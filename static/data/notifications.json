@@ -1,0 +1,26 @@
+[
+  {
+    "id": "notif-001",
+    "type": "reminder",
+    "title": "課程提醒",
+    "message": "您的幼兒體操課程將在明天下午2點開始",
+    "timestamp": "2025-10-24T14:00:00Z",
+    "read": false
+  },
+  {
+    "id": "notif-002",
+    "type": "promotion",
+    "title": "限時優惠",
+    "message": "本月競技啦啦隊課程享20%折扣！",
+    "timestamp": "2025-10-23T09:00:00Z",
+    "read": false
+  },
+  {
+    "id": "notif-003",
+    "type": "schedule",
+    "title": "課程調整",
+    "message": "成人體操課程時間已調整",
+    "timestamp": "2025-10-22T16:00:00Z",
+    "read": true
+  }
+]

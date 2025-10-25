@@ -1,0 +1,477 @@
+<script lang="ts">
+  import { cartStore, totalPrice } from '$lib/stores/cartStore';
+  import { toastStore } from '$lib/stores/toastStore';
+
+  $: cart = $cartStore;
+  $: total = $totalPrice;
+
+  function increaseQuantity(itemId: string) {
+    const item = cart.find((i) => i.id === itemId);
+    if (item) {
+      cartStore.updateQuantity(itemId, item.quantity + 1);
+    }
+  }
+
+  function decreaseQuantity(itemId: string) {
+    const item = cart.find((i) => i.id === itemId);
+    if (item) {
+      cartStore.updateQuantity(itemId, item.quantity - 1);
+      if (item.quantity === 1) {
+        toastStore.showToast('已從購物車移除項目', 'info');
+      }
+    }
+  }
+
+  function removeItem(itemId: string) {
+    const item = cart.find((i) => i.id === itemId);
+    if (item) {
+      cartStore.removeFromCart(itemId);
+      toastStore.showToast(`已移除 ${item.name}`, 'success');
+    }
+  }
+
+  function clearAllItems() {
+    if (confirm('確定要清空購物車嗎？')) {
+      cartStore.clearCart();
+      toastStore.showToast('購物車已清空', 'info');
+    }
+  }
+</script>
+
+<svelte:head>
+  <title>購物車 - Dream Fly 體操館</title>
+</svelte:head>
+
+<div class="cart-page">
+  <section class="page-header">
+    <div class="container">
+      <h1>購物車</h1>
+      <p>確認您的選購項目</p>
+    </div>
+  </section>
+
+  <section class="cart-content">
+    <div class="container">
+      {#if cart.length === 0}
+        <div class="empty-cart card">
+          <div class="empty-icon">🛒</div>
+          <h2>購物車是空的</h2>
+          <p>還沒有選購任何課程或票券</p>
+          <div class="empty-actions">
+            <a href="/courses" class="btn btn-primary">瀏覽課程</a>
+            <a href="/tickets" class="btn btn-secondary">查看票券</a>
+          </div>
+        </div>
+      {:else}
+        <div class="cart-layout">
+          <div class="cart-items-section">
+            <div class="section-header">
+              <h2>購物車項目</h2>
+              <button class="clear-all-btn" on:click={clearAllItems}>清空購物車</button>
+            </div>
+
+            <div class="cart-items">
+              {#each cart as item (item.id)}
+                <div class="cart-item card">
+                  <div class="item-main">
+                    <div class="item-info">
+                      <h3>{item.name}</h3>
+                      <div class="item-meta">
+                        <span class="item-type">
+                          {item.type === 'course' ? '課程' : '票券'}
+                        </span>
+                        {#if item.level}
+                          <span class="item-level">{item.level}</span>
+                        {/if}
+                      </div>
+                      <p class="item-duration">{item.duration}</p>
+                    </div>
+
+                    <div class="item-actions">
+                      <div class="item-price-section">
+                        <p class="unit-price">單價：NT$ {item.price.toLocaleString()}</p>
+                        <p class="subtotal">
+                          小計：NT$ {(item.price * item.quantity).toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div class="quantity-control">
+                        <button
+                          class="qty-btn"
+                          on:click={() => decreaseQuantity(item.id)}
+                          aria-label="減少數量"
+                        >
+                          -
+                        </button>
+                        <span class="quantity">{item.quantity}</span>
+                        <button
+                          class="qty-btn"
+                          on:click={() => increaseQuantity(item.id)}
+                          aria-label="增加數量"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <button class="remove-btn" on:click={() => removeItem(item.id)}>
+                        移除
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+
+          <div class="order-summary-section">
+            <div class="order-summary card">
+              <h2>訂單摘要</h2>
+
+              <div class="summary-details">
+                <div class="summary-row">
+                  <span>項目總數</span>
+                  <span>{cart.reduce((sum, item) => sum + item.quantity, 0)} 項</span>
+                </div>
+                <div class="summary-row">
+                  <span>商品總計</span>
+                  <span>NT$ {total.toLocaleString()}</span>
+                </div>
+                <div class="summary-row highlight">
+                  <span class="total-label">總計</span>
+                  <span class="total-amount">NT$ {total.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div class="summary-actions">
+                <a href="/contact" class="btn btn-primary btn-large">前往結帳</a>
+                <a href="/courses" class="btn btn-secondary">繼續選購</a>
+              </div>
+
+              <div class="summary-notes">
+                <p>結帳後將由專人與您聯繫確認</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </section>
+</div>
+
+<style>
+  .page-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: var(--color-white);
+    padding: var(--spacing-xl) 0;
+    text-align: center;
+  }
+
+  .page-header h1 {
+    color: var(--color-white);
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .page-header p {
+    font-size: 1.2rem;
+    color: var(--color-accent);
+  }
+
+  .cart-content {
+    padding: var(--spacing-xl) 0;
+    min-height: 60vh;
+  }
+
+  .empty-cart {
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-lg);
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .empty-icon {
+    font-size: 4rem;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .empty-cart h2 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .empty-cart p {
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .empty-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+  }
+
+  .cart-layout {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: var(--spacing-lg);
+    align-items: start;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .section-header h2 {
+    color: var(--color-primary);
+    margin: 0;
+  }
+
+  .clear-all-btn {
+    background: none;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+  }
+
+  .clear-all-btn:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+
+  .cart-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .cart-item {
+    transition: transform var(--transition-fast);
+  }
+
+  .cart-item:hover {
+    transform: translateX(4px);
+  }
+
+  .item-main {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-lg);
+  }
+
+  .item-info {
+    flex: 1;
+  }
+
+  .item-info h3 {
+    color: var(--color-primary);
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 1.2rem;
+  }
+
+  .item-meta {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .item-type,
+  .item-level {
+    display: inline-block;
+    background-color: var(--color-bg);
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--color-text-light);
+  }
+
+  .item-duration {
+    color: var(--color-text-light);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--spacing-sm);
+  }
+
+  .item-price-section {
+    text-align: right;
+  }
+
+  .unit-price {
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-light);
+    font-size: 0.9rem;
+  }
+
+  .subtotal {
+    margin: 0;
+    color: var(--color-primary);
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .quantity-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: var(--color-bg);
+    border-radius: 4px;
+    padding: 0.5rem;
+  }
+
+  .qty-btn {
+    background-color: var(--color-white);
+    border: 1px solid #ddd;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: var(--color-primary);
+    transition: all var(--transition-fast);
+  }
+
+  .qty-btn:hover {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+
+  .quantity {
+    min-width: 32px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.1rem;
+  }
+
+  .remove-btn {
+    background: none;
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+  }
+
+  .remove-btn:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+
+  .order-summary {
+    position: sticky;
+    top: 90px;
+  }
+
+  .order-summary h2 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+    font-size: 1.3rem;
+  }
+
+  .summary-details {
+    border-top: 1px solid #eee;
+    border-bottom: 2px solid var(--color-accent);
+    padding: var(--spacing-md) 0;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-sm) 0;
+  }
+
+  .summary-row.highlight {
+    padding-top: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    border-top: 1px solid #eee;
+  }
+
+  .total-label {
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  .total-amount {
+    color: var(--color-primary);
+    font-weight: 700;
+    font-size: 1.3rem;
+  }
+
+  .summary-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .summary-actions .btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .btn-large {
+    padding: 1rem;
+    font-size: 1.1rem;
+  }
+
+  .summary-notes {
+    text-align: center;
+    padding-top: var(--spacing-md);
+    border-top: 1px solid #eee;
+  }
+
+  .summary-notes p {
+    color: var(--color-text-light);
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .cart-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .order-summary {
+      position: static;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .page-header h1 {
+      font-size: 2rem;
+    }
+
+    .item-main {
+      flex-direction: column;
+    }
+
+    .item-actions {
+      align-items: stretch;
+    }
+
+    .item-price-section {
+      text-align: left;
+    }
+
+    .empty-actions {
+      flex-direction: column;
+    }
+  }
+</style>

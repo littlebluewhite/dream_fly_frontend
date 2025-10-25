@@ -1,0 +1,280 @@
+<script lang="ts">
+  import ContactForm from '$lib/components/ContactForm.svelte';
+
+  // Contact Page - 聯絡資訊
+</script>
+
+<svelte:head>
+  <title>聯絡資訊 - Dream Fly 體操館</title>
+</svelte:head>
+
+<div class="contact-page">
+  <section class="page-header">
+    <div class="container">
+      <h1>聯絡資訊</h1>
+      <p>歡迎與我們聯繫，我們將竭誠為您服務</p>
+    </div>
+  </section>
+
+  <section class="contact-content">
+    <div class="container">
+      <div class="contact-grid">
+        <!-- Contact Information -->
+        <div class="contact-info">
+          <div class="info-card card">
+            <h2>聯絡方式</h2>
+
+            <div class="info-item">
+              <div class="info-icon">📍</div>
+              <div class="info-details">
+                <h3>場館地址</h3>
+                <p>台北市信義區信義路五段 168 號 3 樓</p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon">📞</div>
+              <div class="info-details">
+                <h3>聯絡電話</h3>
+                <p>(02) 2345-6789</p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon">📱</div>
+              <div class="info-details">
+                <h3>手機號碼</h3>
+                <p>0912-345-678</p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon">✉️</div>
+              <div class="info-details">
+                <h3>電子郵件</h3>
+                <p>info@dreamfly.com.tw</p>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <div class="info-icon">💬</div>
+              <div class="info-details">
+                <h3>Line 官方帳號</h3>
+                <p>@dreamfly</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hours-card card">
+            <h2>營業時間</h2>
+            <div class="hours-list">
+              <div class="hours-item">
+                <span class="day">週一至週五</span>
+                <span class="time">06:00 - 23:00</span>
+              </div>
+              <div class="hours-item">
+                <span class="day">週六至週日</span>
+                <span class="time">06:00 - 23:00</span>
+              </div>
+              <div class="hours-item">
+                <span class="day">國定假日</span>
+                <span class="time">06:00 - 23:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contact Form -->
+        <div class="contact-form-wrapper">
+          <div class="form-card card">
+            <h2>線上諮詢</h2>
+            <p class="form-description">
+              有任何問題或需求嗎？請填寫以下表單，我們將盡快回覆您。
+            </p>
+            <ContactForm />
+          </div>
+        </div>
+      </div>
+
+      <!-- Map Section -->
+      <div class="map-section card">
+        <h2>場館位置</h2>
+        <div class="map-placeholder">
+          <p>🗺️ Google Maps 位置</p>
+          <p class="map-note">台北市信義區信義路五段 168 號 3 樓</p>
+        </div>
+        <div class="directions">
+          <h3>交通方式</h3>
+          <ul>
+            <li><strong>捷運：</strong>市政府站 2 號出口，步行約 5 分鐘</li>
+            <li><strong>公車：</strong>多線公車可達，信義行政中心站下車</li>
+            <li><strong>停車：</strong>附設地下停車場，憑證可折抵停車費</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .page-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: var(--color-white);
+    padding: var(--spacing-xl) 0;
+    text-align: center;
+  }
+
+  .page-header h1 {
+    color: var(--color-white);
+    font-size: 2.5rem;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .page-header p {
+    font-size: 1.2rem;
+    color: var(--color-accent);
+  }
+
+  .contact-content {
+    padding: var(--spacing-xl) 0;
+  }
+
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+  }
+
+  .info-card h2,
+  .hours-card h2,
+  .form-card h2 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .info-item {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md) 0;
+    border-bottom: 1px solid #eee;
+  }
+
+  .info-item:last-child {
+    border-bottom: none;
+  }
+
+  .info-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+  }
+
+  .info-details h3 {
+    color: var(--color-text);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .info-details p {
+    color: var(--color-text-light);
+    margin-bottom: 0;
+  }
+
+  .hours-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .hours-item {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-sm);
+    background-color: var(--color-bg);
+    border-radius: 4px;
+  }
+
+  .hours-item .day {
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .hours-item .time {
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  .form-description {
+    color: var(--color-text-light);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .map-section h2 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .map-placeholder {
+    background-color: var(--color-bg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    border-radius: 8px;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .map-placeholder p {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .map-note {
+    color: var(--color-text-light);
+    font-size: 1rem !important;
+  }
+
+  .directions h3 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .directions ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .directions li {
+    padding: var(--spacing-sm) 0;
+    padding-left: var(--spacing-md);
+    position: relative;
+  }
+
+  .directions li::before {
+    content: '➜';
+    position: absolute;
+    left: 0;
+    color: var(--color-accent);
+  }
+
+  @media (max-width: 1023px) {
+    .contact-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .page-header h1 {
+      font-size: 2rem;
+    }
+
+    .info-item {
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+  }
+</style>
