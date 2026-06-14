@@ -100,13 +100,28 @@
 
 <style>
   .header {
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--df-border);
     position: sticky;
     top: 0;
     z-index: 1000;
+  }
+
+  /* The frosted-glass backdrop lives on a pseudo-element, NOT on .header itself.
+     A backdrop-filter on .header would establish a containing block for the
+     position:fixed mobile nav drawer nested inside it — the closed drawer
+     (right: -100%) would then be measured against the header instead of the
+     viewport and add a second viewport-width to the page, causing horizontal
+     scroll on phones. Keeping the filter on ::before (not an ancestor of the
+     drawer) preserves the blur without trapping the drawer. */
+  .header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    pointer-events: none;
   }
 
   .header-content {
