@@ -57,7 +57,7 @@
 
       <!-- Icons and menu at far right -->
       <div class="header-right">
-        <a href="/tickets" class="ticket-link" on:click={closeMobileMenu}>
+        <a href="/tickets" class="ticket-link" aria-label="購票" on:click={closeMobileMenu}>
           <Icon name="ticket" size={18} />
           <span class="ticket-label">購票</span>
         </a>
@@ -240,6 +240,12 @@
   @media (max-width: 767px) {
     .mobile-menu-toggle {
       display: inline-flex;
+    }
+
+    /* Drop the wordmark text on phones — the monogram carries the brand and
+       this frees space so the ticket/bell/cart/menu controls never overflow. */
+    .wordmark {
+      display: none;
     }
 
     .ticket-link .ticket-label {
