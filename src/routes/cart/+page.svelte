@@ -1,6 +1,7 @@
 <script lang="ts">
   import { cartStore, totalPrice } from '$lib/stores/cartStore';
   import { toastStore } from '$lib/stores/toastStore';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   $: cart = $cartStore;
   $: total = $totalPrice;
@@ -54,7 +55,7 @@
     <div class="container">
       {#if cart.length === 0}
         <div class="empty-cart card">
-          <div class="empty-icon">🛒</div>
+          <div class="empty-icon"><Icon name="shopping-cart" size={64} color="var(--df-primary)" /></div>
           <h2>購物車是空的</h2>
           <p>還沒有選購任何課程或票券</p>
           <div class="empty-actions">
@@ -160,60 +161,61 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
-    padding: var(--spacing-xl) 0;
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));
+    color: var(--df-white);
+    padding: var(--df-space-8) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-white);
     font-size: 2.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .cart-content {
-    padding: var(--spacing-xl) 0;
+    padding: var(--df-space-8) 0;
     min-height: 60vh;
   }
 
   .empty-cart {
     text-align: center;
-    padding: var(--spacing-xl) var(--spacing-lg);
+    padding: var(--df-space-8) var(--df-space-6);
     max-width: 500px;
     margin: 0 auto;
   }
 
   .empty-icon {
-    font-size: 4rem;
-    margin-bottom: var(--spacing-md);
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--df-space-5);
   }
 
   .empty-cart h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-4);
   }
 
   .empty-cart p {
-    color: var(--color-text-light);
-    margin-bottom: var(--spacing-lg);
+    color: var(--df-text-light);
+    margin-bottom: var(--df-space-6);
   }
 
   .empty-actions {
     display: flex;
-    gap: var(--spacing-md);
+    gap: var(--df-space-5);
     justify-content: center;
   }
 
   .cart-layout {
     display: grid;
     grid-template-columns: 1fr 400px;
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
     align-items: start;
   }
 
@@ -221,34 +223,34 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--df-space-5);
   }
 
   .section-header h2 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin: 0;
   }
 
   .clear-all-btn {
     background: none;
-    border: 1px solid #dc3545;
-    color: #dc3545;
+    border: 1px solid var(--df-error);
+    color: var(--df-error);
     padding: 0.5rem 1rem;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     cursor: pointer;
     font-size: 0.9rem;
     transition: all var(--transition-fast);
   }
 
   .clear-all-btn:hover {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--df-error);
+    color: var(--df-white);
   }
 
   .cart-items {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: var(--df-space-5);
   }
 
   .cart-item {
@@ -262,7 +264,7 @@
   .item-main {
     display: flex;
     justify-content: space-between;
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .item-info {
@@ -270,29 +272,29 @@
   }
 
   .item-info h3 {
-    color: var(--color-primary);
-    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--df-primary);
+    margin: 0 0 var(--df-space-4) 0;
     font-size: 1.2rem;
   }
 
   .item-meta {
     display: flex;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-xs);
+    gap: var(--df-space-4);
+    margin-bottom: var(--df-space-2);
   }
 
   .item-type,
   .item-level {
     display: inline-block;
-    background-color: var(--color-bg);
+    background-color: var(--df-bg-light);
     padding: 0.2rem 0.6rem;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     font-size: 0.85rem;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
   }
 
   .item-duration {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.9rem;
     margin: 0;
   }
@@ -301,7 +303,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: var(--spacing-sm);
+    gap: var(--df-space-4);
   }
 
   .item-price-section {
@@ -310,13 +312,13 @@
 
   .unit-price {
     margin: 0 0 0.25rem 0;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.9rem;
   }
 
   .subtotal {
     margin: 0;
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 700;
     font-size: 1.1rem;
   }
@@ -325,29 +327,29 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    background-color: var(--color-bg);
-    border-radius: 4px;
+    background-color: var(--df-bg-light);
+    border-radius: var(--df-radius-md);
     padding: 0.5rem;
   }
 
   .qty-btn {
-    background-color: var(--color-white);
-    border: 1px solid #ddd;
+    background-color: var(--df-white);
+    border: 1px solid var(--df-border-strong);
     width: 32px;
     height: 32px;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.1rem;
-    color: var(--color-primary);
+    color: var(--df-primary);
     transition: all var(--transition-fast);
   }
 
   .qty-btn:hover {
-    background-color: var(--color-primary);
-    color: var(--color-white);
+    background-color: var(--df-primary);
+    color: var(--df-white);
   }
 
   .quantity {
@@ -359,18 +361,18 @@
 
   .remove-btn {
     background: none;
-    border: 1px solid #dc3545;
-    color: #dc3545;
+    border: 1px solid var(--df-error);
+    color: var(--df-error);
     padding: 0.5rem 1rem;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     cursor: pointer;
     font-size: 0.9rem;
     transition: all var(--transition-fast);
   }
 
   .remove-btn:hover {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--df-error);
+    color: var(--df-white);
   }
 
   .order-summary {
@@ -379,28 +381,28 @@
   }
 
   .order-summary h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
     font-size: 1.3rem;
   }
 
   .summary-details {
-    border-top: 1px solid #eee;
-    border-bottom: 2px solid var(--color-accent);
-    padding: var(--spacing-md) 0;
-    margin-bottom: var(--spacing-md);
+    border-top: 1px solid var(--df-border);
+    border-bottom: 2px solid var(--df-accent);
+    padding: var(--df-space-5) 0;
+    margin-bottom: var(--df-space-5);
   }
 
   .summary-row {
     display: flex;
     justify-content: space-between;
-    padding: var(--spacing-sm) 0;
+    padding: var(--df-space-4) 0;
   }
 
   .summary-row.highlight {
-    padding-top: var(--spacing-md);
-    margin-top: var(--spacing-sm);
-    border-top: 1px solid #eee;
+    padding-top: var(--df-space-5);
+    margin-top: var(--df-space-4);
+    border-top: 1px solid var(--df-border);
   }
 
   .total-label {
@@ -409,7 +411,7 @@
   }
 
   .total-amount {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 700;
     font-size: 1.3rem;
   }
@@ -417,8 +419,8 @@
   .summary-actions {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
+    gap: var(--df-space-4);
+    margin-bottom: var(--df-space-5);
   }
 
   .summary-actions .btn {
@@ -433,12 +435,12 @@
 
   .summary-notes {
     text-align: center;
-    padding-top: var(--spacing-md);
-    border-top: 1px solid #eee;
+    padding-top: var(--df-space-5);
+    border-top: 1px solid var(--df-border);
   }
 
   .summary-notes p {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.85rem;
     margin: 0;
   }

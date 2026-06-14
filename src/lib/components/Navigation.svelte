@@ -5,6 +5,7 @@
   import { navigationConfig } from '$lib/data/navigationConfig';
   import MegaMenu from './navigation/MegaMenu.svelte';
   import MobileAccordion from './navigation/MobileAccordion.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let mobileMenuOpen = false;
 
@@ -82,7 +83,9 @@
             aria-haspopup="true"
           >
             {item.label}
-            <span class="dropdown-arrow" class:open={openMenuIndex === index}>▼</span>
+            <span class="dropdown-arrow" class:open={openMenuIndex === index}>
+              <Icon name="chevron-down" size={16} />
+            </span>
           </button>
           <MegaMenu
             navItem={item}
@@ -154,11 +157,11 @@
   .nav-link {
     display: block;
     padding: 0.5rem 0.75rem;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-weight: 500;
     font-size: 0.9375rem;
     text-decoration: none;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     transition: all var(--transition-fast);
     position: relative;
     white-space: nowrap;
@@ -176,7 +179,8 @@
   }
 
   .dropdown-arrow {
-    font-size: 0.7rem;
+    display: inline-flex;
+    align-items: center;
     transition: transform var(--transition-fast);
   }
 
@@ -185,12 +189,12 @@
   }
 
   .nav-link:hover {
-    color: var(--color-primary);
-    background-color: rgba(0, 102, 204, 0.05);
+    color: var(--df-primary);
+    background-color: var(--df-primary-bg);
   }
 
   .nav-link.active {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 600;
   }
 
@@ -202,13 +206,13 @@
     transform: translateX(-50%);
     width: 60%;
     height: 3px;
-    background-color: var(--color-accent);
+    background-color: var(--df-accent);
     border-radius: 2px 2px 0 0;
   }
 
   .nav-link.menu-open {
-    color: var(--color-primary);
-    background-color: rgba(0, 102, 204, 0.05);
+    color: var(--df-primary);
+    background-color: var(--df-primary-bg);
   }
 
   .mobile-nav {
@@ -223,32 +227,32 @@
     padding: 1rem;
     font-weight: 700;
     font-size: 0.875rem;
-    color: var(--color-primary);
+    color: var(--df-primary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    background-color: rgba(0, 102, 204, 0.05);
+    background-color: var(--df-primary-bg);
   }
 
   .mobile-nav-link {
     display: block;
     padding: 1rem;
     min-height: 44px;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     text-decoration: none;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
     transition: all var(--transition-fast);
   }
 
   .mobile-nav-link:hover,
   .mobile-nav-link:active {
-    background-color: rgba(0, 102, 204, 0.05);
-    color: var(--color-primary);
+    background-color: var(--df-primary-bg);
+    color: var(--df-primary);
   }
 
   .mobile-nav-link.active {
-    background-color: rgba(0, 102, 204, 0.1);
-    border-left: 4px solid var(--color-accent);
-    color: var(--color-primary);
+    background-color: var(--df-primary-bg);
+    border-left: 4px solid var(--df-accent);
+    color: var(--df-primary);
   }
 
   /* Desktop */
@@ -279,8 +283,8 @@
       width: 80%;
       max-width: 300px;
       height: 100vh;
-      background-color: var(--color-white);
-      box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+      background-color: var(--df-white);
+      box-shadow: var(--df-shadow-lifted);
       transition: right var(--transition-normal);
       padding-top: 80px;
       z-index: 999;

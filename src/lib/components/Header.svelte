@@ -3,6 +3,7 @@
   import Navigation from './Navigation.svelte';
   import CartDropdown from './CartDropdown.svelte';
   import NotificationsDropdown from './NotificationsDropdown.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import { totalItems } from '$lib/stores/cartStore';
   import { unreadCount } from '$lib/stores/notificationsStore';
 
@@ -44,8 +45,11 @@
   <div class="container">
     <div class="header-content">
       <a href="/" class="logo-link" on:click={closeMobileMenu}>
-        <img src="/logo.png" alt="Dream Fly Logo" class="logo" />
-        <span class="site-title">Dream Fly</span>
+        <img src="/logo-df-monogram.png" alt="Dream Fly" class="logo" height="38" />
+        <span class="wordmark">
+          <span class="wordmark-line1">DREAM FLY</span>
+          <span class="wordmark-line2">夢飛體操館</span>
+        </span>
       </a>
 
       <!-- Navigation in center -->
@@ -53,20 +57,25 @@
 
       <!-- Icons and menu at far right -->
       <div class="header-right">
+        <a href="/tickets" class="ticket-link" on:click={closeMobileMenu}>
+          <Icon name="ticket" size={18} />
+          <span class="ticket-label">購票</span>
+        </a>
+
         <div class="header-actions">
           <button
             class="icon-button"
             on:click={toggleNotificationsDropdown}
             aria-label="通知"
           >
-            <span class="icon">🔔</span>
+            <Icon name="bell" size={22} />
             {#if notificationCount > 0}
               <span class="badge">{notificationCount}</span>
             {/if}
           </button>
 
           <button class="icon-button" on:click={toggleCartDropdown} aria-label="購物車">
-            <span class="icon">🛒</span>
+            <Icon name="shopping-cart" size={22} />
             {#if cartItemCount > 0}
               <span class="badge">{cartItemCount}</span>
             {/if}
@@ -79,9 +88,7 @@
           on:click={toggleMobileMenu}
           aria-label="選單"
         >
-          <span></span>
-          <span></span>
-          <span></span>
+          <Icon name={mobileMenuOpen ? 'x' : 'menu'} size={26} />
         </button>
       </div>
     </div>
@@ -93,8 +100,10 @@
 
 <style>
   .header {
-    background-color: var(--color-white);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--df-border);
     position: sticky;
     top: 0;
     z-index: 1000;
@@ -104,146 +113,141 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-sm) 0;
-    gap: 0.75rem;
+    height: 72px;
+    gap: var(--df-space-3);
   }
 
   .logo-link {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--df-space-3);
     text-decoration: none;
     flex-shrink: 0;
-    margin-right: 0.5rem;
   }
 
   .logo {
-    height: 50px;
+    height: 38px;
     width: auto;
-  }
-
-  .site-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--color-primary);
-    display: none;
-  }
-
-  .mobile-menu-toggle {
-    display: none;
-    flex-direction: column;
-    gap: 5px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 8px;
-    z-index: 1001;
-    flex-shrink: 0;
-  }
-
-  .mobile-menu-toggle span {
     display: block;
-    width: 25px;
-    height: 3px;
-    background-color: var(--color-primary);
-    transition: all var(--transition-fast);
-    border-radius: 2px;
   }
 
-  .mobile-menu-toggle.active span:nth-child(1) {
-    transform: rotate(45deg) translate(7px, 7px);
+  .wordmark {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
   }
 
-  .mobile-menu-toggle.active span:nth-child(2) {
-    opacity: 0;
+  .wordmark-line1 {
+    font-family: var(--df-font-heading);
+    font-weight: 800;
+    font-size: 19px;
+    color: var(--df-ink);
+    letter-spacing: 0.01em;
   }
 
-  .mobile-menu-toggle.active span:nth-child(3) {
-    transform: rotate(-45deg) translate(6px, -6px);
+  .wordmark-line2 {
+    font-size: 11px;
+    color: var(--df-text-light);
+    letter-spacing: 0.18em;
   }
 
   .header-right {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--df-space-4);
     margin-left: auto;
     flex-shrink: 0;
   }
 
+  .ticket-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--df-space-2);
+    color: var(--df-text-dark);
+    font-size: var(--df-text-sm);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+  }
+
+  .ticket-link:hover {
+    color: var(--df-primary);
+  }
+
   .header-actions {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--df-space-2);
     align-items: center;
     flex-shrink: 0;
   }
 
   .icon-button {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     cursor: pointer;
-    padding: 0.5rem;
-    transition: transform var(--transition-fast);
+    padding: var(--df-space-2);
+    color: var(--df-text-dark);
+    border-radius: var(--df-radius-md);
+    transition: color var(--transition-fast), background-color var(--transition-fast);
   }
 
   .icon-button:hover {
-    transform: scale(1.1);
-  }
-
-  .icon {
-    font-size: 1.5rem;
-    display: block;
+    color: var(--df-primary);
+    background-color: var(--df-primary-bg);
   }
 
   .badge {
     position: absolute;
-    top: 0;
-    right: 0;
-    background-color: var(--color-accent);
-    color: var(--color-primary);
+    top: 2px;
+    right: 2px;
+    background-color: var(--df-accent);
+    color: var(--df-primary-dark);
     font-size: 0.7rem;
     font-weight: 700;
     min-width: 18px;
     height: 18px;
-    border-radius: 50%;
+    border-radius: var(--df-radius-pill);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2px;
-    border: 2px solid var(--color-white);
+    padding: 0 2px;
+    border: 2px solid var(--df-white);
   }
 
-  /* Tablet and up */
-  @media (min-width: 768px) {
-    .logo {
-      height: 60px;
-    }
+  .mobile-menu-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: var(--df-space-2);
+    color: var(--df-ink);
+    border-radius: var(--df-radius-md);
+    z-index: 1001;
+    flex-shrink: 0;
+  }
 
-    .site-title {
-      display: block;
-    }
+  .mobile-menu-toggle:hover {
+    background-color: var(--df-primary-bg);
+    color: var(--df-primary);
   }
 
   /* Mobile */
   @media (max-width: 767px) {
     .mobile-menu-toggle {
-      display: flex;
+      display: inline-flex;
     }
 
-    .logo {
-      height: 40px;
+    .ticket-link .ticket-label {
+      display: none;
     }
 
     .header-actions {
-      gap: 0.25rem;
-    }
-
-    .icon-button {
-      padding: 0.4rem;
-    }
-
-    .icon {
-      font-size: 1.3rem;
+      gap: var(--df-space-1);
     }
   }
 </style>

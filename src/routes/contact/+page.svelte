@@ -1,5 +1,6 @@
 <script lang="ts">
   import ContactForm from '$lib/components/ContactForm.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   // Contact Page - 聯絡資訊
 </script>
@@ -25,7 +26,7 @@
             <h2>聯絡方式</h2>
 
             <div class="info-item">
-              <div class="info-icon">📍</div>
+              <div class="info-icon"><Icon name="map-pin" size={28} color="var(--df-primary)" /></div>
               <div class="info-details">
                 <h3>場館地址</h3>
                 <p>台北市信義區信義路五段 168 號 3 樓</p>
@@ -33,7 +34,7 @@
             </div>
 
             <div class="info-item">
-              <div class="info-icon">📞</div>
+              <div class="info-icon"><Icon name="phone" size={28} color="var(--df-primary)" /></div>
               <div class="info-details">
                 <h3>聯絡電話</h3>
                 <p>(02) 2345-6789</p>
@@ -41,7 +42,7 @@
             </div>
 
             <div class="info-item">
-              <div class="info-icon">📱</div>
+              <div class="info-icon"><Icon name="phone" size={28} color="var(--df-primary)" /></div>
               <div class="info-details">
                 <h3>手機號碼</h3>
                 <p>0912-345-678</p>
@@ -49,7 +50,7 @@
             </div>
 
             <div class="info-item">
-              <div class="info-icon">✉️</div>
+              <div class="info-icon"><Icon name="mail" size={28} color="var(--df-primary)" /></div>
               <div class="info-details">
                 <h3>電子郵件</h3>
                 <p>info@dreamfly.com.tw</p>
@@ -57,7 +58,7 @@
             </div>
 
             <div class="info-item">
-              <div class="info-icon">💬</div>
+              <div class="info-icon"><Icon name="send" size={28} color="var(--df-primary)" /></div>
               <div class="info-details">
                 <h3>Line 官方帳號</h3>
                 <p>@dreamfly</p>
@@ -100,7 +101,7 @@
       <div class="map-section card">
         <h2>場館位置</h2>
         <div class="map-placeholder">
-          <p>🗺️ Google Maps 位置</p>
+          <p class="map-title"><Icon name="map-pin" size={24} color="var(--df-primary)" /> Google Maps 位置</p>
           <p class="map-note">台北市信義區信義路五段 168 號 3 樓</p>
         </div>
         <div class="directions">
@@ -118,52 +119,53 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
-    padding: var(--spacing-xl) 0;
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));
+    color: var(--df-white);
+    padding: var(--df-space-8) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-white);
     font-size: 2.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .contact-content {
-    padding: var(--spacing-xl) 0;
+    padding: var(--df-space-8) 0;
   }
 
   .contact-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
+    gap: var(--df-space-6);
+    margin-bottom: var(--df-space-8);
   }
 
   .contact-info {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .info-card h2,
   .hours-card h2,
   .form-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
   }
 
   .info-item {
     display: flex;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md) 0;
-    border-bottom: 1px solid #eee;
+    align-items: center;
+    gap: var(--df-space-5);
+    padding: var(--df-space-5) 0;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .info-item:last-child {
@@ -171,76 +173,82 @@
   }
 
   .info-icon {
-    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
 
   .info-details h3 {
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-size: 1rem;
     margin-bottom: 0.25rem;
   }
 
   .info-details p {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     margin-bottom: 0;
   }
 
   .hours-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--df-space-4);
   }
 
   .hours-item {
     display: flex;
     justify-content: space-between;
-    padding: var(--spacing-sm);
-    background-color: var(--color-bg);
-    border-radius: 4px;
+    padding: var(--df-space-4);
+    background-color: var(--df-bg-light);
+    border-radius: var(--df-radius-md);
   }
 
   .hours-item .day {
     font-weight: 600;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .hours-item .time {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 600;
   }
 
   .form-description {
-    color: var(--color-text-light);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-text-light);
+    margin-bottom: var(--df-space-5);
   }
 
   .map-section h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
   }
 
   .map-placeholder {
-    background-color: var(--color-bg);
-    padding: var(--spacing-xl);
+    background-color: var(--df-bg-light);
+    padding: var(--df-space-8);
     text-align: center;
-    border-radius: 8px;
-    margin-bottom: var(--spacing-md);
+    border-radius: var(--df-radius-md);
+    margin-bottom: var(--df-space-5);
   }
 
-  .map-placeholder p {
+  .map-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--df-space-2);
     font-size: 1.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .map-note {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 1rem !important;
   }
 
   .directions h3 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-4);
   }
 
   .directions ul {
@@ -249,8 +257,8 @@
   }
 
   .directions li {
-    padding: var(--spacing-sm) 0;
-    padding-left: var(--spacing-md);
+    padding: var(--df-space-4) 0;
+    padding-left: var(--df-space-5);
     position: relative;
   }
 
@@ -258,7 +266,7 @@
     content: '➜';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   @media (max-width: 1023px) {
@@ -274,7 +282,8 @@
 
     .info-item {
       flex-direction: column;
-      gap: var(--spacing-sm);
+      align-items: flex-start;
+      gap: var(--df-space-4);
     }
   }
 </style>

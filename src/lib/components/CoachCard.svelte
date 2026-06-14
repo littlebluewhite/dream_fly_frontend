@@ -59,15 +59,15 @@
     gap: var(--spacing-md);
     margin-bottom: var(--spacing-md);
     padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid var(--color-accent);
+    border-bottom: 2px solid var(--df-accent);
   }
 
   .coach-avatar {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-    color: var(--color-white);
+    background: linear-gradient(135deg, var(--df-primary) 0%, var(--df-primary-light) 100%);
+    color: var(--df-white);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -77,13 +77,13 @@
   }
 
   .coach-info h3 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin-bottom: var(--spacing-xs);
     font-size: 1.5rem;
   }
 
   .coach-title {
-    color: var(--color-accent-dark);
+    color: var(--df-accent-dark);
     font-weight: 600;
     margin-bottom: 0;
   }
@@ -96,13 +96,13 @@
   }
 
   .coach-section h4 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1rem;
     margin-bottom: var(--spacing-xs);
   }
 
   .coach-section p {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     line-height: 1.6;
   }
 
@@ -118,14 +118,14 @@
     padding: var(--spacing-xs);
     padding-left: var(--spacing-md);
     position: relative;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
   }
 
   .specialties-list li::before {
     content: '▸';
     position: absolute;
     left: 0;
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: bold;
   }
 
@@ -133,7 +133,7 @@
     content: '✓';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent-dark);
     font-weight: bold;
   }
 </style>

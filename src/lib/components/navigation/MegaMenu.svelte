@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import type { NavItem } from '$lib/data/navigationConfig';
 
   export let navItem: NavItem;
@@ -52,7 +53,7 @@
       {#each navItem.categories as category}
         <div class="category" role="group" aria-label={category.title}>
           <h3 class="category-title">
-            <span class="category-icon">{category.icon}</span>
+            <Icon name={category.icon} size={18} color="var(--df-primary)" />
             {category.title}
           </h3>
           <ul class="category-items">
@@ -83,9 +84,10 @@
     transform: translateX(-50%);
     min-width: 700px;
     max-width: 1000px;
-    background-color: var(--color-white);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    border-radius: 12px;
+    background-color: var(--df-white);
+    border: 1px solid var(--df-border);
+    box-shadow: var(--df-shadow-lifted);
+    border-radius: var(--df-radius-lg);
     padding: 2.5rem;
     z-index: 1000;
     opacity: 0;
@@ -124,19 +126,15 @@
   .category-title {
     font-size: 0.875rem;
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin: 0;
     padding-bottom: 0.75rem;
-    border-bottom: 2px solid var(--color-primary);
+    border-bottom: 2px solid var(--df-primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-  }
-
-  .category-icon {
-    font-size: 1.25rem;
   }
 
   .category-items {
@@ -155,22 +153,22 @@
   .category-link {
     display: block;
     padding: 0.625rem 0.875rem;
-    color: #333;
+    color: var(--df-text-dark);
     text-decoration: none;
-    border-radius: 6px;
+    border-radius: var(--df-radius-md);
     transition: all var(--transition-fast);
     font-size: 0.9375rem;
     line-height: 1.4;
   }
 
   .category-link:hover {
-    color: var(--color-primary);
-    background-color: rgba(0, 102, 204, 0.08);
+    color: var(--df-primary);
+    background-color: var(--df-primary-bg);
     transform: translateX(4px);
   }
 
   .category-link:focus {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--df-primary);
     outline-offset: 2px;
   }
 

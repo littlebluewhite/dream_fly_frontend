@@ -2,6 +2,7 @@
   import type { NavCategory } from '$lib/data/navigationConfig';
   import { slide } from 'svelte/transition';
   import { createEventDispatcher } from 'svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let category: NavCategory;
   export let isExpanded: boolean = false;
@@ -25,10 +26,12 @@
     aria-controls="accordion-content-{category.title}"
   >
     <span class="accordion-title">
-      <span class="category-icon">{category.icon}</span>
+      <Icon name={category.icon} size={20} color="var(--df-primary)" />
       {category.title}
     </span>
-    <span class="chevron" class:expanded={isExpanded}>›</span>
+    <span class="chevron" class:expanded={isExpanded}>
+      <Icon name="chevron-right" size={20} />
+    </span>
   </button>
 
   {#if isExpanded}
@@ -52,7 +55,7 @@
 
 <style>
   .mobile-accordion {
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .accordion-header {
@@ -67,31 +70,30 @@
     cursor: pointer;
     font-size: 1rem;
     font-weight: 500;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     text-align: left;
     transition: background-color var(--transition-fast);
   }
 
   .accordion-header:hover {
-    background-color: rgba(0, 102, 204, 0.05);
+    background-color: var(--df-primary-bg);
   }
 
   .accordion-header:active {
-    background-color: rgba(0, 102, 204, 0.1);
+    background-color: var(--df-primary-bg);
   }
 
   .accordion-title {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .category-icon {
-    font-size: 1.25rem;
+    color: var(--df-text-dark);
   }
 
   .chevron {
-    font-size: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    color: var(--df-text-light);
     transition: transform var(--transition-fast);
     transform: rotate(0deg);
   }
@@ -101,7 +103,7 @@
   }
 
   .accordion-content {
-    background-color: rgba(0, 102, 204, 0.02);
+    background-color: var(--df-bg-light);
   }
 
   .accordion-items {
@@ -118,19 +120,19 @@
     display: block;
     padding: 0.75rem 1rem 0.75rem 2.5rem;
     min-height: 44px;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     text-decoration: none;
     transition: all var(--transition-fast);
     border-left: 3px solid transparent;
   }
 
   .accordion-link:hover {
-    color: var(--color-primary);
-    background-color: rgba(0, 102, 204, 0.05);
-    border-left-color: var(--color-primary);
+    color: var(--df-primary);
+    background-color: var(--df-primary-bg);
+    border-left-color: var(--df-primary);
   }
 
   .accordion-link:active {
-    background-color: rgba(0, 102, 204, 0.1);
+    background-color: var(--df-primary-bg);
   }
 </style>

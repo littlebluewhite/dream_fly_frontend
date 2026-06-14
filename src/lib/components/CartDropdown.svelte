@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cartStore, totalPrice } from '$lib/stores/cartStore';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
@@ -30,8 +31,13 @@
   <button type="button" class="dropdown-overlay" on:click={onClose} aria-label="關閉購物車"></button>
   <div class="cart-dropdown">
     <div class="dropdown-header">
-      <h3>購物車</h3>
-      <button class="close-btn" on:click={onClose}>✕</button>
+      <h3>
+        <Icon name="shopping-cart" size={18} color="var(--df-primary)" />
+        購物車
+      </h3>
+      <button class="close-btn" on:click={onClose} aria-label="關閉">
+        <Icon name="x" size={18} color="currentColor" />
+      </button>
     </div>
 
     <div class="dropdown-body">
@@ -61,7 +67,7 @@
                     on:click={() => decreaseQuantity(item.id)}
                     aria-label="減少數量"
                   >
-                    -
+                    <Icon name="minus" size={14} color="currentColor" />
                   </button>
                   <span class="quantity">{item.quantity}</span>
                   <button
@@ -69,11 +75,11 @@
                     on:click={() => increaseQuantity(item.id)}
                     aria-label="增加數量"
                   >
-                    +
+                    <Icon name="plus" size={14} color="currentColor" />
                   </button>
                 </div>
                 <button class="remove-btn" on:click={() => removeItem(item.id)} aria-label="移除">
-                  🗑️
+                  <Icon name="trash-2" size={16} color="currentColor" />
                 </button>
               </div>
             </div>
@@ -117,9 +123,10 @@
     width: 400px;
     max-width: calc(100vw - 40px);
     max-height: 500px;
-    background-color: var(--color-white);
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    background-color: var(--df-surface);
+    border-radius: var(--df-radius-lg);
+    border: 1px solid var(--df-border);
+    box-shadow: var(--df-shadow-lifted);
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -130,21 +137,23 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--spacing-md);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .dropdown-header h3 {
     margin: 0;
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
   }
 
   .close-btn {
     background: none;
     border: none;
-    font-size: 1.5rem;
     cursor: pointer;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     padding: 0;
     width: 30px;
     height: 30px;
@@ -152,10 +161,12 @@
     align-items: center;
     justify-content: center;
     transition: color var(--transition-fast);
+    border-radius: var(--df-radius-md);
   }
 
   .close-btn:hover {
-    color: var(--color-text);
+    color: var(--df-text-dark);
+    background-color: var(--df-bg-light);
   }
 
   .dropdown-body {
@@ -167,7 +178,7 @@
   .empty-state {
     text-align: center;
     padding: var(--spacing-xl) 0;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
   }
 
   .cart-items {
@@ -181,7 +192,7 @@
     justify-content: space-between;
     gap: var(--spacing-md);
     padding-bottom: var(--spacing-md);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .cart-item:last-child {
@@ -194,29 +205,32 @@
 
   .item-info h4 {
     margin: 0 0 0.25rem 0;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-size: 1rem;
   }
 
   .item-details {
     font-size: 0.85rem;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     margin: 0.25rem 0;
   }
 
   .level-tag {
     display: inline-block;
-    background-color: var(--color-bg);
+    background-color: var(--df-primary-bg);
+    color: var(--df-primary);
     padding: 0.1rem 0.4rem;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     margin-left: 0.5rem;
     font-size: 0.75rem;
+    font-weight: 500;
   }
 
   .item-price {
     margin: 0.25rem 0 0 0;
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 600;
+    font-family: var(--df-font-mono);
   }
 
   .item-controls {
@@ -230,55 +244,60 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background-color: var(--color-bg);
-    border-radius: 4px;
+    background-color: var(--df-bg-light);
+    border-radius: var(--df-radius-md);
     padding: 0.25rem;
   }
 
   .qty-btn {
-    background-color: var(--color-white);
-    border: 1px solid #ddd;
+    background-color: var(--df-surface);
+    border: 1px solid var(--df-border);
     width: 24px;
     height: 24px;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1rem;
-    color: var(--color-primary);
+    color: var(--df-primary);
     transition: all var(--transition-fast);
   }
 
   .qty-btn:hover {
-    background-color: var(--color-primary);
-    color: var(--color-white);
+    background-color: var(--df-primary);
+    color: var(--df-white);
+    border-color: var(--df-primary);
   }
 
   .quantity {
     min-width: 24px;
     text-align: center;
     font-weight: 600;
+    color: var(--df-text-dark);
   }
 
   .remove-btn {
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 1.2rem;
+    color: var(--df-text-muted);
     padding: 0.25rem;
-    opacity: 0.6;
-    transition: opacity var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--df-radius-md);
+    transition: color var(--transition-fast), background-color var(--transition-fast);
   }
 
   .remove-btn:hover {
-    opacity: 1;
+    color: var(--df-error);
+    background-color: var(--df-error-bg);
   }
 
   .cart-footer {
     margin-top: var(--spacing-md);
     padding-top: var(--spacing-md);
-    border-top: 2px solid var(--color-accent);
+    border-top: 2px solid var(--df-accent);
   }
 
   .total {
@@ -288,11 +307,13 @@
     margin-bottom: var(--spacing-md);
     font-size: 1.1rem;
     font-weight: 600;
+    color: var(--df-text-dark);
   }
 
   .total-price {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1.3rem;
+    font-family: var(--df-font-mono);
   }
 
   .action-buttons {

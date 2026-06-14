@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { NavLink } from '$lib/data/navigationConfig';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let title: string;
   export let subtitle: string = '';
@@ -80,7 +81,9 @@
             <a href={item.href} class="related-item">
               <div class="related-content">
                 <h3>{item.label}</h3>
-                <span class="related-arrow">→</span>
+                <span class="related-arrow">
+                  <Icon name="arrow-right" size={20} color="var(--df-primary)" />
+                </span>
               </div>
             </a>
           {/each}
@@ -134,20 +137,20 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+    background: linear-gradient(to top, rgba(15, 23, 42, 0.75), transparent);
     padding: 3rem 0 2rem;
   }
 
   .hero-title {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--color-white);
+    color: var(--df-white);
     margin: 0;
   }
 
   .hero-subtitle {
     font-size: 1.25rem;
-    color: var(--color-white);
+    color: var(--df-white);
     margin: 0.5rem 0 0;
     opacity: 0.9;
   }
@@ -155,13 +158,13 @@
   /* Description Section */
   .description-section {
     padding: 3rem 0;
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
   }
 
   .description {
     font-size: 1.125rem;
     line-height: 1.8;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .description :global(p) {
@@ -172,16 +175,16 @@
   .section-title {
     font-size: 2rem;
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin: 0 0 2rem;
     padding-bottom: 1rem;
-    border-bottom: 3px solid var(--color-accent);
+    border-bottom: 3px solid var(--df-accent);
   }
 
   /* Specifications Section */
   .specs-section {
     padding: 3rem 0;
-    background-color: #f8f9fa;
+    background-color: var(--df-bg-light);
   }
 
   .specs-grid {
@@ -191,16 +194,17 @@
   }
 
   .spec-item {
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
     padding: 1.5rem;
-    border-radius: 8px;
-    border-left: 4px solid var(--color-primary);
+    border-radius: var(--df-radius-lg);
+    border-left: 4px solid var(--df-primary);
+    box-shadow: var(--df-shadow-soft);
   }
 
   .spec-label {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #666;
+    color: var(--df-text-light);
     margin-bottom: 0.5rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -209,13 +213,13 @@
   .spec-value {
     font-size: 1.125rem;
     font-weight: 500;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   /* Gallery Section */
   .gallery-section {
     padding: 3rem 0;
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
   }
 
   .gallery-grid {
@@ -228,8 +232,8 @@
     position: relative;
     aspect-ratio: 4 / 3;
     overflow: hidden;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: var(--df-radius-lg);
+    box-shadow: var(--df-shadow-card);
     transition: transform var(--transition-fast);
   }
 
@@ -246,7 +250,7 @@
   /* Related Items Section */
   .related-section {
     padding: 3rem 0;
-    background-color: #f8f9fa;
+    background-color: var(--df-bg-light);
   }
 
   .related-grid {
@@ -256,19 +260,20 @@
   }
 
   .related-item {
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
     padding: 1.5rem;
-    border-radius: 8px;
+    border-radius: var(--df-radius-lg);
     text-decoration: none;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     transition: all var(--transition-fast);
     border: 2px solid transparent;
+    box-shadow: var(--df-shadow-soft);
   }
 
   .related-item:hover {
-    border-color: var(--color-primary);
+    border-color: var(--df-primary);
     transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.2);
+    box-shadow: var(--df-shadow-lifted);
   }
 
   .related-content {
@@ -281,12 +286,12 @@
     font-size: 1rem;
     font-weight: 600;
     margin: 0;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .related-arrow {
-    font-size: 1.5rem;
-    color: var(--color-primary);
+    display: flex;
+    align-items: center;
     transition: transform var(--transition-fast);
   }
 
@@ -297,28 +302,28 @@
   /* CTA Section */
   .cta-section {
     padding: 3rem 0;
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
     text-align: center;
   }
 
   .cta-button {
-    background-color: var(--color-primary);
-    color: var(--color-white);
+    background-color: var(--df-primary);
+    color: var(--df-white);
     font-size: 1.125rem;
     font-weight: 600;
     padding: 1rem 3rem;
     border: none;
-    border-radius: 50px;
+    border-radius: var(--df-radius-pill);
     cursor: pointer;
     transition: all var(--transition-fast);
-    box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+    box-shadow: var(--df-shadow-card);
   }
 
   .cta-button:hover {
-    background-color: var(--color-accent);
-    color: var(--color-primary);
+    background-color: var(--df-accent);
+    color: var(--df-primary);
     transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.4);
+    box-shadow: var(--df-shadow-lifted);
   }
 
   .cta-button:active {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { notificationsStore } from '$lib/stores/notificationsStore';
   import { getRelativeTime } from '$lib/utils/timeUtils';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
@@ -15,11 +16,12 @@
     notificationsStore.markAllAsRead();
   }
 
-  const notificationIcons: Record<string, string> = {
-    reminder: '⏰',
-    promotion: '🎉',
-    schedule: '📅',
-    announcement: '📢'
+  // Map notification types to Lucide icon names
+  const notificationIconNames: Record<string, string> = {
+    reminder: 'clock',
+    promotion: 'sparkles',
+    schedule: 'calendar-days',
+    announcement: 'bell'
   };
 </script>
 
@@ -27,8 +29,13 @@
   <button type="button" class="dropdown-overlay" on:click={onClose} aria-label="關閉通知"></button>
   <div class="notifications-dropdown">
     <div class="dropdown-header">
-      <h3>通知</h3>
-      <button class="close-btn" on:click={onClose}>✕</button>
+      <h3>
+        <Icon name="bell" size={18} color="var(--df-primary)" />
+        通知
+      </h3>
+      <button class="close-btn" on:click={onClose} aria-label="關閉">
+        <Icon name="x" size={18} color="currentColor" />
+      </button>
     </div>
 
     <div class="dropdown-body">
@@ -52,7 +59,11 @@
               tabindex="0"
             >
               <div class="notification-icon">
-                {notificationIcons[notification.type] || '📌'}
+                <Icon
+                  name={notificationIconNames[notification.type] || 'info'}
+                  size={20}
+                  color="var(--df-primary)"
+                />
               </div>
               <div class="notification-content">
                 <h4>{notification.title}</h4>
@@ -91,9 +102,10 @@
     width: 400px;
     max-width: calc(100vw - 40px);
     max-height: 500px;
-    background-color: var(--color-white);
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    background-color: var(--df-surface);
+    border-radius: var(--df-radius-lg);
+    border: 1px solid var(--df-border);
+    box-shadow: var(--df-shadow-lifted);
     z-index: 1000;
     display: flex;
     flex-direction: column;
@@ -104,21 +116,23 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--spacing-md);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .dropdown-header h3 {
     margin: 0;
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
   }
 
   .close-btn {
     background: none;
     border: none;
-    font-size: 1.5rem;
     cursor: pointer;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     padding: 0;
     width: 30px;
     height: 30px;
@@ -126,10 +140,12 @@
     align-items: center;
     justify-content: center;
     transition: color var(--transition-fast);
+    border-radius: var(--df-radius-md);
   }
 
   .close-btn:hover {
-    color: var(--color-text);
+    color: var(--df-text-dark);
+    background-color: var(--df-bg-light);
   }
 
   .dropdown-body {
@@ -140,18 +156,18 @@
   .empty-state {
     text-align: center;
     padding: var(--spacing-xl) 0;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
   }
 
   .notifications-actions {
     padding: var(--spacing-sm) var(--spacing-md);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
   }
 
   .mark-all-read-btn {
     background: none;
     border: none;
-    color: var(--color-primary);
+    color: var(--df-primary);
     cursor: pointer;
     font-size: 0.85rem;
     padding: 0.25rem 0.5rem;
@@ -171,23 +187,25 @@
     display: flex;
     gap: var(--spacing-sm);
     padding: var(--spacing-md);
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--df-border);
     cursor: pointer;
     transition: background-color var(--transition-fast);
     position: relative;
   }
 
   .notification-item:hover {
-    background-color: var(--color-bg);
+    background-color: var(--df-bg-light);
   }
 
   .notification-item.unread {
-    background-color: rgba(0, 102, 204, 0.05);
+    background-color: var(--df-primary-bg);
   }
 
   .notification-icon {
-    font-size: 1.5rem;
     flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 2px;
   }
 
   .notification-content {
@@ -196,21 +214,21 @@
 
   .notification-content h4 {
     margin: 0 0 0.25rem 0;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-size: 0.95rem;
     font-weight: 600;
   }
 
   .notification-content p {
     margin: 0 0 0.5rem 0;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.85rem;
     line-height: 1.4;
   }
 
   .notification-time {
     font-size: 0.75rem;
-    color: var(--color-text-light);
+    color: var(--df-text-muted);
   }
 
   .unread-indicator {
@@ -220,7 +238,7 @@
     transform: translateY(-50%);
     width: 8px;
     height: 8px;
-    background-color: var(--color-primary);
+    background-color: var(--df-primary);
     border-radius: 50%;
   }
 

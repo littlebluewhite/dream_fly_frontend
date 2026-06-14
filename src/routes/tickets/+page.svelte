@@ -206,40 +206,40 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
-    padding: var(--spacing-xl) 0;
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));
+    color: var(--df-white);
+    padding: var(--df-space-8) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-white);
     font-size: 2.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .tickets-intro {
-    padding: var(--spacing-xl) 0 var(--spacing-lg);
+    padding: var(--df-space-8) 0 var(--df-space-6);
   }
 
   .intro-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
   }
 
   .tickets-list {
-    padding-bottom: var(--spacing-xl);
+    padding-bottom: var(--df-space-8);
   }
 
   .tickets-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .ticket-card {
@@ -254,33 +254,33 @@
   }
 
   .ticket-card.highlighted {
-    border: 2px solid var(--color-accent);
-    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+    border: 2px solid var(--df-accent);
+    box-shadow: var(--df-shadow-card);
   }
 
   .discount-badge {
     position: absolute;
     top: -10px;
-    right: var(--spacing-md);
-    background-color: #dc3545;
-    color: white;
+    right: var(--df-space-5);
+    background-color: var(--df-error);
+    color: var(--df-white);
     padding: 0.4rem 0.8rem;
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     font-size: 0.85rem;
     font-weight: 600;
   }
 
   .ticket-header {
     text-align: center;
-    margin-bottom: var(--spacing-md);
-    padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid var(--color-accent);
+    margin-bottom: var(--df-space-5);
+    padding-bottom: var(--df-space-5);
+    border-bottom: 2px solid var(--df-accent);
   }
 
   .ticket-header h3 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1.4rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .price-wrapper {
@@ -288,35 +288,35 @@
     flex-direction: column;
     align-items: center;
     gap: 0.25rem;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--df-space-2);
   }
 
   .original-price {
     text-decoration: line-through;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.9rem;
   }
 
   .price {
     font-size: 2rem;
     font-weight: 700;
-    color: var(--color-primary);
+    color: var(--df-primary);
   }
 
   .duration {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.95rem;
   }
 
   .ticket-body {
     flex: 1;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--df-space-5);
   }
 
   .description {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     text-align: center;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--df-space-5);
   }
 
   .features-list {
@@ -325,17 +325,17 @@
   }
 
   .features-list li {
-    padding: var(--spacing-xs) 0;
-    padding-left: var(--spacing-md);
+    padding: var(--df-space-2) 0;
+    padding-left: var(--df-space-5);
     position: relative;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .features-list li::before {
     content: '✓';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent);
     font-weight: bold;
   }
 
@@ -344,19 +344,19 @@
   }
 
   .purchase-info {
-    background-color: var(--color-bg);
-    padding: var(--spacing-xl) 0;
+    background-color: var(--df-bg-light);
+    padding: var(--df-space-8) 0;
   }
 
   .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .info-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
     font-size: 1.3rem;
   }
 
@@ -366,8 +366,8 @@
   }
 
   .info-card li {
-    padding: var(--spacing-xs) 0;
-    padding-left: var(--spacing-md);
+    padding: var(--df-space-2) 0;
+    padding-left: var(--df-space-5);
     position: relative;
   }
 
@@ -375,7 +375,7 @@
     content: '•';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent);
     font-weight: bold;
   }
 

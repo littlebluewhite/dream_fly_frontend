@@ -1,13 +1,14 @@
 <script lang="ts">
   import { toastStore } from '$lib/stores/toastStore';
   import { fade, fly } from 'svelte/transition';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   $: toasts = $toastStore;
 
-  const toastIcons = {
-    success: '✓',
-    error: '✕',
-    info: 'ℹ'
+  const toastIconNames: Record<string, string> = {
+    success: 'circle-check',
+    error: 'circle-alert',
+    info: 'info'
   };
 </script>
 
@@ -18,14 +19,16 @@
       in:fly={{ x: 300, duration: 300 }}
       out:fade={{ duration: 200 }}
     >
-      <div class="toast-icon">{toastIcons[toast.type]}</div>
+      <div class="toast-icon">
+        <Icon name={toastIconNames[toast.type] || 'info'} size={20} color="currentColor" />
+      </div>
       <div class="toast-message">{toast.message}</div>
       <button
         class="toast-close"
         on:click={() => toastStore.removeToast(toast.id)}
         aria-label="關閉"
       >
-        ✕
+        <Icon name="x" size={16} color="currentColor" />
       </button>
       <div class="toast-progress"></div>
     </div>
@@ -49,10 +52,10 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    background-color: var(--color-white);
+    background-color: var(--df-surface);
     padding: var(--spacing-md);
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: var(--df-radius-lg);
+    box-shadow: var(--df-shadow-lifted);
     min-width: 300px;
     max-width: 400px;
     pointer-events: auto;
@@ -60,47 +63,45 @@
   }
 
   .toast-success {
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--df-success);
   }
 
   .toast-error {
-    border-left: 4px solid #dc3545;
+    border-left: 4px solid var(--df-error);
   }
 
   .toast-info {
-    border-left: 4px solid var(--color-primary);
+    border-left: 4px solid var(--df-info);
   }
 
   .toast-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
-    font-weight: bold;
-    font-size: 0.9rem;
     flex-shrink: 0;
   }
 
   .toast-success .toast-icon {
-    background-color: #28a745;
-    color: white;
+    background-color: var(--df-success-bg);
+    color: var(--df-success-strong);
   }
 
   .toast-error .toast-icon {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--df-error-bg);
+    color: var(--df-error-strong);
   }
 
   .toast-info .toast-icon {
-    background-color: var(--color-primary);
-    color: white;
+    background-color: var(--df-info-bg);
+    color: var(--df-info);
   }
 
   .toast-message {
     flex: 1;
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-size: 0.9rem;
     line-height: 1.4;
   }
@@ -109,8 +110,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: var(--color-text-light);
-    font-size: 1.2rem;
+    color: var(--df-text-muted);
     padding: 0;
     width: 24px;
     height: 24px;
@@ -119,10 +119,11 @@
     justify-content: center;
     transition: color var(--transition-fast);
     flex-shrink: 0;
+    border-radius: var(--df-radius-sm);
   }
 
   .toast-close:hover {
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .toast-progress {
@@ -131,20 +132,23 @@
     left: 0;
     height: 3px;
     width: 100%;
-    background-color: rgba(0, 0, 0, 0.1);
     animation: progress 3000ms linear forwards;
+    transform-origin: left;
   }
 
   .toast-success .toast-progress {
-    background-color: rgba(40, 167, 69, 0.3);
+    background-color: var(--df-success);
+    opacity: 0.4;
   }
 
   .toast-error .toast-progress {
-    background-color: rgba(220, 53, 69, 0.3);
+    background-color: var(--df-error);
+    opacity: 0.4;
   }
 
   .toast-info .toast-progress {
-    background-color: rgba(0, 102, 204, 0.3);
+    background-color: var(--df-info);
+    opacity: 0.4;
   }
 
   @keyframes progress {

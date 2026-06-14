@@ -2,7 +2,7 @@
  *
  * Layering:
  *   1. tokens/*  — the canonical --df-* design tokens (verbatim from the DS).
- *   2. :root     — legacy --color-*/--spacing-* aliases mapped onto --df-*, so
+ *   2. :root     — legacy color and spacing aliases mapped onto --df-*, so
  *                  every existing component keeps working while immediately
  *                  picking up the correct brand values. Non-DS vars
  *                  (--transition-*, --breakpoint-*) are retained as-is.

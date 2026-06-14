@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$lib/components/ui/Icon.svelte';
   // Venues Page - 場館介紹
 </script>
 
@@ -26,7 +27,7 @@
 
       <div class="facilities-grid">
         <div class="facility-card card">
-          <h3>🤸 訓練設施</h3>
+          <h3><Icon name="activity" size={20} class="facility-icon" /> 訓練設施</h3>
           <ul>
             <li>大跳床 - 專業彈跳訓練，提升空中控制能力</li>
             <li>小跳床 - 基礎彈跳練習，適合初學者使用</li>
@@ -37,7 +38,7 @@
         </div>
 
         <div class="facility-card card">
-          <h3>🛡️ 安全設施</h3>
+          <h3><Icon name="shield-check" size={20} class="facility-icon" /> 安全設施</h3>
           <ul>
             <li>氣墊 - 高空落下緩衝保護，確保訓練安全</li>
             <li>海綿池 - 大型海綿填充池，提供安全著陸環境</li>
@@ -45,7 +46,7 @@
         </div>
 
         <div class="facility-card card">
-          <h3>💪 輔助訓練</h3>
+          <h3><Icon name="dumbbell" size={20} class="facility-icon" /> 輔助訓練</h3>
           <ul>
             <li>小型健身房 - 體能訓練器材，增強肌力與耐力</li>
             <li>小型攀岩場 - 手腳協調訓練，提升身體控制力</li>
@@ -54,7 +55,7 @@
         </div>
 
         <div class="facility-card card">
-          <h3>🏠 配套設施</h3>
+          <h3><Icon name="house" size={20} class="facility-icon" /> 配套設施</h3>
           <ul>
             <li>休息區 - 舒適的休息空間，家長觀課區</li>
             <li>小教室 - 理論課程教學、影片分析使用</li>
@@ -117,21 +118,21 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
+    background: linear-gradient(135deg, var(--df-primary) 0%, var(--df-primary-dark) 100%);
+    color: var(--df-text-on-dark);
     padding: var(--spacing-xl) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-text-on-dark);
     font-size: 2.5rem;
     margin-bottom: var(--spacing-sm);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .venue-details {
@@ -143,7 +144,7 @@
   }
 
   .venue-intro h2 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin-bottom: var(--spacing-md);
   }
 
@@ -154,10 +155,30 @@
     margin-bottom: var(--spacing-lg);
   }
 
+  .facility-card {
+    background: var(--df-surface);
+    border: 1px solid var(--df-border);
+    border-radius: var(--df-radius-lg);
+    box-shadow: var(--df-shadow-card);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .facility-card:hover {
+    box-shadow: var(--df-shadow-lifted);
+    border-color: var(--df-primary);
+  }
+
   .facility-card h3 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin-bottom: var(--spacing-md);
     font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+  }
+
+  :global(.facility-icon) {
+    flex-shrink: 0;
   }
 
   .facility-card ul {
@@ -169,13 +190,14 @@
     padding: var(--spacing-xs) 0;
     padding-left: var(--spacing-md);
     position: relative;
+    color: var(--df-text-dark);
   }
 
   .facility-card li::before {
     content: '✓';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent);
     font-weight: bold;
   }
 
@@ -185,7 +207,7 @@
 
   .venue-specs h2,
   .opening-hours h2 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin-bottom: var(--spacing-md);
   }
 
@@ -199,8 +221,8 @@
   .spec-item,
   .hours-item {
     padding: var(--spacing-sm);
-    background-color: var(--color-bg);
-    border-radius: 4px;
+    background-color: var(--df-bg-light);
+    border-radius: var(--df-radius-md);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
@@ -208,7 +230,7 @@
 
   .spec-item strong,
   .hours-item strong {
-    color: var(--color-primary);
+    color: var(--df-primary);
   }
 
   @media (max-width: 767px) {

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '$lib/components/ui/Icon.svelte';
+
   let formData = {
     name: '',
     email: '',
@@ -132,13 +134,15 @@
 
   {#if errorMessage}
     <div class="error-message">
-      ⚠️ {errorMessage}
+      <Icon name="circle-alert" size={16} color="var(--df-error-strong)" />
+      {errorMessage}
     </div>
   {/if}
 
   {#if formStatus === 'success'}
     <div class="success-message">
-      ✓ 訊息已送出！我們會盡快與您聯繫。
+      <Icon name="circle-check" size={16} color="var(--df-success-strong)" />
+      訊息已送出！我們會盡快與您聯繫。
     </div>
   {/if}
 
@@ -150,7 +154,8 @@
     {#if formStatus === 'submitting'}
       送出中...
     {:else if formStatus === 'success'}
-      已送出 ✓
+      <Icon name="check" size={18} color="currentColor" />
+      已送出
     {:else}
       送出訊息
     {/if}
@@ -169,12 +174,12 @@
   label {
     display: block;
     margin-bottom: var(--spacing-xs);
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-weight: 600;
   }
 
   .required {
-    color: #dc3545;
+    color: var(--df-error);
   }
 
   input,
@@ -182,24 +187,28 @@
   textarea {
     width: 100%;
     padding: var(--spacing-sm);
-    border: 2px solid #ddd;
-    border-radius: 4px;
+    border: 1.5px solid var(--df-border-strong);
+    border-radius: var(--df-radius-md);
     font-size: 1rem;
     font-family: inherit;
-    transition: border-color var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--df-surface);
+    color: var(--df-text-dark);
   }
 
   input:focus,
   select:focus,
   textarea:focus {
     outline: none;
-    border-color: var(--color-primary);
+    border-color: var(--df-primary);
+    box-shadow: 0 0 0 3px var(--df-primary-bg);
   }
 
   input:disabled,
   select:disabled,
   textarea:disabled {
-    background-color: #f5f5f5;
+    background-color: var(--df-bg-light);
+    color: var(--df-text-muted);
     cursor: not-allowed;
   }
 
@@ -209,27 +218,39 @@
   }
 
   .error-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
     padding: var(--spacing-sm);
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-    border-radius: 4px;
+    background-color: var(--df-error-bg);
+    color: var(--df-error-strong);
+    border: 1px solid var(--df-error);
+    border-radius: var(--df-radius-md);
     margin-bottom: var(--spacing-md);
+    font-size: 0.9rem;
   }
 
   .success-message {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
     padding: var(--spacing-sm);
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-    border-radius: 4px;
+    background-color: var(--df-success-bg);
+    color: var(--df-success-strong);
+    border: 1px solid var(--df-success);
+    border-radius: var(--df-radius-md);
     margin-bottom: var(--spacing-md);
+    font-size: 0.9rem;
   }
 
   .submit-btn {
     width: 100%;
     padding: var(--spacing-md);
     font-size: 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
   }
 
   .submit-btn:disabled {

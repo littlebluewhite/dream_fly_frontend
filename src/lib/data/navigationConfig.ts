@@ -28,7 +28,7 @@ export const navigationConfig: NavItem[] = [
     categories: [
       {
         title: '訓練設施',
-        icon: '🤸',
+        icon: 'activity',
         items: [
           { label: '大跳床', href: '/venues/training/trampoline-large' },
           { label: '小跳床', href: '/venues/training/trampoline-small' },
@@ -39,7 +39,7 @@ export const navigationConfig: NavItem[] = [
       },
       {
         title: '安全設施',
-        icon: '🛡️',
+        icon: 'shield-check',
         items: [
           { label: '氣墊', href: '/venues/safety/air-cushion' },
           { label: '海綿池', href: '/venues/safety/foam-pit' }
@@ -47,7 +47,7 @@ export const navigationConfig: NavItem[] = [
       },
       {
         title: '輔助訓練',
-        icon: '💪',
+        icon: 'dumbbell',
         items: [
           { label: '小型健身房', href: '/venues/supporting/gym' },
           { label: '攀岩場', href: '/venues/supporting/climbing' },
@@ -56,7 +56,7 @@ export const navigationConfig: NavItem[] = [
       },
       {
         title: '配套設施',
-        icon: '🏠',
+        icon: 'house',
         items: [
           { label: '休息區', href: '/venues/amenities/lounge' },
           { label: '小教室', href: '/venues/amenities/classroom' }
@@ -70,7 +70,7 @@ export const navigationConfig: NavItem[] = [
     categories: [
       {
         title: '專業教練團隊',
-        icon: '👨‍🏫',
+        icon: 'graduation-cap',
         items: [
           { label: '王教練', href: '/coaches/wang' },
           { label: '李教練', href: '/coaches/li' },
@@ -86,7 +86,7 @@ export const navigationConfig: NavItem[] = [
     categories: [
       {
         title: '四大核心課程',
-        icon: '🎯',
+        icon: 'target',
         items: [
           { label: '幼兒體操', href: '/courses/children' },
           { label: '競技啦啦隊', href: '/courses/cheerleading' },

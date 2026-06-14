@@ -1,5 +1,6 @@
 <script lang="ts">
   import ScheduleCalendar from '$lib/components/ScheduleCalendar.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   // Schedule Page - 日程表
 </script>
@@ -69,7 +70,7 @@
         <h2>預約規則</h2>
         <div class="rules-grid">
           <div class="rule-item">
-            <h3>📅 預約時間</h3>
+            <h3><Icon name="calendar-days" size={22} /> 預約時間</h3>
             <ul>
               <li>可預約 30 天內的時段</li>
               <li>每次預約最少 2 小時</li>
@@ -78,7 +79,7 @@
           </div>
 
           <div class="rule-item">
-            <h3>⏰ 取消規則</h3>
+            <h3><Icon name="clock" size={22} /> 取消規則</h3>
             <ul>
               <li>使用前 24 小時可免費取消</li>
               <li>24 小時內取消收取 50% 費用</li>
@@ -87,7 +88,7 @@
           </div>
 
           <div class="rule-item">
-            <h3>💳 付款方式</h3>
+            <h3><Icon name="credit-card" size={22} /> 付款方式</h3>
             <ul>
               <li>線上刷卡付款</li>
               <li>使用回數票或會員卡</li>
@@ -96,7 +97,7 @@
           </div>
 
           <div class="rule-item">
-            <h3>📝 注意事項</h3>
+            <h3><Icon name="info" size={22} /> 注意事項</h3>
             <ul>
               <li>請穿著運動服裝及室內球鞋</li>
               <li>預約時段前 10 分鐘報到</li>
@@ -113,28 +114,28 @@
       <h2 class="text-center mb-lg">課程時段資訊</h2>
       <div class="courts-grid">
         <div class="court-card card">
-          <h3>🤸 幼兒體操班</h3>
+          <h3><Icon name="baby" size={24} /> 幼兒體操班</h3>
           <p><strong>時段：</strong>週二、週四 16:00-17:00</p>
           <p><strong>適合：</strong>3-6歲幼兒</p>
           <p><strong>收費：</strong>NT$ 3,200 / 月 (4堂)</p>
         </div>
 
         <div class="court-card card">
-          <h3>🎀 競技啦啦隊</h3>
+          <h3><Icon name="sparkles" size={24} /> 競技啦啦隊</h3>
           <p><strong>時段：</strong>週三、週五 18:00-19:30</p>
           <p><strong>適合：</strong>7-18歲青少年</p>
           <p><strong>收費：</strong>NT$ 4,500 / 月 (8堂)</p>
         </div>
 
         <div class="court-card card">
-          <h3>💪 成人體操班</h3>
+          <h3><Icon name="dumbbell" size={24} /> 成人體操班</h3>
           <p><strong>時段：</strong>週一、週三 20:00-21:15</p>
           <p><strong>適合：</strong>18歲以上成人</p>
           <p><strong>收費：</strong>NT$ 3,600 / 月 (4堂)</p>
         </div>
 
         <div class="court-card card">
-          <h3>🏃 跑酷訓練班</h3>
+          <h3><Icon name="footprints" size={24} /> 跑酷訓練班</h3>
           <p><strong>時段：</strong>週六、週日 14:00-15:30</p>
           <p><strong>適合：</strong>12歲以上</p>
           <p><strong>收費：</strong>NT$ 4,000 / 月 (8堂)</p>
@@ -146,37 +147,37 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
-    padding: var(--spacing-xl) 0;
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));
+    color: var(--df-white);
+    padding: var(--df-space-8) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-white);
     font-size: 2.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .schedule-intro {
-    padding: var(--spacing-xl) 0 var(--spacing-lg);
+    padding: var(--df-space-8) 0 var(--df-space-6);
   }
 
   .intro-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-lg);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-6);
     text-align: center;
   }
 
   .instructions-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .instruction-item {
@@ -184,14 +185,14 @@
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: var(--spacing-sm);
+    gap: var(--df-space-4);
   }
 
   .step-number {
     width: 50px;
     height: 50px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-    color: var(--color-white);
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-light));
+    color: var(--df-white);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -201,40 +202,43 @@
   }
 
   .step-content h3 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-xs);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-2);
     font-size: 1.1rem;
   }
 
   .step-content p {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.95rem;
   }
 
   .schedule-calendar-section {
-    padding: var(--spacing-lg) 0 var(--spacing-xl);
+    padding: var(--df-space-6) 0 var(--df-space-8);
   }
 
   .booking-rules {
-    background-color: var(--color-bg);
-    padding: var(--spacing-xl) 0;
+    background-color: var(--df-bg-light);
+    padding: var(--df-space-8) 0;
   }
 
   .rules-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-lg);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-6);
     text-align: center;
   }
 
   .rules-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .rule-item h3 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--df-space-2);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-4);
     font-size: 1.2rem;
   }
 
@@ -244,45 +248,48 @@
   }
 
   .rule-item li {
-    padding: var(--spacing-xs) 0;
-    padding-left: var(--spacing-md);
+    padding: var(--df-space-2) 0;
+    padding-left: var(--df-space-5);
     position: relative;
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   .rule-item li::before {
     content: '•';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent);
     font-weight: bold;
   }
 
   .court-info {
-    padding: var(--spacing-xl) 0;
+    padding: var(--df-space-8) 0;
   }
 
   .court-info h2 {
-    color: var(--color-primary);
+    color: var(--df-primary);
   }
 
   .courts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .court-card h3 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--df-space-2);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
   }
 
   .court-card p {
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .court-card strong {
-    color: var(--color-text);
+    color: var(--df-text-dark);
   }
 
   @media (max-width: 767px) {

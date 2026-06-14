@@ -1,5 +1,7 @@
 <script lang="ts">
   import { cartStore } from '$lib/stores/cartStore';
+  import Badge from '$lib/components/ui/Badge.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
 
   export let course: {
     id: number;
@@ -17,26 +19,26 @@
   $: cart = $cartStore;
   $: isInCart = cart.some((item) => item.id === `course-${course.id}`);
 
-  // Color mapping for different levels
-  const levelColors: Record<string, string> = {
-    '初級': 'green',
-    '中級': 'blue',
-    '高級': 'purple',
-    '青少年': 'orange',
-    '客製化': 'gold',
-    '體驗': 'teal',
-    '幼兒': 'pink',      // pink for children's gymnastics
-    '競技': 'crimson',   // crimson red for competitive cheer
-    '成人': 'navy',      // navy blue for adult gymnastics
-    '進階': 'magenta'    // dark magenta for parkour
+  // Map level to Badge tone
+  const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {
+    '初級': 'success',
+    '中級': 'primary',
+    '高級': 'info',
+    '青少年': 'warning',
+    '客製化': 'accent',
+    '體驗': 'info',
+    '幼兒': 'success',
+    '競技': 'error',
+    '成人': 'primary',
+    '進階': 'neutral'
   };
 
-  $: levelColor = levelColors[course.level] || 'blue';
+  $: levelTone = levelTones[course.level] || 'primary';
 </script>
 
 <div class="course-card card">
   <div class="course-header">
-    <span class="level-badge" data-level={levelColor}>{course.level}</span>
+    <Badge tone={levelTone}>{course.level}</Badge>
     <h3>{course.name}</h3>
   </div>
 
@@ -45,11 +47,11 @@
 
     <div class="course-details">
       <div class="detail-item">
-        <span class="detail-icon">⏱️</span>
+        <Icon name="clock" size={18} color="var(--df-text-muted)" />
         <span class="detail-text">{course.duration}</span>
       </div>
       <div class="detail-item">
-        <span class="detail-icon">💰</span>
+        <Icon name="credit-card" size={18} color="var(--df-primary)" />
         <span class="detail-text price">{course.price}</span>
       </div>
     </div>
@@ -93,61 +95,15 @@
     margin-bottom: var(--spacing-md);
   }
 
-  .level-badge {
-    display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 12px;
-    font-size: 0.85rem;
-    font-weight: 600;
+  .course-header :global(.badge) {
     margin-bottom: var(--spacing-sm);
-    color: white;
-  }
-
-  .level-badge[data-level="green"] {
-    background-color: #28a745;
-  }
-
-  .level-badge[data-level="blue"] {
-    background-color: var(--color-primary);
-  }
-
-  .level-badge[data-level="purple"] {
-    background-color: #6f42c1;
-  }
-
-  .level-badge[data-level="orange"] {
-    background-color: #fd7e14;
-  }
-
-  .level-badge[data-level="gold"] {
-    background-color: var(--color-accent-dark);
-    color: var(--color-text);
-  }
-
-  .level-badge[data-level="teal"] {
-    background-color: #20c997;
-  }
-
-  .level-badge[data-level="pink"] {
-    background-color: #ff69b4;
-  }
-
-  .level-badge[data-level="crimson"] {
-    background-color: #dc143c;
-  }
-
-  .level-badge[data-level="navy"] {
-    background-color: #000080;
-  }
-
-  .level-badge[data-level="magenta"] {
-    background-color: #8b008b;
   }
 
   .course-header h3 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1.3rem;
     margin-bottom: 0;
+    margin-top: var(--spacing-sm);
   }
 
   .course-body {
@@ -158,7 +114,7 @@
   }
 
   .course-description {
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     line-height: 1.6;
   }
 
@@ -167,8 +123,8 @@
     flex-direction: column;
     gap: var(--spacing-sm);
     padding: var(--spacing-md);
-    background-color: var(--color-bg);
-    border-radius: 4px;
+    background-color: var(--df-bg-light);
+    border-radius: var(--df-radius-md);
   }
 
   .detail-item {
@@ -177,23 +133,20 @@
     gap: var(--spacing-sm);
   }
 
-  .detail-icon {
-    font-size: 1.2rem;
-  }
-
   .detail-text {
-    color: var(--color-text);
+    color: var(--df-text-dark);
     font-weight: 500;
   }
 
   .detail-text.price {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-weight: 700;
     font-size: 1.1rem;
+    font-family: var(--df-font-mono);
   }
 
   .course-includes h4 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     font-size: 1rem;
     margin-bottom: var(--spacing-sm);
   }
@@ -208,7 +161,7 @@
     padding: 0.3rem 0;
     padding-left: var(--spacing-md);
     position: relative;
-    color: var(--color-text-light);
+    color: var(--df-text-light);
     font-size: 0.95rem;
   }
 
@@ -216,14 +169,14 @@
     content: '✓';
     position: absolute;
     left: 0;
-    color: var(--color-accent);
+    color: var(--df-accent-dark);
     font-weight: bold;
   }
 
   .course-footer {
     margin-top: var(--spacing-md);
     padding-top: var(--spacing-md);
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--df-border);
   }
 
   .course-footer .btn {

@@ -212,23 +212,23 @@
   }
 
   .calendar-header h2 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin: 0;
   }
 
   .nav-btn {
-    background-color: var(--color-primary);
-    color: var(--color-white);
+    background-color: var(--df-primary);
+    color: var(--df-white);
     border: none;
     padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: 4px;
+    border-radius: var(--df-radius-md);
     cursor: pointer;
     font-size: 1.2rem;
     transition: background-color var(--transition-fast);
   }
 
   .nav-btn:hover {
-    background-color: var(--color-primary-dark);
+    background-color: var(--df-primary-dark);
   }
 
   .calendar-grid {
@@ -241,21 +241,22 @@
   .day-header {
     text-align: center;
     font-weight: 600;
-    color: var(--color-primary);
+    color: var(--df-primary);
     padding: var(--spacing-sm);
   }
 
   .calendar-day {
     aspect-ratio: 1;
-    border: 2px solid #ddd;
-    background-color: var(--color-white);
-    border-radius: 4px;
+    border: 2px solid var(--df-border);
+    background-color: var(--df-surface);
+    border-radius: var(--df-radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all var(--transition-fast);
     font-weight: 500;
+    color: var(--df-text-dark);
   }
 
   .calendar-day.empty {
@@ -264,19 +265,19 @@
   }
 
   .calendar-day:not(.empty):not(.past):hover {
-    border-color: var(--color-primary);
-    background-color: rgba(0, 102, 204, 0.1);
+    border-color: var(--df-primary);
+    background-color: var(--df-primary-bg);
   }
 
   .calendar-day.today {
-    border-color: var(--color-accent);
-    background-color: rgba(255, 215, 0, 0.1);
+    border-color: var(--df-accent);
+    background-color: var(--df-warning-bg);
   }
 
   .calendar-day.selected {
-    background-color: var(--color-primary);
-    color: var(--color-white);
-    border-color: var(--color-primary);
+    background-color: var(--df-primary);
+    color: var(--df-white);
+    border-color: var(--df-primary);
   }
 
   .calendar-day.past {
@@ -287,11 +288,11 @@
   .time-slots {
     margin-top: var(--spacing-xl);
     padding-top: var(--spacing-lg);
-    border-top: 2px solid #eee;
+    border-top: 2px solid var(--df-border);
   }
 
   .time-slots h3 {
-    color: var(--color-primary);
+    color: var(--df-primary);
     margin-bottom: var(--spacing-md);
   }
 
@@ -304,55 +305,56 @@
 
   .time-slot {
     padding: var(--spacing-md);
-    border: 2px solid #ddd;
-    border-radius: 4px;
-    background-color: var(--color-white);
+    border: 2px solid var(--df-border);
+    border-radius: var(--df-radius-md);
+    background-color: var(--df-surface);
     cursor: pointer;
     transition: all var(--transition-fast);
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    color: var(--df-text-dark);
   }
 
   .time-slot:not(:disabled):hover {
-    border-color: var(--color-primary);
+    border-color: var(--df-primary);
     transform: translateY(-2px);
   }
 
   .time-slot.selected-slot {
-    border-color: var(--color-primary);
-    background-color: var(--color-primary);
-    color: var(--color-white);
+    border-color: var(--df-primary);
+    background-color: var(--df-primary);
+    color: var(--df-white);
   }
 
   .time-slot.available {
-    border-color: #28a745;
+    border-color: var(--df-success);
   }
 
   .time-slot.available .slot-status {
-    color: #28a745;
+    color: var(--df-success-strong);
   }
 
   .time-slot.limited {
-    border-color: #fd7e14;
+    border-color: var(--df-warning);
   }
 
   .time-slot.limited .slot-status {
-    color: #fd7e14;
+    color: var(--df-warning);
   }
 
   .time-slot.full {
-    border-color: #dc3545;
+    border-color: var(--df-error);
     opacity: 0.5;
     cursor: not-allowed;
   }
 
   .time-slot.full .slot-status {
-    color: #dc3545;
+    color: var(--df-error);
   }
 
   .time-slot.selected-slot .slot-status {
-    color: var(--color-white);
+    color: var(--df-white);
   }
 
   .slot-time {
@@ -379,35 +381,36 @@
     gap: var(--spacing-lg);
     margin-top: var(--spacing-lg);
     padding-top: var(--spacing-md);
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--df-border);
   }
 
   .legend-item {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
+    color: var(--df-text-light);
   }
 
   .legend-color {
     width: 20px;
     height: 20px;
-    border-radius: 4px;
+    border-radius: var(--df-radius-sm);
     border: 2px solid;
   }
 
   .legend-color.available {
-    border-color: #28a745;
-    background-color: rgba(40, 167, 69, 0.2);
+    border-color: var(--df-success);
+    background-color: var(--df-success-bg);
   }
 
   .legend-color.limited {
-    border-color: #fd7e14;
-    background-color: rgba(253, 126, 20, 0.2);
+    border-color: var(--df-warning);
+    background-color: var(--df-warning-bg);
   }
 
   .legend-color.full {
-    border-color: #dc3545;
-    background-color: rgba(220, 53, 69, 0.2);
+    border-color: var(--df-error);
+    background-color: var(--df-error-bg);
   }
 
   @media (max-width: 767px) {

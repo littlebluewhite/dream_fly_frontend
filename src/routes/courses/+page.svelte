@@ -1,5 +1,6 @@
 <script lang="ts">
   import CourseCard from '$lib/components/CourseCard.svelte';
+  import Icon from '$lib/components/ui/Icon.svelte';
   import { cartStore } from '$lib/stores/cartStore';
   import { toastStore } from '$lib/stores/toastStore';
 
@@ -102,19 +103,19 @@
         <h2>報名資訊</h2>
         <div class="info-grid">
           <div class="info-item">
-            <h3>🎫 報名方式</h3>
+            <h3><Icon name="ticket" size={22} /> 報名方式</h3>
             <p>線上報名、電話報名或現場報名皆可</p>
           </div>
           <div class="info-item">
-            <h3>👥 班級人數</h3>
+            <h3><Icon name="users" size={22} /> 班級人數</h3>
             <p>團體班 6-10 人，確保教學品質</p>
           </div>
           <div class="info-item">
-            <h3>👕 服裝準備</h3>
+            <h3><Icon name="info" size={22} /> 服裝準備</h3>
             <p>請穿著舒適運動服裝，建議赤腳或體操鞋</p>
           </div>
           <div class="info-item">
-            <h3>💳 優惠方案</h3>
+            <h3><Icon name="credit-card" size={22} /> 優惠方案</h3>
             <p>團報、續報享優惠，詳情請洽櫃台</p>
           </div>
         </div>
@@ -125,57 +126,57 @@
 
 <style>
   .page-header {
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    color: var(--color-white);
-    padding: var(--spacing-xl) 0;
+    background: linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));
+    color: var(--df-white);
+    padding: var(--df-space-8) 0;
     text-align: center;
   }
 
   .page-header h1 {
-    color: var(--color-white);
+    color: var(--df-white);
     font-size: 2.5rem;
-    margin-bottom: var(--spacing-sm);
+    margin-bottom: var(--df-space-4);
   }
 
   .page-header p {
     font-size: 1.2rem;
-    color: var(--color-accent);
+    color: var(--df-accent);
   }
 
   .courses-intro {
-    padding: var(--spacing-xl) 0 var(--spacing-lg);
+    padding: var(--df-space-8) 0 var(--df-space-6);
   }
 
   .intro-card h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-md);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-5);
   }
 
   .courses-list {
-    padding-bottom: var(--spacing-xl);
+    padding-bottom: var(--df-space-8);
   }
 
   .courses-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .enrollment-info {
-    background-color: var(--color-bg);
-    padding: var(--spacing-xl) 0;
+    background-color: var(--df-bg-light);
+    padding: var(--df-space-8) 0;
   }
 
   .enrollment-info h2 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-lg);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-6);
     text-align: center;
   }
 
   .info-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: var(--spacing-lg);
+    gap: var(--df-space-6);
   }
 
   .info-item {
@@ -183,8 +184,12 @@
   }
 
   .info-item h3 {
-    color: var(--color-primary);
-    margin-bottom: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--df-space-2);
+    color: var(--df-primary);
+    margin-bottom: var(--df-space-4);
     font-size: 1.2rem;
   }
 
