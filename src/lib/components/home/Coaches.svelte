@@ -93,6 +93,13 @@
     gap: 3px;
     margin-bottom: 14px;
   }
+  /* Lucide ships `star` as an outline (the <svg> carries fill="none"); fill it
+     so the rating reads as 5 solid gold stars, not an empty/unrated widget.
+     Must target the svg directly — an inherited fill can't beat the element's
+     own presentation attribute. */
+  .coach-stars :global(svg) {
+    fill: var(--df-accent);
+  }
   .coach-tags {
     display: flex;
     gap: 8px;

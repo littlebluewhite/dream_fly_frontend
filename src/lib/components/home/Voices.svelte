@@ -60,6 +60,11 @@
     gap: 3px;
     margin-bottom: 16px;
   }
+  /* Fill Lucide's outline star (svg has fill="none") so the rating reads as
+     solid gold stars. Target the svg directly to beat the presentation attr. */
+  .voice-stars :global(svg) {
+    fill: var(--df-accent);
+  }
   .voice-quote {
     margin: 0 0 20px;
     font-size: 16px;
