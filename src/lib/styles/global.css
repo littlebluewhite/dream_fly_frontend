@@ -1,40 +1,50 @@
-/* Dream Fly Global Styles */
+/* Dream Fly Global Styles — Dream Fly design-system aligned
+ *
+ * Layering:
+ *   1. tokens/*  — the canonical --df-* design tokens (verbatim from the DS).
+ *   2. :root     — legacy --color-*/--spacing-* aliases mapped onto --df-*, so
+ *                  every existing component keeps working while immediately
+ *                  picking up the correct brand values. Non-DS vars
+ *                  (--transition-*, --breakpoint-*) are retained as-is.
+ *   3. base + .btn/.card primitives + utilities.
+ */
+
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/base.css';
 
 :root {
-  /* Primary Colors */
-  --color-primary: #0066cc;
-  --color-primary-dark: #004d99;
-  --color-primary-light: #3385d6;
-  --color-white: #ffffff;
-  --color-accent: #ffd700;
-  --color-accent-dark: #e6c200;
+  /* ── Legacy colour aliases → Dream Fly tokens ── */
+  --color-primary: var(--df-primary);
+  --color-primary-dark: var(--df-primary-dark);
+  --color-primary-light: var(--df-primary-light);
+  --color-white: var(--df-white);
+  --color-accent: var(--df-accent);
+  --color-accent-dark: var(--df-accent-dark);
 
-  /* Text Colors */
-  --color-text: #333333;
-  --color-text-light: #666666;
-  --color-text-white: #ffffff;
+  --color-text: var(--df-text-dark);
+  --color-text-light: var(--df-text-light);
+  --color-text-white: var(--df-text-on-dark);
 
-  /* Background Colors */
-  --color-bg: #f8f9fa;
-  --color-bg-white: #ffffff;
+  --color-bg: var(--df-bg-light);
+  --color-bg-white: var(--df-white);
 
-  /* Spacing */
-  --spacing-xs: 0.5rem;
-  --spacing-sm: 1rem;
-  --spacing-md: 1.5rem;
-  --spacing-lg: 2rem;
-  --spacing-xl: 3rem;
+  /* ── Legacy spacing (rem scale) → df 4px grid (values are identical) ── */
+  --spacing-xs: var(--df-space-2); /* 8px  */
+  --spacing-sm: var(--df-space-4); /* 16px */
+  --spacing-md: var(--df-space-5); /* 24px */
+  --spacing-lg: var(--df-space-6); /* 32px */
+  --spacing-xl: var(--df-space-8); /* 48px */
 
-  /* Breakpoints (for reference in JS) */
+  /* ── Non-DS vars retained verbatim (components still reference these) ── */
   --breakpoint-mobile: 768px;
   --breakpoint-tablet: 1024px;
-
-  /* Transitions */
   --transition-fast: 0.2s ease;
   --transition-normal: 0.3s ease;
 }
 
-/* Reset and Base Styles */
+/* ── Reset & base ── */
 * {
   margin: 0;
   padding: 0;
@@ -46,123 +56,152 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', 'Microsoft JhengHei',
-               'PingFang TC', 'Heiti TC', sans-serif;
-  line-height: 1.8;
-  color: var(--color-text);
-  background-color: var(--color-bg);
+  font-family: var(--df-font-body);
+  font-size: var(--df-text-base);
+  line-height: var(--df-leading-normal);
+  color: var(--df-text-dark);
+  background-color: var(--df-bg-light);
+  letter-spacing: 0.02em; /* gentle CJK readability aid */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Chinese Character Optimization */
-body {
-  letter-spacing: 0.02em;
-}
-
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
-  line-height: 1.4;
-  color: var(--color-text);
+  font-family: var(--df-font-heading);
+  font-weight: var(--df-weight-bold);
+  line-height: var(--df-leading-tight);
+  color: var(--text-heading); /* navy ink */
   margin-bottom: var(--spacing-sm);
 }
 
-h1 { font-size: 2.5rem; }
-h2 { font-size: 2rem; }
-h3 { font-size: 1.75rem; }
-h4 { font-size: 1.5rem; }
-h5 { font-size: 1.25rem; }
-h6 { font-size: 1rem; }
+h1 { font-size: var(--df-text-h1); } /* 36 */
+h2 { font-size: var(--df-text-h2); } /* 32 */
+h3 { font-size: var(--df-text-h3); line-height: var(--df-leading-snug); } /* 24 */
+h4 { font-size: var(--df-text-h4); line-height: var(--df-leading-snug); } /* 20 */
+h5 { font-size: var(--df-text-lg); line-height: var(--df-leading-snug); } /* 18 */
+h6 { font-size: var(--df-text-base); line-height: var(--df-leading-snug); } /* 16 */
 
 p {
   margin-bottom: var(--spacing-sm);
 }
 
 a {
-  color: var(--color-primary);
+  color: var(--df-primary);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-primary-dark);
+  color: var(--df-primary-dark);
 }
 
-/* Container */
+/* ── Container ── */
 .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 var(--spacing-md);
 }
 
-/* Button Styles */
+/* ── Buttons (full variant set; radius 8px, hover brightness .94, press 1px) ──
+ * Existing markup uses `.btn .btn-primary/.btn-secondary/.btn-accent`; all
+ * variants are defined here so nothing renders unstyled before pages migrate
+ * to the <Button> primitive. */
 .btn {
-  display: inline-block;
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--df-space-2);
+  padding: 12px 24px;
+  border: 1.5px solid transparent;
+  border-radius: var(--df-radius-md);
+  font-family: var(--df-font-body);
+  font-size: var(--df-text-base);
+  font-weight: var(--df-weight-bold);
+  line-height: 1.2;
   text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter var(--transition-fast), background-color var(--transition-fast),
+    color var(--transition-fast), border-color var(--transition-fast);
 }
+
+.btn:hover { filter: brightness(0.94); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--df-shadow-focus); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; transform: none; }
 
 .btn-primary {
-  background-color: var(--color-primary);
-  color: var(--color-white);
+  background-color: var(--df-primary);
+  color: var(--df-white);
+  border-color: var(--df-primary);
 }
 
-.btn-primary:hover {
-  background-color: var(--color-primary-dark);
-  transform: translateY(-2px);
+.btn-secondary {
+  background-color: var(--df-white);
+  color: var(--df-primary);
+  border-color: var(--df-primary);
 }
 
 .btn-accent {
-  background-color: var(--color-accent);
-  color: var(--color-text);
+  background-color: var(--df-accent);
+  color: var(--df-ink);
+  border-color: var(--df-accent);
 }
 
-.btn-accent:hover {
-  background-color: var(--color-accent-dark);
-  transform: translateY(-2px);
+.btn-ghost {
+  background-color: transparent;
+  color: var(--df-primary);
+  border-color: transparent;
+}
+.btn-ghost:hover { background-color: var(--df-primary-bg); filter: none; }
+
+.btn-danger {
+  background-color: var(--df-error);
+  color: var(--df-white);
+  border-color: var(--df-error);
 }
 
-/* Card Styles */
+/* ── Cards (static by default; lift is opt-in via .card-hoverable) ── */
 .card {
-  background-color: var(--color-white);
-  border-radius: 8px;
-  padding: var(--spacing-lg);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: box-shadow var(--transition-normal);
+  background-color: var(--df-surface);
+  border: 1px solid var(--df-border);
+  border-radius: var(--df-radius-lg);
+  padding: var(--df-space-5);
+  box-shadow: var(--df-shadow-card);
 }
 
-.card:hover {
-  box-shadow: 0 4px 16px rgba(0, 102, 204, 0.15);
+.card-hoverable {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  cursor: pointer;
+}
+.card-hoverable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--df-shadow-lifted);
 }
 
-/* Responsive Images */
+/* ── Responsive images ── */
 img {
   max-width: 100%;
   height: auto;
   display: block;
 }
 
-/* Mobile Responsive */
+/* ── Mobile ── */
 @media (max-width: 767px) {
-  h1 { font-size: 2rem; }
-  h2 { font-size: 1.75rem; }
-  h3 { font-size: 1.5rem; }
+  h1 { font-size: var(--df-text-h2); } /* 32 */
+  h2 { font-size: var(--df-text-h3); } /* 24 */
+  h3 { font-size: var(--df-text-h4); } /* 20 */
 
   .container {
     padding: 0 var(--spacing-sm);
   }
 }
 
-/* Utility Classes */
+/* ── Utility classes (retained; existing pages reference these) ── */
 .text-center { text-align: center; }
-.text-primary { color: var(--color-primary); }
-.text-accent { color: var(--color-accent); }
+.text-primary { color: var(--df-primary); }
+.text-accent { color: var(--df-accent); }
 .mb-sm { margin-bottom: var(--spacing-sm); }
 .mb-md { margin-bottom: var(--spacing-md); }
 .mb-lg { margin-bottom: var(--spacing-lg); }

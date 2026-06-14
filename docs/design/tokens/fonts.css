@@ -1,0 +1,5 @@
+/* Dream Fly — Webfonts
+ * Headings/UI: Geist · Body/UI: Inter · Code: Geist Mono
+ * Loaded from Google Fonts. The athletic logo wordmark itself is a fixed
+ * graphic asset (assets/logo-*), not a webfont. */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap");

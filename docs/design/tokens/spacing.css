@@ -1,0 +1,32 @@
+/* Dream Fly — Spacing, radius, shadow tokens
+ * 4px base grid. Soft, low-spread shadows on a light page. */
+:root {
+  /* ---- Spacing (4px grid) ---- */
+  --df-space-1: 4px;
+  --df-space-2: 8px;
+  --df-space-3: 12px;
+  --df-space-4: 16px;
+  --df-space-5: 24px;
+  --df-space-6: 32px;
+  --df-space-8: 48px;
+  --df-space-10: 64px;
+
+  /* ---- Radius ---- */
+  --df-radius-sm: 4px;
+  --df-radius-md: 8px;
+  --df-radius-lg: 12px;
+  --df-radius-xl: 16px;
+  --df-radius-pill: 999px;
+
+  /* ---- Shadows ---- */
+  --df-shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --df-shadow-card: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --df-shadow-lifted: 0 10px 28px rgba(15, 23, 42, 0.12);
+  --df-shadow-strong: 0 18px 48px rgba(15, 23, 42, 0.20);
+  --df-shadow-focus: 0 0 0 3px rgba(0, 102, 204, 0.30);
+
+  /* ---- Semantic aliases ---- */
+  --radius-control: var(--df-radius-md);
+  --radius-card: var(--df-radius-lg);
+  --shadow-card: var(--df-shadow-card);
+}

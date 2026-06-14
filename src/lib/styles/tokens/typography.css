@@ -1,0 +1,39 @@
+/* Dream Fly — Typography tokens
+ * Geist for headings + admin, Inter for body/UI, Geist Mono for code/data.
+ * Noto Sans TC backs Traditional-Chinese glyphs across both stacks. */
+:root {
+  /* ---- Families ---- */
+  --df-font-heading: "Geist", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+  --df-font-body: "Inter", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+  --df-font-ui: "Inter", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+  --df-font-admin: "Geist", "Noto Sans TC", system-ui, sans-serif;
+  --df-font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* ---- Sizes (px) ---- */
+  --df-text-display: 48px;
+  --df-text-h1: 36px;
+  --df-text-h2: 32px;
+  --df-text-h3: 24px;
+  --df-text-h4: 20px;
+  --df-text-lg: 18px;
+  --df-text-base: 16px;
+  --df-text-sm: 14px;
+  --df-text-xs: 12px;
+
+  /* ---- Weights ---- */
+  --df-weight-regular: 400;
+  --df-weight-medium: 500;
+  --df-weight-semibold: 600;
+  --df-weight-bold: 700;
+
+  /* ---- Line heights ---- */
+  --df-leading-tight: 1.2;
+  --df-leading-snug: 1.45;
+  --df-leading-normal: 1.6;
+  --df-leading-relaxed: 1.8;
+
+  /* ---- Semantic aliases ---- */
+  --font-heading: var(--df-font-heading);
+  --font-body: var(--df-font-body);
+  --font-mono: var(--df-font-mono);
+}

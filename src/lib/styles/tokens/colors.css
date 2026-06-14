@@ -1,0 +1,59 @@
+/* Dream Fly — Color tokens
+ * Brand: 藍 (blue) · 白 (white) · 黃 (gold). Athletic-collegiate spirit,
+ * clean digital surfaces. Blue leads; gold is the energetic accent. */
+:root {
+  /* ---- Brand · Primary (blue) ---- */
+  --df-primary: #0066CC;
+  --df-primary-dark: #004D99;
+  --df-primary-light: #3385D6;
+  --df-primary-bg: #EAF3FB;
+
+  /* ---- Brand · Accent (gold) ---- */
+  --df-accent: #FFD700;
+  --df-accent-dark: #E6C200;
+  --df-accent-light: #FFE34D;
+
+  /* ---- Athletic navy (logo / hero ink) ---- */
+  --df-ink: #0F172A;          /* deep navy — logo claw, hero overlays */
+  --df-ink-soft: #1E293B;
+
+  /* ---- Neutrals / surfaces ---- */
+  --df-white: #FFFFFF;
+  --df-surface: #FFFFFF;
+  --df-bg-light: #F8F9FA;
+  --df-bg-dark: #0F172A;
+  --df-border: #E5E7EB;
+  --df-border-strong: #CBD5E1;
+
+  /* ---- Text ---- */
+  --df-text-dark: #333333;
+  --df-text-light: #666666;
+  --df-text-muted: #94A3B8;
+  --df-text-on-dark: #FFFFFF;
+
+  /* ---- Semantic ---- */
+  --df-success: #10B981;
+  --df-success-bg: #E6F4EA;
+  --df-success-strong: #047857;
+  --df-warning: #F59E0B;
+  --df-warning-bg: #FEF3C7;
+  --df-error: #EF4444;
+  --df-error-bg: #FBE7E9;
+  --df-error-strong: #B91C1C;
+  --df-info: #0EA5E9;
+  --df-info-bg: #E0F2FE;
+
+  /* ---- Semantic aliases (use these in product UI) ---- */
+  --text-heading: var(--df-ink);
+  --text-body: var(--df-text-dark);
+  --text-subtle: var(--df-text-light);
+  --text-muted: var(--df-text-muted);
+  --surface-page: var(--df-bg-light);
+  --surface-card: var(--df-surface);
+  --surface-inverse: var(--df-bg-dark);
+  --border-default: var(--df-border);
+  --border-emphasis: var(--df-border-strong);
+  --action-primary: var(--df-primary);
+  --action-primary-hover: var(--df-primary-dark);
+  --action-accent: var(--df-accent);
+}

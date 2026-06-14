@@ -23,5 +23,8 @@
   "type": "module",
   "overrides": {
     "cookie": "^0.7.0"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.18.0"
   }
 }
