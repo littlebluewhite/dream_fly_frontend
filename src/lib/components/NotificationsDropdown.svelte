@@ -24,7 +24,7 @@
 </script>
 
 {#if isOpen}
-  <div class="dropdown-overlay" on:click={onClose}></div>
+  <button type="button" class="dropdown-overlay" on:click={onClose} aria-label="關閉通知"></button>
   <div class="notifications-dropdown">
     <div class="dropdown-header">
       <h3>通知</h3>
@@ -78,6 +78,9 @@
     right: 0;
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.3);
+    border: none;
+    padding: 0;
+    cursor: pointer;
     z-index: 999;
   }
 

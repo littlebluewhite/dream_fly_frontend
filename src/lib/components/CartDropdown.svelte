@@ -27,7 +27,7 @@
 </script>
 
 {#if isOpen}
-  <div class="dropdown-overlay" on:click={onClose}></div>
+  <button type="button" class="dropdown-overlay" on:click={onClose} aria-label="關閉購物車"></button>
   <div class="cart-dropdown">
     <div class="dropdown-header">
       <h3>購物車</h3>
@@ -104,6 +104,9 @@
     right: 0;
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.3);
+    border: none;
+    padding: 0;
+    cursor: pointer;
     z-index: 999;
   }
 

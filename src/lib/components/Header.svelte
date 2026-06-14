@@ -48,6 +48,10 @@
         <span class="site-title">Dream Fly</span>
       </a>
 
+      <!-- Navigation in center -->
+      <Navigation {mobileMenuOpen} on:close={closeMobileMenu} />
+
+      <!-- Icons and menu at far right -->
       <div class="header-right">
         <div class="header-actions">
           <button
@@ -79,8 +83,6 @@
           <span></span>
           <span></span>
         </button>
-
-        <Navigation {mobileMenuOpen} on:close={closeMobileMenu} />
       </div>
     </div>
   </div>
@@ -103,13 +105,16 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--spacing-sm) 0;
+    gap: 0.75rem;
   }
 
   .logo-link {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: 0.5rem;
     text-decoration: none;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
   }
 
   .logo {
@@ -133,6 +138,7 @@
     cursor: pointer;
     padding: 8px;
     z-index: 1001;
+    flex-shrink: 0;
   }
 
   .mobile-menu-toggle span {
@@ -159,12 +165,16 @@
   .header-right {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
+    gap: 0.75rem;
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .header-actions {
     display: flex;
-    gap: var(--spacing-sm);
+    gap: 0.5rem;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   .icon-button {

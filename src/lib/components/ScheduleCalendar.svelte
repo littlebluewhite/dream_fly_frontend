@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
 
   let currentDate = new Date();
   let selectedDate: Date | null = null;
@@ -81,10 +83,10 @@
   }
 
   function handleBooking() {
-    if (!selectedDate || !selectedTimeSlot) return;
+    if (!selectedDate || !selectedTimeSlot || !browser) return;
 
     alert(`預約成功！\n日期：${formatDate(selectedDate)}\n時段：${selectedTimeSlot}\n\n請前往聯絡頁面完成預約流程。`);
-    window.location.href = '/contact';
+    goto('/contact');
   }
 
   $: year = currentDate.getFullYear();
