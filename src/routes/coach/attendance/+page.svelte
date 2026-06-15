@@ -49,10 +49,14 @@
   }
 
   function markAll() {
+    // codex r2 (P2): bump dirtyCount by the rows this bulk action actually changes,
+    // so the save bar / status card don't claim "0 筆變更" after a sync.
+    const changed = ATT_ROSTER.filter((r) => r.def !== 'leave' && marks[r.mid] !== 'present').length;
     marks = Object.fromEntries(
       ATT_ROSTER.map((r) => [r.mid, r.def === 'leave' ? 'leave' : 'present'] as [string, AttDefault])
     );
     state = 'dirty';
+    dirtyCount += changed;
   }
 
   function doSave() {

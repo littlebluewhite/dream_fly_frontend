@@ -203,7 +203,7 @@
   <!-- ════════════════════ STEP 2: ROLE PORTAL ════════════════════ -->
   {:else}
     <div
-      style="min-height:100vh; display:flex; flex-direction:column; position:relative; z-index:1;"
+      style="width:100%; align-self:stretch; min-height:100vh; display:flex; flex-direction:column; position:relative; z-index:1;"
     >
       <!-- header bar -->
       <header

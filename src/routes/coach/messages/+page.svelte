@@ -98,6 +98,10 @@
 
     <!-- ══════════════ Col 2: 對話串 ══════════════ -->
     <div style="display:flex;flex-direction:column;min-height:0;background:var(--df-bg-light)">
+      {#if list.length === 0}
+        <!-- codex r2 (P2): no matches → no active thread/composer -->
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--df-text-muted);font-size:13px">沒有符合的對話</div>
+      {:else}
       <!-- thread header -->
       <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--df-border);background:#fff">
         <span style="width:40px;height:40px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
@@ -141,6 +145,7 @@
 
       <!-- composer -->
       <MessageComposer bind:value={reply} on:send={handleSend} />
+      {/if}
     </div>
 
     <!-- ══════════════ Col 3: 資訊面板 ══════════════ -->
