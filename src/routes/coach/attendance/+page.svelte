@@ -62,6 +62,9 @@
   function doSave() {
     state = 'saving';
     setTimeout(() => {
+      // codex r3 (P2): if an edit re-dirtied the page during the in-flight save,
+      // don't clobber it with 'saved' — leave the new change pending.
+      if (state !== 'saving') return;
       state = 'saved';
       savedAt = '14:32';
       dirtyCount = 0;

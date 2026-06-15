@@ -153,26 +153,30 @@
       <!-- 學員資訊 -->
       <InfoSection title="學員資訊">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <span style="width:38px;height:38px;border-radius:50%;background:#0066CC;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">王</span>
+          <span style="width:38px;height:38px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">王小明</div>
-            <div style="font-size:12px;color:var(--df-text-light)">兒童體操初階班</div>
+            <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">{showThread ? '王小明' : cur.name}</div>
+            <div style="font-size:12px;color:var(--df-text-light)">{showThread ? '兒童體操初階班' : cur.kind}</div>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div style="display:flex;justify-content:space-between;font-size:12.5px">
-            <span style="color:var(--df-text-muted)">出席率</span>
-            <span style="color:var(--df-text-dark);font-weight:600">98%</span>
+        {#if showThread}
+          <!-- codex r3 (P2): these stats are 王小明's; show only for the 王媽媽 thread
+               rather than the wrong student's numbers on other conversations. -->
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px">
+              <span style="color:var(--df-text-muted)">出席率</span>
+              <span style="color:var(--df-text-dark);font-weight:600">98%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px">
+              <span style="color:var(--df-text-muted)">學習進度</span>
+              <span style="color:var(--df-text-dark);font-weight:600">初階</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px">
+              <span style="color:var(--df-text-muted)">最近課程</span>
+              <span style="color:var(--df-text-dark);font-weight:600">今日 09:00</span>
+            </div>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:12.5px">
-            <span style="color:var(--df-text-muted)">學習進度</span>
-            <span style="color:var(--df-text-dark);font-weight:600">初階</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:12.5px">
-            <span style="color:var(--df-text-muted)">最近課程</span>
-            <span style="color:var(--df-text-dark);font-weight:600">今日 09:00</span>
-          </div>
-        </div>
+        {/if}
       </InfoSection>
 
       <!-- 快捷操作 -->
