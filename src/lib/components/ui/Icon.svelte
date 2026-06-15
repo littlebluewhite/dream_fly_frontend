@@ -116,6 +116,28 @@
   import History from '@lucide/svelte/icons/history';
   import Percent from '@lucide/svelte/icons/percent';
   import Repeat2 from '@lucide/svelte/icons/repeat-2';
+  // ── Coach + staff additions ──
+  import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
+  import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+  import Image from '@lucide/svelte/icons/image';
+  import Lightbulb from '@lucide/svelte/icons/lightbulb';
+  import Loader from '@lucide/svelte/icons/loader';
+  import PenLine from '@lucide/svelte/icons/pen-line';
+  import CirclePlay from '@lucide/svelte/icons/circle-play';
+  import Save from '@lucide/svelte/icons/save';
+  import Signal from '@lucide/svelte/icons/signal';
+  import StickyNote from '@lucide/svelte/icons/sticky-note';
+  import UserCog from '@lucide/svelte/icons/user-cog';
+  import Paperclip from '@lucide/svelte/icons/paperclip';
+  import Play from '@lucide/svelte/icons/play';
+  import FileVideo from '@lucide/svelte/icons/file-video';
+  import MessagesSquare from '@lucide/svelte/icons/messages-square';
+  import FileText from '@lucide/svelte/icons/file-text';
+  import Camera from '@lucide/svelte/icons/camera';
+  import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+  import Cloud from '@lucide/svelte/icons/cloud';
+  import CloudCheck from '@lucide/svelte/icons/cloud-check';
+  import Video from '@lucide/svelte/icons/video';
 
   const ICONS: Record<string, typeof Activity> = {
     'activity': Activity,
@@ -223,7 +245,32 @@
     'calendar-plus': CalendarPlus,
     'history': History,
     'percent': Percent,
-    'repeat-2': Repeat2
+    'repeat-2': Repeat2,
+    // ── Coach + staff additions ──
+    'arrow-up-down': ArrowUpDown,
+    'clipboard-check': ClipboardCheck,
+    'image': Image,
+    'lightbulb': Lightbulb,
+    'loader': Loader,
+    'pen-line': PenLine,
+    'circle-play': CirclePlay,
+    'play-circle': CirclePlay, // alias → circle-play (old-style name)
+    'save': Save,
+    'signal': Signal,
+    'sticky-note': StickyNote,
+    'user-cog': UserCog,
+    'paperclip': Paperclip,
+    'play': Play,
+    'file-video': FileVideo,
+    'messages-square': MessagesSquare,
+    'file-text': FileText,
+    'camera': Camera,
+    'shield-alert': ShieldAlert,
+    'cloud': Cloud,
+    'cloud-check': CloudCheck,
+    'video': Video,
+    'alert-triangle': TriangleAlert, // alias → triangle-alert (old-style name)
+    'circle-check-big': CircleCheck // alias → circle-check (old-style name)
   };
 
   export let name: string;
