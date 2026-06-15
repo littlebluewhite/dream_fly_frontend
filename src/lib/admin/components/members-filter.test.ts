@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MEMBERS } from '$lib/admin/data';
-import { filterMembers, countByStatus } from './members-filter';
+import { filterMembers, countByStatus, blankMember } from './members-filter';
 
 /* Pure filter/sort derivation for the 學員名單 (ported from admin.jsx
  * MembersTable). Exercised against the real MEMBERS fixture so the behaviour is
@@ -92,5 +92,29 @@ describe('countByStatus', () => {
 		expect(c.warning).toBe(MEMBERS.filter((m) => m.status === 'warning').length);
 		expect(c.paused).toBe(MEMBERS.filter((m) => m.status === 'paused').length);
 		expect(c.active + c.warning + c.paused).toBe(c.all);
+	});
+});
+
+/* P2 regression (codex round 1): the 新增學員 flow needs a blank member with a
+ * unique id so it can be prepended to the keyed table without a key collision. */
+describe('blankMember — 新增學員 add flow', () => {
+	it('derives a unique, well-formed id from the current row count', () => {
+		const m = blankMember(MEMBERS.length); // 48 seeded → GY2024049
+		expect(m.id).toBe('GY2024049');
+		expect(MEMBERS.some((x) => x.id === m.id)).toBe(false);
+	});
+
+	it('gives distinct ids for sequential adds (keyed-table safe)', () => {
+		expect(blankMember(MEMBERS.length).id).not.toBe(blankMember(MEMBERS.length + 1).id);
+	});
+
+	it('seeds sane defaults with every required Member field populated', () => {
+		const m = blankMember(0);
+		expect(m.pay).toBe('trial');
+		expect(m.status).toBe('active');
+		expect(m.att).toBe(100);
+		expect(m.course).toBeTruthy();
+		expect(m.coach).toBeTruthy();
+		expect(m.tier).toBe('一般會員');
 	});
 });

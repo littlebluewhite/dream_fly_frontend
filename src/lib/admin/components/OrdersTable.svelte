@@ -9,20 +9,20 @@
   import StatusBadge from './StatusBadge.svelte';
   import OrderDialog from './OrderDialog.svelte';
   import { ORDERS, type Order } from '$lib/admin/data';
-  import { search, toasts } from '$lib/admin/stores';
+  import { search } from '$lib/admin/stores';
   import { fmtNT } from '$lib/admin/format';
   import { filterOrders, countByStatus, type OrderStatusFilter } from './orders-filter';
 
+  // The orders page owns the mutable order state (so the summary KPIs and this
+  // table stay in sync); we render straight from `rows` and report actions up.
   export let rows: Order[] = ORDERS;
-
-  // Local working copy so 標記已付款 reflects immediately (mirrors the source useState).
-  let orders: Order[] = rows;
-  $: orders = rows;
+  export let onMarkPaid: (o: Order) => void = () => {};
+  export let onRemind: (o: Order) => void = () => {};
 
   let tab: OrderStatusFilter = 'all';
   let active: Order | null = null;
 
-  $: counts = countByStatus(orders);
+  $: counts = countByStatus(rows);
   $: tabs = [
     { value: 'all', label: '全部', count: counts.all },
     { value: 'paid', label: '已付款', count: counts.paid },
@@ -30,17 +30,16 @@
     { value: 'refunded', label: '已退款', count: counts.refunded }
   ];
 
-  $: visible = filterOrders(orders, { query: $search, status: tab });
+  $: visible = filterOrders(rows, { query: $search, status: tab });
 
-  function markPaid(o: Order) {
-    orders = orders.map((x) => (x.id === o.id ? { ...x, status: 'paid' } : x));
+  function handleMarkPaid(o: Order) {
     active = null;
-    toasts.notify('success', '已標記收款', o.id + ' · ' + fmtNT(o.amount) + ' 已入帳。');
+    onMarkPaid(o);
   }
 
-  function remind(o: Order) {
+  function handleRemind(o: Order) {
     active = null;
-    toasts.notify('info', '已發送催繳', o.member + ' 將收到繳費提醒。');
+    onRemind(o);
   }
 </script>
 
@@ -98,8 +97,8 @@
 <OrderDialog
   order={active}
   onClose={() => (active = null)}
-  onMarkPaid={markPaid}
-  onRemind={remind}
+  onMarkPaid={handleMarkPaid}
+  onRemind={handleRemind}
 />
 
 <style>

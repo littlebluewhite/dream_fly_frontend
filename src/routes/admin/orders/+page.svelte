@@ -7,13 +7,25 @@
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
-  import { ORDERS } from '$lib/admin/data';
+  import { ORDERS, type Order } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
   import { fmtNT } from '$lib/admin/format';
-  import { countByStatus, paidRevenue } from '$lib/admin/components/orders-filter';
+  import { countByStatus, paidRevenue, applyMarkPaid } from '$lib/admin/components/orders-filter';
 
-  const counts = countByStatus(ORDERS);
-  const revenue = paidRevenue(ORDERS);
+  // Single source of truth for the orders surface: both the summary KPIs and the
+  // table derive from this mutable copy, so 標記已付款 keeps the StatCards in sync
+  // with the table (instead of the stats staying frozen on the original fixture).
+  let orders: Order[] = ORDERS.map((o) => ({ ...o }));
+  $: counts = countByStatus(orders);
+  $: revenue = paidRevenue(orders);
+
+  function markPaid(o: Order) {
+    orders = applyMarkPaid(orders, o.id);
+    toasts.notify('success', '已標記收款', o.id + ' · ' + fmtNT(o.amount) + ' 已入帳。');
+  }
+  function remind(o: Order) {
+    toasts.notify('info', '已發送催繳', o.member + ' 將收到繳費提醒。');
+  }
 </script>
 
 <PageHead title="訂單與金流" sub="報名繳費紀錄">
@@ -58,7 +70,7 @@
   />
 </div>
 
-<OrdersTable />
+<OrdersTable rows={orders} onMarkPaid={markPaid} onRemind={remind} />
 
 <style>
   .stats {

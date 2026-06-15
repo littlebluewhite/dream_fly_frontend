@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import MembersTable from './MembersTable.svelte';
 import type { Member } from '$lib/admin/data';
 
@@ -92,5 +92,17 @@ describe('MembersTable (compact)', () => {
 	it('omits the status tabs in compact mode', () => {
 		const { queryByRole } = render(MembersTable, { rows: [row], compact: true });
 		expect(queryByRole('tab', { name: /全部/ })).toBeNull();
+	});
+});
+
+/* P2 regression (codex round 1): the 新增學員 header button had no on:click and
+ * did nothing. The table now owns the add flow, so clicking it opens the
+ * blank-member edit dialog. */
+describe('MembersTable add flow', () => {
+	it('opens the add dialog when 新增學員 is clicked (previously a dead button)', async () => {
+		const { getByRole, getByText, queryByText } = render(MembersTable, { rows: [row] });
+		expect(queryByText('編輯學員資料')).toBeNull();
+		await fireEvent.click(getByRole('button', { name: /新增學員/ }));
+		expect(getByText('編輯學員資料')).toBeInTheDocument();
 	});
 });

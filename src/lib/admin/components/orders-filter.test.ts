@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ORDERS } from '$lib/admin/data';
-import { filterOrders, countByStatus, paidRevenue } from './orders-filter';
+import { filterOrders, countByStatus, paidRevenue, applyMarkPaid } from './orders-filter';
 
 /* Pure filter derivation for the 訂單與金流 view (ported from admin.jsx
  * OrdersView). Exercised against the real ORDERS fixture so the behaviour is
@@ -83,5 +83,36 @@ describe('paidRevenue', () => {
 	it('sums amount over paid orders only', () => {
 		const expected = ORDERS.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
 		expect(paidRevenue(ORDERS)).toBe(expected);
+	});
+});
+
+/* P2 regression (codex round 1): the orders page derives its 本月已收 / 待付款
+ * StatCards from the SAME mutable array the table marks paid, via applyMarkPaid,
+ * so the stats can't go stale after 標記已付款. */
+describe('applyMarkPaid — KPI/table consistency after 標記已付款', () => {
+	const pending = ORDERS.find((o) => o.status === 'pending');
+
+	it('marks the targeted order paid without mutating the input', () => {
+		const id = pending!.id;
+		const out = applyMarkPaid(ORDERS, id);
+		expect(out.find((o) => o.id === id)!.status).toBe('paid');
+		expect(ORDERS.find((o) => o.id === id)!.status).toBe('pending');
+		expect(out).not.toBe(ORDERS);
+	});
+
+	it('moves one order from pending to paid in the derived counts', () => {
+		const before = countByStatus(ORDERS);
+		const after = countByStatus(applyMarkPaid(ORDERS, pending!.id));
+		expect(after.pending).toBe(before.pending - 1);
+		expect(after.paid).toBe(before.paid + 1);
+	});
+
+	it('adds the order amount to paidRevenue (本月已收) so the stat stays consistent', () => {
+		const out = applyMarkPaid(ORDERS, pending!.id);
+		expect(paidRevenue(out)).toBe(paidRevenue(ORDERS) + pending!.amount);
+	});
+
+	it('is a no-op for an unknown id', () => {
+		expect(countByStatus(applyMarkPaid(ORDERS, '___nope___'))).toEqual(countByStatus(ORDERS));
 	});
 });

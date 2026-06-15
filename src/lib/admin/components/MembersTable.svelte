@@ -21,6 +21,7 @@
   import {
     filterMembers,
     countByStatus,
+    blankMember,
     type MemberStatusFilter,
     type MembersSort
   } from './members-filter';
@@ -75,11 +76,29 @@
     editOpen = false;
     editing = null;
   }
+
+  // 新增學員 flow — owned here (the source opens it from this table's header).
+  // Exposed via openAdd() so the 學員管理 page can trigger it too (bind:this).
+  let addOpen = false;
+  let adding: Member | null = null;
+  export function openAdd() {
+    adding = blankMember(members.length);
+    addOpen = true;
+  }
+  function onAdded(m: Member) {
+    members = [m, ...members];
+    addOpen = false;
+    adding = null;
+  }
+  function closeAdd() {
+    addOpen = false;
+    adding = null;
+  }
 </script>
 
 <Card padding={0} style="overflow:hidden">
   <PanelHead title="學員名單" sub={compact ? '最近活躍 6 位' : counts.all + ' 位在學學員'}>
-    <Button slot="right" size="sm" variant="primary">
+    <Button slot="right" size="sm" variant="primary" on:click={openAdd}>
       <Icon name="plus" size={15} />新增學員
     </Button>
   </PanelHead>
@@ -188,6 +207,7 @@
   }}
   onSave={onSaved}
 />
+<MemberEditDialog member={adding} open={addOpen} onClose={closeAdd} onSave={onAdded} />
 
 <style>
   .th {

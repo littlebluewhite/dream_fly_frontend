@@ -6,7 +6,7 @@
  * matches `m.name + m.id + m.course`), then optionally sort by 出席率 (att).
  * Kept here, unit-testable without rendering, and imported by MembersTable. */
 
-import type { Member, MemberStatus } from '$lib/admin/data';
+import { CLASSES, COACHES, MEMBER_COLORS, type Member, type MemberStatus } from '$lib/admin/data';
 
 /** Status tab/chip key. `all` = 全部; the rest mirror MemberStatus. */
 export type MemberStatusFilter = 'all' | MemberStatus;
@@ -67,4 +67,40 @@ export function filterMembers(rows: Member[], opts: MembersFilter = {}): Member[
 	}
 
 	return out;
+}
+
+/**
+ * A fresh blank learner for the 新增學員 flow. `seq` (the current row count)
+ * yields a unique, monotonic member id so the keyed table never collides when
+ * several members are added in a row. Mirrors admin.jsx blankMember defaults.
+ */
+export function blankMember(seq: number): Member {
+	return {
+		id: 'GY' + String(2024001 + seq),
+		name: '',
+		initial: '',
+		color: MEMBER_COLORS[seq % MEMBER_COLORS.length],
+		course: CLASSES[0].name,
+		coach: COACHES[0].name,
+		att: 100,
+		status: 'active',
+		age: 0,
+		parent: '',
+		phone: '',
+		joined: '2026/06',
+		points: 0,
+		pay: 'trial',
+		remain: 0,
+		lastSeen: '—',
+		recent: [],
+		emName: '',
+		emPhone: '',
+		campus: '美村本館',
+		source: '官網預約表單',
+		birthday: '—',
+		tier: '一般會員',
+		tierColor: '#64748B',
+		renewDue: '體驗 06/30 到期',
+		lineId: ''
+	};
 }

@@ -42,6 +42,15 @@ export function paidRevenue(rows: Order[]): number {
 }
 
 /**
+ * Mark one order paid, returning a NEW array (input never mutated). The orders
+ * page derives BOTH the table and the summary KPIs (本月已收 / 待付款) from the
+ * result, so they stay consistent after 標記已付款.
+ */
+export function applyMarkPaid(rows: Order[], id: string): Order[] {
+	return rows.map((o) => (o.id === id ? { ...o, status: 'paid' } : o));
+}
+
+/**
  * Filter the order rows. Order mirrors the source: status tab → search term.
  * Returns a new array; the input is never mutated.
  */
