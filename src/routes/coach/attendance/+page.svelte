@@ -38,6 +38,10 @@
     if (!noteFor) return;
     notes = { ...notes, [noteFor.mid]: noteText };
     noteFor = null;
+    // codex r1 (P2): a note edit is an unsaved change too — re-dirty the save bar
+    // so a coach who annotates after syncing isn't told everything is uploaded.
+    state = 'dirty';
+    dirtyCount += 1;
   }
 
   function closeNote() {

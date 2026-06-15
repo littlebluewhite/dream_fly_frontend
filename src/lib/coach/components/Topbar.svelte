@@ -19,8 +19,9 @@
   export let title: string;
 
   let notif = false;
+  let allRead = false; // codex r1 (P3): 全部標為已讀 actually clears the unread state
   $: isSchedule = $page.url.pathname === '/coach/schedule';
-  $: unread = NOTIFS.filter((n) => n.unread).length;
+  $: unread = allRead ? 0 : NOTIFS.filter((n) => n.unread).length;
 
   function addClass() {
     toasts.notify('info', '新增課程', '建立新的課程時段（示範）。');
@@ -67,7 +68,7 @@
           : 'var(--df-bg-light)'};display:flex;align-items:center;justify-content:center;cursor:pointer"
       >
         <Icon name="bell" size={18} color={notif ? 'var(--df-primary)' : 'var(--df-text-dark)'} />
-        <span style="position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:999px;background:#dc2626"></span>
+        {#if unread > 0}<span style="position:absolute;top:9px;right:10px;width:8px;height:8px;border-radius:999px;background:#dc2626"></span>{/if}
       </button>
       {#if notif}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -87,7 +88,10 @@
               {/if}
             </div>
             <button
-              on:click={() => (notif = false)}
+              on:click={() => {
+                allRead = true;
+                notif = false;
+              }}
               style="border:none;background:transparent;color:var(--df-primary);font-weight:600;font-size:12.5px;cursor:pointer;font-family:var(--df-font-body)"
             >
               全部標為已讀
@@ -95,13 +99,14 @@
           </div>
           <div style="max-height:380px;overflow-y:auto">
             {#each NOTIFS as n, i (i)}
+              {@const rowUnread = n.unread && !allRead}
               <button
                 class="df-rowhover"
                 on:click={() => openNotif(n.to)}
                 style="display:flex;gap:12px;width:100%;padding:13px 18px;border:none;border-bottom:{i <
                 NOTIFS.length - 1
                   ? '1px solid var(--df-border)'
-                  : 'none'};background:{n.unread ? 'var(--df-primary-bg)' : '#fff'};cursor:pointer;text-align:left;font-family:var(--df-font-body)"
+                  : 'none'};background:{rowUnread ? 'var(--df-primary-bg)' : '#fff'};cursor:pointer;text-align:left;font-family:var(--df-font-body)"
               >
                 <span
                   style="width:36px;height:36px;border-radius:9px;background:{n.bg};display:flex;align-items:center;justify-content:center;flex:none"
@@ -115,7 +120,7 @@
                     >
                       {n.title}
                     </span>
-                    {#if n.unread}
+                    {#if rowUnread}
                       <span style="width:8px;height:8px;border-radius:999px;background:var(--df-primary);flex:none"></span>
                     {/if}
                   </span>
