@@ -1,0 +1,97 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, fireEvent } from '@testing-library/svelte';
+import CoachEditDialog from './CoachEditDialog.svelte';
+import { COACHES, type Coach } from '$lib/admin/data';
+
+/* CoachEditDialog — edit form in the shared EditModal (admin.jsx
+ * CoachEditDialog). Holds a local copy of the coach; 儲存 fires onSave(updated) +
+ * a success toast. We assert the field render, the onSave wiring, the edited
+ * value flowing through, and tags-text → tags[] normalisation. */
+const base: Coach = COACHES[0]; // 林雅婷
+
+describe('CoachEditDialog', () => {
+	it('renders open with the coach name and the 儲存 primary', () => {
+		const { getByDisplayValue, getByText } = render(CoachEditDialog, {
+			open: true,
+			coach: base
+		});
+		expect(getByDisplayValue(base.name)).toBeInTheDocument();
+		expect(getByText('儲存')).toBeInTheDocument();
+	});
+
+	it('renders the editable fields (職稱 / 專長標籤 / 聯絡電話)', () => {
+		const { getByDisplayValue, getByLabelText } = render(CoachEditDialog, {
+			open: true,
+			coach: base
+		});
+		expect(getByDisplayValue(base.title)).toBeInTheDocument();
+		expect(getByDisplayValue(base.phone)).toBeInTheDocument();
+		// tags joined with 、 into the text buffer
+		expect(getByDisplayValue(base.tags.join('、'))).toBeInTheDocument();
+		expect(getByLabelText('目前狀態')).toBeInTheDocument();
+	});
+
+	it('renders nothing actionable when closed', () => {
+		const { queryByText } = render(CoachEditDialog, { open: false, coach: base });
+		expect(queryByText('儲存')).toBeNull();
+	});
+
+	it('uses the 新增教練 title + 建立教練 primary in new mode', () => {
+		const { getByText } = render(CoachEditDialog, { open: true, coach: base, isNew: true });
+		expect(getByText('新增教練')).toBeInTheDocument();
+		expect(getByText('建立教練')).toBeInTheDocument();
+	});
+
+	it('fires onSave with the edited name + re-derived initial when 儲存 clicked', async () => {
+		const onSave = vi.fn();
+		const { getByDisplayValue, getByText } = render(CoachEditDialog, {
+			open: true,
+			coach: base,
+			onSave
+		});
+
+		const nameInput = getByDisplayValue(base.name) as HTMLInputElement;
+		await fireEvent.input(nameInput, { target: { value: '陳測試' } });
+		await fireEvent.click(getByText('儲存'));
+
+		expect(onSave).toHaveBeenCalledTimes(1);
+		const updated = onSave.mock.calls[0][0] as Coach;
+		expect(updated.name).toBe('陳測試');
+		expect(updated.initial).toBe('陳'); // initial re-derived from the new name
+		expect(updated.id).toBe(base.id); // identity preserved
+	});
+
+	it('splits the 專長標籤 text buffer back into a tags[] array on save', async () => {
+		const onSave = vi.fn();
+		const { getByDisplayValue, getByText } = render(CoachEditDialog, {
+			open: true,
+			coach: base,
+			onSave
+		});
+		await fireEvent.input(getByDisplayValue(base.tags.join('、')), {
+			target: { value: '競技體操、跑酷, 成人體操' }
+		});
+		await fireEvent.click(getByText('儲存'));
+		expect(onSave.mock.calls[0][0].tags).toEqual(['競技體操', '跑酷', '成人體操']);
+	});
+
+	it('coerces edited numeric fields (年資) back to a number on save', async () => {
+		const onSave = vi.fn();
+		const { getByDisplayValue, getByText } = render(CoachEditDialog, {
+			open: true,
+			coach: base,
+			onSave
+		});
+		// the 年資 field shows the coach's years; edit it then save
+		await fireEvent.input(getByDisplayValue(String(base.years)), { target: { value: '15' } });
+		await fireEvent.click(getByText('儲存'));
+		expect(onSave.mock.calls[0][0].years).toBe(15);
+	});
+
+	it('calls onClose from the 取消 button', async () => {
+		const onClose = vi.fn();
+		const { getByText } = render(CoachEditDialog, { open: true, coach: base, onClose });
+		await fireEvent.click(getByText('取消'));
+		expect(onClose).toHaveBeenCalled();
+	});
+});

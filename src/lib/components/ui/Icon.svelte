@@ -85,6 +85,37 @@
   import SearchX from '@lucide/svelte/icons/search-x';
   import Shirt from '@lucide/svelte/icons/shirt';
   import UserRound from '@lucide/svelte/icons/user-round';
+  // ── Admin back-office additions ──
+  import BarChart3 from '@lucide/svelte/icons/bar-chart-3';
+  import Building2 from '@lucide/svelte/icons/building-2';
+  import CalendarRange from '@lucide/svelte/icons/calendar-range';
+  import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+  import CircleDollarSign from '@lucide/svelte/icons/circle-dollar-sign';
+  import DollarSign from '@lucide/svelte/icons/dollar-sign';
+  import Filter from '@lucide/svelte/icons/filter';
+  import KeyRound from '@lucide/svelte/icons/key-round';
+  import Monitor from '@lucide/svelte/icons/monitor';
+  import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
+  import Receipt from '@lucide/svelte/icons/receipt';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+  import Repeat from '@lucide/svelte/icons/repeat';
+  import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+  import ScanLine from '@lucide/svelte/icons/scan-line';
+  import ShoppingBag from '@lucide/svelte/icons/shopping-bag';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
+  import Tablet from '@lucide/svelte/icons/tablet';
+  import Tickets from '@lucide/svelte/icons/tickets';
+  import TrendingDown from '@lucide/svelte/icons/trending-down';
+  import TrendingUp from '@lucide/svelte/icons/trending-up';
+  import Trophy from '@lucide/svelte/icons/trophy';
+  import UserCheck from '@lucide/svelte/icons/user-check';
+  import UserPlus from '@lucide/svelte/icons/user-plus';
+  import UserX from '@lucide/svelte/icons/user-x';
+  import Cake from '@lucide/svelte/icons/cake';
+  import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+  import History from '@lucide/svelte/icons/history';
+  import Percent from '@lucide/svelte/icons/percent';
+  import Repeat2 from '@lucide/svelte/icons/repeat-2';
 
   const ICONS: Record<string, typeof Activity> = {
     'activity': Activity,
@@ -161,7 +192,38 @@
     'pencil-line': PencilLine,
     'search-x': SearchX,
     'shirt': Shirt,
-    'user-round': UserRound
+    'user-round': UserRound,
+    // ── Admin back-office additions ──
+    'bar-chart-3': BarChart3,
+    'building-2': Building2,
+    'calendar-range': CalendarRange,
+    'chevrons-up-down': ChevronsUpDown,
+    'circle-dollar-sign': CircleDollarSign,
+    'dollar-sign': DollarSign,
+    'filter': Filter,
+    'key-round': KeyRound,
+    'monitor': Monitor,
+    'more-horizontal': MoreHorizontal,
+    'receipt': Receipt,
+    'refresh-cw': RefreshCw,
+    'repeat': Repeat,
+    'rotate-ccw': RotateCcw,
+    'scan-line': ScanLine,
+    'shopping-bag': ShoppingBag,
+    'smartphone': Smartphone,
+    'tablet': Tablet,
+    'tickets': Tickets,
+    'trending-down': TrendingDown,
+    'trending-up': TrendingUp,
+    'trophy': Trophy,
+    'user-check': UserCheck,
+    'user-plus': UserPlus,
+    'user-x': UserX,
+    'cake': Cake,
+    'calendar-plus': CalendarPlus,
+    'history': History,
+    'percent': Percent,
+    'repeat-2': Repeat2
   };
 
   export let name: string;

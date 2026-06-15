@@ -3,6 +3,17 @@
    * Use bind:value. Forwards input/change/focus/blur/keydown. */
   export let label = '';
   export let value = '';
+  /* Svelte forbids a dynamic `type` attribute together with bind:value, so we
+   * set the input type imperatively via this action (default 'text'). */
+  export let type = 'text';
+  function applyType(node: HTMLInputElement, t: string) {
+    node.type = t;
+    return {
+      update(next: string) {
+        node.type = next;
+      }
+    };
+  }
   export let placeholder = '';
   export let helper = '';
   export let error = '';
@@ -22,7 +33,7 @@
   {/if}
   <input
     id={inputId}
-    type="text"
+    use:applyType={type}
     class="control"
     class:has-error={error}
     {placeholder}

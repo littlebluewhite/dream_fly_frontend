@@ -8,7 +8,7 @@
   /* App surfaces (member centre — and, later, coach/admin) bring their own
    * chrome via a nested layout, so the marketing header/footer must not wrap
    * them. global.css still loads here, so tokens/.btn/.card apply everywhere. */
-  $: isAppSurface = $page.url.pathname.startsWith('/member');
+  $: isAppSurface = $page.url.pathname.startsWith('/member') || $page.url.pathname.startsWith('/admin');
 </script>
 
 {#if isAppSurface}
