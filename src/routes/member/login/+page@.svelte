@@ -234,7 +234,6 @@
       <div style="text-align:center;">
         <a
           href="/staff/login"
-          on:click|preventDefault
           style="display:inline-flex; align-items:center; gap:6px; font-size:13px;
             color:var(--df-text-muted); text-decoration:none;"
         >

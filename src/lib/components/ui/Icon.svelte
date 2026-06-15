@@ -138,6 +138,7 @@
   import Cloud from '@lucide/svelte/icons/cloud';
   import CloudCheck from '@lucide/svelte/icons/cloud-check';
   import Video from '@lucide/svelte/icons/video';
+  import File from '@lucide/svelte/icons/file';
 
   const ICONS: Record<string, typeof Activity> = {
     'activity': Activity,
@@ -269,6 +270,7 @@
     'cloud': Cloud,
     'cloud-check': CloudCheck,
     'video': Video,
+    'file': File,
     'alert-triangle': TriangleAlert, // alias → triangle-alert (old-style name)
     'circle-check-big': CircleCheck // alias → circle-check (old-style name)
   };

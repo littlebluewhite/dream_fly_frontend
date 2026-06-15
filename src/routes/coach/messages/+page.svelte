@@ -1,5 +1,216 @@
 <script lang="ts">
-  /* 訊息中心 — placeholder; replaced by the messages implementation. */
+  /* 訊息中心 — ported from docs/design/coach/views_messages.jsx (L1-102 recovered;
+   * bubble area, composer, info panel reconstructed from spec).
+   * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root. */
+  import Icon from '$lib/components/ui/Icon.svelte';
+  import IconButton from '$lib/components/ui/IconButton.svelte';
+  import ConversationRow from '$lib/coach/components/ConversationRow.svelte';
+  import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
+  import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
+  import InfoSection from '$lib/coach/components/InfoSection.svelte';
+  import { CONVERSATIONS, THREAD, SHARED_FILES } from '$lib/coach/data';
+  import { toasts, search } from '$lib/coach/stores';
+
+  /* ── state (legacy, no runes) ── */
+  let tab = '全部';
+  let sel = 'v1';
+  let reply = '';
+
+  const tabs = [
+    { k: '全部', label: '全部' },
+    { k: '緊急', label: '緊急 2' },
+    { k: '未讀', label: '未讀' },
+    { k: '家長', label: '家長' },
+  ];
+
+  /* wired to topbar search store */
+  $: q = $search.trim().toLowerCase();
+
+  $: list = CONVERSATIONS.filter((c) => {
+    if (tab === '緊急' && !c.urgent) return false;
+    if (tab === '未讀' && !c.badge) return false;
+    if (tab === '家長' && c.kind !== '家長') return false;
+    if (q && !(c.name + c.preview).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  /* selection guard: if current sel falls out of filtered list, auto-select first */
+  $: if (list.length && !list.some((c) => c.id === sel)) sel = list[0].id;
+
+  $: cur = CONVERSATIONS.find((c) => c.id === sel) || CONVERSATIONS[0];
+  $: showThread = cur.id === 'v1';
+
+  function handleSelect(e: CustomEvent<string>) {
+    sel = e.detail;
+  }
+
+  function handleSend() {
+    toasts.notify('success', '訊息已傳送', '（示範）');
+    reply = '';
+  }
 </script>
 
-<div>訊息中心</div>
+<div style="height:calc(100vh - 68px - 52px);min-height:560px;padding:0">
+  <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;box-shadow:var(--df-shadow-card)">
+
+    <!-- ══════════════ Col 1: 對話列表 ══════════════ -->
+    <div style="border-right:1px solid var(--df-border);display:flex;flex-direction:column;min-height:0">
+      <!-- header -->
+      <div style="padding:16px 16px 10px;border-bottom:1px solid var(--df-border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <span style="font-size:17px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading)">訊息</span>
+          <IconButton
+            variant="soft"
+            size="sm"
+            aria-label="撰寫"
+            on:click={() => toasts.notify('info', '撰寫訊息', '建立新的對話（示範）。')}
+          >
+            <Icon name="pen-line" size={16} color="var(--df-primary)" />
+          </IconButton>
+        </div>
+        <!-- faux search field (static) -->
+        <div style="display:flex;align-items:center;gap:8px;background:var(--df-bg-light);border:1px solid var(--df-border);border-radius:8px;padding:0 12px;height:36px">
+          <Icon name="search" size={15} color="var(--df-text-muted)" />
+          <span style="font-size:12.5px;color:var(--df-text-muted)">搜尋家長或學員</span>
+        </div>
+        <!-- filter tabs -->
+        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+          {#each tabs as t (t.k)}
+            {@const on = tab === t.k}
+            <button
+              on:click={() => (tab = t.k)}
+              style="padding:5px 12px;border-radius:999px;border:none;cursor:pointer;font-size:12.5px;font-weight:600;font-family:var(--df-font-body);background:{on ? 'var(--df-primary)' : 'var(--df-bg-light)'};color:{on ? '#fff' : 'var(--df-text-light)'}"
+            >{t.label}</button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- conversation list -->
+      <div style="flex:1;overflow-y:auto;min-height:0">
+        {#if list.length === 0}
+          <div style="padding:28px 16px;text-align:center;font-size:13px;color:var(--df-text-muted)">沒有符合的對話</div>
+        {/if}
+        {#each list as c (c.id)}
+          <ConversationRow {c} active={sel === c.id} on:select={handleSelect} />
+        {/each}
+      </div>
+    </div>
+
+    <!-- ══════════════ Col 2: 對話串 ══════════════ -->
+    <div style="display:flex;flex-direction:column;min-height:0;background:var(--df-bg-light)">
+      <!-- thread header -->
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--df-border);background:#fff">
+        <span style="width:40px;height:40px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15.5px;font-weight:700;color:var(--df-ink)">{cur.name}</div>
+          <div style="font-size:12.5px;color:var(--df-text-light)">{showThread ? '王小明 的家長 · 兒童體操初階班' : cur.kind}</div>
+        </div>
+        {#each ['phone', 'video', 'more-horizontal'] as ic}
+          <button
+            on:click={() => toasts.notify('info', '功能', '（示範）')}
+            aria-label={ic}
+            style="width:36px;height:36px;border-radius:8px;border:1px solid var(--df-border);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"
+          >
+            <Icon name={ic} size={16} color="var(--df-text-light)" />
+          </button>
+        {/each}
+      </div>
+
+      <!-- SLA banner (only for v1 / 王媽媽 緊急對話) -->
+      {#if showThread}
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:var(--df-warning-bg);border-bottom:1px solid var(--df-border)">
+          <Icon name="clock" size={15} color="#92400E" />
+          <span style="flex:1;font-size:12.5px;color:#92400E;font-weight:500">緊急對話 · 需於 30 分鐘內回覆（回覆 SLA）</span>
+          <button
+            on:click={() => toasts.notify('success', '已標記', '對話已標記為已處理。')}
+            style="border:none;background:#fff;color:#92400E;border-radius:7px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--df-font-body)"
+          >標記已處理</button>
+        </div>
+      {/if}
+
+      <!-- bubble area -->
+      <div style="flex:1;overflow-y:auto;min-height:0;padding:20px;display:flex;flex-direction:column;gap:14px">
+        {#if showThread}
+          {#each THREAD as m}
+            <MessageBubble {m} />
+          {/each}
+        {:else}
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--df-text-muted);font-size:13px">選擇對話以檢視訊息</div>
+        {/if}
+      </div>
+
+      <!-- composer -->
+      <MessageComposer bind:value={reply} on:send={handleSend} />
+    </div>
+
+    <!-- ══════════════ Col 3: 資訊面板 ══════════════ -->
+    <div style="background:#fff;border-left:1px solid var(--df-border);display:flex;flex-direction:column;min-height:0;overflow-y:auto">
+      <!-- 學員資訊 -->
+      <InfoSection title="學員資訊">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="width:38px;height:38px;border-radius:50%;background:#0066CC;color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">王</span>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">王小明</div>
+            <div style="font-size:12px;color:var(--df-text-light)">兒童體操初階班</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px">
+            <span style="color:var(--df-text-muted)">出席率</span>
+            <span style="color:var(--df-text-dark);font-weight:600">98%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px">
+            <span style="color:var(--df-text-muted)">學習進度</span>
+            <span style="color:var(--df-text-dark);font-weight:600">初階</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px">
+            <span style="color:var(--df-text-muted)">最近課程</span>
+            <span style="color:var(--df-text-dark);font-weight:600">今日 09:00</span>
+          </div>
+        </div>
+      </InfoSection>
+
+      <!-- 快捷操作 -->
+      <InfoSection title="快捷操作">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button
+            on:click={() => toasts.notify('info', '查看學員資料', '（示範）')}
+            style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--df-border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--df-text-dark);font-family:var(--df-font-body)"
+          >
+            <Icon name="user" size={15} color="var(--df-primary)" />查看學員資料
+          </button>
+          <button
+            on:click={() => toasts.notify('info', '預約補課', '（示範）')}
+            style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--df-border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--df-text-dark);font-family:var(--df-font-body)"
+          >
+            <Icon name="calendar-plus" size={15} color="var(--df-primary)" />預約補課
+          </button>
+          <button
+            on:click={() => toasts.notify('info', '填寫事故回報', '（示範）')}
+            style="display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--df-border);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:var(--df-text-dark);font-family:var(--df-font-body)"
+          >
+            <Icon name="file-text" size={15} color="var(--df-primary)" />填寫事故回報
+          </button>
+        </div>
+      </InfoSection>
+
+      <!-- 共用檔案 -->
+      <InfoSection title="共用檔案">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          {#each SHARED_FILES as f}
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border-radius:8px;background:var(--df-primary-bg);display:flex;align-items:center;justify-content:center;flex:none">
+                <Icon name={f.icon} size={16} color={f.tint} />
+              </div>
+              <div style="min-width:0">
+                <div style="font-size:12.5px;font-weight:600;color:var(--df-text-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{f.name}</div>
+                <div style="font-size:11px;color:var(--df-text-muted);margin-top:1px">{f.meta}</div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </InfoSection>
+    </div>
+
+  </div>
+</div>

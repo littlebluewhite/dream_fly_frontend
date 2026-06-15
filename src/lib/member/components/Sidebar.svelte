@@ -23,10 +23,6 @@
   $: path = $page.url.pathname as string;
   const isActive = (href: string) => (href === '/member' ? path === '/member' : path.startsWith(href));
 
-  function staffPortal(e: MouseEvent) {
-    e.preventDefault();
-    toasts.notify('info', '員工後台', '教練 / 管理員後台將於後續階段實作。');
-  }
   function logout() {
     toasts.notify('success', '已登出', '期待你下次再來！');
     goto('/member/login');
@@ -55,7 +51,7 @@
   </nav>
 
   <div class="foot">
-    <a class="staff" href="/staff/login" title="員工後台（示範切換）" on:click={staffPortal}>
+    <a class="staff" href="/staff/login" title="員工後台（示範切換）">
       <Icon name="shield-check" size={15} color="var(--df-text-muted)" />
       <span>員工後台入口</span>
       <Icon name="arrow-up-right" size={13} color="var(--df-text-muted)" />
