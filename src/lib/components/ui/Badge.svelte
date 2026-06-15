@@ -1,11 +1,17 @@
 <script lang="ts">
   /* Small pill label. Semantic tones use tint-bg + a contrast-safe dark text
-   * (the raw semantic hues don't pass AA as text on their tints). */
+   * (the raw semantic hues don't pass AA as text on their tints).
+   * `dot` prepends a status dot; `solid` fills the pill with the tone colour. */
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
   export let tone: Tone = 'primary';
+  export let solid = false;
+  export let dot = false;
 </script>
 
-<span class="badge {tone}"><slot /></span>
+<span class="badge {tone}" class:solid>
+  {#if dot}<span class="dot"></span>{/if}
+  <slot />
+</span>
 
 <style>
   .badge {
@@ -19,6 +25,7 @@
     line-height: 1.5;
     white-space: nowrap;
   }
+  /* ── Tint (default) ── */
   .primary {
     background: var(--df-primary-bg);
     color: var(--df-primary);
@@ -46,5 +53,62 @@
   .neutral {
     background: var(--df-bg-light);
     color: var(--df-text-light);
+  }
+  /* ── Leading dot — uses the tone's strong hue ── */
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .primary .dot {
+    background: var(--df-primary);
+  }
+  .accent .dot {
+    background: var(--df-accent-dark);
+  }
+  .success .dot {
+    background: var(--df-success);
+  }
+  .warning .dot {
+    background: var(--df-warning);
+  }
+  .error .dot {
+    background: var(--df-error);
+  }
+  .info .dot {
+    background: var(--df-info);
+  }
+  .neutral .dot {
+    background: var(--df-text-muted);
+  }
+  /* ── Solid fill ── */
+  .solid {
+    color: #fff;
+  }
+  .solid.primary {
+    background: var(--df-primary);
+  }
+  .solid.accent {
+    background: var(--df-accent);
+    color: var(--df-ink);
+  }
+  .solid.success {
+    background: var(--df-success);
+  }
+  .solid.warning {
+    background: var(--df-warning);
+  }
+  .solid.error {
+    background: var(--df-error);
+  }
+  .solid.info {
+    background: var(--df-info);
+  }
+  .solid.neutral {
+    background: var(--df-text-light);
+  }
+  .solid .dot {
+    background: currentColor;
   }
 </style>

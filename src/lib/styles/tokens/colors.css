@@ -12,6 +12,7 @@
   --df-accent: #FFD700;
   --df-accent-dark: #E6C200;
   --df-accent-light: #FFE34D;
+  --df-accent-bg: #FFF8DB;     /* soft gold tint — accent badges, reward tiles */
 
   /* ---- Athletic navy (logo / hero ink) ---- */
   --df-ink: #0F172A;          /* deep navy — logo claw, hero overlays */

@@ -1,21 +1,31 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import '$lib/styles/global.css';
+
+  /* App surfaces (member centre — and, later, coach/admin) bring their own
+   * chrome via a nested layout, so the marketing header/footer must not wrap
+   * them. global.css still loads here, so tokens/.btn/.card apply everywhere. */
+  $: isAppSurface = $page.url.pathname.startsWith('/member');
 </script>
 
-<div class="app">
-  <Header />
+{#if isAppSurface}
+  <slot />
+{:else}
+  <div class="app">
+    <Header />
 
-  <main class="main-content">
-    <slot />
-  </main>
+    <main class="main-content">
+      <slot />
+    </main>
 
-  <Footer />
+    <Footer />
 
-  <Toast />
-</div>
+    <Toast />
+  </div>
+{/if}
 
 <style>
   .app {

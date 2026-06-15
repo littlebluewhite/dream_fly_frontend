@@ -61,6 +61,30 @@
   import User from '@lucide/svelte/icons/user';
   import Users from '@lucide/svelte/icons/users';
   import X from '@lucide/svelte/icons/x';
+  // ── Member-centre additions ──
+  import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+  import BadgeCheck from '@lucide/svelte/icons/badge-check';
+  import BellOff from '@lucide/svelte/icons/bell-off';
+  import BookOpen from '@lucide/svelte/icons/book-open';
+  import CalendarClock from '@lucide/svelte/icons/calendar-clock';
+  import CalendarOff from '@lucide/svelte/icons/calendar-off';
+  import CalendarX from '@lucide/svelte/icons/calendar-x';
+  import CheckCheck from '@lucide/svelte/icons/check-check';
+  import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+  import CloudOff from '@lucide/svelte/icons/cloud-off';
+  import Download from '@lucide/svelte/icons/download';
+  import Eye from '@lucide/svelte/icons/eye';
+  import EyeOff from '@lucide/svelte/icons/eye-off';
+  import Hourglass from '@lucide/svelte/icons/hourglass';
+  import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+  import Lock from '@lucide/svelte/icons/lock';
+  import LogOut from '@lucide/svelte/icons/log-out';
+  import Megaphone from '@lucide/svelte/icons/megaphone';
+  import MessageCircle from '@lucide/svelte/icons/message-circle';
+  import PencilLine from '@lucide/svelte/icons/pencil-line';
+  import SearchX from '@lucide/svelte/icons/search-x';
+  import Shirt from '@lucide/svelte/icons/shirt';
+  import UserRound from '@lucide/svelte/icons/user-round';
 
   const ICONS: Record<string, typeof Activity> = {
     'activity': Activity,
@@ -113,13 +137,38 @@
     'triangle-alert': TriangleAlert,
     'user': User,
     'users': Users,
-    'x': X
+    'x': X,
+    // ── Member-centre additions ──
+    'arrow-up-right': ArrowUpRight,
+    'badge-check': BadgeCheck,
+    'bell-off': BellOff,
+    'book-open': BookOpen,
+    'calendar-clock': CalendarClock,
+    'calendar-off': CalendarOff,
+    'calendar-x': CalendarX,
+    'check-check': CheckCheck,
+    'clipboard-list': ClipboardList,
+    'cloud-off': CloudOff,
+    'download': Download,
+    'eye': Eye,
+    'eye-off': EyeOff,
+    'hourglass': Hourglass,
+    'layout-dashboard': LayoutDashboard,
+    'lock': Lock,
+    'log-out': LogOut,
+    'megaphone': Megaphone,
+    'message-circle': MessageCircle,
+    'pencil-line': PencilLine,
+    'search-x': SearchX,
+    'shirt': Shirt,
+    'user-round': UserRound
   };
 
   export let name: string;
   export let size: number | string = 20;
   export let color: string = 'currentColor';
   export let strokeWidth: number | string = 2;
+  export let style = '';
   let className = '';
   export { className as class };
 
@@ -127,5 +176,5 @@
 </script>
 
 {#if Cmp}
-  <svelte:component this={Cmp} {size} {color} {strokeWidth} class={className} />
+  <svelte:component this={Cmp} {size} {color} {strokeWidth} {style} class={className} />
 {/if}
