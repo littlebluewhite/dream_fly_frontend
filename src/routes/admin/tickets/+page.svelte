@@ -56,7 +56,7 @@
       <Card padding={0} hoverable style="overflow:hidden;">
         <div style="display:flex; align-items:flex-start; gap:14px; padding:18px 20px 16px;">
           <div
-            style="width:46px; height:46px; border-radius:11px; background:{t.color}1A; display:flex; align-items:center; justify-content:center; flex:none;"
+            style="width:46px; height:46px; border-radius:11px; background:color-mix(in srgb, {t.color} 10%, transparent); display:flex; align-items:center; justify-content:center; flex:none;"
           >
             <Icon name={t.icon} size={22} color={t.color} />
           </div>

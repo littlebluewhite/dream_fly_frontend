@@ -7,6 +7,7 @@
   import { Button, Icon } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import { REPORT_KPIS } from '$lib/admin/data';
+  import { toasts } from '$lib/admin/stores';
 
   import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
   import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
@@ -36,7 +37,11 @@
           color="var(--df-text-light)"
         />
       </button>
-      <Button variant="primary" size="sm">
+      <Button
+        variant="primary"
+        size="sm"
+        on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
+      >
         <span style="display:inline-flex; align-items:center; gap:8px;">
           <Icon name="download" size={15} />匯出報表
         </span>

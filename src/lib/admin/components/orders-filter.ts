@@ -47,7 +47,9 @@ export function paidRevenue(rows: Order[]): number {
  * result, so they stay consistent after 標記已付款.
  */
 export function applyMarkPaid(rows: Order[], id: string): Order[] {
-	return rows.map((o) => (o.id === id ? { ...o, status: 'paid' } : o));
+	// flip status AND the displayed 收款時間 together (paidAt mirrors the paid
+	// branch of the source enrichment: o.date) so OrderDialog stays consistent.
+	return rows.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: o.date } : o));
 }
 
 /**

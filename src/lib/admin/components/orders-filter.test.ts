@@ -115,4 +115,11 @@ describe('applyMarkPaid — KPI/table consistency after 標記已付款', () => 
 	it('is a no-op for an unknown id', () => {
 		expect(countByStatus(applyMarkPaid(ORDERS, '___nope___'))).toEqual(countByStatus(ORDERS));
 	});
+
+	it('updates paidAt to the order date so OrderDialog 收款時間 stays consistent', () => {
+		const o = pending!;
+		expect(o.paidAt).toBe('—（待付款）'); // pending shows the placeholder
+		const out = applyMarkPaid(ORDERS, o.id);
+		expect(out.find((x) => x.id === o.id)!.paidAt).toBe(o.date);
+	});
 });
