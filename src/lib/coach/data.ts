@@ -15,6 +15,7 @@ export type TodayStatus = 'done' | 'live' | 'soon' | 'wait';
 export type TodayLevel = '初級' | '中級' | '啟蒙' | '高級' | '基礎';
 export type StudentLevel = '啟蒙' | '初階' | '中階' | '選手';
 export type SchedCat = '體操' | '啦啦隊' | '跑酷';
+export type SchedVenue = '主場館' | '競技訓練館' | '副館';
 export type AttDefault = 'present' | 'late' | 'leave' | 'absent';
 export type SlaTone = 'warning' | 'muted' | 'error' | 'success';
 export type ThreadWho = 'them' | 'me';
@@ -72,6 +73,7 @@ export interface SchedCourse {
 	name: string;
 	count: number;
 	cat: SchedCat;
+	venue: SchedVenue;
 }
 export interface AttClass {
 	name: string;
@@ -206,16 +208,16 @@ export const SCHED_DAYS: SchedDay[] = [
 ];
 export const SCHED_HOURS: string[] = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
 export const SCHED_COURSES: SchedCourse[] = [
-	{ day: 'Mon', start: '09:00', end: '10:00', name: '幼兒體操初階', count: 8, cat: '體操' },
-	{ day: 'Mon', start: '15:00', end: '16:30', name: '青少年競技組', count: 12, cat: '體操' },
-	{ day: 'Tue', start: '10:00', end: '11:00', name: '啦啦隊基礎', count: 10, cat: '啦啦隊' },
-	{ day: 'Wed', start: '09:00', end: '10:30', name: '成人體操', count: 6, cat: '體操' },
-	{ day: 'Wed', start: '16:00', end: '17:00', name: '跑酷入門', count: 8, cat: '跑酷' },
-	{ day: 'Thu', start: '14:00', end: '15:00', name: '幼兒體操進階', count: 10, cat: '體操' },
-	{ day: 'Fri', start: '10:00', end: '11:30', name: '競技啦啦隊', count: 14, cat: '啦啦隊' },
-	{ day: 'Fri', start: '17:00', end: '18:00', name: '跑酷進階', count: 6, cat: '跑酷' },
-	{ day: 'Sat', start: '09:00', end: '10:00', name: '週末親子班', count: 12, cat: '體操' },
-	{ day: 'Sat', start: '11:00', end: '12:00', name: '幼兒體操初階', count: 8, cat: '體操' }
+	{ day: 'Mon', start: '09:00', end: '10:00', name: '幼兒體操初階', count: 8, cat: '體操', venue: '主場館' },
+	{ day: 'Mon', start: '15:00', end: '16:30', name: '青少年競技組', count: 12, cat: '體操', venue: '競技訓練館' },
+	{ day: 'Tue', start: '10:00', end: '11:00', name: '啦啦隊基礎', count: 10, cat: '啦啦隊', venue: '主場館' },
+	{ day: 'Wed', start: '09:00', end: '10:30', name: '成人體操', count: 6, cat: '體操', venue: '副館' },
+	{ day: 'Wed', start: '16:00', end: '17:00', name: '跑酷入門', count: 8, cat: '跑酷', venue: '副館' },
+	{ day: 'Thu', start: '14:00', end: '15:00', name: '幼兒體操進階', count: 10, cat: '體操', venue: '主場館' },
+	{ day: 'Fri', start: '10:00', end: '11:30', name: '競技啦啦隊', count: 14, cat: '啦啦隊', venue: '競技訓練館' },
+	{ day: 'Fri', start: '17:00', end: '18:00', name: '跑酷進階', count: 6, cat: '跑酷', venue: '副館' },
+	{ day: 'Sat', start: '09:00', end: '10:00', name: '週末親子班', count: 12, cat: '體操', venue: '主場館' },
+	{ day: 'Sat', start: '11:00', end: '12:00', name: '幼兒體操初階', count: 8, cat: '體操', venue: '主場館' }
 ];
 export const CAT_COLOR: Record<SchedCat, { bar: string; bg: string; fg: string }> = {
 	體操: { bar: 'var(--df-primary)', bg: 'var(--df-primary-bg)', fg: 'var(--df-primary-dark)' },
@@ -239,6 +241,47 @@ export const ATT_ROSTER: AttRow[] = [
 	{ n: '11', name: '許家豪', initial: '許', color: '#8B5CF6', mid: 'GY2024101', def: 'present' }
 ];
 
+/* ──────────────── today's classes to take attendance for (切換班級) ────────────────
+ * A1 of the attendance roster is the FIRST class — it reuses ATT_CLASS + ATT_ROSTER
+ * verbatim so 出勤記錄 opens on the same roster as before. The other classes carry
+ * their own small rosters. `id` is the switch key (CoachDropdown echoes the NAME,
+ * the handler maps name→id). */
+export interface AttClassFull extends AttClass {
+	id: string;
+	roster: AttRow[];
+}
+export const ATT_TODAY_CLASSES: AttClassFull[] = [
+	{ id: 'ac1', ...ATT_CLASS, roster: ATT_ROSTER },
+	{
+		id: 'ac2',
+		name: '青少年體操中級班',
+		time: '今日 13:30–15:00',
+		room: 'B 教室',
+		coach: '陳怡君',
+		roster: [
+			{ n: '01', name: '周彥廷', initial: '周', color: '#0066CC', mid: 'GY2023012', def: 'present' },
+			{ n: '02', name: '簡子涵', initial: '簡', color: '#EC4899', mid: 'GY2023027', def: 'present' },
+			{ n: '03', name: '潘宥廷', initial: '潘', color: '#10B981', mid: 'GY2023039', def: 'late' },
+			{ n: '04', name: '蕭詠晴', initial: '蕭', color: '#8B5CF6', mid: 'GY2023044', def: 'present' },
+			{ n: '05', name: '范書瑋', initial: '范', color: '#F59E0B', mid: 'GY2023051', def: 'leave' },
+			{ n: '06', name: '葉承恩', initial: '葉', color: '#0EA5E9', mid: 'GY2023068', def: 'present' }
+		]
+	},
+	{
+		id: 'ac3',
+		name: '競技體操選手班',
+		time: '今日 16:00–18:00',
+		room: '競技訓練館',
+		coach: '李志偉',
+		roster: [
+			{ n: '01', name: '張家豪', initial: '張', color: '#8B5CF6', mid: 'GY2022003', def: 'present' },
+			{ n: '02', name: '劉若彤', initial: '劉', color: '#EF4444', mid: 'GY2022011', def: 'present' },
+			{ n: '03', name: '許書豪', initial: '許', color: '#14B8A6', mid: 'GY2022018', def: 'present' },
+			{ n: '04', name: '鍾佩珊', initial: '鍾', color: '#0066CC', mid: 'GY2022025', def: 'late' }
+		]
+	}
+];
+
 /* ──────────────── messages (訊息中心) ──────────────── */
 export const CONVERSATIONS: Conversation[] = [
 	{ id: 'v1', name: '王媽媽', initial: '王', color: '#0066CC', kind: '家長', time: '09:42', badge: 2, preview: '老師您好，小明明天的課可以調整時間嗎？', urgent: true, sla: '30 分內需回覆', slaTone: 'warning' },
@@ -247,6 +290,24 @@ export const CONVERSATIONS: Conversation[] = [
 	{ id: 'v4', name: '黃媽媽', initial: '黃', color: '#F59E0B', kind: '家長', time: '昨天', preview: '孩子在課堂上跌倒，想了解處理狀況…', urgent: true, sla: '已逾時 1.5h', slaTone: 'error' },
 	{ id: 'v5', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '家長', time: '昨天', preview: '謝謝老師這學期的細心指導！', sla: '已回覆', slaTone: 'success' },
 	{ id: 'v6', name: '吳媽媽', initial: '吳', color: '#0EA5E9', kind: '家長', time: '週一', preview: '收到，謝謝您。', sla: '已回覆', slaTone: 'success' }
+];
+
+/* ──────────────── compose recipient directory (撰寫 新訊息) ────────────────
+ * Contacts the coach can start a NEW conversation with. Deliberately disjoint
+ * from CONVERSATIONS (those threads already exist). */
+export interface MsgRecipient {
+	name: string;
+	initial: string;
+	color: string;
+	kind: string;
+}
+export const MSG_DIRECTORY: MsgRecipient[] = [
+	{ name: '張媽媽', initial: '張', color: '#8B5CF6', kind: '家長' },
+	{ name: '劉同學', initial: '劉', color: '#EF4444', kind: '學員' },
+	{ name: '蔡爸爸', initial: '蔡', color: '#0066CC', kind: '家長' },
+	{ name: '幼兒體操班 群組', initial: '群', color: '#10B981', kind: '群組' },
+	{ name: '鄭媽媽', initial: '鄭', color: '#14B8A6', kind: '家長' },
+	{ name: '楊同學', initial: '楊', color: '#EC4899', kind: '學員' }
 ];
 
 /* thread for 王媽媽 — me = 李教練 (right aligned) */

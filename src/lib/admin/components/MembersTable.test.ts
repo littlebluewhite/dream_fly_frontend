@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import MembersTable from './MembersTable.svelte';
 import type { Member } from '$lib/admin/data';
+import { memberFilter, MEMBER_FILTER_DEFAULT } from '$lib/admin/stores';
 
 /* MembersTable — the shared learner table (admin.jsx MembersTable). Full variant
  * shows 學員/課程/分校/授課教練/近況(6 dots)/出席率/繳費/狀態/剩餘堂數; compact drops
@@ -104,5 +105,30 @@ describe('MembersTable add flow', () => {
 		expect(queryByText('編輯學員資料')).toBeNull();
 		await fireEvent.click(getByRole('button', { name: /新增學員/ }));
 		expect(getByText('編輯學員資料')).toBeInTheDocument();
+	});
+});
+
+/* B3: the full variant folds the shared memberFilter store into its
+ * filterMembers() call. The default store is pass-through (the tests above all
+ * pass unchanged); a narrowing store hides non-matching rows. Compact ignores it. */
+describe('MembersTable memberFilter folding (full variant)', () => {
+	afterEach(() => memberFilter.set({ ...MEMBER_FILTER_DEFAULT }));
+
+	const matchRow: Member = { ...row, id: 'GY2099002', name: '高出席', att: 95 };
+	const lowRow: Member = { ...row, id: 'GY2099003', name: '低出席', att: 50 };
+
+	it('hides rows outside the store att band; keeps matching ones', async () => {
+		memberFilter.set({ ...MEMBER_FILTER_DEFAULT, attMin: 90 });
+		const { container } = render(MembersTable, { rows: [matchRow, lowRow] });
+		expect(container.textContent).toContain('高出席'); // att 95 ≥ 90
+		expect(container.textContent).not.toContain('低出席'); // att 50 filtered out
+	});
+
+	it('compact variant ignores the memberFilter store', () => {
+		memberFilter.set({ ...MEMBER_FILTER_DEFAULT, attMin: 90 });
+		const { container } = render(MembersTable, { rows: [matchRow, lowRow], compact: true });
+		// compact shows both — the advanced store does not apply
+		expect(container.textContent).toContain('高出席');
+		expect(container.textContent).toContain('低出席');
 	});
 });

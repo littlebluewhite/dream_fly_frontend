@@ -356,6 +356,10 @@ export const STATUS_TONE: Record<ClassStatus, Tone> = {
 export const LEVELS: Level[] = ['啟蒙', '入門', '基礎', '進階', '選手'];
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];
 export const CLASS_STATUS: ClassStatus[] = ['招生中', '候補', '額滿'];
+/** Ticket type union as a 新增/編輯票券 Select source (keys of TICKET_TYPE). */
+export const TICKET_TYPES: TicketType[] = ['pass', 'trial', 'event'];
+/** Venue status union as a 新增/編輯場地 Select source (keys of VENUE_STATUS). */
+export const VENUE_STATUSES: VenueStatus[] = ['available', 'maintenance'];
 export const MEMBER_COLORS: string[] = ['#0066CC', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444'];
 
 /* ───────────────────────── today schedule (admin) ───────────────────────── */

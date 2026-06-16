@@ -1,32 +1,74 @@
 <script lang="ts">
   /* 票券管理 — faithful port of reports.jsx TicketsView. PageHead + a 3-up KPI
-   * row (已售票券 / 票券營收 / 販售方案), then a card grid over TICKETS: an icon
+   * row (已售票券 / 票券營收 / 販售方案), then a card grid over the tickets: an icon
    * chip (tinted with the ticket colour) + name + desc + price + type
    * StatusBadge, the 已售/配額 line with a ProgressBar (warning once ≥80% sold),
-   * and the 銷售明細/編輯 actions (mock — they fire a toast). */
+   * and the 銷售明細/編輯 actions. The row set is held locally so 新增 / 儲存 reflect
+   * immediately; 編輯 / 新增票券 open the TicketEditDialog (the prototype is
+   * front-end only). 銷售明細 still fires a toast. */
   import { Button, Card, Icon, ProgressBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
+  import TicketEditDialog from '$lib/admin/components/TicketEditDialog.svelte';
   import { toasts } from '$lib/admin/stores';
-  import { TICKETS } from '$lib/admin/data';
+  import { TICKETS, TICKET_TYPES, type Ticket } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
 
   const notify = toasts.notify;
 
-  const totalSold = TICKETS.reduce((s, t) => s + t.sold, 0);
-  const revenue = TICKETS.reduce((s, t) => s + t.sold * t.price, 0);
+  // Blank票券 for the 新增 flow (mirrors classes/+page.svelte blankClass).
+  const blankTicket = (): Ticket => ({
+    id: '',
+    name: '',
+    type: TICKET_TYPES[0],
+    price: 1000,
+    sold: 0,
+    quota: 100,
+    color: 'var(--df-primary)',
+    icon: 'ticket',
+    desc: ''
+  });
+
+  let tickets: Ticket[] = TICKETS;
+  let edit: Ticket | null = null;
+  let editOpen = false;
+  let addNew = false;
+
+  $: totalSold = tickets.reduce((s, t) => s + t.sold, 0);
+  $: revenue = tickets.reduce((s, t) => s + t.sold * t.price, 0);
+
+  function openEdit(t: Ticket) {
+    addNew = false;
+    edit = t;
+    editOpen = true;
+  }
+  function openNew() {
+    addNew = true;
+    edit = blankTicket();
+    editOpen = true;
+  }
+  function closeEdit() {
+    editOpen = false;
+    edit = null;
+    addNew = false;
+  }
+  function save(updated: Ticket) {
+    if (addNew) {
+      const id = 'T-NEW' + (tickets.length + 1);
+      tickets = [{ ...updated, id }, ...tickets];
+    } else {
+      tickets = tickets.map((t) => (t.id === updated.id ? updated : t));
+    }
+    closeEdit();
+  }
 </script>
 
 <div style="display:flex; flex-direction:column; gap:20px;">
   <PageHead title="票券管理" sub="月票、體驗券與活動票券">
     <svelte:fragment slot="actions">
-      <Button
-        variant="primary"
-        size="sm"
-        on:click={() => notify('success', '新增票券', '已開啟票券建立表單。')}
-      >
+      <Button variant="primary" size="sm" on:click={openNew}>
         <Icon name="plus" size={15} style="margin-right:6px;" />新增票券
       </Button>
     </svelte:fragment>
@@ -44,14 +86,14 @@
     <StatCard
       icon="layers"
       label="販售方案"
-      value={TICKETS.length + ' 種'}
+      value={tickets.length + ' 種'}
       tint="var(--df-primary-bg)"
       color="var(--df-primary)"
     />
   </div>
 
   <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
-    {#each TICKETS as t (t.id)}
+    {#each tickets as t (t.id)}
       {@const pct = soldPct(t.sold, t.quota)}
       <Card padding={0} hoverable style="overflow:hidden;">
         <div style="display:flex; align-items:flex-start; gap:14px; padding:18px 20px 16px;">
@@ -102,12 +144,7 @@
           >
             <Icon name="bar-chart-3" size={14} style="margin-right:6px;" />銷售明細
           </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            fullWidth
-            on:click={() => notify('info', t.name, '編輯票券方案（示範）。')}
-          >
+          <Button variant="primary" size="sm" fullWidth on:click={() => openEdit(t)}>
             <Icon name="pencil-line" size={14} style="margin-right:6px;" />編輯
           </Button>
         </div>
@@ -115,3 +152,5 @@
     {/each}
   </div>
 </div>
+
+<TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />

@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { NavLink } from '$lib/data/navigationConfig';
+  import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import BrandedPlaceholder from '$lib/components/BrandedPlaceholder.svelte';
 
   export let title: string;
   export let subtitle: string = '';
@@ -11,14 +13,14 @@
   export let relatedItems: NavLink[] = [];
   export let ctaText: string = '立即預約';
   export let ctaAction: () => void = () => {
-    alert('預約功能即將推出');
+    goto('/contact');
   };
 </script>
 
 <div class="detail-page">
   <!-- Hero Section -->
   <section class="hero">
-    <img src={heroImage} alt={title} class="hero-image" />
+    <BrandedPlaceholder src={heroImage} alt={title} variant="hero" showCaption={false} />
     <div class="hero-overlay">
       <div class="container">
         <h1 class="hero-title">{title}</h1>
@@ -63,7 +65,7 @@
         <div class="gallery-grid">
           {#each gallery as image, index}
             <div class="gallery-item">
-              <img src={image} alt="{title} - 圖片 {index + 1}" loading="lazy" />
+              <BrandedPlaceholder src={image} alt={title + ' - 圖片 ' + (index + 1)} />
             </div>
           {/each}
         </div>
@@ -124,12 +126,6 @@
     width: 100%;
     height: 400px;
     overflow: hidden;
-  }
-
-  .hero-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
   }
 
   .hero-overlay {
@@ -239,12 +235,6 @@
 
   .gallery-item:hover {
     transform: scale(1.05);
-  }
-
-  .gallery-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
   }
 
   /* Related Items Section */

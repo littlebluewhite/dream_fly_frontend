@@ -17,7 +17,7 @@
   import MemberDialog from './MemberDialog.svelte';
   import MemberEditDialog from './MemberEditDialog.svelte';
   import { MEMBERS, ATT_MARK, type Member } from '$lib/admin/data';
-  import { search } from '$lib/admin/stores';
+  import { search, memberFilter } from '$lib/admin/stores';
   import {
     filterMembers,
     countByStatus,
@@ -48,11 +48,13 @@
     { value: 'paused', label: '暫停中', count: counts.paused }
   ];
 
-  // status filter only applies in the full variant; compact always shows 'all'.
+  // status tab + the 進階篩選 store only apply in the full variant; compact always
+  // shows 'all' with no advanced narrowing (it is the dashboard preview).
   $: visible = (() => {
     const out = filterMembers(members, {
       query: $search,
       status: compact ? 'all' : tab,
+      ...(compact ? {} : $memberFilter),
       sort
     });
     return compact ? out.slice(0, 6) : out;

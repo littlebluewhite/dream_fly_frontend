@@ -84,6 +84,87 @@ describe('filterMembers', () => {
 	});
 });
 
+/* B3 advanced filter — course / pay / attMin / attMax. Each is an inclusive,
+ * immutable narrowing whose default (omitted / '' / undefined) is pure
+ * pass-through, so MembersTable's defaults stay equivalent to the old behaviour. */
+describe('filterMembers — advanced fields (course / pay / attendance range)', () => {
+	it('course = a specific 課程 narrows to exact-match rows only', () => {
+		const course = '跑酷入門班';
+		const out = filterMembers(MEMBERS, { course });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((m) => m.course === course)).toBe(true);
+	});
+
+	it("course = '' (or 全部) is pass-through", () => {
+		expect(filterMembers(MEMBERS, { course: '' })).toHaveLength(MEMBERS.length);
+		expect(filterMembers(MEMBERS, { course: '全部' })).toHaveLength(MEMBERS.length);
+	});
+
+	it('pay = a specific 繳費狀態 narrows to that status only', () => {
+		const out = filterMembers(MEMBERS, { pay: 'due' });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((m) => m.pay === 'due')).toBe(true);
+	});
+
+	it("pay = '' (or 'all') is pass-through", () => {
+		expect(filterMembers(MEMBERS, { pay: '' })).toHaveLength(MEMBERS.length);
+		expect(filterMembers(MEMBERS, { pay: 'all' })).toHaveLength(MEMBERS.length);
+	});
+
+	it('attMin is an inclusive lower bound', () => {
+		const out = filterMembers(MEMBERS, { attMin: 90 });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((m) => m.att >= 90)).toBe(true);
+		// a member sitting exactly on the bound is kept
+		const exact = MEMBERS.find((m) => m.att === 90);
+		if (exact) expect(out.map((m) => m.id)).toContain(exact.id);
+	});
+
+	it('attMax is an inclusive upper bound', () => {
+		const out = filterMembers(MEMBERS, { attMax: 75 });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((m) => m.att <= 75)).toBe(true);
+	});
+
+	it('attMin + attMax compose into an inclusive band', () => {
+		const out = filterMembers(MEMBERS, { attMin: 80, attMax: 90 });
+		expect(out.every((m) => m.att >= 80 && m.att <= 90)).toBe(true);
+		// equals the hand-computed band
+		const expected = MEMBERS.filter((m) => m.att >= 80 && m.att <= 90).length;
+		expect(out).toHaveLength(expected);
+	});
+
+	it('undefined attMin/attMax are pass-through (full set, fresh array)', () => {
+		const out = filterMembers(MEMBERS, { attMin: undefined, attMax: undefined });
+		expect(out).toHaveLength(MEMBERS.length);
+		expect(out).not.toBe(MEMBERS);
+	});
+
+	it('advanced fields compose with status + query', () => {
+		const out = filterMembers(MEMBERS, {
+			status: 'active',
+			pay: 'paid',
+			attMin: 90,
+			query: '林'
+		});
+		expect(
+			out.every(
+				(m) =>
+					m.status === 'active' &&
+					m.pay === 'paid' &&
+					m.att >= 90 &&
+					(m.name + m.id + m.course).includes('林')
+			)
+		).toBe(true);
+	});
+
+	it('never mutates the input array', () => {
+		const before = MEMBERS.map((m) => m.id);
+		filterMembers(MEMBERS, { course: '跑酷入門班', pay: 'due', attMin: 70, attMax: 80 });
+		expect(MEMBERS.map((m) => m.id)).toEqual(before);
+	});
+});
+
 describe('countByStatus', () => {
 	it('counts each status and the total', () => {
 		const c = countByStatus(MEMBERS);

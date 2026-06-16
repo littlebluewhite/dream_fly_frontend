@@ -1,17 +1,25 @@
 <script lang="ts">
-  /* 排課管理 — weekly calendar grid.
-   * Faithful port of docs/design/coach/views_students.jsx L156-196. */
-  import { SCHED_DAYS, SCHED_HOURS, SCHED_COURSES, CAT_COLOR } from '$lib/coach/data';
+  /* 排課管理 — calendar grid (day or week view).
+   * Faithful port of docs/design/coach/views_students.jsx L156-196, now
+   * prop-driven: `days` drives the columns (1 for 日 view, 7 for 週), `courses`
+   * is the live filtered list. `hours` defaults to SCHED_HOURS so the page need
+   * not pass it. */
+  import { SCHED_HOURS, CAT_COLOR } from '$lib/coach/data';
+  import type { SchedDay, SchedCourse } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { toY, dur, ROW_H } from '$lib/coach/schedule-grid';
+
+  export let days: SchedDay[];
+  export let courses: SchedCourse[];
+  export let hours: string[] = SCHED_HOURS;
 </script>
 
 <!-- day header -->
 <div
-  style="display:grid;grid-template-columns:60px repeat(7,1fr);border-bottom:1px solid var(--df-border)"
+  style="display:grid;grid-template-columns:60px repeat({days.length},1fr);border-bottom:1px solid var(--df-border)"
 >
   <div style="border-right:1px solid var(--df-border)"></div>
-  {#each SCHED_DAYS as d (d.key)}
+  {#each days as d (d.key)}
     <div
       style="padding:12px 8px;text-align:center;border-right:1px solid var(--df-border);background:{d.today
         ? 'var(--df-primary-bg)'
@@ -38,10 +46,10 @@
 </div>
 
 <!-- body -->
-<div style="display:grid;grid-template-columns:60px repeat(7,1fr);position:relative">
+<div style="display:grid;grid-template-columns:60px repeat({days.length},1fr);position:relative">
   <!-- time column -->
   <div style="border-right:1px solid var(--df-border)">
-    {#each SCHED_HOURS as h (h)}
+    {#each hours as h (h)}
       <div
         style="height:{ROW_H}px;border-bottom:1px solid var(--df-border);display:flex;justify-content:center;padding-top:6px;font-size:11.5px;color:var(--df-text-muted);font-family:var(--df-font-mono)"
       >
@@ -51,18 +59,18 @@
   </div>
 
   <!-- day columns -->
-  {#each SCHED_DAYS as d (d.key)}
-    {@const courses = SCHED_COURSES.filter((c) => c.day === d.key)}
+  {#each days as d (d.key)}
+    {@const dayCourses = courses.filter((c) => c.day === d.key)}
     <div
       style="position:relative;border-right:1px solid var(--df-border);background:{d.today
         ? 'rgba(234,243,251,0.4)'
         : '#fff'}"
     >
-      {#each SCHED_HOURS as h (h)}
+      {#each hours as h (h)}
         <div style="height:{ROW_H}px;border-bottom:1px solid var(--df-border)"></div>
       {/each}
 
-      {#each courses as c, i (i)}
+      {#each dayCourses as c, i (i)}
         {@const col = CAT_COLOR[c.cat]}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <div

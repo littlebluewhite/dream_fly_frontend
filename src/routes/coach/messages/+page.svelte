@@ -4,17 +4,25 @@
    * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root. */
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
+  import Dialog from '$lib/components/ui/Dialog.svelte';
   import ConversationRow from '$lib/coach/components/ConversationRow.svelte';
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
-  import { CONVERSATIONS, THREAD, SHARED_FILES } from '$lib/coach/data';
+  import { CONVERSATIONS, MSG_DIRECTORY, THREAD, SHARED_FILES } from '$lib/coach/data';
+  import type { Conversation, MsgRecipient } from '$lib/coach/data';
   import { toasts, search } from '$lib/coach/stores';
 
   /* ── state (legacy, no runes) ── */
+  let convos: Conversation[] = [...CONVERSATIONS];
   let tab = '全部';
   let sel = 'v1';
   let reply = '';
+
+  /* compose dialog */
+  let composeOpen = false;
+  let composePick: MsgRecipient | null = null;
+  let newSeq = 1;
 
   const tabs = [
     { k: '全部', label: '全部' },
@@ -26,7 +34,7 @@
   /* wired to topbar search store */
   $: q = $search.trim().toLowerCase();
 
-  $: list = CONVERSATIONS.filter((c) => {
+  $: list = convos.filter((c) => {
     if (tab === '緊急' && !c.urgent) return false;
     if (tab === '未讀' && !c.badge) return false;
     if (tab === '家長' && c.kind !== '家長') return false;
@@ -37,7 +45,7 @@
   /* selection guard: if current sel falls out of filtered list, auto-select first */
   $: if (list.length && !list.some((c) => c.id === sel)) sel = list[0].id;
 
-  $: cur = CONVERSATIONS.find((c) => c.id === sel) || CONVERSATIONS[0];
+  $: cur = convos.find((c) => c.id === sel) || convos[0];
   $: showThread = cur.id === 'v1';
 
   function handleSelect(e: CustomEvent<string>) {
@@ -47,6 +55,36 @@
   function handleSend() {
     toasts.notify('success', '訊息已傳送', '（示範）');
     reply = '';
+  }
+
+  function openCompose() {
+    composePick = null;
+    composeOpen = true;
+  }
+
+  function createConversation() {
+    if (!composePick) return;
+    const r = composePick;
+    const id = 'new-' + newSeq++;
+    const convo: Conversation = {
+      id,
+      name: r.name,
+      initial: r.initial,
+      color: r.color,
+      kind: r.kind,
+      time: '剛剛',
+      preview: '尚無訊息',
+      sla: '尚未回覆',
+      slaTone: 'muted',
+    };
+    convos = [convo, ...convos];
+    // reset the filters so the guard can't re-select the first visible row over us.
+    tab = '全部';
+    search.set('');
+    sel = id;
+    composeOpen = false;
+    composePick = null;
+    toasts.notify('success', '已建立對話', '與 ' + r.name + ' 的新對話已建立。');
   }
 </script>
 
@@ -63,7 +101,7 @@
             variant="soft"
             size="sm"
             aria-label="撰寫"
-            on:click={() => toasts.notify('info', '撰寫訊息', '建立新的對話（示範）。')}
+            on:click={openCompose}
           >
             <Icon name="pen-line" size={16} color="var(--df-primary)" />
           </IconButton>
@@ -111,7 +149,7 @@
         </div>
         {#each ['phone', 'video', 'more-horizontal'] as ic}
           <button
-            on:click={() => toasts.notify('info', '功能', '（示範）')}
+            on:click={() => toasts.notify('info', ic === 'phone' ? '語音通話' : ic === 'video' ? '視訊通話' : '更多', ic === 'more-horizontal' ? '更多對話選項。' : '此原型不含通話功能。')}
             aria-label={ic}
             style="width:36px;height:36px;border-radius:8px;border:1px solid var(--df-border);background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"
           >
@@ -223,3 +261,35 @@
 
   </div>
 </div>
+
+<!-- ══════════════ 撰寫 新對話 Dialog ══════════════ -->
+<Dialog
+  open={composeOpen}
+  title="撰寫新訊息"
+  onClose={() => (composeOpen = false)}
+  primaryAction={{ label: '建立對話', onClick: createConversation }}
+  secondaryAction={{ label: '取消', onClick: () => (composeOpen = false) }}
+>
+  <div style="font-size:13px;color:var(--df-text-light);margin-bottom:10px">選擇收件對象</div>
+  <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
+    {#each MSG_DIRECTORY as r (r.name)}
+      {@const on = composePick?.name === r.name}
+      <button
+        type="button"
+        on:click={() => (composePick = r)}
+        style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1.5px solid {on
+          ? 'var(--df-primary)'
+          : 'var(--df-border)'};background:{on
+          ? 'var(--df-primary-bg)'
+          : '#fff'};border-radius:10px;padding:10px 12px;cursor:pointer;font-family:var(--df-font-body)"
+      >
+        <span style="width:36px;height:36px;border-radius:50%;background:{r.color};color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none">{r.initial}</span>
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-size:13.5px;font-weight:700;color:var(--df-text-dark)">{r.name}</span>
+          <span style="display:block;font-size:12px;color:var(--df-text-light)">{r.kind}</span>
+        </span>
+        {#if on}<Icon name="check" size={16} color="var(--df-primary)" />{/if}
+      </button>
+    {/each}
+  </div>
+</Dialog>

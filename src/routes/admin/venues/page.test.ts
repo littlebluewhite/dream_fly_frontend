@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import VenuesPage from './+page.svelte';
 import { VENUES } from '$lib/admin/data';
 
@@ -42,5 +42,22 @@ describe('場館管理 (+page)', () => {
 		// A 訓練館: cap 16, today 4
 		expect(txt).toContain('16 人');
 		expect(txt).toContain('4 堂');
+	});
+
+	/* P1 (plan B2): the 編輯 / 新增場地 buttons were dead (fired a toast only). They
+	 * now open the VenueEditDialog. */
+	it('opens the VenueEditDialog (編輯場地) when a card 編輯 is clicked', async () => {
+		const { getAllByText, getByText, queryByText } = render(VenuesPage);
+		expect(queryByText('儲存場地')).toBeNull();
+		await fireEvent.click(getAllByText('編輯')[0]);
+		expect(getByText('編輯場地')).toBeInTheDocument();
+		expect(getByText('儲存場地')).toBeInTheDocument();
+	});
+
+	it('opens the VenueEditDialog in new mode (新增場地 dialog) when the header 新增場地 is clicked', async () => {
+		const { getByText, queryByText } = render(VenuesPage);
+		expect(queryByText('建立場地')).toBeNull();
+		await fireEvent.click(getByText('新增場地'));
+		expect(getByText('建立場地')).toBeInTheDocument();
 	});
 });

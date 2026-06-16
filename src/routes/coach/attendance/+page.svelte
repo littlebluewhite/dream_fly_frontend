@@ -1,19 +1,29 @@
 <script lang="ts">
   /* 出勤記錄 / 點名 — 教練端點名頁面
    * Ported from docs/design/coach/views_attendance.jsx (L25–153).
-   * Legacy Svelte (no runes). */
-  import { ATT_CLASS, ATT_ROSTER } from '$lib/coach/data';
+   * Legacy Svelte (no runes).
+   *
+   * Now: class/roster are stateful (切換班級 via CoachDropdown) and every unsaved
+   * edit snapshots the WHOLE save-bar state so 復原 restores marks + dirtyCount +
+   * state, not just marks. */
+  import { ATT_TODAY_CLASSES } from '$lib/coach/data';
   import type { AttRow, AttDefault } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
+  import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
+  // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
+  let curClassId = 'ac1';
+  $: curClass = ATT_TODAY_CLASSES.find((c) => c.id === curClassId)!;
+  $: roster = curClass.roster;
+
   // ── 狀態 ──────────────────────────────────────────────────────────────
   let marks: Record<string, AttDefault> = Object.fromEntries(
-    ATT_ROSTER.map((r) => [r.mid, r.def] as [string, AttDefault])
+    ATT_TODAY_CLASSES[0].roster.map((r) => [r.mid, r.def] as [string, AttDefault])
   );
   let notes: Record<string, string> = {};
   let noteFor: AttRow | null = null;
@@ -22,8 +32,30 @@
   let savedAt: string | null = null;
   let dirtyCount = 3;
 
+  // ── 復原快照 ───────────────────────────────────────────────────────────
+  // The save bar is driven by state/savedAt/dirtyCount, not just marks — so a
+  // single-step undo must capture all of them. `prev != null` drives the 復原
+  // control's visibility.
+  type SaveBar = {
+    marks: Record<string, AttDefault>;
+    notes: Record<string, string>;
+    state: 'dirty' | 'saving' | 'saved';
+    savedAt: string | null;
+    dirtyCount: number;
+  };
+  let prev: SaveBar | null = null;
+  function snapshot() {
+    prev = { marks, notes, state, savedAt, dirtyCount };
+  }
+  function undo() {
+    if (!prev) return;
+    ({ marks, notes, state, savedAt, dirtyCount } = prev);
+    prev = null;
+  }
+
   // ── 動作 ──────────────────────────────────────────────────────────────
   function setMark(mid: string, v: AttDefault) {
+    snapshot();
     marks = { ...marks, [mid]: v };
     state = 'dirty';
     dirtyCount += 1;
@@ -36,6 +68,7 @@
 
   function saveNote() {
     if (!noteFor) return;
+    snapshot();
     notes = { ...notes, [noteFor.mid]: noteText };
     noteFor = null;
     // codex r1 (P2): a note edit is an unsaved change too — re-dirty the save bar
@@ -49,14 +82,49 @@
   }
 
   function markAll() {
+    snapshot();
     // codex r2 (P2): bump dirtyCount by the rows this bulk action actually changes,
     // so the save bar / status card don't claim "0 筆變更" after a sync.
-    const changed = ATT_ROSTER.filter((r) => r.def !== 'leave' && marks[r.mid] !== 'present').length;
+    const changed = roster.filter((r) => r.def !== 'leave' && marks[r.mid] !== 'present').length;
     marks = Object.fromEntries(
-      ATT_ROSTER.map((r) => [r.mid, r.def === 'leave' ? 'leave' : 'present'] as [string, AttDefault])
+      roster.map((r) => [r.mid, r.def === 'leave' ? 'leave' : 'present'] as [string, AttDefault])
     );
     state = 'dirty';
     dirtyCount += changed;
+  }
+
+  // Per-class drafts: switching stashes the current class's whole save-bar state and
+  // restores the target's (or inits it), so an unsaved edit survives a round-trip
+  // switch instead of silently resetting to defaults. (codex round 2 P2)
+  let byClass: Record<string, SaveBar> = {};
+  function buildMarks(rows: AttRow[]): Record<string, AttDefault> {
+    return Object.fromEntries(rows.map((r) => [r.mid, r.def] as [string, AttDefault]));
+  }
+  function selectClass(name: string) {
+    const next = ATT_TODAY_CLASSES.find((c) => c.name === name);
+    if (!next || next.id === curClassId) return;
+    // Don't switch mid-save: the in-flight doSave() callback completes against the
+    // live state, so stashing a 'saving' class would leave it stuck on 儲存中 forever
+    // (and the success toast could land on the wrong class). (codex round 3 P1)
+    if (state === 'saving') {
+      toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
+      return;
+    }
+    // stash the current class's draft, then restore the target's (or build a fresh one).
+    // Read `next` DIRECTLY — the legacy `$: roster` doesn't update mid-handler.
+    byClass[curClassId] = { marks, notes, state, savedAt, dirtyCount };
+    const saved = byClass[next.id];
+    if (saved) {
+      ({ marks, notes, state, savedAt, dirtyCount } = saved);
+    } else {
+      marks = buildMarks(next.roster);
+      notes = {};
+      state = 'dirty';
+      savedAt = null;
+      dirtyCount = next.roster.filter((r) => r.def !== 'present').length;
+    }
+    prev = null;
+    curClassId = next.id;
   }
 
   function doSave() {
@@ -68,26 +136,26 @@
       state = 'saved';
       savedAt = '14:32';
       dirtyCount = 0;
-      toasts.notify('success', '點名已儲存', ATT_CLASS.name + ' · ' + ATT_ROSTER.length + ' 位學員出勤已同步至雲端。');
+      toasts.notify('success', '點名已儲存', curClass.name + ' · ' + roster.length + ' 位學員出勤已同步至雲端。');
     }, 1100);
   }
 
   // ── 衍生 ──────────────────────────────────────────────────────────────
-  $: tallyCounts = tally(marks, ATT_ROSTER);
+  $: tallyCounts = tally(marks, roster);
 
   $: chips = [
     { key: 'present', label: '出席',               color: 'var(--df-success)',      n: tallyCounts.present || 0 },
     { key: 'late',    label: '遲到',               color: 'var(--df-warning)',      n: tallyCounts.late    || 0 },
     { key: 'leave',   label: '請假',               color: 'var(--df-info)',         n: tallyCounts.leave   || 0 },
     { key: 'absent',  label: '缺席',               color: 'var(--df-error)',        n: tallyCounts.absent  || 0 },
-    { key: 'total',   label: '共 ' + ATT_ROSTER.length + ' 人', color: 'var(--df-text-muted)', n: ATT_ROSTER.length },
+    { key: 'total',   label: '共 ' + roster.length + ' 人', color: 'var(--df-text-muted)', n: roster.length },
   ];
 
   // 儲存狀態卡片設定 (circle-check-big → circle-check per icon naming guide)
   $: SS = {
     dirty:  { icon: 'circle-alert', tone: 'var(--df-warning)',  bg: 'var(--df-warning-bg)',  title: '尚未儲存', desc: dirtyCount + ' 筆出席變更尚未儲存，離開前請記得儲存' },
     saving: { icon: 'loader',       tone: 'var(--df-primary)',  bg: 'var(--df-primary-bg)', title: '儲存中…',  desc: '正在同步至雲端，請勿關閉頁面' },
-    saved:  { icon: 'circle-check', tone: 'var(--df-success)',  bg: 'var(--df-success-bg)', title: '已儲存',   desc: (savedAt || '14:32') + ' 已同步至雲端 · 全部 ' + ATT_ROSTER.length + ' 位學員' },
+    saved:  { icon: 'circle-check', tone: 'var(--df-success)',  bg: 'var(--df-success-bg)', title: '已儲存',   desc: (savedAt || '14:32') + ' 已同步至雲端 · 全部 ' + roster.length + ' 位學員' },
   }[state];
 </script>
 
@@ -102,9 +170,9 @@
           <Icon name="dumbbell" size={24} color="var(--df-primary)" />
         </div>
         <div>
-          <div style="font-size:18px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading);">{ATT_CLASS.name}</div>
+          <div style="font-size:18px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading);">{curClass.name}</div>
           <div style="display:flex;gap:14px;margin-top:5px;flex-wrap:wrap;">
-            {#each [['clock', ATT_CLASS.time], ['map-pin', ATT_CLASS.room], ['user', '授課教練：' + ATT_CLASS.coach]] as [ic, t]}
+            {#each [['clock', curClass.time], ['map-pin', curClass.room], ['user', '授課教練：' + curClass.coach]] as [ic, t]}
               <span style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--df-text-light);">
                 <Icon name={ic} size={13} color="var(--df-text-muted)" />{t}
               </span>
@@ -112,11 +180,13 @@
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        on:click={() => toasts.notify('info', '切換班級', '選擇其他今日班級進行點名（示範）。')}
-        style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;color:var(--df-text-dark);cursor:pointer;font-family:var(--df-font-body);"
-      >切換班級 <Icon name="chevron-down" size={15} color="var(--df-text-muted)" /></button>
+      <!-- 切換班級 — CoachDropdown echoes the NAME; selectClass maps name→id. -->
+      <CoachDropdown
+        icon="dumbbell"
+        value={curClass.name}
+        options={ATT_TODAY_CLASSES.map((c) => c.name)}
+        onChange={selectClass}
+      />
     </div>
   </Card>
 
@@ -148,11 +218,11 @@
 
     <!-- 學員列 -->
     <div>
-      {#each ATT_ROSTER as r, i (r.mid)}
+      {#each roster as r, i (r.mid)}
         {@const onLeave = r.def === 'leave'}
         <div
           class="df-rowhover"
-          style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:{i < ATT_ROSTER.length - 1 ? '1px solid var(--df-border)' : 'none'};"
+          style="display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:{i < roster.length - 1 ? '1px solid var(--df-border)' : 'none'};"
         >
           <!-- 序號 -->
           <span style="font-family:var(--df-font-mono);font-size:14px;font-weight:600;color:var(--df-text-muted);width:24px;">{r.n}</span>
@@ -204,10 +274,10 @@
         <div style="font-size:14.5px;font-weight:700;color:var(--df-text-dark);">{SS.title}</div>
         <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px;">{SS.desc}</div>
       </div>
-      {#if state === 'saved'}
+      {#if prev != null}
         <button
           type="button"
-          on:click={() => { state = 'dirty'; dirtyCount = 1; toasts.notify('info', '已復原', '已回到上一個版本（示範）。'); }}
+          on:click={undo}
           style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--df-text-light);cursor:pointer;font-family:var(--df-font-body);"
         ><Icon name="rotate-ccw" size={15} />復原</button>
       {/if}
@@ -225,7 +295,7 @@
       color={state === 'saved' ? 'var(--df-success)' : 'var(--df-text-muted)'}
     />
     {#if state === 'saved'}
-      {(savedAt || '14:32')} 已同步至雲端 · 全部 {ATT_ROSTER.length} 位學員
+      {(savedAt || '14:32')} 已同步至雲端 · 全部 {roster.length} 位學員
     {:else}
       尚未儲存 · {dirtyCount} 筆變更 · 已自動暫存於本機 14:30
     {/if}

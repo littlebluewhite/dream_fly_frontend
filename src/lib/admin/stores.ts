@@ -7,6 +7,8 @@
 
 import { writable } from 'svelte/store';
 
+import type { MembersFilter } from './components/members-filter';
+
 /* ---- Toasts (bottom-right stack, mirrors the member centre, 4000ms) ---- */
 export type ToastTone = 'success' | 'info' | 'warning' | 'error';
 export interface AdminToast {
@@ -39,3 +41,15 @@ export const toasts = createToasts();
 
 /* ---- Topbar search term ---- */
 export const search = writable('');
+
+/* ---- 學員管理 advanced filter (進階篩選 panel) ----
+ * Only the advanced dimensions live here (status tab + topbar query stay local to
+ * MembersTable). The default is fully pass-through so the table behaves exactly
+ * as before until the panel narrows it. */
+export const MEMBER_FILTER_DEFAULT: MembersFilter = {
+	course: '',
+	pay: '',
+	attMin: undefined,
+	attMax: undefined
+};
+export const memberFilter = writable<MembersFilter>({ ...MEMBER_FILTER_DEFAULT });

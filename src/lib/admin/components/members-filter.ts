@@ -6,10 +6,20 @@
  * matches `m.name + m.id + m.course`), then optionally sort by 出席率 (att).
  * Kept here, unit-testable without rendering, and imported by MembersTable. */
 
-import { CLASSES, COACHES, MEMBER_COLORS, type Member, type MemberStatus } from '$lib/admin/data';
+import {
+	CLASSES,
+	COACHES,
+	MEMBER_COLORS,
+	type Member,
+	type MemberStatus,
+	type PayStatus
+} from '$lib/admin/data';
 
 /** Status tab/chip key. `all` = 全部; the rest mirror MemberStatus. */
 export type MemberStatusFilter = 'all' | MemberStatus;
+
+/** Pay filter key. `all` (or '') = 全部; the rest mirror PayStatus. */
+export type MemberPayFilter = 'all' | '' | PayStatus;
 
 /** Sort directive: only 出席率 (att) is sortable in the source, or null = source order. */
 export interface MembersSort {
@@ -22,6 +32,14 @@ export interface MembersFilter {
 	query?: string;
 	/** Status tab/chip. Defaults to 'all'. */
 	status?: MemberStatusFilter;
+	/** Advanced: exact 課程 match. '' / '全部' / omitted = all courses (pass-through). */
+	course?: string;
+	/** Advanced: 繳費狀態. '' / 'all' / omitted = all pay statuses (pass-through). */
+	pay?: MemberPayFilter;
+	/** Advanced: inclusive 出席率 lower bound. Omitted = no floor. */
+	attMin?: number;
+	/** Advanced: inclusive 出席率 upper bound. Omitted = no ceiling. */
+	attMax?: number;
 	/** Sort by att; omitted/null keeps source order. */
 	sort?: MembersSort;
 }
@@ -49,9 +67,27 @@ export function countByStatus(rows: Member[]): MemberCounts {
  * search term → sort. Returns a new array; the input is never mutated.
  */
 export function filterMembers(rows: Member[], opts: MembersFilter = {}): Member[] {
-	const { query = '', status = 'all', sort } = opts;
+	const { query = '', status = 'all', course = '', pay = '', attMin, attMax, sort } = opts;
 
 	let out = status === 'all' ? rows : rows.filter((m) => m.status === status);
+
+	// Advanced: 課程 (exact match). '全部'/'' is pass-through.
+	if (course && course !== '全部') {
+		out = out.filter((m) => m.course === course);
+	}
+
+	// Advanced: 繳費狀態. 'all'/'' is pass-through.
+	if (pay && pay !== 'all') {
+		out = out.filter((m) => m.pay === pay);
+	}
+
+	// Advanced: inclusive 出席率 band. undefined bound = no clamp on that side.
+	if (attMin != null) {
+		out = out.filter((m) => m.att >= attMin);
+	}
+	if (attMax != null) {
+		out = out.filter((m) => m.att <= attMax);
+	}
 
 	const q = query.trim().toLowerCase();
 	if (q) {

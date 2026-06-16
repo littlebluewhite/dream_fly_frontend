@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import TicketsPage from './+page.svelte';
 import { TICKETS, TICKET_TYPE } from '$lib/admin/data';
 import { fmtNT } from '$lib/admin/format';
@@ -59,5 +59,22 @@ describe('票券管理 (+page)', () => {
 		expect(fills).toHaveLength(TICKETS.length);
 		// first ticket (月票): 128/200 = 64%
 		expect((fills[0] as HTMLElement).style.width).toBe(`${soldPct(TICKETS[0].sold, TICKETS[0].quota)}%`);
+	});
+
+	/* P1 (plan B1): the 編輯 / 新增票券 buttons were dead (fired a toast only). They
+	 * now open the TicketEditDialog. */
+	it('opens the TicketEditDialog (編輯票券) when a card 編輯 is clicked', async () => {
+		const { getAllByText, getByText, queryByText } = render(TicketsPage);
+		expect(queryByText('儲存票券')).toBeNull();
+		await fireEvent.click(getAllByText('編輯')[0]);
+		expect(getByText('編輯票券')).toBeInTheDocument();
+		expect(getByText('儲存票券')).toBeInTheDocument();
+	});
+
+	it('opens the TicketEditDialog in new mode (新增票券) when the header 新增票券 is clicked', async () => {
+		const { getByText, queryByText } = render(TicketsPage);
+		expect(queryByText('建立票券')).toBeNull();
+		await fireEvent.click(getByText('新增票券'));
+		expect(getByText('建立票券')).toBeInTheDocument();
 	});
 });

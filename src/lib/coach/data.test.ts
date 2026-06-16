@@ -6,7 +6,10 @@ import {
 	SCHED_HOURS,
 	SCHED_COURSES,
 	ATT_ROSTER,
+	ATT_CLASS,
+	ATT_TODAY_CLASSES,
 	CONVERSATIONS,
+	MSG_DIRECTORY,
 	THREAD,
 	SHARED_FILES,
 	NOTIFS,
@@ -64,5 +67,42 @@ describe('coach data — referential integrity', () => {
 			const kinds = [m.text, m.attach, m.failed].filter((x) => x != null);
 			expect(kinds).toHaveLength(1);
 		}
+	});
+
+	it('every SCHED_COURSES.venue is one of the 3 valid venues', () => {
+		const valid = new Set(['主場館', '競技訓練館', '副館']);
+		for (const c of SCHED_COURSES) expect(valid.has(c.venue)).toBe(true);
+	});
+});
+
+describe('coach data — ATT_TODAY_CLASSES (switch-class roster)', () => {
+	it('has at least 3 classes', () => {
+		expect(ATT_TODAY_CLASSES.length).toBeGreaterThanOrEqual(3);
+	});
+
+	it('first class reuses the existing ATT_CLASS + ATT_ROSTER', () => {
+		expect(ATT_TODAY_CLASSES[0].roster).toBe(ATT_ROSTER);
+		expect(ATT_TODAY_CLASSES[0].name).toBe(ATT_CLASS.name);
+	});
+
+	it('every class has a stable id and a non-empty roster', () => {
+		const ids = new Set<string>();
+		for (const c of ATT_TODAY_CLASSES) {
+			expect(c.id).toBeTruthy();
+			ids.add(c.id);
+			expect(c.roster.length).toBeGreaterThan(0);
+		}
+		expect(ids.size).toBe(ATT_TODAY_CLASSES.length); // ids unique
+	});
+});
+
+describe('coach data — MSG_DIRECTORY (compose recipients)', () => {
+	it('is non-empty', () => {
+		expect(MSG_DIRECTORY.length).toBeGreaterThan(0);
+	});
+
+	it('no recipient name collides with an existing conversation', () => {
+		const convoNames = new Set(CONVERSATIONS.map((c) => c.name));
+		for (const r of MSG_DIRECTORY) expect(convoNames.has(r.name)).toBe(false);
 	});
 });

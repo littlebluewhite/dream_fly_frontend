@@ -4,10 +4,11 @@
    * the REPORT_KPIS 3-col grid, the full-width RevenueBreakdown, then the prototype's
    * paired panel rows (flex, gap 18, wrap) — each pairs one flexible chart with one
    * fixed-width chart exactly as ReportsView lays them out. Every chart is pure CSS. */
-  import { Button, Icon } from '$lib/components/ui';
+  import { Button, Icon, Select } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import { REPORT_KPIS } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
+  import { REPORT_PERIODS, DEFAULT_PERIOD, kpisForPeriod } from '$lib/admin/components/reports-period';
 
   import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
   import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
@@ -25,18 +26,20 @@
   import PaymentSplit from '$lib/admin/components/reports/PaymentSplit.svelte';
   import ConversionFunnel from '$lib/admin/components/reports/ConversionFunnel.svelte';
   import WeekdayLoad from '$lib/admin/components/reports/WeekdayLoad.svelte';
+
+  // The period picker re-scales ONLY the KPI band (kpisForPeriod). The 15 charts
+  // below import their data at module scope and take no props, so they are not
+  // rewired — that is the honest mock boundary.
+  let period = DEFAULT_PERIOD;
+  $: kpis = kpisForPeriod(REPORT_KPIS, period);
 </script>
 
 <div style="display:flex; flex-direction:column; gap:20px;">
   <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
     <svelte:fragment slot="actions">
-      <button type="button" class="period">
-        <Icon name="calendar" size={16} color="var(--df-text-light)" />2026 上半年<Icon
-          name="chevron-down"
-          size={14}
-          color="var(--df-text-light)"
-        />
-      </button>
+      <div class="period-select">
+        <Select bind:value={period} options={REPORT_PERIODS} />
+      </div>
       <Button
         variant="primary"
         size="sm"
@@ -50,7 +53,7 @@
   </PageHead>
 
   <div class="kpi-grid">
-    {#each REPORT_KPIS as k}
+    {#each kpis as k (k.label)}
       <ReportKpi {k} />
     {/each}
   </div>
@@ -99,19 +102,11 @@
     align-items: stretch;
     flex-wrap: wrap;
   }
-  .period {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
+  /* keep the period Select compact inside the PageHead actions row */
+  .period-select {
+    min-width: 150px;
+  }
+  .period-select :global(.control) {
     height: 38px;
-    padding: 0 14px;
-    border-radius: 8px;
-    border: 1px solid var(--df-border);
-    background: #fff;
-    color: var(--df-text-dark);
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    font-family: var(--df-font-body);
   }
 </style>

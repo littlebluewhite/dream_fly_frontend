@@ -3,6 +3,9 @@
   import Icon from '$lib/components/ui/Icon.svelte';
 
   // Contact Page - 聯絡資訊
+  const mapAddress = '台北市信義區信義路五段 168 號 3 樓';
+  const mapEmbedUrl = `https://www.google.com/maps?q=${encodeURIComponent(mapAddress)}&output=embed`;
+  const mapLinkUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}`;
 </script>
 
 <svelte:head>
@@ -100,10 +103,19 @@
       <!-- Map Section -->
       <div class="map-section card">
         <h2>場館位置</h2>
-        <div class="map-placeholder">
-          <p class="map-title"><Icon name="map-pin" size={24} color="var(--df-primary)" /> Google Maps 位置</p>
-          <p class="map-note">台北市信義區信義路五段 168 號 3 樓</p>
+        <div class="map-embed">
+          <iframe
+            title={'Dream Fly 體操館位置 — ' + mapAddress}
+            src={mapEmbedUrl}
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+            allowfullscreen
+          ></iframe>
         </div>
+        <a class="map-link" href={mapLinkUrl} target="_blank" rel="noopener noreferrer">
+          <Icon name="external-link" size={18} color="var(--df-primary)" />
+          在 Google 地圖開啟
+        </a>
         <div class="directions">
           <h3>交通方式</h3>
           <ul>
@@ -224,26 +236,36 @@
     margin-bottom: var(--df-space-5);
   }
 
-  .map-placeholder {
-    background-color: var(--df-bg-light);
-    padding: var(--df-space-8);
-    text-align: center;
+  .map-embed {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
     border-radius: var(--df-radius-md);
-    margin-bottom: var(--df-space-5);
-  }
-
-  .map-title {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--df-space-2);
-    font-size: 1.5rem;
+    border: 1px solid var(--df-border);
+    box-shadow: var(--df-shadow-soft);
     margin-bottom: var(--df-space-4);
   }
 
-  .map-note {
-    color: var(--df-text-light);
-    font-size: 1rem !important;
+  .map-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .map-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--df-space-2);
+    color: var(--df-primary);
+    font-weight: 600;
+    text-decoration: none;
+    margin-bottom: var(--df-space-5);
+  }
+
+  .map-link:hover {
+    text-decoration: underline;
   }
 
   .directions h3 {
