@@ -5,6 +5,7 @@
    * Legacy Svelte (no runes). Traditional Chinese copy. */
   import { goto } from '$app/navigation';
   import { Button, Checkbox, Icon, Avatar } from '$lib/components/ui';
+  import { COACH } from '$lib/coach/data';
 
   /* ─── Step 1: Credentials ─── */
   let account = '';
@@ -211,7 +212,7 @@
           border-bottom:1px solid var(--df-border); background:rgba(255,255,255,0.72);
           backdrop-filter:blur(12px); position:sticky; top:0; z-index:10;"
       >
-        <Avatar name="陳" size="md" color="var(--df-primary)" />
+        <Avatar name={COACH.initial} size="md" color="var(--df-primary)" />
         <div style="line-height:1.25; flex:1;">
           <div
             style="font-size:11px; font-weight:500; letter-spacing:0.8px;
@@ -219,7 +220,7 @@
           >歡迎回來</div>
           <div
             style="font-size:15px; font-weight:700; color:var(--df-ink);"
-          >陳教練</div>
+          >{COACH.display}</div>
         </div>
         <!-- facility pill -->
         <div
@@ -264,7 +265,7 @@
         <p
           style="margin:0 0 28px; font-size:17px; color:var(--df-text-dark); text-align:center;"
         >
-          陳教練，歡迎回來 👋
+          {COACH.display}，歡迎回來 👋
         </p>
 
         <!-- remember role checkbox -->

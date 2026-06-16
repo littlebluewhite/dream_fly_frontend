@@ -32,10 +32,10 @@
   );
 
   function addToCart(c: (typeof CATALOG)[number]) {
-    cart.add(c);
+    const r = cart.add(c);
     toasts.notify(
-      c.spots === 0 ? 'info' : 'success',
-      c.spots === 0 ? '已加入候補' : '已加入購物車',
+      r === 'waitlisted' ? 'info' : 'success',
+      r === 'waitlisted' ? '已加入候補' : '已加入購物車',
       c.name
     );
   }

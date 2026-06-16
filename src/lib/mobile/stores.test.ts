@@ -121,3 +121,30 @@ describe('notifs', () => {
 		expect(seed.filter((x) => !x.read)).toHaveLength(2);
 	});
 });
+
+describe('cart waitlist guard', () => {
+	const fullCourse = { id: 'k9', name: '額滿體操班', price: 5000, spots: 0 };
+	it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
+		const c = createCart();
+		const r = c.add(fullCourse);
+		expect(r).toBe('waitlisted');
+		expect(get(c)).toHaveLength(0); // never enters the paid cart
+		expect(get(c.waitlist)).toContain('k9'); // registered for waitlist
+	});
+
+	it('adds a course that still has spots to the paid cart and returns "added"', () => {
+		const c = createCart();
+		const r = c.add({ id: 'k1', name: '競技啦啦隊 進階班', price: 4800, spots: 1 });
+		expect(r).toBe('added');
+		expect(get(c)).toHaveLength(1);
+		expect(get(c.waitlist)).toHaveLength(0);
+	});
+
+	it('keeps the waitlist idempotent when the same full course is added twice', () => {
+		const c = createCart();
+		c.add(fullCourse);
+		c.add(fullCourse);
+		expect(get(c.waitlist)).toEqual(['k9']); // recorded once
+		expect(get(c)).toHaveLength(0); // still never in the paid cart
+	});
+});

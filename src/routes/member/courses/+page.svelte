@@ -28,13 +28,10 @@
 
   function addToCart(c: CatalogCourse) {
     const r = cart.add(c);
-    if (r === 'bumped') toasts.notify('info', '已更新數量', c.name + ' 數量 +1。');
-    else
-      toasts.notify(
-        'success',
-        c.spots === 0 ? '已加入候補' : '已加入購物車',
-        c.name + (c.spots === 0 ? ' — 有名額時將通知您。' : ' — 前往購物車完成報名。')
-      );
+    if (r === 'waitlisted')
+      toasts.notify('info', '已加入候補', c.name + ' — 有名額時將通知您。');
+    else if (r === 'bumped') toasts.notify('info', '已更新數量', c.name + ' 數量 +1。');
+    else toasts.notify('success', '已加入購物車', c.name + ' — 前往購物車完成報名。');
   }
 </script>
 

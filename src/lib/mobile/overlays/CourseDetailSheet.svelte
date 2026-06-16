@@ -27,8 +27,8 @@
 
   function add() {
     if (!c) return;
-    cart.add(c as CartInput);
-    toasts.notify('success', full ? '已加入候補名單' : '已加入購物車', c.name);
+    const r = cart.add(c as CartInput);
+    toasts.notify(r === 'waitlisted' ? 'info' : 'success', r === 'waitlisted' ? '已加入候補名單' : '已加入購物車', c.name);
     onClose();
   }
 </script>

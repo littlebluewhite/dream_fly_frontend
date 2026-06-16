@@ -16,15 +16,23 @@ import {
 } from './data';
 
 /* ---- Cart ---- */
-export type AddResult = 'added' | 'bumped';
+export type AddResult = 'added' | 'bumped' | 'waitlisted';
 
-function createCart() {
+export function createCart() {
   const { subscribe, update, set } = writable<CartItem[]>([]);
+  // 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
+  const waitlist = writable<number[]>([]);
   return {
     subscribe,
-    /** Add a course, or bump qty if already in the cart. Returns which happened
-     *  so the caller can show the right toast. */
+    waitlist,
+    /** Add a course, or bump qty if already in the cart. A full course
+     *  (spots 0) is recorded on the waitlist instead of entering the paid cart.
+     *  Returns which happened so the caller can show the right toast. */
     add(course: CatalogCourse): AddResult {
+      if (course.spots === 0) {
+        waitlist.update((ids) => (ids.includes(course.id) ? ids : [...ids, course.id]));
+        return 'waitlisted';
+      }
       let result: AddResult = 'added';
       update((items) => {
         if (items.some((x) => x.id === course.id)) {

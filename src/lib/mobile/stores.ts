@@ -62,19 +62,29 @@ export interface CartInput {
 export interface CartLine extends CartInput {
 	qty: number;
 }
-/** add() increments an existing line or appends qty 1; updateQty() clamps to a
- *  minimum of 1 (ui.jsx checkout never allows 0). */
+/** add() records a full course (spots 0) on the waitlist instead of adding it to
+ *  the paid cart; otherwise it increments an existing line or appends qty 1.
+ *  updateQty() clamps to a minimum of 1 (ui.jsx checkout never allows 0). */
+export type AddResult = 'added' | 'waitlisted';
 export function createCart() {
 	const { subscribe, update, set } = writable<CartLine[]>([]);
+	// 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
+	const waitlist = writable<(string | number)[]>([]);
 	return {
 		subscribe,
-		add(course: CartInput) {
+		waitlist,
+		add(course: CartInput): AddResult {
+			if (course.spots === 0) {
+				waitlist.update((ids) => (ids.includes(course.id) ? ids : [...ids, course.id]));
+				return 'waitlisted';
+			}
 			update((items) => {
 				const ex = items.find((c) => c.id === course.id);
 				if (ex) return items.map((c) => (c.id === course.id ? { ...c, qty: c.qty + 1 } : c));
 				const line: CartLine = { ...course, qty: 1 };
 				return [...items, line];
 			});
+			return 'added';
 		},
 		remove(id: string | number) {
 			update((items) => items.filter((c) => c.id !== id));
