@@ -9,14 +9,15 @@
 
 <script lang="ts">
   /* 管理後台 left rail: dark brand header, single nav group (9 real route
-   * links with active state), and a static admin profile menu in the footer
-   * (avatar + name + role, popover with 個人設定 / 帳號管理 / 登出 — no role
-   * switch; coach is a separate future app). */
+   * links with active state), and an admin profile menu in the footer
+   * (avatar + name + role, popover with a 切換至其他身分 → 教練工作台 role
+   * switch, then 個人設定 / 帳號管理 / 登出). */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { toasts } from '$lib/admin/stores';
+  import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
 
   const NAV = [
     { href: '/admin', label: '儀表板總覽', icon: 'layout-dashboard' },
@@ -49,6 +50,12 @@
   function profileAction(label: string) {
     menuOpen = false;
     toasts.notify('info', label, '此功能將於後續階段實作。');
+  }
+
+  function switchRole() {
+    menuOpen = false;
+    rememberStaffRole('coach');
+    goto(ROLE_HOME.coach);
   }
 </script>
 
@@ -87,6 +94,23 @@
             <div class="menu-head-name">{PROFILE.name}</div>
             <div class="menu-head-desc">{PROFILE.desc}</div>
           </div>
+        </div>
+        <div class="menu-switch-label">
+          <span class="menu-switch-title">切換至其他身分</span>
+          <span class="menu-switch-avail">1 個可用</span>
+        </div>
+        <div class="menu-switch-wrap">
+          <button class="menu-switch" type="button" role="menuitem" on:click={switchRole}>
+            <span class="menu-switch-ic"><Icon name="graduation-cap" size={20} color="var(--df-ink)" /></span>
+            <span class="menu-switch-text">
+              <span class="menu-switch-row">
+                <span class="menu-switch-name">教練工作台</span>
+                <span class="menu-switch-tag">教練</span>
+              </span>
+              <span class="menu-switch-desc">管理班級、學員出勤與訊息</span>
+            </span>
+            <span class="menu-switch-go"><Icon name="arrow-right" size={14} color="#fff" /></span>
+          </button>
         </div>
         <div class="menu-sep"></div>
         <button class="menu-row" type="button" role="menuitem" on:click={() => profileAction('個人設定')}>
@@ -274,7 +298,11 @@
     border-radius: 14px;
     box-shadow: var(--df-shadow-strong);
     z-index: 70;
-    overflow: hidden;
+    /* cap height so the taller (role-switch) popover scrolls instead of clipping
+       above the height:100vh / overflow:hidden shell on short or split-screen viewports */
+    max-height: calc(100vh - 96px);
+    overflow-x: hidden;
+    overflow-y: auto;
     animation: df-fade-up 0.16s ease both;
   }
   .menu-head {
@@ -362,5 +390,85 @@
   }
   .menu-row-sub.danger {
     color: #f87171;
+  }
+  .menu-switch-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 18px 6px;
+  }
+  .menu-switch-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    color: var(--df-text-muted);
+  }
+  .menu-switch-avail {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--df-border-strong);
+  }
+  .menu-switch-wrap {
+    padding: 0 8px 4px;
+  }
+  .menu-switch {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--df-accent);
+    background: #fffbeb;
+    cursor: pointer;
+    text-align: left;
+  }
+  .menu-switch-ic {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--df-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .menu-switch-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .menu-switch-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .menu-switch-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--df-text-dark);
+  }
+  .menu-switch-tag {
+    background: var(--df-warning-bg);
+    color: #b45309;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .menu-switch-desc {
+    display: block;
+    font-size: 11px;
+    color: var(--df-text-light);
+    margin-top: 3px;
+  }
+  .menu-switch-go {
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    background: var(--df-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
   }
 </style>

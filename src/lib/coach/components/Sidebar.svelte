@@ -11,6 +11,7 @@
   import { NAV, coachPath, isActive } from '$lib/coach/nav';
   import { COACH } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
+  import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
 
   let menu = false;
   $: path = $page.url.pathname;
@@ -28,6 +29,12 @@
   function logout() {
     menu = false;
     toasts.notify('info', '登出', '您已安全登出（示範）。');
+  }
+
+  function switchRole() {
+    menu = false;
+    rememberStaffRole('admin');
+    goto(ROLE_HOME.admin);
   }
 </script>
 
@@ -81,7 +88,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div style="position:fixed;inset:0;z-index:60" on:click={() => (menu = false)}></div>
     <div
-      style="position:absolute;bottom:86px;left:16px;width:256px;background:#fff;border-radius:14px;box-shadow:var(--df-shadow-strong);z-index:70;overflow:hidden;animation:df-fade-up .16s ease both"
+      style="position:absolute;bottom:86px;left:16px;width:256px;background:#fff;border-radius:14px;box-shadow:var(--df-shadow-strong);z-index:70;max-height:calc(100vh - 112px);overflow-x:hidden;overflow-y:auto;animation:df-fade-up .16s ease both"
     >
       <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--df-border)">
         <CoachAvatar size={40} online />
@@ -90,6 +97,32 @@
           <div style="font-size:11.5px;color:var(--df-text-light);margin-top:2px">{COACH.id}</div>
         </div>
       </div>
+      <!-- 切換至其他身分 (shell.jsx:57-78) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 18px 6px">
+        <span style="font-size:10px;font-weight:700;letter-spacing:1.4px;color:var(--df-text-muted)">切換至其他身分</span>
+        <span style="font-size:10px;font-weight:600;color:var(--df-border-strong)">1 個可用</span>
+      </div>
+      <div style="padding:0 8px 4px">
+        <button
+          on:click={switchRole}
+          style="width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;border:1px solid var(--df-accent);background:#FFFBEB;cursor:pointer;text-align:left"
+        >
+          <span style="width:38px;height:38px;border-radius:10px;background:var(--df-accent);display:flex;align-items:center;justify-content:center;flex:none">
+            <Icon name="shield-check" size={20} color="var(--df-ink)" />
+          </span>
+          <span style="flex:1;min-width:0">
+            <span style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:14px;font-weight:700;color:var(--df-text-dark)">管理後台</span>
+              <span style="background:var(--df-warning-bg);color:#B45309;font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px">管理員</span>
+            </span>
+            <span style="display:block;font-size:11px;color:var(--df-text-light);margin-top:3px">可存取全平台後台 · 9 個功能模組</span>
+          </span>
+          <span style="width:28px;height:28px;border-radius:14px;background:var(--df-primary);display:flex;align-items:center;justify-content:center;flex:none">
+            <Icon name="arrow-right" size={14} color="#fff" />
+          </span>
+        </button>
+      </div>
+      <div style="height:1px;background:#F1F5F9;margin:6px 18px"></div>
       <div style="padding:6px 4px">
         {#each MENU_ROWS as r (r.label + r.to)}
           <button

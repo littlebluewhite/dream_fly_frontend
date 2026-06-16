@@ -11,6 +11,7 @@
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import Badge from '$lib/components/ui/Badge.svelte';
   import { search, toasts } from '$lib/coach/stores';
   import { NOTIFS, COACH } from '$lib/coach/data';
   import { coachPath } from '$lib/coach/nav';
@@ -37,11 +38,14 @@
 >
   <div>
     <div style="font-size:13px;color:var(--df-text-light);font-family:var(--df-font-body)">{crumb}</div>
-    <h1
-      style="margin:2px 0 0;font-family:var(--df-font-body);font-size:19px;font-weight:700;color:var(--df-text-dark);line-height:1.2"
-    >
-      {title}
-    </h1>
+    <div style="display:flex;align-items:center;gap:10px;min-width:0;margin:2px 0 0">
+      <h1
+        style="margin:0;font-family:var(--df-font-body);font-size:19px;font-weight:700;color:var(--df-text-dark);line-height:1.2"
+      >
+        {title}
+      </h1>
+      <Badge tone="accent" solid>教練</Badge>
+    </div>
   </div>
   <div style="display:flex;align-items:center;gap:16px">
     {#if isSchedule}
