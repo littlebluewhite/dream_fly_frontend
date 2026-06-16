@@ -139,6 +139,16 @@
   import CloudCheck from '@lucide/svelte/icons/cloud-check';
   import Video from '@lucide/svelte/icons/video';
   import File from '@lucide/svelte/icons/file';
+  // ── Mobile + mobile-admin additions ──
+  import Circle from '@lucide/svelte/icons/circle';
+  import Radio from '@lucide/svelte/icons/radio';
+  import ExternalLink from '@lucide/svelte/icons/external-link';
+  import MessageSquareQuote from '@lucide/svelte/icons/message-square-quote';
+  import Inbox from '@lucide/svelte/icons/inbox';
+  import Hash from '@lucide/svelte/icons/hash';
+  import Moon from '@lucide/svelte/icons/moon';
+  import Globe from '@lucide/svelte/icons/globe';
+  import BellPlus from '@lucide/svelte/icons/bell-plus';
 
   const ICONS: Record<string, typeof Activity> = {
     'activity': Activity,
@@ -272,7 +282,20 @@
     'video': Video,
     'file': File,
     'alert-triangle': TriangleAlert, // alias → triangle-alert (old-style name)
-    'circle-check-big': CircleCheck // alias → circle-check (old-style name)
+    'circle-check-big': CircleCheck, // alias → circle-check (old-style name)
+    // ── Mobile + mobile-admin additions ──
+    'circle': Circle,
+    'radio': Radio,
+    'external-link': ExternalLink,
+    'message-square-quote': MessageSquareQuote,
+    'inbox': Inbox,
+    'hash': Hash,
+    'moon': Moon,
+    'globe': Globe,
+    'bell-plus': BellPlus,
+    'alert-circle': CircleAlert, // alias → circle-alert (old-style name)
+    'check-circle': CircleCheck, // alias → circle-check (old-style name)
+    'x-circle': CircleX // alias → circle-x (old-style name)
   };
 
   export let name: string;

@@ -1,0 +1,186 @@
+/* Dream Fly — shared phone frame for the /mobile + /mobile-admin surfaces.
+ *
+ * Responsive (the user's rendering decision): full-bleed on real phones
+ * (<480px, the device provides the status bar / notch); a centered 393×852
+ * device frame on a dark gym-gradient stage on desktop (≥480px) with only a
+ * decorative dynamic island — no simulated status bar. Ported from the
+ * prototype index.html stage / phone / screen + keyframes. */
+
+.m-stage {
+	min-height: 100vh;
+	min-height: 100dvh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--df-bg-light);
+}
+
+.m-phone {
+	position: relative;
+	flex: none;
+	width: 100%;
+	height: 100vh;
+	height: 100dvh;
+	background: var(--df-bg-light);
+	overflow: hidden;
+}
+
+.m-screen {
+	--m-island-space: 0px;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: var(--df-bg-light);
+}
+
+/* Decorative dynamic island — desktop frame only (hidden full-bleed). */
+.m-island {
+	display: none;
+}
+
+/* Header / hero top inset: clears the real notch on phones (safe-area), the
+ * decorative island on desktop (--m-island-space). Apply to every top region. */
+.m-top-inset {
+	padding-top: calc(env(safe-area-inset-top) + var(--m-island-space));
+}
+
+/* Tab bar / sheet footers: clear the home-indicator safe area on real phones. */
+.m-bottom-inset {
+	padding-bottom: calc(26px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 480px) {
+	.m-stage {
+		padding: 32px 24px;
+		background:
+			radial-gradient(1100px 700px at 18% -10%, rgba(0, 102, 204, 0.16), transparent 60%),
+			radial-gradient(900px 600px at 100% 110%, rgba(255, 215, 0, 0.12), transparent 55%),
+			#0b1220;
+	}
+	.m-phone {
+		width: 393px;
+		height: 852px;
+		max-height: calc(100dvh - 64px);
+		padding: 12px;
+		border-radius: 54px;
+		background: #04060c;
+		box-shadow:
+			0 50px 120px rgba(2, 6, 23, 0.6),
+			0 0 0 1px rgba(255, 255, 255, 0.06),
+			inset 0 0 0 2px rgba(255, 255, 255, 0.04);
+	}
+	.m-screen {
+		--m-island-space: 34px;
+		border-radius: 43px;
+	}
+	.m-island {
+		display: block;
+		position: absolute;
+		top: 13px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 116px;
+		height: 33px;
+		background: #04060c;
+		border-radius: 999px;
+		z-index: 60;
+	}
+	/* On desktop the home-indicator inset is decorative only — keep the tab-bar
+	 * padding the prototype used without the env() (which is 0 on desktop). */
+	.m-bottom-inset {
+		padding-bottom: 26px;
+	}
+}
+
+/* Vertical scroll body — fills the screen column, hides the scrollbar. */
+.df-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	-webkit-overflow-scrolling: touch;
+}
+.df-scroll::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+/* Horizontal strips (filter chips) — hide the scrollbar WITHOUT flex:1. */
+.df-hide-scrollbar {
+	scrollbar-width: none;
+}
+.df-hide-scrollbar::-webkit-scrollbar {
+	width: 0;
+	height: 0;
+}
+
+/* Tap feedback. */
+.df-tapscale {
+	transition: transform 0.12s ease, background 0.14s ease, box-shadow 0.15s ease;
+}
+.df-tapscale:active {
+	transform: scale(0.97);
+}
+.df-press:active {
+	transform: translateY(1px);
+}
+
+/* Animations (index.html). */
+@keyframes df-screen-in {
+	from { transform: translateY(7px); }
+	to { transform: none; }
+}
+@keyframes df-push-in {
+	from { transform: translateX(100%); }
+	to { transform: translateX(0); }
+}
+@keyframes df-sheet-in {
+	from { transform: translateY(100%); }
+	to { transform: translateY(0); }
+}
+@keyframes df-fade-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+@keyframes df-toast-in {
+	from { opacity: 0; transform: translateY(12px) scale(0.97); }
+	to { opacity: 1; transform: none; }
+}
+@keyframes df-shimmer {
+	0% { background-position: 150% 0; }
+	100% { background-position: -150% 0; }
+}
+@keyframes df-typing {
+	0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+	30% { opacity: 1; transform: translateY(-3px); }
+}
+@keyframes df-pop {
+	0% { transform: scale(0.6); }
+	60% { transform: scale(1.12); }
+	100% { transform: scale(1); }
+}
+@keyframes df-grow {
+	from { transform: scaleX(0); }
+	to { transform: scaleX(1); }
+}
+
+.df-view { animation: df-screen-in 0.26s ease; }
+.df-push { animation: df-push-in 0.26s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.df-sheet { animation: df-sheet-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.df-scrim { animation: df-fade-in 0.2s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+	.df-view,
+	.df-push,
+	.df-sheet,
+	.df-scrim {
+		animation: none !important;
+	}
+	.df-tapscale,
+	.df-press {
+		transition: none !important;
+	}
+}

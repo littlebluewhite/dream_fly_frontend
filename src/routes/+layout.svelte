@@ -13,7 +13,9 @@
     $page.url.pathname.startsWith('/member') ||
     $page.url.pathname.startsWith('/admin') ||
     $page.url.pathname.startsWith('/coach') ||
-    $page.url.pathname.startsWith('/staff');
+    $page.url.pathname.startsWith('/staff') ||
+    $page.url.pathname.startsWith('/mobile-admin') ||
+    $page.url.pathname.startsWith('/mobile');
 </script>
 
 {#if isAppSurface}
