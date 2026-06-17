@@ -7,6 +7,8 @@
    * here. Button / Checkbox / Icon come from the shared foundation. */
   import { Button, Checkbox, Icon } from '$lib/components/ui';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { authStore } from '$lib/stores/authStore';
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -25,7 +27,11 @@
   const submit = () => {
     if (busy) return;
     busy = true;
-    setTimeout(() => goto('/member'), 650);
+    setTimeout(() => {
+      authStore.login();
+      const redirect = $page.url.searchParams.get('redirect');
+      goto(redirect ?? '/member');
+    }, 650);
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') submit();

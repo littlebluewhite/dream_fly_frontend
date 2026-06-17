@@ -1,7 +1,8 @@
 <script lang="ts">
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { cartStore } from '$lib/stores/cartStore';
+  import { cart } from '$lib/member/stores';
+  import { marketingCourseToCartItem } from '$lib/member/data';
   import { toastStore } from '$lib/stores/toastStore';
 
   // Courses Page - 課程介紹
@@ -45,19 +46,7 @@
   ];
 
   function addCourseToCart(course: typeof courses[0]) {
-    // Extract price number from string like "NT$ 3,200/月 (4堂)"
-    const priceMatch = course.price.match(/NT\$\s*([\d,]+)/);
-    const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : 0;
-
-    cartStore.addToCart({
-      id: `course-${course.id}`,
-      name: course.name,
-      type: 'course',
-      price: price,
-      duration: course.duration,
-      level: course.level
-    });
-
+    cart.addItem(marketingCourseToCartItem(course));
     toastStore.showToast(`已將 ${course.name} 加入購物車`, 'success');
   }
 </script>

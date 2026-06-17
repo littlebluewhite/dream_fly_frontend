@@ -6,10 +6,19 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import { ME } from '$lib/member/data';
-  import { search, unreadCount, cart, checkoutOpen } from '$lib/member/stores';
+  import { search, unreadCount, cartCount, checkoutOpen } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
+  import { checkoutTarget } from '$lib/checkout-gate';
 
   export let title = '';
-  $: cartCount = $cart.length;
+
+  // Opening the checkout dialog is itself a checkout action, so gate it like the
+  // marketing cart surfaces: a guest who reached /member directly (there's no SSR
+  // route guard) is bounced through login rather than allowed to complete checkout.
+  function openCheckout() {
+    if ($isLoggedIn) checkoutOpen.set(true);
+    else goto(checkoutTarget(false));
+  }
 </script>
 
 <div class="topbar">
@@ -26,10 +35,10 @@
       {#if $unreadCount > 0}<span class="dot">{$unreadCount}</span>{/if}
     </div>
     <div class="iconwrap">
-      <IconButton aria-label="購物車" variant="outline" on:click={() => checkoutOpen.set(true)}>
+      <IconButton aria-label="購物車" variant="outline" on:click={openCheckout}>
         <Icon name="shopping-cart" size={19} />
       </IconButton>
-      {#if cartCount > 0}<span class="dot">{cartCount}</span>{/if}
+      {#if $cartCount > 0}<span class="dot">{$cartCount}</span>{/if}
     </div>
     <Avatar name={ME.initial} size="md" color={ME.color} />
   </div>

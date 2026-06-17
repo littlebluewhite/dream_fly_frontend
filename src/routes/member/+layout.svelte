@@ -2,12 +2,34 @@
   /* Member-centre shell: fixed sidebar + sticky top bar + scrolling content,
    * plus the cross-route checkout dialog and toast stack. The login route opts
    * out of this layout via +page@.svelte. */
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import { goto, replaceState } from '$app/navigation';
   import Sidebar from '$lib/member/components/Sidebar.svelte';
   import Topbar from '$lib/member/components/Topbar.svelte';
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
   import ToastStack from '$lib/member/components/ToastStack.svelte';
+  import { checkoutOpen } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
+  import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
   import '$lib/member/member.css';
+
+  // Receiver half of the checkout gate. A landing URL carrying ?checkout=1
+  // auto-opens the checkout dialog — but ONLY for a logged-in member; a guest who
+  // reaches it directly is bounced through login (auth-at-checkout is enforced
+  // here, not merely trusted from the trigger). Then we strip the query so a
+  // reload / back-nav can't reopen it. Browser-only: replaceState throws on the
+  // server and there is no dialog to open during SSR. Fires once per arrival.
+  let handled = false;
+  $: if (browser && wantsCheckout($page.url) && !handled) {
+    handled = true;
+    if ($isLoggedIn) {
+      checkoutOpen.set(true);
+      replaceState('/member', {});
+    } else {
+      goto(checkoutTarget(false));
+    }
+  }
 
   const TITLES: Record<string, string> = {
     '/member': '會員中心',

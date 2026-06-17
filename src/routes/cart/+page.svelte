@@ -1,41 +1,41 @@
 <script lang="ts">
-  import { cartStore, totalPrice } from '$lib/stores/cartStore';
+  import { goto } from '$app/navigation';
+  import { cart } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
+  import { checkoutTarget } from '$lib/checkout-gate';
   import { toastStore } from '$lib/stores/toastStore';
+  import type { CartItem } from '$lib/member/data';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  $: cart = $cartStore;
-  $: total = $totalPrice;
+  $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  function increaseQuantity(itemId: string) {
-    const item = cart.find((i) => i.id === itemId);
-    if (item) {
-      cartStore.updateQuantity(itemId, item.quantity + 1);
+  function increaseQuantity(item: CartItem) {
+    cart.updateQty(item.id, +1);
+  }
+
+  function decreaseQuantity(item: CartItem) {
+    if (item.qty === 1) {
+      cart.remove(item.id);
+      toastStore.showToast('已從購物車移除項目', 'info');
+    } else {
+      cart.updateQty(item.id, -1);
     }
   }
 
-  function decreaseQuantity(itemId: string) {
-    const item = cart.find((i) => i.id === itemId);
-    if (item) {
-      cartStore.updateQuantity(itemId, item.quantity - 1);
-      if (item.quantity === 1) {
-        toastStore.showToast('已從購物車移除項目', 'info');
-      }
-    }
-  }
-
-  function removeItem(itemId: string) {
-    const item = cart.find((i) => i.id === itemId);
-    if (item) {
-      cartStore.removeFromCart(itemId);
-      toastStore.showToast(`已移除 ${item.name}`, 'success');
-    }
+  function removeItem(item: CartItem) {
+    cart.remove(item.id);
+    toastStore.showToast(`已移除 ${item.name}`, 'success');
   }
 
   function clearAllItems() {
     if (confirm('確定要清空購物車嗎？')) {
-      cartStore.clearCart();
+      cart.clear();
       toastStore.showToast('購物車已清空', 'info');
     }
+  }
+
+  function checkout() {
+    goto(checkoutTarget($isLoggedIn));
   }
 </script>
 
@@ -53,7 +53,7 @@
 
   <section class="cart-content">
     <div class="container">
-      {#if cart.length === 0}
+      {#if $cart.length === 0}
         <div class="empty-cart card">
           <div class="empty-icon"><Icon name="shopping-cart" size={64} color="var(--df-primary)" /></div>
           <h2>購物車是空的</h2>
@@ -72,7 +72,7 @@
             </div>
 
             <div class="cart-items">
-              {#each cart as item (item.id)}
+              {#each $cart as item (item.id)}
                 <div class="cart-item card">
                   <div class="item-main">
                     <div class="item-info">
@@ -85,36 +85,46 @@
                           <span class="item-level">{item.level}</span>
                         {/if}
                       </div>
-                      <p class="item-duration">{item.duration}</p>
+                      <p class="item-duration">
+                        {#if item.type === 'pass'}
+                          {item.duration ?? ''}
+                        {:else if item.days}
+                          {item.days}{#if item.coach} · {item.coach} 教練{/if}
+                        {:else}
+                          {item.duration ?? ''}
+                        {/if}
+                      </p>
                     </div>
 
                     <div class="item-actions">
                       <div class="item-price-section">
                         <p class="unit-price">單價：NT$ {item.price.toLocaleString()}</p>
                         <p class="subtotal">
-                          小計：NT$ {(item.price * item.quantity).toLocaleString()}
+                          小計：NT$ {(item.price * item.qty).toLocaleString()}
                         </p>
                       </div>
 
-                      <div class="quantity-control">
-                        <button
-                          class="qty-btn"
-                          on:click={() => decreaseQuantity(item.id)}
-                          aria-label="減少數量"
-                        >
-                          -
-                        </button>
-                        <span class="quantity">{item.quantity}</span>
-                        <button
-                          class="qty-btn"
-                          on:click={() => increaseQuantity(item.id)}
-                          aria-label="增加數量"
-                        >
-                          +
-                        </button>
-                      </div>
+                      {#if item.type !== 'pass'}
+                        <div class="quantity-control">
+                          <button
+                            class="qty-btn"
+                            on:click={() => decreaseQuantity(item)}
+                            aria-label="減少數量"
+                          >
+                            -
+                          </button>
+                          <span class="quantity">{item.qty}</span>
+                          <button
+                            class="qty-btn"
+                            on:click={() => increaseQuantity(item)}
+                            aria-label="增加數量"
+                          >
+                            +
+                          </button>
+                        </div>
+                      {/if}
 
-                      <button class="remove-btn" on:click={() => removeItem(item.id)}>
+                      <button class="remove-btn" on:click={() => removeItem(item)}>
                         移除
                       </button>
                     </div>
@@ -131,7 +141,7 @@
               <div class="summary-details">
                 <div class="summary-row">
                   <span>項目總數</span>
-                  <span>{cart.reduce((sum, item) => sum + item.quantity, 0)} 項</span>
+                  <span>{$cart.reduce((sum, item) => sum + item.qty, 0)} 項</span>
                 </div>
                 <div class="summary-row">
                   <span>商品總計</span>
@@ -144,12 +154,8 @@
               </div>
 
               <div class="summary-actions">
-                <a href="/contact" class="btn btn-primary btn-large">前往結帳</a>
+                <button class="btn btn-primary btn-large" on:click={checkout}>前往結帳</button>
                 <a href="/courses" class="btn btn-secondary">繼續選購</a>
-              </div>
-
-              <div class="summary-notes">
-                <p>結帳後將由專人與您聯繫確認</p>
               </div>
             </div>
           </div>
@@ -431,18 +437,6 @@
   .btn-large {
     padding: 1rem;
     font-size: 1.1rem;
-  }
-
-  .summary-notes {
-    text-align: center;
-    padding-top: var(--df-space-5);
-    border-top: 1px solid var(--df-border);
-  }
-
-  .summary-notes p {
-    color: var(--df-text-light);
-    font-size: 0.85rem;
-    margin: 0;
   }
 
   @media (max-width: 1024px) {

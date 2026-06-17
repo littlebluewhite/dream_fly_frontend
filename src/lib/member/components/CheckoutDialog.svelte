@@ -11,8 +11,8 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from './EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-  import { COUPONS, type LedgerEntry } from '$lib/member/data';
+  import { cart, points, pointsLedger, subscriptions, checkoutOpen, toasts } from '$lib/member/stores';
+  import { COUPONS, type LedgerEntry, type Subscription } from '$lib/member/data';
   import { fmtNT } from '$lib/member/format';
 
   let step = 0;
@@ -20,9 +20,9 @@
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
-  // Amounts snapshotted at payment time so the success step keeps showing them
-  // after the cart is cleared.
-  let paid = { total: 0, earned: 0, ptRedeem: 0 };
+  // Amounts + cart composition snapshotted at payment time so the success step
+  // keeps showing them after the cart is cleared.
+  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false };
 
   // Reset state whenever the dialog transitions closed → open.
   let wasOpen = false;
@@ -34,13 +34,18 @@
       coupon = null;
       codeErr = '';
       usePoints = false;
-      paid = { total: 0, earned: 0, ptRedeem: 0 };
+      paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false };
     }
     wasOpen = open;
   }
 
   $: items = $cart;
-  $: subtotal = items.reduce((s, c) => s + c.price * c.qty, 0);
+  // A pass the member already holds is a no-op at checkout (confirmPay dedups it),
+  // so it must not be charged or earn points. Exclude already-subscribed passes
+  // from the transacted set that drives every total.
+  $: subscribedIds = new Set($subscriptions.map((s) => s.id));
+  $: chargeable = items.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id)));
+  $: subtotal = chargeable.reduce((s, c) => s + c.price * c.qty, 0);
   $: couponOff = coupon ? Math.min(coupon.off, subtotal) : 0;
   $: afterCoupon = subtotal - couponOff;
   $: ptRedeem = usePoints ? Math.min($points, afterCoupon) : 0;
@@ -70,24 +75,59 @@
   // would leave the cart and points uncommitted while the UI says 已付款.
   // Snapshot the amounts first; clearing the cart resets the reactive totals.
   function confirmPay() {
-    paid = { total, earned, ptRedeem };
+    // Snapshot the cart BEFORE clearing — passes become persisted 使用權 and the
+    // cart composition drives the completion copy. `chargeable` already drops
+    // passes the member already owns, so totals, points and new subscriptions all
+    // derive from the same transacted set (no charging a no-op).
+    const ordered = chargeable;
+    const hasCourse = ordered.some((i) => i.type === 'course');
+    const hasPass = ordered.some((i) => i.type === 'pass');
+    paid = { total, earned, ptRedeem, hasCourse, hasPass };
     points.update((p) => p - paid.ptRedeem + paid.earned);
+    // A pass checkout grants a Subscription / 使用權 (persisted). Skip any pass
+    // already subscribed so re-checkout never double-subscribes.
+    subscriptions.update((subs) => {
+      const seen = new Set(subs.map((s) => s.id));
+      const added: Subscription[] = [];
+      for (const c of ordered) {
+        if (c.type === 'pass' && !seen.has(c.id)) {
+          seen.add(c.id);
+          added.push({ id: c.id, name: c.name, since: new Date().toLocaleDateString('zh-TW'), price: c.price });
+        }
+      }
+      return [...subs, ...added];
+    });
     // Mirror the point movements into the ledger so the Points page history and
-    // monthly totals stay consistent with the new balance.
+    // monthly totals stay consistent with the new balance. The earn-entry label
+    // branches: a pure-pass order is 訂閱, anything with a course stays 報名.
     pointsLedger.update((p) => {
       const entries: LedgerEntry[] = [];
+      const earnDesc = paid.hasCourse ? '報名回饋點數' : '訂閱回饋點數';
       if (paid.earned > 0)
-        entries.push({ id: 'co-earn-' + p.length, date: '2026/06/15', desc: '報名回饋點數', type: 'earn', delta: paid.earned });
-      if (paid.ptRedeem > 0)
-        entries.push({ id: 'co-redeem-' + p.length, date: '2026/06/15', desc: '結帳折抵 · 課程報名', type: 'redeem', delta: -paid.ptRedeem });
+        entries.push({ id: 'co-earn-' + p.length, date: '2026/06/15', desc: earnDesc, type: 'earn', delta: paid.earned });
+      if (paid.ptRedeem > 0) {
+        const redeemDesc = paid.hasCourse ? '結帳折抵 · 課程報名' : '結帳折抵 · 方案訂閱';
+        entries.push({ id: 'co-redeem-' + p.length, date: '2026/06/15', desc: redeemDesc, type: 'redeem', delta: -paid.ptRedeem });
+      }
       return [...entries, ...p];
     });
     cart.clear();
-    toasts.notify(
-      'success',
-      '報名完成',
-      '課程已加入你的日程' + (paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '') + '，獲得 ' + paid.earned + ' 點回饋。'
-    );
+    const redeemNote = paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '';
+    if (paid.hasCourse) {
+      // 報名 language for any order containing a course (append a 方案 note when mixed).
+      toasts.notify(
+        'success',
+        '報名完成',
+        '課程已加入你的日程' + (paid.hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。'
+      );
+    } else {
+      // Pure-pass order → 訂閱 / 使用權 language (never 報名 / 日程).
+      toasts.notify(
+        'success',
+        '訂閱開通',
+        '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。'
+      );
+    }
     step = 2;
   }
   function onKey(e: KeyboardEvent) {
@@ -120,13 +160,17 @@
               <div class="line-ic"><Icon name={c.icon} size={22} color="var(--df-primary)" /></div>
               <div class="line-info">
                 <div class="line-name">{c.name}</div>
-                <div class="line-sub">{c.days} · {c.coach} 教練</div>
+                <div class="line-sub">
+                  {#if c.type === 'pass'}{c.duration}{:else if c.days}{c.days}{c.coach ? ` · ${c.coach} 教練` : ''}{:else}{c.duration}{/if}
+                </div>
               </div>
-              <div class="qty">
-                <button aria-label="減量" on:click={() => cart.updateQty(c.id, -1)} disabled={c.qty <= 1}><Icon name="minus" size={14} /></button>
-                <span class="qty-n">{c.qty}</span>
-                <button aria-label="加量" on:click={() => cart.updateQty(c.id, 1)}><Icon name="plus" size={14} /></button>
-              </div>
+              {#if c.type !== 'pass'}
+                <div class="qty">
+                  <button aria-label="減量" on:click={() => cart.updateQty(c.id, -1)} disabled={c.qty <= 1}><Icon name="minus" size={14} /></button>
+                  <span class="qty-n">{c.qty}</span>
+                  <button aria-label="加量" on:click={() => cart.updateQty(c.id, 1)}><Icon name="plus" size={14} /></button>
+                </div>
+              {/if}
               <div class="line-amt">{fmtNT(c.price * c.qty)}</div>
               <IconButton aria-label="移除" variant="ghost" on:click={() => cart.remove(c.id)}><Icon name="trash-2" size={16} color="var(--df-text-light)" /></IconButton>
             </div>
@@ -173,8 +217,10 @@
             </div>
             <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
           </div>
+        {:else if paid.hasCourse}
+          <SuccessBody title="報名完成！" body={`課程已加入你的日程${paid.hasPass ? '，方案使用權已啟用' : ''}，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數。`} />
         {:else}
-          <SuccessBody title="報名完成！" body={`課程已加入你的日程，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數。`} />
+          <SuccessBody title="訂閱開通！" body={`方案已開通,使用權已啟用,可在帳戶頁查看。本次獲得 ${paid.earned} 點會員點數。`} />
         {/if}
       </div>
 

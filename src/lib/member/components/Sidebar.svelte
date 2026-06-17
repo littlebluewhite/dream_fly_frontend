@@ -8,6 +8,7 @@
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import { ME } from '$lib/member/data';
   import { unreadCount, toasts } from '$lib/member/stores';
+  import { authStore } from '$lib/stores/authStore';
 
   const NAV = [
     { href: '/member', label: '總覽', icon: 'layout-dashboard' },
@@ -25,6 +26,7 @@
 
   function logout() {
     toasts.notify('success', '已登出', '期待你下次再來！');
+    authStore.logout();
     goto('/member/login');
   }
 </script>

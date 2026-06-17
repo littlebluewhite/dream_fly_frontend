@@ -6,8 +6,9 @@
   import { Card, Badge, Button, Avatar, Icon } from '$lib/components/ui';
   import { ME, ORDERS } from '$lib/member/data';
   import { fmtNT } from '$lib/member/format';
-  import { points, toasts } from '$lib/member/stores';
+  import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
+  import EmptyState from '$lib/member/components/EmptyState.svelte';
 
   let profile = {
     ...ME,
@@ -51,6 +52,26 @@
       </div>
       <div style="font-size:34px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading)">{$points.toLocaleString()}</div>
       <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">加入會員自 {profile.since} · 可折抵報名費</div>
+    </Card>
+    <Card padding={22}>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <Icon name="ticket" size={20} color="var(--df-primary)" /><span style="font-size:14px;font-weight:700;color:var(--df-ink)">我的訂閱 · 使用權</span>
+      </div>
+      {#if $subscriptions.length === 0}
+        <EmptyState icon="ticket" title="目前沒有訂閱中的方案" body="購買月票或會員卡後,使用權會顯示在這裡。" pad="16px 0" />
+      {:else}
+        <div style="display:flex;flex-direction:column;gap:12px">
+          {#each $subscriptions as sub (sub.id)}
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+              <div style="min-width:0">
+                <div style="font-size:14px;font-weight:600;color:var(--df-text-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{sub.name}</div>
+                <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">開通自 {sub.since}</div>
+              </div>
+              <div style="font-family:var(--df-font-mono);font-size:13.5px;font-weight:700;color:var(--df-ink);white-space:nowrap">{fmtNT(sub.price)}</div>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </Card>
   </div>
   <Card padding={0} style="overflow:hidden">

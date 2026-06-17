@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { cartStore } from '$lib/stores/cartStore';
+  import { cart } from '$lib/member/stores';
+  import { marketingCourseId } from '$lib/member/data';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -16,8 +17,9 @@
   export let onAddToCart: (() => void) | undefined = undefined;
   export let showCartButton = false;
 
-  $: cart = $cartStore;
-  $: isInCart = cart.some((item) => item.id === `course-${course.id}`);
+  $: isInCart = $cart.some(
+    (item) => item.type === 'course' && item.id === marketingCourseId(course.id)
+  );
 
   // Map level to Badge tone
   const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {

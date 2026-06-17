@@ -1,29 +1,35 @@
 <script lang="ts">
-  import { cartStore, totalPrice } from '$lib/stores/cartStore';
+  import { goto } from '$app/navigation';
+  import { cart } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
+  import { checkoutTarget } from '$lib/checkout-gate';
+  import type { CartItem } from '$lib/member/data';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
 
-  $: cart = $cartStore;
-  $: total = $totalPrice;
+  $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  function increaseQuantity(itemId: string) {
-    const item = cart.find((i) => i.id === itemId);
-    if (item) {
-      cartStore.updateQuantity(itemId, item.quantity + 1);
+  function increaseQuantity(item: CartItem) {
+    cart.updateQty(item.id, +1);
+  }
+
+  function decreaseQuantity(item: CartItem) {
+    if (item.qty === 1) {
+      cart.remove(item.id);
+    } else {
+      cart.updateQty(item.id, -1);
     }
   }
 
-  function decreaseQuantity(itemId: string) {
-    const item = cart.find((i) => i.id === itemId);
-    if (item) {
-      cartStore.updateQuantity(itemId, item.quantity - 1);
-    }
+  function removeItem(itemId: number) {
+    cart.remove(itemId);
   }
 
-  function removeItem(itemId: string) {
-    cartStore.removeFromCart(itemId);
+  function checkout() {
+    onClose();
+    goto(checkoutTarget($isLoggedIn));
   }
 </script>
 
@@ -41,18 +47,24 @@
     </div>
 
     <div class="dropdown-body">
-      {#if cart.length === 0}
+      {#if $cart.length === 0}
         <div class="empty-state">
           <p>購物車是空的</p>
         </div>
       {:else}
         <div class="cart-items">
-          {#each cart as item (item.id)}
+          {#each $cart as item (item.id)}
             <div class="cart-item">
               <div class="item-info">
                 <h4>{item.name}</h4>
                 <p class="item-details">
-                  {item.duration}
+                  {#if item.type === 'pass'}
+                    {item.duration ?? ''}
+                  {:else if item.days}
+                    {item.days}{#if item.coach} · {item.coach} 教練{/if}
+                  {:else}
+                    {item.duration ?? ''}
+                  {/if}
                   {#if item.level}
                     <span class="level-tag">{item.level}</span>
                   {/if}
@@ -61,23 +73,25 @@
               </div>
 
               <div class="item-controls">
-                <div class="quantity-control">
-                  <button
-                    class="qty-btn"
-                    on:click={() => decreaseQuantity(item.id)}
-                    aria-label="減少數量"
-                  >
-                    <Icon name="minus" size={14} color="currentColor" />
-                  </button>
-                  <span class="quantity">{item.quantity}</span>
-                  <button
-                    class="qty-btn"
-                    on:click={() => increaseQuantity(item.id)}
-                    aria-label="增加數量"
-                  >
-                    <Icon name="plus" size={14} color="currentColor" />
-                  </button>
-                </div>
+                {#if item.type !== 'pass'}
+                  <div class="quantity-control">
+                    <button
+                      class="qty-btn"
+                      on:click={() => decreaseQuantity(item)}
+                      aria-label="減少數量"
+                    >
+                      <Icon name="minus" size={14} color="currentColor" />
+                    </button>
+                    <span class="quantity">{item.qty}</span>
+                    <button
+                      class="qty-btn"
+                      on:click={() => increaseQuantity(item)}
+                      aria-label="增加數量"
+                    >
+                      <Icon name="plus" size={14} color="currentColor" />
+                    </button>
+                  </div>
+                {/if}
                 <button class="remove-btn" on:click={() => removeItem(item.id)} aria-label="移除">
                   <Icon name="trash-2" size={16} color="currentColor" />
                 </button>
@@ -94,7 +108,7 @@
 
           <div class="action-buttons">
             <a href="/cart" class="btn btn-secondary" on:click={onClose}>查看購物車</a>
-            <a href="/contact" class="btn btn-primary" on:click={onClose}>結帳</a>
+            <button class="btn btn-primary" on:click={checkout}>結帳</button>
           </div>
         </div>
       {/if}

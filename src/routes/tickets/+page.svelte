@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { cartStore } from '$lib/stores/cartStore';
+  import { cart, subscriptions } from '$lib/member/stores';
+  import { passToCartItem, passId } from '$lib/member/data';
   import { toastStore } from '$lib/stores/toastStore';
 
   // Tickets Page - 購票資訊
@@ -60,28 +61,22 @@
     }
   ];
 
-  $: cart = $cartStore;
-
   function addTicketToCart(ticket: typeof ticketTypes[0]) {
-    // Extract price number from string like "NT$ 500"
-    const priceMatch = ticket.price.match(/NT\$\s*([\d,]+)/);
-    const price = priceMatch ? parseInt(priceMatch[1].replace(/,/g, '')) : 0;
+    // Already an active entitlement? Block it — confirmPay dedups by id, so a
+    // repurchase would charge + reward points without creating/renewing anything.
+    if ($subscriptions.some((s) => s.id === passId(ticket.id))) {
+      toastStore.showToast(`您已訂閱「${ticket.name}」，無需重複購買`, 'info');
+      return;
+    }
 
-    const isInCart = cart.some((item) => item.id === `ticket-${ticket.id}`);
+    const inCart = $cart.some((item) => item.id === passId(ticket.id) && item.type === 'pass');
 
-    if (isInCart) {
+    if (inCart) {
       toastStore.showToast(`${ticket.name} 已在購物車中`, 'info');
       return;
     }
 
-    cartStore.addToCart({
-      id: `ticket-${ticket.id}`,
-      name: ticket.name,
-      type: 'ticket',
-      price: price,
-      duration: ticket.duration
-    });
-
+    cart.addItem(passToCartItem(ticket));
     toastStore.showToast(`已將 ${ticket.name} 加入購物車`, 'success');
   }
 </script>
@@ -143,7 +138,9 @@
             </div>
 
             <div class="ticket-footer">
-              {#if cart.some((item) => item.id === `ticket-${ticket.id}`)}
+              {#if $subscriptions.some((s) => s.id === passId(ticket.id))}
+                <button class="btn btn-secondary" disabled>已訂閱</button>
+              {:else if $cart.some((item) => item.id === passId(ticket.id) && item.type === 'pass')}
                 <button class="btn btn-secondary" disabled>已在購物車</button>
               {:else}
                 <button class="btn btn-primary" on:click={() => addTicketToCart(ticket)}>

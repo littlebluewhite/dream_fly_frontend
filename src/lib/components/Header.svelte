@@ -4,14 +4,15 @@
   import CartDropdown from './CartDropdown.svelte';
   import NotificationsDropdown from './NotificationsDropdown.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { totalItems } from '$lib/stores/cartStore';
+  import { cartCount } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
   import { unreadCount } from '$lib/stores/notificationsStore';
 
   let mobileMenuOpen = false;
   let cartDropdownOpen = false;
   let notificationsDropdownOpen = false;
 
-  $: cartItemCount = $totalItems;
+  $: cartItemCount = $cartCount;
   $: notificationCount = $unreadCount;
 
   function toggleMobileMenu() {
@@ -62,17 +63,31 @@
           <span class="ticket-label">購票</span>
         </a>
 
+        {#if $isLoggedIn}
+          <a href="/member" class="ticket-link" aria-label="會員中心" on:click={closeMobileMenu}>
+            <Icon name="user" size={18} />
+            <span class="ticket-label">會員中心</span>
+          </a>
+        {:else}
+          <a href="/member/login" class="ticket-link" aria-label="登入" on:click={closeMobileMenu}>
+            <Icon name="user" size={18} />
+            <span class="ticket-label">登入</span>
+          </a>
+        {/if}
+
         <div class="header-actions">
-          <button
-            class="icon-button"
-            on:click={toggleNotificationsDropdown}
-            aria-label="通知"
-          >
-            <Icon name="bell" size={22} />
-            {#if notificationCount > 0}
-              <span class="badge">{notificationCount}</span>
-            {/if}
-          </button>
+          {#if $isLoggedIn}
+            <button
+              class="icon-button"
+              on:click={toggleNotificationsDropdown}
+              aria-label="通知"
+            >
+              <Icon name="bell" size={22} />
+              {#if notificationCount > 0}
+                <span class="badge">{notificationCount}</span>
+              {/if}
+            </button>
+          {/if}
 
           <button class="icon-button" on:click={toggleCartDropdown} aria-label="購物車">
             <Icon name="shopping-cart" size={22} />
