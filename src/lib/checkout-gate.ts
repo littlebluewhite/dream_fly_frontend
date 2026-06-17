@@ -4,7 +4,8 @@
  * Both halves of the gate live here so the trigger (cart surfaces) and the
  * receiver (member layout) can never drift apart:
  *  - checkoutTarget(): where the 結帳 button sends you, by login state.
- *  - wantsCheckout():  whether a landing URL asked to open the checkout dialog. */
+ *  - wantsCheckout():  whether a landing URL asked to open the checkout dialog.
+ *  - safeRedirect():   sanitise the post-login ?redirect= target (open-redirect guard). */
 
 const CHECKOUT_DEST = '/member?checkout=1';
 
@@ -21,4 +22,18 @@ export function checkoutTarget(loggedIn: boolean): string {
  *  to auto-open the checkout dialog after the login round-trip. */
 export function wantsCheckout(url: URL): boolean {
   return url.searchParams.get('checkout') === '1';
+}
+
+/** Sanitise a post-login ?redirect= target. Only same-origin ROOT-RELATIVE paths
+ *  are allowed, so a crafted link (?redirect=//evil.com, an absolute URL, or a
+ *  backslash-prefixed authority) can't bounce a freshly-logged-in member off-site
+ *  (open redirect -> phishing). Anything else falls back to the member home. */
+export function safeRedirect(raw: string | null | undefined): string {
+  // Require a single leading '/', then reject '//' and a backslash second char:
+  // browsers normalise those to an external authority (protocol-relative or
+  // backslash tricks like /\evil.com).
+  if (!raw || raw[0] !== '/' || raw[1] === '/' || raw[1] === '\\') {
+    return '/member';
+  }
+  return raw;
 }

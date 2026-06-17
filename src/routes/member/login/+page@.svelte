@@ -9,6 +9,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
+  import { safeRedirect } from '$lib/checkout-gate';
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -29,8 +30,7 @@
     busy = true;
     setTimeout(() => {
       authStore.login();
-      const redirect = $page.url.searchParams.get('redirect');
-      goto(redirect ?? '/member');
+      goto(safeRedirect($page.url.searchParams.get('redirect')));
     }, 650);
   };
   const onKey = (e: KeyboardEvent) => {
