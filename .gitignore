@@ -1,4 +1,4 @@
-ㄔ# Dependencies
+# Dependencies
 node_modules/
 package-lock.json
 pnpm-lock.yaml
@@ -37,5 +37,5 @@ coverage/
 # Temporary files
 *.tmp
 .cache/
-/.serena/
 .understand-anything/
+/.claude/
