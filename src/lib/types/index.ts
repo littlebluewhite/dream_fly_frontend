@@ -1,13 +1,3 @@
-export interface CartItem {
-  id: string;
-  name: string;
-  type: 'course' | 'ticket';
-  price: number;
-  quantity: number;
-  duration: string;
-  level?: string;
-}
-
 export interface Notification {
   id: string;
   type: 'reminder' | 'promotion' | 'schedule' | 'announcement';
