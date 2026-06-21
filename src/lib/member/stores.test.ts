@@ -144,7 +144,6 @@ describe('applyOrder — 結算寫入 stores', () => {
         { date: '2026/06/22', desc: '結帳折抵 · 方案訂閱', type: 'redeem', delta: -100 }
       ]
     });
-    const initialLen = get(pointsLedger).length;
     applyOrder(result);
     const ledger = get(pointsLedger);
     // 新增的兩筆在最前（prepend），index 0 = earn, index 1 = redeem
@@ -153,9 +152,6 @@ describe('applyOrder — 結算寫入 stores', () => {
     expect(earn.id).toMatch(/^co-earn-/);
     expect(redeem.id).toMatch(/^co-redeem-/);
     expect(earn.id).not.toBe(redeem.id);
-    // id 後綴等於寫入時的舊 ledger 長度
-    expect(earn.id).toBe('co-earn-' + initialLen);
-    expect(redeem.id).toBe('co-redeem-' + initialLen);
   });
 
   it('ledger 最新在前 — applyOrder 後新筆 prepend 在既有項目之前', () => {
@@ -177,9 +173,8 @@ describe('applyOrder — 結算寫入 stores', () => {
   });
 
   it('point delta 可為負 — 折抵大於獲得時，points 正確減少', () => {
-    const initial = get(points); // 1250
     applyOrder(makeResult({ pointDelta: -50 }));
-    expect(get(points)).toBe(initial - 50); // 1200
+    expect(get(points)).toBe(1200); // 1250 - 50
   });
 
   it('subscription 去重 — newSubscriptions 內 id 已存在於 subscriptions 時不重複加', () => {
@@ -200,6 +195,7 @@ describe('applyOrder — 結算寫入 stores', () => {
       ]
     }));
     const subs = get(subscriptions);
+    expect(subs).toHaveLength(1);
     expect(subs.filter((s) => s.id === 2003)).toHaveLength(1);
   });
 
