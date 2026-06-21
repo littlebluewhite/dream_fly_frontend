@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import { readable, writable } from 'svelte/store';
+import { readable } from 'svelte/store';
 import AdminTabBar from './TabBar.svelte';
 
 vi.mock('$app/stores', () => ({
