@@ -11,11 +11,11 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { overlay, role, session } from '$lib/mobile-admin/stores';
+  import { overlay, role, session, toasts } from '$lib/mobile-admin/stores';
   import { roleFromPath, type Role } from '$lib/mobile-admin/nav';
   import TabBar from '$lib/mobile-admin/components/TabBar.svelte';
   import OverlayHost from '$lib/mobile-admin/OverlayHost.svelte';
-  import ToastStack from '$lib/mobile-admin/components/ToastStack.svelte';
+  import ToastStack from '$lib/components/toast/ToastStackMobile.svelte';
   import '$lib/styles/mobile-frame.css';
 
   $: currentRole = roleFromPath($page.url.pathname);
@@ -50,7 +50,7 @@
         <TabBar role={currentRole} />
       {/if}
       <OverlayHost />
-      <ToastStack />
+      <ToastStack {toasts} />
     </div>
   </div>
 </div>

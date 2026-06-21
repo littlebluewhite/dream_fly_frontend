@@ -8,6 +8,7 @@
  * Self-contained (does NOT re-export from the desktop admin). Mock-only. */
 
 import { writable, derived } from 'svelte/store';
+import { createToasts } from '$lib/stores/toasts';
 import type { Role } from './nav';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
 
@@ -113,31 +114,8 @@ export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unrea
 export const role = writable<Role>('admin');
 export const session = writable(false);
 
-/* ---------- Toasts (above the tab bar, 2800ms — app.jsx) ---------- */
-export type ToastTone = 'success' | 'info' | 'warning' | 'error' | 'accent';
-export interface AdminToast {
-	id: number;
-	tone: ToastTone;
-	title: string;
-	body: string;
-}
-export function createToasts() {
-	const { subscribe, update } = writable<AdminToast[]>([]);
-	let seq = 1;
-	return {
-		subscribe,
-		notify(tone: ToastTone, title: string, body = ''): number {
-			const id = seq++;
-			update((t) => [...t, { id, tone, title, body }]);
-			setTimeout(() => update((t) => t.filter((x) => x.id !== id)), 2800);
-			return id;
-		},
-		dismiss(id: number) {
-			update((t) => t.filter((x) => x.id !== id));
-		}
-	};
-}
-export const toasts = createToasts();
+/* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
+export const toasts = createToasts(2800);
 
 /* ---------- Convenience derived counts ---------- */
 export const adminUnreadCount = derived(adminNotifs, ($n) => adminUnread($n));
