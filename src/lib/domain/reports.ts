@@ -1,8 +1,10 @@
 /* Dream Fly — 報表分析 seed (single source of truth)
  * Data and types copied verbatim from src/lib/admin/data.ts.
- * Excludes divergent symbols: REPORT_KPIS/ReportKpi, REVENUE_TREND/TrendBar,
- * REVENUE_BREAKDOWN/RevenueRow, REVENUE_TOTAL, TODAY/TodayClass/TodayState,
- * INCOME_SOURCES/IncomeSource, COACH_PERF/CoachPerf (NT$ spacing diverges). */
+ * Excludes the report symbols whose values diverge between admin and mobile
+ * (kept per-surface, NOT single-sourced): REPORT_KPIS/ReportKpi,
+ * REVENUE_TREND/TrendBar, REVENUE_BREAKDOWN/RevenueRow, REVENUE_TOTAL,
+ * INCOME_SOURCES/IncomeSource, COACH_PERF/CoachPerf (NT$ spacing / label format
+ * diverges). (TODAY is a schedule, not a report — it was never part of this module.) */
 
 /** label + pct + colour — shared by the category / age / payment splits. */
 export interface PctSlice {

@@ -213,7 +213,7 @@ export const TODAY: TodayClass[] = [
 ];
 
 /* ───────────────────────── activity / venues / tickets ─────────────────────────
- * `ACTIVITY`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top. */
+ * `COACHES`, `ACTIVITY`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top. */
 
 /* ═════════════════════════ 報表分析 datasets ═════════════════════════ */
 export interface ReportKpi {
