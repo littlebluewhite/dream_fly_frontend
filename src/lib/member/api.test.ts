@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getDashboard, getReports, getSchedule, getMine } from './api';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE, ATT_HISTORY } from './data';
+import { getDashboard, getReports, getSchedule, getMine, getAccount } from './api';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE, ATT_HISTORY, ORDERS } from './data';
 
 describe('member/api', () => {
   it('getDashboard 回傳整包儀表板資料(含 nextClass / track)', async () => {
@@ -37,5 +37,24 @@ describe('member/api', () => {
   });
   it('getMine 是 async 接縫(回 Promise)', () => {
     expect(getMine()).toBeInstanceOf(Promise);
+  });
+
+  it('getAccount 回傳整包帳戶資料(orders + profile)', async () => {
+    const d = await getAccount();
+    expect(d).toEqual({
+      orders: ORDERS,
+      profile: {
+        ...ME,
+        birth: '2013/05/18',
+        phone: '0911-222-333',
+        email: 'wang.family@example.com',
+        guardian: '王先生 · 0911-222-333',
+        remind: true,
+        promo: false
+      }
+    });
+  });
+  it('getAccount 是 async 接縫(回 Promise)', () => {
+    expect(getAccount()).toBeInstanceOf(Promise);
   });
 });
