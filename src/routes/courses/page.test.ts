@@ -6,16 +6,16 @@ import { cart } from '$lib/member/stores';
 import { marketingCourseId } from '$lib/member/data';
 import { toasts } from '$lib/stores/marketingToasts';
 
-beforeEach(() => {
+function resetState() {
 	localStorage.clear();
 	cart.clear();
 	cart.waitlist.set([]);
-});
-afterEach(() => {
-	localStorage.clear();
-	cart.clear();
-	cart.waitlist.set([]);
-});
+	// marketingToasts is a module singleton; dismiss any leftover toasts so a
+	// stale entry from a prior test can't satisfy the toast assertion (vacuous pass).
+	get(toasts).forEach((t) => toasts.dismiss(t.id));
+}
+beforeEach(resetState);
+afterEach(resetState);
 
 describe('課程介紹 (marketing) — 加入購物車 unifies onto the member cart', () => {
 	it('adds the marketing course to the member cart under its namespaced id', async () => {
@@ -34,6 +34,9 @@ describe('課程介紹 (marketing) — 加入購物車 unifies onto the member c
 
 	it('shows a marketing toast on add', async () => {
 		const { getAllByRole } = render(Page);
+		// Baseline: no toasts before the click, so the assertion below proves THIS
+		// click created the toast (not a leftover from a prior test).
+		expect(get(toasts)).toHaveLength(0);
 		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
 
 		expect(get(toasts).some((t) => t.title === '已將 幼兒體操 加入購物車')).toBe(true);
