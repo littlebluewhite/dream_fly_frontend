@@ -49,7 +49,7 @@ describe('member/reports 頁', () => {
     // 永遠 pending — 不 flush
     vi.mocked(getReports).mockReturnValue(new Promise(() => {}));
     const { container } = render(Page);
-    // skeleton 分支會 render df-view wrapper;用 class 確認 loading 分支存在
-    expect(container.querySelector('.df-view')).not.toBeNull();
+    // skeleton 分支帶 data-testid;用它確認 loading 分支(非 ready/error 共用的 .df-view)
+    expect(container.querySelector('[data-testid="reports-skeleton"]')).not.toBeNull();
   });
 });

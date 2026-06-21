@@ -180,7 +180,7 @@
 {:else if phase === 'error'}
   <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
 {:else}
-  <div class="df-view">
+  <div class="df-view" data-testid="reports-skeleton">
     <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />
     <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
   </div>

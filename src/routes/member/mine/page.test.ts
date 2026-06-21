@@ -17,7 +17,7 @@ describe('member/mine 頁', () => {
   it('先骨架,async 載入後顯示資料', async () => {
     vi.mocked(getMine).mockResolvedValue(SEED);
     render(Page);
-    // 課程名稱尚未出現
+    // 出席紀錄(ready 專屬內容)尚未出現
     expect(screen.queryByText('出席紀錄')).toBeNull();
     // 載入後出現
     expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
