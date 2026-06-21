@@ -2,7 +2,8 @@
   import { page } from '$app/stores';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
-  import Toast from '$lib/components/Toast.svelte';
+  import ToastPublic from '$lib/components/toast/ToastPublic.svelte';
+  import { toasts } from '$lib/stores/marketingToasts';
   import '$lib/styles/global.css';
 
   /* App surfaces (member centre, admin back-office, coach work-portal, and the
@@ -30,7 +31,7 @@
 
     <Footer />
 
-    <Toast />
+    <ToastPublic {toasts} />
   </div>
 {/if}
 

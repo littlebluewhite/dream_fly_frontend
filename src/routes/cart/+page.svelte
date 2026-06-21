@@ -3,7 +3,7 @@
   import { cart } from '$lib/member/stores';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import { toastStore } from '$lib/stores/toastStore';
+  import { toasts } from '$lib/stores/marketingToasts';
   import type { CartItem } from '$lib/member/data';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -16,7 +16,7 @@
   function decreaseQuantity(item: CartItem) {
     if (item.qty === 1) {
       cart.remove(item.id);
-      toastStore.showToast('已從購物車移除項目', 'info');
+      toasts.notify('info', '已從購物車移除項目');
     } else {
       cart.updateQty(item.id, -1);
     }
@@ -24,13 +24,13 @@
 
   function removeItem(item: CartItem) {
     cart.remove(item.id);
-    toastStore.showToast(`已移除 ${item.name}`, 'success');
+    toasts.notify('success', `已移除 ${item.name}`);
   }
 
   function clearAllItems() {
     if (confirm('確定要清空購物車嗎？')) {
       cart.clear();
-      toastStore.showToast('購物車已清空', 'info');
+      toasts.notify('info', '購物車已清空');
     }
   }
 

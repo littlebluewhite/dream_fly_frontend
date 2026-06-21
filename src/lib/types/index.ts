@@ -6,9 +6,3 @@ export interface Notification {
   timestamp: string;
   read: boolean;
 }
-
-export interface Toast {
-  id: string;
-  message: string;
-  type: 'success' | 'error' | 'info';
-}

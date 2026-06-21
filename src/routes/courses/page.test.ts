@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart } from '$lib/member/stores';
 import { marketingCourseId } from '$lib/member/data';
-import { toastStore } from '$lib/stores/toastStore';
+import { toasts } from '$lib/stores/marketingToasts';
 
 beforeEach(() => {
 	localStorage.clear();
@@ -36,7 +36,7 @@ describe('課程介紹 (marketing) — 加入購物車 unifies onto the member c
 		const { getAllByRole } = render(Page);
 		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
 
-		expect(get(toastStore).some((t) => t.message === '已將 幼兒體操 加入購物車')).toBe(true);
+		expect(get(toasts).some((t) => t.title === '已將 幼兒體操 加入購物車')).toBe(true);
 	});
 
 	it('flips the added card to the disabled 已在購物車 state (CourseCard isInCart)', async () => {

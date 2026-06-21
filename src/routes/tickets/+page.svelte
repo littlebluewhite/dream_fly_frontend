@@ -1,7 +1,7 @@
 <script lang="ts">
   import { cart, subscriptions } from '$lib/member/stores';
   import { passToCartItem, passId } from '$lib/member/data';
-  import { toastStore } from '$lib/stores/toastStore';
+  import { toasts } from '$lib/stores/marketingToasts';
 
   // Tickets Page - 購票資訊
   const ticketTypes = [
@@ -65,19 +65,19 @@
     // Already an active entitlement? Block it — confirmPay dedups by id, so a
     // repurchase would charge + reward points without creating/renewing anything.
     if ($subscriptions.some((s) => s.id === passId(ticket.id))) {
-      toastStore.showToast(`您已訂閱「${ticket.name}」，無需重複購買`, 'info');
+      toasts.notify('info', `您已訂閱「${ticket.name}」，無需重複購買`);
       return;
     }
 
     const inCart = $cart.some((item) => item.id === passId(ticket.id) && item.type === 'pass');
 
     if (inCart) {
-      toastStore.showToast(`${ticket.name} 已在購物車中`, 'info');
+      toasts.notify('info', `${ticket.name} 已在購物車中`);
       return;
     }
 
     cart.addItem(passToCartItem(ticket));
-    toastStore.showToast(`已將 ${ticket.name} 加入購物車`, 'success');
+    toasts.notify('success', `已將 ${ticket.name} 加入購物車`);
   }
 </script>
 

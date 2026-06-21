@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { toastStore } from '$lib/stores/toastStore';
+  import { toasts } from '$lib/stores/marketingToasts';
   import Hero from '$lib/components/home/Hero.svelte';
   import ProofStrip from '$lib/components/home/ProofStrip.svelte';
   import WhyUs from '$lib/components/home/WhyUs.svelte';
@@ -11,7 +11,7 @@
   import CtaBanner from '$lib/components/home/CtaBanner.svelte';
 
   function book() {
-    toastStore.showToast('已收到預約，專員將於 1 個工作天內與您聯繫', 'success');
+    toasts.notify('success', '已收到預約，專員將於 1 個工作天內與您聯繫');
   }
 </script>
 

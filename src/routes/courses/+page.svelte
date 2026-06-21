@@ -3,7 +3,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { cart } from '$lib/member/stores';
   import { marketingCourseToCartItem } from '$lib/member/data';
-  import { toastStore } from '$lib/stores/toastStore';
+  import { toasts } from '$lib/stores/marketingToasts';
 
   // Courses Page - 課程介紹
   const courses = [
@@ -47,7 +47,7 @@
 
   function addCourseToCart(course: typeof courses[0]) {
     cart.addItem(marketingCourseToCartItem(course));
-    toastStore.showToast(`已將 ${course.name} 加入購物車`, 'success');
+    toasts.notify('success', `已將 ${course.name} 加入購物車`);
   }
 </script>
 
