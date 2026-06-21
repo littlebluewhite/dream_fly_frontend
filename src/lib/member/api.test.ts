@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getDashboard } from './api';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
+import { getDashboard, getReports } from './api';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS } from './data';
 
 describe('member/api', () => {
   it('getDashboard 回傳整包儀表板資料(含 nextClass / track)', async () => {
@@ -13,5 +13,13 @@ describe('member/api', () => {
   });
   it('是 async 接縫(回 Promise)', () => {
     expect(getDashboard()).toBeInstanceOf(Promise);
+  });
+
+  it('getReports 回傳整包成績單資料', async () => {
+    const d = await getReports();
+    expect(d).toEqual({ courses: MY_COURSES, reports: REPORTS, certs: CERTS });
+  });
+  it('getReports 是 async 接縫(回 Promise)', () => {
+    expect(getReports()).toBeInstanceOf(Promise);
   });
 });

@@ -3,35 +3,39 @@
    * tab, earned certificates on the other. Ported from the prototype's Reports
    * (client/views2.jsx). The BarRow + ReportCard sub-views are kept as inline
    * markup here. Data + primitives come from the shared foundation. */
+  import { onMount } from 'svelte';
   import { Tabs, Card, Badge, Button, Avatar, ProgressBar, Icon } from '$lib/components/ui';
-  import LoadingGate from '$lib/member/components/LoadingGate.svelte';
   import Skeleton from '$lib/member/components/Skeleton.svelte';
   import SkelCard from '$lib/member/components/SkelCard.svelte';
+  import ErrorState from '$lib/member/components/ErrorState.svelte';
   import EmptyState from '$lib/member/components/EmptyState.svelte';
-  import { MY_COURSES, REPORTS, CERTS, type EnrolledCourse, type Report } from '$lib/member/data';
+  import { getReports, type ReportsData } from '$lib/member/api';
   import { toasts } from '$lib/member/stores';
 
   let tab = 'report';
-  let active = MY_COURSES[0].id;
+  let active: string | null = null;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: ReportsData | null = null;
 
-  $: cur = MY_COURSES.find((c) => c.id === active) ?? MY_COURSES[0];
-  $: rpt = REPORTS[active];
+  function load() {
+    phase = 'loading';
+    getReports()
+      .then((d) => { data = d; active = d.courses[0].id; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: cur = data && active != null ? (data.courses.find((c) => c.id === active) ?? data.courses[0]) : null;
+  $: rpt = data && active != null ? data.reports[active] : undefined;
 </script>
 
-<LoadingGate>
-  <svelte:fragment slot="skeleton">
-    <div class="df-view">
-      <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />
-      <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
-    </div>
-  </svelte:fragment>
-
+{#if phase === 'ready' && data}
   <div class="df-view">
     <Tabs
       bind:value={tab}
       tabs={[
         { value: 'report', label: '本季成績單' },
-        { value: 'cert', label: '我的證書', count: CERTS.length }
+        { value: 'cert', label: '我的證書', count: data.certs.length }
       ]}
       style="margin-bottom:20px"
     />
@@ -40,9 +44,9 @@
       <div style="display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start">
         <!-- Left: course picker -->
         <div style="display:flex;flex-direction:column;gap:10px">
-          {#each MY_COURSES as c (c.id)}
+          {#each data.courses as c (c.id)}
             {@const on = active === c.id}
-            {@const has = !!REPORTS[c.id]}
+            {@const has = !!data.reports[c.id]}
             <button
               type="button"
               class="picker"
@@ -69,7 +73,7 @@
         </div>
 
         <!-- Right: report card or empty state -->
-        {#if rpt}
+        {#if rpt && cur}
           <Card padding={0} style="overflow:hidden">
             <div
               style="padding:22px 26px;display:flex;align-items:center;gap:16px;background:linear-gradient(115deg, var(--df-primary) 0%, var(--df-primary-dark) 100%);color:#fff"
@@ -90,7 +94,7 @@
               <div>
                 <div style="font-size:14px;font-weight:700;color:var(--df-ink);margin-bottom:16px">技巧評量</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 28px">
-                  {#each rpt.skills as [l, v] (l)}
+                  {#each rpt.skills as [l, v], i (i)}
                     <div>
                       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
                         <span style="color:var(--df-text-dark);font-weight:500">{l}</span>
@@ -105,7 +109,7 @@
               <div style="border-top:1px solid var(--df-border);padding-top:22px">
                 <div style="font-size:14px;font-weight:700;color:var(--df-ink);margin-bottom:16px">學習表現</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 28px">
-                  {#each rpt.attrs as [l, v] (l)}
+                  {#each rpt.attrs as [l, v], i (i)}
                     <div>
                       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
                         <span style="color:var(--df-text-dark);font-weight:500">{l}</span>
@@ -129,7 +133,7 @@
               </div>
             </div>
           </Card>
-        {:else}
+        {:else if cur}
           <Card>
             <EmptyState
               icon="clipboard-list"
@@ -143,7 +147,7 @@
       </div>
     {:else}
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px,1fr));gap:18px">
-        {#each CERTS as ct (ct.id)}
+        {#each data.certs as ct (ct.id)}
           <Card padding={0} hoverable style="overflow:hidden;display:flex;flex-direction:column">
             <div
               style="height:120px;background:linear-gradient(135deg, {ct.color} 0%, {ct.color}cc 100%);display:flex;align-items:center;justify-content:center;position:relative"
@@ -173,7 +177,14 @@
       </div>
     {/if}
   </div>
-</LoadingGate>
+{:else if phase === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else}
+  <div class="df-view">
+    <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />
+    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
+  </div>
+{/if}
 
 <style>
   .picker {
