@@ -4,8 +4,8 @@
  * toasts / prefs / profile in one React component. Rendered as real routes, the
  * bottom tabs are URLs but push-screens + sheets are overlay state, and the
  * cart / points / notifs / toasts / prefs / profile are shared stores that live
- * here. Factories are exported (isolated test instances, mirroring the admin /
- * coach `createToasts` convention); the app uses the singletons below.
+ * here. Toasts come from the canonical shared store (`createToasts` imported
+ * from `$lib/stores/toasts`); no local factory is defined or exported here.
  * Mock-only, no backend. */
 
 import { writable, derived } from 'svelte/store';

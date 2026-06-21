@@ -4,8 +4,8 @@
  * component (app.jsx). Rendered as real SvelteKit routes, that shared state
  * lives here. Self-contained — does NOT re-export from admin. Mock-only.
  *
- * NB: the coach prototype auto-dismisses toasts after 4200ms (app.jsx:39),
- * not admin's 4000ms — kept source-faithful. */
+ * NB: toasts auto-dismiss at 4000ms, unified across desktop surfaces (the
+ * coach prototype used 4200ms; aligned in the consolidation — see ADR 0003). */
 
 import { writable } from 'svelte/store';
 

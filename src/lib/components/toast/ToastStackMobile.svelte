@@ -33,6 +33,7 @@
       style="animation:df-toast-in .24s ease both; background:var(--df-ink); color:#fff;
         border-radius:14px; padding:12px 15px; display:flex; align-items:flex-start; gap:11px;
         box-shadow:var(--df-shadow-strong);"
+      role="status"
     >
       <span style="margin-top:1px; display:flex; flex:none;">
         <Icon name={ICONS[t.tone] || 'info'} size={19} color={TINT[t.tone] || '#fff'} />

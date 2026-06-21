@@ -23,6 +23,7 @@
       class="toast toast-{t.tone}"
       in:fly={{ x: 300, duration: 300 }}
       out:fade={{ duration: 200 }}
+      role="status"
     >
       <div class="toast-icon">
         <Icon name={toastIconNames[t.tone] || 'info'} size={20} color="currentColor" />
