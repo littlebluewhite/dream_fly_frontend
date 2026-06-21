@@ -28,7 +28,7 @@ function walk(dir: string): string[] {
 	return out;
 }
 
-const SURFACE_DIRS = ['src/lib/mobile', 'src/lib/mobile-admin', 'src/routes/mobile', 'src/routes/mobile-admin'].map(r);
+const SURFACE_DIRS = ['src/lib/mobile', 'src/lib/mobile-admin', 'src/lib/components/mobile', 'src/routes/mobile', 'src/routes/mobile-admin'].map(r);
 const surfaceFiles = SURFACE_DIRS.flatMap(walk).filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts'));
 
 describe('icon-registry completeness', () => {
