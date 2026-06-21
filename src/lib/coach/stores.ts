@@ -9,34 +9,9 @@
 
 import { writable } from 'svelte/store';
 
-/* ---- Toasts (bottom-right stack, 4200ms) ---- */
-export type ToastTone = 'success' | 'info' | 'warning' | 'error';
-export interface CoachToast {
-	id: number;
-	tone: ToastTone;
-	title: string;
-	body: string;
-}
+import { createToasts } from '$lib/stores/toasts';
 
-/** Factory — exported so tests get an isolated instance (the app uses the
- *  `toasts` singleton below). */
-export function createToasts() {
-	const { subscribe, update } = writable<CoachToast[]>([]);
-	let seq = 1;
-	return {
-		subscribe,
-		/** Push a toast; it auto-dismisses after 4200ms. Returns its id. */
-		notify(tone: ToastTone, title: string, body = ''): number {
-			const id = seq++;
-			update((t) => [...t, { id, tone, title, body }]);
-			setTimeout(() => update((t) => t.filter((x) => x.id !== id)), 4200);
-			return id;
-		},
-		dismiss(id: number) {
-			update((t) => t.filter((x) => x.id !== id));
-		}
-	};
-}
+/* ---- Toasts (bottom-right stack, 4000ms — canonical store) ---- */
 export const toasts = createToasts();
 
 /* ---- Topbar search term ---- */

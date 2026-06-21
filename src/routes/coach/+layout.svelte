@@ -13,9 +13,9 @@
   import { afterNavigate } from '$app/navigation';
   import Sidebar from '$lib/coach/components/Sidebar.svelte';
   import Topbar from '$lib/coach/components/Topbar.svelte';
-  import ToastStack from '$lib/coach/components/ToastStack.svelte';
+  import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { resolve } from '$lib/coach/nav';
-  import { search } from '$lib/coach/stores';
+  import { search, toasts } from '$lib/coach/stores';
   import '$lib/coach/coach.css';
 
   let content: HTMLElement;
@@ -36,7 +36,7 @@
       <slot />
     </div>
   </div>
-  <ToastStack />
+  <ToastStack {toasts} />
 </div>
 
 <style>
