@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, fireEvent, cleanup } from '@testing-library/svelte';
 import Sheet from './Sheet.svelte';
 import SheetFixture from './Sheet.fixture.svelte';
+import SheetNoFooterFixture from './Sheet.nofooter.fixture.svelte';
 
 afterEach(() => {
 	cleanup();
@@ -25,6 +26,18 @@ describe('Sheet — contract tests', () => {
 			footer: false
 		});
 		expect(queryByText('FOOTER_SLOT_CONTENT')).toBeNull();
+	});
+
+	it('footer gate: footer=true with NO footer slot renders no footer chrome', () => {
+		// This test fails if the shell uses `{#if footer}` ignoring `$$slots.footer`:
+		// a missing slot still passes the `footer` prop check, so the chrome div
+		// would render (empty). The correct gate is `footer && $$slots.footer`.
+		const { container } = render(SheetNoFooterFixture, { open: true, onClose: () => {} });
+		// The footer chrome has a specific border-top style — assert it is absent.
+		const footerDivs = Array.from(container.querySelectorAll('div')).filter((el) =>
+			el.getAttribute('style')?.includes('border-top:1px solid var(--df-border)')
+		);
+		expect(footerDivs).toHaveLength(0);
 	});
 
 	it('Escape keydown → onClose is called when open=true', async () => {
