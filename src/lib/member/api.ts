@@ -1,6 +1,6 @@
 /* 會員中心 mock API 接縫。今天回傳 seed;未來把函式體換成 fetch 即可,呼叫端不變。 */
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, SCHEDULE, ORDERS, CATALOG, REWARDS } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock, Order, CatalogCourse, Reward } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, SCHEDULE, ORDERS, CATALOG, REWARDS, NOTIFS_SEED } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock, Order, CatalogCourse, Reward, Notification } from './data';
 
 /** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。 */
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -88,3 +88,7 @@ export interface PointsData {
 
 export const getPoints = (): Promise<PointsData> =>
   reply({ rewards: REWARDS, expiring: '360 點', expiryDate: '2026/12/31' });
+
+/** 通知中心 feed(store-getter,非包物件)。與 stores.ts 同源、同樣 clone。 */
+export const getNotifications = (): Promise<Notification[]> =>
+  reply(NOTIFS_SEED.map((n) => ({ ...n })));

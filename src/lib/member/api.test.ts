@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses, getPoints } from './api';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE, ATT_HISTORY, ORDERS, CATALOG, REWARDS } from './data';
+import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses, getPoints, getNotifications } from './api';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE, ATT_HISTORY, ORDERS, CATALOG, REWARDS, NOTIFS_SEED } from './data';
 
 describe('member/api', () => {
   it('getDashboard 回傳整包儀表板資料(含 nextClass / track)', async () => {
@@ -72,5 +72,13 @@ describe('member/api', () => {
   });
   it('getPoints 是 async 接縫(回 Promise)', () => {
     expect(getPoints()).toBeInstanceOf(Promise);
+  });
+
+  it('getNotifications 回傳整包通知資料(= NOTIFS_SEED)', async () => {
+    const d = await getNotifications();
+    expect(d).toEqual(NOTIFS_SEED);
+  });
+  it('getNotifications 是 async 接縫(回 Promise)', () => {
+    expect(getNotifications()).toBeInstanceOf(Promise);
   });
 });

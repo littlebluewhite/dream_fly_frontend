@@ -5,23 +5,36 @@
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { Card, FilterChip, Button, Icon } from '$lib/components/ui';
   import Skeleton from '$lib/member/components/Skeleton.svelte';
   import SkelCard from '$lib/member/components/SkelCard.svelte';
   import EmptyState from '$lib/member/components/EmptyState.svelte';
   import ErrorState from '$lib/member/components/ErrorState.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
-  import { notifications, toasts } from '$lib/member/stores';
+  import { getNotifications } from '$lib/member/api';
+  import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
 
   let cat = 'all';
   let phase: 'loading' | 'error' | 'ready' = 'loading';
-  let refreshed = false;
 
-  function run(fail: boolean) {
+  // First client mount hydrates the feed once via the seam; re-visits skip the
+  // fetch (guard already true) so read-state / unread badge aren't clobbered.
+  function load() {
     phase = 'loading';
-    setTimeout(() => (phase = fail ? 'error' : 'ready'), 720);
+    if (get(notificationsHydrated)) {
+      phase = 'ready';
+      return;
+    }
+    getNotifications()
+      .then((d) => {
+        notifications.set(d);
+        notificationsHydrated.set(true);
+        phase = 'ready';
+      })
+      .catch(() => (phase = 'error'));
   }
-  onMount(() => run(false));
+  onMount(load);
 
   $: list = $notifications.filter((n) => cat === 'all' || n.cat === cat);
   $: unread = $notifications.filter((n) => !n.read).length;
@@ -34,17 +47,21 @@
     notifications.update((p) => p.map((n) => ({ ...n, read: true })));
     toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');
   };
-  // First manual refresh demonstrates an error → retry boundary; subsequent
-  // refreshes succeed.
-  const refresh = () => {
-    const fail = !refreshed;
-    refreshed = true;
-    run(fail);
-  };
+  // Explicit refresh always re-fetches — the user asked for the latest, so
+  // resetting to server truth (re-seed) is acceptable.
+  function refresh() {
+    phase = 'loading';
+    getNotifications()
+      .then((d) => {
+        notifications.set(d);
+        phase = 'ready';
+      })
+      .catch(() => (phase = 'error'));
+  }
 </script>
 
 {#if phase === 'loading'}
-  <div class="df-view">
+  <div class="df-view" data-testid="notifs-skeleton">
     <div style="display:flex;gap:8px;margin-bottom:18px">
       {#each [60, 50, 50, 50, 50] as w, i (i)}
         <Skeleton {w} h={30} r={999} />
@@ -70,7 +87,7 @@
 {:else if phase === 'error'}
   <div class="df-view">
     <Card padding={0}>
-      <ErrorState onRetry={() => run(false)} />
+      <ErrorState onRetry={load} />
     </Card>
   </div>
 {:else}

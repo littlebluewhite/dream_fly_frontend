@@ -173,6 +173,11 @@ export const notifications = writable<Notification[]>(NOTIFS_SEED.map((n) => ({ 
 export const unreadCount: Readable<number> = derived(notifications, ($n) =>
   $n.filter((n) => !n.read).length
 );
+// True once the notifications feed has been hydrated via getNotifications() on
+// the first client mount; lets re-visits skip re-seeding so read-state (and the
+// unread badge) survive navigation. Independent of `notifications`/`unreadCount`
+// so it never affects the badge. Resettable in tests.
+export const notificationsHydrated = writable(false);
 
 /* ---- Cross-route UI state ---- */
 export const checkoutOpen = writable(false);
