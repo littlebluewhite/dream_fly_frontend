@@ -5,6 +5,13 @@ import { CLASSES_BASE } from './classes';
 import { MEMBERS_BASE } from './members';
 import { ORDERS_BASE } from './orders';
 import { CAMPUSES, ENROLL_SOURCES } from './shared';
+import { VENUES } from './venues';
+import { TICKETS } from './tickets';
+import { ACTIVITY } from './activity';
+import {
+	CATEGORY_SPLIT, TOP_COURSES, VENUE_USAGE,
+	ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE, PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST
+} from './reports';
 
 /* ── row-count canaries ── */
 describe('row counts', () => {
@@ -104,5 +111,59 @@ describe('shared constants', () => {
 	it('ENROLL_SOURCES has exactly 6 non-empty strings', () => {
 		expect(ENROLL_SOURCES).toHaveLength(6);
 		ENROLL_SOURCES.forEach((s) => expect(s.length).toBeGreaterThan(0));
+	});
+});
+
+/* ── new dataset row counts ── */
+describe('new dataset row counts', () => {
+	it('VENUES has 6 rows', () => expect(VENUES).toHaveLength(6));
+	it('TICKETS has 6 rows', () => expect(TICKETS).toHaveLength(6));
+	it('ACTIVITY has 8 rows', () => expect(ACTIVITY).toHaveLength(8));
+	it('CATEGORY_SPLIT has 4 rows', () => expect(CATEGORY_SPLIT).toHaveLength(4));
+	it('TOP_COURSES has 5 rows', () => expect(TOP_COURSES).toHaveLength(5));
+	it('VENUE_USAGE has 6 rows', () => expect(VENUE_USAGE).toHaveLength(6));
+	it('ATT_DIST has 4 rows', () => expect(ATT_DIST).toHaveLength(4));
+	it('RETENTION has 6 rows', () => expect(RETENTION).toHaveLength(6));
+	it('AGE_DIST has 4 rows', () => expect(AGE_DIST).toHaveLength(4));
+	it('CAMPUS_REVENUE has 3 rows', () => expect(CAMPUS_REVENUE).toHaveLength(3));
+	it('PAYMENT_SPLIT has 5 rows', () => expect(PAYMENT_SPLIT).toHaveLength(5));
+	it('FUNNEL has 4 rows', () => expect(FUNNEL).toHaveLength(4));
+	it('WEEKDAY_LOAD has 7 rows', () => expect(WEEKDAY_LOAD).toHaveLength(7));
+	it('TIER_DIST has 4 rows', () => expect(TIER_DIST).toHaveLength(4));
+});
+
+/* ── new dataset id uniqueness ── */
+describe('new dataset id uniqueness', () => {
+	it('VENUES ids are unique', () => {
+		const ids = VENUES.map((v) => v.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+	it('TICKETS ids are unique', () => {
+		const ids = TICKETS.map((t) => t.id);
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+});
+
+/* ── new dataset enum membership ── */
+describe('new dataset enum membership', () => {
+	const venueStatuses = new Set(['available', 'maintenance']);
+	const ticketTypes = new Set(['pass', 'trial', 'event']);
+
+	it('every VENUES[i].status is valid', () => {
+		VENUES.forEach((v) => expect(venueStatuses.has(v.status)).toBe(true));
+	});
+	it('every TICKETS[i].type is valid', () => {
+		TICKETS.forEach((t) => expect(ticketTypes.has(t.type)).toBe(true));
+	});
+});
+
+/* ── new datasets non-empty ── */
+describe('new datasets non-empty', () => {
+	it('all new arrays are non-empty', () => {
+		for (const arr of [VENUES, TICKETS, ACTIVITY, CATEGORY_SPLIT, TOP_COURSES,
+			VENUE_USAGE, ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE,
+			PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST]) {
+			expect(arr.length).toBeGreaterThan(0);
+		}
 	});
 });
