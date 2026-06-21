@@ -5,7 +5,7 @@
  * lives here. Self-contained — does NOT re-export from admin. Mock-only.
  *
  * NB: toasts auto-dismiss at 4000ms, unified across desktop surfaces (the
- * coach prototype used 4200ms; aligned in the consolidation — see ADR 0003). */
+ * coach prototype used 4200ms; aligned in the consolidation — see ADR 0005). */
 
 import { writable } from 'svelte/store';
 
