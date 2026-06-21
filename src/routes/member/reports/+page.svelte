@@ -20,7 +20,7 @@
   function load() {
     phase = 'loading';
     getReports()
-      .then((d) => { data = d; active = d.courses[0].id; phase = 'ready'; })
+      .then((d) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
@@ -41,6 +41,15 @@
     />
 
     {#if tab === 'report'}
+      {#if data.courses.length === 0}
+        <Card>
+          <EmptyState
+            icon="book-open"
+            title="尚未報名任何課程"
+            body="完成報名後，你的本季成績單與教練評語將會在這裡顯示。"
+          />
+        </Card>
+      {:else}
       <div style="display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:start">
         <!-- Left: course picker -->
         <div style="display:flex;flex-direction:column;gap:10px">
@@ -145,6 +154,7 @@
           </Card>
         {/if}
       </div>
+      {/if}
     {:else}
       <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px,1fr));gap:18px">
         {#each data.certs as ct (ct.id)}

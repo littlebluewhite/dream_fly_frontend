@@ -11,6 +11,7 @@
   import Skeleton from '$lib/member/components/Skeleton.svelte';
   import SkelCard from '$lib/member/components/SkelCard.svelte';
   import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import EmptyState from '$lib/member/components/EmptyState.svelte';
   import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
   import { getMine, type MineData } from '$lib/member/api';
@@ -23,7 +24,7 @@
   function load() {
     phase = 'loading';
     getMine()
-      .then((d) => { data = d; active = d.courses[0].id; phase = 'ready'; })
+      .then((d) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
@@ -38,6 +39,15 @@
 </script>
 
 {#if phase === 'ready' && data}
+  {#if data.courses.length === 0}
+    <div class="df-view">
+      <EmptyState
+        icon="book-open"
+        title="尚未報名任何課程"
+        body="完成報名後，你的課程詳情、出席紀錄與教練資訊將會在這裡顯示。"
+      />
+    </div>
+  {:else}
   <div class="df-view" style="display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start">
     <!-- Left: enrolled course list -->
     <div style="display:flex;flex-direction:column;gap:14px">
@@ -150,6 +160,7 @@
         slot && toasts.notify('success', '補課預約成功', slot.date + ' ' + slot.time + ' · 已加入日程表。')}
     />
     <ContactDialog open={dialog === 'contact'} course={cur} onClose={() => (dialog = null)} />
+  {/if}
   {/if}
 {:else if phase === 'error'}
   <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>

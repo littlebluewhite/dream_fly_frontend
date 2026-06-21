@@ -45,4 +45,15 @@ describe('member/mine 頁', () => {
     const { container } = render(Page);
     expect(container.querySelector('[data-testid="mine-skeleton"]')).not.toBeNull();
   });
+
+  // 迴歸:新會員 courses:[] 時,成功 resolve 不應落入 catch → error state。
+  // 修正前:d.courses[0].id 擲 TypeError → .catch → 顯示「載入失敗」
+  it('courses 為空陣列時成功載入並顯示空狀態(不進 error state)', async () => {
+    vi.mocked(getMine).mockResolvedValue({ courses: [], attendance: [] });
+    render(Page);
+    // 空狀態訊息出現代表頁面到達 ready
+    expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
+    // 不得顯示錯誤狀態
+    expect(screen.queryByText('載入失敗')).toBeNull();
+  });
 });

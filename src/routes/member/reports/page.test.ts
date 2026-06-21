@@ -52,4 +52,27 @@ describe('member/reports 頁', () => {
     // skeleton 分支帶 data-testid;用它確認 loading 分支(非 ready/error 共用的 .df-view)
     expect(container.querySelector('[data-testid="reports-skeleton"]')).not.toBeNull();
   });
+
+  // 迴歸:新會員 courses:[] 時,成功 resolve 不應落入 catch → error state。
+  // 修正前:d.courses[0].id 擲 TypeError → .catch → 顯示「載入失敗」
+  it('courses 為空陣列時成功載入並顯示空狀態(不進 error state)', async () => {
+    vi.mocked(getReports).mockResolvedValue({ courses: [], reports: {}, certs: [] });
+    render(Page);
+    // 空狀態訊息出現代表頁面到達 ready
+    expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
+    // 不得顯示錯誤狀態
+    expect(screen.queryByText('載入失敗')).toBeNull();
+  });
+
+  // 迴歸:courses 空時切換至「我的證書」tab 不應崩潰(頁面不得停在 error state)。
+  it('courses 為空時「我的證書」tab 仍可切換', async () => {
+    vi.mocked(getReports).mockResolvedValue({ courses: [], reports: {}, certs: [] });
+    render(Page);
+    // 等頁面到達 ready(空狀態顯示)
+    expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
+    // 證書 tab 標籤存在,代表 Tabs 元件已正常渲染
+    expect(screen.getByText('我的證書')).toBeInTheDocument();
+    // 頁面不得在 error state
+    expect(screen.queryByText('載入失敗')).toBeNull();
+  });
 });
