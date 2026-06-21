@@ -1,3 +1,5 @@
+/* Dream Fly — public/marketing surface notifications store. */
+
 import { writable, derived } from 'svelte/store';
 import type { Notification } from '$lib/types';
 

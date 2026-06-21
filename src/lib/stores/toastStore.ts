@@ -1,3 +1,5 @@
+/* Dream Fly — public/marketing surface toast store. */
+
 import { writable } from 'svelte/store';
 import type { Toast } from '$lib/types';
 

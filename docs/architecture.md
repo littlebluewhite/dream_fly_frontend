@@ -28,7 +28,7 @@ Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mob
 `staff/`) typically containing: `data.ts` (mock seed), `stores.ts` (Svelte stores), `nav.ts`, `format.ts`,
 and a `components/` (or `overlays/`) subfolder. Cross-surface shared code lives in:
 `lib/components/` (marketing/shared UI), `lib/data/` (marketing seed + nav config), `lib/stores/`
-(cross-cutting stores), `lib/styles/` (`global.css` + design tokens), `lib/types/`, `lib/utils/`.
+(`authStore` is cross-cutting; `toastStore`/`notificationsStore` belong to the public/marketing surface), `lib/styles/` (`global.css` + design tokens), `lib/types/`, `lib/utils/`.
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
 
