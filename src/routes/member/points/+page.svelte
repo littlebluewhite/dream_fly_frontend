@@ -4,18 +4,30 @@
    * PointsSkeleton (client/views2.jsx). Data + primitives come from the shared
    * foundation; the live balance lives in the `points` store so redemptions
    * persist across routes (mock-only, resets on reload). */
+  import { onMount } from 'svelte';
   import { Card, Badge, Button, Dialog, Icon } from '$lib/components/ui';
-  import LoadingGate from '$lib/member/components/LoadingGate.svelte';
   import Skeleton from '$lib/member/components/Skeleton.svelte';
   import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import { PT_TYPE, REWARDS, type Reward } from '$lib/member/data';
+  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { PT_TYPE, type Reward } from '$lib/member/data';
   import { points, pointsLedger, toasts } from '$lib/member/stores';
+  import { getPoints, type PointsData } from '$lib/member/api';
 
   let confirm: Reward | null = null;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: PointsData | null = null;
 
   $: earnedThisMonth = $pointsLedger
     .filter((l) => l.date.startsWith('2026/06') && l.delta > 0)
     .reduce((s, l) => s + l.delta, 0);
+
+  function load() {
+    phase = 'loading';
+    getPoints()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   function redeem(rw: Reward) {
     if ($points < rw.cost) {
@@ -37,33 +49,7 @@
   }
 </script>
 
-<LoadingGate>
-  <svelte:fragment slot="skeleton">
-    <div class="df-view" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
-      <div style="display:flex;flex-direction:column;gap:18px">
-        <SkelCard>
-          <Skeleton w={120} h={14} />
-          <Skeleton w={160} h={40} style="margin:14px 0 8px" />
-          <Skeleton w="60%" h={11} />
-        </SkelCard>
-        <SkelCard padding={0}>
-          {#each [0, 1, 2, 3] as i (i)}
-            <div style="display:flex;justify-content:space-between;padding:15px 22px;{i < 3 ? 'border-bottom:1px solid var(--df-border)' : ''}">
-              <Skeleton w="50%" h={12} />
-              <Skeleton w={50} h={12} />
-            </div>
-          {/each}
-        </SkelCard>
-      </div>
-      <SkelCard>
-        <Skeleton w={120} h={14} style="margin-bottom:16px" />
-        {#each [0, 1, 2] as i (i)}
-          <Skeleton w="100%" h={64} r={12} style="margin-bottom:12px" />
-        {/each}
-      </SkelCard>
-    </div>
-  </svelte:fragment>
-
+{#if phase === 'ready' && data}
   <div class="df-view" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <!-- Left: balance hero + ledger -->
     <div style="display:flex;flex-direction:column;gap:18px">
@@ -82,11 +68,11 @@
           </div>
           <div>
             <div style="opacity:0.7">即將到期</div>
-            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px;color:var(--df-accent)">360 點</div>
+            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px;color:var(--df-accent)">{data.expiring}</div>
           </div>
           <div>
             <div style="opacity:0.7">到期日</div>
-            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px">2026/12/31</div>
+            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px">{data.expiryDate}</div>
           </div>
         </div>
       </div>
@@ -117,7 +103,7 @@
         <span style="font-size:12.5px;color:var(--df-text-light)">1 點 = NT$1 折抵</span>
       </div>
       <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
-        {#each REWARDS as rw (rw.id)}
+        {#each data.rewards as rw (rw.id)}
           {@const afford = $points >= rw.cost}
           <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;border:1px solid var(--df-border);background:#fff">
             <div style="width:46px;height:46px;border-radius:12px;background:var(--df-accent-bg, #FFF8DB);display:flex;align-items:center;justify-content:center;flex:none">
@@ -139,7 +125,33 @@
       </div>
     </Card>
   </div>
-</LoadingGate>
+{:else if phase === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else}
+  <div class="df-view" data-testid="points-skeleton" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <SkelCard>
+        <Skeleton w={120} h={14} />
+        <Skeleton w={160} h={40} style="margin:14px 0 8px" />
+        <Skeleton w="60%" h={11} />
+      </SkelCard>
+      <SkelCard padding={0}>
+        {#each [0, 1, 2, 3] as i (i)}
+          <div style="display:flex;justify-content:space-between;padding:15px 22px;{i < 3 ? 'border-bottom:1px solid var(--df-border)' : ''}">
+            <Skeleton w="50%" h={12} />
+            <Skeleton w={50} h={12} />
+          </div>
+        {/each}
+      </SkelCard>
+    </div>
+    <SkelCard>
+      <Skeleton w={120} h={14} style="margin-bottom:16px" />
+      {#each [0, 1, 2] as i (i)}
+        <Skeleton w="100%" h={64} r={12} style="margin-bottom:12px" />
+      {/each}
+    </SkelCard>
+  </div>
+{/if}
 
 <Dialog
   open={!!confirm}
