@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lookupCoupon, subtotalOf, checkoutMath } from './cart-math';
+import { lookupCoupon, subtotalOf, checkoutMath } from './checkout-math';
 
 describe('lookupCoupon', () => {
   it('returns the NT$ off for a known code (case-insensitive, trimmed)', () => {

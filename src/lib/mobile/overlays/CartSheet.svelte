@@ -13,7 +13,7 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { cart, points, checkout, toasts } from '$lib/mobile/stores';
   import { fmtNT, ME } from '$lib/mobile/data';
-  import { lookupCoupon, checkoutMath } from '$lib/mobile/cart-math';
+  import { lookupCoupon, checkoutMath } from '$lib/checkout-math';
 
   export let onClose: () => void;
 

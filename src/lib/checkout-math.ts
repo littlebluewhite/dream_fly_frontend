@@ -1,10 +1,11 @@
-/* Dream Fly — 行動版會員 App · 結帳金額計算（純函式，給 CartSheet 用）。
+/* Dream Fly — 結帳金額計算，跨 surface 共用的純函式。
  *
- * ui.jsx CartSheet 的 subtotal / couponOff / ptRedeem / total / earned 計算邏輯，
+ * CartSheet / CheckoutDialog 的 subtotal / couponOff / ptRedeem / total / earned 計算邏輯，
  * 抽成可單測的純函式。優惠碼查表→折抵、點數折抵夾擠、最終金額、回饋點數。
  * Mock-only。 */
 
-import { COUPONS } from './data';
+/* Coupon codes（結帳優惠碼）— code → NT$ off。內聯自原 data.ts（mobile/member 兩份值相同）。 */
+const COUPONS: Record<string, number> = { DREAMFLY100: 100, NEWYEAR500: 500, WELCOME50: 50 };
 
 export interface CartMathLine {
   price: number;
