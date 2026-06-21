@@ -47,7 +47,16 @@ export {
 	PAYMENT_SPLIT,
 	FUNNEL,
 	WEEKDAY_LOAD,
-	TIER_DIST
+	TIER_DIST,
+	// Row types were part of admin's public API on `main` — re-export them too (not just values).
+	type PctSlice,
+	type TopCourse,
+	type VenueUsage,
+	type CountBar,
+	type RetentionBar,
+	type CampusRevenue,
+	type FunnelStage,
+	type WeekdayLoad
 } from '$lib/domain/reports';
 
 // Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).

@@ -37,6 +37,8 @@ export {
 	WEEKDAY_LOAD,
 	TIER_DIST
 } from '$lib/domain/reports';
+// `Split` was mobile's name for the percentage-split row type on `main` — preserve it as an alias.
+export type { PctSlice as Split } from '$lib/domain/reports';
 
 // Base arrays consumed by the `.map` derivations that STAY in mobile (import, not re-export).
 import { CLASSES_BASE } from '$lib/domain/classes';
