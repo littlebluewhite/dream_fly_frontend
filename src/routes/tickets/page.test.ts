@@ -6,7 +6,7 @@ import { cart, subscriptions } from '$lib/member/stores';
 import { passId } from '$lib/member/data';
 
 // The /tickets marketing page sells PASSES (方案/購票). 加入購物車 must route into
-// the unified member cart as a pass entitlement, not the legacy cartStore.
+// the unified member cart as a pass entitlement.
 
 beforeEach(() => {
 	localStorage.clear();

@@ -2,8 +2,8 @@
  *
  * Guests browse and fill a cart without logging in; login is required only at
  * checkout. This module-singleton store holds the (mock) logged-in session and
- * persists it to localStorage so a reload keeps you signed in — mirroring the
- * cartStore persistence pattern (SSR guard + load + subscribe write-back). */
+ * persists it to localStorage so a reload keeps you signed in
+ * (SSR guard + load + subscribe write-back). */
 
 import { writable, derived } from 'svelte/store';
 import { ME, type Member } from '$lib/member/data';

@@ -18,4 +18,4 @@ auth-at-checkout 將訪客購物車、登入閘與結帳收斂到單一持久化
 
 ## 已知後續(codex 對抗式審 round 3,P2,延後)
 
-持久化 client store(`authStore`、會員 `cart`、`subscriptions`)在 SSR 下於 module-init 即讀 localStorage,於「已登入／有訂閱」狀態硬重整 SSR 頁面時,可能造成 hydration 首屏閃動或警告。此沿用既有 `src/lib/stores/cartStore.ts` 的相同 load-at-init 模式;正解為「持久化 store 一律延後到 mount 後再讀」,且應連同既有 cartStore 一併統一處理,故不在本 PR 範圍,另案跟進。
+持久化 client store(`authStore`、會員 `cart`、`subscriptions`)在 SSR 下於 module-init 即讀 localStorage,於「已登入／有訂閱」狀態硬重整 SSR 頁面時,可能造成 hydration 首屏閃動或警告。（此 load-at-init 模式的原型 `src/lib/stores/cartStore.ts` 已作為死碼移除;）正解為「持久化 store 一律延後到 mount 後再讀」,餘 `authStore`／會員 `cart`／`subscriptions` 仍待統一延後處理,故不在本 PR 範圍,另案跟進。
