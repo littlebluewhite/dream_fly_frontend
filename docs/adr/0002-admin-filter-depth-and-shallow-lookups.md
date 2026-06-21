@@ -12,7 +12,7 @@ compact 預覽列數上限(`COMPACT_PREVIEW_LIMIT`,定義於 `MembersTable.svelt
 
 ## 後果(刻意,非 bug)
 
-- **覆蓋現況須精確說明。** `members-filter.test.ts` 對純函數 `filterMembers` 做了完整覆蓋(status / query / sort / advanced fields — course / pay / attMin / attMax 的全組合)。`MembersTable.test.ts` characterize 了 `...(compact ? {} : $memberFilter)` spread(兩個分支)與 compact 欄/列渲染,並在此次變更中新增了 compact 列數上限(`slice(0, COMPACT_PREVIEW_LIMIT)`)及標籤(`最近活躍 6 位`)的 pin test。**尚未被 characterize 的**是 `MembersTable.svelte` 第 56–60 行的 call-site wiring:測試從未驅動 `search` store、未點擊非 `all` 的狀態 tab、也未點擊排序表頭——`$search`、`status: tab`、`sort` 的 UI plumbing 仍未在 component 層級被 characterize。
+- **覆蓋現況須精確說明。** `members-filter.test.ts` 對純函數 `filterMembers` 做了完整覆蓋(status / query / sort / advanced fields — course / pay / attMin / attMax 的全組合)。`MembersTable.test.ts` characterize 了 `...(compact ? {} : $memberFilter)` spread(兩個分支)與 compact 欄/列渲染,並在此次變更中新增了 compact 列數上限(`slice(0, COMPACT_PREVIEW_LIMIT)`)及標籤(`最近活躍 6 位`)的 pin test。**尚未被 characterize 的**是 `MembersTable.svelte` 的 `$: visible` 區塊(第 55–63 行)中的 call-site wiring:測試從未驅動 `search` store、未點擊非 `all` 的狀態 tab、也未點擊排序表頭——`$search`、`status: tab`、`sort` 的 UI plumbing 仍未在 component 層級被 characterize。
 - `coach-status.ts` 與 `tone.ts` 維持 shallow module 形式;呼叫端若日後需要組合,直接 import 即可,無需任何包裝。
 
 ## 已知後續
