@@ -5,6 +5,7 @@
  * that shared state lives in these module stores instead. Mock-only, no backend. */
 
 import { writable, derived, get, type Readable } from 'svelte/store';
+import { createToasts } from '$lib/stores/toasts';
 import {
   ME,
   NOTIFS_SEED,
@@ -183,28 +184,5 @@ export const notificationsHydrated = writable(false);
 export const checkoutOpen = writable(false);
 export const search = writable('');
 
-/* ---- Toasts (member, bottom-right stack) ---- */
-export type ToastTone = 'success' | 'info' | 'warning' | 'error';
-export interface MemberToast {
-  id: number;
-  tone: ToastTone;
-  title: string;
-  body: string;
-}
-
-function createToasts() {
-  const { subscribe, update } = writable<MemberToast[]>([]);
-  let seq = 1;
-  return {
-    subscribe,
-    notify(tone: ToastTone, title: string, body = '') {
-      const id = seq++;
-      update((t) => [...t, { id, tone, title, body }]);
-      setTimeout(() => update((t) => t.filter((x) => x.id !== id)), 4000);
-    },
-    dismiss(id: number) {
-      update((t) => t.filter((x) => x.id !== id));
-    }
-  };
-}
+/* ---- Toasts (member, bottom-right stack, 4000ms — canonical store) ---- */
 export const toasts = createToasts();

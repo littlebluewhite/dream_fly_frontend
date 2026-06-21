@@ -8,8 +8,8 @@
   import Sidebar from '$lib/member/components/Sidebar.svelte';
   import Topbar from '$lib/member/components/Topbar.svelte';
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
-  import ToastStack from '$lib/member/components/ToastStack.svelte';
-  import { checkoutOpen } from '$lib/member/stores';
+  import ToastStack from '$lib/components/toast/ToastStack.svelte';
+  import { checkoutOpen, toasts } from '$lib/member/stores';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
   import '$lib/member/member.css';
@@ -51,7 +51,7 @@
     <div class="content df-scroll"><slot /></div>
   </div>
   <CheckoutDialog />
-  <ToastStack />
+  <ToastStack {toasts} />
 </div>
 
 <style>
