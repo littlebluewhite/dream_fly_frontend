@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, fireEvent, cleanup } from '@testing-library/svelte';
 import Sheet from './Sheet.svelte';
-import SheetTestWithSlot from './SheetTestWithSlot.svelte';
+import SheetFixture from './Sheet.fixture.svelte';
 
 afterEach(() => {
 	cleanup();
@@ -9,17 +9,17 @@ afterEach(() => {
 
 describe('Sheet — contract tests', () => {
 	it('renders default slot content when open=true', () => {
-		const { getByText } = render(SheetTestWithSlot, { open: true, onClose: () => {} });
+		const { getByText } = render(SheetFixture, { open: true, onClose: () => {} });
 		expect(getByText('DEFAULT_SLOT_CONTENT')).toBeTruthy();
 	});
 
 	it('footer gate: footer=true renders the footer slot content', () => {
-		const { getByText } = render(SheetTestWithSlot, { open: true, onClose: () => {}, footer: true });
+		const { getByText } = render(SheetFixture, { open: true, onClose: () => {}, footer: true });
 		expect(getByText('FOOTER_SLOT_CONTENT')).toBeTruthy();
 	});
 
 	it('footer gate: footer=false hides the footer slot content', () => {
-		const { queryByText } = render(SheetTestWithSlot, {
+		const { queryByText } = render(SheetFixture, {
 			open: true,
 			onClose: () => {},
 			footer: false
