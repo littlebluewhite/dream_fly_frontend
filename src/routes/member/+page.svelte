@@ -1,13 +1,28 @@
 <script lang="ts">
-  /* Dream Fly — 會員中心 · 總覽 Dashboard.
-   * Ported from the prototype `function Dashboard` (client/views.jsx). Visual
-   * output recreated 1:1; React structure dropped. Data + primitives come from
-   * the shared foundation — nothing is redefined here. */
+  /* Dream Fly — 會員中心 · 總覽 Dashboard. Visual output unchanged from the
+   * prototype; the bare consts now load through the async api.ts seam
+   * (getDashboard) behind a loading / error / ready phase machine, so the
+   * loading + error UI is ready for when fetch replaces the mock. */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Card, Badge, Button, ProgressBar, Icon } from '$lib/components/ui';
-  import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from '$lib/member/data';
+  import Skeleton from '$lib/member/components/Skeleton.svelte';
+  import SkelCard from '$lib/member/components/SkelCard.svelte';
+  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { getDashboard, type DashboardData } from '$lib/member/api';
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: DashboardData | null = null;
+  function load() {
+    phase = 'loading';
+    getDashboard()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 </script>
 
+{#if phase === 'ready' && data}
 <div class="df-view" style="display:flex;flex-direction:column;gap:22px">
   <!-- Welcome banner -->
   <div
@@ -15,9 +30,9 @@
   >
     <div>
       <div style="font-size:14px;opacity:0.85">歡迎回來，</div>
-      <div style="font-family:var(--df-font-heading);font-size:30px;font-weight:800;margin:3px 0 8px">{ME.name} 👋</div>
+      <div style="font-family:var(--df-font-heading);font-size:30px;font-weight:800;margin:3px 0 8px">{data.me.name} 👋</div>
       <div style="display:flex;align-items:center;gap:8px;font-size:14.5px;opacity:0.92">
-        <Icon name="calendar-clock" size={17} color="#fff" />下一堂課：競技啦啦隊 進階班 · 明日 19:00 · A 訓練館
+        <Icon name="calendar-clock" size={17} color="#fff" />下一堂課：{data.nextClass}
       </div>
     </div>
     <Button variant="accent" on:click={() => goto('/member/schedule')}>
@@ -27,7 +42,7 @@
 
   <!-- Stat cards -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
-    {#each STATS as s (s.label)}
+    {#each data.stats as s, i (i)}
       <Card padding={22}>
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div>
@@ -51,10 +66,10 @@
         >查看我的預約 →</button>
       </div>
       <div style="padding:4px 22px 14px">
-        {#each UPCOMING as u, i (i)}
+        {#each data.upcoming as u, i (i)}
           <div
             class="df-rowhover"
-            style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:{i < UPCOMING.length - 1 ? '1px solid var(--df-border)' : 'none'}"
+            style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:{i < data.upcoming.length - 1 ? '1px solid var(--df-border)' : 'none'}"
           >
             <div style="flex:1;min-width:0">
               <div style="font-size:14.5px;font-weight:600;color:var(--df-text-dark)">{u.name}</div>
@@ -71,10 +86,10 @@
       <Card padding={22}>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
           <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">技巧熟練度</h3>
-          <Badge tone="primary">競技啦啦隊</Badge>
+          <Badge tone="primary">{data.track}</Badge>
         </div>
         <div style="display:flex;flex-direction:column;gap:14px">
-          {#each SKILLS as [n, v] (n)}
+          {#each data.skills as [n, v], i (i)}
             <ProgressBar value={v} showLabel label={n} height={7} tone={v >= 85 ? 'success' : 'primary'} />
           {/each}
         </div>
@@ -88,8 +103,8 @@
       <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">場館公告</h3>
     </div>
     <div style="padding:8px 22px 16px">
-      {#each ANNOUNCE as a, i (i)}
-        <div style="display:flex;gap:13px;padding:13px 0;border-bottom:{i < ANNOUNCE.length - 1 ? '1px solid var(--df-border)' : 'none'}">
+      {#each data.announce as a, i (i)}
+        <div style="display:flex;gap:13px;padding:13px 0;border-bottom:{i < data.announce.length - 1 ? '1px solid var(--df-border)' : 'none'}">
           <div style="width:38px;height:38px;border-radius:10px;background:{a.bg};display:flex;align-items:center;justify-content:center;flex:none"><Icon name={a.icon} size={18} color={a.tone} /></div>
           <div style="flex:1">
             <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{a.title}</div>
@@ -101,3 +116,17 @@
     </div>
   </Card>
 </div>
+{:else if phase === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else}
+  <div class="df-view" style="display:flex;flex-direction:column;gap:22px">
+    <SkelCard padding={30}><Skeleton w="40%" h={26} /></SkelCard>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px">
+      {#each [0, 1, 2] as i (i)}<SkelCard><Skeleton w="60%" h={28} /></SkelCard>{/each}
+    </div>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+      <SkelCard padding={0}>{#each [0, 1, 2] as i (i)}<div style="padding:14px 22px"><Skeleton w="70%" h={16} /></div>{/each}</SkelCard>
+      <SkelCard>{#each [0, 1, 2, 3] as i (i)}<Skeleton w="100%" h={14} style="margin-bottom:12px" />{/each}</SkelCard>
+    </div>
+  </div>
+{/if}
