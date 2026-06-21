@@ -3,9 +3,9 @@
    * (1) 課程明細 + 數量 stepper + 優惠碼 + 點數折抵；(2) 付款方式；(3) SuccessBody。
    * 確認付款 → checkout(ptRedeem, earned) + toast。金額計算抽到 cart-math.ts。 */
   import Sheet from '$lib/mobile/components/Sheet.svelte';
-  import SuccessBody from '$lib/mobile/components/SuccessBody.svelte';
-  import NoteBox from '$lib/mobile/components/NoteBox.svelte';
-  import MEmpty from '$lib/mobile/components/MEmpty.svelte';
+  import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
+  import NoteBox from '$lib/components/mobile/NoteBox.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';

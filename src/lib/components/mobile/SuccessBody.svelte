@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* 成功完成版面（圓形 icon + 標題 + 說明）。ui.jsx SuccessBody (179-187)。 */
+  /* 成功完成版面（圓形 icon + 標題 + 說明）。ported from ui.jsx SuccessBody。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let icon = 'check';

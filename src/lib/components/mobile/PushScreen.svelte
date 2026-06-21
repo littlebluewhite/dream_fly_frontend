@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* Push screen 外殼（全幅、由右滑入）。ui.jsx PushScreen (91-97)。 */
+  /* Push screen 外殼（全幅、由右滑入）。ported from ui.jsx PushScreen。 */
 </script>
 
 <div

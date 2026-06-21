@@ -6,7 +6,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
-  import SectionTitle from '$lib/mobile-admin/components/SectionTitle.svelte';
+  import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import { overlay, role, switchRole, session } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { PROFILES, COACHES, VENUES, TICKETS } from '$lib/mobile-admin/data';

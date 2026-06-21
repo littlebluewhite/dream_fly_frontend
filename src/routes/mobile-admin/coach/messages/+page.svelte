@@ -5,7 +5,7 @@
   import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
-  import MEmpty from '$lib/mobile-admin/components/MEmpty.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead } from '$lib/mobile-admin/stores';
   import type { MessageRow } from '$lib/mobile-admin/data';
 

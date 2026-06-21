@@ -5,7 +5,7 @@
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
-  import MEmpty from '$lib/mobile-admin/components/MEmpty.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { overlay, adminNotifs, adminUnreadCount, toasts, orders } from '$lib/mobile-admin/stores';

@@ -6,7 +6,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile/components/HeaderIcon.svelte';
-  import MEmpty from '$lib/mobile/components/MEmpty.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import { CATALOG } from '$lib/mobile/data';
   import { overlay, cart, toasts } from '$lib/mobile/stores';

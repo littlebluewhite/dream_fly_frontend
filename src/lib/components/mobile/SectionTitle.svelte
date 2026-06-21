@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* Section title row。ui.jsx SectionTitle (83-90)。default slot = 標題；action/onAction = 右側連結。 */
+  /* Section title row。ported from ui.jsx SectionTitle。default slot = 標題；action/onAction = 右側連結。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let action = '';

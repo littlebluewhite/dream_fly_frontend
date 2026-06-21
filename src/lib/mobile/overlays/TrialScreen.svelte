@@ -4,13 +4,13 @@
    * 送出時 toasts.notify('accent', …)。逐步驗證委派給 trialValidation.stepValid（已測試）。
    * Legacy Svelte（無 runes）。 */
   import { tick } from 'svelte';
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
-  import NoteBox from '$lib/mobile/components/NoteBox.svelte';
-  import SuccessBody from '$lib/mobile/components/SuccessBody.svelte';
+  import NoteBox from '$lib/components/mobile/NoteBox.svelte';
+  import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import { toasts, profile } from '$lib/mobile/stores';
   import { stepValid } from './trialValidation';
 

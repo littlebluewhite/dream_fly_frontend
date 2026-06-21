@@ -5,7 +5,7 @@
    * Legacy Svelte（無 runes）。 */
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';

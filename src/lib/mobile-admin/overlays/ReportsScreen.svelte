@@ -3,7 +3,7 @@
    * KPI grid + 各圖表 Panel（營收來源下鑽、營收趨勢、類別占比、熱門課程、
    * 收入來源、教練表現、場館使用率、出席分布、新生vs續報、年齡層、分校營收、
    * 付款占比 conic 圓餅、轉換漏斗、星期負載、會員分級）。 */
-  import PushScreen from '$lib/mobile-admin/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';

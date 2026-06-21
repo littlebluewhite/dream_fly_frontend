@@ -3,7 +3,7 @@
    * notify → toasts.notify；送出為本地 echo（家長泡泡來自 m.preview）。 */
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import PushScreen from '$lib/mobile-admin/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import { toasts } from '$lib/mobile-admin/stores';

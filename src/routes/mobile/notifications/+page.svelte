@@ -5,7 +5,7 @@
    * Legacy Svelte（無 runes）、繁體中文文案、mock-only。 */
   import Icon from '$lib/components/ui/Icon.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
-  import MEmpty from '$lib/mobile/components/MEmpty.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
   import { notifs, unread, toasts } from '$lib/mobile/stores';
 

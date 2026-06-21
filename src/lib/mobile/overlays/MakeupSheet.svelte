@@ -2,8 +2,8 @@
   /* 預約補課 sheet。mobile/mine.jsx MakeupSheet (253-290)。
    * MAKEUP_SLOTS 清單（spots 0 → 額滿 disabled）→ toast + 切成功畫面。 */
   import Sheet from '$lib/mobile/components/Sheet.svelte';
-  import SuccessBody from '$lib/mobile/components/SuccessBody.svelte';
-  import MEmpty from '$lib/mobile/components/MEmpty.svelte';
+  import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';

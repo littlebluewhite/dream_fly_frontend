@@ -2,8 +2,8 @@
   /* 請假 sheet。mobile/mine.jsx LeaveSheet (217-250)。
    * 選課堂（COURSE_SESSIONS[course.id]）+ 事由（LEAVE_REASONS）→ toast + 切成功畫面。 */
   import Sheet from '$lib/mobile/components/Sheet.svelte';
-  import SuccessBody from '$lib/mobile/components/SuccessBody.svelte';
-  import NoteBox from '$lib/mobile/components/NoteBox.svelte';
+  import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
+  import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Select from '$lib/components/ui/Select.svelte';

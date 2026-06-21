@@ -2,7 +2,7 @@
   /* 票券管理 push screen。admin2.jsx TicketsScreen (151)。
    * 營收 hero + TICKETS 卡片：icon 方塊 + 名稱/TICKET_TYPE Badge + 說明 + 售價 +
    * 已售/配額 MiniBar + 銷售明細/編輯。 */
-  import PushScreen from '$lib/mobile-admin/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';

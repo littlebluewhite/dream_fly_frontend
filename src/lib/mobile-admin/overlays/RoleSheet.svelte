@@ -2,7 +2,7 @@
   /* 切換身分 sheet（完整 port）。ui.jsx RoleSheet (293-318)。 */
   import Icon from '$lib/components/ui/Icon.svelte';
   import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
-  import NoteBox from '$lib/mobile-admin/components/NoteBox.svelte';
+  import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import { PROFILES } from '$lib/mobile-admin/data';
   import type { Role } from '$lib/mobile-admin/nav';
 

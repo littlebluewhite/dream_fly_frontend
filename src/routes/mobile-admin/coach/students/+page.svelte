@@ -8,7 +8,7 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
-  import MEmpty from '$lib/mobile-admin/components/MEmpty.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { MEMBERS, SKILLS, type MemberRow } from '$lib/mobile-admin/data';

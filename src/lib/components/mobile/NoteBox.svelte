@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* 提示框。ui.jsx NoteBox (176-178)。default slot = 內容。 */
+  /* 提示框（灰底）。ported from ui.jsx NoteBox。default slot = 內容。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let icon = 'info';

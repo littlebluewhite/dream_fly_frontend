@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 每週課表 push screen。mine.jsx ScheduleScreen (177) · app.jsx (89)。
    * 依星期分組固定課表。 */
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { SCHEDULE, WEEK, type ScheduleBlock } from '$lib/mobile/data';

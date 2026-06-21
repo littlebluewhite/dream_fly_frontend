@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* 空狀態。ui.jsx MEmpty (152-162)。slot `action` 取代 React `action` prop。 */
+  /* 空狀態。ported from ui.jsx MEmpty。slot `action` 取代 React `action` prop。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let icon = 'inbox';

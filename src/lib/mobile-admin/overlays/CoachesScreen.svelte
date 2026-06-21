@@ -3,7 +3,7 @@
    * $coaches 卡片（Avatar + 狀態點 + 標籤 + 4 欄統計 + 聯絡/課表）；
    * 新增 → onNew()（未提供時 overlay.sheet('coachForm',{c:null})）；
    * 編輯鉛筆 → overlay.sheet('coachForm',{c})。 */
-  import PushScreen from '$lib/mobile-admin/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
   import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';

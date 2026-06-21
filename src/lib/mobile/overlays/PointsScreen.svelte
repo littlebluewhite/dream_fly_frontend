@@ -3,7 +3,7 @@
    * 深色漸層 hero（自帶返回鍵）→ 兌換好禮 / 點數明細 切換 tab。
    * REWARDS 兌換卡（點數足夠才可兌換，toast 提示）；POINTS_LEDGER 明細（PT_TYPE tones）。
    * Legacy Svelte（無 runes）。 */
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { points, toasts, redeemReward } from '$lib/mobile/stores';

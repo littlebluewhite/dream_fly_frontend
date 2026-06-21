@@ -2,7 +2,7 @@
   /* 成績單與證書 push screen。account.jsx ReportScreen (208) · app.jsx (90)。
    * 本季成績單（評等 / 技巧 / 學習表現 / 教練評語）+ 證書 / 獎狀。
    * 無對應 report 時回退 REPORTS.k1。 */
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';

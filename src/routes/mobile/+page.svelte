@@ -9,7 +9,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import SectionTitle from '$lib/mobile/components/SectionTitle.svelte';
+  import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import HeaderIcon from '$lib/mobile/components/HeaderIcon.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import { CATALOG, ANNOUNCE, MY_COURSES } from '$lib/mobile/data';

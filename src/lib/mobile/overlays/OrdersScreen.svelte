@@ -2,7 +2,7 @@
   /* 我的訂單 push screen。account.jsx OrdersScreen (179)。
    * ScreenHeader（自帶返回）→ ORDERS 清單，狀態 Badge（status[0] tone / status[1] 標籤）。
    * Legacy Svelte（無 runes）。 */
-  import PushScreen from '$lib/mobile/components/PushScreen.svelte';
+  import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
