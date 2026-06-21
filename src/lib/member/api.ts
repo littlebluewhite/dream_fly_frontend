@@ -1,6 +1,6 @@
 /* 會員中心 mock API 接縫。今天回傳 seed;未來把函式體換成 fetch 即可,呼叫端不變。 */
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, Report, Certificate } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, Report, Certificate, ScheduleBlock } from './data';
 
 /** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。 */
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -30,3 +30,7 @@ export interface ReportsData {
 
 export const getReports = (): Promise<ReportsData> =>
   reply({ courses: MY_COURSES, reports: REPORTS, certs: CERTS });
+
+export interface ScheduleData { schedule: ScheduleBlock[]; }
+
+export const getSchedule = (): Promise<ScheduleData> => reply({ schedule: SCHEDULE });
