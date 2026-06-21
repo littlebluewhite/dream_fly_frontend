@@ -4,8 +4,8 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
   import type { MessageRow } from '$lib/mobile-admin/data';
 

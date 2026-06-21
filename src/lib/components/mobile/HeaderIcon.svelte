@@ -1,5 +1,5 @@
 <script lang="ts">
-  /* 圓形 header icon 按鈕，可帶 dot badge。ui.jsx HeaderIcon (71-80). */
+  /* 圓形 header icon 按鈕，可帶數字 badge。ui.jsx HeaderIcon。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let icon: string;

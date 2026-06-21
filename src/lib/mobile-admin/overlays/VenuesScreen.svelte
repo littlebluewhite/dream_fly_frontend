@@ -3,7 +3,7 @@
    * VENUES 卡片：編號方塊 + 名稱/型態/面積/上限 + 狀態 Badge + 器材 Tag +
    * 今日使用列與時段表動作。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';

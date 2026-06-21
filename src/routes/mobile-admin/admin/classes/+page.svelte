@@ -1,8 +1,8 @@
 <script lang="ts">
   /* 管理員 · 課程管理。admin.jsx ClassesScreen (202)。
    * 清單由 $classes store 提供;tap → sheet('class'),新增 → sheet('classForm',{k:null})。 */
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';

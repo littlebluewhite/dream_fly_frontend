@@ -3,8 +3,8 @@
    * 點學員卡 → overlay.sheet('studentSkills',{student})；onBell → overlay.sheet('notif')。 */
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';

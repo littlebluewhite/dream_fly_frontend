@@ -2,8 +2,8 @@
   /* 教練 · 訊息。port coach.jsx CoachMessagesScreen (213-242)。
    * 點訊息 → overlay.push('messageThread',{m})；onBell → overlay.sheet('notif')。 */
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead } from '$lib/mobile-admin/stores';

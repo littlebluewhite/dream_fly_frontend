@@ -3,7 +3,7 @@
    * ScreenHeader（自帶返回）→ ORDERS 清單，狀態 Badge（status[0] tone / status[1] 標籤）。
    * Legacy Svelte（無 runes）。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { ORDERS, fmtNT } from '$lib/mobile/data';

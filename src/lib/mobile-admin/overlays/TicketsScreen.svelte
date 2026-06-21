@@ -3,8 +3,8 @@
    * 營收 hero + TICKETS 卡片：icon 方塊 + 名稱/TICKET_TYPE Badge + 說明 + 售價 +
    * 已售/配額 MiniBar + 銷售明細/編輯。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';

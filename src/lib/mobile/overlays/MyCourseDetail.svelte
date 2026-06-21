@@ -2,8 +2,8 @@
   /* 我的課程 · 課程詳情 push screen。mine.jsx MyCourseDetail (99) · app.jsx (88)。
    * 課程 hero（出席環）+ 動作（請假 / 補課 / 聯絡）+ 技巧熟練度 + 出席紀錄。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';

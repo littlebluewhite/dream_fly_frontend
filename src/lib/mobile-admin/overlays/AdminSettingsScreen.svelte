@@ -2,7 +2,7 @@
   /* 系統設定 push screen。admin2.jsx AdminSettingsScreen (487) + SettingRow (472)。
    * 場館資訊輸入 + 通知/自動化開關（本地狀態）+ 帳號與安全列 + 儲存變更。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';

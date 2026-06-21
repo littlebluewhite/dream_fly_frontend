@@ -4,8 +4,8 @@
    * 新增 → onNew()（未提供時 overlay.sheet('coachForm',{c:null})）；
    * 編輯鉛筆 → overlay.sheet('coachForm',{c})。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';

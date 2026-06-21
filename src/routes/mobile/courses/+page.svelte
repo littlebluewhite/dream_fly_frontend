@@ -4,8 +4,8 @@
    * 課程卡 onOpen → overlay.sheet('course',{course})；onAdd → cart.add + toast。
    * Legacy Svelte（無 runes）、繁體中文文案、mock-only。 */
   import Icon from '$lib/components/ui/Icon.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import { CATALOG } from '$lib/mobile/data';

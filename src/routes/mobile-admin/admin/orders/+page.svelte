@@ -1,8 +1,8 @@
 <script lang="ts">
   /* 管理員 · 訂單與金流。admin.jsx OrdersScreen (287)。
    * 清單為靜態 ORDERS;tap → sheet('order',{o})。 */
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';

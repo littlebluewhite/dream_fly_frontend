@@ -2,7 +2,7 @@
   /* Dashboard hero header（navy→blue，role chip + bell）。ui.jsx HeroHeader (19-50).
    * 原型的 <StatusBar light/> 改成 <div class="m-top-inset"/> spacer。 */
   import Icon from '$lib/components/ui/Icon.svelte';
-  import HeaderIcon from './HeaderIcon.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import type { Profile } from '$lib/mobile-admin/data';
   import type { Role } from '$lib/mobile-admin/nav';
 

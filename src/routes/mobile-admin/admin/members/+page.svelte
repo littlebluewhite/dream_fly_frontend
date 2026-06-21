@@ -1,8 +1,8 @@
 <script lang="ts">
   /* 管理員 · 學員管理。admin.jsx MembersScreen (116)。
    * 清單由 $members store 提供;tap → sheet('member'),新增 → sheet('memberForm',{m:null})。 */
-  import ScreenHeader from '$lib/mobile-admin/components/ScreenHeader.svelte';
-  import HeaderIcon from '$lib/mobile-admin/components/HeaderIcon.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';

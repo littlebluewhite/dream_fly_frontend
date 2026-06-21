@@ -4,7 +4,7 @@
    * notifs store 清單、點擊 → notifs.markRead(id)、全部已讀 → notifs.markAllRead + toast、MEmpty fallback。
    * Legacy Svelte（無 runes）、繁體中文文案、mock-only。 */
   import Icon from '$lib/components/ui/Icon.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
   import { notifs, unread, toasts } from '$lib/mobile/stores';

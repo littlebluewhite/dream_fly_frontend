@@ -1,11 +1,11 @@
 <script lang="ts">
-  /* 白底 screen header（可選返回鍵）。ui.jsx ScreenHeader (19-34)。
+  /* 白底 screen header（可選返回鍵）。ui.jsx ScreenHeader。
    * outer 套 m-top-inset 以清除瀏海 / 動態島。slot `right` 取代 React `right` prop。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let title: string;
   export let sub = '';
-  export let onBack: (() => void) | null = null;
+  export let onBack: (() => void) | undefined = undefined;
   export let border = true;
 </script>
 

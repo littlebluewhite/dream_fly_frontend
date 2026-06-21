@@ -10,7 +10,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
-  import HeaderIcon from '$lib/mobile/components/HeaderIcon.svelte';
+  import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import { CATALOG, ANNOUNCE, MY_COURSES } from '$lib/mobile/data';
   import { overlay, cart, toasts, unread } from '$lib/mobile/stores';

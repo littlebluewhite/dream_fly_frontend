@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 我的課程 tab。mine.jsx MineScreen (23) · app.jsx (80)。
    * 摘要統計 + 本週日程 + 報名課程卡（出席進度 / 下次上課）。 */
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import StatTile from '$lib/mobile/components/StatTile.svelte';
   import Divider from '$lib/mobile/components/Divider.svelte';

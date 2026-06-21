@@ -3,7 +3,7 @@
    * 本季成績單（評等 / 技巧 / 學習表現 / 教練評語）+ 證書 / 獎狀。
    * 無對應 report 時回退 REPORTS.k1。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';

@@ -6,7 +6,7 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
-  import ScreenHeader from '$lib/mobile/components/ScreenHeader.svelte';
+  import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
