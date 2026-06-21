@@ -9,6 +9,7 @@
  * Mock-only, no backend. */
 
 import { writable, derived } from 'svelte/store';
+import { createToasts } from '$lib/stores/toasts';
 import { ME, NOTIFS_SEED, type NotifItem } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
@@ -146,31 +147,8 @@ export function unreadCount(items: { read: boolean }[]): number {
 export const notifs = createNotifs<NotifItem>(NOTIFS_SEED);
 export const unread = derived(notifs, ($n) => unreadCount($n));
 
-/* ---------- Toasts (above the tab bar, 2800ms — app.jsx) ---------- */
-export type ToastTone = 'success' | 'info' | 'warning' | 'error' | 'accent';
-export interface MobileToast {
-	id: number;
-	tone: ToastTone;
-	title: string;
-	body: string;
-}
-export function createToasts() {
-	const { subscribe, update } = writable<MobileToast[]>([]);
-	let seq = 1;
-	return {
-		subscribe,
-		notify(tone: ToastTone, title: string, body = ''): number {
-			const id = seq++;
-			update((t) => [...t, { id, tone, title, body }]);
-			setTimeout(() => update((t) => t.filter((x) => x.id !== id)), 2800);
-			return id;
-		},
-		dismiss(id: number) {
-			update((t) => t.filter((x) => x.id !== id));
-		}
-	};
-}
-export const toasts = createToasts();
+/* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
+export const toasts = createToasts(2800);
 
 /* ---------- Preferences + profile (帳戶 / 設定) ---------- */
 export interface Prefs {

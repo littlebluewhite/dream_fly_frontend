@@ -10,10 +10,10 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto, afterNavigate } from '$app/navigation';
-  import { overlay, session } from '$lib/mobile/stores';
+  import { overlay, session, toasts } from '$lib/mobile/stores';
   import TabBar from '$lib/mobile/components/TabBar.svelte';
   import OverlayHost from '$lib/mobile/OverlayHost.svelte';
-  import ToastStack from '$lib/mobile/components/ToastStack.svelte';
+  import ToastStack from '$lib/components/toast/ToastStackMobile.svelte';
   import '$lib/styles/mobile-frame.css';
 
   onMount(() => {
@@ -41,7 +41,7 @@
         <TabBar />
       {/if}
       <OverlayHost />
-      <ToastStack />
+      <ToastStack {toasts} />
     </div>
   </div>
 </div>
