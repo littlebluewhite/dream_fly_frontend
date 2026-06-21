@@ -3,7 +3,7 @@
    * CONTACT_THREAD 對話泡泡 + 輸入框；送出 push 本地訊息，1.4s 後 push 一則
    * COACH_REPLIES 罐頭回覆（含 typing 動畫）。包進 Sheet（footer=輸入列）。 */
   import { tick } from 'svelte';
-  import Sheet from '$lib/mobile/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { CONTACT_THREAD, COACH_REPLIES, type ThreadMsg, type MyCourse } from '$lib/mobile/data';
 

@@ -2,7 +2,7 @@
   /* 編輯個人資料 sheet。mobile/profile.jsx EditProfileSheet (20-70)。
    * 編輯 profile 欄位 + prefs 通知偏好 → 寫回 stores + toast + close。
    * 編輯的是本地副本 f / p，按儲存才 commit 到 store（取消不影響）。 */
-  import Sheet from '$lib/mobile/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';

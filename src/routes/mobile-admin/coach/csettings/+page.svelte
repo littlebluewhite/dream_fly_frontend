@@ -11,7 +11,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import { overlay, role, switchRole, session, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { PROFILES, COACHES } from '$lib/mobile-admin/data';

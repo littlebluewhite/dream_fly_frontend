@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 班級詳情 sheet。admin.jsx ClassSheet (252)。
    * onEdit fallback → overlay.sheet('classForm',{k})(OverlayHost 未傳 onEdit)。 */
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import LevelBadge from '$lib/mobile-admin/components/LevelBadge.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';

@@ -1,8 +1,7 @@
 <script lang="ts">
-  /* 底部 sheet。ui.jsx Sheet (141-170)。
-   * default slot = 內容；slot `footer` = 底部按鈕列。Escape 關閉；點 scrim 關閉。 */
-  import { onDestroy } from 'svelte';
-  import { browser } from '$app/environment';
+  /* 底部 sheet。
+   * default slot = 內容；slot `footer` = 底部按鈕列。Escape 關閉；點 scrim 關閉。
+   * a11y 比照 Dialog.svelte（svelte-ignore + role/aria/tabindex）。 */
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let open = false;
@@ -17,23 +16,11 @@
   export let footer = true;
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
+    if (open && e.key === 'Escape') onClose();
   }
-
-  let bound = false;
-  $: if (browser) {
-    if (open && !bound) {
-      window.addEventListener('keydown', onKey);
-      bound = true;
-    } else if (!open && bound) {
-      window.removeEventListener('keydown', onKey);
-      bound = false;
-    }
-  }
-  onDestroy(() => {
-    if (browser && bound) window.removeEventListener('keydown', onKey);
-  });
 </script>
+
+<svelte:window on:keydown={onKey} />
 
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

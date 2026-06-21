@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 訂單明細 sheet。admin.jsx OrderSheet (346)。 */
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';

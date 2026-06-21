@@ -2,7 +2,7 @@
   /* 購物車 / 結帳 sheet（3 步驟）。mobile/home.jsx CartSheet (245-337)。
    * (1) 課程明細 + 數量 stepper + 優惠碼 + 點數折抵；(2) 付款方式；(3) SuccessBody。
    * 確認付款 → checkout(ptRedeem, earned) + toast。金額計算抽到 cart-math.ts。 */
-  import Sheet from '$lib/mobile/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';

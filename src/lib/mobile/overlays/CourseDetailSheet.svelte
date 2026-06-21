@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 課程介紹 sheet。mobile/home.jsx CourseDetailSheet (201-242)。
    * 加入購物車 → cart.add + toast，然後 onClose。候補（spots 0）走加入候補名單文案。 */
-  import Sheet from '$lib/mobile/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import LevelBadge from '$lib/mobile/components/LevelBadge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';

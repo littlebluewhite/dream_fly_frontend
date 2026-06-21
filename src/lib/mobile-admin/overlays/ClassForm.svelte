@@ -2,7 +2,7 @@
   /* 課程 編輯 / 新增 sheet。forms.jsx ClassForm (75)。
    * 透過 OverlayHost 掛載：每次 overlay.sheet('classForm',{k}) 都是新實例。
    * 儲存 → onSave(rec,isNew)（未提供時退回 store saveClass），再 onClose()。 */
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Select from '$lib/components/ui/Select.svelte';

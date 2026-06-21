@@ -8,7 +8,7 @@
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { ROSTER, type RosterEntry } from '$lib/mobile-admin/data';
 

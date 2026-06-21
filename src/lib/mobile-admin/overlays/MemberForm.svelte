@@ -3,7 +3,7 @@
    * 透過 OverlayHost 掛載：每次 overlay.sheet('memberForm',{m}) 都是新實例，
    * 故直接以 prop 初始化表單狀態（不需 React 的 useEffect-on-open）。
    * 儲存 → onSave(rec,isNew)（未提供時退回 store saveMember），再 onClose()。 */
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Select from '$lib/components/ui/Select.svelte';

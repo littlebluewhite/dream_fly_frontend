@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 通知中心 sheet（完整 port）。ui.jsx NotifSheet (268-290)。 */
   import Icon from '$lib/components/ui/Icon.svelte';
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import type { AdminNotif } from '$lib/mobile-admin/data';
 
   export let onClose: () => void;

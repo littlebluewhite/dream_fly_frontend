@@ -2,7 +2,7 @@
   /* 學員詳情 sheet。admin.jsx MemberSheet (162)。
    * onEdit 由 host 傳入時用之;OverlayHost 未傳 onEdit,故 fallback 直接
    * overlay.sheet('memberForm',{m})(與 app.jsx onEdit 等價)。 */
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';

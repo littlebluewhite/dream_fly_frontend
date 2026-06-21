@@ -5,7 +5,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import Sheet from '$lib/mobile-admin/components/Sheet.svelte';
+  import Sheet from '$lib/components/mobile/Sheet.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
