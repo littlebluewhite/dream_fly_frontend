@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
+import { tick } from 'svelte';
 import { getNotifications } from '$lib/member/api';
 import { notifications, notificationsHydrated } from '$lib/member/stores';
 import { NOTIFS_SEED } from '$lib/member/data';
+import type { Notification } from '$lib/member/data';
 import Page from './+page.svelte';
 
 vi.mock('$lib/member/api', () => ({ getNotifications: vi.fn() }));
@@ -14,6 +17,12 @@ beforeEach(() => {
   notificationsHydrated.set(false);
   // Re-seed the feed so a prior test's set() doesn't bleed through.
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
+});
+
+afterEach(() => {
+  // Ensure shared store is always restored to seed after each test.
+  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
+  notificationsHydrated.set(false);
 });
 
 describe('member/notifications 頁', () => {
@@ -73,5 +82,34 @@ describe('member/notifications 頁', () => {
 
     // 應呼叫 3 次: 初次載入 + 失敗的 refresh + 重試的 refresh
     expect(vi.mocked(getNotifications)).toHaveBeenCalledTimes(3);
+  });
+
+  it('unmount 後解析的 in-flight fetch 不應覆寫 shared notifications store', async () => {
+    // Arrange: deferred promise so we can control when promise A resolves.
+    let resolveA!: (value: Notification[]) => void;
+    vi.mocked(getNotifications).mockReturnValueOnce(
+      new Promise<Notification[]>((r) => { resolveA = r; })
+    );
+
+    // Mount: load() fires on mount; promise A is pending (phase=loading).
+    const { unmount } = render(Page);
+
+    // Simulate post-remount state: user already marked items read in the store.
+    const sentinel: Notification[] = [
+      { id: 'sentinel', cat: 'system', icon: 'bell', tone: 'info', title: '哨兵', body: '已讀哨兵', time: '剛才', read: true }
+    ];
+    notifications.set(sentinel);
+
+    // Unmount the component (simulates navigating away).
+    unmount();
+
+    // Now the stale promise A resolves with fresh seed data.
+    resolveA(NOTIFS_SEED.map((n) => ({ ...n })));
+    // Flush microtasks so the .then() callback runs.
+    await Promise.resolve();
+    await tick();
+
+    // The shared store must NOT have been clobbered — sentinel must still be there.
+    expect(get(notifications)).toEqual(sentinel);
   });
 });

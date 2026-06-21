@@ -4,8 +4,11 @@
    * Notifications + NotifSkeleton (client/views2.jsx). The list now lives in the
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
+
+  let alive = true;
+  onDestroy(() => { alive = false; });
   import { Card, FilterChip, Button, Icon } from '$lib/components/ui';
   import Skeleton from '$lib/member/components/Skeleton.svelte';
   import SkelCard from '$lib/member/components/SkelCard.svelte';
@@ -27,12 +30,8 @@
       return;
     }
     getNotifications()
-      .then((d) => {
-        notifications.set(d);
-        notificationsHydrated.set(true);
-        phase = 'ready';
-      })
-      .catch(() => (phase = 'error'));
+      .then((d) => { if (!alive) return; notifications.set(d); notificationsHydrated.set(true); phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
   }
   onMount(load);
 
@@ -52,12 +51,8 @@
   function refresh() {
     phase = 'loading';
     getNotifications()
-      .then((d) => {
-        notifications.set(d);
-        notificationsHydrated.set(true);
-        phase = 'ready';
-      })
-      .catch(() => (phase = 'error'));
+      .then((d) => { if (!alive) return; notifications.set(d); notificationsHydrated.set(true); phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
   }
 </script>
 
