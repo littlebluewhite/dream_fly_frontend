@@ -2,29 +2,50 @@
   /* 課程介紹 (Courses) — catalog browse with tab + category filters, search,
    * add-to-cart / waitlist, and a course-detail dialog. Ported from the
    * prototype's Courses + CourseDetail (client/views.jsx). */
+  import { onMount } from 'svelte';
   import { Tabs, FilterChip, Card, Badge, Button, Icon } from '$lib/components/ui';
   import EmptyState from '$lib/member/components/EmptyState.svelte';
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
-  import { CATALOG, LEVEL_TONE, type CatalogCourse } from '$lib/member/data';
+  import Skeleton from '$lib/member/components/Skeleton.svelte';
+  import SkelCard from '$lib/member/components/SkelCard.svelte';
+  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { LEVEL_TONE, type CatalogCourse } from '$lib/member/data';
+  import { getCourses, type CoursesData } from '$lib/member/api';
   import { cart, search, toasts } from '$lib/member/stores';
 
   let tab = 'all';
   let filter = '全部';
   let detail: CatalogCourse | null = null;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: CoursesData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getCourses()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   const cats = ['全部', '幼兒體操', '兒童基礎', '競技啦啦隊', '競技體操', '成人體操', '跑酷'];
-  const tabs = [
-    { value: 'all', label: '全部課程', count: CATALOG.length },
-    { value: 'hot', label: '熱門', count: CATALOG.filter((c) => c.hot).length }
-  ];
 
-  $: list = CATALOG.filter((c) => filter === '全部' || c.cat === filter)
-    .filter((c) => tab === 'all' || c.hot)
-    .filter(
-      (c) =>
-        !$search ||
-        (c.name + c.coach + c.cat).toLowerCase().includes($search.toLowerCase())
-    );
+  $: tabs = data
+    ? [
+        { value: 'all', label: '全部課程', count: data.catalog.length },
+        { value: 'hot', label: '熱門', count: data.catalog.filter((c) => c.hot).length }
+      ]
+    : [];
+
+  $: list = data
+    ? data.catalog
+        .filter((c) => filter === '全部' || c.cat === filter)
+        .filter((c) => tab === 'all' || c.hot)
+        .filter(
+          (c) =>
+            !$search ||
+            (c.name + c.coach + c.cat).toLowerCase().includes($search.toLowerCase())
+        )
+    : [];
 
   function addToCart(c: CatalogCourse) {
     const r = cart.add(c);
@@ -35,80 +56,98 @@
   }
 </script>
 
-<div class="df-view">
-  <Tabs {tabs} bind:value={tab} style="margin-bottom:18px" />
-  <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
-    {#each cats as f (f)}
-      <FilterChip selected={filter === f} on:click={() => (filter = f)}>{f}</FilterChip>
-    {/each}
-  </div>
+{#if phase === 'ready' && data}
+  <div class="df-view">
+    <Tabs {tabs} bind:value={tab} style="margin-bottom:18px" />
+    <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
+      {#each cats as f (f)}
+        <FilterChip selected={filter === f} on:click={() => (filter = f)}>{f}</FilterChip>
+      {/each}
+    </div>
 
-  {#if list.length === 0}
-    <Card>
-      <EmptyState
-        icon="search-x"
-        title="找不到符合的課程"
-        body={$search
-          ? `沒有與「${$search}」相符的課程，試試其他關鍵字或切換分類。`
-          : '這個分類目前沒有開放中的課程,看看其他分類吧。'}
-      />
-    </Card>
-  {/if}
-
-  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
-    {#each list as c (c.id)}
-      {@const full = c.spots === 0}
-      <Card padding={0} hoverable style="overflow:hidden; display:flex; flex-direction:column">
-        <button
-          type="button"
-          class="course-head"
-          on:click={() => (detail = c)}
-          aria-label={`查看 ${c.name} 詳情`}
-        >
-          <div class="course-icon"><Icon name={c.icon} size={30} color="var(--df-primary)" /></div>
-          {#if c.hot}
-            <span style="position:absolute; top:12px; right:12px"><Badge tone="accent" solid>熱門</Badge></span>
-          {/if}
-          {#if full}
-            <span style="position:absolute; top:12px; left:12px"><Badge tone="warning">候補</Badge></span>
-          {/if}
-        </button>
-        <div style="padding:18px; flex:1; display:flex; flex-direction:column">
-          <div style="display:flex; gap:6px; margin-bottom:10px">
-            <Badge tone={LEVEL_TONE[c.level]}>{c.level}</Badge>
-            <Badge tone="neutral">{c.age}</Badge>
-          </div>
-          <h3 style="margin:0 0 8px">
-            <button type="button" class="course-title" on:click={() => (detail = c)}>{c.name}</button>
-          </h3>
-          <div
-            style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--df-text-light); margin-bottom:16px"
-          >
-            <Icon name="calendar-days" size={15} color="var(--df-text-muted)" />{c.days}
-          </div>
-          <div
-            style="margin-top:auto; display:flex; align-items:center; justify-content:space-between"
-          >
-            <div style="display:flex; align-items:baseline; gap:3px">
-              <span style="font-size:13px; color:var(--df-text-light)">NT$</span>
-              <span
-                style="font-family:var(--df-font-heading); font-size:22px; font-weight:800; color:var(--df-ink)"
-                >{c.price.toLocaleString()}</span
-              >
-              <span style="font-size:13px; color:var(--df-text-light)">/季</span>
-            </div>
-            <Button size="sm" variant={full ? 'secondary' : 'primary'} on:click={() => addToCart(c)}>
-              <Icon name={full ? 'clock' : 'plus'} size={15} />
-              {full ? '候補' : '加入'}
-            </Button>
-          </div>
-        </div>
+    {#if list.length === 0}
+      <Card>
+        <EmptyState
+          icon="search-x"
+          title="找不到符合的課程"
+          body={$search
+            ? `沒有與「${$search}」相符的課程，試試其他關鍵字或切換分類。`
+            : '這個分類目前沒有開放中的課程,看看其他分類吧。'}
+        />
       </Card>
-    {/each}
-  </div>
+    {/if}
 
-  <CourseDetailDialog course={detail} onClose={() => (detail = null)} onAdd={addToCart} />
-</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
+      {#each list as c (c.id)}
+        {@const full = c.spots === 0}
+        <Card padding={0} hoverable style="overflow:hidden; display:flex; flex-direction:column">
+          <button
+            type="button"
+            class="course-head"
+            on:click={() => (detail = c)}
+            aria-label={`查看 ${c.name} 詳情`}
+          >
+            <div class="course-icon"><Icon name={c.icon} size={30} color="var(--df-primary)" /></div>
+            {#if c.hot}
+              <span style="position:absolute; top:12px; right:12px"><Badge tone="accent" solid>熱門</Badge></span>
+            {/if}
+            {#if full}
+              <span style="position:absolute; top:12px; left:12px"><Badge tone="warning">候補</Badge></span>
+            {/if}
+          </button>
+          <div style="padding:18px; flex:1; display:flex; flex-direction:column">
+            <div style="display:flex; gap:6px; margin-bottom:10px">
+              <Badge tone={LEVEL_TONE[c.level]}>{c.level}</Badge>
+              <Badge tone="neutral">{c.age}</Badge>
+            </div>
+            <h3 style="margin:0 0 8px">
+              <button type="button" class="course-title" on:click={() => (detail = c)}>{c.name}</button>
+            </h3>
+            <div
+              style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--df-text-light); margin-bottom:16px"
+            >
+              <Icon name="calendar-days" size={15} color="var(--df-text-muted)" />{c.days}
+            </div>
+            <div
+              style="margin-top:auto; display:flex; align-items:center; justify-content:space-between"
+            >
+              <div style="display:flex; align-items:baseline; gap:3px">
+                <span style="font-size:13px; color:var(--df-text-light)">NT$</span>
+                <span
+                  style="font-family:var(--df-font-heading); font-size:22px; font-weight:800; color:var(--df-ink)"
+                  >{c.price.toLocaleString()}</span
+                >
+                <span style="font-size:13px; color:var(--df-text-light)">/季</span>
+              </div>
+              <Button size="sm" variant={full ? 'secondary' : 'primary'} on:click={() => addToCart(c)}>
+                <Icon name={full ? 'clock' : 'plus'} size={15} />
+                {full ? '候補' : '加入'}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      {/each}
+    </div>
+
+    <CourseDetailDialog course={detail} onClose={() => (detail = null)} onAdd={addToCart} />
+  </div>
+{:else if phase === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else}
+  <div class="df-view" data-testid="courses-skeleton">
+    <Skeleton w={320} h={36} r={9} style="margin-bottom:18px" />
+    <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
+      {#each [0, 1, 2, 3] as i (i)}
+        <Skeleton w={72} h={32} r={16} />
+      {/each}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+{/if}
 
 <style>
   .course-head {
