@@ -54,6 +54,7 @@
     getNotifications()
       .then((d) => {
         notifications.set(d);
+        notificationsHydrated.set(true);
         phase = 'ready';
       })
       .catch(() => (phase = 'error'));
@@ -87,7 +88,7 @@
 {:else if phase === 'error'}
   <div class="df-view">
     <Card padding={0}>
-      <ErrorState onRetry={load} />
+      <ErrorState onRetry={refresh} />
     </Card>
   </div>
 {:else}

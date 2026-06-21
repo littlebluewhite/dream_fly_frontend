@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import { getNotifications } from '$lib/member/api';
 import { notifications, notificationsHydrated } from '$lib/member/stores';
 import { NOTIFS_SEED } from '$lib/member/data';
@@ -51,5 +51,27 @@ describe('member/notifications 頁', () => {
     await screen.findByText('明日課程提醒');
     const { get } = await import('svelte/store');
     expect(get(notificationsHydrated)).toBe(true);
+  });
+
+  it('refresh 失敗後重試必須真正重新 fetch 而非被 hydration 守衛短路', async () => {
+    // Step 1: 初次載入成功 → hydration 守衛設為 true
+    vi.mocked(getNotifications).mockResolvedValueOnce(NOTIFS_SEED.map((n) => ({ ...n })));
+    render(Page);
+    await screen.findByText('明日課程提醒');
+
+    // Step 2: 使用者點「重新整理」，但這次 fetch 失敗
+    vi.mocked(getNotifications).mockRejectedValueOnce(new Error('network error'));
+    await fireEvent.click(screen.getByRole('button', { name: /重新整理/ }));
+    await screen.findByText('載入失敗');
+
+    // Step 3: 使用者點 ErrorState 的「重新載入」重試
+    // Bug: onRetry={load} 被 hydration 守衛短路，不會再呼叫 getNotifications
+    // Fix: onRetry={refresh} 確保一定重新 fetch
+    vi.mocked(getNotifications).mockResolvedValueOnce(NOTIFS_SEED.map((n) => ({ ...n })));
+    await fireEvent.click(screen.getByRole('button', { name: /重新載入/ }));
+    await screen.findByText('明日課程提醒');
+
+    // 應呼叫 3 次: 初次載入 + 失敗的 refresh + 重試的 refresh
+    expect(vi.mocked(getNotifications)).toHaveBeenCalledTimes(3);
   });
 });
