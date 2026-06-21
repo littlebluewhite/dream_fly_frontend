@@ -1,10 +1,12 @@
 /* Dream Fly — 報表分析 seed (single source of truth)
- * Data and types copied verbatim from src/lib/admin/data.ts.
- * Excludes the report symbols whose values diverge between admin and mobile
- * (kept per-surface, NOT single-sourced): REPORT_KPIS/ReportKpi,
- * REVENUE_TREND/TrendBar, REVENUE_BREAKDOWN/RevenueRow, REVENUE_TOTAL,
- * INCOME_SOURCES/IncomeSource, COACH_PERF/CoachPerf (NT$ spacing / label format
- * diverges). (TODAY is a schedule, not a report — it was never part of this module.) */
+ * Data and types copied verbatim from src/lib/admin/data.ts, EXCEPT INCOME_SOURCES
+ * and COACH_PERF: those two diverged ONLY by NT$ spacing (admin 'NT$ 168K' vs mobile
+ * 'NT$168K'). They are unified here to the NO-SPACE form — the convention fmtNT()
+ * produces and the format test asserts — so admin's display now matches mobile + the
+ * formatter (an intentional, user-approved display change for admin).
+ * Still excluded (values diverge by more than spacing; kept per-surface): REPORT_KPIS/
+ * ReportKpi, REVENUE_TREND/TrendBar, REVENUE_BREAKDOWN/RevenueRow, REVENUE_TOTAL.
+ * (TODAY is a schedule, not a report — it was never part of this module.) */
 
 /** label + pct + colour — shared by the category / age / payment splits. */
 export interface PctSlice {
@@ -134,4 +136,40 @@ export const TIER_DIST: CountBar[] = [
 	{ label: '銀卡', count: 13, color: '#94A3B8' },
 	{ label: '銅卡', count: 16, color: '#B45309' },
 	{ label: '一般', count: 10, color: '#64748B' }
+];
+
+/* INCOME_SOURCES / COACH_PERF: previously per-surface (admin used 'NT$ ' with a space,
+ * mobile 'NT$' without) — values otherwise identical. Unified to the no-space form. */
+export interface IncomeSource {
+	label: string;
+	amount: string;
+	pct: number;
+	color: string;
+}
+
+export const INCOME_SOURCES: IncomeSource[] = [
+	{ label: '課程學費', amount: 'NT$2.61M', pct: 58, color: 'var(--df-primary)' },
+	{ label: '票券銷售', amount: 'NT$992K', pct: 22, color: '#10B981' },
+	{ label: '裝備販售', amount: 'NT$541K', pct: 12, color: 'var(--df-warning)' },
+	{ label: '場地租借', amount: 'NT$361K', pct: 8, color: '#8B5CF6' }
+];
+
+export interface CoachPerf {
+	name: string;
+	initial: string;
+	color: string;
+	students: number;
+	revenue: string;
+	revPct: number;
+	att: number;
+}
+
+export const COACH_PERF: CoachPerf[] = [
+	{ name: '林雅婷', initial: '林', color: '#0066CC', students: 86, revenue: 'NT$168K', revPct: 100, att: 96 },
+	{ name: '陳冠宇', initial: '陳', color: '#0EA5E9', students: 64, revenue: 'NT$121K', revPct: 72, att: 92 },
+	{ name: '蘇建宏', initial: '蘇', color: '#14B8A6', students: 53, revenue: 'NT$98K', revPct: 58, att: 89 },
+	{ name: '黃詩涵', initial: '黃', color: '#10B981', students: 48, revenue: 'NT$86K', revPct: 51, att: 95 },
+	{ name: '周曉彤', initial: '周', color: '#EC4899', students: 42, revenue: 'NT$72K', revPct: 43, att: 93 },
+	{ name: '王思齊', initial: '王', color: '#F59E0B', students: 39, revenue: 'NT$64K', revPct: 38, att: 88 },
+	{ name: '張育誠', initial: '張', color: '#8B5CF6', students: 31, revenue: 'NT$48K', revPct: 29, att: 90 }
 ];

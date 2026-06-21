@@ -35,7 +35,9 @@ export {
 	PAYMENT_SPLIT,
 	FUNNEL,
 	WEEKDAY_LOAD,
-	TIER_DIST
+	TIER_DIST,
+	INCOME_SOURCES,
+	COACH_PERF
 } from '$lib/domain/reports';
 // `Split` was mobile's name for the percentage-split row type on `main` — preserve it as an alias.
 export type { PctSlice as Split } from '$lib/domain/reports';
@@ -307,23 +309,6 @@ export const REVENUE_TREND: { m: string; h: number; peak?: boolean }[] = [
 	{ m: '1', h: 102 }, { m: '2', h: 112 }, { m: '3', h: 107 }, { m: '4', h: 121 },
 	{ m: '5', h: 128 }, { m: '6', h: 138 }, { m: '7', h: 133 }, { m: '8', h: 144 },
 	{ m: '9', h: 151 }, { m: '10', h: 160, peak: true }, { m: '11', h: 148 }, { m: '12', h: 156 }
-];
-export const INCOME_SOURCES: { label: string; amount: string; pct: number; color: string }[] = [
-	{ label: '課程學費', amount: 'NT$2.61M', pct: 58, color: 'var(--df-primary)' },
-	{ label: '票券銷售', amount: 'NT$992K', pct: 22, color: '#10B981' },
-	{ label: '裝備販售', amount: 'NT$541K', pct: 12, color: 'var(--df-warning)' },
-	{ label: '場地租借', amount: 'NT$361K', pct: 8, color: '#8B5CF6' }
-];
-
-/* per-coach performance */
-export const COACH_PERF: { name: string; initial: string; color: string; students: number; revenue: string; revPct: number; att: number }[] = [
-	{ name: '林雅婷', initial: '林', color: '#0066CC', students: 86, revenue: 'NT$168K', revPct: 100, att: 96 },
-	{ name: '陳冠宇', initial: '陳', color: '#0EA5E9', students: 64, revenue: 'NT$121K', revPct: 72, att: 92 },
-	{ name: '蘇建宏', initial: '蘇', color: '#14B8A6', students: 53, revenue: 'NT$98K', revPct: 58, att: 89 },
-	{ name: '黃詩涵', initial: '黃', color: '#10B981', students: 48, revenue: 'NT$86K', revPct: 51, att: 95 },
-	{ name: '周曉彤', initial: '周', color: '#EC4899', students: 42, revenue: 'NT$72K', revPct: 43, att: 93 },
-	{ name: '王思齊', initial: '王', color: '#F59E0B', students: 39, revenue: 'NT$64K', revPct: 38, att: 88 },
-	{ name: '張育誠', initial: '張', color: '#8B5CF6', students: 31, revenue: 'NT$48K', revPct: 29, att: 90 }
 ];
 
 /* revenue-source drill-down */

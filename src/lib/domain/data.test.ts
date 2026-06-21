@@ -10,7 +10,8 @@ import { TICKETS } from './tickets';
 import { ACTIVITY } from './activity';
 import {
 	CATEGORY_SPLIT, TOP_COURSES, VENUE_USAGE,
-	ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE, PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST
+	ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE, PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST,
+	INCOME_SOURCES, COACH_PERF
 } from './reports';
 
 /* ── row-count canaries ── */
@@ -130,6 +131,8 @@ describe('new dataset row counts', () => {
 	it('FUNNEL has 4 rows', () => expect(FUNNEL).toHaveLength(4));
 	it('WEEKDAY_LOAD has 7 rows', () => expect(WEEKDAY_LOAD).toHaveLength(7));
 	it('TIER_DIST has 4 rows', () => expect(TIER_DIST).toHaveLength(4));
+	it('INCOME_SOURCES has 4 rows', () => expect(INCOME_SOURCES).toHaveLength(4));
+	it('COACH_PERF has 7 rows', () => expect(COACH_PERF).toHaveLength(7));
 });
 
 /* ── new dataset id uniqueness ── */
@@ -162,7 +165,7 @@ describe('new datasets non-empty', () => {
 	it('all new arrays are non-empty', () => {
 		for (const arr of [VENUES, TICKETS, ACTIVITY, CATEGORY_SPLIT, TOP_COURSES,
 			VENUE_USAGE, ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE,
-			PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST]) {
+			PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST, INCOME_SOURCES, COACH_PERF]) {
 			expect(arr.length).toBeGreaterThan(0);
 		}
 	});

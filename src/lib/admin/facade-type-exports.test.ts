@@ -21,6 +21,8 @@ import {
 	PAYMENT_SPLIT,
 	FUNNEL,
 	WEEKDAY_LOAD,
+	INCOME_SOURCES,
+	COACH_PERF,
 	type PctSlice,
 	type TopCourse,
 	type VenueUsage,
@@ -28,7 +30,9 @@ import {
 	type RetentionBar,
 	type CampusRevenue,
 	type FunnelStage,
-	type WeekdayLoad
+	type WeekdayLoad,
+	type IncomeSource,
+	type CoachPerf
 } from '$lib/admin/data';
 import { CATEGORY_SPLIT as M_CATEGORY_SPLIT, type Split } from '$lib/mobile-admin/data';
 
@@ -45,7 +49,9 @@ describe('ops facades preserve report row TYPE exports (zero-API-change guard)',
 		const i: PctSlice = PAYMENT_SPLIT[0];
 		const j: FunnelStage = FUNNEL[0];
 		const k: WeekdayLoad = WEEKDAY_LOAD[0];
-		expect([a, b, c, d, e, f, g, h, i, j, k].every((x) => x != null)).toBe(true);
+		const l: IncomeSource = INCOME_SOURCES[0];
+		const m: CoachPerf = COACH_PERF[0];
+		expect([a, b, c, d, e, f, g, h, i, j, k, l, m].every((x) => x != null)).toBe(true);
 	});
 
 	it('mobile re-exports the `Split` percentage-split type', () => {
