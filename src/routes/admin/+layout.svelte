@@ -6,7 +6,8 @@
   import { page } from '$app/stores';
   import Sidebar from '$lib/admin/components/Sidebar.svelte';
   import Topbar from '$lib/admin/components/Topbar.svelte';
-  import ToastStack from '$lib/admin/components/ToastStack.svelte';
+  import ToastStack from '$lib/components/toast/ToastStack.svelte';
+  import { toasts } from '$lib/admin/stores';
   import '$lib/admin/admin.css';
 
   const TITLES: Record<string, [string, string]> = {
@@ -45,7 +46,7 @@
     <Topbar {title} {sub} />
     <div class="content df-view df-scroll"><slot /></div>
   </div>
-  <ToastStack />
+  <ToastStack {toasts} />
 </div>
 
 <style>
