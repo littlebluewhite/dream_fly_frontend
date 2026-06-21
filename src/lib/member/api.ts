@@ -1,9 +1,12 @@
 /* 會員中心 mock API 接縫。今天回傳 seed;未來把函式體換成 fetch 即可,呼叫端不變。 */
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, Report, Certificate, ScheduleBlock } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, SCHEDULE } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock } from './data';
 
 /** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。 */
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
+
+/** 「我的報名課程」單一內部存取點;未來 fetch 只改此處。 */
+const myCourses = (): EnrolledCourse[] => MY_COURSES;
 
 export interface DashboardData {
   me: Member;
@@ -29,8 +32,15 @@ export interface ReportsData {
 }
 
 export const getReports = (): Promise<ReportsData> =>
-  reply({ courses: MY_COURSES, reports: REPORTS, certs: CERTS });
+  reply({ courses: myCourses(), reports: REPORTS, certs: CERTS });
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 
 export const getSchedule = (): Promise<ScheduleData> => reply({ schedule: SCHEDULE });
+
+export interface MineData {
+  courses: EnrolledCourse[];
+  attendance: AttRecord[];
+}
+
+export const getMine = (): Promise<MineData> => reply({ courses: myCourses(), attendance: ATT_HISTORY });
