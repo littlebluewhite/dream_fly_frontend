@@ -180,4 +180,15 @@ describe('chargeableLines', () => {
     expect(result).toHaveLength(2);
     expect(result.map((c) => c.id)).toEqual([1, 1002]);
   });
+
+  it('已持有 pass + 新課程 → 只計課程費用與回饋點（5%×4800=240），pass 視為 no-op', () => {
+    // 混合車：id 1001 pass 已持有 → 被過濾；課程 id 1 price 4800 照計。
+    const cart: CartItem[] = [makePass(1001, 3000), makeCourse(1, 4800)];
+    const result = commitCheckout(cart, ctx({ ownedSubs: [{ id: 1001 }] }));
+    expect(result.subtotal).toBe(4800);           // 只算課程
+    expect(result.earned).toBe(240);               // 5% × 4800
+    expect(result.newSubscriptions).toHaveLength(0); // pass 已持有，不再加訂閱
+    expect(result.hasCourse).toBe(true);
+    expect(result.hasPass).toBe(false);            // 已持有的 pass 被排除後無 pass 行
+  });
 });

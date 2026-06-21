@@ -75,47 +75,7 @@ describe('CheckoutDialog — pure-pass checkout creates a Subscription (使用�
 		expect(get(points)).toBe(ME.points + 225);
 	});
 
-	it('does not double-subscribe a pass whose id is already in subscriptions', async () => {
-		subscriptions.set([{ id: passId(3), name: '競技啦啦隊月費', since: '2026/01/01', price: 4500 }]);
-		cart.addItem(PASS);
-		checkoutOpen.set(true);
-		const { getByText } = render(CheckoutDialog);
 
-		await payThrough(getByText);
-
-		const subs = get(subscriptions);
-		expect(subs).toHaveLength(1); // unchanged — no duplicate
-		expect(subs[0].since).toBe('2026/01/01'); // original entry untouched
-	});
-
-	it('does not charge or award points for an already-subscribed pass left in the cart (no paid no-op)', async () => {
-		// Stale state: the member already holds pass id 3, yet it lingers in the cart.
-		subscriptions.set([{ id: passId(3), name: '競技啦啦隊月費', since: '2026/01/01', price: 4500 }]);
-		cart.addItem(PASS);
-		checkoutOpen.set(true);
-		const { getByText } = render(CheckoutDialog);
-
-		await payThrough(getByText);
-
-		// The only line was an entitlement the member already owns → nothing billable.
-		expect(get(points)).toBe(ME.points); // no 5%-of-4500 reward for a no-op
-		expect(get(subscriptions)).toHaveLength(1); // no duplicate entitlement
-		expect(get(subscriptions)[0].since).toBe('2026/01/01');
-	});
-
-	it('charges only the chargeable lines when a subscribed pass sits beside a new course', async () => {
-		subscriptions.set([{ id: passId(3), name: '競技啦啦隊月費', since: '2026/01/01', price: 4500 }]);
-		cart.addItem(PASS); // already held → excluded from the charge
-		cart.addItem(COURSE); // new course → charged
-		checkoutOpen.set(true);
-		const { getByText } = render(CheckoutDialog);
-
-		await payThrough(getByText);
-
-		// Points reflect the course only (5% of 4800 = 240), not the stale pass.
-		expect(get(points)).toBe(ME.points + 240);
-		expect(get(subscriptions)).toHaveLength(1); // pass already held; course makes none
-	});
 });
 
 describe('CheckoutDialog — course checkout stays a mock (points only, 報名 copy)', () => {
