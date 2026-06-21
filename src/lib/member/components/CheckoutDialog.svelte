@@ -11,9 +11,10 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from './EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, pointsLedger, subscriptions, checkoutOpen, toasts } from '$lib/member/stores';
-  import { COUPONS, type LedgerEntry, type Subscription } from '$lib/member/data';
+  import { cart, points, subscriptions, checkoutOpen, toasts, applyOrder } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';
+  import { commitCheckout, chargeableLines } from '$lib/member/checkout';
+  import { checkoutMath, lookupCoupon } from '$lib/checkout-math';
 
   let step = 0;
   let code = '';
@@ -40,28 +41,15 @@
   }
 
   $: items = $cart;
-  // A pass the member already holds is a no-op at checkout (confirmPay dedups it),
-  // so it must not be charged or earn points. Exclude already-subscribed passes
-  // from the transacted set that drives every total.
-  $: subscribedIds = new Set($subscriptions.map((s) => s.id));
-  $: chargeable = items.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id)));
-  $: subtotal = chargeable.reduce((s, c) => s + c.price * c.qty, 0);
-  $: couponOff = coupon ? Math.min(coupon.off, subtotal) : 0;
-  $: afterCoupon = subtotal - couponOff;
-  $: ptRedeem = usePoints ? Math.min($points, afterCoupon) : 0;
-  $: total = Math.max(0, afterCoupon - ptRedeem);
-  $: earned = Math.round(total * 0.05);
+  // chargeableLines + checkoutMath：顯示與 commit 同源，避免計算漂移。
+  $: chargeable = chargeableLines($cart, $subscriptions);
+  $: m = checkoutMath(chargeable, coupon, $points, usePoints);
 
   function applyCode() {
-    const key = code.trim().toUpperCase();
-    if (!key) return;
-    if (COUPONS[key]) {
-      coupon = { code: key, off: COUPONS[key] };
-      codeErr = '';
-    } else {
-      coupon = null;
-      codeErr = '優惠碼無效或已過期';
-    }
+    if (!code.trim()) return;                    // 保留空守衛：空輸入按「套用」不顯示錯誤（決策 #4）
+    const hit = lookupCoupon(code);              // lookupCoupon 內部已 trim+toUpperCase，回 {code,off}|null
+    if (hit) { coupon = hit; codeErr = ''; }
+    else { coupon = null; codeErr = '優惠碼無效或已過期'; }
   }
   function close() {
     checkoutOpen.set(false);
@@ -73,61 +61,16 @@
   // Commit the order when the user confirms payment (step 1 → 2), NOT on the
   // final 完成 button — otherwise closing the success step via X/overlay/Escape
   // would leave the cart and points uncommitted while the UI says 已付款.
-  // Snapshot the amounts first; clearing the cart resets the reactive totals.
   function confirmPay() {
-    // Snapshot the cart BEFORE clearing — passes become persisted 使用權 and the
-    // cart composition drives the completion copy. `chargeable` already drops
-    // passes the member already owns, so totals, points and new subscriptions all
-    // derive from the same transacted set (no charging a no-op).
-    const ordered = chargeable;
-    const hasCourse = ordered.some((i) => i.type === 'course');
-    const hasPass = ordered.some((i) => i.type === 'pass');
-    paid = { total, earned, ptRedeem, hasCourse, hasPass };
-    points.update((p) => p - paid.ptRedeem + paid.earned);
-    // A pass checkout grants a Subscription / 使用權 (persisted). Skip any pass
-    // already subscribed so re-checkout never double-subscribes.
-    subscriptions.update((subs) => {
-      const seen = new Set(subs.map((s) => s.id));
-      const added: Subscription[] = [];
-      for (const c of ordered) {
-        if (c.type === 'pass' && !seen.has(c.id)) {
-          seen.add(c.id);
-          added.push({ id: c.id, name: c.name, since: new Date().toLocaleDateString('zh-TW'), price: c.price });
-        }
-      }
-      return [...subs, ...added];
-    });
-    // Mirror the point movements into the ledger so the Points page history and
-    // monthly totals stay consistent with the new balance. The earn-entry label
-    // branches: a pure-pass order is 訂閱, anything with a course stays 報名.
-    pointsLedger.update((p) => {
-      const entries: LedgerEntry[] = [];
-      const earnDesc = paid.hasCourse ? '報名回饋點數' : '訂閱回饋點數';
-      if (paid.earned > 0)
-        entries.push({ id: 'co-earn-' + p.length, date: '2026/06/15', desc: earnDesc, type: 'earn', delta: paid.earned });
-      if (paid.ptRedeem > 0) {
-        const redeemDesc = paid.hasCourse ? '結帳折抵 · 課程報名' : '結帳折抵 · 方案訂閱';
-        entries.push({ id: 'co-redeem-' + p.length, date: '2026/06/15', desc: redeemDesc, type: 'redeem', delta: -paid.ptRedeem });
-      }
-      return [...entries, ...p];
-    });
-    cart.clear();
-    const redeemNote = paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '';
-    if (paid.hasCourse) {
-      // 報名 language for any order containing a course (append a 方案 note when mixed).
-      toasts.notify(
-        'success',
-        '報名完成',
-        '課程已加入你的日程' + (paid.hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。'
-      );
-    } else {
-      // Pure-pass order → 訂閱 / 使用權 language (never 報名 / 日程).
-      toasts.notify(
-        'success',
-        '訂閱開通',
-        '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。'
-      );
-    }
+    // 本地補零 today（勿用 toISOString=UTC，台灣 UTC+8 近午夜會 off-by-one）；在函式內算，勿 module-scope。
+    const n = new Date();
+    const today = `${n.getFullYear()}/${String(n.getMonth() + 1).padStart(2, '0')}/${String(n.getDate()).padStart(2, '0')}`;
+    const r = commitCheckout($cart, { points: $points, usePoints, coupon, ownedSubs: $subscriptions, today });
+    paid = { total: r.total, earned: r.earned, ptRedeem: r.ptRedeem, hasCourse: r.hasCourse, hasPass: r.hasPass };
+    applyOrder(r);
+    const redeemNote = r.ptRedeem > 0 ? '，使用 ' + r.ptRedeem + ' 點折抵' : '';
+    if (r.hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (r.hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + r.earned + ' 點回饋。');
+    else             toasts.notify('success', '訂閱開通', '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + r.earned + ' 點回饋。');
     step = 2;
   }
   function onKey(e: KeyboardEvent) {
@@ -185,7 +128,7 @@
                 </div>
                 {#if coupon}
                   <div class="coupon-ok">
-                    <Icon name="badge-check" size={15} color="var(--df-success)" /> 已套用 {coupon.code}，折抵 {fmtNT(couponOff)}
+                    <Icon name="badge-check" size={15} color="var(--df-success)" /> 已套用 {coupon.code}，折抵 {fmtNT(m.couponOff)}
                     <button class="link" on:click={() => { coupon = null; code = ''; }}>移除</button>
                   </div>
                 {/if}
@@ -195,7 +138,7 @@
                   <Icon name="star" size={18} color="var(--df-accent-dark)" />
                   <div>
                     <div class="pr-title">使用會員點數折抵</div>
-                    <div class="pr-sub">可用 {$points.toLocaleString()} 點{usePoints && ptRedeem > 0 ? '，此單折抵 ' + fmtNT(ptRedeem) : '（1 點 = NT$1）'}</div>
+                    <div class="pr-sub">可用 {$points.toLocaleString()} 點{usePoints && m.ptRedeem > 0 ? '，此單折抵 ' + fmtNT(m.ptRedeem) : '（1 點 = NT$1）'}</div>
                   </div>
                 </div>
                 <Switch bind:checked={usePoints} />
@@ -211,9 +154,9 @@
               <Input label="安全碼" placeholder="CVC" style="flex:1" />
             </div>
             <div class="summary">
-              <div class="sum-row"><span>小計</span><span class="mono">{fmtNT(subtotal)}</span></div>
-              {#if couponOff > 0}<div class="sum-row ok"><span>優惠碼 {coupon?.code}</span><span class="mono">−{fmtNT(couponOff)}</span></div>{/if}
-              {#if ptRedeem > 0}<div class="sum-row ok"><span>點數折抵</span><span class="mono">−{fmtNT(ptRedeem)}</span></div>{/if}
+              <div class="sum-row"><span>小計</span><span class="mono">{fmtNT(m.subtotal)}</span></div>
+              {#if m.couponOff > 0}<div class="sum-row ok"><span>優惠碼 {coupon?.code}</span><span class="mono">−{fmtNT(m.couponOff)}</span></div>{/if}
+              {#if m.ptRedeem > 0}<div class="sum-row ok"><span>點數折抵</span><span class="mono">−{fmtNT(m.ptRedeem)}</span></div>{/if}
             </div>
             <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
           </div>
@@ -227,7 +170,7 @@
       <div class="foot">
         <div class="total">
           {step === 2 ? '已付款' : '合計'}
-          <span class="total-n">{fmtNT(step === 2 ? paid.total : total)}</span>
+          <span class="total-n">{fmtNT(step === 2 ? paid.total : m.total)}</span>
         </div>
         {#if step === 0}
           <Button variant="primary" disabled={items.length === 0} on:click={() => (step = 1)}>前往付款 <Icon name="arrow-right" size={16} /></Button>

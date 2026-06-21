@@ -461,13 +461,6 @@ export const REWARDS: Reward[] = [
   { id: 'rw4', name: '單堂體驗課兌換券', cost: 600, icon: 'sparkles', desc: '可贈親友，體驗任一入門課程。', tag: '' }
 ];
 
-/* Coupon codes (結帳優惠碼) — code → NT$ off */
-export const COUPONS: Record<string, number> = {
-  DREAMFLY100: 100,
-  NEWYEAR500: 500,
-  WELCOME50: 50
-};
-
 /* Term report cards & coach assessment (成績單 / 教練評語) — keyed by enrolled-course id */
 export const REPORTS: Record<string, Report> = {
   k1: {

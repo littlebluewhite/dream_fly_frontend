@@ -17,6 +17,7 @@ import {
   type Notification,
   type Subscription
 } from './data';
+import type { CheckoutResult } from './checkout';
 
 /* ---- Cart ---- */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';
@@ -146,6 +147,25 @@ if (typeof window !== 'undefined') {
       console.error('Failed to save subscriptions to storage:', error);
     }
   });
+}
+
+/* ---- applyOrder — store 寫入（Task 3 接縫） ----
+ * 接收 commitCheckout 的純結果，統一寫入 points / pointsLedger / subscriptions / cart。
+ * 不純：有副作用；不負責算錢（那是 commitCheckout 的事）。 */
+export function applyOrder(result: CheckoutResult): void {
+  points.update((p) => p + result.pointDelta);
+  if (result.ledgerEntries.length) pointsLedger.update((p) => {
+    // 全部 entry 共用同一 p.length，靠 e.type 區分 → id 唯一性賴「至多一 earn 一 redeem」不變量。
+    // 結果與舊碼 'co-earn-'+len / 'co-redeem-'+len 逐字相等。
+    const withIds = result.ledgerEntries.map((e) => ({ ...e, id: 'co-' + e.type + '-' + p.length }));
+    return [...withIds, ...p];
+  });
+  if (result.newSubscriptions.length) subscriptions.update((subs) => {
+    const owned = new Set(subs.map((s) => s.id));
+    // owned 邊濾邊長：即使 newSubscriptions 含同 id 兩筆（不該發生）也只進一筆 → 批次冪等。
+    return [...subs, ...result.newSubscriptions.filter((s) => !owned.has(s.id) && (owned.add(s.id), true))];
+  });
+  cart.clear();
 }
 
 /* ---- Notifications ---- */
