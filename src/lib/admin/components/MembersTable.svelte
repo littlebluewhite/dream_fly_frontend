@@ -26,6 +26,8 @@
     type MembersSort
   } from './members-filter';
 
+  const COMPACT_PREVIEW_LIMIT = 6;
+
   export let compact = false;
   export let rows: Member[] = MEMBERS;
 
@@ -57,7 +59,7 @@
       ...(compact ? {} : $memberFilter),
       sort
     });
-    return compact ? out.slice(0, 6) : out;
+    return compact ? out.slice(0, COMPACT_PREVIEW_LIMIT) : out;
   })();
 
   function toggleSort() {
@@ -99,7 +101,7 @@
 </script>
 
 <Card padding={0} style="overflow:hidden">
-  <PanelHead title="學員名單" sub={compact ? '最近活躍 6 位' : counts.all + ' 位在學學員'}>
+  <PanelHead title="學員名單" sub={compact ? `最近活躍 ${COMPACT_PREVIEW_LIMIT} 位` : counts.all + ' 位在學學員'}>
     <Button slot="right" size="sm" variant="primary" on:click={openAdd}>
       <Icon name="plus" size={15} />新增學員
     </Button>

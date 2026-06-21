@@ -96,6 +96,15 @@ describe('MembersTable (compact)', () => {
 	});
 });
 
+describe('MembersTable — compact preview is capped', () => {
+	it('caps the compact preview at 6 rows and labels it 最近活躍 6 位', () => {
+		const many = Array.from({ length: 9 }, (_, i) => ({ ...row, id: `GY2099${100 + i}`, name: `學員${i}` }));
+		const { container } = render(MembersTable, { rows: many, compact: true });
+		expect(container.querySelectorAll('.row')).toHaveLength(6); // pins the slice
+		expect(container.textContent).toContain('最近活躍 6 位');    // pins the label + DRY
+	});
+});
+
 /* P2 regression (codex round 1): the 新增學員 header button had no on:click and
  * did nothing. The table now owns the add flow, so clicking it opens the
  * blank-member edit dialog. */
