@@ -36,7 +36,9 @@
       >
         <Icon name="x" size={16} color="currentColor" />
       </button>
-      <div class="toast-progress"></div>
+      {#key t.bump}
+        <div class="toast-progress"></div>
+      {/key}
     </div>
   {/each}
 </div>

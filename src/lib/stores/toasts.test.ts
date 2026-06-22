@@ -64,6 +64,17 @@ describe('canonical toast store', () => {
 		expect(get(toasts)).toHaveLength(0);
 	});
 
+	it('dedup: bumps the existing entry (re-render nonce) while keeping the same id and a single entry', () => {
+		const toasts = createToasts();
+		const id1 = toasts.notify('info', 'hello', 'world');
+		expect(get(toasts)[0].bump).toBe(0); // a fresh toast starts un-bumped
+		const id2 = toasts.notify('info', 'hello', 'world'); // dedup hit
+		expect(id2).toBe(id1);
+		const list = get(toasts);
+		expect(list).toHaveLength(1);
+		expect(list[0].bump).toBe(1); // bumped so ToastPublic can remount its progress bar
+	});
+
 	it('cap: pushing 5 distinct toasts keeps only the newest 4 (FIFO evict)', () => {
 		const toasts = createToasts();
 		toasts.notify('info', 'a');

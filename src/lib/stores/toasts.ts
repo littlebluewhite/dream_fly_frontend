@@ -20,6 +20,9 @@ export interface ToastItem {
 	tone: ToastTone;
 	title: string;
 	body: string;
+	/* Re-render nonce: bumped each time a dedup hit re-schedules this toast, so
+	 * a keyed view (ToastPublic's progress bar) can remount and restart. */
+	bump: number;
 }
 
 const CAP = 4;
@@ -48,15 +51,15 @@ export function createToasts(duration = 4000) {
 	const notify = (tone: ToastTone, title: string, body = ''): number => {
 		let existingId: number | undefined;
 
-		// Check for a duplicate already on screen.
+		// Check for a duplicate already on screen; if found, bump it so a keyed
+		// view can remount (immutable update → new array + new entry object).
 		update((current) => {
 			const found = current.find(
 				(x) => x.tone === tone && x.title === title && x.body === body
 			);
-			if (found) {
-				existingId = found.id;
-			}
-			return current;
+			if (!found) return current;
+			existingId = found.id;
+			return current.map((x) => (x.id === found.id ? { ...x, bump: x.bump + 1 } : x));
 		});
 
 		if (existingId !== undefined) {
@@ -69,7 +72,7 @@ export function createToasts(duration = 4000) {
 		// New entry.
 		const id = seq++;
 		update((current) => {
-			const next = [...current, { id, tone, title, body }];
+			const next = [...current, { id, tone, title, body, bump: 0 }];
 			if (next.length > CAP) {
 				// Evict the oldest (first) entry.
 				const evicted = next.shift()!;
