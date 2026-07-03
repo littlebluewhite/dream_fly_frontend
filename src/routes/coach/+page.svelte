@@ -2,9 +2,17 @@
   /* 儀表板 (Dashboard) — 教練端首頁
    * Source: docs/design/coach/views_dashboard.jsx (partial, gaps L1-54, L95-109, L142-215)
    * Recovered sections used verbatim: L55-56, L62-114.
-   * Gaps reconstructed from the per-view spec in the build prompt. */
+   * Gaps reconstructed from the per-view spec in the build prompt.
+   *
+   * Data arrives async via getDashboard()(mock-API seam): onMount loads coach /
+   * today's schedule / conversations / KPI 數字 into a three-state gate
+   * (loading/error/ready)。KPI 卡「待點名/學員出席率/待回覆訊息」原為頁面硬編字串,
+   * 一併移入 getDashboard() payload(換後端只改 api.ts 這一層)。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { COACH, TODAY_LABEL, TODAY_CLASSES, CONVERSATIONS } from '$lib/coach/data';
+  import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
   import ClassRow from '$lib/coach/components/ClassRow.svelte';
@@ -12,47 +20,64 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Checkbox from '$lib/components/ui/Checkbox.svelte';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: CoachDashboardData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getDashboard()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: todayClasses = data?.todayClasses ?? [];
+  $: conversations = data?.conversations ?? [];
+
   /* ── next class: the `live` one, else first non-`done` ─────────────── */
   $: nextClass =
-    TODAY_CLASSES.find((c) => c.status === 'live') ??
-    TODAY_CLASSES.find((c) => c.status !== 'done') ??
+    todayClasses.find((c) => c.status === 'live') ??
+    todayClasses.find((c) => c.status !== 'done') ??
     null;
 
-  /* ── KPI data (reconstructed from today's data) ──────────────────── */
-  $: kpis = [
-    {
-      label: '今日課程',
-      value: `${TODAY_CLASSES.length} 堂`,
-      sub: '今日全部課程',
-      subTone: 'var(--df-primary)',
-      icon: 'calendar-clock',
-      iconColor: 'var(--df-primary)'
-    },
-    {
-      label: '待點名',
-      value: '2 班',
-      sub: '需盡快完成點名',
-      subTone: 'var(--df-warning)',
-      icon: 'clipboard-check',
-      iconColor: 'var(--df-warning)'
-    },
-    {
-      label: '學員出席率',
-      value: '92%',
-      sub: '本週平均',
-      subTone: 'var(--df-success)',
-      icon: 'calendar-check',
-      iconColor: 'var(--df-success)'
-    },
-    {
-      label: '待回覆訊息',
-      value: '3 則',
-      sub: '含 1 則逾時訊息',
-      subTone: 'var(--df-error)',
-      icon: 'message-circle',
-      iconColor: 'var(--df-error)'
-    }
-  ];
+  /* ── KPI data (今日課程 由 todayClasses 衍生;其餘 3 欄原為頁面硬編字串,現讀
+   * getDashboard() payload) ──────────────────────────────────────────── */
+  $: kpis = data
+    ? [
+        {
+          label: '今日課程',
+          value: `${todayClasses.length} 堂`,
+          sub: '今日全部課程',
+          subTone: 'var(--df-primary)',
+          icon: 'calendar-clock',
+          iconColor: 'var(--df-primary)'
+        },
+        {
+          label: '待點名',
+          value: data.pendingClasses,
+          sub: '需盡快完成點名',
+          subTone: 'var(--df-warning)',
+          icon: 'clipboard-check',
+          iconColor: 'var(--df-warning)'
+        },
+        {
+          label: '學員出席率',
+          value: data.attendanceRate,
+          sub: '本週平均',
+          subTone: 'var(--df-success)',
+          icon: 'calendar-check',
+          iconColor: 'var(--df-success)'
+        },
+        {
+          label: '待回覆訊息',
+          value: data.pendingReplies,
+          sub: '含 1 則逾時訊息',
+          subTone: 'var(--df-error)',
+          icon: 'message-circle',
+          iconColor: 'var(--df-error)'
+        }
+      ]
+    : [];
 
   /* ── todo checklist ───────────────────────────────────────────────── */
   let done: Record<string, boolean> = {
@@ -73,19 +98,20 @@
   const checkTiles = ['場地確認', '器材檢查', '學員名單'];
 
   /* ── message rows: first 3 conversations ────────────────────────────── */
-  $: messages = CONVERSATIONS.slice(0, 3);
+  $: messages = conversations.slice(0, 3);
 </script>
 
+{#if phase === 'ready' && data}
 <div style="display:flex;flex-direction:column;gap:18px">
 
   <!-- ① Gradient welcome hero -->
   <div
     style="background:linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));border-radius:14px;padding:26px 28px;color:#fff"
   >
-    <div style="font-size:22px;font-weight:800;letter-spacing:-0.3px">早安，{COACH.display}（李教練）</div>
-    <div style="font-size:14px;opacity:0.85;margin-top:6px">{TODAY_LABEL}</div>
+    <div style="font-size:22px;font-weight:800;letter-spacing:-0.3px">早安，{data.coach.display}（李教練）</div>
+    <div style="font-size:14px;opacity:0.85;margin-top:6px">{data.todayLabel}</div>
     <div style="font-size:13.5px;opacity:0.78;margin-top:4px">
-      今天有 {TODAY_CLASSES.length} 堂課，2 班待點名
+      今天有 {todayClasses.length} 堂課，2 班待點名
     </div>
   </div>
 
@@ -176,7 +202,7 @@
       </div>
       <!-- ClassRow list (L80-82) -->
       <div style="display:flex;flex-direction:column;gap:10px">
-        {#each TODAY_CLASSES as c (c.id)}
+        {#each todayClasses as c (c.id)}
           <ClassRow {c} onClick={() => goto('/coach/today')} />
         {/each}
       </div>
@@ -236,3 +262,19 @@
   </div>
 
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:18px" data-testid="coach-home-skeleton">
+    <SkelCard><Skeleton w="100%" h={110} r={14} /></SkelCard>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={90} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 360px;gap:18px">
+      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
+      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
+    </div>
+  </div>
+{/if}
