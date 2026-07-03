@@ -246,7 +246,8 @@ export const COURSE_SESSIONS: Record<string, string[]> = {
 };
 export const LEAVE_REASONS = ['生病 / 身體不適', '家庭因素', '學校活動', '出國 / 旅遊', '其他'];
 
-/* Coach message thread (聯絡教練 / 訊息) */
+/* Canned coach replies for the contact thread (聯絡教練 / 訊息 — 罐頭回覆;
+ * CONTACT_THREAD 本體在 $lib/domain/member-app) */
 export const COACH_REPLIES = [
   '收到！我會留意，謝謝家長。',
   '好的，我們課堂上再幫承恩加強。',
