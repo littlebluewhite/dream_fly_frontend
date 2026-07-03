@@ -61,14 +61,35 @@ export interface CsettingsData {
 }
 export const getCsettings = (): Promise<CsettingsData> => reply({ profiles: PROFILES, coaches: COACHES });
 
+/** Hero 日期與「在學學員/本週課堂/本月營收」KPI 帶原為頁面硬編字串,一併移入
+ *  payload(換後端只改這一層;「出席偏低」KPI 維持由 members 動態算出,不在此列)。 */
 export interface MAdminHomeData {
 	profiles: Record<'admin' | 'coach', Profile>;
 	members: MemberRow[];
 	today: TodayRow[];
 	activity: ActivityRow[];
+	dateLabel: string;
+	enrolledValue: string;
+	enrolledDelta: string;
+	classesWeekValue: string;
+	classesWeekDelta: string;
+	revenueMonthValue: string;
+	revenueMonthDelta: string;
 }
 export const getAdminHome = (): Promise<MAdminHomeData> =>
-	reply({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
+	reply({
+		profiles: PROFILES,
+		members: MEMBERS,
+		today: TODAY,
+		activity: ACTIVITY,
+		dateLabel: '2026 年 6 月 10 日',
+		enrolledValue: '248',
+		enrolledDelta: '+12',
+		classesWeekValue: '64',
+		classesWeekDelta: '+4',
+		revenueMonthValue: 'NT$182K',
+		revenueMonthDelta: '+8%'
+	});
 
 /** 集合 store 水合(clone,防共享參照被 mutation 污染)。 */
 export interface OpsCollections {

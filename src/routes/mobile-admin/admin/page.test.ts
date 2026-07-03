@@ -31,7 +31,22 @@ const FIXTURE_ACTIVITY: ActivityRow[] = [
 	{ icon: 'user-plus', tone: '#000', bg: '#fff', text: '測試動態一', time: '剛剛' },
 	{ icon: 'credit-card', tone: '#000', bg: '#fff', text: '測試動態二', time: '5 分鐘前' }
 ];
-const FIXTURE = { profiles: FIXTURE_PROFILES, members: FIXTURE_MEMBERS, today: FIXTURE_TODAY, activity: FIXTURE_ACTIVITY };
+// Hero 日期 + KPI 帶(dateLabel/enrolledValue/classesWeekValue/revenueMonthValue)刻意
+// 與 seed 相異,證明頁面讀 payload,而非殘留的舊硬編字面(2026 年 6 月 10 日 / 248 /
+// 64 / NT$182K)。
+const FIXTURE = {
+	profiles: FIXTURE_PROFILES,
+	members: FIXTURE_MEMBERS,
+	today: FIXTURE_TODAY,
+	activity: FIXTURE_ACTIVITY,
+	dateLabel: '2099 年 1 月 1 日',
+	enrolledValue: '999',
+	enrolledDelta: '+1',
+	classesWeekValue: '111',
+	classesWeekDelta: '+2',
+	revenueMonthValue: 'NT$999K',
+	revenueMonthDelta: '+3%'
+};
 
 beforeEach(() => {
 	vi.mocked(getAdminHome).mockReset();
@@ -49,6 +64,19 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		const { findByText } = render(AdminHomePage);
 		await findByText('測試動態一');
 		expect(await findByText('2')).toBeInTheDocument();
+	});
+
+	it('Hero 日期與在學學員/本週課堂/本月營收 KPI 讀 payload(相異 fixture,非殘留 seed 硬編)', async () => {
+		const { findByText, container } = render(AdminHomePage);
+		await findByText('測試動態一');
+		expect(await findByText(/2099 年 1 月 1 日/)).toBeInTheDocument();
+		expect(await findByText('999')).toBeInTheDocument();
+		expect(await findByText('111')).toBeInTheDocument();
+		expect(await findByText('NT$999K')).toBeInTheDocument();
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain('2026 年 6 月 10 日');
+		expect(txt).not.toContain('248');
+		expect(txt).not.toContain('NT$182K');
 	});
 
 	it('render 今日課表與進行中課堂橫幅(皆讀 payload 的 today)', async () => {
@@ -71,7 +99,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	});
 
 	it('today/activity 空集合不當機,且沒有進行中課堂橫幅', async () => {
-		vi.mocked(getAdminHome).mockResolvedValue({ profiles: FIXTURE_PROFILES, members: [], today: [], activity: [] });
+		vi.mocked(getAdminHome).mockResolvedValue({ ...FIXTURE, members: [], today: [], activity: [] });
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('營運總覽');
 		expect(queryByText('進行中課堂')).toBeNull();

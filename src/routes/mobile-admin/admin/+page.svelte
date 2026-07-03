@@ -5,7 +5,9 @@
    *
    * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
    * ready)。$orders 維持原樣直接讀共享 store(待付款橫幅,與本頁 payload 無關,
-   * store 本身已同步 seed)。 */
+   * store 本身已同步 seed)。Hero 日期與「在學學員/本週課堂/本月營收」KPI 原為頁面
+   * 硬編字串,一併移入 getAdminHome() payload(換後端只改 api.ts 這一層;「出席
+   * 偏低」KPI 維持由 payload 的 members 動態算出,不受影響)。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
@@ -55,14 +57,14 @@
 {#if phase === 'ready' && data}
 {@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openNotif} onRole={openRole}
-  greeting="營運總覽" sub="2026 年 6 月 10 日 · 全館即時概況" />
+  greeting="營運總覽" sub={data.dateLabel + ' · 全館即時概況'} />
 
 <div class="df-scroll df-view">
   <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:-2px;">
-      <KpiCard icon="users" label="在學學員" value="248" delta="+12" up tint="var(--df-primary-bg)" color="var(--df-primary)" onClick={() => go('members')} />
-      <KpiCard icon="calendar-check" label="本週課堂" value="64" delta="+4" up tint="var(--df-success-bg)" color="var(--df-success)" />
-      <KpiCard icon="receipt" label="本月營收" value="NT$182K" delta="+8%" up tint="#FFF8DB" color="var(--df-accent-dark)" />
+      <KpiCard icon="users" label="在學學員" value={data.enrolledValue} delta={data.enrolledDelta} up tint="var(--df-primary-bg)" color="var(--df-primary)" onClick={() => go('members')} />
+      <KpiCard icon="calendar-check" label="本週課堂" value={data.classesWeekValue} delta={data.classesWeekDelta} up tint="var(--df-success-bg)" color="var(--df-success)" />
+      <KpiCard icon="receipt" label="本月營收" value={data.revenueMonthValue} delta={data.revenueMonthDelta} up tint="#FFF8DB" color="var(--df-accent-dark)" />
       <KpiCard icon="user-x" label="出席偏低" value={String(lowAtt)} delta="需關注" up={false} tint="var(--df-warning-bg)" color="var(--df-warning)" onClick={() => go('members')} />
     </div>
 
