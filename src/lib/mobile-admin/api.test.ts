@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getMore, getCoachHome, getRoster, getStudents, getCsettings } from './api';
-import { PROFILES, COACHES, VENUES, TICKETS, COACH_TODAY, ROSTER, MEMBERS, SKILLS } from './data';
+import { getMore, getCoachHome, getRoster, getStudents, getCsettings, getAdminHome } from './api';
+import { PROFILES, COACHES, VENUES, TICKETS, COACH_TODAY, ROSTER, MEMBERS, SKILLS, TODAY, ACTIVITY } from './data';
 
 describe('getMore', () => {
 	it('resolves profiles + coaches + venues + tickets verbatim from data.ts', async () => {
@@ -34,5 +34,12 @@ describe('getCsettings', () => {
 	it('resolves profiles + coaches verbatim from data.ts', async () => {
 		const d = await getCsettings();
 		expect(d).toEqual({ profiles: PROFILES, coaches: COACHES });
+	});
+});
+
+describe('getAdminHome', () => {
+	it('resolves profiles + members + today + activity verbatim from data.ts', async () => {
+		const d = await getAdminHome();
+		expect(d).toEqual({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
 	});
 });

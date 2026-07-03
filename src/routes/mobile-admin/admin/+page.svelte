@@ -1,23 +1,43 @@
 <script lang="ts">
   /* 管理員 · 總覽(工作台首頁)。admin.jsx AdminHome (27)。
    * React 的 setTab(id) 路由化為 goto(adminPath('admin', id));
-   * onBell/onRole 開 notif/role sheet(於呼叫端帶入所需 props,OverlayHost 僅展開 props)。 */
+   * onBell/onRole 開 notif/role sheet(於呼叫端帶入所需 props,OverlayHost 僅展開 props)。
+   *
+   * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
+   * ready)。$orders 維持原樣直接讀共享 store(待付款橫幅,與本頁 payload 無關,
+   * store 本身已同步 seed)。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import KpiCard from '$lib/mobile-admin/components/KpiCard.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import { overlay, role, switchRole, adminNotifs, adminUnreadCount, toasts, orders } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
-  import { PROFILES, MEMBERS, TODAY, ACTIVITY } from '$lib/mobile-admin/data';
+  import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  const p = PROFILES.admin;
-  const lowAtt = MEMBERS.filter((m) => m.att < 80).length;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MAdminHomeData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getAdminHome()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: members = data?.members ?? [];
+  $: today = data?.today ?? [];
+  $: activity = data?.activity ?? [];
+  $: lowAtt = members.filter((m) => m.att < 80).length;
   $: pending = $orders.filter((o) => o.status === 'pending').length;
-  const liveNow = TODAY.find((t) => t.label === '進行中');
+  $: liveNow = today.find((t) => t.label === '進行中');
 
   const go = (id: string) => goto(adminPath('admin', id));
   function openNotif() {
@@ -32,6 +52,8 @@
   ];
 </script>
 
+{#if phase === 'ready' && data}
+{@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openNotif} onRole={openRole}
   greeting="營運總覽" sub="2026 年 6 月 10 日 · 全館即時概況" />
 
@@ -76,12 +98,12 @@
       </button>
     {/if}
 
-    <Panel title="今日課表" sub={'全館 ' + TODAY.length + ' 堂課'} action="課程" onAction={() => go('classes')}>
-      {#each TODAY as t, i (i)}
+    <Panel title="今日課表" sub={'全館 ' + today.length + ' 堂課'} action="課程" onAction={() => go('classes')}>
+      {#each today as t, i (i)}
         <div
           class="df-rowhover"
           style="display:flex; align-items:center; gap:12px; padding:12px 16px;
-            border-bottom:{i < TODAY.length - 1 ? '1px solid var(--df-border)' : 'none'};"
+            border-bottom:{i < today.length - 1 ? '1px solid var(--df-border)' : 'none'};"
         >
           <div style="font-family:var(--df-font-mono); font-size:14px; font-weight:700; color:var(--df-ink); width:44px; flex:none;">{t.time}</div>
           <div style="flex:1; min-width:0;">
@@ -104,10 +126,10 @@
     {/if}
 
     <Panel title="最新動態">
-      {#each ACTIVITY as a, i (i)}
+      {#each activity as a, i (i)}
         <div
           style="display:flex; gap:12px; padding:11px 16px;
-            border-bottom:{i < ACTIVITY.length - 1 ? '1px solid var(--df-border)' : 'none'};"
+            border-bottom:{i < activity.length - 1 ? '1px solid var(--df-border)' : 'none'};"
         >
           <div style="width:34px; height:34px; border-radius:9px; background:{a.bg}; display:flex; align-items:center; justify-content:center; flex:none;">
             <Icon name={a.icon} size={16} color={a.tone} />
@@ -122,3 +144,16 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="madmin-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={90} r={14} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard padding={0}><Skeleton w="100%" h={180} r={16} /></SkelCard>
+    <SkelCard padding={0}><Skeleton w="100%" h={180} r={16} /></SkelCard>
+  </div>
+{/if}
