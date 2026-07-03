@@ -8,6 +8,8 @@ import {
 	ROSTER,
 	MEMBERS,
 	SKILLS,
+	TODAY,
+	ACTIVITY,
 	type Profile,
 	type Coach,
 	type Venue,
@@ -15,7 +17,8 @@ import {
 	type TodayRow,
 	type RosterEntry,
 	type MemberRow,
-	type Skill
+	type Skill,
+	type ActivityRow
 } from './data';
 
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -51,3 +54,12 @@ export interface CsettingsData {
 	coaches: Coach[];
 }
 export const getCsettings = (): Promise<CsettingsData> => reply({ profiles: PROFILES, coaches: COACHES });
+
+export interface MAdminHomeData {
+	profiles: Record<'admin' | 'coach', Profile>;
+	members: MemberRow[];
+	today: TodayRow[];
+	activity: ActivityRow[];
+}
+export const getAdminHome = (): Promise<MAdminHomeData> =>
+	reply({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
