@@ -5,32 +5,54 @@
    *
    * Now: class/roster are stateful (切換班級 via CoachDropdown) and every unsaved
    * edit snapshots the WHOLE save-bar state so 復原 restores marks + dirtyCount +
-   * state, not just marks. */
-  import { ATT_TODAY_CLASSES } from '$lib/coach/data';
-  import type { AttRow, AttDefault } from '$lib/coach/data';
+   * state, not just marks.
+   *
+   * Data arrives async via getAttendance()(mock-API seam): onMount loads the班級
+   * 清單 into a three-state gate (loading/error/ready). `curClass` keeps its
+   * non-null assertion (safe once ready — curClassId always matches a loaded
+   * class); `roster` is derived independently with an optional-chain guard so the
+   * pre-load reactive tick (classes still []) can't throw. */
+  import { onMount } from 'svelte';
+  import { getAttendance } from '$lib/coach/api';
+  import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let classes: AttClassFull[] = [];
+
   // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
   let curClassId = 'ac1';
-  $: curClass = ATT_TODAY_CLASSES.find((c) => c.id === curClassId)!;
-  $: roster = curClass.roster;
+  $: curClass = classes.find((c) => c.id === curClassId)!;
+  $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
 
   // ── 狀態 ──────────────────────────────────────────────────────────────
-  let marks: Record<string, AttDefault> = Object.fromEntries(
-    ATT_TODAY_CLASSES[0].roster.map((r) => [r.mid, r.def] as [string, AttDefault])
-  );
+  let marks: Record<string, AttDefault> = {};
   let notes: Record<string, string> = {};
   let noteFor: AttRow | null = null;
   let noteText = '';
   let state: 'dirty' | 'saving' | 'saved' = 'dirty';
   let savedAt: string | null = null;
-  let dirtyCount = 3;
+  let dirtyCount = 0;
+
+  function load() {
+    phase = 'loading';
+    getAttendance()
+      .then((d) => {
+        classes = d.classes;
+        marks = buildMarks(classes[0].roster);
+        dirtyCount = classes[0].roster.filter((r) => r.def !== 'present').length;
+        phase = 'ready';
+      })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   // ── 復原快照 ───────────────────────────────────────────────────────────
   // The save bar is driven by state/savedAt/dirtyCount, not just marks — so a
@@ -101,7 +123,7 @@
     return Object.fromEntries(rows.map((r) => [r.mid, r.def] as [string, AttDefault]));
   }
   function selectClass(name: string) {
-    const next = ATT_TODAY_CLASSES.find((c) => c.name === name);
+    const next = classes.find((c) => c.name === name);
     if (!next || next.id === curClassId) return;
     // Don't switch mid-save: the in-flight doSave() callback completes against the
     // live state, so stashing a 'saving' class would leave it stuck on 儲存中 forever
@@ -159,6 +181,7 @@
   }[state];
 </script>
 
+{#if phase === 'ready'}
 <!-- 根容器：不加 df-view（layout 已包） -->
 <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;">
 
@@ -184,7 +207,7 @@
       <CoachDropdown
         icon="dumbbell"
         value={curClass.name}
-        options={ATT_TODAY_CLASSES.map((c) => c.name)}
+        options={classes.map((c) => c.name)}
         onChange={selectClass}
       />
     </div>
@@ -335,3 +358,16 @@
     ></textarea>
   {/if}
 </Dialog>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;" data-testid="attendance-skeleton">
+    <SkelCard><Skeleton w="100%" h={64} r={12} /></SkelCard>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      {#each [0, 1, 2, 3, 4] as i (i)}
+        <SkelCard><Skeleton w="100%" h={56} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+{/if}
