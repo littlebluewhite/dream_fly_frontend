@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMore, getCoachHome, getRoster, getStudents } from './api';
+import { getMore, getCoachHome, getRoster, getStudents, getCsettings } from './api';
 import { PROFILES, COACHES, VENUES, TICKETS, COACH_TODAY, ROSTER, MEMBERS, SKILLS } from './data';
 
 describe('getMore', () => {
@@ -27,5 +27,12 @@ describe('getStudents', () => {
 	it('resolves members + skill assessments verbatim from data.ts', async () => {
 		const d = await getStudents();
 		expect(d).toEqual({ members: MEMBERS, skills: SKILLS });
+	});
+});
+
+describe('getCsettings', () => {
+	it('resolves profiles + coaches verbatim from data.ts', async () => {
+		const d = await getCsettings();
+		expect(d).toEqual({ profiles: PROFILES, coaches: COACHES });
 	});
 });

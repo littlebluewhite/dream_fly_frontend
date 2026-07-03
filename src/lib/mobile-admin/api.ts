@@ -45,3 +45,9 @@ export interface MStudentsData {
 	skills: Record<string, Skill[]>;
 }
 export const getStudents = (): Promise<MStudentsData> => reply({ members: MEMBERS, skills: SKILLS });
+
+export interface CsettingsData {
+	profiles: Record<'admin' | 'coach', Profile>;
+	coaches: Coach[];
+}
+export const getCsettings = (): Promise<CsettingsData> => reply({ profiles: PROFILES, coaches: COACHES });
