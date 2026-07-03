@@ -397,7 +397,7 @@ export const getNotifications = () => reply(NOTIFS_SEED.map((n) => ({ ...n })));
 
 **notifs store 化(本任務核心風險點 — 三守衛全用上):**
 
-- `src/lib/mobile/stores.ts` 現況:`notifs` writable 以 `NOTIFS_SEED` 同步 seed,`unread` 衍生,`markRead/markAllRead` mutation。改法照 member notifications 前例:store 起始空陣列 + `hydrated` 守衛;`notifications/+page.svelte` 在 `onMount` 走 `load()`(守衛短路用)與 `refresh()`(always refetch,`onRetry` 用它);寫回 store 前檢查 `alive`(`onDestroy` 清除);`markRead` 等 mutation 不動。**badge(`unread`)在其他頁面/TabBar 也讀** — 水合前 unread 顯示 0 是可接受的初始態(member 前例相同)。
+- `src/lib/mobile/stores.ts` 現況:`notifs` writable 以 `NOTIFS_SEED` 同步 seed,`unread` 衍生,`markRead/markAllRead` mutation。改法照 member notifications 前例(**member 實況 = 同步 seed(clone)+ 水合守衛**,不是起始空):保留同步 seed,加 `hydrated` 守衛 + 經 `getNotifications()` 的水合路徑;`notifications/+page.svelte` 在 `onMount` 走 `load()`(守衛短路用)與 `refresh()`(always refetch,`onRetry` 用它);寫回 store 前檢查 `alive`(`onDestroy` 清除);`markRead` 等 mutation 不動。**badge(`unread`)在其他頁面/TabBar 也讀** — 同步 seed 保證 badge 立即有值,與改動前行為一致。(此段修正紀錄:初版誤寫「起始空陣列/member 前例相同」— Task 5 實作者比對 member 實碼揪出矛盾,裁決以 member 實況為準。)
 - `stores.test.ts` 對應更新;`notifications/page.test.ts` 補三態 + 兩個回歸:(1) unmount 後 resolve 不覆寫 store(照 `src/routes/member/notifications/page.test.ts` 既有案例形狀);(2) refresh 失敗後 retry 會真的 refetch。
 
 **五頁套用表(其餘同 Task 3 模式):**
@@ -465,7 +465,7 @@ export const getOpsCollections = (): Promise<OpsCollections> =>
 
 (getter 名/payload 以**實作時逐頁核對的實際用量**為準 — 上面是以 import 清單推定的起點;差異記入報告。)
 
-**store 水合改造:** `stores.ts` 的集合 writable(`orders`、`members`、`classes`、`coaches` 等)改為空起始 + `hydrateOps()`(內部呼叫 `getOpsCollections()`,`hydrated` 守衛防重複,供 `refresh` 用的 always-refetch 版本)。消費 store 的頁(classes/members/orders)在 `onMount` 觸發水合並以三態呈現;**overlay 的新增/編輯 mutation 行為不變**(水合守衛保證使用者改動不被第二次進頁覆寫)。alive 旗標:凡頁面把 fetch 結果寫入共享 store 的路徑都要。
+**store 水合改造:** `stores.ts` 的集合 writable(`orders`、`members`、`classes`、`coaches` 等)**保留同步 seed**(對齊 member/mobile notifs 前例;空起始會造成跨頁讀值的行為回歸),加 `hydrateOps()`(內部呼叫 `getOpsCollections()`,`hydrated` 守衛防重複覆寫,另供 `refresh` 用的 always-refetch 版本)。消費 store 的頁(classes/members/orders)在 `onMount` 觸發水合並以三態呈現;**overlay 的新增/編輯 mutation 行為不變**(水合守衛保證使用者改動不被第二次進頁覆寫)。alive 旗標:凡頁面把 fetch 結果寫入共享 store 的路徑都要。
 
 **十頁套用表(模式同前;測試模板同 Task 3):**
 
