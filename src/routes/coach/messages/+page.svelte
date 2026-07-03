@@ -1,23 +1,49 @@
 <script lang="ts">
   /* 訊息中心 — ported from docs/design/coach/views_messages.jsx (L1-102 recovered;
    * bubble area, composer, info panel reconstructed from spec).
-   * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root. */
+   * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root.
+   *
+   * Data arrives async via getMessages()(mock-API seam): onMount loads
+   * conversations/directory/thread/sharedFiles into a three-state gate
+   * (loading/error/ready); `convos` is the local working copy the compose flow
+   * prepends to. `sel`'s initial value can no longer assume the seed's first id
+   * ('v1') synchronously, so it's seeded from the loaded list with an empty-array
+   * guard once ready. */
+  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
+  import Card from '$lib/components/ui/Card.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import ConversationRow from '$lib/coach/components/ConversationRow.svelte';
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
-  import { CONVERSATIONS, MSG_DIRECTORY, THREAD, SHARED_FILES } from '$lib/coach/data';
   import type { Conversation, MsgRecipient } from '$lib/coach/data';
+  import { getMessages, type MessagesData } from '$lib/coach/api';
   import { toasts, search } from '$lib/coach/stores';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MessagesData | null = null;
+
   /* ── state (legacy, no runes) ── */
-  let convos: Conversation[] = [...CONVERSATIONS];
+  let convos: Conversation[] = [];
   let tab = '全部';
-  let sel = 'v1';
+  let sel: string | null = null;
   let reply = '';
+
+  function load() {
+    phase = 'loading';
+    getMessages()
+      .then((d) => {
+        data = d;
+        convos = [...d.conversations];
+        sel = d.conversations[0]?.id ?? null;
+        phase = 'ready';
+      })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   /* compose dialog */
   let composeOpen = false;
@@ -46,7 +72,10 @@
   $: if (list.length && !list.some((c) => c.id === sel)) sel = list[0].id;
 
   $: cur = convos.find((c) => c.id === sel) || convos[0];
-  $: showThread = cur.id === 'v1';
+  // optional-chain guard: during the pre-load reactive tick `convos` is still []
+  // so `cur` is undefined — dereferencing `.id` directly would throw before the
+  // getMessages() seam ever resolves.
+  $: showThread = cur?.id === 'v1';
 
   function handleSelect(e: CustomEvent<string>) {
     sel = e.detail;
@@ -88,6 +117,7 @@
   }
 </script>
 
+{#if phase === 'ready' && data}
 <div style="height:calc(100vh - 68px - 52px);min-height:560px;padding:0">
   <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;box-shadow:var(--df-shadow-card)">
 
@@ -173,7 +203,7 @@
       <!-- bubble area -->
       <div style="flex:1;overflow-y:auto;min-height:0;padding:20px;display:flex;flex-direction:column;gap:14px">
         {#if showThread}
-          {#each THREAD as m}
+          {#each data.thread as m}
             <MessageBubble {m} />
           {/each}
         {:else}
@@ -244,7 +274,7 @@
       <!-- 共用檔案 -->
       <InfoSection title="共用檔案">
         <div style="display:flex;flex-direction:column;gap:8px">
-          {#each SHARED_FILES as f}
+          {#each data.sharedFiles as f}
             <div style="display:flex;align-items:center;gap:10px">
               <div style="width:36px;height:36px;border-radius:8px;background:var(--df-primary-bg);display:flex;align-items:center;justify-content:center;flex:none">
                 <Icon name={f.icon} size={16} color={f.tint} />
@@ -272,7 +302,7 @@
 >
   <div style="font-size:13px;color:var(--df-text-light);margin-bottom:10px">選擇收件對象</div>
   <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
-    {#each MSG_DIRECTORY as r (r.name)}
+    {#each data.directory as r (r.name)}
       {@const on = composePick?.name === r.name}
       <button
         type="button"
@@ -293,3 +323,14 @@
     {/each}
   </div>
 </Dialog>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="height:calc(100vh - 68px - 52px);min-height:560px;" data-testid="messages-skeleton">
+    <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;">
+      <div style="padding:16px;"><Skeleton w="100%" h={40} r={8} /></div>
+      <div style="padding:16px;display:flex;align-items:center;justify-content:center;"><SkelCard><Skeleton w={280} h={200} r={12} /></SkelCard></div>
+      <div style="padding:16px;"><SkelCard><Skeleton w="100%" h={300} r={12} /></SkelCard></div>
+    </div>
+  </div>
+{/if}
