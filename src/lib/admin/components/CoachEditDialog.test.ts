@@ -130,4 +130,32 @@ describe('CoachEditDialog', () => {
 		expect(getByDisplayValue(second.name)).toBeInTheDocument();
 		expect(queryByDisplayValue(first.name)).toBeNull();
 	});
+
+	// Regression #2: the CLOSE transition must update the guard's bookkeeping
+	// too. The parent (admin/coaches +page) clears BOTH props on 取消
+	// (open:false + coach:null); a `coach && (…)` short-circuit skipped that
+	// transition, freezing `wasOpen`/`lastCoach`/`f` at their open-time values —
+	// so re-opening the SAME coach (same reference: open && !wasOpen false,
+	// coach !== lastCoach false) re-fired nothing and the form showed the
+	// abandoned dirty draft (and 儲存 would write it back).
+	it('re-opening the same coach after 取消 discards the abandoned dirty draft', async () => {
+		const target: Coach = COACHES[4]; // 張育誠 — untouched by any other case
+		const { rerender, getByDisplayValue, queryByDisplayValue } = render(CoachEditDialog, {
+			open: false,
+			coach: null
+		});
+
+		// open → dirty-edit the name (never saved)
+		await rerender({ open: true, coach: target });
+		await fireEvent.input(getByDisplayValue(target.name), { target: { value: '髒草稿' } });
+		expect(getByDisplayValue('髒草稿')).toBeInTheDocument();
+
+		// 取消 — the parent clears both props together
+		await rerender({ open: false, coach: null });
+
+		// re-open the same coach (same reference) → true values back, draft gone
+		await rerender({ open: true, coach: target });
+		expect(getByDisplayValue(target.name)).toBeInTheDocument();
+		expect(queryByDisplayValue('髒草稿')).toBeNull();
+	});
 });

@@ -27,14 +27,20 @@
     label: COACH_STATUS[v][0]
   }));
 
-  // Local editable copy + text buffers, reset when the dialog opens or a
-  // different coach prop arrives (single-stage pattern — mirrors
-  // ClassEditDialog/VenueEditDialog/TicketEditDialog). The previous two-stage
-  // `$: if (open && !wasOpen && coach) {…}` + `$: wasOpen = open;` pair never
-  // re-fired on an already-mounted instance: Svelte schedules the assignment
-  // to `wasOpen` before the guard that reads it (the guard depends on it), so
-  // `wasOpen` was always already in sync with `open` by the time the guard
-  // ran and `!wasOpen` could never be true.
+  // Local editable copy + text buffers, reset on every coach-prop change —
+  // INCLUDING coach → null on close — or when the dialog transitions to open
+  // (single-stage pattern — mirrors ClassEditDialog/VenueEditDialog/
+  // TicketEditDialog's unconditional `x !== lastX`). Two earlier shapes both
+  // failed here:
+  // - the two-stage `$: if (open && !wasOpen && coach) {…}` + `$: wasOpen =
+  //   open;` pair never re-fired on a mounted instance (Svelte schedules the
+  //   `wasOpen` assignment before the guard that reads it, so `!wasOpen` was
+  //   always false);
+  // - a `coach && (…)` short-circuit skipped the CLOSE transition (the parent
+  //   clears open+coach together on 取消), freezing `wasOpen`/`lastCoach`/`f`
+  //   at their open-time values, so re-opening the SAME coach showed the
+  //   abandoned dirty draft. The guard must also run on coach → null; the
+  //   body is null-safe instead.
   let f: Coach | null = coach;
   let tagsText = coach ? coach.tags.join('、') : '';
   let yearsText = coach ? String(coach.years) : '';
@@ -43,15 +49,15 @@
   let awardsText = coach ? String(coach.awards) : '';
   let lastCoach: Coach | null = coach;
   let wasOpen = open;
-  $: if (coach && ((open && !wasOpen) || coach !== lastCoach)) {
+  $: if (coach !== lastCoach || (open && !wasOpen)) {
     wasOpen = open;
     lastCoach = coach;
-    f = { ...coach };
-    tagsText = coach.tags.join('、');
-    yearsText = String(coach.years);
-    studentsText = String(coach.students);
-    classesText = String(coach.classes);
-    awardsText = String(coach.awards);
+    f = coach ? { ...coach } : null;
+    tagsText = coach ? coach.tags.join('、') : '';
+    yearsText = coach ? String(coach.years) : '';
+    studentsText = coach ? String(coach.students) : '';
+    classesText = coach ? String(coach.classes) : '';
+    awardsText = coach ? String(coach.awards) : '';
   }
 
   function onName(e: Event) {
