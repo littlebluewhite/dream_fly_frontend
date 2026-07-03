@@ -4,10 +4,12 @@
    * showing 142 總課程數, over a colour-dot legend of CATEGORY_SPLIT. Fixed 360px
    * width (flex:none) so it sits beside the flexible RevenueTrend. */
   import { Card } from '$lib/components/ui';
-  import { CATEGORY_SPLIT } from '$lib/admin/data';
+  import type { PctSlice } from '$lib/admin/data';
   import { donutStops } from './donut';
 
-  $: stops = donutStops(CATEGORY_SPLIT);
+  export let rows: PctSlice[];
+
+  $: stops = donutStops(rows);
 </script>
 
 <Card padding={18} style="width:360px; flex:none;">
@@ -29,7 +31,7 @@
     </div>
   </div>
   <div style="display:flex; flex-direction:column; gap:9px;">
-    {#each CATEGORY_SPLIT as c}
+    {#each rows as c}
       <div style="display:flex; align-items:center; gap:9px;">
         <span style="width:10px; height:10px; border-radius:5px; background:{c.color}; flex:none;"></span>
         <span style="flex:1; font-size:13px; color:var(--df-text-dark);">{c.label}</span>

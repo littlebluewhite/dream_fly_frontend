@@ -3,9 +3,11 @@
    * label atop, height = classes/maxC * 104px) in a 158px track; the busiest day
    * (classes === maxC) renders in primary-dark. Fixed 380px beside ConversionFunnel. */
   import { Card } from '$lib/components/ui';
-  import { WEEKDAY_LOAD } from '$lib/admin/data';
+  import type { WeekdayLoad } from '$lib/admin/data';
 
-  $: maxC = Math.max(...WEEKDAY_LOAD.map((d) => d.classes));
+  export let rows: WeekdayLoad[];
+
+  $: maxC = Math.max(...rows.map((d) => d.classes));
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">
@@ -18,7 +20,7 @@
     長條為課堂數 · 數字為平均出席率
   </div>
   <div style="display:flex; align-items:flex-end; gap:8px; height:158px;">
-    {#each WEEKDAY_LOAD as d}
+    {#each rows as d}
       <div class="col">
         <span style="font-size:11px; font-weight:700; color:var(--df-primary);">{d.rate}%</span>
         <div

@@ -4,9 +4,11 @@
    * segment sized nu/(nu+re) and a primary (續報) fill below. A two-item legend
    * follows. Fixed 380px beside the flexible AttDist. */
   import { Card } from '$lib/components/ui';
-  import { RETENTION } from '$lib/admin/data';
+  import type { RetentionBar } from '$lib/admin/data';
 
-  $: maxR = Math.max(...RETENTION.map((d) => d.nu + d.re));
+  export let rows: RetentionBar[];
+
+  $: maxR = Math.max(...rows.map((d) => d.nu + d.re));
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">
@@ -22,7 +24,7 @@
     <span style="font-size:13px; font-weight:700; color:#0EA5E9;">留存 88.4%</span>
   </div>
   <div style="display:flex; align-items:flex-end; gap:12px; height:150px;">
-    {#each RETENTION as d}
+    {#each rows as d}
       <div class="col">
         <div class="stack" style="height:{((d.nu + d.re) / maxR) * 116}px;">
           <div style="height:{(d.nu / (d.nu + d.re)) * 100}%; background:var(--df-accent);"></div>

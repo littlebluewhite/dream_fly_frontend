@@ -3,7 +3,9 @@
    * dot + name · "{pct}% · {hours}" meta, over a width-% bar (pct, in the venue
    * colour). Fixed 380px beside the flexible CoachPerf. */
   import { Card } from '$lib/components/ui';
-  import { VENUE_USAGE } from '$lib/admin/data';
+  import type { VenueUsage } from '$lib/admin/data';
+
+  export let rows: VenueUsage[];
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">
@@ -13,7 +15,7 @@
     場館使用率
   </div>
   <div style="display:flex; flex-direction:column; gap:14px;">
-    {#each VENUE_USAGE as v}
+    {#each rows as v}
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">

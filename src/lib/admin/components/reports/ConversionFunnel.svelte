@@ -4,7 +4,9 @@
    * previous stage's pct) for every stage after the first. Below each is a 24px
    * track with a width-% fill in the stage colour. Flexible card beside WeekdayLoad. */
   import { Card } from '$lib/components/ui';
-  import { FUNNEL } from '$lib/admin/data';
+  import type { FunnelStage } from '$lib/admin/data';
+
+  export let rows: FunnelStage[];
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -17,7 +19,7 @@
     <span style="font-size:12px; color:var(--df-text-light);">本季</span>
   </div>
   <div style="display:flex; flex-direction:column; gap:11px;">
-    {#each FUNNEL as f, i}
+    {#each rows as f, i}
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
           <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">{f.label}</span>
@@ -25,7 +27,7 @@
             <b style="color:var(--df-text-dark); font-family:var(--df-font-mono);">{f.count}</b> 人 · {f.pct}%{#if i > 0}<span
                 style="color:var(--df-text-muted);"
               >
-                · 轉化 {Math.round((f.pct / FUNNEL[i - 1].pct) * 100)}%</span
+                · 轉化 {Math.round((f.pct / rows[i - 1].pct) * 100)}%</span
               >{/if}
           </span>
         </div>

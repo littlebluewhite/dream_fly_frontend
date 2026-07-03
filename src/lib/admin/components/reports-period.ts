@@ -4,8 +4,9 @@
  * front-end-only re-scale: kpisForPeriod() scales the numeric token out of each
  * pre-formatted REPORT_KPIS.value string by the selected window's factor, while
  * leaving %-valued KPIs untouched (a留存率 / 出席率 ratio does not grow with the
- * window). The 15 charts import their data at module scope and take no props, so
- * they are NOT re-scaled — that is the honest mock boundary. */
+ * window). The 15 charts render their getReports() payload datasets (passed down
+ * as props) as-is — the period re-scales the KPI band only, matching the
+ * prototype, where the period control never touched the charts. */
 
 import type { ReportKpi } from '$lib/admin/data';
 

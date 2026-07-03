@@ -4,7 +4,10 @@
    * REVENUE_BREAKDOWN entry (dot · name/meta · mono amount · drill button), then a
    * 合計 footer on bg-light. The drill button is a static demo affordance. */
   import { Card, Icon } from '$lib/components/ui';
-  import { REVENUE_BREAKDOWN, REVENUE_TOTAL } from '$lib/admin/data';
+  import type { RevenueRow } from '$lib/admin/data';
+
+  export let rows: RevenueRow[];
+  export let total: string;
 </script>
 
 <Card padding={0} style="overflow:hidden">
@@ -15,7 +18,7 @@
         <div
           style="font-size:15px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-heading);"
         >
-          本月營收 {REVENUE_TOTAL} · 來源拆解
+          本月營收 {total} · 來源拆解
         </div>
         <div style="font-size:12px; color:var(--df-text-light); margin-top:2px;">
           點任一來源可下鑽至原始訂單／班級／票券,每個數字皆可追溯
@@ -26,8 +29,8 @@
   </div>
 
   <div>
-    {#each REVENUE_BREAKDOWN as r, i}
-      <div class="row" class:bordered={i < REVENUE_BREAKDOWN.length - 1}>
+    {#each rows as r, i}
+      <div class="row" class:bordered={i < rows.length - 1}>
         <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:0;">
           <span style="width:8px; height:8px; border-radius:4px; background:{r.dot}; flex:none;"></span>
           <div style="min-width:0;">
@@ -48,7 +51,7 @@
       <span
         style="font-size:16px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-mono);"
       >
-        {REVENUE_TOTAL}
+        {total}
       </span>
     </div>
   </div>

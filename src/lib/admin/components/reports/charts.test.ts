@@ -23,7 +23,10 @@ import { donutStops } from './donut';
 
 /* One focused render test per CHART FAMILY (donut / vertical-bar / horizontal-bar
  * list / funnel / KPI card / drill list) — the pure cumulative-stop maths lives in
- * donut.test.ts; here we assert each family paints its labels + values from data. */
+ * donut.test.ts; here we assert each family paints its labels + values from data.
+ * Charts take their dataset as a REQUIRED prop (from the getReports() seam) — the
+ * fixtures below are passed explicitly; a chart that fails to consume its prop
+ * renders nothing and reds these assertions. */
 
 describe('ReportKpi (KPI card family)', () => {
   it('renders the KPI label, value and delta', () => {
@@ -37,7 +40,7 @@ describe('ReportKpi (KPI card family)', () => {
 
 describe('CategoryDonut (donut family)', () => {
   it('renders every legend label + percentage and a cumulative conic-gradient', () => {
-    const { container } = render(CategoryDonut);
+    const { container } = render(CategoryDonut, { rows: CATEGORY_SPLIT });
     for (const c of CATEGORY_SPLIT) {
       expect(container.textContent).toContain(c.label);
       expect(container.textContent).toContain(`${c.pct}%`);
@@ -48,7 +51,7 @@ describe('CategoryDonut (donut family)', () => {
   });
 
   it('PaymentSplit renders its payment-method legend + percentages', () => {
-    const { container } = render(PaymentSplit);
+    const { container } = render(PaymentSplit, { rows: PAYMENT_SPLIT });
     for (const p of PAYMENT_SPLIT) {
       expect(container.textContent).toContain(p.label);
       expect(container.textContent).toContain(`${p.pct}%`);
@@ -58,7 +61,7 @@ describe('CategoryDonut (donut family)', () => {
 
 describe('WeekdayLoad (vertical-bar family)', () => {
   it('renders one bar per weekday with its rate label, height ∝ classes/max', () => {
-    const { container } = render(WeekdayLoad);
+    const { container } = render(WeekdayLoad, { rows: WEEKDAY_LOAD });
     const maxC = Math.max(...WEEKDAY_LOAD.map((d) => d.classes));
     const bars = container.querySelectorAll('.bar');
     expect(bars.length).toBe(WEEKDAY_LOAD.length);
@@ -75,7 +78,7 @@ describe('WeekdayLoad (vertical-bar family)', () => {
 
 describe('CoachPerf (horizontal-bar list family)', () => {
   it('renders each coach initial, name, revenue and a revPct-width bar', () => {
-    const { container } = render(CoachPerf);
+    const { container } = render(CoachPerf, { rows: COACH_PERF });
     for (const c of COACH_PERF) {
       expect(container.textContent).toContain(c.name);
       expect(container.textContent).toContain(c.revenue);
@@ -90,7 +93,7 @@ describe('CoachPerf (horizontal-bar list family)', () => {
 
 describe('ConversionFunnel (funnel family)', () => {
   it('renders every stage label, count and pct', () => {
-    const { container } = render(ConversionFunnel);
+    const { container } = render(ConversionFunnel, { rows: FUNNEL });
     for (const f of FUNNEL) {
       expect(container.textContent).toContain(f.label);
       expect(container.textContent).toContain(String(f.count));
@@ -99,7 +102,7 @@ describe('ConversionFunnel (funnel family)', () => {
   });
 
   it('annotates per-step conversion for stages after the first', () => {
-    const { container } = render(ConversionFunnel);
+    const { container } = render(ConversionFunnel, { rows: FUNNEL });
     const step = Math.round((FUNNEL[1].pct / FUNNEL[0].pct) * 100);
     expect(container.textContent).toContain(`轉化 ${step}%`);
   });
@@ -107,7 +110,7 @@ describe('ConversionFunnel (funnel family)', () => {
 
 describe('RevenueBreakdown (drill list)', () => {
   it('renders every source name, meta, amount and drill action + the total', () => {
-    const { container } = render(RevenueBreakdown);
+    const { container } = render(RevenueBreakdown, { rows: REVENUE_BREAKDOWN, total: REVENUE_TOTAL });
     for (const r of REVENUE_BREAKDOWN) {
       expect(container.textContent).toContain(r.name);
       expect(container.textContent).toContain(r.meta);
