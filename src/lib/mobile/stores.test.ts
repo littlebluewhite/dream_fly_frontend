@@ -12,6 +12,7 @@ import {
 	notifs,
 	notifsHydrated
 } from './stores';
+import { NOTIFS_SEED } from './data';
 
 describe('createOverlay', () => {
 	it('pushes and pops the screen stack', () => {
@@ -142,9 +143,13 @@ describe('notifs', () => {
 	});
 });
 
-describe('notifs singleton — 水合守衛(notifications 頁 core risk)', () => {
-	it('起始為空陣列,notifsHydrated 起始為 false(水合前 unread 顯示 0 為可接受初始態)', () => {
-		expect(get(notifs)).toEqual([]);
+describe('notifs singleton — 同步 seed + 水合守衛(notifications 頁 core risk)', () => {
+	// 與 member notifications 前例同型:同步 seed(badge 立即有值),首訪通知頁
+	// 時經 getNotifications() 水合覆寫一次,notifsHydrated 守衛防重訪重抓。
+	it('起始即帶 NOTIFS_SEED(clone,badge 立即有值),notifsHydrated 起始為 false', () => {
+		expect(get(notifs)).toEqual(NOTIFS_SEED);
+		// clone 而非共享參照:store 上的 mutation 不得污染 seed 常數。
+		expect(get(notifs)[0]).not.toBe(NOTIFS_SEED[0]);
 		expect(get(notifsHydrated)).toBe(false);
 	});
 });
