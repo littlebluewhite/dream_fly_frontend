@@ -10,7 +10,7 @@
 
 import { writable, derived } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { ME, NOTIFS_SEED, type NotifItem } from './data';
+import { ME, type NotifItem } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 export interface OverlayEntry {
@@ -128,11 +128,13 @@ export function redeemReward(cost: number) {
 
 /* ---------- Notification centre ---------- */
 /** read-flag store; markRead flips one, markAllRead clears all. Immutable update
- *  so the seed array is never mutated. */
+ *  so the seed array is never mutated. `set` is exposed for hydration (the
+ *  notifications 頁 writes getNotifications() 的結果進來),不影響既有 mutation。 */
 export function createNotifs<T extends { id: string; read: boolean }>(seed: T[]) {
-	const { subscribe, update } = writable<T[]>(seed.map((n) => ({ ...n })));
+	const { subscribe, update, set } = writable<T[]>(seed.map((n) => ({ ...n })));
 	return {
 		subscribe,
+		set,
 		markRead(id: string) {
 			update((ns) => ns.map((n) => (n.id === id ? { ...n, read: true } : n)));
 		},
@@ -144,7 +146,11 @@ export function createNotifs<T extends { id: string; read: boolean }>(seed: T[])
 export function unreadCount(items: { read: boolean }[]): number {
 	return items.filter((n) => !n.read).length;
 }
-export const notifs = createNotifs<NotifItem>(NOTIFS_SEED);
+// 起始空陣列,由 notifications/+page.svelte 透過 getNotifications() 接縫水合
+// (見該頁 load()/refresh());notifsHydrated 是 load-once 守衛,防止重訪覆寫已讀
+// 狀態。badge(unread,TabBar/首頁鈴鐺都讀)水合前顯示 0 是可接受的初始態。
+export const notifs = createNotifs<NotifItem>([]);
+export const notifsHydrated = writable(false);
 export const unread = derived(notifs, ($n) => unreadCount($n));
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
