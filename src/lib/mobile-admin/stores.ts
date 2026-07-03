@@ -11,7 +11,7 @@ import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import type { Role } from './nav';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
-import { getOpsCollections } from './api';
+import { getOpsCollections, getMessages } from './api';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 export interface OverlayEntry {
@@ -129,6 +129,21 @@ export function markMessageRead(id: string) {
 	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
+
+/** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
+ *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 hydrateOps()。同步 seed
+ *  保留(對齊 mobile notifs 前例),guard 為 true 就短路,保護 markMessageRead 不被
+ *  第二次進頁的 fetch 覆寫;refreshMessages() 一律重新 fetch,供重試使用。 */
+export const messagesHydrated = writable(false);
+export function hydrateMessages(): Promise<void> {
+	return get(messagesHydrated) ? Promise.resolve() : refreshMessages();
+}
+export function refreshMessages(): Promise<void> {
+	return getMessages().then((d) => {
+		messages.set(d);
+		messagesHydrated.set(true);
+	});
+}
 
 /* ---------- Role + demo auth session ---------- */
 export const role = writable<Role>('admin');
