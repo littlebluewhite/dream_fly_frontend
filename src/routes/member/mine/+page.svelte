@@ -4,14 +4,10 @@
    * 聯絡教練 actions). Ported from the prototype's MyCourses (client/views.jsx).
    * Data + primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, ProgressBar, Icon } from '$lib/components/ui';
+  import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
-  import EmptyState from '$lib/member/components/EmptyState.svelte';
   import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
   import { getMine, type MineData } from '$lib/member/api';

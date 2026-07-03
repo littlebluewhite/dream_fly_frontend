@@ -1,7 +1,7 @@
 <script lang="ts">
   /* Error-state block with an optional retry button. */
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
+  import Icon from './Icon.svelte';
+  import Button from './Button.svelte';
   export let title = '載入失敗';
   export let body = '連線發生問題，無法取得最新資料，請稍後再試。';
   export let onRetry: (() => void) | null = null;

@@ -208,3 +208,13 @@ img {
 .mt-sm { margin-top: var(--spacing-sm); }
 .mt-md { margin-top: var(--spacing-md); }
 .mt-lg { margin-top: var(--spacing-lg); }
+
+/* 骨架 shimmer — Skeleton.svelte(共用貨架)依賴;單一定義,勿在 surface css 重複 */
+@keyframes df-shimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -150% 0;
+  }
+}

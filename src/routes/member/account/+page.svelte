@@ -4,14 +4,10 @@
    * member-points card and the order/payment history table; editing opens the
    * ProfileEditDialog. Data + primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, Avatar, Icon } from '$lib/components/ui';
+  import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { fmtNT } from '$lib/member/format';
   import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
-  import EmptyState from '$lib/member/components/EmptyState.svelte';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
   import { getAccount, type AccountData, type AccountProfile } from '$lib/member/api';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';

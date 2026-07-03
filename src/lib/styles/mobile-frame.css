@@ -149,10 +149,6 @@
 	from { opacity: 0; transform: translateY(12px) scale(0.97); }
 	to { opacity: 1; transform: none; }
 }
-@keyframes df-shimmer {
-	0% { background-position: 150% 0; }
-	100% { background-position: -150% 0; }
-}
 @keyframes df-typing {
 	0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
 	30% { opacity: 1; transform: translateY(-3px); }

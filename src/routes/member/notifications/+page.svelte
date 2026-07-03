@@ -9,11 +9,7 @@
 
   let alive = true;
   onDestroy(() => { alive = false; });
-  import { Card, FilterChip, Button, Icon } from '$lib/components/ui';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import EmptyState from '$lib/member/components/EmptyState.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState } from '$lib/components/ui';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { getNotifications } from '$lib/member/api';
   import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';

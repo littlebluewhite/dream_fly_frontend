@@ -5,12 +5,9 @@
    * are visual-only; clicking a class block raises an info toast. Data +
    * primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, IconButton, Icon } from '$lib/components/ui';
+  import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { WEEK, TIME_ROWS, type ScheduleBlock } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
   import { getSchedule, type ScheduleData } from '$lib/member/api';
 
   const rowOf = (t: string) => TIME_ROWS.indexOf(t);

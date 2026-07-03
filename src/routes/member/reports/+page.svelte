@@ -4,11 +4,7 @@
    * (client/views2.jsx). The BarRow + ReportCard sub-views are kept as inline
    * markup here. Data + primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Tabs, Card, Badge, Button, Avatar, ProgressBar, Icon } from '$lib/components/ui';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
-  import EmptyState from '$lib/member/components/EmptyState.svelte';
+  import { Tabs, Card, Badge, Button, Avatar, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import { getReports, type ReportsData } from '$lib/member/api';
   import { toasts } from '$lib/member/stores';
 

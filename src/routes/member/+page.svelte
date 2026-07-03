@@ -5,10 +5,7 @@
    * loading + error UI is ready for when fetch replaces the mock. */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { Card, Badge, Button, ProgressBar, Icon } from '$lib/components/ui';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { getDashboard, type DashboardData } from '$lib/member/api';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';

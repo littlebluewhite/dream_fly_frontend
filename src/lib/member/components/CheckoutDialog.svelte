@@ -9,7 +9,7 @@
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
-  import EmptyState from './EmptyState.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import { cart, points, subscriptions, checkoutOpen, toasts, applyOrder } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';

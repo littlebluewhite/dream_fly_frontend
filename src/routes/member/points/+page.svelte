@@ -5,10 +5,7 @@
    * foundation; the live balance lives in the `points` store so redemptions
    * persist across routes (mock-only, resets on reload). */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, Dialog, Icon } from '$lib/components/ui';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
+  import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { PT_TYPE, type Reward } from '$lib/member/data';
   import { points, pointsLedger, toasts } from '$lib/member/stores';
   import { getPoints, type PointsData } from '$lib/member/api';
