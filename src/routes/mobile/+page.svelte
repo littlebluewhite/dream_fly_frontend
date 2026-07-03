@@ -4,15 +4,24 @@
    * setTab(...) → goto 對應路由；nav.sheet('cart') → overlay.sheet；nav.push('trial') → overlay.push；
    * 課程卡 onOpen → overlay.sheet('course',{course})；onAdd → cart.add + toast。
    * 原型 <StatusBar light/> 改為 hero 內 .m-top-inset spacer（比照 HeroHeader 慣例）。
-   * Legacy Svelte（無 runes）、繁體中文文案、mock-only。 */
+   * Legacy Svelte（無 runes）、繁體中文文案、mock-only。
+   *
+   * 資料改由 getHome()(mock-API 接縫)非同步取得:onMount 進三態閘門
+   * (loading/error/ready);cart/overlay/unread 等既有 store 互動不動。下一堂課
+   * 卡的「明日」/「19:00」原是頁面硬編字面,與 myCourses[0].next 描述同一件事
+   * 卻各自寫一次,改為拆解 next.next 衍生,不留雙來源。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
+  import Card from '$lib/components/ui/Card.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
-  import { CATALOG, ANNOUNCE, MY_COURSES } from '$lib/mobile/data';
+  import type { Course } from '$lib/mobile/data';
+  import { getHome, type MobileHomeData } from '$lib/mobile/api';
   import { overlay, cart, toasts, unread } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
 
@@ -26,11 +35,28 @@
     { key: '跑酷', label: '跑酷', icon: 'flame' }
   ];
 
-  $: profile = $profileStore;
-  const hot = CATALOG.filter((c) => c.hot).concat(CATALOG.filter((c) => !c.hot)).slice(0, 4);
-  const next = MY_COURSES[0];
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MobileHomeData | null = null;
 
-  function addToCart(c: (typeof CATALOG)[number]) {
+  function load() {
+    phase = 'loading';
+    getHome()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: profile = $profileStore;
+  $: catalog = data?.catalog ?? [];
+  $: announce = data?.announce ?? [];
+  $: myCourses = data?.myCourses ?? [];
+  $: hot = catalog.filter((c) => c.hot).concat(catalog.filter((c) => !c.hot)).slice(0, 4);
+  // 下一堂課卡的日期/時間:與 mine 頁課程卡同一欄位(next.next,如「明日 19:00」)
+  // 同源拆解,不再各自硬編一次。載入完成前 myCourses 仍是 [],用可選鏈防呆。
+  $: next = myCourses[0];
+  $: [nextDay, nextTime] = next ? next.next.split(' ') : ['', ''];
+
+  function addToCart(c: Course) {
     const r = cart.add(c);
     toasts.notify(
       r === 'waitlisted' ? 'info' : 'success',
@@ -40,6 +66,7 @@
   }
 </script>
 
+{#if phase === 'ready'}
 <div style="flex:none; background:linear-gradient(125deg, var(--df-primary), var(--df-primary-dark)); color:#fff;">
   <div class="m-top-inset"></div>
   <div style="padding:2px 18px 18px;">
@@ -74,8 +101,8 @@
         </div>
         <div style="display:flex; align-items:center; gap:13px;">
           <div style="text-align:center; flex:none; background:var(--df-primary-bg); border-radius:12px; padding:9px 13px;">
-            <div style="font-size:11px; color:var(--df-primary); font-weight:600;">明日</div>
-            <div style="font-size:19px; font-weight:800; color:var(--df-primary); font-family:var(--df-font-heading);">19:00</div>
+            <div style="font-size:11px; color:var(--df-primary); font-weight:600;">{nextDay}</div>
+            <div style="font-size:19px; font-weight:800; color:var(--df-primary); font-family:var(--df-font-heading);">{nextTime}</div>
           </div>
           <div style="flex:1; min-width:0;">
             <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{next.name}</div>
@@ -139,7 +166,7 @@
     <div>
       <SectionTitle>最新公告</SectionTitle>
       <div class="df-hide-scrollbar" style="display:flex; gap:12px; overflow-x:auto; margin:0 -18px; padding:0 18px 4px;">
-        {#each ANNOUNCE as a, i (i)}
+        {#each announce as a, i (i)}
           <div style="flex:none; width:232px; background:#fff; border:1px solid var(--df-border); border-radius:14px; padding:14px; box-shadow:var(--df-shadow-card);">
             <div style="display:flex; align-items:center; gap:9px; margin-bottom:9px;">
               <div style="width:34px; height:34px; border-radius:10px; background:{a.bg}; display:flex; align-items:center; justify-content:center; flex:none;">
@@ -166,3 +193,38 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <div class="m-top-inset df-scroll df-view" style="padding:16px;">
+    <Card padding={0}><ErrorState onRetry={load} /></Card>
+  </div>
+{:else}
+  <div class="m-top-inset df-scroll df-view" data-testid="mobile-home-skeleton" style="padding:18px; display:flex; flex-direction:column; gap:18px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <Skeleton w={44} h={44} r={999} />
+      <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+        <Skeleton w="40%" h={12} />
+        <Skeleton w="60%" h={16} />
+      </div>
+    </div>
+    <SkelCard><Skeleton w="100%" h={72} r={12} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={72} r={12} /></SkelCard>
+    <div style="display:grid; grid-template-columns:repeat(6, 1fr); gap:6px;">
+      {#each [0, 1, 2, 3, 4, 5] as i (i)}
+        <Skeleton w="100%" h={64} r={15} />
+      {/each}
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard padding={0}>
+          <div style="display:flex; align-items:center; gap:13px; padding:13px 14px;">
+            <Skeleton w={52} h={52} r={13} />
+            <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+              <Skeleton w="60%" h={15} />
+              <Skeleton w="40%" h={12} />
+            </div>
+          </div>
+        </SkelCard>
+      {/each}
+    </div>
+  </div>
+{/if}
