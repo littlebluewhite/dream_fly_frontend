@@ -3,13 +3,19 @@
    * over a responsive grid of CoachCard, filtered by the topbar `search` store
    * (matches 姓名 / 職稱 / 專長標籤, case-insensitive). The pencil on a card opens
    * CoachEditDialog on that coach; 新增教練 opens it on a blank coach. Saves update
-   * the local working copy (mock-only — no backend), appending new coaches. */
+   * the local working copy (mock-only — no backend), appending new coaches.
+   *
+   * Data now arrives async via getCoaches() (mock-API seam): onMount loads it
+   * into a three-state gate (loading/error/ready); `coaches` is the local
+   * mutable working copy 新增/編輯 edits in place. */
+  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import CoachCard from '$lib/admin/components/CoachCard.svelte';
   import CoachEditDialog from '$lib/admin/components/CoachEditDialog.svelte';
-  import { Button, Icon } from '$lib/components/ui';
-  import { COACHES, type Coach } from '$lib/admin/data';
+  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import type { Coach } from '$lib/admin/data';
   import { search } from '$lib/admin/stores';
+  import { getCoaches } from '$lib/admin/api';
 
   const blankCoach = (): Coach => ({
     id: '',
@@ -26,12 +32,21 @@
     phone: ''
   });
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
   // Local working copy so saves reflect immediately (mirrors the source useState).
-  let coaches: Coach[] = COACHES;
+  let coaches: Coach[] = [];
 
   let editing: Coach | null = null;
   let editOpen = false;
   let addNew = false;
+
+  function load() {
+    phase = 'loading';
+    getCoaches()
+      .then((d) => { coaches = d.coaches; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   // Filter by 姓名 / 職稱 / 專長標籤, case-insensitive (source matches name/title/tags).
   $: q = $search.trim().toLowerCase();
@@ -72,24 +87,34 @@
   }
 </script>
 
-<PageHead title="教練團隊" sub={coaches.length + ' 位專任教練'}>
-  <svelte:fragment slot="actions">
-    <Button variant="primary" size="sm" on:click={openNew}>
-      <Icon name="user-plus" size={15} />新增教練
-    </Button>
-  </svelte:fragment>
-</PageHead>
+{#if phase === 'ready'}
+  <PageHead title="教練團隊" sub={coaches.length + ' 位專任教練'}>
+    <svelte:fragment slot="actions">
+      <Button variant="primary" size="sm" on:click={openNew}>
+        <Icon name="user-plus" size={15} />新增教練
+      </Button>
+    </svelte:fragment>
+  </PageHead>
 
-<div class="grid">
-  {#each visible as coach (coach.id)}
-    <CoachCard {coach} onEdit={openEdit} />
-  {/each}
-  {#if visible.length === 0}
-    <div class="empty">找不到符合的教練</div>
-  {/if}
-</div>
+  <div class="grid">
+    {#each visible as coach (coach.id)}
+      <CoachCard {coach} onEdit={openEdit} />
+    {/each}
+    {#if visible.length === 0}
+      <div class="empty">找不到符合的教練</div>
+    {/if}
+  </div>
 
-<CoachEditDialog coach={editing} open={editOpen} isNew={addNew} {onClose} onSave={onSaved} />
+  <CoachEditDialog coach={editing} open={editOpen} isNew={addNew} {onClose} onSave={onSaved} />
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="grid" data-testid="coaches-skeleton">
+    {#each [0, 1, 2] as i (i)}
+      <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
+    {/each}
+  </div>
+{/if}
 
 <style>
   .grid {
