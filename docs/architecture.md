@@ -41,8 +41,10 @@ see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `t
 `ORDERS_BASE` in `classes.ts` / `members.ts` / `orders.ts`) shared by the admin↔mobile-admin ops-pair, and
 `member-app.ts` — the member↔mobile desktop/mobile twin seed (16 constants; `ANNOUNCE` stays forked in
 each facade because one announcement's background colour differs between the two). Four facades consume
-it — `admin`, `mobile-admin`, `member`, `mobile`'s `data.ts` — each either re-exporting a dataset verbatim
-(pass-through) or importing a `*_BASE` array and layering its own derived/looked-up fields on top; `coach`
+it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` — mostly as verbatim
+pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE` arrays and layers its
+own derived fields on top via `.map` builders, while `member`/`mobile` re-export the same domain value
+under an `as` assertion to their own stricter local type (same reference, no transformation); `coach`
 has no persona mapping into the shared seed, so it doesn't consume `lib/domain/` at all. Because a facade
 could silently drop a re-exported *type* without vitest noticing (type-only imports erase at transpile
 time), the `facade-type-exports` convention (`src/lib/admin/facade-type-exports.test.ts`, mirrored inline
@@ -95,9 +97,11 @@ Pages that used to import seed constants directly now do a legacy `onMount` + pl
 (mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
 `*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) with a page-level `load()` /
 `refresh()` split so `ErrorState`'s retry always refetches, and pages track their own `alive` flag so a
-response that resolves after unmount can't overwrite a shared store. Layout shells like `admin`/`coach`'s
-`Sidebar.svelte` / `Topbar.svelte` carry their own hardcoded nav config and stay outside the seam entirely
-(no `data.ts` or `api.ts` import) — a deliberate boundary, not an oversight. `public` is excluded because
+response that resolves after unmount can't overwrite a shared store. Layout shells stay outside the seam
+— a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
+or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
+static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
+synchronously, never through `api.ts` or the phase gate. `public` is excluded because
 its pages may later move to a SvelteKit `+page.ts` load instead (SSR/SEO, out of scope here); `staff` is
 excluded because it's pre-auth login/role-switch UI with no `data.ts` to seam.
 
