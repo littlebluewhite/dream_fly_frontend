@@ -92,7 +92,7 @@
         預覽
       </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
-        <CoachAvatar size={72} online />
+        <CoachAvatar size={72} online initial={coach.initial} />
         <div>
           <div
             style="font-size:var(--df-text-lg);font-weight:var(--df-weight-bold);color:var(--df-text-dark);font-family:var(--df-font-heading)"

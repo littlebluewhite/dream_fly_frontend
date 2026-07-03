@@ -53,6 +53,16 @@ describe('/coach/settings (+page)', () => {
 		expect(txt).toContain(FIXTURE_COACH.bio);
 	});
 
+	it('CoachAvatar 顯示 payload 的 initial,而非退回 seed 預設值(審查回修)', async () => {
+		// 頁首(size 88)與 ProfileTab 預覽卡(size 72)兩顆頭像都應顯示 fixture 的
+		// 「測」;若任一處漏傳 initial prop,元件會退回 seed COACH.initial「李」,
+		// 此斷言必紅 — 可證偽。fixture 其他欄位刻意不含「李」字。
+		const { container, findByText, getAllByText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+		expect(getAllByText(FIXTURE_COACH.initial).length).toBeGreaterThanOrEqual(2);
+		expect(container.textContent ?? '').not.toContain('李');
+	});
+
 	it('passes coach through to CredentialsTab (帳號憑證 tab 顯示 fixture chips)', async () => {
 		const { container, findByText, getByText } = render(SettingsPage);
 		await findByText(FIXTURE_COACH.full);

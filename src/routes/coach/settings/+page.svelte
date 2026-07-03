@@ -53,7 +53,7 @@
   <Card padding={24}>
     <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap">
       <!-- Avatar -->
-      <CoachAvatar size={88} online />
+      <CoachAvatar size={88} online initial={data.coach.initial} />
 
       <!-- Name / role / chips -->
       <div style="flex:1;min-width:200px">

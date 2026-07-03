@@ -111,7 +111,7 @@
     <div style="font-size:22px;font-weight:800;letter-spacing:-0.3px">早安，{data.coach.display}（李教練）</div>
     <div style="font-size:14px;opacity:0.85;margin-top:6px">{data.todayLabel}</div>
     <div style="font-size:13.5px;opacity:0.78;margin-top:4px">
-      今天有 {todayClasses.length} 堂課，2 班待點名
+      今天有 {todayClasses.length} 堂課，{data.pendingClasses}待點名
     </div>
   </div>
 
@@ -189,8 +189,8 @@
         <span style="font-size:12px;font-weight:600;color:var(--df-text-light)">依優先排序</span>
         {#each [
           ['var(--df-primary-bg)', 'var(--df-primary)', '下一堂課 14:00 競技體操'],
-          ['var(--df-warning-bg)', 'var(--df-warning)', '待點名 2 班'],
-          ['var(--df-error-bg)', 'var(--df-error)', '待回覆 3 則']
+          ['var(--df-warning-bg)', 'var(--df-warning)', '待點名 ' + data.pendingClasses],
+          ['var(--df-error-bg)', 'var(--df-error)', '待回覆 ' + data.pendingReplies]
         ] as [bg, dot, t] (t)}
           <span
             style="display:inline-flex;align-items:center;gap:6px;background:{bg};border-radius:999px;padding:5px 10px"
