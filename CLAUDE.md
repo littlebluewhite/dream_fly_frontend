@@ -15,8 +15,8 @@ SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing
 **no real backend**: every "API" is mock seed data in `data.ts` files plus browser `localStorage`;
 checkout/payment is simulated (no real money flow).
 
-> `README.md` is **stale** (an earlier badminton-marketing scaffold) — treat `CONTEXT.md`, `docs/adr/`,
-> and `docs/architecture.md` as authoritative, not `README.md`.
+> `README.md` is a quick-start summary (rewritten 2026-07); `CONTEXT.md`, `docs/adr/`, and
+> `docs/architecture.md` remain the authoritative deep references.
 
 ## Commands
 
