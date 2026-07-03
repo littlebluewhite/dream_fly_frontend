@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 本月營收來源拆解 — faithful port of reports.jsx `RevenueBreakdown`. A padding-0
    * Card: a tinted header (dollar chip + title + 可追溯 pill), then one row per
-   * REVENUE_BREAKDOWN entry (dot · name/meta · mono amount · drill button), then a
+   * `rows` entry (dot · name/meta · mono amount · drill button), then a
    * 合計 footer on bg-light. The drill button is a static demo affordance. */
   import { Card, Icon } from '$lib/components/ui';
   import type { RevenueRow } from '$lib/admin/data';

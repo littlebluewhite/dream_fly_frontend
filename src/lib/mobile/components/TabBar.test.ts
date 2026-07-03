@@ -12,8 +12,8 @@ vi.mock('$app/stores', () => ({
 afterEach(() => {
 	vi.restoreAllMocks();
 	// Reset notifs to ensure unread count is back to the seeded value for other tests.
-	// We cannot call set() directly (createNotifs doesn't expose it), but we can leave
-	// the store as-is — each test controls it as needed for its assertions.
+	// createNotifs DOES expose set() (added for hydration), but we leave the store
+	// as-is here — each test controls it as needed for its assertions.
 });
 
 describe('mobile TabBar adapter — smoke tests', () => {

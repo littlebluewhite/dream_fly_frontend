@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 付款方式占比 — faithful port of reports.jsx `PaymentSplit`. A 120px
    * conic-gradient donut (cumulative stops, 72px hub showing 種管道 count) sitting
-   * to the LEFT of the PAYMENT_SPLIT legend (row layout, gap 20). Fixed 380px. */
+   * to the LEFT of the `rows` legend (row layout, gap 20). Fixed 380px. */
   import { Card } from '$lib/components/ui';
   import type { PctSlice } from '$lib/admin/data';
   import { donutStops } from './donut';

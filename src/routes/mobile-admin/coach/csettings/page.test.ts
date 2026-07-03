@@ -35,7 +35,7 @@ describe('mobile-admin/coach/csettings 頁', () => {
 	it('async 載入後顯示 payload 的教練資料(相異 fixture)', async () => {
 		const { findByText, getAllByText } = render(CsettingsPage);
 		expect(await findByText('測試特級教練')).toBeInTheDocument();
-		expect((await getAllByText('42 年').length) > 0).toBe(true);
+		expect(getAllByText('42 年').length).toBeGreaterThan(0);
 		expect(getAllByText('999 位').length).toBeGreaterThan(0);
 	});
 

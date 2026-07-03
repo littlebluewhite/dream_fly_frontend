@@ -36,10 +36,10 @@ npx vitest run -t "blocks open redirect"
 
 ## 架構一覽
 
-前端在根 layout（`src/routes/+layout.svelte`）依路徑拆成七大 UI surface：公開行銷站，以及六個各自帶著自己
-版型的「app」surface —— 會員中心 `/member`、管理後台 `/admin`、教練工作台 `/coach`、staff 登入
-`/staff/login`、行動版會員 `/mobile`、行動版後台 `/mobile-admin`；只有公開行銷站套用共用的
-`Header`/`Footer`。`src/lib` 依 surface 分資料夾（各自的 `data.ts`、`stores.ts`、`api.ts` 等），跨
+前端在根 layout（`src/routes/+layout.svelte`）依路徑拆成七大 UI surface：公開行銷站，以及六個「app」
+surface —— 會員中心 `/member`、管理後台 `/admin`、教練工作台 `/coach`、staff 登入 `/staff/login`、行動版
+會員 `/mobile`、行動版後台 `/mobile-admin`，其中五個各自帶著自己版型，staff 登入為 bare 頁面、無巢狀版型；
+只有公開行銷站套用共用的 `Header`/`Footer`。`src/lib` 依 surface 分資料夾（各自的 `data.ts`、`stores.ts`、`api.ts` 等），跨
 surface 共用程式碼集中在 `lib/components/`、`lib/domain/`、`lib/stores/`、`lib/styles/` 等目錄，其中
 `lib/domain/` 是 admin/mobile-admin（ops pair）與 member/mobile（會員 app 雙生）共用 mock 種子的單一
 來源。`admin`、`coach`、`member`、`mobile`、`mobile-admin` 五個 surface 各有一份 `api.ts` 作為 mock API

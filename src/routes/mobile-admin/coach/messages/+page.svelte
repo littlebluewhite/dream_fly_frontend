@@ -2,10 +2,11 @@
   /* 教練 · 訊息。port coach.jsx CoachMessagesScreen (213-242)。
    * 點訊息 → overlay.push('messageThread',{m})；onBell → overlay.sheet('notif')。
    *
-   * 資料改由 getMessages()(mock-API 接縫)非同步水合共享 messages store(mobile
-   * notifications 範本同款):alive 旗標防 unmount 後 resolve 覆寫、messagesHydrated
-   * 守衛防重訪重抓、refresh() 一律重新 fetch 供 ErrorState 重試共用(不會被
-   * load() 的守衛短路)。markMessageRead 既有 mutation 不動。 */
+   * 資料改由 hydrateMessages()(mock-API 接縫)非同步水合共享 messages store,三態
+   * 閘門(loading/error/ready);messagesHydrated 守衛防止第二次進頁的 fetch 覆寫
+   * markMessageRead 的已讀狀態,refreshMessages() 供 ErrorState 重試(不受守衛短路)。
+   * alive 旗標防止 unmount 後解析的 in-flight fetch 影響本頁狀態。markMessageRead
+   * 既有 mutation 不動。 */
   import { onMount, onDestroy } from 'svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
