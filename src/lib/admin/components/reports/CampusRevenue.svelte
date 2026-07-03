@@ -3,7 +3,9 @@
    * dot + name + students caption · mono amount, over a width-% bar (pct, in the
    * campus colour). Flexible card beside the fixed PaymentSplit. */
   import { Card } from '$lib/components/ui';
-  import { CAMPUS_REVENUE } from '$lib/admin/data';
+  import type { CampusRevenue } from '$lib/admin/data';
+
+  export let rows: CampusRevenue[];
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -16,7 +18,7 @@
     <span style="font-size:12px; color:var(--df-text-light);">本月 · 含在學人數</span>
   </div>
   <div style="display:flex; flex-direction:column; gap:15px;">
-    {#each CAMPUS_REVENUE as c}
+    {#each rows as c}
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">

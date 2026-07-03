@@ -3,9 +3,11 @@
    * height = count/maxC * 110px) inside a 168px track; each bar carries its own
    * colour. Flexible card beside the fixed RetentionTrend. */
   import { Card } from '$lib/components/ui';
-  import { ATT_DIST } from '$lib/admin/data';
+  import type { CountBar } from '$lib/admin/data';
 
-  $: maxC = Math.max(...ATT_DIST.map((d) => d.count));
+  export let rows: CountBar[];
+
+  $: maxC = Math.max(...rows.map((d) => d.count));
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -16,7 +18,7 @@
   </div>
   <div style="font-size:12px; color:var(--df-text-light); margin-bottom:16px;">全館學員人數分布</div>
   <div style="display:flex; align-items:flex-end; gap:16px; height:168px;">
-    {#each ATT_DIST as d}
+    {#each rows as d}
       <div class="col">
         <span
           style="font-size:16px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-heading);"

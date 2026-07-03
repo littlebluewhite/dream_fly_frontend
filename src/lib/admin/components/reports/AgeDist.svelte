@@ -3,7 +3,9 @@
    * dot + label · pct%, over a width-% bar (pct, in the band colour). Flexible
    * card beside the fixed TierDist. */
   import { Card } from '$lib/components/ui';
-  import { AGE_DIST } from '$lib/admin/data';
+  import type { PctSlice } from '$lib/admin/data';
+
+  export let rows: PctSlice[];
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -13,7 +15,7 @@
     年齡層分布
   </div>
   <div style="display:flex; flex-direction:column; gap:14px;">
-    {#each AGE_DIST as a}
+    {#each rows as a}
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">

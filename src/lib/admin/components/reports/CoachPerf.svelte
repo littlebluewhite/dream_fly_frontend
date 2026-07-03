@@ -4,7 +4,9 @@
    * width-% bar (revPct, filled in the coach colour). Flexible card beside the
    * fixed VenueUsage. */
   import { Card } from '$lib/components/ui';
-  import { COACH_PERF } from '$lib/admin/data';
+  import type { CoachPerf } from '$lib/admin/data';
+
+  export let rows: CoachPerf[];
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -17,7 +19,7 @@
     <span style="font-size:12px; color:var(--df-text-light);">營收 · 學員數 · 出席率</span>
   </div>
   <div style="display:flex; flex-direction:column; gap:13px;">
-    {#each COACH_PERF as c}
+    {#each rows as c}
       <div style="display:flex; align-items:center; gap:13px;">
         <div class="avatar" style="background:{c.color};">{c.initial}</div>
         <div style="flex:1; min-width:0;">

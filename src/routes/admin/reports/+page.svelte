@@ -1,14 +1,14 @@
 <script lang="ts">
   /* 報表分析 — faithful SvelteKit port of reports.jsx `ReportsView`. The shell wraps
    * /admin, so this renders page content only: a PageHead (period picker + 匯出報表),
-   * the REPORT_KPIS 3-col grid, the full-width RevenueBreakdown, then the prototype's
+   * the KPI 3-col grid, the full-width RevenueBreakdown, then the prototype's
    * paired panel rows (flex, gap 18, wrap) — each pairs one flexible chart with one
    * fixed-width chart exactly as ReportsView lays them out. Every chart is pure CSS.
    *
-   * Data now arrives async via getReports() (mock-API seam): onMount loads the
-   * REPORT_KPIS band into a three-state gate (loading/error/ready). The 15 charts
-   * below import their data at module scope and take no props — an existing,
-   * documented boundary (see comment further down) that this task leaves as-is. */
+   * Data arrives async via getReports() (mock-API seam): onMount loads the KPI band
+   * AND every chart dataset into a three-state gate (loading/error/ready). The 15
+   * charts take their datasets as REQUIRED props from this payload — no chart reads
+   * seed data itself, so swapping the mock for a real backend touches api.ts only. */
   import { onMount } from 'svelte';
   import { Button, Icon, Select, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
@@ -44,9 +44,9 @@
   }
   onMount(load);
 
-  // The period picker re-scales ONLY the KPI band (kpisForPeriod). The 15 charts
-  // below import their data at module scope and take no props, so they are not
-  // rewired — that is the honest mock boundary.
+  // The period picker re-scales ONLY the KPI band (kpisForPeriod); the 15 charts
+  // render their payload datasets as-is (the prototype's period control never
+  // touched the charts either).
   let period = DEFAULT_PERIOD;
   $: kpis = data ? kpisForPeriod(data.kpis, period) : [];
 </script>
@@ -76,35 +76,35 @@
       {/each}
     </div>
 
-    <RevenueBreakdown />
+    <RevenueBreakdown rows={data.revenueBreakdown} total={data.revenueTotal} />
 
     <div class="panel-row">
-      <RevenueTrend />
-      <CategoryDonut />
+      <RevenueTrend rows={data.revenueTrend} />
+      <CategoryDonut rows={data.categorySplit} />
     </div>
     <div class="panel-row">
-      <TopCourses />
-      <IncomeSources />
+      <TopCourses rows={data.topCourses} />
+      <IncomeSources rows={data.incomeSources} />
     </div>
     <div class="panel-row">
-      <CoachPerf />
-      <VenueUsage />
+      <CoachPerf rows={data.coachPerf} />
+      <VenueUsage rows={data.venueUsage} />
     </div>
     <div class="panel-row">
-      <AttDist />
-      <RetentionTrend />
+      <AttDist rows={data.attDist} />
+      <RetentionTrend rows={data.retention} />
     </div>
     <div class="panel-row">
-      <AgeDist />
-      <TierDist />
+      <AgeDist rows={data.ageDist} />
+      <TierDist rows={data.tierDist} />
     </div>
     <div class="panel-row">
-      <CampusRevenue />
-      <PaymentSplit />
+      <CampusRevenue rows={data.campusRevenue} />
+      <PaymentSplit rows={data.paymentSplit} />
     </div>
     <div class="panel-row">
-      <ConversionFunnel />
-      <WeekdayLoad />
+      <ConversionFunnel rows={data.funnel} />
+      <WeekdayLoad rows={data.weekdayLoad} />
     </div>
   </div>
 {:else if phase === 'error'}

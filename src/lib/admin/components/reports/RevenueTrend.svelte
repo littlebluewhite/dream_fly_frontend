@@ -3,9 +3,11 @@
    * (height = h/max * 160px) inside a 190px-tall track; the peak month renders in
    * primary-dark. Flexible card (flex:1) beside the fixed CategoryDonut. */
   import { Card } from '$lib/components/ui';
-  import { REVENUE_TREND } from '$lib/admin/data';
+  import type { TrendBar } from '$lib/admin/data';
 
-  $: max = Math.max(...REVENUE_TREND.map((d) => d.h));
+  export let rows: TrendBar[];
+
+  $: max = Math.max(...rows.map((d) => d.h));
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -21,7 +23,7 @@
     <span style="font-size:13px; font-weight:700; color:var(--df-primary);">總計 NT$ 4.51M</span>
   </div>
   <div style="display:flex; align-items:flex-end; gap:8px; height:190px;">
-    {#each REVENUE_TREND as d}
+    {#each rows as d}
       <div class="col">
         <div
           class="bar"

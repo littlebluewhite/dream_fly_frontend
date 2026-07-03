@@ -4,9 +4,11 @@
    * (count/max), with rank 1's fill in primary and the rest primary-light.
    * Flexible card beside the fixed IncomeSources. */
   import { Card } from '$lib/components/ui';
-  import { TOP_COURSES } from '$lib/admin/data';
+  import type { TopCourse } from '$lib/admin/data';
 
-  $: max = Math.max(...TOP_COURSES.map((c) => c.count));
+  export let rows: TopCourse[];
+
+  $: max = Math.max(...rows.map((c) => c.count));
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -19,7 +21,7 @@
     <span style="font-size:12px; color:var(--df-text-light);">依報名人數</span>
   </div>
   <div style="display:flex; flex-direction:column; gap:15px;">
-    {#each TOP_COURSES as c}
+    {#each rows as c}
       <div style="display:flex; align-items:center; gap:14px;">
         <span
           style="width:20px; text-align:center; font-size:14px; font-weight:800; color:{c.rank === 1

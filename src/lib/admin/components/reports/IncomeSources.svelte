@@ -3,7 +3,9 @@
    * source: dot + label · mono amount, a width-% bar (pct, filled in the source
    * colour), then a "{pct}% 占比" caption. Fixed 380px beside flexible TopCourses. */
   import { Card } from '$lib/components/ui';
-  import { INCOME_SOURCES } from '$lib/admin/data';
+  import type { IncomeSource } from '$lib/admin/data';
+
+  export let rows: IncomeSource[];
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">
@@ -13,7 +15,7 @@
     收入來源分析
   </div>
   <div style="display:flex; flex-direction:column; gap:14px;">
-    {#each INCOME_SOURCES as s}
+    {#each rows as s}
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
