@@ -1,0 +1,69 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render } from '@testing-library/svelte';
+import CoachesPage from './+page.svelte';
+import { COACHES } from '$lib/admin/data';
+import { getCoaches } from '$lib/admin/api';
+
+vi.mock('$lib/admin/api', () => ({ getCoaches: vi.fn() }));
+
+beforeEach(() => {
+	vi.mocked(getCoaches).mockReset();
+	vi.mocked(getCoaches).mockResolvedValue({ coaches: COACHES });
+});
+
+/* 教練團隊 (admin.jsx CoachesView): PageHead + a card grid over COACHES. Data now
+ * arrives through the getCoaches() seam (async), so every assertion first
+ * awaits the ready phase.
+ *
+ * Not covered here: asserting that clicking a card's 編輯教練 pencil (or the
+ * header's 新增教練) actually opens CoachEditDialog. Pre-existing, unrelated to
+ * this seam conversion: CoachEditDialog's `let wasOpen = false; $: if (open &&
+ * !wasOpen && coach) {...}; $: wasOpen = open;` two-statement pattern does not
+ * pick up `coach`/`open` prop changes on an already-mounted instance (verified
+ * in isolation — Svelte reorders the trailing `$: wasOpen = open;` ahead of the
+ * guard it's meant to gate, so `f` never updates and the dialog never opens).
+ * ClassEditDialog/VenueEditDialog/TicketEditDialog use the safe single-
+ * statement `let lastX = x; $: if (x !== lastX) { lastX = x; ... }` form and do
+ * not have this problem. Left unfixed per this task's scope (consumption-layer
+ * swap only); flagged in the task report for a follow-up fix. */
+describe('教練團隊 (+page)', () => {
+	it('renders the PageHead title and 新增教練 action', async () => {
+		const { container, findByText } = render(CoachesPage);
+		await findByText(COACHES[0].name);
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('教練團隊');
+		expect(txt).toContain('新增教練');
+	});
+
+	it('renders every coach name from COACHES', async () => {
+		const { container, findByText } = render(CoachesPage);
+		await findByText(COACHES[0].name);
+		const txt = container.textContent ?? '';
+		for (const c of COACHES) {
+			expect(txt).toContain(c.name);
+		}
+	});
+
+	it('renders one 編輯教練 pencil button per coach', async () => {
+		const { container, findByText } = render(CoachesPage);
+		await findByText(COACHES[0].name);
+		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
+		expect(pencils).toHaveLength(COACHES.length);
+	});
+});
+
+describe('教練團隊 — 三態', () => {
+	it('error:顯示「載入失敗」', async () => {
+		vi.mocked(getCoaches).mockReset();
+		vi.mocked(getCoaches).mockRejectedValue(new Error('network'));
+		const { findByText } = render(CoachesPage);
+		await findByText('載入失敗');
+	});
+
+	it('loading:顯示骨架', () => {
+		vi.mocked(getCoaches).mockReset();
+		vi.mocked(getCoaches).mockReturnValue(new Promise(() => {}));
+		const { getByTestId } = render(CoachesPage);
+		expect(getByTestId('coaches-skeleton')).toBeTruthy();
+	});
+});
