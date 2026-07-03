@@ -1,13 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import SchedulePage from './+page.svelte';
+import { SCHED_COURSES } from '$lib/coach/data';
+import { getSchedule } from '$lib/coach/api';
+
+vi.mock('$lib/coach/api', () => ({ getSchedule: vi.fn() }));
+
+beforeEach(() => {
+	vi.mocked(getSchedule).mockReset();
+	vi.mocked(getSchedule).mockResolvedValue({ courses: SCHED_COURSES });
+});
 
 /* 排課管理 page — now interactive: 日/週/月 toggle, prev/next/今日, and two
  * CoachDropdown filters (category + venue) that narrow the rendered courses.
- * Anchor is fixed at Sat 30 May 2026 so the rendered week is deterministic. */
+ * Anchor is fixed at Sat 30 May 2026 so the rendered week is deterministic.
+ * Data now arrives through the getSchedule() seam (async), so every assertion
+ * first awaits the ready phase. */
 describe('/coach/schedule (+page) — interactive', () => {
-	it('defaults to the 週 view (time grid present) showing all courses', () => {
-		const { container, getByText } = render(SchedulePage);
+	it('defaults to the 週 view (time grid present) showing all courses', async () => {
+		const { container, getByText, findByText } = render(SchedulePage);
+		await findByText('08:00');
 		const txt = container.textContent ?? '';
 		// week grid renders SCHED_HOURS time labels; month view does not.
 		expect(txt).toContain('08:00');
@@ -17,7 +29,8 @@ describe('/coach/schedule (+page) — interactive', () => {
 	});
 
 	it('switching to 月 swaps to the month view (time grid gone)', async () => {
-		const { container, getByText } = render(SchedulePage);
+		const { container, getByText, findByText } = render(SchedulePage);
+		await findByText('08:00');
 		await fireEvent.click(getByText('月'));
 		const txt = container.textContent ?? '';
 		// month view has no SCHED_HOURS time column.
@@ -27,7 +40,8 @@ describe('/coach/schedule (+page) — interactive', () => {
 	});
 
 	it('a category filter narrows the rendered courses', async () => {
-		const { getByText, queryByText, getAllByText } = render(SchedulePage);
+		const { getByText, queryByText, getAllByText, findByText } = render(SchedulePage);
+		await findByText('08:00');
 		// open the category CoachDropdown (current value label) and pick 跑酷.
 		await fireEvent.click(getByText('全部課程類型'));
 		// "跑酷" appears both as a dropdown option (a <button>) and a legend chip
@@ -38,5 +52,21 @@ describe('/coach/schedule (+page) — interactive', () => {
 		// 跑酷 course stays, 啦啦隊 course is filtered out.
 		expect(getByText('跑酷入門')).toBeInTheDocument();
 		expect(queryByText('啦啦隊基礎')).toBeNull();
+	});
+});
+
+describe('/coach/schedule — 三態', () => {
+	it('error:顯示「載入失敗」', async () => {
+		vi.mocked(getSchedule).mockReset();
+		vi.mocked(getSchedule).mockRejectedValue(new Error('network'));
+		const { findByText } = render(SchedulePage);
+		await findByText('載入失敗');
+	});
+
+	it('loading:顯示骨架', () => {
+		vi.mocked(getSchedule).mockReset();
+		vi.mocked(getSchedule).mockReturnValue(new Promise(() => {}));
+		const { getByTestId } = render(SchedulePage);
+		expect(getByTestId('schedule-skeleton')).toBeTruthy();
 	});
 });

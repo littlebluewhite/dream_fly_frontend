@@ -2,11 +2,18 @@
   /* 排課管理 — interactive schedule (日 / 週 / 月).
    * Anchor-driven: prev/next shift the anchor by the active view, 今日 resets it,
    * and the two CoachDropdowns filter by category + venue. Filtered courses feed
-   * both ScheduleGrid (日/週) and ScheduleMonth (月). */
+   * both ScheduleGrid (日/週) and ScheduleMonth (月).
+   *
+   * Data arrives async via getSchedule()(mock-API seam): onMount loads the course
+   * list into a three-state gate (loading/error/ready); `courses` is the local
+   * working copy the category/venue filters read from. */
+  import { onMount } from 'svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { CAT_COLOR, SCHED_COURSES } from '$lib/coach/data';
-  import type { SchedCat, SchedVenue } from '$lib/coach/data';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { CAT_COLOR } from '$lib/coach/data';
+  import type { SchedCat, SchedVenue, SchedCourse } from '$lib/coach/data';
+  import { getSchedule } from '$lib/coach/api';
   import ScheduleGrid from '$lib/coach/components/ScheduleGrid.svelte';
   import ScheduleMonth from '$lib/coach/components/ScheduleMonth.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
@@ -19,6 +26,17 @@
     fmtDayTitle
   } from '$lib/coach/schedule-dates';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let courses: SchedCourse[] = [];
+
+  function load() {
+    phase = 'loading';
+    getSchedule()
+      .then((d) => { courses = d.courses; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
   type View = '日' | '週' | '月';
   const viewOptions: View[] = ['日', '週', '月'];
 
@@ -28,7 +46,7 @@
   let catFilter = '全部課程類型';
   let venueFilter = '所有場館';
 
-  $: filteredCourses = SCHED_COURSES.filter(
+  $: filteredCourses = courses.filter(
     (c) =>
       (catFilter === '全部課程類型' || c.cat === (catFilter as SchedCat)) &&
       (venueFilter === '所有場館' || c.venue === (venueFilter as SchedVenue))
@@ -43,6 +61,7 @@
     'display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--df-border);border-radius:8px;background:#fff;padding:7px 10px;cursor:pointer';
 </script>
 
+{#if phase === 'ready'}
 <div style="display:flex;flex-direction:column;gap:16px">
   <!-- filter bar -->
   <Card>
@@ -147,3 +166,11 @@
     </span>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="schedule-skeleton">
+    <SkelCard><Skeleton w="100%" h={54} r={10} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={420} r={12} /></SkelCard>
+  </div>
+{/if}
