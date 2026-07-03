@@ -79,15 +79,21 @@ export const members = writable<MemberRow[]>(MEMBERS);
 export const classes = writable<ClassRow[]>(CLASSES);
 export const coaches = writable<Coach[]>(COACHES);
 
-/** Create (id assigned) or update a member / class / coach record in place. */
+/** Create (id assigned) or update a member / class / coach record in place.
+ *  Also flips `opsHydrated` true: a mutation IS the session's source of truth, so
+ *  it must not be silently wiped by a first-time hydrate that races it (見下方
+ *  opsHydrated 守衛註解 — C1 regression fix)。 */
 export function saveMember(rec: MemberRow, isNew: boolean) {
 	members.update((ms) => (isNew ? [{ ...rec, id: nextId('GY2026', ms, 3) }, ...ms] : upsertById(ms, rec)));
+	opsHydrated.set(true);
 }
 export function saveClass(rec: ClassRow, isNew: boolean) {
 	classes.update((cs) => (isNew ? [{ ...rec, id: nextId('k', cs) }, ...cs] : upsertById(cs, rec)));
+	opsHydrated.set(true);
 }
 export function saveCoach(rec: Coach, isNew: boolean) {
 	coaches.update((cs) => (isNew ? [{ ...rec, id: nextId('c', cs) }, ...cs] : upsertById(cs, rec)));
+	opsHydrated.set(true);
 }
 
 /** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本月已收
@@ -96,19 +102,35 @@ export function saveCoach(rec: Coach, isNew: boolean) {
 export const orders = writable<OrderRow[]>(ORDERS);
 /** Flip a pending order to paid and stamp the receipt time, so revenue / counts /
  *  filter chips recompute. Without this the action only toasts and the row stays
- *  pending. The detail sheet closes on action, so only the list needs to react. */
+ *  pending. The detail sheet closes on action, so only the list needs to react.
+ *  Also flips `opsHydrated` true(同 saveMember/saveClass/saveCoach — mutation 即
+ *  宣告水合真相)。 */
 export function markOrderPaid(id: string) {
 	orders.update((os) => os.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: '剛剛' } : o)));
+	opsHydrated.set(true);
 }
 
 /** 集合水合守衛(members/classes/coaches/orders 一次到位)。四個 store 都保留同步
- *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸),hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發:guard 為 true 就短路,
- *  保護 overlay 新增/編輯不被第二次進頁的 fetch 覆寫。refreshOps() 一律重新
- *  fetch,供「重新整理」/ErrorState 重試共用(不受 guard 短路)。 */
+ *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸)。hydrateOps()
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發:guard 為 true 就短路;
+ *  save* / markOrderPaid 等 mutation 也會把 guard 設 true(mutation 即宣告水合真相),
+ *  防止「水合前的新增/編輯」被首次水合的 seed clone 無聲清除(C1 regression:admin
+ *  首頁快速操作新增學員/教練 → 首次進 classes/members/orders 任一頁 → 舊碼會用
+ *  seed 覆寫剛新增的資料)。resolve 時重查一次 guard,若等待 fetch 期間發生
+ *  mutation 就放棄本次寫入(封 in-flight 邊窗)。refreshOps() 保持無條件寫入,供
+ *  「重新整理」/ErrorState 重試共用(使用者明確要求最新資料,不受 guard 短路或
+ *  保護)。 */
 export const opsHydrated = writable(false);
 export function hydrateOps(): Promise<void> {
-	return get(opsHydrated) ? Promise.resolve() : refreshOps();
+	if (get(opsHydrated)) return Promise.resolve();
+	return getOpsCollections().then((d) => {
+		if (get(opsHydrated)) return; // mutation 發生於 in-flight 期間 — mutation 勝出,放棄覆寫
+		members.set(d.members);
+		classes.set(d.classes);
+		coaches.set(d.coaches);
+		orders.set(d.orders);
+		opsHydrated.set(true);
+	});
 }
 export function refreshOps(): Promise<void> {
 	return getOpsCollections().then((d) => {
@@ -124,19 +146,29 @@ export function refreshOps(): Promise<void> {
  *  this store, so reading a thread updates both — the static seed only ever showed
  *  the original unread count for the whole session. */
 export const messages = writable<MessageRow[]>(MESSAGES.map((m) => ({ ...m })));
-/** Mark a thread read (the coach opened it). */
+/** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
+ *  (同 ops 集合的 save* / markOrderPaid — mutation 即宣告水合真相,防止首次水合
+ *  覆寫)。 */
 export function markMessageRead(id: string) {
 	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
+	messagesHydrated.set(true);
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
  *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 hydrateOps()。同步 seed
- *  保留(對齊 mobile notifs 前例),guard 為 true 就短路,保護 markMessageRead 不被
- *  第二次進頁的 fetch 覆寫;refreshMessages() 一律重新 fetch,供重試使用。 */
+ *  保留(對齊 mobile notifs 前例);guard 為 true 就短路,markMessageRead 也會把
+ *  guard 設 true(mutation 即宣告水合真相);resolve 時重查一次 guard,若等待 fetch
+ *  期間發生 mutation 就放棄本次寫入(同 hydrateOps 的封 in-flight 邊窗機制)。
+ *  refreshMessages() 保持無條件寫入,供重試使用。 */
 export const messagesHydrated = writable(false);
 export function hydrateMessages(): Promise<void> {
-	return get(messagesHydrated) ? Promise.resolve() : refreshMessages();
+	if (get(messagesHydrated)) return Promise.resolve();
+	return getMessages().then((d) => {
+		if (get(messagesHydrated)) return; // mutation 發生於 in-flight 期間 — mutation 勝出
+		messages.set(d);
+		messagesHydrated.set(true);
+	});
 }
 export function refreshMessages(): Promise<void> {
 	return getMessages().then((d) => {
