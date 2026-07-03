@@ -38,9 +38,21 @@ describe('getCsettings', () => {
 });
 
 describe('getAdminHome', () => {
-	it('resolves profiles + members + today + activity verbatim from data.ts', async () => {
+	it('resolves profiles + members + today + activity + hero 日期 + KPI 帶 verbatim', async () => {
 		const d = await getAdminHome();
-		expect(d).toEqual({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
+		expect(d).toEqual({
+			profiles: PROFILES,
+			members: MEMBERS,
+			today: TODAY,
+			activity: ACTIVITY,
+			dateLabel: '2026 年 6 月 10 日',
+			enrolledValue: '248',
+			enrolledDelta: '+12',
+			classesWeekValue: '64',
+			classesWeekDelta: '+4',
+			revenueMonthValue: 'NT$182K',
+			revenueMonthDelta: '+8%'
+		});
 	});
 });
 
