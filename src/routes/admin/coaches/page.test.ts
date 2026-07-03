@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import CoachesPage from './+page.svelte';
 import { COACHES } from '$lib/admin/data';
 import { getCoaches } from '$lib/admin/api';
@@ -15,17 +15,11 @@ beforeEach(() => {
  * arrives through the getCoaches() seam (async), so every assertion first
  * awaits the ready phase.
  *
- * Not covered here: asserting that clicking a card's 編輯教練 pencil (or the
- * header's 新增教練) actually opens CoachEditDialog. Pre-existing, unrelated to
- * this seam conversion: CoachEditDialog's `let wasOpen = false; $: if (open &&
- * !wasOpen && coach) {...}; $: wasOpen = open;` two-statement pattern does not
- * pick up `coach`/`open` prop changes on an already-mounted instance (verified
- * in isolation — Svelte reorders the trailing `$: wasOpen = open;` ahead of the
- * guard it's meant to gate, so `f` never updates and the dialog never opens).
- * ClassEditDialog/VenueEditDialog/TicketEditDialog use the safe single-
- * statement `let lastX = x; $: if (x !== lastX) { lastX = x; ... }` form and do
- * not have this problem. Left unfixed per this task's scope (consumption-layer
- * swap only); flagged in the task report for a follow-up fix. */
+ * Clicking a card's 編輯教練 pencil opens CoachEditDialog pre-filled with that
+ * coach's data (see below) — previously untestable because of a two-stage
+ * `wasOpen` reactive bug that never re-populated the dialog's local copy on an
+ * already-mounted instance; fixed in CoachEditDialog.svelte (single-stage
+ * `lastCoach`/`wasOpen` guard, mirrors ClassEditDialog). */
 describe('教練團隊 (+page)', () => {
 	it('renders the PageHead title and 新增教練 action', async () => {
 		const { container, findByText } = render(CoachesPage);
@@ -49,6 +43,17 @@ describe('教練團隊 (+page)', () => {
 		await findByText(COACHES[0].name);
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		expect(pencils).toHaveLength(COACHES.length);
+	});
+
+	it('opens CoachEditDialog pre-filled when the 編輯教練 pencil is clicked', async () => {
+		const { container, getByText, getByDisplayValue, findByText } = render(CoachesPage);
+		await findByText(COACHES[0].name);
+
+		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
+		await fireEvent.click(pencils[0]);
+
+		expect(getByText('編輯教練')).toBeInTheDocument();
+		expect(getByDisplayValue(COACHES[0].name)).toBeInTheDocument();
 	});
 });
 

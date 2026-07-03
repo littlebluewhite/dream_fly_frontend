@@ -94,4 +94,40 @@ describe('CoachEditDialog', () => {
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	// Regression (bug found while wiring the seam layer): the dialog is mounted
+	// once, up front, with open=false/coach=null; 編輯/新增教練 then flips both
+	// props on that already-mounted instance. A two-stage `wasOpen` reactive
+	// pair never picked this up, so the dialog silently stayed shut.
+	//
+	// These two use COACHES[2]/[3] rather than the shared `base` (COACHES[0]):
+	// `base` gets mutated in place by the 儲存-name test above (bind:value={f.name}
+	// aliases the coach object directly on this component's first open), so
+	// asserting against it here would depend on suite execution order.
+	it('opens on an already-mounted instance when open and coach change together', async () => {
+		const target: Coach = COACHES[2]; // 黃詩涵
+		const { rerender, getByDisplayValue } = render(CoachEditDialog, {
+			open: false,
+			coach: null
+		});
+
+		await rerender({ open: true, coach: target });
+
+		expect(getByDisplayValue(target.name)).toBeInTheDocument();
+	});
+
+	it('swaps the form to a newly-assigned coach without leaving stale data from the previous coach behind', async () => {
+		const first: Coach = COACHES[2]; // 黃詩涵
+		const second: Coach = COACHES[3]; // 王思齊
+		const { rerender, getByDisplayValue, queryByDisplayValue } = render(CoachEditDialog, {
+			open: true,
+			coach: first
+		});
+		expect(getByDisplayValue(first.name)).toBeInTheDocument();
+
+		await rerender({ open: true, coach: second });
+
+		expect(getByDisplayValue(second.name)).toBeInTheDocument();
+		expect(queryByDisplayValue(first.name)).toBeNull();
+	});
 });
