@@ -10,7 +10,7 @@
 
 import { writable, derived } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { ME, type NotifItem } from './data';
+import { ME, NOTIFS_SEED, type NotifItem } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 export interface OverlayEntry {
@@ -146,10 +146,11 @@ export function createNotifs<T extends { id: string; read: boolean }>(seed: T[])
 export function unreadCount(items: { read: boolean }[]): number {
 	return items.filter((n) => !n.read).length;
 }
-// 起始空陣列,由 notifications/+page.svelte 透過 getNotifications() 接縫水合
-// (見該頁 load()/refresh());notifsHydrated 是 load-once 守衛,防止重訪覆寫已讀
-// 狀態。badge(unread,TabBar/首頁鈴鐺都讀)水合前顯示 0 是可接受的初始態。
-export const notifs = createNotifs<NotifItem>([]);
+// 同步 seed(createNotifs 內部 clone;與 member notifications 前例同型):badge
+// (unread,TabBar/首頁鈴鐺都讀)一開始就有值。首次造訪通知頁時經 getNotifications()
+// 接縫水合覆寫一次(見該頁 load()/refresh());notifsHydrated 是 load-once 守衛,
+// 防止重訪重抓覆寫已讀狀態。
+export const notifs = createNotifs<NotifItem>(NOTIFS_SEED);
 export const notifsHydrated = writable(false);
 export const unread = derived(notifs, ($n) => unreadCount($n));
 

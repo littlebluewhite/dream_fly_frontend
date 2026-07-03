@@ -14,12 +14,14 @@ beforeEach(() => {
 	vi.mocked(getNotifications).mockReset();
 	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
 	notifsHydrated.set(false);
-	// 重設共享 feed,避免前一測試的 set() 滲漏到下一個測試。
-	notifs.set([]);
+	// 重新 seed 共享 feed(store 同步 seed 起始,比照 member 前例),避免前一
+	// 測試的 set()/markAllRead 滲漏到下一個測試。
+	notifs.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 afterEach(() => {
-	notifs.set([]);
+	// 確保共享 store 在每個測試後都還原為 seed。
+	notifs.set(NOTIFS_SEED.map((n) => ({ ...n })));
 	notifsHydrated.set(false);
 });
 
@@ -44,9 +46,8 @@ describe('mobile/notifications 頁', () => {
 	});
 
 	it('load-once 守衛:已 hydrate 則重訪不再 fetch、直接 ready', async () => {
-		// 模擬「先前已成功載入」:守衛為 true、store 已有資料。
+		// 模擬「先前已成功載入」:守衛為 true(store 已由 beforeEach seed)。
 		notifsHydrated.set(true);
-		notifs.set(NOTIFS_SEED.map((n) => ({ ...n })));
 		render(Page);
 		// 直接 ready(store 已有資料),且未再呼叫接縫 → 不覆寫已讀狀態。
 		expect(await screen.findByText('明日課程提醒')).toBeInTheDocument();
