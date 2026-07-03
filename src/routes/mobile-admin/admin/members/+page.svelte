@@ -1,6 +1,11 @@
 <script lang="ts">
   /* 管理員 · 學員管理。admin.jsx MembersScreen (116)。
-   * 清單由 $members store 提供;tap → sheet('member'),新增 → sheet('memberForm',{m:null})。 */
+   * 清單由 $members store 提供;tap → sheet('member'),新增 → sheet('memberForm',{m:null})。
+   *
+   * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $members store,三態閘門
+   * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
+   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。 */
+  import { onMount, onDestroy } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -10,9 +15,29 @@
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { overlay, adminNotifs, adminUnreadCount, toasts } from '$lib/mobile-admin/stores';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
+  import { overlay, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { PAY_STATUS } from '$lib/mobile-admin/data';
+
+  let alive = true;
+  onDestroy(() => { alive = false; });
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  function load() {
+    phase = 'loading';
+    hydrateOps()
+      .then(() => { if (alive) phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
+  }
+  onMount(load);
+  function refresh() {
+    phase = 'loading';
+    refreshOps()
+      .then(() => { if (alive) phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
+  }
 
   let tab = 'all';
   let q = '';
@@ -44,6 +69,7 @@
     .filter((m) => !q || (m.name + m.id + m.course).toLowerCase().includes(q.toLowerCase()));
 </script>
 
+{#if phase === 'ready'}
 <ScreenHeader title="學員管理" sub={counts.all + ' 位在學學員'}>
   <div slot="right" style="display:flex; gap:8px;">
     <HeaderIcon icon="user-plus" label="新增學員" onClick={() => overlay.sheet('memberForm', { m: null })} />
@@ -92,3 +118,12 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="members-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:11px;">
+    {#each [0, 1, 2, 3] as i (i)}
+      <SkelCard><Skeleton w="100%" h={100} r={14} /></SkelCard>
+    {/each}
+  </div>
+{/if}
