@@ -5,24 +5,33 @@
    * category AND the topbar search store (matches name / coach). Clicking a card
    * opens the read-only ClassDialog; 編輯 / 新增課程 open the ClassEditDialog. The
    * row set is held locally so新增 / 儲存 reflect immediately (the prototype is
-   * front-end only). */
+   * front-end only).
+   *
+   * Data now arrives async via getClasses() (mock-API seam): onMount loads it
+   * into a three-state gate (loading/error/ready). `classes` is the local
+   * mutable working copy 新增/編輯 edits in place; `coaches` is read-only here
+   * (blankClass's default coach + the ClassEditDialog 授課教練 picker). */
+  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import ClassCard from '$lib/admin/components/ClassCard.svelte';
   import ClassDialog from '$lib/admin/components/ClassDialog.svelte';
   import ClassEditDialog from '$lib/admin/components/ClassEditDialog.svelte';
-  import { Button, Icon, FilterChip } from '$lib/components/ui';
+  import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { search } from '$lib/admin/stores';
-  import { CLASSES, CATS, COACHES, type ClassRow } from '$lib/admin/data';
+  import { CATS, type ClassRow, type Coach } from '$lib/admin/data';
+  import { getClasses } from '$lib/admin/api';
 
   // Blank班級 for the 新增 flow (ported from admin.jsx blankClass, enriched with
-  // the ClassRow-only fields the detail view reads).
-  const blankClass = (): ClassRow => ({
+  // the ClassRow-only fields the detail view reads). Takes `coaches` as a
+  // parameter (rather than reading the module-level seed) now that coaches
+  // arrive through the getClasses() seam.
+  const blankClass = (coaches: Coach[]): ClassRow => ({
     id: '',
     name: '',
     level: '基礎',
     cat: CATS[0],
-    coach: COACHES[0].name,
+    coach: coaches[0]?.name ?? '',
     room: '',
     day: '',
     time: '',
@@ -41,12 +50,22 @@
 
   const cats = ['全部', ...CATS];
 
-  let classes: ClassRow[] = CLASSES;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let classes: ClassRow[] = [];
+  let coaches: Coach[] = [];
   let cat = '全部';
   let detail: ClassRow | null = null;
   let edit: ClassRow | null = null;
   let editOpen = false;
   let addNew = false;
+
+  function load() {
+    phase = 'loading';
+    getClasses()
+      .then((d) => { classes = d.classes; coaches = d.coaches; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   $: list = filterClasses(classes, { cat, query: $search });
 
@@ -62,7 +81,7 @@
   function openNew() {
     detail = null;
     addNew = true;
-    edit = blankClass();
+    edit = blankClass(coaches);
     editOpen = true;
   }
   function closeEdit() {
@@ -81,34 +100,52 @@
   }
 </script>
 
-<div class="view">
-  <PageHead title="課程管理" sub={classes.length + ' 個開課班級 · 本季招生中'}>
-    <svelte:fragment slot="actions">
-      <Button variant="primary" size="sm" on:click={openNew}>
-        <Icon name="plus" size={15} />新增課程
-      </Button>
-    </svelte:fragment>
-  </PageHead>
+{#if phase === 'ready'}
+  <div class="view">
+    <PageHead title="課程管理" sub={classes.length + ' 個開課班級 · 本季招生中'}>
+      <svelte:fragment slot="actions">
+        <Button variant="primary" size="sm" on:click={openNew}>
+          <Icon name="plus" size={15} />新增課程
+        </Button>
+      </svelte:fragment>
+    </PageHead>
 
-  <div class="chips">
-    {#each cats as c}
-      <FilterChip selected={cat === c} on:click={() => (cat = c)}>{c}</FilterChip>
-    {/each}
+    <div class="chips">
+      {#each cats as c}
+        <FilterChip selected={cat === c} on:click={() => (cat = c)}>{c}</FilterChip>
+      {/each}
+    </div>
+
+    <div class="grid">
+      {#each list as k (k.id)}
+        <ClassCard {k} onEdit={() => openEdit(k)} onOpen={() => openDetail(k)} />
+      {/each}
+    </div>
+
+    {#if list.length === 0}
+      <div class="empty">找不到符合的班級</div>
+    {/if}
+
+    <ClassDialog klass={detail} onClose={() => (detail = null)} onEdit={openEdit} />
+    <ClassEditDialog {coaches} klass={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
   </div>
-
-  <div class="grid">
-    {#each list as k (k.id)}
-      <ClassCard {k} onEdit={() => openEdit(k)} onOpen={() => openDetail(k)} />
-    {/each}
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="view" data-testid="classes-skeleton">
+    <Skeleton w={180} h={32} r={8} />
+    <div class="chips">
+      {#each [0, 1, 2, 3] as i (i)}
+        <Skeleton w={72} h={32} r={16} />
+      {/each}
+    </div>
+    <div class="grid">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={260} r={12} /></SkelCard>
+      {/each}
+    </div>
   </div>
-
-  {#if list.length === 0}
-    <div class="empty">找不到符合的班級</div>
-  {/if}
-
-  <ClassDialog klass={detail} onClose={() => (detail = null)} onEdit={openEdit} />
-  <ClassEditDialog klass={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
-</div>
+{/if}
 
 <style>
   .view {

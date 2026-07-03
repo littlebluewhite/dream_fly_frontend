@@ -9,15 +9,19 @@
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
   import { toasts } from '$lib/admin/stores';
-  import { LEVELS, CATS, CLASS_STATUS, COACHES, type ClassRow } from '$lib/admin/data';
+  import { LEVELS, CATS, CLASS_STATUS, COACHES, type ClassRow, type Coach } from '$lib/admin/data';
 
   export let klass: ClassRow | null = null;
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
   export let onSave: (updated: ClassRow) => void = () => {};
+  // Caller (classes/+page.svelte) passes the getClasses() seam's coaches; the
+  // COACHES import stays only as this prop's default (mirrors OrdersTable's
+  // `export let rows: Order[] = ORDERS;`), so a standalone render still works.
+  export let coaches: Coach[] = COACHES;
 
-  const coachOptions = COACHES.map((c) => c.name);
+  const coachOptions = coaches.map((c) => c.name);
 
   // Local editable copy, reset whenever the klass prop changes (mirrors React's
   // useEffect(() => setF(k), [k])). Numeric fields are edited as text
