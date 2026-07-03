@@ -1,6 +1,13 @@
 <script lang="ts">
-  /* 個人設定 page — profile header card + 5 underline tabs */
-  import { COACH } from '$lib/coach/data';
+  /* 個人設定 page — profile header card + 5 underline tabs
+   *
+   * Data arrives async via getSettings()(mock-API seam): onMount loads coach 資料
+   * 進三態閘門(loading/error/ready)。ProfileTab/CredentialsTab/SecurityTab 三個
+   * 分頁元件原本各自 module-scope import COACH(元件樹檢查揪出) — 現改為 required
+   * prop 下傳,由 check 把關漏傳。 */
+  import { onMount } from 'svelte';
+  import { getSettings, type CoachSettingsData } from '$lib/coach/api';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import CoachAvatar from '$lib/coach/components/CoachAvatar.svelte';
@@ -21,6 +28,17 @@
 
   let activeTab = 'profile';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: CoachSettingsData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getSettings()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
   // Stats — sensible values derived from data / mock
   const STATS = [
     { label: '授課時數', value: '312 hr' },
@@ -29,6 +47,7 @@
   ];
 </script>
 
+{#if phase === 'ready' && data}
 <div style="display:flex;flex-direction:column;gap:16px">
   <!-- Profile header card -->
   <Card padding={24}>
@@ -41,13 +60,13 @@
         <div
           style="font-size:var(--df-text-h2);font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading);letter-spacing:-0.5px;line-height:1.2"
         >
-          {COACH.full}
+          {data.coach.full}
         </div>
         <div style="font-size:var(--df-text-base);color:var(--df-text-light);margin-top:4px">
-          {COACH.role} · {COACH.id}
+          {data.coach.role} · {data.coach.id}
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
-          {#each COACH.chips as chip}
+          {#each data.coach.chips as chip}
             <CoachTag tone="accent">{chip}</CoachTag>
           {/each}
         </div>
@@ -75,15 +94,23 @@
   <div>
     <Tabs tabs={TABS} bind:value={activeTab} />
     {#if activeTab === 'profile'}
-      <ProfileTab />
+      <ProfileTab coach={data.coach} />
     {:else if activeTab === 'credentials'}
-      <CredentialsTab />
+      <CredentialsTab coach={data.coach} />
     {:else if activeTab === 'preferences'}
       <PreferencesTab />
     {:else if activeTab === 'notifications'}
       <NotifTab />
     {:else if activeTab === 'security'}
-      <SecurityTab />
+      <SecurityTab coach={data.coach} />
     {/if}
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="settings-skeleton">
+    <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+{/if}

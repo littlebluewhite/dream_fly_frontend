@@ -1,6 +1,7 @@
 <script lang="ts">
-  /* 帳號安全 tab — 變更密碼 Dialog + 雙重驗證 Switch + 登入裝置 list */
-  import { COACH } from '$lib/coach/data';
+  /* 帳號安全 tab — 變更密碼 Dialog + 雙重驗證 Switch + 登入裝置 list
+   * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH。 */
+  import type { Coach } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import Card from '$lib/components/ui/Card.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
@@ -9,6 +10,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachSettingRow from '$lib/coach/components/CoachSettingRow.svelte';
+
+  export let coach: Coach;
 
   // Password dialog
   let pwDialogOpen = false;
@@ -105,7 +108,7 @@
       已登入裝置
     </div>
     <div style="font-size:var(--df-text-sm);color:var(--df-text-light);margin-bottom:16px">
-      上次登入：{COACH.lastLogin}
+      上次登入：{coach.lastLogin}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:12px">

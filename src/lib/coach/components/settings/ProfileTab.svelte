@@ -1,6 +1,8 @@
 <script lang="ts">
-  /* 個人資料 tab — edit form + live preview card + danger zone */
-  import { COACH } from '$lib/coach/data';
+  /* 個人資料 tab — edit form + live preview card + danger zone
+   * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH,由
+   * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。 */
+  import type { Coach } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import Card from '$lib/components/ui/Card.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -9,14 +11,16 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachAvatar from '$lib/coach/components/CoachAvatar.svelte';
 
+  export let coach: Coach;
+
   // Local copies of editable fields
-  let name = COACH.name;
-  let email = COACH.email;
-  let phone = COACH.phone;
-  let gender = COACH.gender;
-  let birth = COACH.birth;
-  let emergency = COACH.emergency;
-  let bio = COACH.bio;
+  let name = coach.name;
+  let email = coach.email;
+  let phone = coach.phone;
+  let gender = coach.gender;
+  let birth = coach.birth;
+  let emergency = coach.emergency;
+  let bio = coach.bio;
 
   let saving = false;
 
@@ -93,10 +97,10 @@
           <div
             style="font-size:var(--df-text-lg);font-weight:var(--df-weight-bold);color:var(--df-text-dark);font-family:var(--df-font-heading)"
           >
-            {name || COACH.name}
+            {name || coach.name}
           </div>
           <div style="font-size:var(--df-text-sm);color:var(--df-text-light);margin-top:2px">
-            {COACH.role}
+            {coach.role}
           </div>
         </div>
         <div
@@ -106,10 +110,10 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;padding-top:8px;border-top:1px solid var(--df-border)">
           <div style="display:flex;align-items:center;gap:8px;font-size:var(--df-text-xs);color:var(--df-text-light)">
-            <Icon name="mail" size={13} color="var(--df-text-light)" />{email || COACH.email}
+            <Icon name="mail" size={13} color="var(--df-text-light)" />{email || coach.email}
           </div>
           <div style="display:flex;align-items:center;gap:8px;font-size:var(--df-text-xs);color:var(--df-text-light)">
-            <Icon name="phone" size={13} color="var(--df-text-light)" />{phone || COACH.phone}
+            <Icon name="phone" size={13} color="var(--df-text-light)" />{phone || coach.phone}
           </div>
         </div>
       </div>
