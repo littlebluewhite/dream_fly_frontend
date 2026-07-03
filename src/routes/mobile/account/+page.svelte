@@ -2,19 +2,36 @@
   /* 帳戶 tab。app.jsx AccountScreen (48)。
    * 深色漸層 hero（Avatar + 編輯）→ 點數高光卡 → 選單卡（push points/orders/report/settings）
    * → 切換到管理後台（goto /mobile-admin）→ 登出（清 df_mobile_session + session.set(false) + goto /mobile/login）。
-   * Legacy Svelte（無 runes）。繁體中文文案。 */
+   * Legacy Svelte（無 runes）。繁體中文文案。
+   *
+   * 訂單筆數改由 getAccount()(mock-API 接縫)非同步取得:onMount 進三態閘門
+   * (loading/error/ready);points/profile/session 等既有 store 互動不動。 */
+  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Card from '$lib/components/ui/Card.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, points, profile, session } from '$lib/mobile/stores';
-  import { ORDERS } from '$lib/mobile/data';
+  import { getAccount, type MobileAccountData } from '$lib/mobile/api';
 
   type Item = { id: string; icon: string; label: string; sub: string; tone: string; tint: string };
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MobileAccountData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getAccount()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
   $: items = [
     { id: 'points', icon: 'star', label: '會員點數', sub: $points.toLocaleString() + ' 點可用', tone: 'var(--df-accent-dark)', tint: '#FFF8DB' },
-    { id: 'orders', icon: 'receipt', label: '我的訂單', sub: ORDERS.length + ' 筆報名紀錄', tone: 'var(--df-primary)', tint: 'var(--df-primary-bg)' },
+    { id: 'orders', icon: 'receipt', label: '我的訂單', sub: (data?.orders.length ?? 0) + ' 筆報名紀錄', tone: 'var(--df-primary)', tint: 'var(--df-primary-bg)' },
     { id: 'report', icon: 'clipboard-list', label: '成績單與證書', sub: '查看學習成果與獎狀', tone: 'var(--df-success)', tint: 'var(--df-success-bg)' },
     { id: 'settings', icon: 'settings', label: '帳號設定', sub: '個人資料與偏好設定', tone: 'var(--df-text-light)', tint: 'var(--df-bg-light)' }
   ] as Item[];
@@ -30,6 +47,7 @@
   }
 </script>
 
+{#if phase === 'ready'}
 <div class="m-top-inset" style="flex:none; background:linear-gradient(125deg, var(--df-primary), var(--df-primary-dark)); color:#fff;">
   <div style="padding:4px 18px 22px; display:flex; align-items:center; gap:14px;">
     <Avatar name={$profile.initial} size="lg" color="rgba(255,255,255,0.22)" />
@@ -117,3 +135,30 @@
     <div style="text-align:center; font-size:11.5px; color:var(--df-text-muted); padding:4px 0 8px;">Dream Fly 夢飛體操 · App v2.4.0</div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <div class="m-top-inset df-scroll df-view" style="padding:16px;">
+    <Card padding={0}><ErrorState onRetry={load} /></Card>
+  </div>
+{:else}
+  <div class="m-top-inset df-scroll df-view" data-testid="account-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:16px;">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <Skeleton w={56} h={56} r={999} />
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+        <Skeleton w="50%" h={18} />
+        <Skeleton w="70%" h={12} />
+      </div>
+    </div>
+    <SkelCard padding={18}><Skeleton w="100%" h={60} r={10} /></SkelCard>
+    <SkelCard padding={0}>
+      {#each [0, 1, 2, 3] as i (i)}
+        <div style="display:flex; gap:13px; padding:14px 16px; border-bottom:{i < 3 ? '1px solid var(--df-border)' : 'none'};">
+          <Skeleton w={38} h={38} r={11} />
+          <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+            <Skeleton w="40%" h={14} />
+            <Skeleton w="60%" h={11} />
+          </div>
+        </div>
+      {/each}
+    </SkelCard>
+  </div>
+{/if}
