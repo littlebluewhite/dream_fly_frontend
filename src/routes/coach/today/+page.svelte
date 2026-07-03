@@ -1,17 +1,32 @@
 <script lang="ts">
   /* 今日課程頁 — reconstructed from views_dashboard.jsx:141-231 (spec + plan).
-   * Legacy Svelte, no runes. No df-view on root. */
+   * Legacy Svelte, no runes. No df-view on root.
+   *
+   * Data arrives async via getToday()(mock-API seam): onMount loads todayLabel/
+   * todayClasses into a three-state gate (loading/error/ready). CLASS_STATUS 查表
+   * 留直接 import;reminders 為頁內硬編 UI 提示文案,留在頁內。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import {
-    TODAY_LABEL,
-    TODAY_CLASSES,
-    CLASS_STATUS
-  } from '$lib/coach/data';
+  import { CLASS_STATUS } from '$lib/coach/data';
+  import { getToday, type TodayData } from '$lib/coach/api';
   import { coachPath } from '$lib/coach/nav';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
   import TodayClassCard from '$lib/coach/components/TodayClassCard.svelte';
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: TodayData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getToday()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   /* ── 課堂提醒 reminders (reconstructed per spec) ── */
   const reminders: { icon: string; text: string }[] = [
@@ -20,23 +35,26 @@
     { icon: 'sparkles',       text: '今日成人班為月末體能測評日，請準備評量表格。' }
   ];
 
+  $: todayClasses = data?.todayClasses ?? [];
+
   /* ── derived KPIs ── */
-  $: liveClass   = TODAY_CLASSES.find(c => c.status === 'live');
-  $: doneCount   = TODAY_CLASSES.filter(c => c.status === 'done').length;
-  $: totalCount  = TODAY_CLASSES.reduce((sum, c) => sum + c.count, 0);
+  $: liveClass   = todayClasses.find(c => c.status === 'live');
+  $: doneCount   = todayClasses.filter(c => c.status === 'done').length;
+  $: totalCount  = todayClasses.reduce((sum, c) => sum + c.count, 0);
 
   /* ── attendance progress ── */
-  $: attendedCount = TODAY_CLASSES.filter(c => c.status === 'done' || c.status === 'live').length;
-  $: attendancePct = Math.round((attendedCount / TODAY_CLASSES.length) * 100);
+  $: attendedCount = todayClasses.filter(c => c.status === 'done' || c.status === 'live').length;
+  $: attendancePct = Math.round((attendedCount / todayClasses.length) * 100);
 </script>
 
+{#if phase === 'ready' && data}
 <!-- root: flex col gap 16 (no df-view per convention) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
   <!-- ① page head -->
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <h1 style="margin:0;font-size:22px;font-weight:800;color:var(--df-text-dark);font-family:var(--df-font-body)">今日課程</h1>
-    <span style="background:var(--df-primary-bg);color:var(--df-primary-dark);font-size:13px;font-weight:600;padding:4px 12px;border-radius:999px;font-family:var(--df-font-body)">{TODAY_LABEL}</span>
+    <span style="background:var(--df-primary-bg);color:var(--df-primary-dark);font-size:13px;font-weight:600;padding:4px 12px;border-radius:999px;font-family:var(--df-font-body)">{data.todayLabel}</span>
   </div>
 
   <!-- ② live-class highlight banner -->
@@ -54,8 +72,8 @@
 
   <!-- ③ KPI grid (3 col) -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-    <KpiCard label="今日課程" value="{TODAY_CLASSES.length} 堂" icon="calendar" iconColor="var(--df-primary)" />
-    <KpiCard label="已完成" value="{doneCount} 堂" icon="circle-check" iconColor="var(--df-success)" subTone="var(--df-success)" sub="今日進度 {Math.round((doneCount / TODAY_CLASSES.length) * 100)}%" />
+    <KpiCard label="今日課程" value="{todayClasses.length} 堂" icon="calendar" iconColor="var(--df-primary)" />
+    <KpiCard label="已完成" value="{doneCount} 堂" icon="circle-check" iconColor="var(--df-success)" subTone="var(--df-success)" sub="今日進度 {Math.round((doneCount / todayClasses.length) * 100)}%" />
     <KpiCard label="學員總數" value="{totalCount} 位" icon="users" iconColor="var(--df-accent-dark)" />
   </div>
 
@@ -65,7 +83,7 @@
     <!-- LEFT: 今日課表 -->
     <PanelCard title="今日課表">
       <div style="display:flex;flex-direction:column;gap:10px">
-        {#each TODAY_CLASSES as c (c.id)}
+        {#each todayClasses as c (c.id)}
           <TodayClassCard {c} />
         {/each}
       </div>
@@ -79,14 +97,14 @@
         <div style="display:flex;flex-direction:column;gap:12px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <span style="font-size:13px;color:var(--df-text-light)">已到堂 / 今日總堂數</span>
-            <span style="font-size:18px;font-weight:800;color:var(--df-text-dark);font-family:var(--df-font-body)">{attendedCount} / {TODAY_CLASSES.length}</span>
+            <span style="font-size:18px;font-weight:800;color:var(--df-text-dark);font-family:var(--df-font-body)">{attendedCount} / {todayClasses.length}</span>
           </div>
           <!-- local borderless progress bar -->
           <div style="height:8px;background:var(--df-bg-light);border-radius:999px;overflow:hidden">
             <div style="height:100%;width:{attendancePct}%;background:var(--df-primary);border-radius:999px;transition:width 0.4s"></div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px">
-            {#each TODAY_CLASSES as c (c.id)}
+            {#each todayClasses as c (c.id)}
               {@const st = CLASS_STATUS[c.status]}
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px">
                 <span style="color:var(--df-text-dark);font-weight:500">{c.name}</span>
@@ -134,3 +152,19 @@
     </div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="today-skeleton">
+    <Skeleton w={220} h={30} r={8} />
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:18px">
+      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+    </div>
+  </div>
+{/if}
