@@ -6,12 +6,16 @@ import {
 	TICKETS,
 	COACH_TODAY,
 	ROSTER,
+	MEMBERS,
+	SKILLS,
 	type Profile,
 	type Coach,
 	type Venue,
 	type Ticket,
 	type TodayRow,
-	type RosterEntry
+	type RosterEntry,
+	type MemberRow,
+	type Skill
 } from './data';
 
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -35,3 +39,9 @@ export interface RosterData {
 	roster: RosterEntry[];
 }
 export const getRoster = (): Promise<RosterData> => reply({ roster: ROSTER });
+
+export interface MStudentsData {
+	members: MemberRow[];
+	skills: Record<string, Skill[]>;
+}
+export const getStudents = (): Promise<MStudentsData> => reply({ members: MEMBERS, skills: SKILLS });
