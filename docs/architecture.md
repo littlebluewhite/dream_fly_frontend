@@ -96,8 +96,15 @@ Pages that used to import seed constants directly now do a legacy `onMount` + pl
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store
 (mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
 `*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) with a page-level `load()` /
-`refresh()` split so `ErrorState`'s retry always refetches, and pages track their own `alive` flag so a
-response that resolves after unmount can't overwrite a shared store. Layout shells stay outside the seam
+`refresh()` split so `ErrorState`'s retry always refetches — but the guard's ownership differs by surface.
+Member/mobile notifications are page-owned: the store write lives in the page's `load()`/`refresh()`, so
+the page's own `alive` flag directly guards it and a response resolving after unmount can't overwrite the
+shared store. Mobile-admin's ops collections and messages are store-owned: the write lives in `stores.ts`,
+so a page's `alive` flag only protects that page's local `phase`, never the store — protection there comes
+from the guard itself, which mutators (`saveMember`/`saveClass`/`saveCoach`/`markOrderPaid`/
+`markMessageRead`) also flip true (a mutation *is* the session's source of truth) and which is rechecked
+right before the hydrate write lands, so a mutation racing an in-flight fetch always wins. Layout shells
+stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but

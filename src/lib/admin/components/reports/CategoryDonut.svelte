@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 課程分類占比 — faithful port of reports.jsx `CategoryDonut`. A 150px
    * conic-gradient ring (cumulative stops via donutStops) with a 93px white hub
-   * showing 142 總課程數, over a colour-dot legend of CATEGORY_SPLIT. Fixed 360px
+   * showing 142 總課程數, over a colour-dot legend of the `rows` prop. Fixed 360px
    * width (flex:none) so it sits beside the flexible RevenueTrend. */
   import { Card } from '$lib/components/ui';
   import type { PctSlice } from '$lib/admin/data';
