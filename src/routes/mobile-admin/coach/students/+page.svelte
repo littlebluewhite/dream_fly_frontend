@@ -1,6 +1,10 @@
 <script lang="ts">
   /* 教練 · 我的學員。port coach.jsx CoachStudentsScreen (165-210)。
-   * 點學員卡 → overlay.sheet('studentSkills',{student})；onBell → overlay.sheet('notif')。 */
+   * 點學員卡 → overlay.sheet('studentSkills',{student})；onBell → overlay.sheet('notif')。
+   *
+   * 資料改由 getStudents()(mock-API 接縫)非同步載入,三態閘門(loading/error/
+   * ready);members/skills 為本頁本地一次性快照。 */
+  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -10,19 +14,35 @@
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
-  import { MEMBERS, SKILLS, type MemberRow } from '$lib/mobile-admin/data';
+  import { getStudents } from '$lib/mobile-admin/api';
+  import type { MemberRow, Skill } from '$lib/mobile-admin/data';
 
-  const mine = MEMBERS.filter((m) => m.coach === '林雅婷');
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let members: MemberRow[] = [];
+  let skills: Record<string, Skill[]> = {};
   let q = '';
+
+  function load() {
+    phase = 'loading';
+    getStudents()
+      .then((d) => { members = d.members; skills = d.skills; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: mine = members.filter((m) => m.coach === '林雅婷');
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
   const openSkills = (student: MemberRow) => overlay.sheet('studentSkills', { student });
-  const skillsOf = (m: MemberRow): [string, number][] => SKILLS[m.id] || [['基本動作', m.att], ['體能', Math.max(60, m.att - 8)]];
+  const skillsOf = (m: MemberRow): Skill[] => skills[m.id] || [['基本動作', m.att], ['體能', Math.max(60, m.att - 8)]];
 
   $: list = q ? mine.filter((m) => (m.name + m.id + m.course).toLowerCase().includes(q.toLowerCase())) : mine;
 </script>
 
+{#if phase === 'ready'}
 <ScreenHeader title="我的學員" sub={mine.length + ' 位 · 競技啦啦隊 / 競技體操'}>
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
@@ -76,3 +96,12 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="students-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+    {#each [0, 1, 2] as i (i)}
+      <SkelCard><Skeleton w="100%" h={170} r={16} /></SkelCard>
+    {/each}
+  </div>
+{/if}
