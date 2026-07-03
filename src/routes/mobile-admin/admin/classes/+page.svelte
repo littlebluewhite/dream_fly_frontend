@@ -1,6 +1,12 @@
 <script lang="ts">
   /* 管理員 · 課程管理。admin.jsx ClassesScreen (202)。
-   * 清單由 $classes store 提供;tap → sheet('class'),新增 → sheet('classForm',{k:null})。 */
+   * 清單由 $classes store 提供;tap → sheet('class'),新增 → sheet('classForm',{k:null})。
+   *
+   * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $classes store,三態閘門
+   * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
+   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。alive 旗標防止 unmount
+   * 後解析的 in-flight fetch 影響本頁狀態。 */
+  import { onMount, onDestroy } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -10,10 +16,30 @@
   import LevelBadge from '$lib/mobile-admin/components/LevelBadge.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { overlay, classes, adminNotifs, adminUnreadCount, toasts } from '$lib/mobile-admin/stores';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
+  import { overlay, classes, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+
+  let alive = true;
+  onDestroy(() => { alive = false; });
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  function load() {
+    phase = 'loading';
+    hydrateOps()
+      .then(() => { if (alive) phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
+  }
+  onMount(load);
+  function refresh() {
+    phase = 'loading';
+    refreshOps()
+      .then(() => { if (alive) phase = 'ready'; })
+      .catch(() => { if (alive) phase = 'error'; });
+  }
 
   let cat = '全部';
   let q = '';
@@ -27,6 +53,8 @@
     .filter((k) => cat === '全部' || k.cat === cat)
     .filter((k) => !q || (k.name + k.coach).toLowerCase().includes(q.toLowerCase()));
 </script>
+
+{#if phase === 'ready'}
 
 <ScreenHeader title="課程管理" sub={$classes.length + ' 個開課班級 · 本季招生中'}>
   <div slot="right" style="display:flex; gap:8px;">
@@ -98,3 +126,12 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="classes-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
+    {#each [0, 1, 2] as i (i)}
+      <SkelCard><Skeleton w="100%" h={170} r={16} /></SkelCard>
+    {/each}
+  </div>
+{/if}
