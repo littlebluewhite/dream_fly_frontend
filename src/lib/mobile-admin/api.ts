@@ -10,6 +10,8 @@ import {
 	SKILLS,
 	TODAY,
 	ACTIVITY,
+	CLASSES,
+	ORDERS,
 	type Profile,
 	type Coach,
 	type Venue,
@@ -18,7 +20,9 @@ import {
 	type RosterEntry,
 	type MemberRow,
 	type Skill,
-	type ActivityRow
+	type ActivityRow,
+	type ClassRow,
+	type OrderRow
 } from './data';
 
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -63,3 +67,18 @@ export interface MAdminHomeData {
 }
 export const getAdminHome = (): Promise<MAdminHomeData> =>
 	reply({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
+
+/** 集合 store 水合(clone,防共享參照被 mutation 污染)。 */
+export interface OpsCollections {
+	members: MemberRow[];
+	classes: ClassRow[];
+	coaches: Coach[];
+	orders: OrderRow[];
+}
+export const getOpsCollections = (): Promise<OpsCollections> =>
+	reply({
+		members: MEMBERS.map((m) => ({ ...m })),
+		classes: CLASSES.map((c) => ({ ...c })),
+		coaches: COACHES.map((c) => ({ ...c })),
+		orders: ORDERS.map((o) => ({ ...o }))
+	});

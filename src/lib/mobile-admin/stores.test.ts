@@ -1,6 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
-import { createOverlay, createAdminNotifs, upsertById, nextId, adminUnread, role, overlay, switchRole, closeNotifAfterReadAll, orders, markOrderPaid, messages, markMessageRead, coachMsgUnread } from './stores';
+import {
+	createOverlay,
+	createAdminNotifs,
+	upsertById,
+	nextId,
+	adminUnread,
+	role,
+	overlay,
+	switchRole,
+	closeNotifAfterReadAll,
+	orders,
+	markOrderPaid,
+	messages,
+	markMessageRead,
+	coachMsgUnread,
+	members,
+	classes,
+	coaches,
+	opsHydrated,
+	hydrateOps,
+	refreshOps,
+	saveClass
+} from './stores';
+import { MEMBERS, CLASSES, COACHES, ORDERS } from './data';
 
 describe('createOverlay (admin)', () => {
 	it('pushes / pops the stack and opens / closes a sheet', () => {
@@ -90,6 +113,7 @@ describe('markOrderPaid', () => {
 		expect(after.status).toBe('paid');
 		expect(after.paidAt).toBe('剛剛');
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
+		orders.set(ORDERS); // restore the shared singleton for other tests
 	});
 });
 
@@ -109,5 +133,62 @@ describe('markMessageRead + coachMsgUnread', () => {
 		const before = get(coachMsgUnread);
 		markMessageRead(read.id);
 		expect(get(coachMsgUnread)).toBe(before);
+	});
+});
+
+describe('hydrateOps / refreshOps / opsHydrated', () => {
+	it('members/classes/coaches/orders keep the synchronous seed at module load (no empty-array flash)', () => {
+		// 對齊 mobile notifs 前例:空起始會造成跨頁讀值的行為回歸,集合 store 一律
+		// 同步 seed,水合只是之後再覆寫一次(clone)。
+		expect(get(members)).toEqual(MEMBERS);
+		expect(get(classes)).toEqual(CLASSES);
+		expect(get(coaches)).toEqual(COACHES);
+		expect(get(orders)).toEqual(ORDERS);
+		expect(get(opsHydrated)).toBe(false);
+	});
+
+	it('hydrateOps() 在 guard 為 false 時實際觸發水合(覆寫先前的假資料)', async () => {
+		members.set([{ ...MEMBERS[0], name: '水合前的假資料' }]);
+		await hydrateOps();
+		expect(get(members)).toEqual(MEMBERS);
+		expect(get(opsHydrated)).toBe(true);
+		// restore for other tests
+		members.set(MEMBERS);
+		opsHydrated.set(false);
+	});
+
+	it('hydrateOps() 在 guard 為 true 時短路,不會再次覆寫(保護 overlay mutation)', async () => {
+		await hydrateOps();
+		expect(get(opsHydrated)).toBe(true);
+		classes.set([{ ...CLASSES[0], name: '使用者剛新增的班級' }]);
+		await hydrateOps();
+		expect(get(classes)).toEqual([{ ...CLASSES[0], name: '使用者剛新增的班級' }]);
+		// restore for other tests
+		classes.set(CLASSES);
+		opsHydrated.set(false);
+	});
+
+	it('refreshOps() 一律重新 fetch,不受 guard 短路(供重試使用)', async () => {
+		await hydrateOps();
+		expect(get(opsHydrated)).toBe(true);
+		orders.set([{ ...ORDERS[0], member: '水合前的假資料' }]);
+		await refreshOps();
+		expect(get(orders)).toEqual(ORDERS);
+		// restore for other tests
+		orders.set(ORDERS);
+		opsHydrated.set(false);
+	});
+
+	it('mutation 存活:hydrate 後的 overlay 新增/編輯,第二次進頁(guard 已 true)不被清掉', async () => {
+		await hydrateOps();
+		const before = get(classes).length;
+		saveClass({ ...CLASSES[0], id: '', name: '新班級(使用者剛新增)' }, true);
+		expect(get(classes).length).toBe(before + 1);
+		// 模擬「第二次進頁」再次觸發 hydrateOps(guard 已是 true)。
+		await hydrateOps();
+		expect(get(classes).some((c) => c.name === '新班級(使用者剛新增)')).toBe(true);
+		// restore for other tests
+		classes.set(CLASSES);
+		opsHydrated.set(false);
 	});
 });

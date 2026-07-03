@@ -7,10 +7,11 @@
  * exported for isolated test instances; the app uses the singletons.
  * Self-contained (does NOT re-export from the desktop admin). Mock-only. */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import type { Role } from './nav';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
+import { getOpsCollections } from './api';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 export interface OverlayEntry {
@@ -98,6 +99,25 @@ export const orders = writable<OrderRow[]>(ORDERS);
  *  pending. The detail sheet closes on action, so only the list needs to react. */
 export function markOrderPaid(id: string) {
 	orders.update((os) => os.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: '剛剛' } : o)));
+}
+
+/** 集合水合守衛(members/classes/coaches/orders 一次到位)。四個 store 都保留同步
+ *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸),hydrateOps()
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發:guard 為 true 就短路,
+ *  保護 overlay 新增/編輯不被第二次進頁的 fetch 覆寫。refreshOps() 一律重新
+ *  fetch,供「重新整理」/ErrorState 重試共用(不受 guard 短路)。 */
+export const opsHydrated = writable(false);
+export function hydrateOps(): Promise<void> {
+	return get(opsHydrated) ? Promise.resolve() : refreshOps();
+}
+export function refreshOps(): Promise<void> {
+	return getOpsCollections().then((d) => {
+		members.set(d.members);
+		classes.set(d.classes);
+		coaches.set(d.coaches);
+		orders.set(d.orders);
+		opsHydrated.set(true);
+	});
 }
 
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from

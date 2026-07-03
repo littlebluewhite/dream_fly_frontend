@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getMore, getCoachHome, getRoster, getStudents, getCsettings, getAdminHome } from './api';
-import { PROFILES, COACHES, VENUES, TICKETS, COACH_TODAY, ROSTER, MEMBERS, SKILLS, TODAY, ACTIVITY } from './data';
+import { getMore, getCoachHome, getRoster, getStudents, getCsettings, getAdminHome, getOpsCollections } from './api';
+import { PROFILES, COACHES, VENUES, TICKETS, COACH_TODAY, ROSTER, MEMBERS, SKILLS, TODAY, ACTIVITY, CLASSES, ORDERS } from './data';
 
 describe('getMore', () => {
 	it('resolves profiles + coaches + venues + tickets verbatim from data.ts', async () => {
@@ -41,5 +41,24 @@ describe('getAdminHome', () => {
 	it('resolves profiles + members + today + activity verbatim from data.ts', async () => {
 		const d = await getAdminHome();
 		expect(d).toEqual({ profiles: PROFILES, members: MEMBERS, today: TODAY, activity: ACTIVITY });
+	});
+});
+
+describe('getOpsCollections', () => {
+	it('resolves members/classes/coaches/orders equal in content to data.ts', async () => {
+		const d = await getOpsCollections();
+		expect(d).toEqual({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: ORDERS });
+	});
+
+	it('clones every record so mutating the resolved value cannot leak back into data.ts (防共享參照)', async () => {
+		const d = await getOpsCollections();
+		d.members[0].name = '被污染';
+		d.classes[0].name = '被污染';
+		d.coaches[0].name = '被污染';
+		d.orders[0].member = '被污染';
+		expect(MEMBERS[0].name).not.toBe('被污染');
+		expect(CLASSES[0].name).not.toBe('被污染');
+		expect(COACHES[0].name).not.toBe('被污染');
+		expect(ORDERS[0].member).not.toBe('被污染');
 	});
 });
