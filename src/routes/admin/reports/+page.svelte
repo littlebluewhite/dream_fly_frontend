@@ -3,12 +3,18 @@
    * /admin, so this renders page content only: a PageHead (period picker + 匯出報表),
    * the REPORT_KPIS 3-col grid, the full-width RevenueBreakdown, then the prototype's
    * paired panel rows (flex, gap 18, wrap) — each pairs one flexible chart with one
-   * fixed-width chart exactly as ReportsView lays them out. Every chart is pure CSS. */
-  import { Button, Icon, Select } from '$lib/components/ui';
+   * fixed-width chart exactly as ReportsView lays them out. Every chart is pure CSS.
+   *
+   * Data now arrives async via getReports() (mock-API seam): onMount loads the
+   * REPORT_KPIS band into a three-state gate (loading/error/ready). The 15 charts
+   * below import their data at module scope and take no props — an existing,
+   * documented boundary (see comment further down) that this task leaves as-is. */
+  import { onMount } from 'svelte';
+  import { Button, Icon, Select, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
-  import { REPORT_KPIS } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
   import { REPORT_PERIODS, DEFAULT_PERIOD, kpisForPeriod } from '$lib/admin/components/reports-period';
+  import { getReports, type ReportsData } from '$lib/admin/api';
 
   import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
   import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
@@ -27,68 +33,93 @@
   import ConversionFunnel from '$lib/admin/components/reports/ConversionFunnel.svelte';
   import WeekdayLoad from '$lib/admin/components/reports/WeekdayLoad.svelte';
 
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: ReportsData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getReports()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
   // The period picker re-scales ONLY the KPI band (kpisForPeriod). The 15 charts
   // below import their data at module scope and take no props, so they are not
   // rewired — that is the honest mock boundary.
   let period = DEFAULT_PERIOD;
-  $: kpis = kpisForPeriod(REPORT_KPIS, period);
+  $: kpis = data ? kpisForPeriod(data.kpis, period) : [];
 </script>
 
-<div style="display:flex; flex-direction:column; gap:20px;">
-  <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
-    <svelte:fragment slot="actions">
-      <div class="period-select">
-        <Select bind:value={period} options={REPORT_PERIODS} />
-      </div>
-      <Button
-        variant="primary"
-        size="sm"
-        on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
-      >
-        <span style="display:inline-flex; align-items:center; gap:8px;">
-          <Icon name="download" size={15} />匯出報表
-        </span>
-      </Button>
-    </svelte:fragment>
-  </PageHead>
+{#if phase === 'ready' && data}
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
+      <svelte:fragment slot="actions">
+        <div class="period-select">
+          <Select bind:value={period} options={REPORT_PERIODS} />
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
+        >
+          <span style="display:inline-flex; align-items:center; gap:8px;">
+            <Icon name="download" size={15} />匯出報表
+          </span>
+        </Button>
+      </svelte:fragment>
+    </PageHead>
 
-  <div class="kpi-grid">
-    {#each kpis as k (k.label)}
-      <ReportKpi {k} />
-    {/each}
-  </div>
+    <div class="kpi-grid">
+      {#each kpis as k, i (i)}
+        <ReportKpi {k} />
+      {/each}
+    </div>
 
-  <RevenueBreakdown />
+    <RevenueBreakdown />
 
-  <div class="panel-row">
-    <RevenueTrend />
-    <CategoryDonut />
+    <div class="panel-row">
+      <RevenueTrend />
+      <CategoryDonut />
+    </div>
+    <div class="panel-row">
+      <TopCourses />
+      <IncomeSources />
+    </div>
+    <div class="panel-row">
+      <CoachPerf />
+      <VenueUsage />
+    </div>
+    <div class="panel-row">
+      <AttDist />
+      <RetentionTrend />
+    </div>
+    <div class="panel-row">
+      <AgeDist />
+      <TierDist />
+    </div>
+    <div class="panel-row">
+      <CampusRevenue />
+      <PaymentSplit />
+    </div>
+    <div class="panel-row">
+      <ConversionFunnel />
+      <WeekdayLoad />
+    </div>
   </div>
-  <div class="panel-row">
-    <TopCourses />
-    <IncomeSources />
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
+    <Skeleton w={220} h={32} r={8} />
+    <div class="kpi-grid">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
   </div>
-  <div class="panel-row">
-    <CoachPerf />
-    <VenueUsage />
-  </div>
-  <div class="panel-row">
-    <AttDist />
-    <RetentionTrend />
-  </div>
-  <div class="panel-row">
-    <AgeDist />
-    <TierDist />
-  </div>
-  <div class="panel-row">
-    <CampusRevenue />
-    <PaymentSplit />
-  </div>
-  <div class="panel-row">
-    <ConversionFunnel />
-    <WeekdayLoad />
-  </div>
-</div>
+{/if}
 
 <style>
   .kpi-grid {
