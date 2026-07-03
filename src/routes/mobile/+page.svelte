@@ -88,32 +88,35 @@
 
 <div class="df-scroll df-view">
   <div style="padding:18px; display:flex; flex-direction:column; gap:22px;">
-    <!-- next class hero -->
-    <button
-      on:click={() => goto('/mobile/mine')}
-      class="df-tapscale"
-      style="text-align:left; border:none; cursor:pointer; border-radius:16px; padding:0; background:transparent; margin-top:-52px;"
-    >
-      <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:var(--df-shadow-card); border:1px solid var(--df-border);">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <span style="font-size:12px; font-weight:700; letter-spacing:1px; color:var(--df-primary);">下一堂課</span>
-          <Badge tone="success" dot>可報到</Badge>
-        </div>
-        <div style="display:flex; align-items:center; gap:13px;">
-          <div style="text-align:center; flex:none; background:var(--df-primary-bg); border-radius:12px; padding:9px 13px;">
-            <div style="font-size:11px; color:var(--df-primary); font-weight:600;">{nextDay}</div>
-            <div style="font-size:19px; font-weight:800; color:var(--df-primary); font-family:var(--df-font-heading);">{nextTime}</div>
+    <!-- next class hero — 空集合守衛:零報名會員(myCourses 空)時 next 為
+      undefined,整卡不渲染(mine 頁已有「尚未報名任何課程」MEmpty,首頁不重複)。 -->
+    {#if next}
+      <button
+        on:click={() => goto('/mobile/mine')}
+        class="df-tapscale"
+        style="text-align:left; border:none; cursor:pointer; border-radius:16px; padding:0; background:transparent; margin-top:-52px;"
+      >
+        <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:var(--df-shadow-card); border:1px solid var(--df-border);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <span style="font-size:12px; font-weight:700; letter-spacing:1px; color:var(--df-primary);">下一堂課</span>
+            <Badge tone="success" dot>可報到</Badge>
           </div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{next.name}</div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-top:3px; display:flex; align-items:center; gap:5px;">
-              <Icon name="map-pin" size={13} color="var(--df-text-muted)" />{next.room} · {next.coach} 教練
+          <div style="display:flex; align-items:center; gap:13px;">
+            <div style="text-align:center; flex:none; background:var(--df-primary-bg); border-radius:12px; padding:9px 13px;">
+              <div style="font-size:11px; color:var(--df-primary); font-weight:600;">{nextDay}</div>
+              <div style="font-size:19px; font-weight:800; color:var(--df-primary); font-family:var(--df-font-heading);">{nextTime}</div>
             </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{next.name}</div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-top:3px; display:flex; align-items:center; gap:5px;">
+                <Icon name="map-pin" size={13} color="var(--df-text-muted)" />{next.room} · {next.coach} 教練
+              </div>
+            </div>
+            <Icon name="chevron-right" size={20} color="var(--df-text-muted)" />
           </div>
-          <Icon name="chevron-right" size={20} color="var(--df-text-muted)" />
         </div>
-      </div>
-    </button>
+      </button>
+    {/if}
 
     <!-- free trial banner -->
     <button

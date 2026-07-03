@@ -57,4 +57,15 @@ describe('首頁 tab — 三態', () => {
 		expect(screen.getByText('週三')).toBeInTheDocument();
 		expect(screen.getByText('09:00')).toBeInTheDocument();
 	});
+
+	it('報名課程為空時 ready 不拋錯,「下一堂課」卡整塊不出現(空集合守衛)', async () => {
+		// getHome() 換真 fetch 後,零報名會員會回傳 myCourses: [] — next 為
+		// undefined 時不得對 next.name/room/coach deref 拋 TypeError。
+		vi.mocked(getHome).mockResolvedValue({ catalog: CATALOG, announce: ANNOUNCE, myCourses: [] });
+		render(Page);
+		// ready 證據:其餘區塊(熱門課程)照常渲染,不依賴下一堂課卡。
+		expect(await screen.findByText('熱門課程')).toBeInTheDocument();
+		// 空集合 → 卡整塊消失(首頁不重複 mine 頁的 MEmpty 訊息)。
+		expect(screen.queryByText('下一堂課')).toBeNull();
+	});
 });
