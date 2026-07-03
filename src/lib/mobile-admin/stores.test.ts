@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
 	createOverlay,
@@ -21,12 +21,21 @@ import {
 	opsHydrated,
 	hydrateOps,
 	refreshOps,
+	saveMember,
 	saveClass,
 	messagesHydrated,
 	hydrateMessages,
 	refreshMessages
 } from './stores';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES } from './data';
+import { getOpsCollections, type OpsCollections } from './api';
+
+// 只 spy getOpsCollections(供 in-flight race 測試控制 resolve 時機),其餘 api.ts
+// 匯出(getMessages 等)維持真實實作(importOriginal passthrough),不影響本檔其他測試。
+vi.mock('./api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./api')>();
+	return { ...actual, getOpsCollections: vi.fn(actual.getOpsCollections) };
+});
 
 describe('createOverlay (admin)', () => {
 	it('pushes / pops the stack and opens / closes a sheet', () => {
@@ -117,6 +126,7 @@ describe('markOrderPaid', () => {
 		expect(after.paidAt).toBe('剛剛');
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
 		orders.set(ORDERS); // restore the shared singleton for other tests
+		opsHydrated.set(false); // markOrderPaid now also flips this (C1) — reset for other tests
 	});
 });
 
@@ -131,12 +141,14 @@ describe('markMessageRead + coachMsgUnread', () => {
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		expect(get(coachMsgUnread)).toBe(unread0 - 1);
 		messages.set(MESSAGES.map((m) => ({ ...m }))); // restore the shared singleton for other tests
+		messagesHydrated.set(false); // markMessageRead now also flips this (C1) — reset for other tests
 	});
 	it('reading an already-read thread is a no-op for the count', () => {
 		const read = get(messages).find((m) => !m.unread)!;
 		const before = get(coachMsgUnread);
 		markMessageRead(read.id);
 		expect(get(coachMsgUnread)).toBe(before);
+		messagesHydrated.set(false); // markMessageRead now also flips this (C1) — reset for other tests
 	});
 });
 
@@ -191,6 +203,50 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		// 模擬「第二次進頁」再次觸發 hydrateOps(guard 已是 true)。
 		await hydrateOps();
 		expect(get(classes).some((c) => c.name === '新班級(使用者剛新增)')).toBe(true);
+		// restore for other tests
+		classes.set(CLASSES);
+		opsHydrated.set(false);
+	});
+
+	// Regression(C1):admin 首頁快速操作「新增學員」在使用者第一次造訪 classes/
+	// members/orders 任一頁之前就寫入 members store。反轉 :186 既有測試的順序 ——
+	// mutation 先發生、hydrateOps() 才第一次觸發 —— 修法前 refreshOps() 會用 seed
+	// clone 無條件覆寫四個 store,讓新學員無聲消失。
+	it('mutate-before-first-hydrate:首次 hydrateOps() 前的 saveMember 不被覆寫', async () => {
+		opsHydrated.set(false);
+		members.set(MEMBERS);
+		saveMember({ ...MEMBERS[0], id: '', name: '水合前新增的學員(regression)' }, true);
+		expect(get(members).length).toBe(MEMBERS.length + 1);
+		await hydrateOps();
+		expect(get(members).length).toBe(MEMBERS.length + 1);
+		expect(get(members).some((m) => m.name === '水合前新增的學員(regression)')).toBe(true);
+		// restore for other tests
+		members.set(MEMBERS);
+		opsHydrated.set(false);
+	});
+
+	// Regression(C1 in-flight 邊窗):hydrateOps() 的 fetch 尚未 resolve 時發生的
+	// mutation,resolve 後不該被覆寫。用可控 deferred promise 模擬「fetch 掛著、
+	// mutation 先到」的race。
+	it('in-flight:hydrateOps() fetch 尚未 resolve 時發生的 saveClass,resolve 後不被覆寫', async () => {
+		opsHydrated.set(false);
+		classes.set(CLASSES);
+		let resolveFetch!: (v: OpsCollections) => void;
+		vi.mocked(getOpsCollections).mockReturnValueOnce(
+			new Promise((resolve) => {
+				resolveFetch = resolve;
+			})
+		);
+		const pending = hydrateOps();
+		saveClass({ ...CLASSES[0], id: '', name: '水合進行中新增的班級(in-flight)' }, true);
+		resolveFetch({
+			members: MEMBERS.map((m) => ({ ...m })),
+			classes: CLASSES.map((c) => ({ ...c })),
+			coaches: COACHES.map((c) => ({ ...c })),
+			orders: ORDERS.map((o) => ({ ...o }))
+		});
+		await pending;
+		expect(get(classes).some((c) => c.name === '水合進行中新增的班級(in-flight)')).toBe(true);
 		// restore for other tests
 		classes.set(CLASSES);
 		opsHydrated.set(false);
