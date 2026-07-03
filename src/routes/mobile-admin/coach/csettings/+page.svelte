@@ -1,7 +1,12 @@
 <script lang="ts">
   /* 教練 · 個人設定。port coach.jsx CoachSettingsScreen (276-401)。
    * SettingRow 內聯（kit 未提供）；CTag selected 內聯選取樣式。
-   * onRole → overlay.sheet('role')；notify → toasts.notify；logout 清 localStorage 導向登入。 */
+   * onRole → overlay.sheet('role')；notify → toasts.notify；logout 清 localStorage 導向登入。
+   *
+   * 資料改由 getCsettings()(mock-API 接縫)非同步載入,三態閘門(loading/error/
+   * ready)。cInfo 在 payload 的 coaches 裡找不到本人(含空集合)時顯示 EmptyState,
+   * 不當機(既有 `|| COACHES[0]` fallback 在空陣列時仍是 undefined)。 */
+  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -12,12 +17,24 @@
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
+  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import { overlay, role, switchRole, session, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
-  import { PROFILES, COACHES } from '$lib/mobile-admin/data';
+  import { getCsettings, type CsettingsData } from '$lib/mobile-admin/api';
 
-  const p = PROFILES.coach;
-  const cInfo = COACHES.find((c) => c.name === '林雅婷') || COACHES[0];
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: CsettingsData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getCsettings()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: cInfo = data ? data.coaches.find((c) => c.name === '林雅婷') || data.coaches[0] : undefined;
 
   let notif = { parentMsg: true, classRemind: true, attUndone: true, lowAtt: true, weekly: false, sms: false };
   let twoFA = true;
@@ -51,10 +68,15 @@
   }
 </script>
 
+{#if phase === 'ready' && data}
+{@const p = data.profiles.coach}
 <HeroHeader role="coach" {p} unread={0} onBell={() => {}} {onRole} greeting="個人設定" sub="個人資料、通知偏好與帳號安全" />
 
 <div class="df-scroll df-view">
   <div style="padding:16px; display:flex; flex-direction:column; gap:18px; margin-top:-2px;">
+  {#if !cInfo}
+    <EmptyState icon="user-x" title="找不到教練資料" body="請確認教練帳號設定。" />
+  {:else}
     <!-- profile summary -->
     <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
       <div style="display:flex; align-items:center; gap:13px;">
@@ -173,6 +195,7 @@
     >
       <Icon name="log-out" size={17} color="var(--df-error)" /> 登出
     </button>
+  {/if}
     <div style="height:8px;"></div>
   </div>
 </div>
@@ -194,3 +217,12 @@
     </Button>
   </svelte:fragment>
 </Sheet>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="csettings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+    <SkelCard><Skeleton w="100%" h={100} r={16} /></SkelCard>
+    <SkelCard padding={0}><Skeleton w="100%" h={180} r={16} /></SkelCard>
+    <SkelCard padding={0}><Skeleton w="100%" h={220} r={16} /></SkelCard>
+  </div>
+{/if}
