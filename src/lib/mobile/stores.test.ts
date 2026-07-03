@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
-import { createOverlay, createCart, createNotifs, cartCount, applyCheckout, unreadCount, points, redeemReward } from './stores';
+import {
+	createOverlay,
+	createCart,
+	createNotifs,
+	cartCount,
+	applyCheckout,
+	unreadCount,
+	points,
+	redeemReward,
+	notifs,
+	notifsHydrated
+} from './stores';
 
 describe('createOverlay', () => {
 	it('pushes and pops the screen stack', () => {
@@ -119,6 +130,22 @@ describe('notifs', () => {
 		const n = createNotifs(seed);
 		n.markAllRead();
 		expect(seed.filter((x) => !x.read)).toHaveLength(2);
+	});
+
+	// set() 是水合用的整批覆寫(notifications 頁 load()/refresh() 拿 getNotifications()
+	// 的結果寫回 store),不影響 markRead/markAllRead 既有 mutation 行為。
+	it('set 整批覆寫內容,供 getNotifications() 水合結果寫回', () => {
+		const n = createNotifs(seed);
+		const fresh = [{ id: 'n9', read: false }];
+		n.set(fresh);
+		expect(get(n)).toEqual(fresh);
+	});
+});
+
+describe('notifs singleton — 水合守衛(notifications 頁 core risk)', () => {
+	it('起始為空陣列,notifsHydrated 起始為 false(水合前 unread 顯示 0 為可接受初始態)', () => {
+		expect(get(notifs)).toEqual([]);
+		expect(get(notifsHydrated)).toBe(false);
 	});
 });
 
