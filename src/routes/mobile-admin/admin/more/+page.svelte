@@ -1,29 +1,47 @@
 <script lang="ts">
   /* 管理員 · 更多(延伸模組 hub)。admin2.jsx MoreScreen (6)。
-   * 列表項 → overlay.push(screen);profile/role chip → sheet('role');logout 清 session。 */
+   * 列表項 → overlay.push(screen);profile/role chip → sheet('role');logout 清 session。
+   *
+   * 資料改由 getMore()(mock-API 接縫)非同步載入,三態閘門(loading/error/ready);
+   * `data` 是本頁本地一次性快照(非共享 store),profiles/coaches/venues/tickets 皆
+   * 讀自 payload。 */
+  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import { overlay, role, switchRole, session } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
-  import { PROFILES, COACHES, VENUES, TICKETS } from '$lib/mobile-admin/data';
+  import { getMore, type MoreData } from '$lib/mobile-admin/api';
 
-  const p = PROFILES.admin;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MoreData | null = null;
 
-  const groups: [string, [string, string, string, string][]][] = [
-    ['營運管理', [
-      ['教練管理', 'user-check', COACHES.length + ' 位專任教練', 'coaches'],
-      ['場館管理', 'building-2', VENUES.length + ' 個場地 · 器材', 'venues'],
-      ['票券管理', 'ticket', TICKETS.length + ' 種方案 · 銷售', 'tickets'],
-      ['報表分析', 'bar-chart-3', '營收與課程數據', 'reports']
-    ]],
-    ['系統', [
-      ['系統設定', 'settings', '場館資訊與通知', 'settings']
-    ]]
-  ];
+  function load() {
+    phase = 'loading';
+    getMore()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: groups = data
+    ? ([
+        ['營運管理', [
+          ['教練管理', 'user-check', data.coaches.length + ' 位專任教練', 'coaches'],
+          ['場館管理', 'building-2', data.venues.length + ' 個場地 · 器材', 'venues'],
+          ['票券管理', 'ticket', data.tickets.length + ' 種方案 · 銷售', 'tickets'],
+          ['報表分析', 'bar-chart-3', '營收與課程數據', 'reports']
+        ]],
+        ['系統', [
+          ['系統設定', 'settings', '場館資訊與通知', 'settings']
+        ]]
+      ] as [string, [string, string, string, string][]][])
+    : [];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
   function logout() {
@@ -38,6 +56,8 @@
   }
 </script>
 
+{#if phase === 'ready' && data}
+{@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={0} onBell={() => {}} {onRole} greeting="更多功能" sub="管理後台延伸模組" />
 
 <div class="df-scroll df-view">
@@ -105,3 +125,19 @@
     <div style="text-align:center; font-size:11.5px; color:var(--df-text-muted); padding-bottom:8px;">Dream Fly 夢飛體操館 · 後台 v1.0</div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="more-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:20px;">
+    <SkelCard><Skeleton w="100%" h={80} r={16} /></SkelCard>
+    {#each [0, 1] as i (i)}
+      <SkelCard padding={0}>
+        <div style="padding:14px 15px; display:flex; flex-direction:column; gap:14px;">
+          {#each [0, 1] as j (j)}
+            <Skeleton w="100%" h={40} r={11} />
+          {/each}
+        </div>
+      </SkelCard>
+    {/each}
+  </div>
+{/if}
