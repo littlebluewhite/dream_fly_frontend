@@ -27,15 +27,25 @@
     label: COACH_STATUS[v][0]
   }));
 
-  // Local editable copy + text buffers, reset on each open transition.
+  // Local editable copy + text buffers, reset when the dialog opens or a
+  // different coach prop arrives (single-stage pattern — mirrors
+  // ClassEditDialog/VenueEditDialog/TicketEditDialog). The previous two-stage
+  // `$: if (open && !wasOpen && coach) {…}` + `$: wasOpen = open;` pair never
+  // re-fired on an already-mounted instance: Svelte schedules the assignment
+  // to `wasOpen` before the guard that reads it (the guard depends on it), so
+  // `wasOpen` was always already in sync with `open` by the time the guard
+  // ran and `!wasOpen` could never be true.
   let f: Coach | null = coach;
   let tagsText = coach ? coach.tags.join('、') : '';
   let yearsText = coach ? String(coach.years) : '';
   let studentsText = coach ? String(coach.students) : '';
   let classesText = coach ? String(coach.classes) : '';
   let awardsText = coach ? String(coach.awards) : '';
-  let wasOpen = false;
-  $: if (open && !wasOpen && coach) {
+  let lastCoach: Coach | null = coach;
+  let wasOpen = open;
+  $: if (coach && ((open && !wasOpen) || coach !== lastCoach)) {
+    wasOpen = open;
+    lastCoach = coach;
     f = { ...coach };
     tagsText = coach.tags.join('、');
     yearsText = String(coach.years);
@@ -43,7 +53,6 @@
     classesText = String(coach.classes);
     awardsText = String(coach.awards);
   }
-  $: wasOpen = open;
 
   function onName(e: Event) {
     const v = (e.target as HTMLInputElement).value;
