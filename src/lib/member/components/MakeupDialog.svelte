@@ -2,10 +2,9 @@
   /* 預約補課 (Makeup booking) — radio list of open makeup slots; confirming
    * shows a success confirmation. Ported from the prototype's MakeupDialog
    * (client/components.jsx). */
-  import { Button, Badge, Icon } from '$lib/components/ui';
+  import { Button, Badge, Icon, EmptyState } from '$lib/components/ui';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import EmptyState from './EmptyState.svelte';
   import { MAKEUP_SLOTS, type EnrolledCourse, type MakeupSlot } from '$lib/member/data';
 
   export let open = false;

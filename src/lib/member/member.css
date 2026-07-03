@@ -20,14 +20,6 @@
     transform: none;
   }
 }
-@keyframes df-shimmer {
-  0% {
-    background-position: 150% 0;
-  }
-  100% {
-    background-position: -150% 0;
-  }
-}
 @keyframes df-typing {
   0%,
   60%,

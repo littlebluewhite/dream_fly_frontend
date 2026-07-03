@@ -3,12 +3,8 @@
    * add-to-cart / waitlist, and a course-detail dialog. Ported from the
    * prototype's Courses + CourseDetail (client/views.jsx). */
   import { onMount } from 'svelte';
-  import { Tabs, FilterChip, Card, Badge, Button, Icon } from '$lib/components/ui';
-  import EmptyState from '$lib/member/components/EmptyState.svelte';
+  import { Tabs, FilterChip, Card, Badge, Button, Icon, EmptyState, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
-  import Skeleton from '$lib/member/components/Skeleton.svelte';
-  import SkelCard from '$lib/member/components/SkelCard.svelte';
-  import ErrorState from '$lib/member/components/ErrorState.svelte';
   import { LEVEL_TONE, type CatalogCourse } from '$lib/member/data';
   import { getCourses, type CoursesData } from '$lib/member/api';
   import { cart, search, toasts } from '$lib/member/stores';
