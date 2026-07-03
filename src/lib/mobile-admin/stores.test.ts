@@ -21,9 +21,12 @@ import {
 	opsHydrated,
 	hydrateOps,
 	refreshOps,
-	saveClass
+	saveClass,
+	messagesHydrated,
+	hydrateMessages,
+	refreshMessages
 } from './stores';
-import { MEMBERS, CLASSES, COACHES, ORDERS } from './data';
+import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES } from './data';
 
 describe('createOverlay (admin)', () => {
 	it('pushes / pops the stack and opens / closes a sheet', () => {
@@ -127,6 +130,7 @@ describe('markMessageRead + coachMsgUnread', () => {
 		markMessageRead(firstUnread.id);
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		expect(get(coachMsgUnread)).toBe(unread0 - 1);
+		messages.set(MESSAGES.map((m) => ({ ...m }))); // restore the shared singleton for other tests
 	});
 	it('reading an already-read thread is a no-op for the count', () => {
 		const read = get(messages).find((m) => !m.unread)!;
@@ -190,5 +194,45 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		// restore for other tests
 		classes.set(CLASSES);
 		opsHydrated.set(false);
+	});
+});
+
+describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
+	it('messages 保留同步 seed(不因獨立水合而清空);messagesHydrated 起始為 false', () => {
+		expect(get(messages)).toEqual(MESSAGES);
+		expect(get(messagesHydrated)).toBe(false);
+	});
+
+	it('hydrateMessages() 在 guard 為 false 時實際觸發水合(覆寫先前的假資料)', async () => {
+		messages.set([{ ...MESSAGES[0], from: '水合前的假資料' }]);
+		await hydrateMessages();
+		expect(get(messages)).toEqual(MESSAGES);
+		expect(get(messagesHydrated)).toBe(true);
+		// restore for other tests
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messagesHydrated.set(false);
+	});
+
+	it('hydrateMessages() 在 guard 為 true 時短路,不會覆寫 markMessageRead 的結果', async () => {
+		await hydrateMessages();
+		expect(get(messagesHydrated)).toBe(true);
+		const firstUnread = get(messages).find((m) => m.unread)!;
+		markMessageRead(firstUnread.id);
+		await hydrateMessages();
+		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
+		// restore for other tests
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messagesHydrated.set(false);
+	});
+
+	it('refreshMessages() 一律重新 fetch,不受 guard 短路(供重試使用)', async () => {
+		await hydrateMessages();
+		expect(get(messagesHydrated)).toBe(true);
+		messages.set([{ ...MESSAGES[0], from: '水合前的假資料' }]);
+		await refreshMessages();
+		expect(get(messages)).toEqual(MESSAGES);
+		// restore for other tests
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messagesHydrated.set(false);
 	});
 });

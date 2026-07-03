@@ -12,6 +12,7 @@ import {
 	ACTIVITY,
 	CLASSES,
 	ORDERS,
+	MESSAGES,
 	type Profile,
 	type Coach,
 	type Venue,
@@ -22,7 +23,8 @@ import {
 	type Skill,
 	type ActivityRow,
 	type ClassRow,
-	type OrderRow
+	type OrderRow,
+	type MessageRow
 } from './data';
 
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -82,3 +84,7 @@ export const getOpsCollections = (): Promise<OpsCollections> =>
 		coaches: COACHES.map((c) => ({ ...c })),
 		orders: ORDERS.map((o) => ({ ...o }))
 	});
+
+/** 教練 · 訊息串列(獨立於 ops 集合水合 — 與 orders/classes/members/coaches 屬不同
+ *  領域,coach/messages 專用;clone 防共享參照被 mutation 污染)。 */
+export const getMessages = (): Promise<MessageRow[]> => reply(MESSAGES.map((m) => ({ ...m })));
