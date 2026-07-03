@@ -1,21 +1,42 @@
 <script lang="ts">
   /* 教練 · 工作台（首頁）。port coach.jsx CoachToday (6-61)。
-   * 原型的 setTab(id) → goto(adminPath('coach',id))；onBell/onRole → overlay.sheet。 */
+   * 原型的 setTab(id) → goto(adminPath('coach',id))；onBell/onRole → overlay.sheet。
+   *
+   * 資料改由 getCoachHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
+   * ready)。「今日課堂/今日學員」統計原為頁面硬編字串(2 / 23),與同頁 coachToday
+   * 課表描述同一件事實,改為由 coachToday 動態算出(單一來源);「我的學員」(86)
+   * 本頁資料無對應欄位,維持原樣硬編。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import Card from '$lib/components/ui/Card.svelte';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
-  import { COACH_TODAY, PROFILES } from '$lib/mobile-admin/data';
+  import { getCoachHome, type MCoachHomeData } from '$lib/mobile-admin/api';
 
-  const p = PROFILES.coach;
-  const stats: [string, string, string, string][] = [
-    ['2', '今日課堂', 'calendar-days', 'var(--df-primary)'],
-    ['23', '今日學員', 'users', 'var(--df-success)'],
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let data: MCoachHomeData | null = null;
+
+  function load() {
+    phase = 'loading';
+    getCoachHome()
+      .then((d) => { data = d; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
+
+  $: coachToday = data?.coachToday ?? [];
+  $: classCount = coachToday.length;
+  $: studentCount = coachToday.reduce((s, t) => s + t.count, 0);
+  $: stats = [
+    [String(classCount), '今日課堂', 'calendar-days', 'var(--df-primary)'],
+    [String(studentCount), '今日學員', 'users', 'var(--df-success)'],
     ['86', '我的學員', 'graduation-cap', 'var(--df-accent-dark)']
-  ];
+  ] as [string, string, string, string][];
   const tasks = [
     { icon: 'calendar-check', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '19:00 競技啦啦隊 進階班 尚未點名', action: '去點名', to: 'attendance' },
     { icon: 'message-circle', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', text: '2 則家長訊息待回覆', action: '查看', to: 'messages' },
@@ -27,6 +48,8 @@
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 </script>
 
+{#if phase === 'ready' && data}
+{@const p = data.profiles.coach}
 <HeroHeader
   role="coach"
   {p}
@@ -34,7 +57,7 @@
   {onBell}
   {onRole}
   greeting={p.name + ' 教練，午安 👋'}
-  sub="今天有 2 堂課、23 位學員，記得課後完成點名。"
+  sub={'今天有 ' + classCount + ' 堂課、' + studentCount + ' 位學員，記得課後完成點名。'}
 />
 
 <div class="df-scroll df-view">
@@ -51,9 +74,9 @@
     </div>
 
     <!-- today schedule -->
-    <Panel title="今日課表" sub="你負責的 2 堂課" action="點名" onAction={() => setTab('attendance')}>
-      {#each COACH_TODAY as t, i (i)}
-        <div style="display:flex; align-items:center; gap:13px; padding:13px 16px; border-bottom:{i < COACH_TODAY.length - 1 ? '1px solid var(--df-border)' : 'none'};">
+    <Panel title="今日課表" sub={'你負責的 ' + classCount + ' 堂課'} action="點名" onAction={() => setTab('attendance')}>
+      {#each coachToday as t, i (i)}
+        <div style="display:flex; align-items:center; gap:13px; padding:13px 16px; border-bottom:{i < coachToday.length - 1 ? '1px solid var(--df-border)' : 'none'};">
           <div style="font-family:var(--df-font-mono); font-size:16px; font-weight:700; color:var(--df-ink); width:48px; flex:none;">{t.time}</div>
           <div style="flex:1; min-width:0;">
             <div style="font-size:14.5px; font-weight:700; color:var(--df-text-dark);">{t.name}</div>
@@ -90,3 +113,16 @@
     <div style="height:8px;"></div>
   </div>
 </div>
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div class="df-scroll df-view" data-testid="mcoach-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+    <SkelCard><Skeleton w="100%" h={90} r={16} /></SkelCard>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:11px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={80} r={14} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard padding={0}><Skeleton w="100%" h={140} r={16} /></SkelCard>
+  </div>
+{/if}
