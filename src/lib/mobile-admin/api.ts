@@ -5,11 +5,13 @@ import {
 	VENUES,
 	TICKETS,
 	COACH_TODAY,
+	ROSTER,
 	type Profile,
 	type Coach,
 	type Venue,
 	type Ticket,
-	type TodayRow
+	type TodayRow,
+	type RosterEntry
 } from './data';
 
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
@@ -28,3 +30,8 @@ export interface MCoachHomeData {
 	profiles: Record<'admin' | 'coach', Profile>;
 }
 export const getCoachHome = (): Promise<MCoachHomeData> => reply({ coachToday: COACH_TODAY, profiles: PROFILES });
+
+export interface RosterData {
+	roster: RosterEntry[];
+}
+export const getRoster = (): Promise<RosterData> => reply({ roster: ROSTER });
