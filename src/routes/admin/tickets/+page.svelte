@@ -5,16 +5,22 @@
    * StatusBadge, the 已售/配額 line with a ProgressBar (warning once ≥80% sold),
    * and the 銷售明細/編輯 actions. The row set is held locally so 新增 / 儲存 reflect
    * immediately; 編輯 / 新增票券 open the TicketEditDialog (the prototype is
-   * front-end only). 銷售明細 still fires a toast. */
-  import { Button, Card, Icon, ProgressBar } from '$lib/components/ui';
+   * front-end only). 銷售明細 still fires a toast.
+   *
+   * Data now arrives async via getTickets() (mock-API seam): onMount loads it
+   * into a three-state gate (loading/error/ready); `tickets` is the local
+   * mutable working copy the 新增/編輯 flow edits in place. */
+  import { onMount } from 'svelte';
+  import { Button, Card, Icon, ProgressBar, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import TicketEditDialog from '$lib/admin/components/TicketEditDialog.svelte';
   import { toasts } from '$lib/admin/stores';
-  import { TICKETS, TICKET_TYPES, type Ticket } from '$lib/admin/data';
+  import { TICKET_TYPES, type Ticket } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
+  import { getTickets } from '$lib/admin/api';
 
   const notify = toasts.notify;
 
@@ -31,10 +37,19 @@
     desc: ''
   });
 
-  let tickets: Ticket[] = TICKETS;
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let tickets: Ticket[] = [];
   let edit: Ticket | null = null;
   let editOpen = false;
   let addNew = false;
+
+  function load() {
+    phase = 'loading';
+    getTickets()
+      .then((d) => { tickets = d.tickets; phase = 'ready'; })
+      .catch(() => { phase = 'error'; });
+  }
+  onMount(load);
 
   $: totalSold = tickets.reduce((s, t) => s + t.sold, 0);
   $: revenue = tickets.reduce((s, t) => s + t.sold * t.price, 0);
@@ -65,92 +80,109 @@
   }
 </script>
 
-<div style="display:flex; flex-direction:column; gap:20px;">
-  <PageHead title="票券管理" sub="月票、體驗券與活動票券">
-    <svelte:fragment slot="actions">
-      <Button variant="primary" size="sm" on:click={openNew}>
-        <Icon name="plus" size={15} style="margin-right:6px;" />新增票券
-      </Button>
-    </svelte:fragment>
-  </PageHead>
+{#if phase === 'ready'}
+  <div style="display:flex; flex-direction:column; gap:20px;">
+    <PageHead title="票券管理" sub="月票、體驗券與活動票券">
+      <svelte:fragment slot="actions">
+        <Button variant="primary" size="sm" on:click={openNew}>
+          <Icon name="plus" size={15} style="margin-right:6px;" />新增票券
+        </Button>
+      </svelte:fragment>
+    </PageHead>
 
-  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
-    <StatCard icon="ticket" label="已售票券" value={totalSold + ' 張'} tint="#8B5CF614" color="#8B5CF6" />
-    <StatCard
-      icon="circle-dollar-sign"
-      label="票券營收"
-      value={fmtNT(revenue)}
-      tint="var(--df-success-bg)"
-      color="var(--df-success)"
-    />
-    <StatCard
-      icon="layers"
-      label="販售方案"
-      value={tickets.length + ' 種'}
-      tint="var(--df-primary-bg)"
-      color="var(--df-primary)"
-    />
-  </div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      <StatCard icon="ticket" label="已售票券" value={totalSold + ' 張'} tint="#8B5CF614" color="#8B5CF6" />
+      <StatCard
+        icon="circle-dollar-sign"
+        label="票券營收"
+        value={fmtNT(revenue)}
+        tint="var(--df-success-bg)"
+        color="var(--df-success)"
+      />
+      <StatCard
+        icon="layers"
+        label="販售方案"
+        value={tickets.length + ' 種'}
+        tint="var(--df-primary-bg)"
+        color="var(--df-primary)"
+      />
+    </div>
 
-  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
-    {#each tickets as t (t.id)}
-      {@const pct = soldPct(t.sold, t.quota)}
-      <Card padding={0} hoverable style="overflow:hidden;">
-        <div style="display:flex; align-items:flex-start; gap:14px; padding:18px 20px 16px;">
-          <div
-            style="width:46px; height:46px; border-radius:11px; background:color-mix(in srgb, {t.color} 10%, transparent); display:flex; align-items:center; justify-content:center; flex:none;"
-          >
-            <Icon name={t.icon} size={22} color={t.color} />
-          </div>
-          <div style="flex:1; min-width:0;">
-            <h3
-              style="margin:0; font-size:16px; font-weight:700; color:var(--df-ink); font-family:var(--df-font-heading);"
-            >
-              {t.name}
-            </h3>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-top:4px;">{t.desc}</div>
-          </div>
-          <div
-            style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;"
-          >
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
+      {#each tickets as t (t.id)}
+        {@const pct = soldPct(t.sold, t.quota)}
+        <Card padding={0} hoverable style="overflow:hidden;">
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:18px 20px 16px;">
             <div
-              style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-mono); white-space:nowrap;"
+              style="width:46px; height:46px; border-radius:11px; background:color-mix(in srgb, {t.color} 10%, transparent); display:flex; align-items:center; justify-content:center; flex:none;"
             >
-              {fmtNT(t.price)}
+              <Icon name={t.icon} size={22} color={t.color} />
             </div>
-            <StatusBadge kind="ticket" value={t.type} />
-          </div>
-        </div>
-
-        <div style="padding:0 20px 16px;">
-          <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px;">
-            <span style="color:var(--df-text-light);">已售 / 配額</span>
-            <span style="font-weight:700; color:var(--df-text-dark); white-space:nowrap;"
-              >{t.sold} / {t.quota} 張</span
+            <div style="flex:1; min-width:0;">
+              <h3
+                style="margin:0; font-size:16px; font-weight:700; color:var(--df-ink); font-family:var(--df-font-heading);"
+              >
+                {t.name}
+              </h3>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-top:4px;">{t.desc}</div>
+            </div>
+            <div
+              style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;"
             >
+              <div
+                style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-mono); white-space:nowrap;"
+              >
+                {fmtNT(t.price)}
+              </div>
+              <StatusBadge kind="ticket" value={t.type} />
+            </div>
           </div>
-          <ProgressBar value={t.sold} max={t.quota} height={7} tone={ticketTone(pct)} />
-        </div>
 
-        <div
-          style="display:flex; gap:8px; padding:14px 20px 18px; border-top:1px solid var(--df-border);"
-        >
-          <Button
-            variant="secondary"
-            size="sm"
-            fullWidth
-            on:click={() =>
-              notify('info', t.name, '已售 ' + t.sold + ' 張 · 營收 ' + fmtNT(t.sold * t.price) + '。')}
+          <div style="padding:0 20px 16px;">
+            <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px;">
+              <span style="color:var(--df-text-light);">已售 / 配額</span>
+              <span style="font-weight:700; color:var(--df-text-dark); white-space:nowrap;"
+                >{t.sold} / {t.quota} 張</span
+              >
+            </div>
+            <ProgressBar value={t.sold} max={t.quota} height={7} tone={ticketTone(pct)} />
+          </div>
+
+          <div
+            style="display:flex; gap:8px; padding:14px 20px 18px; border-top:1px solid var(--df-border);"
           >
-            <Icon name="bar-chart-3" size={14} style="margin-right:6px;" />銷售明細
-          </Button>
-          <Button variant="primary" size="sm" fullWidth on:click={() => openEdit(t)}>
-            <Icon name="pencil-line" size={14} style="margin-right:6px;" />編輯
-          </Button>
-        </div>
-      </Card>
-    {/each}
+            <Button
+              variant="secondary"
+              size="sm"
+              fullWidth
+              on:click={() =>
+                notify('info', t.name, '已售 ' + t.sold + ' 張 · 營收 ' + fmtNT(t.sold * t.price) + '。')}
+            >
+              <Icon name="bar-chart-3" size={14} style="margin-right:6px;" />銷售明細
+            </Button>
+            <Button variant="primary" size="sm" fullWidth on:click={() => openEdit(t)}>
+              <Icon name="pencil-line" size={14} style="margin-right:6px;" />編輯
+            </Button>
+          </div>
+        </Card>
+      {/each}
+    </div>
   </div>
-</div>
 
-<TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
+  <TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
+{:else if phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else}
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="tickets-skeleton">
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={70} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={180} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+{/if}
