@@ -101,5 +101,5 @@ export const NOTIF_TONE_FG: Record<string, string> = { primary: 'var(--df-primar
 /* ---- Member points (點數明細與兌換) ---- */
 export const PT_TYPE: Record<string, Tone> = { earn: ['success', '獲得'], redeem: ['primary', '折抵'], expire: ['neutral', '到期'] };
 
-/* ---- Coach message thread (聯絡教練 / 訊息) ---- */
+/* ---- Canned coach replies (聯絡教練 / 訊息 — 罐頭回覆;CONTACT_THREAD 本體在 $lib/domain/member-app) ---- */
 export const COACH_REPLIES = ['收到！我會留意，謝謝家長。', '好的，我們課堂上再幫承恩加強。', '沒問題，有任何狀況都歡迎隨時跟我說 🙂', '了解～這部分我會特別注意。'];
