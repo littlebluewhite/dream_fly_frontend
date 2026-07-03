@@ -1,9 +1,12 @@
 <script lang="ts">
-  /* 帳號憑證 tab — certifications list + credential history timeline */
-  import { COACH } from '$lib/coach/data';
+  /* 帳號憑證 tab — certifications list + credential history timeline
+   * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH。 */
+  import type { Coach } from '$lib/coach/data';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachTag from '$lib/coach/components/CoachTag.svelte';
+
+  export let coach: Coach;
 
   // Certifications derived from COACH chips + extras
   const CERTS = [
@@ -32,7 +35,7 @@
       現有資格認證
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-      {#each COACH.chips as chip}
+      {#each coach.chips as chip}
         <CoachTag tone="primary">{chip}</CoachTag>
       {/each}
     </div>
