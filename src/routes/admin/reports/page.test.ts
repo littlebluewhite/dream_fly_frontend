@@ -68,7 +68,6 @@ describe('報表分析 (+page)', () => {
 	});
 
 	it('renders the period Select seeded with every REPORT_PERIODS option', async () => {
-		const revenue = REPORT_KPIS.find((k) => k.label === '本月營收')!;
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
 		const select = container.querySelector('select') as HTMLSelectElement;
@@ -81,7 +80,6 @@ describe('報表分析 (+page)', () => {
 	});
 
 	it('re-scales a numeric KPI when the period Select changes', async () => {
-		const revenue = REPORT_KPIS.find((k) => k.label === '本月營收')!;
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
 		const select = container.querySelector('select') as HTMLSelectElement;
@@ -112,7 +110,6 @@ describe('報表分析 (+page)', () => {
 	});
 
 	it('keeps a %-valued KPI honest across a period change', async () => {
-		const revenue = REPORT_KPIS.find((k) => k.label === '本月營收')!;
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
 		const select = container.querySelector('select') as HTMLSelectElement;
