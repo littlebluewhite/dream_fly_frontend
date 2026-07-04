@@ -27,6 +27,31 @@ describe('ClassEditDialog', () => {
 		}
 	});
 
+	/* Task 8 review fix A (concern #1): the 5→3 level fold must not be silent.
+	 * A 分級 helper must spell out that the backend persists 3 tiers and how the 5
+	 * local levels map, so an admin who picks 啟蒙/選手 understands it reloads as
+	 * 入門/進階 rather than being surprised. */
+	it('shows a 分級 helper explaining the 5→3 tier fold (non-silent persistence)', () => {
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base });
+		const hint = getByText(/系統目前僅分三級/);
+		expect(hint).toBeInTheDocument();
+		// mentions the two lossy grades so their fold target is explicit
+		expect(hint.textContent).toContain('啟蒙');
+		expect(hint.textContent).toContain('選手');
+	});
+
+	/* Task 8 review fix B (concern #2): parseAgeRange accepts only 3 exact formats
+	 * (range uses an EN DASH U+2013, not a hyphen); anything else silently clears
+	 * the age restriction. The 適合年齡 Input must show those exact formats as a
+	 * placeholder so unparseable input is visible before it's submitted. */
+	it('shows the accepted 適合年齡 formats as a placeholder (incl. the EN-DASH range form)', () => {
+		const { getByLabelText } = render(ClassEditDialog, { open: true, klass: base });
+		const ageInput = getByLabelText('適合年齡') as HTMLInputElement;
+		expect(ageInput.placeholder).toContain('8–14 歲'); // EN DASH U+2013 — matches AGE_RANGE_RE
+		expect(ageInput.placeholder).toContain('12 歲以上');
+		expect(ageInput.placeholder).toContain('9 歲以下');
+	});
+
 	it('renders nothing actionable when closed', () => {
 		const { queryByText } = render(ClassEditDialog, { open: false, klass: base });
 		expect(queryByText('儲存課程')).toBeNull();

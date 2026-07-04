@@ -71,13 +71,18 @@
   >
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <Input label="班級名稱" bind:value={f.name} style="grid-column:span 2" />
-      <Select label="分級" bind:value={f.level} options={LEVELS} />
+      <Select
+        label="分級"
+        bind:value={f.level}
+        options={LEVELS}
+        helper="系統目前僅分三級儲存：啟蒙・入門→入門、基礎→基礎、進階・選手→進階"
+      />
       <Select label="課程類別" bind:value={f.cat} options={CATS} />
       <Select label="授課教練" bind:value={f.coach} options={coachOptions} />
       <Input label="教室 / 場地" bind:value={f.room} />
       <Input label="上課日" bind:value={f.day} />
       <Input label="時段" bind:value={f.time} />
-      <Input label="適合年齡" bind:value={f.age} />
+      <Input label="適合年齡" bind:value={f.age} placeholder="例如 8–14 歲 / 12 歲以上 / 9 歲以下" />
       <Input label="人數上限" bind:value={capText} />
       <Input label="本期期別" bind:value={f.term} />
       <Input label="本期堂數" bind:value={sessionsText} />
