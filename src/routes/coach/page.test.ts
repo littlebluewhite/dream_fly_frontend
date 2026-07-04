@@ -3,12 +3,12 @@ import { render, fireEvent } from '@testing-library/svelte';
 import CoachHomePage from './+page.svelte';
 import { COACH, TODAY_LABEL, TODAY_CLASSES, CONVERSATIONS } from '$lib/coach/data';
 import { getDashboard } from '$lib/coach/api';
-import { clockIn, clockOut } from '$lib/coach/clock';
+import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
 import { toasts } from '$lib/coach/stores';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$lib/coach/api', () => ({ getDashboard: vi.fn() }));
-vi.mock('$lib/coach/clock', () => ({ clockIn: vi.fn(), clockOut: vi.fn() }));
+vi.mock('$lib/coach/clock', () => ({ clockIn: vi.fn(), clockOut: vi.fn(), isClockedIn: vi.fn() }));
 
 /* 儀表板(index)— welcome hero + next-class command bar + 4 欄 KpiCard + 今日課程表
  * /最新訊息/本週待辦。資料改由 getDashboard() 接縫載入,三態閘門(loading/error/
@@ -30,6 +30,8 @@ beforeEach(() => {
 	vi.mocked(getDashboard).mockResolvedValue(FIXTURE);
 	vi.mocked(clockIn).mockReset();
 	vi.mocked(clockOut).mockReset();
+	vi.mocked(isClockedIn).mockReset();
+	vi.mocked(isClockedIn).mockResolvedValue(false);
 });
 
 describe('/coach (+page) — 儀表板首頁', () => {
@@ -121,6 +123,15 @@ describe('/coach — 三態', () => {
 });
 
 describe('/coach — 上班/下班打卡', () => {
+	it('進頁面時查詢開機狀態：最新打卡紀錄未結束 → 直接顯示「下班打卡」(重新整理不再誤顯示尚未打卡)', async () => {
+		vi.mocked(isClockedIn).mockResolvedValue(true);
+		const { findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+
+		expect(await findByText('下班打卡')).toBeInTheDocument();
+		expect(isClockedIn).toHaveBeenCalledWith(FIXTURE.coach.id);
+	});
+
 	it('點擊「上班打卡」呼叫 clockIn(coach.id)，成功後切換為「下班打卡」', async () => {
 		vi.mocked(clockIn).mockResolvedValue({ id: 'r1', clock_in: '', clock_out: null, note: null, created_at: '' });
 		const { getByText, findByText } = render(CoachHomePage);

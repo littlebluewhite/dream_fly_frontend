@@ -153,9 +153,19 @@ function mapTodayClass(c: ApiCourse): TodayClass {
 	};
 }
 
+/** 依 start 升冪排序 —— 零填充的 "HH:MM" 可直接字典序比較；無時間者(schedule_text
+ *  為 null → start '')排最後，不讓未知時間的課搶走頁面「下一堂課」的位置。mock seed
+ *  的 TODAY_CLASSES 本來就是時間序,頁面(dashboard 的 nextClass、today 的課表)一直
+ *  依賴這個隱含順序,接縫在此恢復同一保證。 */
+function byStartTime(a: TodayClass, b: TodayClass): number {
+	const ka = a.start || '99:99';
+	const kb = b.start || '99:99';
+	return ka < kb ? -1 : ka > kb ? 1 : 0;
+}
+
 async function myTodayClasses(coachId: string): Promise<TodayClass[]> {
 	const courses = await listCourses();
-	return courses.filter((c) => c.coach_id === coachId).map(mapTodayClass);
+	return courses.filter((c) => c.coach_id === coachId).map(mapTodayClass).sort(byStartTime);
 }
 
 /** 首頁 KPI 卡數字(待點名/出席率/待回覆)原為頁面硬編字串,一併移入接縫。 */

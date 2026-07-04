@@ -197,6 +197,33 @@ describe('getToday — 同 getDashboard 的課程過濾，只回 todayLabel/toda
 		expect(d.todayClasses[0].id).toBe('c1');
 	});
 
+	it('todayClasses 依 start 時間升冪排序，無時間(schedule_text null)者排最後 —— getDashboard 共用同一映射', async () => {
+		const base = {
+			slug: 'x', level: 'beginner', description: null, duration_minutes: 60,
+			price_cents: 100000, max_students: 12, min_age: 5, max_age: 8, features: [],
+			is_active: true, coach_id: 'co1', category: '體操', is_highlighted: false,
+			created_at: '', updated_at: '', enrolled_count: 5, waitlist_count: 0
+		};
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME,
+				'GET /coaches': [MY_COACH],
+				'GET /courses?per_page=100': {
+					courses: [
+						{ ...base, id: 'c-late', name: '下午班', schedule_text: '週六 16:00-17:00' },
+						{ ...base, id: 'c-none', name: '未排時間班', schedule_text: null },
+						{ ...base, id: 'c-early', name: '早上班', schedule_text: '週六 09:00-10:00' }
+					],
+					total: 3, page: 1, per_page: 100
+				}
+			})
+		);
+
+		const d = await getToday();
+
+		expect(d.todayClasses.map((c) => c.id)).toEqual(['c-early', 'c-late', 'c-none']);
+	});
+
 	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })

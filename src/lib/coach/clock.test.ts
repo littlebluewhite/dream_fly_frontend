@@ -1,7 +1,7 @@
 /* Dream Fly — coach/clock.ts 單測(Task 19：打卡動作，本任務唯一的寫入操作)。
  * 只 mock $lib/api/client 的 api()，同 api.test.ts 的作法。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { clockIn, clockOut } from './clock';
+import { clockIn, clockOut, isClockedIn } from './clock';
 import { api, ApiError } from '$lib/api/client';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -60,5 +60,35 @@ describe('clockOut — POST /coaches/{id}/clock-out', () => {
 		vi.mocked(api).mockRejectedValue(new ApiError(404, 'no active clock-in record found'));
 
 		await expect(clockOut('co1')).rejects.toMatchObject({ status: 404 });
+	});
+});
+
+describe('isClockedIn — GET /coaches/{id}/clock-records?page=1&per_page=1(開機狀態查詢，最佳努力)', () => {
+	const OPEN = { id: 'r1', clock_in: '2026-07-04T08:00:00Z', clock_out: null, note: null, created_at: '2026-07-04T08:00:00Z' };
+	const CLOSED = { ...OPEN, clock_out: '2026-07-04T17:00:00Z' };
+
+	it('最新一筆紀錄未結束(clock_out === null) → true', async () => {
+		vi.mocked(api).mockResolvedValue([OPEN]);
+
+		await expect(isClockedIn('co1')).resolves.toBe(true);
+		expect(api).toHaveBeenCalledWith('/coaches/co1/clock-records?page=1&per_page=1');
+	});
+
+	it('最新一筆紀錄已下班 → false', async () => {
+		vi.mocked(api).mockResolvedValue([CLOSED]);
+
+		await expect(isClockedIn('co1')).resolves.toBe(false);
+	});
+
+	it('沒有任何打卡紀錄 → false', async () => {
+		vi.mocked(api).mockResolvedValue([]);
+
+		await expect(isClockedIn('co1')).resolves.toBe(false);
+	});
+
+	it('查詢失敗 → false(不拋出——開機查詢為最佳努力，失敗不影響頁面)', async () => {
+		vi.mocked(api).mockRejectedValue(new ApiError(500, 'boom'));
+
+		await expect(isClockedIn('co1')).resolves.toBe(false);
 	});
 });

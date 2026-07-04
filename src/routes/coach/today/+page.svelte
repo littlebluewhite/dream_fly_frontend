@@ -54,10 +54,12 @@
   $: liveClass   = todayClasses.find(c => c.status === 'live');
   $: doneCount   = todayClasses.filter(c => c.status === 'done').length;
   $: totalCount  = todayClasses.reduce((sum, c) => sum + c.count, 0);
+  // 零課程防護:真資料下教練可能沒有任何課程,除以 0 會讓 KPI 顯示 NaN%。
+  $: donePct     = todayClasses.length ? Math.round((doneCount / todayClasses.length) * 100) : 0;
 
   /* ── attendance progress ── */
   $: attendedCount = todayClasses.filter(c => c.status === 'done' || c.status === 'live').length;
-  $: attendancePct = Math.round((attendedCount / todayClasses.length) * 100);
+  $: attendancePct = todayClasses.length ? Math.round((attendedCount / todayClasses.length) * 100) : 0;
 </script>
 
 {#if phase === 'ready' && data}
@@ -86,7 +88,7 @@
   <!-- ③ KPI grid (3 col) -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
     <KpiCard label="今日課程" value="{todayClasses.length} 堂" icon="calendar" iconColor="var(--df-primary)" />
-    <KpiCard label="已完成" value="{doneCount} 堂" icon="circle-check" iconColor="var(--df-success)" subTone="var(--df-success)" sub="今日進度 {Math.round((doneCount / todayClasses.length) * 100)}%" />
+    <KpiCard label="已完成" value="{doneCount} 堂" icon="circle-check" iconColor="var(--df-success)" subTone="var(--df-success)" sub="今日進度 {donePct}%" />
     <KpiCard label="學員總數" value="{totalCount} 位" icon="users" iconColor="var(--df-accent-dark)" />
   </div>
 

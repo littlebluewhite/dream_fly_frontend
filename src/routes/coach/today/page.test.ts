@@ -41,6 +41,16 @@ describe('/coach/today (+page)', () => {
 		expect(txt).toContain(`${doneCount} 堂`);
 		expect(txt).toContain(`${totalCount} 位`);
 	});
+
+	it('零課程時(真資料下可能發生),今日進度/出勤進度顯示 0% 而非 NaN%', async () => {
+		vi.mocked(getToday).mockReset();
+		vi.mocked(getToday).mockResolvedValue({ todayLabel: TODAY_LABEL, todayClasses: [] });
+		const { container, findByText } = render(TodayPage);
+		await findByText(TODAY_LABEL);
+		expect(container.textContent ?? '').toContain('今日進度 0%');
+		// innerHTML 同時涵蓋文字與 style 屬性(出勤進度條的 width:{attendancePct}%)。
+		expect(container.innerHTML).not.toContain('NaN');
+	});
 });
 
 describe('/coach/today — 三態', () => {

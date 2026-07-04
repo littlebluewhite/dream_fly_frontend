@@ -23,3 +23,16 @@ export const clockIn = (coachId: string, note?: string): Promise<ClockRecord> =>
 
 export const clockOut = (coachId: string): Promise<ClockRecord> =>
 	api<ClockRecord>(`/coaches/${coachId}/clock-out`, { method: 'POST' });
+
+/** 進頁面時的「目前是否上班中」開機狀態查詢：GET /coaches/{id}/clock-records 依
+ *  clock_in DESC 排序(純陣列)，取最新一筆，clock_out 仍為 null 即為上班中。
+ *  最佳努力——查詢失敗一律回 false(顯示成「尚未打卡」；使用者實際打卡時仍會被
+ *  後端 409/404 校正，不會造成錯誤寫入)，呼叫端不需要 catch。 */
+export async function isClockedIn(coachId: string): Promise<boolean> {
+	try {
+		const records = await api<ClockRecord[]>(`/coaches/${coachId}/clock-records?page=1&per_page=1`);
+		return records.length > 0 && records[0].clock_out === null;
+	} catch {
+		return false;
+	}
+}

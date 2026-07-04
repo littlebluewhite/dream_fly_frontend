@@ -11,7 +11,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
-  import { clockIn, clockOut } from '$lib/coach/clock';
+  import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
   import { toasts } from '$lib/coach/stores';
   import { ApiError } from '$lib/api/client';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
@@ -31,7 +31,11 @@
   function load() {
     phase = 'loading';
     getDashboard()
-      .then((d) => { data = d; phase = 'ready'; })
+      .then((d) => {
+        data = d;
+        phase = 'ready';
+        void hydrateClockState(d.coach.id);
+      })
       .catch((e) => {
         // 用 e.name 而非 instanceof CoachNotFoundError —— 頁面測試把 $lib/coach/api
         // 整支模組換成只有 getDashboard 的假模組，import 進來的 class 會是
@@ -48,14 +52,24 @@
   }
   onMount(load);
 
-  /* ── 上班/下班打卡 —— 本地樂觀狀態(無對應的「目前打卡狀態」讀取端點在本次範圍
-   * 內，見 P2)：clockIn 409(已在上班中)/clockOut 404(尚未上班)時，用回應校正回
-   * 正確的本地狀態，不只是顯示錯誤。 ── */
+  /* ── 上班/下班打卡 —— 進頁面時以 isClockedIn()(最新一筆 clock-record)做開機狀態
+   * 查詢，之後為本地樂觀狀態；clockIn 409(已在上班中)/clockOut 404(尚未上班)時，
+   * 用回應校正回正確的本地狀態，不只是顯示錯誤。 ── */
   let clockedIn = false;
   let clocking = false;
+  let clockTouched = false; // 手動打卡後,開機查詢的過期結果不得覆寫(mutation wins)
+
+  /** 開機打卡狀態查詢:最佳努力(isClockedIn 失敗一律回 false,不影響頁面)。若使用者
+   *  在查詢往返期間已手動打卡,以手動結果為準——同 mobile-admin hydrate guard 的
+   *  「mutation 永遠贏過 in-flight fetch」原則(docs/architecture.md)。 */
+  async function hydrateClockState(coachId: string) {
+    const active = await isClockedIn(coachId);
+    if (!clockTouched) clockedIn = active;
+  }
 
   async function onClockIn() {
     if (!data) return;
+    clockTouched = true;
     clocking = true;
     try {
       await clockIn(data.coach.id);
@@ -75,6 +89,7 @@
 
   async function onClockOut() {
     if (!data) return;
+    clockTouched = true;
     clocking = true;
     try {
       await clockOut(data.coach.id);
