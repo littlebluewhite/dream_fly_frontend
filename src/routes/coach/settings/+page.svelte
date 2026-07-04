@@ -30,12 +30,25 @@
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CoachSettingsData | null = null;
+  let errorTitle = '載入失敗';
+  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
   function load() {
     phase = 'loading';
     getSettings()
       .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
+      .catch((e) => {
+        // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
+        // 整支模組換成只有 getSettings 的假模組，import 進來的 class 會是 undefined。
+        if (e?.name === 'CoachNotFoundError') {
+          errorTitle = '此帳號未綁定教練檔案';
+          errorBody = '請聯繫系統管理員協助設定教練檔案。';
+        } else {
+          errorTitle = '載入失敗';
+          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+        }
+        phase = 'error';
+      });
   }
   onMount(load);
 
@@ -107,7 +120,7 @@
   </div>
 </div>
 {:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px" data-testid="settings-skeleton">
     <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>

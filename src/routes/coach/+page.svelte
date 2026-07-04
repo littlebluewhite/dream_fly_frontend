@@ -11,6 +11,9 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
+  import { clockIn, clockOut } from '$lib/coach/clock';
+  import { toasts } from '$lib/coach/stores';
+  import { ApiError } from '$lib/api/client';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
@@ -22,14 +25,72 @@
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CoachDashboardData | null = null;
+  let errorTitle = '載入失敗';
+  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
   function load() {
     phase = 'loading';
     getDashboard()
       .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
+      .catch((e) => {
+        // 用 e.name 而非 instanceof CoachNotFoundError —— 頁面測試把 $lib/coach/api
+        // 整支模組換成只有 getDashboard 的假模組，import 進來的 class 會是
+        // undefined，instanceof undefined 會直接拋錯。
+        if (e?.name === 'CoachNotFoundError') {
+          errorTitle = '此帳號未綁定教練檔案';
+          errorBody = '請聯繫系統管理員協助設定教練檔案。';
+        } else {
+          errorTitle = '載入失敗';
+          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+        }
+        phase = 'error';
+      });
   }
   onMount(load);
+
+  /* ── 上班/下班打卡 —— 本地樂觀狀態(無對應的「目前打卡狀態」讀取端點在本次範圍
+   * 內，見 P2)：clockIn 409(已在上班中)/clockOut 404(尚未上班)時，用回應校正回
+   * 正確的本地狀態，不只是顯示錯誤。 ── */
+  let clockedIn = false;
+  let clocking = false;
+
+  async function onClockIn() {
+    if (!data) return;
+    clocking = true;
+    try {
+      await clockIn(data.coach.id);
+      clockedIn = true;
+      toasts.notify('success', '上班打卡成功', '祝你有美好的一天！');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        clockedIn = true;
+        toasts.notify('error', '已在上班中', '你目前已有進行中的打卡紀錄，無需重複打卡。');
+      } else {
+        toasts.notify('error', '打卡失敗', '連線發生問題，請稍後再試。');
+      }
+    } finally {
+      clocking = false;
+    }
+  }
+
+  async function onClockOut() {
+    if (!data) return;
+    clocking = true;
+    try {
+      await clockOut(data.coach.id);
+      clockedIn = false;
+      toasts.notify('success', '下班打卡成功', '辛苦了，路上小心！');
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        clockedIn = false;
+        toasts.notify('error', '尚未上班', '目前沒有進行中的打卡紀錄。');
+      } else {
+        toasts.notify('error', '打卡失敗', '連線發生問題，請稍後再試。');
+      }
+    } finally {
+      clocking = false;
+    }
+  }
 
   $: todayClasses = data?.todayClasses ?? [];
   $: conversations = data?.conversations ?? [];
@@ -113,6 +174,33 @@
     <div style="font-size:13.5px;opacity:0.78;margin-top:4px">
       今天有 {todayClasses.length} 堂課，{data.pendingClasses}待點名
     </div>
+  </div>
+
+  <!-- ①.5 上班/下班打卡 -->
+  <div
+    style="background:#fff;border-radius:14px;padding:18px 24px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border:1px solid var(--df-border);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap"
+  >
+    <div style="display:flex;align-items:center;gap:12px">
+      <span
+        style="width:40px;height:40px;border-radius:10px;background:var(--df-primary-bg);display:flex;align-items:center;justify-content:center;flex:none"
+      >
+        <Icon name="clock" size={18} color="var(--df-primary)" />
+      </span>
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">{clockedIn ? '目前上班中' : '尚未打卡'}</div>
+        <div style="font-size:12px;color:var(--df-text-light);margin-top:2px">
+          {clockedIn ? '別忘了下班前完成打卡' : '請於上班時完成打卡'}
+        </div>
+      </div>
+    </div>
+    <Button
+      variant={clockedIn ? 'secondary' : 'primary'}
+      size="md"
+      disabled={clocking}
+      on:click={clockedIn ? onClockOut : onClockIn}
+    >
+      {clocking ? '處理中…' : clockedIn ? '下班打卡' : '上班打卡'}
+    </Button>
   </div>
 
   <!-- ② Next-class command bar -->
@@ -263,7 +351,7 @@
 
 </div>
 {:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:18px" data-testid="coach-home-skeleton">
     <SkelCard><Skeleton w="100%" h={110} r={14} /></SkelCard>

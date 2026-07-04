@@ -51,6 +51,16 @@ describe('/coach/today — 三態', () => {
 		await findByText('載入失敗');
 	});
 
+	it('myCoachProfile 找不到教練檔案時，顯示「此帳號未綁定教練檔案」而非泛用載入失敗', async () => {
+		vi.mocked(getToday).mockReset();
+		const notFound = new Error('此帳號未綁定教練檔案');
+		notFound.name = 'CoachNotFoundError';
+		vi.mocked(getToday).mockRejectedValue(notFound);
+		const { findByText, queryByText } = render(TodayPage);
+		await findByText('此帳號未綁定教練檔案');
+		expect(queryByText('載入失敗')).toBeNull();
+	});
+
 	it('loading:顯示骨架', () => {
 		vi.mocked(getToday).mockReset();
 		vi.mocked(getToday).mockReturnValue(new Promise(() => {}));

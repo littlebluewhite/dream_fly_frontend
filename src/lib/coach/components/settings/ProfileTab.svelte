@@ -3,6 +3,7 @@
    * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH,由
    * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。 */
   import type { Coach } from '$lib/coach/data';
+  import { saveSettings } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
   import Card from '$lib/components/ui/Card.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -24,12 +25,18 @@
 
   let saving = false;
 
-  function save() {
+  // name/phone 有對應的後端 PATCH /users/me 欄位，實際送出並儲存；email/gender/
+  // birth/emergency/bio 後端不支援寫入，維持本地編輯、不送出(P2，同 api.ts 註解)。
+  async function save() {
     saving = true;
-    setTimeout(() => {
-      saving = false;
+    try {
+      await saveSettings({ name, phone });
       toasts.notify('success', '個人資料已儲存', '變更將於下次登入時生效');
-    }, 800);
+    } catch {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    } finally {
+      saving = false;
+    }
   }
 
   function deactivate() {

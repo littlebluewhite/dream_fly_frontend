@@ -3,8 +3,12 @@ import { render, fireEvent } from '@testing-library/svelte';
 import CoachHomePage from './+page.svelte';
 import { COACH, TODAY_LABEL, TODAY_CLASSES, CONVERSATIONS } from '$lib/coach/data';
 import { getDashboard } from '$lib/coach/api';
+import { clockIn, clockOut } from '$lib/coach/clock';
+import { toasts } from '$lib/coach/stores';
+import { ApiError } from '$lib/api/client';
 
 vi.mock('$lib/coach/api', () => ({ getDashboard: vi.fn() }));
+vi.mock('$lib/coach/clock', () => ({ clockIn: vi.fn(), clockOut: vi.fn() }));
 
 /* 儀表板(index)— welcome hero + next-class command bar + 4 欄 KpiCard + 今日課程表
  * /最新訊息/本週待辦。資料改由 getDashboard() 接縫載入,三態閘門(loading/error/
@@ -24,6 +28,8 @@ const FIXTURE = {
 beforeEach(() => {
 	vi.mocked(getDashboard).mockReset();
 	vi.mocked(getDashboard).mockResolvedValue(FIXTURE);
+	vi.mocked(clockIn).mockReset();
+	vi.mocked(clockOut).mockReset();
 });
 
 describe('/coach (+page) — 儀表板首頁', () => {
@@ -96,10 +102,59 @@ describe('/coach — 三態', () => {
 		await findByText('載入失敗');
 	});
 
+	it('myCoachProfile 找不到教練檔案時，顯示「此帳號未綁定教練檔案」而非泛用載入失敗', async () => {
+		vi.mocked(getDashboard).mockReset();
+		const notFound = new Error('此帳號未綁定教練檔案');
+		notFound.name = 'CoachNotFoundError';
+		vi.mocked(getDashboard).mockRejectedValue(notFound);
+		const { findByText, queryByText } = render(CoachHomePage);
+		await findByText('此帳號未綁定教練檔案');
+		expect(queryByText('載入失敗')).toBeNull();
+	});
+
 	it('loading:顯示骨架', () => {
 		vi.mocked(getDashboard).mockReset();
 		vi.mocked(getDashboard).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(CoachHomePage);
 		expect(getByTestId('coach-home-skeleton')).toBeTruthy();
+	});
+});
+
+describe('/coach — 上班/下班打卡', () => {
+	it('點擊「上班打卡」呼叫 clockIn(coach.id)，成功後切換為「下班打卡」', async () => {
+		vi.mocked(clockIn).mockResolvedValue({ id: 'r1', clock_in: '', clock_out: null, note: null, created_at: '' });
+		const { getByText, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+
+		await fireEvent.click(getByText('上班打卡'));
+
+		expect(clockIn).toHaveBeenCalledWith(FIXTURE.coach.id);
+		expect(await findByText('下班打卡')).toBeInTheDocument();
+	});
+
+	it('已在上班中(後端 409)時顯示「已在上班中」toast，並將按鈕視為已上班', async () => {
+		vi.mocked(clockIn).mockRejectedValue(new ApiError(409, 'already clocked in'));
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+
+		await fireEvent.click(getByText('上班打卡'));
+
+		expect(await findByText('下班打卡')).toBeInTheDocument(); // 本地狀態用回應校正
+		expect(notifySpy).toHaveBeenCalledWith('error', '已在上班中', expect.any(String));
+	});
+
+	it('點擊「下班打卡」呼叫 clockOut(coach.id)，成功後切換回「上班打卡」', async () => {
+		vi.mocked(clockIn).mockResolvedValue({ id: 'r1', clock_in: '', clock_out: null, note: null, created_at: '' });
+		vi.mocked(clockOut).mockResolvedValue({ id: 'r1', clock_in: '', clock_out: '', note: null, created_at: '' });
+		const { getByText, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+		await fireEvent.click(getByText('上班打卡'));
+		await findByText('下班打卡');
+
+		await fireEvent.click(getByText('下班打卡'));
+
+		expect(clockOut).toHaveBeenCalledWith(FIXTURE.coach.id);
+		expect(await findByText('上班打卡')).toBeInTheDocument();
 	});
 });
