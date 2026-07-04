@@ -37,7 +37,6 @@ beforeEach(() => {
 	vi.mocked(listProducts).mockResolvedValue([PRODUCT]);
 	localStorage.clear();
 	cart.clear();
-	cart.waitlist.set([]);
 	subscriptions.set([]);
 });
 

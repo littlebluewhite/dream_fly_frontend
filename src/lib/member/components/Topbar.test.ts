@@ -35,7 +35,6 @@ const courseB = { id: 'course-b', name: '兒童基礎 B 班', level: '基礎', c
 beforeEach(() => {
   localStorage.clear();
   cart.clear();
-  cart.waitlist.set([]);
   authStore.logout();
   checkoutOpen.set(false);
 });

@@ -40,7 +40,6 @@ const COURSE = {
 beforeEach(() => {
 	localStorage.clear();
 	cart.clear();
-	cart.waitlist.set([]);
 	subscriptions.set([]);
 	points.set(ME.points);
 	pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));

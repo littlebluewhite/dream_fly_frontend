@@ -1,16 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import { getMine } from '$lib/member/api';
 import { MY_COURSES, ATT_HISTORY } from '$lib/member/data';
 import type { AttRecord } from '$lib/member/data';
+import { get } from 'svelte/store';
+import { waitlist, toasts } from '$lib/member/stores';
+import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 
 vi.mock('$lib/member/api', () => ({ getMine: vi.fn() }));
+// 只替換 api()，ApiError 用回真實類別。候補清單卡片現在打真實 GET /waitlist/me
+// （水合）與 DELETE /waitlist/{id}（取消）；不關心候補的既有測試不配置這個
+// mock 也能過 —— 未配置時 vi.fn() 回 undefined，refreshWaitlist() 內部會擲錯,
+// 但頁面的 load() 用 .catch(() => {}) 吞掉（best-effort hydrate），不影響主要
+// 的 getMine() 資料流程與既有斷言。
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 
 const SEED = { courses: MY_COURSES, attendance: ATT_HISTORY };
 
 beforeEach(() => {
   vi.mocked(getMine).mockReset();
+  vi.mocked(api).mockReset();
+  waitlist.set([]);
 });
 
 describe('member/mine 頁', () => {
@@ -55,5 +69,71 @@ describe('member/mine 頁', () => {
     expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
     // 不得顯示錯誤狀態
     expect(screen.queryByText('載入失敗')).toBeNull();
+  });
+});
+
+describe('member/mine 頁 — 候補中課程（Task 3：GET /waitlist/me 水合 + DELETE 取消）', () => {
+  it('顯示 GET /waitlist/me 水合的候補清單（只留 status=waiting）', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(api).mockResolvedValue([
+      { id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X', status: 'waiting', created_at: '2026-07-01T00:00:00Z' },
+      { id: 'wl-2', course_id: 'course-y', course_name: '候補課程 Y（已取消）', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
+    ]);
+
+    render(Page);
+
+    expect(await screen.findByText('候補課程 X')).toBeInTheDocument();
+    expect(screen.queryByText('候補課程 Y（已取消）')).toBeNull();
+  });
+
+  it('沒有候補中的課程時顯示空狀態', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(api).mockResolvedValue([]);
+
+    render(Page);
+
+    await screen.findByText('出席紀錄'); // 等頁面進 ready
+    expect(await screen.findByText('目前沒有候補中的課程')).toBeInTheDocument();
+  });
+
+  it('點擊「取消候補」→ DELETE /waitlist/{id} 成功後從清單移除', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/waitlist/me') {
+        return [{ id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }];
+      }
+      if (path === '/waitlist/wl-1' && method === 'DELETE') return undefined;
+      throw new Error(`unexpected api call: ${method} ${path}`);
+    });
+
+    render(Page);
+    const btn = await screen.findByRole('button', { name: '取消候補' });
+    await fireEvent.click(btn);
+
+    await vi.waitFor(() => expect(screen.queryByText('候補課程 X')).toBeNull());
+    expect(api).toHaveBeenCalledWith('/waitlist/wl-1', { method: 'DELETE' });
+    expect(await screen.findByText('目前沒有候補中的課程')).toBeInTheDocument();
+  });
+
+  it('取消候補失敗 → 顯示錯誤 toast，清單不變', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/waitlist/me') {
+        return [{ id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }];
+      }
+      if (path === '/waitlist/wl-1' && method === 'DELETE') throw new ApiError(404, 'waitlist entry not found');
+      throw new Error(`unexpected api call: ${method} ${path}`);
+    });
+
+    render(Page);
+    const btn = await screen.findByRole('button', { name: '取消候補' });
+    await fireEvent.click(btn);
+
+    await vi.waitFor(() => {
+      expect(get(toasts).some((t) => t.tone === 'error' && t.title === '取消候補失敗')).toBe(true);
+    });
+    expect(screen.getByText('候補課程 X')).toBeInTheDocument(); // 未從清單移除
   });
 });

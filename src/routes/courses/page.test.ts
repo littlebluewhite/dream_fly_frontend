@@ -53,7 +53,6 @@ beforeEach(() => {
 	vi.mocked(listCoaches).mockResolvedValue([COACH]);
 	localStorage.clear();
 	cart.clear();
-	cart.waitlist.set([]);
 });
 
 describe('課程介紹 (marketing) — 接真 API', () => {

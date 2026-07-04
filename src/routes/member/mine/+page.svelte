@@ -9,21 +9,38 @@
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
   import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
-  import { toasts } from '$lib/member/stores';
+  import { toasts, waitlist, refreshWaitlist, cancelWaitlist, type WaitlistEntry } from '$lib/member/stores';
   import { getMine, type MineData } from '$lib/member/api';
 
   let active: string | null = null;
   let dialog: 'leave' | 'makeup' | 'contact' | null = null;
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MineData | null = null;
+  let cancellingId: string | null = null;
 
   function load() {
     phase = 'loading';
-    getMine()
-      .then((d) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
+    // 候補清單是 best-effort 的旁路 hydrate（同 getDashboard/getAccount 對 points
+    // /notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的「我的
+    // 課程」資料流程（getMine 走 Promise.all 仍是 fail-hard）。
+    Promise.all([getMine(), refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err))])
+      .then(([d]) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  async function doCancelWaitlist(w: WaitlistEntry) {
+    if (cancellingId) return;
+    cancellingId = w.id;
+    try {
+      await cancelWaitlist(w.id);
+      toasts.notify('success', '已取消候補', w.course_name + ' 已從候補名單移除。');
+    } catch {
+      toasts.notify('error', '取消候補失敗', '請稍後再試。');
+    } finally {
+      cancellingId = null;
+    }
+  }
 
   $: cur = data && active != null ? (data.courses.find((c) => c.id === active) ?? data.courses[0]) : null;
 
@@ -158,6 +175,46 @@
     <ContactDialog open={dialog === 'contact'} course={cur} onClose={() => (dialog = null)} />
   {/if}
   {/if}
+
+  <!-- 候補中課程（Task 3：GET /waitlist/me 水合 + DELETE 取消）—— 不論上面是空
+       狀態或兩欄式課程清單都要顯示，所以放在 courses.length 的 if/else 外面。 -->
+  <div class="df-view" style="margin-top:18px">
+    <Card padding={0} style="overflow:hidden">
+      <div style="padding:16px 22px;border-bottom:1px solid var(--df-border)">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">候補中課程</h3>
+      </div>
+      {#if $waitlist.length === 0}
+        <EmptyState
+          icon="clock"
+          title="目前沒有候補中的課程"
+          body="課程額滿時可加入候補，有名額釋出時將會通知你。"
+          pad="20px 0"
+        />
+      {:else}
+        <div style="padding:2px 22px 8px">
+          {#each $waitlist as w, i (w.id)}
+            <div
+              style="display:flex;align-items:center;gap:12px;padding:14px 0;{i < $waitlist.length - 1
+                ? 'border-bottom:1px solid var(--df-border)'
+                : ''}"
+            >
+              <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--df-text-dark)">
+                {w.course_name}
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={cancellingId === w.id}
+                on:click={() => doCancelWaitlist(w)}
+              >
+                取消候補
+              </Button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </Card>
+  </div>
 {:else if phase === 'error'}
   <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
 {:else}

@@ -10,7 +10,6 @@ import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 beforeEach(() => {
   localStorage.clear();
   cart.clear();
-  cart.waitlist.set([]);
   subscriptions.set([]);
   points.set(ME.points);
   pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
@@ -56,6 +55,10 @@ const TICKET: Ticket = {
 describe('cart waitlist guard (public-seam course path — cart.add)', () => {
   // Task 17: cart.add() now takes the same public-seam CatalogCourse (uuid id)
   // as the marketing course list, and delegates to courseToCartItem internally.
+  // Task 3 (round 2): the cart no longer tracks waitlist membership itself —
+  // it only guards a full course out of the paid cart. Joining the real
+  // waitlist (and its dedup) is now the server's job via joinWaitlist() in
+  // stores.ts's network layer (see checkout-api.test.ts).
   const full = { ...COURSE, spots: 0 };
 
   it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
@@ -63,7 +66,6 @@ describe('cart waitlist guard (public-seam course path — cart.add)', () => {
     const r = c.add(full);
     expect(r).toBe('waitlisted');
     expect(get(c)).toHaveLength(0); // never enters the paid cart
-    expect(get(c.waitlist)).toContain(full.id);
   });
 
   it('adds a course that still has spots to the paid cart and returns "added"', () => {
@@ -72,14 +74,12 @@ describe('cart waitlist guard (public-seam course path — cart.add)', () => {
     const r = c.add(normal);
     expect(r).toBe('added');
     expect(get(c)).toHaveLength(1);
-    expect(get(c.waitlist)).toHaveLength(0);
   });
 
-  it('keeps the waitlist idempotent when the same full course is added twice', () => {
+  it('returns "waitlisted" both times when the same full course is added twice — the cart has no dedup responsibility (the backend 409s a duplicate join)', () => {
     const c = createCart();
-    c.add(full);
-    c.add(full);
-    expect(get(c.waitlist)).toEqual([full.id]); // recorded once
+    expect(c.add(full)).toBe('waitlisted');
+    expect(c.add(full)).toBe('waitlisted');
     expect(get(c)).toHaveLength(0); // still never in the paid cart
   });
 
@@ -113,13 +113,12 @@ describe('cart — addItem (cart v3: uuid ids, dedup by (type,id))', () => {
     expect(get(c)[0].qty).toBe(1); // single entitlement — no qty > 1
   });
 
-  it('routes a full public course (spots 0) straight to the waitlist as a uuid string, never the paid cart', () => {
+  it('routes a full public course (spots 0) straight to the waitlist guard, never the paid cart', () => {
     const c = createCart();
     const full = courseToCartItem({ ...COURSE, spots: 0 });
     const r = c.addItem(full);
     expect(r).toBe('waitlisted');
     expect(get(c)).toHaveLength(0);
-    expect(get(c.waitlist)).toEqual(['course-uuid-1']);
   });
 
   it('dedups by (type,id) — a course and a pass sharing the same id never collide', () => {
@@ -133,14 +132,38 @@ describe('cart — addItem (cart v3: uuid ids, dedup by (type,id))', () => {
 });
 
 describe('cart persistence (survives login / reload) — dreamfly_cart_v3', () => {
-  it('round-trips items and waitlist through localStorage under the v3 key for a fresh persisted cart', () => {
+  it('round-trips items through localStorage under the v3 key for a fresh persisted cart', () => {
     const c1 = createCart(true);
     c1.add({ ...COURSE, spots: 3 }); // normal → cart
-    c1.add({ ...COURSE2, spots: 0 }); // full → waitlist
+    c1.add({ ...COURSE2, spots: 0 }); // full → waitlist guard (never persisted locally, see below)
     const c2 = createCart(true); // simulate a reload
     expect(get(c2)).toHaveLength(1);
-    expect(get(c2.waitlist)).toContain(COURSE2.id);
     expect(localStorage.getItem('dreamfly_cart_v3')).toBeTruthy();
+  });
+
+  // Task 3 (round 2): waitlist truth moved to the server (GET /waitlist/me via
+  // the module-level `waitlist` store) — the cart itself must neither read nor
+  // write a `waitlist` field in dreamfly_cart_v3 any more.
+  it('ignores a legacy `waitlist` array on an old dreamfly_cart_v3 payload — loads items fine, never rehydrates it, and never writes it back', () => {
+    localStorage.setItem(
+      'dreamfly_cart_v3',
+      JSON.stringify({
+        items: [{ id: 'course-uuid-9', type: 'course', name: '舊項目', price: 100, qty: 1, icon: 'sparkles' }],
+        waitlist: ['stale-course-id']
+      })
+    );
+
+    const c = createCart(true);
+
+    expect(get(c)).toHaveLength(1); // items still load fine
+    expect(get(c)[0].id).toBe('course-uuid-9');
+
+    // Any subsequent save (subscribe-write-back fires on the next items mutation)
+    // must not resurrect a `waitlist` key in the persisted payload.
+    c.add({ ...COURSE2, spots: 3 });
+    const saved = JSON.parse(localStorage.getItem('dreamfly_cart_v3')!);
+    expect(saved.waitlist).toBeUndefined();
+    expect(saved.items).toBeDefined();
   });
 
   it('a non-persisted factory cart leaves localStorage untouched', () => {

@@ -9,7 +9,7 @@
 
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { api } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
 import { ntd, type CatalogCourse } from '$lib/public/adapters';
 import { chargeableLines } from './checkout';
 import {
@@ -38,19 +38,23 @@ const CART_STORAGE_KEY = 'dreamfly_cart_v3';
 
 interface PersistedCart {
   items: CartItem[];
-  waitlist: string[];
 }
 
+/** Task 3 (round 2): waitlist truth moved to the server (see the `waitlist`
+ *  store + refreshWaitlist()/joinWaitlist()/cancelWaitlist() below) — an old
+ *  `dreamfly_cart_v3` payload may still carry a `waitlist` array from before
+ *  this change, but it's ignored on load: never rehydrated, and (since
+ *  `PersistedCart` no longer has the field) never written back either. */
 function loadCart(): PersistedCart {
-  if (typeof window === 'undefined') return { items: [], waitlist: [] };
+  if (typeof window === 'undefined') return { items: [] };
   try {
     const stored = localStorage.getItem(CART_STORAGE_KEY);
-    if (!stored) return { items: [], waitlist: [] };
+    if (!stored) return { items: [] };
     const parsed = JSON.parse(stored);
-    return { items: parsed.items ?? [], waitlist: parsed.waitlist ?? [] };
+    return { items: parsed.items ?? [] };
   } catch (error) {
     console.error('Failed to load cart from storage:', error);
-    return { items: [], waitlist: [] };
+    return { items: [] };
   }
 }
 
@@ -58,36 +62,32 @@ function loadCart(): PersistedCart {
  *  single app-wide cart does this so a guest cart survives login / reload.
  *  Tests use the non-persisting default so multiple carts never share storage. */
 export function createCart(persist = false) {
-  const initial = persist ? loadCart() : { items: [], waitlist: [] };
+  const initial = persist ? loadCart() : { items: [] };
   const items = writable<CartItem[]>(initial.items);
   const { subscribe, update, set } = items;
-  // 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
-  const waitlist = writable<string[]>(initial.waitlist);
 
   if (persist && typeof window !== 'undefined') {
     const save = () => {
       try {
-        localStorage.setItem(
-          CART_STORAGE_KEY,
-          JSON.stringify({ items: get(items), waitlist: get(waitlist) })
-        );
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ items: get(items) }));
       } catch (error) {
         console.error('Failed to save cart to storage:', error);
       }
     };
     items.subscribe(save);
-    waitlist.subscribe(save);
   }
 
   /** Add any pre-adapted item (course / pass). Dedup is by (type, id) — a
    *  course and a pass can never collide even if their ids somehow matched.
-   *  A full course (spots 0) never enters the paid cart; it's routed to the
-   *  waitlist instead. Neither a course (enrolment) nor a pass (entitlement)
-   *  accumulates qty on a repeat add — both lock at qty 1 and report
-   *  'bumped' so the caller can show the right toast. */
+   *  A full course (spots 0) never enters the paid cart — the caller is
+   *  expected to call joinWaitlist() itself on a 'waitlisted' result (see
+   *  routes/member/courses/+page.svelte); this guard has no dedup
+   *  responsibility of its own any more, that's the backend's 409. Neither a
+   *  course (enrolment) nor a pass (entitlement) accumulates qty on a repeat
+   *  add — both lock at qty 1 and report 'bumped' so the caller can show the
+   *  right toast. */
   function addItem(input: CartItemInput): AddResult {
     if (input.type === 'course' && input.spots === 0) {
-      waitlist.update((ids) => (ids.includes(input.id) ? ids : [...ids, input.id]));
       return 'waitlisted';
     }
     let result: AddResult = 'added';
@@ -104,7 +104,6 @@ export function createCart(persist = false) {
 
   return {
     subscribe,
-    waitlist,
     addItem,
     /** Add a course from the member catalog (Task 17: now the same public-seam
      *  CatalogCourse the marketing course list uses — uuid id, no icon field).
@@ -140,6 +139,75 @@ export const cart = createCart(true);
 export const cartCount: Readable<number> = derived(cart, ($items) =>
   $items.reduce((sum, item) => sum + item.qty, 0)
 );
+
+/* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
+ * 取代原本掛在 cart 底下、隨 dreamfly_cart_v3 一起存進 localStorage 的
+ * `waitlist: string[]`——truth 改成 server（GET /waitlist/me），跟 subscriptions
+ * /points 同一種「per-session 快取」模式：refreshWaitlist() 整包 hydrate；
+ * joinWaitlist()/cancelWaitlist() 呼叫 API 成功後直接更新 store（不重新整包
+ * fetch，省一次 GET）。cart.addItem 仍會把額滿課程擋在付費購物車外（回傳
+ * 'waitlisted'），但不再自己寫入任何本地清單——呼叫端（courses 頁的
+ * addToCart）收到 'waitlisted' 後才真的呼叫 joinWaitlist()。 */
+export interface WaitlistEntry {
+  id: string; // waitlist entry id — cancelWaitlist(id) 需要
+  course_id: string;
+  course_name: string;
+}
+
+interface ApiWaitlistEntry {
+  id: string;
+  course_id: string;
+  course_name: string;
+  status: 'waiting' | 'cancelled';
+  created_at: string;
+}
+
+export const waitlist = writable<WaitlistEntry[]>([]);
+
+function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
+  return { id: w.id, course_id: w.course_id, course_name: w.course_name };
+}
+
+/** GET /waitlist/me — 純陣列、新到舊，含已取消的歷史紀錄。只留 status='waiting'
+ *  （同 refreshSubscriptions 對 expired/cancelled 的處理慣例——已取消的候補不
+ *  算「候補中」，不該顯示在會員中心的候補清單）。 */
+export async function refreshWaitlist(): Promise<void> {
+  const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
+  waitlist.set(list.filter((w) => w.status === 'waiting').map(toWaitlistEntry));
+}
+
+/** POST /waitlist（帶 course_id）。成功即代表已加入候補：把後端回傳的新 entry
+ *  直接塞進 store 最前面（同 GET /waitlist/me 的新到舊排序），不用整包重新
+ *  hydrate。重複候補（後端 409 "already on waitlist"）由呼叫端用
+ *  joinWaitlistErrorMessage(err) 轉繁中文案；這裡原樣拋出錯誤，不吞。 */
+export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
+  const res = await api<ApiWaitlistEntry>('/waitlist', {
+    method: 'POST',
+    body: JSON.stringify({ course_id: courseId })
+  });
+  const entry = toWaitlistEntry(res);
+  waitlist.update((list) => [entry, ...list]);
+  return entry;
+}
+
+/** DELETE /waitlist/{id} → 204 No Content（同 syncCartToServer 的 DELETE /cart
+ *  慣例，api() 對 204 回傳 undefined，見 client.ts）。成功後從 store 移除該筆。 */
+export async function cancelWaitlist(id: string): Promise<void> {
+  await api(`/waitlist/${id}`, { method: 'DELETE' });
+  waitlist.update((list) => list.filter((w) => w.id !== id));
+}
+
+/** POST /waitlist 409 的繁中文案。後端訊息逐字對照 waitlist service 原始碼
+ *  （dream_fly_backend/src/modules/waitlist/service.rs 的
+ *  `AppError::Conflict("already on waitlist")`）——同 checkout.ts
+ *  ORDER_ERROR_MESSAGES 的子字串比對慣例，只有「重複候補」有專屬文案；
+ *  其餘錯誤（課程未滿班的 409、網路失敗等）落回通用 fallback。 */
+export function joinWaitlistErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.message.includes('already on waitlist')) {
+    return '你已經在候補名單中了';
+  }
+  return '加入候補失敗，請稍後再試';
+}
 
 /* ---- Points ----
  * 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由

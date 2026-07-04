@@ -53,14 +53,12 @@ const PASS: Ticket = {
 beforeEach(() => {
 	localStorage.clear();
 	cart.clear();
-	cart.waitlist.set([]);
 	authStore.logout();
 	vi.mocked(goto).mockClear();
 });
 afterEach(() => {
 	localStorage.clear();
 	cart.clear();
-	cart.waitlist.set([]);
 	authStore.logout();
 });
 

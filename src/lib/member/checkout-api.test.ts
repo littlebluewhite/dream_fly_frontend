@@ -16,11 +16,16 @@ import {
   pointsLedger,
   notifications,
   notificationsHydrated,
+  waitlist,
   syncCartToServer,
   placeOrder,
   refreshSubscriptions,
   refreshPoints,
-  refreshNotifications
+  refreshNotifications,
+  refreshWaitlist,
+  joinWaitlist,
+  cancelWaitlist,
+  joinWaitlistErrorMessage
 } from './stores';
 import type { ApiOrder } from './stores';
 import type { CartItem } from './data';
@@ -68,7 +73,7 @@ function fakeRouter(overrides: Record<string, unknown>) {
 beforeEach(() => {
   localStorage.clear();
   cart.clear();
-  cart.waitlist.set([]);
+  waitlist.set([]);
   subscriptions.set([]);
   points.set(0);
   pointsLedger.set([]);
@@ -402,5 +407,98 @@ describe('refreshNotifications(Task 17)', () => {
 
     expect(api).not.toHaveBeenCalled();
     expect(get(notifications)).toEqual(sentinel); // 未被覆寫
+  });
+});
+
+/* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
+ * 覆蓋 stores.ts 新增的 refreshWaitlist / joinWaitlist / cancelWaitlist 網路層，
+ * 與 joinWaitlistErrorMessage 這個純函式（同 checkout.ts 的 orderErrorMessage
+ * 慣例：只對後端已知的單一 409 原因給專屬文案，其餘落回通用 fallback）。 */
+describe('refreshWaitlist', () => {
+  it('GET /waitlist/me → 只留 status=waiting，映射成 WaitlistEntry（id/course_id/course_name）', async () => {
+    vi.mocked(api).mockResolvedValue([
+      { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-01T00:00:00Z' },
+      { id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
+    ]);
+
+    await refreshWaitlist();
+
+    expect(api).toHaveBeenCalledWith('/waitlist/me');
+    // cancelled 的歷史紀錄不算「候補中」— 同 refreshSubscriptions 對 expired/cancelled 的處理慣例。
+    expect(get(waitlist)).toEqual([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);
+  });
+
+  it('全部都是 cancelled → waitlist 清空', async () => {
+    vi.mocked(api).mockResolvedValue([
+      { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
+    ]);
+
+    await refreshWaitlist();
+
+    expect(get(waitlist)).toEqual([]);
+  });
+});
+
+describe('joinWaitlist', () => {
+  it('POST /waitlist 帶 course_id；成功後把回應塞進 store 最前面（新到舊，同 GET /waitlist/me 的排序）', async () => {
+    waitlist.set([{ id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程' }]);
+    vi.mocked(api).mockResolvedValue({
+      id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z'
+    });
+
+    const entry = await joinWaitlist('course-uuid-9');
+
+    expect(api).toHaveBeenCalledWith('/waitlist', {
+      method: 'POST',
+      body: JSON.stringify({ course_id: 'course-uuid-9' })
+    });
+    expect(entry).toEqual({ id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A' });
+    expect(get(waitlist)).toEqual([
+      { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A' },
+      { id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程' }
+    ]);
+  });
+
+  it('後端 409（重複候補）原樣拋出，不寫入 store', async () => {
+    vi.mocked(api).mockRejectedValue(new ApiError(409, 'already on waitlist'));
+
+    await expect(joinWaitlist('course-uuid-9')).rejects.toBeInstanceOf(ApiError);
+    expect(get(waitlist)).toEqual([]);
+  });
+});
+
+describe('cancelWaitlist', () => {
+  it('DELETE /waitlist/{id}；成功後從 store 移除該筆（204 No Content，同 syncCartToServer 的 DELETE /cart 慣例）', async () => {
+    waitlist.set([
+      { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' },
+      { id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' }
+    ]);
+    vi.mocked(api).mockResolvedValue(undefined);
+
+    await cancelWaitlist('wl-1');
+
+    expect(api).toHaveBeenCalledWith('/waitlist/wl-1', { method: 'DELETE' });
+    expect(get(waitlist)).toEqual([{ id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' }]);
+  });
+
+  it('失敗時原樣拋出，store 不變', async () => {
+    waitlist.set([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);
+    vi.mocked(api).mockRejectedValue(new ApiError(404, 'waitlist entry not found'));
+
+    await expect(cancelWaitlist('wl-1')).rejects.toBeInstanceOf(ApiError);
+    expect(get(waitlist)).toEqual([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);
+  });
+});
+
+describe('joinWaitlistErrorMessage', () => {
+  // 後端錯誤字串逐字對照 waitlist service 原始碼（dream_fly_backend/src/modules/waitlist/service.rs）。
+  it('後端 409 "already on waitlist"（重複候補）→ 專屬繁中文案', () => {
+    expect(joinWaitlistErrorMessage(new ApiError(409, 'already on waitlist'))).toBe('你已經在候補名單中了');
+  });
+
+  it('其餘錯誤（如課程未滿班的 409、網路失敗、非 ApiError）→ 通用 fallback', () => {
+    expect(joinWaitlistErrorMessage(new ApiError(409, 'course is not full'))).toBe('加入候補失敗，請稍後再試');
+    expect(joinWaitlistErrorMessage(new ApiError(500, 'internal error'))).toBe('加入候補失敗，請稍後再試');
+    expect(joinWaitlistErrorMessage(new Error('network'))).toBe('加入候補失敗，請稍後再試');
   });
 });

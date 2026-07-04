@@ -44,7 +44,6 @@ beforeEach(() => {
   localStorage.clear();
   authStore.logout();
   cart.clear();
-  cart.waitlist.set([]);
 });
 afterEach(() => vi.restoreAllMocks());
 

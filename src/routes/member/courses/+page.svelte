@@ -8,7 +8,7 @@
   import { LEVEL_TONE } from '$lib/member/data';
   import type { CatalogCourse } from '$lib/public/adapters';
   import { getCourses, type CoursesData } from '$lib/member/api';
-  import { cart, search, toasts } from '$lib/member/stores';
+  import { cart, search, toasts, waitlist, refreshWaitlist, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
 
   let tab = 'all';
   let filter = '全部';
@@ -22,7 +22,14 @@
       .then((d) => { data = d; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
-  onMount(load);
+  onMount(() => {
+    load();
+    // best-effort：候補狀態只影響「候補」按鈕要不要顯示已候補，失敗就先當作
+    // 尚未候補，仍可手動點擊候補（後端 409 會擋掉真的重複）。
+    void refreshWaitlist().catch(() => {});
+  });
+
+  $: waitlistedIds = new Set($waitlist.map((w) => w.course_id));
 
   const cats = ['全部', '幼兒體操', '兒童基礎', '競技啦啦隊', '競技體操', '成人體操', '跑酷'];
 
@@ -44,11 +51,17 @@
         )
     : [];
 
-  function addToCart(c: CatalogCourse) {
+  async function addToCart(c: CatalogCourse) {
+    if (c.spots === 0 && waitlistedIds.has(c.id)) return; // already joined — the button is disabled, but guard here too (belt-and-suspenders against a duplicate POST /waitlist)
     const r = cart.add(c);
-    if (r === 'waitlisted')
-      toasts.notify('info', '已加入候補', c.name + ' — 有名額時將通知您。');
-    else if (r === 'bumped') toasts.notify('info', '已更新數量', c.name + ' 數量 +1。');
+    if (r === 'waitlisted') {
+      try {
+        await joinWaitlist(c.id);
+        toasts.notify('info', '已加入候補', c.name + ' — 有名額時將通知您。');
+      } catch (err) {
+        toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
+      }
+    } else if (r === 'bumped') toasts.notify('info', '已更新數量', c.name + ' 數量 +1。');
     else toasts.notify('success', '已加入購物車', c.name + ' — 前往購物車完成報名。');
   }
 </script>
@@ -77,6 +90,7 @@
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
       {#each list as c (c.id)}
         {@const full = c.spots === 0}
+        {@const joined = waitlistedIds.has(c.id)}
         <Card padding={0} hoverable style="overflow:hidden; display:flex; flex-direction:column">
           <button
             type="button"
@@ -91,7 +105,7 @@
               <span style="position:absolute; top:12px; right:12px"><Badge tone="accent" solid>熱門</Badge></span>
             {/if}
             {#if full}
-              <span style="position:absolute; top:12px; left:12px"><Badge tone="warning">候補</Badge></span>
+              <span style="position:absolute; top:12px; left:12px"><Badge tone="warning">{joined ? '已候補' : '候補'}</Badge></span>
             {/if}
           </button>
           <div style="padding:18px; flex:1; display:flex; flex-direction:column">
@@ -118,9 +132,9 @@
                 >
                 <span style="font-size:13px; color:var(--df-text-light)">/季</span>
               </div>
-              <Button size="sm" variant={full ? 'secondary' : 'primary'} on:click={() => addToCart(c)}>
-                <Icon name={full ? 'clock' : 'plus'} size={15} />
-                {full ? '候補' : '加入'}
+              <Button size="sm" variant={full ? 'secondary' : 'primary'} disabled={full && joined} on:click={() => addToCart(c)}>
+                <Icon name={full ? (joined ? 'check' : 'clock') : 'plus'} size={15} />
+                {full ? (joined ? '已候補' : '候補') : '加入'}
               </Button>
             </div>
           </div>
