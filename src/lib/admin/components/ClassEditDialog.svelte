@@ -4,18 +4,22 @@
    * then 分級 / 課程類別 / 授課教練 / 教室 / 上課日 / 時段 / 適合年齡 / 人數上限 / 本期期別 /
    * 本期堂數 / 季費 / 招生狀態). Holds a local `let f` copy of the class prop, reset
    * whenever the dialog transitions to open. Numeric fields (人數上限 / 本期堂數 /
-   * 季費) are edited as text and parsed back on save. On 儲存 it fires
-   * onSave(updated) AND a success toast. */
+   * 季費) are edited as text and parsed back on save.
+   *
+   * Task 8 piece 1: 儲存改為呼叫真實 POST/PATCH /courses（classes/+page.svelte 的
+   * save() 是非同步的，可能失敗），這裡不再樂觀地立刻丟成功 toast——成功/失敗 toast
+   * 一律由 page 在 API 呼叫結束後決定並顯示。單堂時長（duration_minutes）是 ClassRow
+   * 沒有的欄位（唯讀映射本就無對應資料），只有「新增」流程需要它（POST 必填），故
+   * 只在 isNew 時額外收集，並隨 onSave 的第二個參數一起送出。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { toasts } from '$lib/admin/stores';
   import { LEVELS, CATS, CLASS_STATUS, COACHES, type ClassRow, type Coach } from '$lib/admin/data';
 
   export let klass: ClassRow | null = null;
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: ClassRow) => void = () => {};
+  export let onSave: (updated: ClassRow, durationMinutes: number) => void = () => {};
   // Caller (classes/+page.svelte) passes the getClasses() seam's coaches; the
   // COACHES import stays only as this prop's default (mirrors OrdersTable's
   // `export let rows: Order[] = ORDERS;`), so a standalone render still works.
@@ -30,6 +34,9 @@
   let capText = klass ? String(klass.cap) : '';
   let priceText = klass ? String(klass.price) : '';
   let sessionsText = klass ? String(klass.sessions) : '';
+  // 單堂時長（分鐘）—— ClassRow 無此欄位，僅新增流程收集；預設 90 分鐘（沿用既有
+  // fixture 常見值），可在送出前調整。
+  let durationText = '90';
   let lastKlass: ClassRow | null = klass;
   $: if (klass !== lastKlass) {
     lastKlass = klass;
@@ -37,6 +44,7 @@
     capText = klass ? String(klass.cap) : '';
     priceText = klass ? String(klass.price) : '';
     sessionsText = klass ? String(klass.sessions) : '';
+    durationText = '90';
   }
 
   function save() {
@@ -47,8 +55,7 @@
       price: parseInt(priceText, 10) || 0,
       sessions: parseInt(sessionsText, 10) || 0
     };
-    onSave(updated);
-    toasts.notify('success', isNew ? '已新增班級' : '已儲存課程', '「' + updated.name + '」已' + (isNew ? '建立' : '更新') + '。');
+    onSave(updated, parseInt(durationText, 10) || 0);
   }
 </script>
 
@@ -76,6 +83,9 @@
       <Input label="本期堂數" bind:value={sessionsText} />
       <Input label="季費 (NT$)" bind:value={priceText} />
       <Select label="招生狀態" bind:value={f.status} options={CLASS_STATUS} />
+      {#if isNew}
+        <Input label="單堂時長（分鐘）" bind:value={durationText} />
+      {/if}
     </div>
   </EditModal>
 {/if}

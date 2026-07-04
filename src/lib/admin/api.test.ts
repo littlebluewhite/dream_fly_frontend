@@ -5,7 +5,17 @@
  * (Task 14 public seam) 一律用真實實作，這樣才是「後端形狀進、UI 形狀出」的端對端
  * 斷言，而不是把邏輯也一起 mock 掉(同 member/api.test.ts 的作法)。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getVenues, getTickets, getOrders, getReports, getClasses, getCoaches, getMembers } from './api';
+import {
+	getVenues,
+	getTickets,
+	getOrders,
+	getReports,
+	getClasses,
+	getCoaches,
+	getMembers,
+	createCourse,
+	updateCourse
+} from './api';
 import { api } from '$lib/api/client';
 import { mapMemberAccount } from './data';
 import {
@@ -321,6 +331,54 @@ describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）
 		expect(c3.status).toBe('候補'); // 8 < 10 但 wait=2 > 0
 		expect(c3.level).toBe('基礎'); // intermediate → 基礎
 		expect(c3.age).toBe('12 歲以上'); // 只有 min_age
+	});
+});
+
+describe('createCourse — POST /courses（admin，Task 8 piece 1）', () => {
+	it('POSTs the given body as-is and returns the CourseResponse', async () => {
+		const created = {
+			id: 'c-new', name: '新班級', slug: 'new-class', level: 'advanced', description: null,
+			duration_minutes: 90, price_cents: 480000, max_students: 12, min_age: 8, max_age: 14,
+			features: [], is_active: true, coach_id: 'co1', category: '競技體操', schedule_text: '週二 17:00-19:00',
+			is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 0, waitlist_count: 0
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /courses': created }));
+
+		const body = {
+			name: '新班級',
+			level: 'advanced',
+			category: '競技體操',
+			price_cents: 480000,
+			max_students: 12,
+			duration_minutes: 90
+		};
+		const result = await createCourse(body);
+
+		expect(api).toHaveBeenCalledWith('/courses', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 422/409) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /courses': new Error('conflict') }));
+		await expect(createCourse({ name: 'x' })).rejects.toThrow('conflict');
+	});
+});
+
+describe('updateCourse — PATCH /courses/{id}（admin，Task 8 piece 1）', () => {
+	it('PATCHes /courses/{id} with the given (partial) body and returns the CourseResponse', async () => {
+		const updated = {
+			id: 'c1', name: '改名班級', slug: 'x', level: 'intermediate', description: null,
+			duration_minutes: 60, price_cents: 320000, max_students: 10, min_age: null, max_age: null,
+			features: [], is_active: true, coach_id: null, category: '兒童基礎', schedule_text: null,
+			is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 3, waitlist_count: 0
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /courses/c1': updated }));
+
+		const body = { name: '改名班級', price_cents: 320000 };
+		const result = await updateCourse('c1', body);
+
+		expect(api).toHaveBeenCalledWith('/courses/c1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual(updated);
 	});
 });
 

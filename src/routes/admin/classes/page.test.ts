@@ -1,10 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
 import { CLASSES, COACHES, type Coach } from '$lib/admin/data';
-import { getClasses } from '$lib/admin/api';
+import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
+import { ApiError } from '$lib/api/client';
+import { toasts } from '$lib/admin/stores';
 
-vi.mock('$lib/admin/api', () => ({ getClasses: vi.fn() }));
+vi.mock('$lib/admin/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/admin/api')>();
+	return { ...actual, getClasses: vi.fn(), createCourse: vi.fn(), updateCourse: vi.fn() };
+});
 
 /* 與真 COACHES 完全不同的自造教練 fixture — 可證偽的關鍵:ClassEditDialog 的
  * coaches prop 預設值是真 COACHES,若頁面漏綁 `{coaches}`,對話框會靜默退回
@@ -63,6 +69,93 @@ describe('課程管理 (+page)', () => {
 		expect(queryByText('建立班級')).toBeNull();
 		await fireEvent.click(getByText('新增課程'));
 		expect(getByText('建立班級')).toBeInTheDocument();
+	});
+});
+
+describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH /courses）', () => {
+	it('新增課程：填寫班級名稱後點擊建立班級，呼叫 createCourse 並把回應映射回列表', async () => {
+		const created = {
+			id: 'c-new', name: '新班級', slug: 'x', level: 'intermediate', description: null,
+			duration_minutes: 90, price_cents: 320000, max_students: 12, min_age: null, max_age: null,
+			features: [], is_active: true, coach_id: null, category: '兒童基礎', schedule_text: null,
+			is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 0, waitlist_count: 0
+		};
+		vi.mocked(createCourse).mockResolvedValue(created);
+
+		const { getByText, getByLabelText, findByText, queryByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+		await fireEvent.click(getByText('新增課程'));
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '新班級' } });
+		await fireEvent.click(getByText('建立班級'));
+
+		await findByText('新班級'); // 回應映射進列表後才會出現
+
+		expect(createCourse).toHaveBeenCalledTimes(1);
+		const body = vi.mocked(createCourse).mock.calls[0][0];
+		expect(body.name).toBe('新班級');
+		expect(body.price_cents).toBe(320000); // toCents(3200)，blankClass 預設季費
+		expect(body.max_students).toBe(12);
+		expect(body.duration_minutes).toBe(90); // 單堂時長預設 90
+
+		// 對話框已關閉（建立班級按鈕消失）
+		expect(queryByText('建立班級')).toBeNull();
+	});
+
+	it('編輯課程：點擊儲存課程，呼叫 updateCourse(真實 id, body) 並把回應映射回該列', async () => {
+		const target = CLASSES[0];
+		const updated = {
+			id: target.id, name: '改名後的班級', slug: 'x', level: 'advanced', description: null,
+			duration_minutes: 90, price_cents: 500000, max_students: target.cap, min_age: null, max_age: null,
+			features: [], is_active: true, coach_id: null, category: target.cat, schedule_text: null,
+			is_highlighted: false, created_at: '', updated_at: '', enrolled_count: target.enrolled, waitlist_count: 0
+		};
+		vi.mocked(updateCourse).mockResolvedValue(updated);
+
+		const { getByText, getAllByText, getByLabelText, findByText } = render(ClassesPage);
+		await findByText(target.name);
+		await fireEvent.click(getAllByText('編輯')[0]);
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '改名後的班級' } });
+		await fireEvent.click(getByText('儲存課程'));
+
+		await findByText('改名後的班級');
+
+		expect(updateCourse).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(updateCourse).mock.calls[0][0]).toBe(target.id); // 真實 id，非 order_number 那種替代鍵
+		const body = vi.mocked(updateCourse).mock.calls[0][1];
+		expect(body.name).toBe('改名後的班級');
+		expect(body.duration_minutes).toBeUndefined(); // 編輯流程不收集，PATCH 省略＝維持原值
+	});
+
+	it('新增課程失敗（409 課程已存在）→ 顯示繁中錯誤 toast，對話框維持開啟，列表不變', async () => {
+		vi.mocked(createCourse).mockRejectedValue(new ApiError(409, 'course slug already exists'));
+		const before = get(toasts).length;
+
+		const { getByText, getByLabelText, findByText, queryByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+		await fireEvent.click(getByText('新增課程'));
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '重複班級' } });
+		await fireEvent.click(getByText('建立班級'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toContain('已存在');
+		expect(queryByText('重複班級')).toBeNull(); // 未進入列表
+		expect(getByText('建立班級')).toBeInTheDocument(); // 對話框仍開著，可修正重試
+	});
+
+	it('編輯課程失敗（422 驗證）→ 顯示繁中錯誤 toast，列表維持原值', async () => {
+		vi.mocked(updateCourse).mockRejectedValue(new ApiError(422, 'invalid course level'));
+		const before = get(toasts).length;
+
+		const { getByText, getAllByText, findByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+		await fireEvent.click(getAllByText('編輯')[0]);
+		await fireEvent.click(getByText('儲存課程'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toContain('不符規則');
+		expect(await findByText(CLASSES[0].name)).toBeInTheDocument(); // 原名稱仍在
 	});
 });
 

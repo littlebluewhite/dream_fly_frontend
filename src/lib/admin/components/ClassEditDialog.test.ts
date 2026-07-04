@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
+import { get } from 'svelte/store';
 import { render, fireEvent } from '@testing-library/svelte';
 import ClassEditDialog from './ClassEditDialog.svelte';
 import { CLASSES, type ClassRow } from '$lib/admin/data';
+import { toasts } from '$lib/admin/stores';
 
 /* ClassEditDialog — edit form in an EditModal (admin.jsx ClassEditDialog). It
  * holds a local copy of the class; 儲存課程 fires onSave(updated) + a success
@@ -73,5 +75,47 @@ describe('ClassEditDialog', () => {
 		const { getByText } = render(ClassEditDialog, { open: true, klass: base, onClose });
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
+	});
+
+	/* Task 8 piece 1: 儲存改叫真實 POST/PATCH /courses（classes/+page.svelte 非同步），
+	 * 這裡不再樂觀丟成功 toast——成功/失敗一律由 page 在 API 呼叫結束後決定。 */
+	it('does not show its own toast on save (the page shows one after the API call resolves)', async () => {
+		const before = get(toasts).length;
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base });
+		await fireEvent.click(getByText('儲存課程'));
+		expect(get(toasts).length).toBe(before);
+	});
+
+	/* 單堂時長（duration_minutes）是 ClassRow 沒有的欄位，只有新增流程需要它
+	 * （POST /courses 必填）——只在 isNew 顯示，並隨 onSave 的第二個參數送出。 */
+	it('shows 單堂時長（分鐘） only in new mode, defaulting to 90, and passes it as onSave’s 2nd arg', async () => {
+		const onSave = vi.fn();
+		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
+			open: true,
+			klass: base,
+			isNew: true,
+			onSave
+		});
+		expect(getByDisplayValue('90')).toBeInTheDocument();
+		await fireEvent.click(getByText('建立班級'));
+		expect(onSave.mock.calls[0][1]).toBe(90);
+	});
+
+	it('does not show 單堂時長（分鐘） in edit mode', () => {
+		const { queryByText } = render(ClassEditDialog, { open: true, klass: base, isNew: false });
+		expect(queryByText('單堂時長（分鐘）')).toBeNull();
+	});
+
+	it('parses an edited 單堂時長 value back to a number on save', async () => {
+		const onSave = vi.fn();
+		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
+			open: true,
+			klass: base,
+			isNew: true,
+			onSave
+		});
+		await fireEvent.input(getByDisplayValue('90'), { target: { value: '60' } });
+		await fireEvent.click(getByText('建立班級'));
+		expect(onSave.mock.calls[0][1]).toBe(60);
 	});
 });

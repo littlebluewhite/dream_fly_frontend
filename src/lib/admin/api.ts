@@ -268,7 +268,7 @@ function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus
  *  (CourseResponse 本身沒有教練姓名欄位，需靠 getClasses() 內的 coachNameById 對照
  *  ——該表現在存的是 mapCoach() 輸出的真實 name)；room/term/sessions/startDate/
  *  checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
-function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
+export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
 	const { day, time } = splitSchedule(c.schedule_text);
 	return {
 		id: c.id,
@@ -306,6 +306,34 @@ export const getClasses = async (): Promise<ClassesData> => {
 		coaches
 	};
 };
+
+/* ── 課程建立/編輯（POST /courses、PATCH /courses/{id}，admin-only，Task 8 piece 1） ──
+ * Body 形狀對齊 CreateCourseRequest/UpdateCourseRequest（契約 §3.3）；兩個端點的欄位
+ * 全部選填語意不同（POST 有 4 個實質必填、PATCH 全選填一律「省略＝維持原值」），這裡
+ * 用同一個寬鬆型別給兩支函式共用（呼叫端 course-request.ts 的 buildCourseBody() 負責
+ * 組出實際會送出的欄位），不為了型別層面的必填/選填強分兩型別。 */
+export interface CourseWriteBody {
+	name?: string;
+	slug?: string;
+	level?: string;
+	description?: string;
+	duration_minutes?: number;
+	price_cents?: number;
+	max_students?: number;
+	min_age?: number;
+	max_age?: number;
+	features?: string[];
+	coach_id?: string;
+	category?: string;
+	schedule_text?: string;
+	is_highlighted?: boolean;
+}
+
+export const createCourse = (body: CourseWriteBody): Promise<ApiCourse> =>
+	api<ApiCourse>('/courses', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateCourse = (id: string, body: CourseWriteBody): Promise<ApiCourse> =>
+	api<ApiCourse>(`/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 教練（GET /coaches，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 

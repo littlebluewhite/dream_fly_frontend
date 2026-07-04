@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ntd, toCatalogCourse, toMarketingCoach, toPass, orderItemsSummary } from './adapters';
+import { ntd, toCents, toCatalogCourse, toMarketingCoach, toPass, orderItemsSummary } from './adapters';
 import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 
 describe('ntd — 全前端唯一 cents→NT$ 轉換點', () => {
@@ -13,6 +13,24 @@ describe('ntd — 全前端唯一 cents→NT$ 轉換點', () => {
 
 	it('handles zero', () => {
 		expect(ntd(0)).toBe(0);
+	});
+});
+
+describe('toCents — 全前端唯一 NT$→cents 轉換點（ntd 的反向)', () => {
+	it('converts whole NT$ amounts', () => {
+		expect(toCents(3200)).toBe(320000);
+	});
+
+	it('rounds half up (Math.round semantics)', () => {
+		expect(toCents(3.005)).toBe(301); // 300.5 → 301
+	});
+
+	it('handles zero', () => {
+		expect(toCents(0)).toBe(0);
+	});
+
+	it('round-trips through ntd for whole-dollar amounts', () => {
+		expect(ntd(toCents(4800))).toBe(4800);
 	});
 });
 

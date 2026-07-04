@@ -3,14 +3,21 @@
    * 新增課程 primary), a category chip row (全部 + one FilterChip per CAT), then a
    * responsive grid of ClassCard for the classes filtered by the selected
    * category AND the topbar search store (matches name / coach). Clicking a card
-   * opens the read-only ClassDialog; 編輯 / 新增課程 open the ClassEditDialog. The
-   * row set is held locally so新增 / 儲存 reflect immediately (the prototype is
-   * front-end only).
+   * opens the read-only ClassDialog; 編輯 / 新增課程 open the ClassEditDialog.
    *
-   * Data now arrives async via getClasses() (mock-API seam): onMount loads it
-   * into a three-state gate (loading/error/ready). `classes` is the local
-   * mutable working copy 新增/編輯 edits in place; `coaches` is read-only here
-   * (blankClass's default coach + the ClassEditDialog 授課教練 picker). */
+   * Data now arrives async via getClasses() (public seam): onMount loads it into
+   * a three-state gate (loading/error/ready). `classes` is the local mutable
+   * working copy 新增/編輯 edits in place; `coaches` is read-only here (blankClass's
+   * default coach + the ClassEditDialog 授課教練 picker).
+   *
+   * Task 8 piece 1: 新增/編輯 now submit to the real POST /courses / PATCH
+   * /courses/{id} (createCourse/updateCourse, admin/api.ts) instead of only
+   * mutating `classes` locally. buildCourseBody() (course-request.ts) assembles
+   * the request body from the edited ClassRow; on success the response is mapped
+   * back through the same mapCourse() the read seam uses (so the row shown here
+   * matches exactly what a fresh getClasses() would render) and merged into
+   * `classes`; on failure the list is left untouched and a 繁中 error toast shows
+   * — the dialog stays open so the admin can correct and retry. */
   import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import ClassCard from '$lib/admin/components/ClassCard.svelte';
@@ -18,9 +25,11 @@
   import ClassEditDialog from '$lib/admin/components/ClassEditDialog.svelte';
   import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { filterClasses } from '$lib/admin/components/classes-filter';
-  import { search } from '$lib/admin/stores';
+  import { buildCourseBody } from '$lib/admin/components/course-request';
+  import { search, toasts } from '$lib/admin/stores';
   import { CATS, type ClassRow, type Coach } from '$lib/admin/data';
-  import { getClasses } from '$lib/admin/api';
+  import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
+  import { ApiError } from '$lib/api/client';
 
   // Blank班級 for the 新增 flow (ported from admin.jsx blankClass, enriched with
   // the ClassRow-only fields the detail view reads). Takes `coaches` as a
@@ -89,14 +98,35 @@
     edit = null;
     addNew = false;
   }
-  function save(updated: ClassRow) {
-    if (addNew) {
-      const id = 'k' + (classes.length + 1);
-      classes = [{ ...updated, id }, ...classes];
-    } else {
-      classes = classes.map((c) => (c.id === updated.id ? updated : c));
+
+  // 422 驗證 / 403 權限 / 409 衝突（如同名課程 slug 撞號）→ 對應的繁中錯誤提示；
+  // 其餘（連線問題等）給通用訊息，同 coach/+page.svelte 的 ApiError 判斷慣例。
+  function courseErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+      if (e.status === 409) return '課程名稱或代碼已存在，請調整後再試。';
     }
-    closeEdit();
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function save(updated: ClassRow, durationMinutes: number) {
+    const body = buildCourseBody(updated, coaches);
+    const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
+    try {
+      if (addNew) {
+        const created = await createCourse({ ...body, duration_minutes: durationMinutes });
+        classes = [mapCourse(created, coachNameById), ...classes];
+        toasts.notify('success', '已新增班級', '「' + updated.name + '」已建立。');
+      } else {
+        const saved = await updateCourse(updated.id, body);
+        classes = classes.map((c) => (c.id === updated.id ? mapCourse(saved, coachNameById) : c));
+        toasts.notify('success', '已儲存課程', '「' + updated.name + '」已更新。');
+      }
+      closeEdit();
+    } catch (e) {
+      toasts.notify('error', addNew ? '新增失敗' : '儲存失敗', courseErrorMessage(e));
+    }
   }
 </script>
 

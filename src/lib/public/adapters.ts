@@ -12,6 +12,10 @@ import type { Coach } from '$lib/data/coaches';
 /** 全前端唯一 cents→NT$ 轉換點。 */
 export const ntd = (cents: number): number => Math.round(cents / 100);
 
+/** `ntd` 的反向：全前端唯一 NT$→cents 轉換點（Task 8：admin 寫入表單金額送出前經此
+ *  轉換，不在呼叫端各自 `* 100`）。 */
+export const toCents = (ntd: number): number => Math.round(ntd * 100);
+
 /** 訂單品項摘要（member `src/lib/member/api.ts` mapOrder 與 admin `src/lib/admin/api.ts`
  *  mapAdminOrder 共用，避免兩處各自實作同一份措辭）。對應 `OrderSummary`/
  *  `AdminOrderSummary.items`（見 integration-contract.md §3.10）：`{ name, quantity }[]`，
