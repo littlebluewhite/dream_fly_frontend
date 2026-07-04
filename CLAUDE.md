@@ -11,12 +11,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 Dream Fly (夢飛) — the frontend for a **gymnastics & competitive-cheer academy** (體操與競技啦啦學苑).
-SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. There is
-**no real backend**: every "API" is mock seed data in `data.ts` files plus browser `localStorage`;
-checkout/payment is simulated (no real money flow).
+SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. The backend is
+the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
+`/api/v1`. Auth, cart, checkout, and the member/admin/coach seams all call it for real now. Mock data
+remains only in explicitly **P2-commented** spots where no backend endpoint exists yet (reports/analytics,
+coach attendance/messages/student roster, member rewards redemption, member weekly schedule, the two
+mobile surfaces, Google OAuth login) — see `docs/adr/0006` for the full inventory.
 
-> `README.md` is a quick-start summary (rewritten 2026-07); `CONTEXT.md`, `docs/adr/`, and
-> `docs/architecture.md` remain the authoritative deep references.
+> `README.md` is a quick-start summary; `CONTEXT.md`, `docs/adr/`, and `docs/architecture.md` remain the
+> authoritative deep references.
+
+## Running the full stack
+
+The frontend has no standalone mock mode anymore — start `dream_fly_backend` first:
+
+```bash
+# in the sibling dream_fly_backend/ checkout
+docker-compose up -d      # Postgres + Redis; migrations auto-apply when the server starts
+cargo run --bin seed      # idempotent dev seed (admin/member/coach accounts, courses, products, coupons…)
+cargo run                 # serves http://localhost:3000/api/v1
+
+# in this repo
+npm install
+npm run dev                # http://localhost:5173
+```
+
+`.env` (see `.env.example`): `VITE_API_BASE_URL`, defaults to `http://localhost:3000/api/v1` if unset.
 
 ## Commands
 
@@ -38,8 +58,9 @@ that touches routing or SSR.
 
 Mapped in **`docs/architecture.md`** — read it before touching routing, layouts, surfaces, `src/lib`
 stores, or the cart/checkout/auth flow. In one breath: seven UI **surfaces** split at the root layout
-(public/marketing vs six app surfaces), `src/lib` organised per surface, and a mock + `localStorage`
-auth/cart/checkout core where 報名 (course enrolment) and 訂閱 (pass subscription) are independent (ADR 0001).
+(public/marketing vs six app surfaces), `src/lib` organised per surface, and an auth/cart/checkout core
+backed by the real `dream_fly_backend` API (Bearer tokens + a thin `localStorage` cache) where 報名
+(course enrolment) and 訂閱 (pass subscription) are independent (ADR 0001).
 
 ## Domain docs (read before working in an area)
 

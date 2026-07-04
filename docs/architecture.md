@@ -26,7 +26,7 @@ everywhere regardless of surface.
 
 Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mobile/`, `mobile-admin/`,
 `staff/`) typically containing: `data.ts` (mock seed), `stores.ts` (Svelte stores), `nav.ts`, `format.ts`,
-`api.ts` (mock API seam — see below), and a `components/` (or `overlays/`) subfolder. Cross-surface shared
+`api.ts` (API seam — see below), and a `components/` (or `overlays/`) subfolder. Cross-surface shared
 code lives in: `lib/components/` (marketing/shared UI, plus the `ui/` and `mobile/` shelves below),
 `lib/data/` (marketing seed + nav config), `lib/domain/` (single-source seed feeding several facades —
 see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `toasts.ts` /
@@ -67,30 +67,42 @@ still wraps the shared `TabBar` in its own thin local component to attach its ow
 Where the pieces live (the *rules* for changing them are in the `coding-standards` skill):
 
 - **auth-at-checkout**: guests browse and fill the cart freely; login is required **only** at 結帳
-  (checkout). Session lives in `lib/stores/authStore.ts` (mock, persisted to `localStorage` key
-  `dreamfly_auth`).
+  (checkout). Session lives in `lib/stores/authStore.ts`, backed by the real `/auth/*` API: access token
+  in memory only, refresh token in `localStorage` under `dreamfly_refresh` (`lib/api/tokens.ts`), rotated
+  single-flight on 401 (see `docs/adr/0006`). The `dreamfly_auth` `localStorage` key still exists but is
+  now only a first-paint cache of the member profile (so the UI doesn't flash "logged out" before
+  `hydrate()` resolves) — the actual truth is whether the refresh token is still valid against the server.
 - **One persistent cart** spanning guest → login → checkout: `lib/member/stores.ts` exports the single
-  app-wide `cart = createCart(true)` (persisted to `dreamfly_cart_v2`). The `createCart(persist=false)`
-  factory exists so tests get an isolated, non-persisting cart.
+  app-wide `cart = createCart(true)` (persisted to `dreamfly_cart_v3` — string uuid item ids deduped by
+  `(type, id)`; no migration runs against the old `dreamfly_cart_v2` key, see `docs/adr/0006`). The
+  `createCart(persist=false)` factory exists so tests get an isolated, non-persisting cart.
 - **Routing contract is single-sourced** in `lib/checkout-gate.ts`: `checkoutTarget()`, `wantsCheckout()`,
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
-- **Course vs Pass**: a `type: 'course'` line checks out as 報名 (enrolment; mock, awards points only —
-  does **not** write to schedule); a `type: 'pass'` line as 訂閱 (entitlement, persisted to
-  `dreamfly_subscriptions`). Per ADR 0001 the two are independent.
+- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it (`placeOrder()` in member stores); the
+  backend creates both artifacts atomically in one transaction. A `type: 'course'` line becomes a real 報名
+  (enrolment row) and still does **not** write to the member's weekly schedule (a separate, still-mock
+  concept, see `docs/adr/0006`); a `type: 'pass'` line becomes a real 訂閱 (entitlement), re-hydrated from
+  `GET /subscriptions/me` after checkout rather than persisted verbatim — the old `dreamfly_subscriptions`
+  `localStorage` key is gone. Per ADR 0001 the two remain independent products.
 - **Waitlist guard:** a full course (`spots: 0`) is blocked from the paid cart and routed to 候補
   (waitlist) — see the `AddResult = 'added' | 'bumped' | 'waitlisted'` add path in member stores.
 - **Staff role switch:** `lib/staff/roles.ts` maps admin↔coach and remembers the last role in
-  `df_staff_last_role`.
+  `df_staff_last_role` — a local UI convenience, independent of the real role check at staff login.
 
 Known, deferred caveat (ADR 0001): persisted stores read `localStorage` at module-init, which can cause a
 hydration flicker on a hard reload of a logged-in SSR page. Intentional follow-up, not a regression.
 
-## Mock API 接縫 (seam): every app surface has an `api.ts`
+## API 接縫 (seam): every app surface but `staff` has an `api.ts`
 
-Every app surface except `public` and `staff` — `admin`, `coach`, `member`, `mobile`, `mobile-admin` — has
-`src/lib/<surface>/api.ts`: async getters that wrap the surface's seed through one knob,
-`reply = <T>(value: T) => Promise.resolve(value)`, so swapping in a real `fetch()` later touches only that
-one file, never the call sites (full design: `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`).
+Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobile`, `mobile-admin` — has
+`src/lib/<surface>/api.ts`: async getters that originally all wrapped the surface's seed through one knob,
+`reply = <T>(value: T) => Promise.resolve(value)` (full design:
+`docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
+real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
+`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for the P2-commented gaps that
+have no backend equivalent yet (reports/analytics, coach attendance/messages/students, member
+rewards/weekly-schedule — full inventory in `docs/adr/0006`). `mobile` and `mobile-admin` still call
+`reply()` throughout — neither mobile surface has been wired to the real API yet (also P2).
 Pages that used to import seed constants directly now do a legacy `onMount` + plain `let` three-phase gate
 (`phase: 'loading' | 'error' | 'ready'`, no runes — deliberate, see the spec), rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store
@@ -108,9 +120,12 @@ stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
-synchronously, never through `api.ts` or the phase gate. `public` is excluded because
-its pages may later move to a SvelteKit `+page.ts` load instead (SSR/SEO, out of scope here); `staff` is
-excluded because it's pre-auth login/role-switch UI with no `data.ts` to seam.
+synchronously, never through `api.ts` or the phase gate. `staff` remains excluded because it's pre-auth
+login/role-switch UI with no `data.ts` to seam. `public` gained its own seam later (`src/lib/public/api.ts`
++ `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id shapes into the existing
+marketing types, including the single cents→NT$ conversion point `ntd()`, see `docs/adr/0006`) once its
+pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venues`, `/schedule`, `/posts`,
+`/contact` endpoints.
 
 ## Testing
 
