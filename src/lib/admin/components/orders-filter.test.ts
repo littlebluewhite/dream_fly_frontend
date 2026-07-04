@@ -5,7 +5,6 @@ import {
 	filterOrders,
 	countByStatus,
 	paidRevenue,
-	applyMarkPaid,
 	legalNextStatuses,
 	applyStatusChange
 } from './orders-filter';
@@ -162,44 +161,6 @@ describe('paidRevenue', () => {
 	it('sums amount over paid orders only', () => {
 		const expected = ORDERS.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
 		expect(paidRevenue(ORDERS)).toBe(expected);
-	});
-});
-
-/* P2 regression (codex round 1): the orders page derives its 本月已收 / 待付款
- * StatCards from the SAME mutable array the table marks paid, via applyMarkPaid,
- * so the stats can't go stale after 標記已付款. */
-describe('applyMarkPaid — KPI/table consistency after 標記已付款', () => {
-	const pending = ORDERS.find((o) => o.status === 'pending');
-
-	it('marks the targeted order paid without mutating the input', () => {
-		const id = pending!.id;
-		const out = applyMarkPaid(ORDERS, id);
-		expect(out.find((o) => o.id === id)!.status).toBe('paid');
-		expect(ORDERS.find((o) => o.id === id)!.status).toBe('pending');
-		expect(out).not.toBe(ORDERS);
-	});
-
-	it('moves one order from pending to paid in the derived counts', () => {
-		const before = countByStatus(ORDERS);
-		const after = countByStatus(applyMarkPaid(ORDERS, pending!.id));
-		expect(after.pending).toBe(before.pending - 1);
-		expect(after.paid).toBe(before.paid + 1);
-	});
-
-	it('adds the order amount to paidRevenue (本月已收) so the stat stays consistent', () => {
-		const out = applyMarkPaid(ORDERS, pending!.id);
-		expect(paidRevenue(out)).toBe(paidRevenue(ORDERS) + pending!.amount);
-	});
-
-	it('is a no-op for an unknown id', () => {
-		expect(countByStatus(applyMarkPaid(ORDERS, '___nope___'))).toEqual(countByStatus(ORDERS));
-	});
-
-	it('updates paidAt to the order date so OrderDialog 收款時間 stays consistent', () => {
-		const o = pending!;
-		expect(o.paidAt).toBe('—（待付款）'); // pending shows the placeholder
-		const out = applyMarkPaid(ORDERS, o.id);
-		expect(out.find((x) => x.id === o.id)!.paidAt).toBe(o.date);
 	});
 });
 

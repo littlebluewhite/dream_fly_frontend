@@ -47,22 +47,11 @@ export function paidRevenue(rows: Order[]): number {
 	return rows.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
 }
 
-/**
- * Mark one order paid, returning a NEW array (input never mutated). The orders
- * page derives BOTH the table and the summary KPIs (本月已收 / 待付款) from the
- * result, so they stay consistent after 標記已付款.
- */
-export function applyMarkPaid(rows: Order[], id: string): Order[] {
-	// flip status AND the displayed 收款時間 together (paidAt mirrors the paid
-	// branch of the source enrichment: o.date) so OrderDialog stays consistent.
-	return rows.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: o.date } : o));
-}
-
 /* ───────────────────────── Task 8 piece 2: 訂單狀態變更（PATCH /orders/{id}/status） ─────────────────────────
- * applyMarkPaid（above）is UNTOUCHED — kept for any purely-local preview. The two
- * functions below are the general, real-API-backed replacement: the UI only
- * offers legalNextStatuses()'s options (so a 400 illegal-transition can't be hit
- * by design), and applyStatusChange() folds the PATCH response's new status into
+ * The general, real-API-backed replacement for the old local-only mark-paid
+ * helper (removed — no live caller remained): the UI only offers
+ * legalNextStatuses()'s options (so a 400 illegal-transition can't be hit by
+ * design), and applyStatusChange() folds the PATCH response's new status into
  * the working copy once the call succeeds (persisted truth comes from the API). */
 
 /** 契約 §3.10 訂單狀態機：目前狀態 → 合法的下一狀態清單（不含同狀態幂等）。

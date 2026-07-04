@@ -14,8 +14,7 @@
    * be reachable by design — the catch branch below is a defensive fallback
    * (e.g. a concurrent change on the backend) with a 繁中 error toast; on success
    * applyStatusChange() folds the response's new status into the working copy,
-   * so the KPIs + table stay consistent with the persisted truth. applyMarkPaid
-   * stays available/tested as-is for any purely-local preview. */
+   * so the KPIs + table stay consistent with the persisted truth. */
   import { onMount } from 'svelte';
   import { Button, Card, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
