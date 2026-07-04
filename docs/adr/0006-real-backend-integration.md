@@ -36,7 +36,8 @@
 export const ntd = (cents: number): number => Math.round(cents / 100);
 ```
 
-`admin/api.ts`、`member/api.ts`、`member/stores.ts`、`member/checkout.ts` 皆從 `$lib/public/adapters`
+`admin/api.ts`、`member/api.ts`、`member/stores.ts`、`member/checkout.ts`、
+`member/components/CheckoutDialog.svelte` 皆從 `$lib/public/adapters`
 import 這顆 `ntd()`，沒有任何檔案自行重寫 `/100` 或 `Math.round` 的換算邏輯——新增一個要顯示金額的
 欄位時，一律透過這個函式，不要在呼叫端另開一條換算路徑。（`coach` surface 目前沒有金額欄位需要
 顯示，未使用 `ntd()`。）

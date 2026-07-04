@@ -158,12 +158,23 @@ describe('cart persistence (survives login / reload) — dreamfly_cart_v3', () =
   });
 });
 
+describe('cart.updateQty — course qty is locked (enrolment, not a quantity)', () => {
+  it('updateQty on a course line is a no-op — qty stays 1 no matter the delta', () => {
+    const c = createCart();
+    c.addItem(courseToCartItem(COURSE));
+    c.updateQty(COURSE.id, 1);
+    c.updateQty(COURSE.id, 5);
+    expect(get(c)[0].qty).toBe(1); // 課程是報名，不是數量 — 永遠鎖 1
+  });
+});
+
 describe('cartCount (badge source)', () => {
-  it('sums qty across lines, not the number of lines', () => {
+  it('sums qty across lines; a course updateQty attempt can never inflate it', () => {
     cart.addItem(courseToCartItem(COURSE)); // qty 1
-    cart.updateQty(COURSE.id, 1); // manual stepper bump → qty 2
-    cart.addItem(passToCartItem(TICKET)); // qty 1 (locked)
-    expect(get(cartCount)).toBe(3); // 2 (course qty) + 1 (pass), though only 2 lines
+    cart.updateQty(COURSE.id, 1); // no-op — courses lock at qty 1
+    cart.addItem(passToCartItem(TICKET)); // qty 1
+    cart.updateQty(TICKET.id, 1); // pass 不在 store 層鎖（無 UI 路徑會走到）→ qty 2
+    expect(get(cartCount)).toBe(3); // 1 (course) + 2 (pass qty)，兩條 line
   });
 });
 

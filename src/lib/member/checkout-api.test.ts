@@ -119,7 +119,6 @@ describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
 describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）', () => {
   it('完整序列：DELETE /cart → POST /cart/items ×N（課程 qty 夾 1）→ POST /orders 帶 Idempotency-Key → GET subscriptions/points → 本地購物車清空', async () => {
     cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
-    cart.updateQty('course-uuid-9', 2); // 模擬 CartDropdown 既有缺口：本地課程 qty 被推到 3
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
 
     vi.mocked(api).mockImplementation(
@@ -151,6 +150,29 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
     expect(order).toEqual(SAMPLE_ORDER);
     expect(get(cart)).toEqual([]);
     expect(get(points)).toBe(235);
+  });
+
+  it('已持有的 pass 不同步到 server — syncCartToServer 只送 chargeableLines（同意金額 ≡ 請款金額）', async () => {
+    subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
+    cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'POST /orders': SAMPLE_ORDER,
+        'GET /subscriptions/me': [],
+        'GET /points/me': { balance: 0, ledger: [] }
+      })
+    );
+
+    await placeOrder('', false, 'key-own');
+
+    const itemPosts = vi
+      .mocked(api)
+      .mock.calls.filter(([p, i]) => p === '/cart/items' && (i as RequestInit)?.method === 'POST');
+    expect(itemPosts).toHaveLength(1); // 只有課程；已持有的 pass 被排除，預覽跳過的絕不請款
+    expect((itemPosts[0][1] as RequestInit).body).toBe(
+      JSON.stringify({ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 })
+    );
   });
 
   it('coupon 空字串 → coupon_code 整個欄位省略（不是送空字串）', async () => {

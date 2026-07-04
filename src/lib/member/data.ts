@@ -150,8 +150,11 @@ export function passToCartItem(t: Ticket): CartItem {
 }
 
 /* ---- Subscriptions / entitlements (方案結帳產生的使用權) ----
- * A member gains a Subscription when a pass checks out. Unlike points, these
- * persist (localStorage) — an entitlement must survive reload / re-login. */
+ * A member gains a Subscription when a pass checks out. Truth lives on the
+ * server (GET /subscriptions/me): the store is a per-session cache hydrated
+ * via refreshSubscriptions — Task 17 removed the old localStorage persistence
+ * (a client snapshot could out-live the real entitlement with no way to
+ * invalidate it). */
 export interface Subscription {
   id: string; // = the pass's cart-item id (backend product uuid)
   name: string;

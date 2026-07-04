@@ -71,19 +71,11 @@ describe('CartDropdown — reads the member cart', () => {
 		expect(getByText('幼兒體操')).toBeInTheDocument();
 	});
 
-	it('plus increments qty via updateQty', async () => {
+	it('plus on a course line is a no-op — courses are enrolments locked at qty 1 (store-level guard)', async () => {
 		cart.addItem(courseToCartItem(COURSE));
 		const { getByLabelText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
 		await fireEvent.click(getByLabelText('增加數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(2);
-	});
-
-	it('minus on a qty>1 line decrements (never reaches 0)', async () => {
-		cart.addItem(courseToCartItem(COURSE));
-		cart.updateQty('course-uuid-1', +1); // qty 2
-		const { getByLabelText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
-		await fireEvent.click(getByLabelText('減少數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1);
+		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1); // 不再累加
 	});
 
 	it('minus on a qty===1 line removes the item from the cart', async () => {

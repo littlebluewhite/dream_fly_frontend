@@ -148,8 +148,8 @@ describe('購票資訊 — 加入購物車 routes a pass into the member cart', 
 
 		const { findByText } = render(Page);
 
-		// Its footer must read 已訂閱 (disabled), not 加入購物車 — re-buying would
-		// charge + reward points while commitCheckout dedups the id to a no-op.
+		// Its footer must read 已訂閱 (disabled), not 加入購物車 — checkout skips
+		// owned passes (chargeableLines), so re-adding would be a confusing no-op.
 		await findByText('已訂閱');
 		expect(get(cart)).toHaveLength(0); // never enters the cart
 	});

@@ -57,13 +57,21 @@ async function payThrough(getByText: (t: string) => HTMLElement) {
 /** confirmPay 打的真實序列（DELETE /cart → POST /cart/items ×N → POST /orders
  *  → GET /subscriptions/me → GET /points/me）一次配好回應。DELETE/POST cart
  *  端點回 undefined（204/成功 upsert），呼叫序列本身已由 checkout-api.test.ts
- *  釘住，這裡只需要讓 confirmPay 的成功路徑跑得完整。 */
+ *  釘住，這裡只需要讓 confirmPay 的成功路徑跑得完整。
+ *
+ *  有狀態：subsAfter/pointsAfter 是「下單後」的世界 —— dialog 開啟時的水合
+ *  （下單前）回傳「未持有／餘額 0」，POST /orders 之後才回傳購買後狀態，忠實
+ *  模擬後端（否則開啟即水合會把『這次要買的 pass』誤判成已持有而擋下付款）。 */
 function mockOrdersApi(order: Record<string, unknown>, subsAfter: unknown[] = [], pointsAfter = 0) {
+	let ordered = false;
 	vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
 		const method = (init.method ?? 'GET').toString().toUpperCase();
-		if (path === '/orders' && method === 'POST') return order;
-		if (path === '/subscriptions/me') return subsAfter;
-		if (path === '/points/me') return { balance: pointsAfter };
+		if (path === '/orders' && method === 'POST') {
+			ordered = true;
+			return order;
+		}
+		if (path === '/subscriptions/me') return ordered ? subsAfter : [];
+		if (path === '/points/me') return { balance: ordered ? pointsAfter : 0, ledger: [] };
 		return undefined; // DELETE /cart、POST /cart/items
 	});
 }
@@ -153,13 +161,16 @@ describe('CheckoutDialog — per-line display branches by type', () => {
 		expect(queryByLabelText('減量')).toBeNull();
 	});
 
-	it('a course line shows days and keeps the qty stepper', () => {
+	it('a course line shows days and renders NO qty stepper — courses are enrolments locked at qty 1', () => {
 		cart.addItem(COURSE);
 		checkoutOpen.set(true);
 		const { container, queryByLabelText } = render(CheckoutDialog);
 
 		expect(container.textContent).toContain('週二 / 週四 19:00');
-		expect(queryByLabelText('加量')).not.toBeNull();
+		// 課程數量恆為 1（同步/DB 都夾 1）——顯示 3× 預覽卻請款 1× 是同意漂移，
+		// 所以 stepper 對課程也不再渲染。
+		expect(queryByLabelText('加量')).toBeNull();
+		expect(queryByLabelText('減量')).toBeNull();
 	});
 });
 
@@ -209,7 +220,7 @@ describe('CheckoutDialog — 付款飛行中的關閉/重開競態（Idempotency
 			const method = (init.method ?? 'GET').toString().toUpperCase();
 			if (path === '/orders' && method === 'POST') return new Promise((r) => (resolveOrder = r));
 			if (path === '/subscriptions/me') return [];
-			if (path === '/points/me') return { balance: 0 };
+			if (path === '/points/me') return { balance: 0, ledger: [] };
 			return undefined; // DELETE /cart、POST /cart/items
 		});
 		const { getByText } = render(CheckoutDialog);
@@ -275,5 +286,58 @@ describe('CheckoutDialog — 開啟時水合已持有訂閱（GET /subscriptions
 		expect(get(subscriptions)[0].id).toBe(PASS.id);
 		// 已持有 pass 被預覽跳過 → 合計 NT$0（頁面上該 pass 的單行金額仍顯示，但不計費）。
 		await vi.waitFor(() => expect(container.querySelector('.total-n')?.textContent).toBe(fmtNT(0)));
+	});
+});
+
+describe('CheckoutDialog — 開啟時水合點數餘額（GET /points/me）', () => {
+	it('點數折抵預覽用 API 餘額，不用本地 mock 殘值（可用 300 點，非 1,250）', async () => {
+		cart.addItem(COURSE);
+		// beforeEach 已把本地 points 設成 mock 殘值 ME.points=1250；開啟後必須被
+		// API 的真實餘額（300）蓋掉，否則折抵預覽是照虛構餘額算的。
+		vi.mocked(api).mockImplementation(async (path: string) => {
+			if (path === '/points/me') return { balance: 300, ledger: [] };
+			if (path === '/subscriptions/me') return [];
+			return undefined;
+		});
+		checkoutOpen.set(true);
+		const { container } = render(CheckoutDialog);
+
+		await vi.waitFor(() => {
+			expect(api).toHaveBeenCalledWith('/points/me');
+			expect(get(points)).toBe(300);
+		});
+		expect(container.textContent).toContain('可用 300 點');
+		expect(container.textContent).not.toContain('1,250');
+	});
+});
+
+describe('CheckoutDialog — 全數已持有（chargeable 為空）不可送單', () => {
+	it('確認付款 disabled、顯示提示，點了也不發 POST /orders', async () => {
+		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 4500 }]);
+		cart.addItem(PASS);
+		vi.mocked(api).mockImplementation(async (path: string) => {
+			if (path === '/subscriptions/me') {
+				return [{
+					id: 'sub-1', product_id: PASS.id, product_name: PASS.name, status: 'active',
+					started_at: '2026-06-01T00:00:00Z', expires_at: null,
+					total_sessions: null, remaining_sessions: null, price_cents: 450000
+				}];
+			}
+			if (path === '/points/me') return { balance: 0, ledger: [] };
+			return undefined;
+		});
+		checkoutOpen.set(true);
+		const { getByText } = render(CheckoutDialog);
+
+		await fireEvent.click(getByText('前往付款')); // 車內仍有 1 行（已持有）→ 可進付款步驟
+		const btn = getByText('確認付款').closest('button')!;
+		expect(btn).toBeDisabled(); // 沒有可計費項目 → 不可送單（避免 POST 出空訂單吃 400）
+		expect(getByText(/皆已持有/)).toBeInTheDocument(); // 說明為何不用付款
+		await fireEvent.click(btn);
+
+		const orderCalls = vi
+			.mocked(api)
+			.mock.calls.filter(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+		expect(orderCalls).toHaveLength(0);
 	});
 });

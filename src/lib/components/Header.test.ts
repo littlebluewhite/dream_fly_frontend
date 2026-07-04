@@ -71,12 +71,11 @@ describe('marketing Header — auth-aware controls', () => {
     expect(screen.getByLabelText('登入').getAttribute('href')).toBe('/member/login');
   });
 
-  it('cart badge reflects the unified member cart qty sum, not the line count', () => {
-    // Two lines but qty 3 total → badge shows 3 (qty sum), proving it reads cartCount.
+  it('cart badge reads cartCount — a course updateQty attempt is a no-op and never inflates it', () => {
     cart.addItem(courseToCartItem(courseA));
-    cart.updateQty(courseA.id, 1); // line A qty → 2
-    cart.addItem(courseToCartItem(courseB)); // line B qty 1  → sum = 3 across 2 lines
+    cart.updateQty(courseA.id, 1); // no-op：課程是報名，qty 鎖 1
+    cart.addItem(courseToCartItem(courseB)); // line B qty 1 → sum = 2 across 2 lines
     render(Header);
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 });

@@ -27,8 +27,8 @@
   onMount(load);
 
   function addTicketToCart(ticket: Ticket) {
-    // Already an active entitlement? Block it — commitCheckout dedups by id, so
-    // a repurchase would charge + reward points without creating/renewing anything.
+    // Already an active entitlement? Block it — checkout skips owned passes
+    // (chargeableLines), so re-adding would only produce a confusing zero-charge line.
     if ($subscriptions.some((s) => s.id === ticket.id)) {
       toasts.notify('info', `您已訂閱「${ticket.name}」，無需重複購買`);
       return;

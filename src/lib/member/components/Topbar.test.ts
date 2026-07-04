@@ -47,12 +47,12 @@ describe('member Topbar — cart badge is the qty sum', () => {
   const cartBadge = () =>
     screen.getByLabelText('購物車').closest('.iconwrap')!.querySelector('.dot');
 
-  it('shows total quantity across lines, not the number of lines', () => {
+  it('sums line qty — a course updateQty attempt is a no-op and can never inflate the badge', () => {
     cart.add(courseA);
-    cart.updateQty(String(courseA.id), 2); // line A qty → 3 (cart v3: CartItem.id is a uuid string)
-    cart.add(courseB); // line B qty 1 → sum = 4 over 2 lines
+    cart.updateQty(String(courseA.id), 2); // no-op：課程是報名，qty 鎖 1
+    cart.add(courseB); // line B qty 1 → sum = 2 over 2 lines
     render(Topbar);
-    expect(cartBadge()?.textContent).toBe('4');
+    expect(cartBadge()?.textContent).toBe('2');
   });
 
   it('renders no cart badge when the cart is empty', () => {

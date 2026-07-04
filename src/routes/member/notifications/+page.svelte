@@ -38,7 +38,7 @@
     c === 'all' ? $notifications.length : $notifications.filter((n) => n.cat === c).length;
 
   // 樂觀更新本地 store,再送 PATCH 到後端;失敗只記錄錯誤、不還原(避免使用者感覺
-  // 「點了又跳回未讀」的閃爍) —— markAll 目前仍是純本地操作,後端沒有批次已讀端點。
+  // 「點了又跳回未讀」的閃爍)。markAll 的後端同步策略見其上方註解。
   const markRead = (id: string) => {
     notifications.update((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)));
     api(`/notifications/${id}/read`, { method: 'PATCH' }).catch((err) => {

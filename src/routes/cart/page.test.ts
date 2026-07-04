@@ -65,13 +65,11 @@ afterEach(() => {
 });
 
 describe('購物車頁 — reads the member cart', () => {
-	it('plus increments qty, minus-at-1 removes', async () => {
+	it('plus on a course is a no-op (enrolment locked at qty 1), minus-at-1 removes', async () => {
 		cart.addItem(courseToCartItem(COURSE));
 		const { getByLabelText } = render(Page);
 		await fireEvent.click(getByLabelText('增加數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(2);
-		await fireEvent.click(getByLabelText('減少數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1);
+		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1); // 課程數量鎖 1
 		await fireEvent.click(getByLabelText('減少數量'));
 		expect(get(cart)).toHaveLength(0);
 	});

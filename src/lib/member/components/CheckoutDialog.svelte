@@ -11,7 +11,7 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions } from '$lib/member/stores';
+  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';
   import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
@@ -50,10 +50,12 @@
       usePoints = false;
       idempotencyKey = crypto.randomUUID();
       paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
-      // 開啟即水合「已持有訂閱」：chargeableLines 的持有判斷來源是後端訂閱清
-      // 單，不能只靠上一次結帳成功後的殘留。best-effort——失敗（未登入、離線）
-      // 就沿用本地現值，結帳送單時後端仍是最終防線（409 already enrolled）。
+      // 開啟即水合「已持有訂閱」與「點數餘額」：chargeableLines 的持有判斷與
+      // 折抵預覽的可用點數都必須來自後端（本地 points 種子是 0 的 fail-safe，
+      // 訂閱殘值可能過期）。best-effort——失敗（未登入、離線）就沿用本地現值，
+      // 結帳送單時後端仍是最終防線（409 already enrolled／點數以實際餘額扣）。
       void refreshSubscriptions().catch(() => {});
+      void refreshPoints().catch(() => {});
     }
     wasOpen = open;
   }
@@ -93,7 +95,10 @@
   // 都不會清空本地購物車，只顯示錯誤 toast，讓使用者可以直接重試（沿用同一把
   // idempotencyKey，不會重複扣款/建立報名訂閱）。
   async function confirmPay() {
-    if (paying) return; // 避免連點造成 syncCartToServer 競態
+    // paying：避免連點造成 syncCartToServer 競態；chargeable 空（全數已持有）：
+    // 沒有可計費項目就不該送單（後端會回 400 cart is empty）——按鈕已 disabled，
+    // 這裡是第二道防線。
+    if (paying || chargeable.length === 0) return;
     paying = true;
     try {
       const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
@@ -151,13 +156,8 @@
                   {#if c.type === 'pass'}{c.desc ?? ''}{:else if c.days}{c.days}{:else}{c.desc ?? ''}{/if}
                 </div>
               </div>
-              {#if c.type !== 'pass'}
-                <div class="qty">
-                  <button aria-label="減量" on:click={() => cart.updateQty(c.id, -1)} disabled={c.qty <= 1}><Icon name="minus" size={14} /></button>
-                  <span class="qty-n">{c.qty}</span>
-                  <button aria-label="加量" on:click={() => cart.updateQty(c.id, 1)}><Icon name="plus" size={14} /></button>
-                </div>
-              {/if}
+              <!-- 無數量 stepper：課程是報名、方案是使用權，兩者 qty 都鎖 1
+                   （課程在同步與 DB 層都夾 1 —— 顯示 3× 預覽卻請款 1× 是同意漂移）。 -->
               <div class="line-amt">{fmtNT(c.price * c.qty)}</div>
               <IconButton aria-label="移除" variant="ghost" on:click={() => cart.remove(c.id)}><Icon name="trash-2" size={16} color="var(--df-text-light)" /></IconButton>
             </div>
@@ -202,7 +202,11 @@
               {#if m.couponOff > 0}<div class="sum-row ok"><span>優惠碼 {coupon?.code}</span><span class="mono">−{fmtNT(m.couponOff)}</span></div>{/if}
               {#if m.ptRedeem > 0}<div class="sum-row ok"><span>點數折抵</span><span class="mono">−{fmtNT(m.ptRedeem)}</span></div>{/if}
             </div>
-            <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
+            {#if chargeable.length === 0}
+              <div class="ssl"><Icon name="badge-check" size={16} color="var(--df-success)" /> 購物車內的方案皆已持有，無需重複付款。</div>
+            {:else}
+              <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
+            {/if}
           </div>
         {:else if paid.hasCourse}
           <SuccessBody title="報名完成！" body={`課程已加入你的日程${paid.hasPass ? '，方案使用權已啟用' : ''}，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數（訂單編號 ${paid.orderNumber}）。`} />
@@ -221,7 +225,7 @@
         {:else if step === 1}
           <div class="foot-actions">
             <Button variant="secondary" disabled={paying} on:click={() => (step = 0)}>返回</Button>
-            <Button variant="primary" disabled={paying} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
+            <Button variant="primary" disabled={paying || chargeable.length === 0} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
           </div>
         {:else}
           <Button variant="primary" on:click={close}>完成</Button>
@@ -304,36 +308,6 @@
   .line-sub {
     font-size: 12.5px;
     color: var(--df-text-light);
-  }
-  .qty {
-    display: flex;
-    align-items: center;
-    border: 1px solid var(--df-border);
-    border-radius: 9px;
-    overflow: hidden;
-  }
-  .qty button {
-    width: 30px;
-    height: 32px;
-    border: none;
-    background: var(--df-bg-light);
-    cursor: pointer;
-    color: var(--df-text-dark);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .qty button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .qty-n {
-    width: 32px;
-    text-align: center;
-    font-size: 14px;
-    font-weight: 700;
-    font-family: var(--df-font-mono);
-    color: var(--df-ink);
   }
   .line-amt {
     width: 86px;

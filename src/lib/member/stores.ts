@@ -2,14 +2,17 @@
  *
  * The prototype kept cart / points / notifications / toasts in the top-level
  * React component. Because we render the member centre as real SvelteKit routes,
- * that shared state lives in these module stores instead. Mock-only, no backend. */
+ * that shared state lives in these module stores instead. Since Tasks 16-17 the
+ * checkout / subscriptions / points / notifications state is backed by the real
+ * API (hydrated via the refresh* functions below); only the cart itself stays a
+ * local store, synced to the server at checkout time (syncCartToServer). */
 
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { api } from '$lib/api/client';
 import { ntd, type CatalogCourse } from '$lib/public/adapters';
+import { chargeableLines } from './checkout';
 import {
-  ME,
   NOTIFS_SEED,
   POINTS_LEDGER,
   SUBS_SEED,
@@ -114,9 +117,15 @@ export function createCart(persist = false) {
     remove(id: string) {
       update((items) => items.filter((x) => x.id !== id));
     },
+    /** 課程是報名（enrolment）不是數量：updateQty 對 course 一律 no-op，qty 鎖 1
+     *  （後端 DB constraint 也強制課程 qty=1；本地若能推超過 1，預覽會顯示 3×
+     *  金額、實際卻只請款 1× —— 同意金額與請款金額漂移）。pass 行為維持不變：
+     *  加購去重已鎖 1，目前沒有任何 UI 會對 pass 呼叫這裡。 */
     updateQty(id: string, delta: number) {
       update((items) =>
-        items.map((x) => (x.id === id ? { ...x, qty: Math.max(1, x.qty + delta) } : x))
+        items.map((x) =>
+          x.id === id && x.type !== 'course' ? { ...x, qty: Math.max(1, x.qty + delta) } : x
+        )
       );
     },
     clear() {
@@ -132,8 +141,11 @@ export const cartCount: Readable<number> = derived(cart, ($items) =>
   $items.reduce((sum, item) => sum + item.qty, 0)
 );
 
-/* ---- Points ---- */
-export const points = writable<number>(ME.points);
+/* ---- Points ----
+ * 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由
+ * refreshPoints 水合：getDashboard / getAccount / getPoints 進頁時，以及
+ * CheckoutDialog 每次開啟時都會觸發。 */
+export const points = writable<number>(0);
 // Ledger lives in a store too, so a redemption (which lowers `points`) stays in
 // sync with the visible history across route navigation.
 export const pointsLedger = writable<LedgerEntry[]>(POINTS_LEDGER.map((e) => ({ ...e })));
@@ -147,10 +159,10 @@ export const pointsLedger = writable<LedgerEntry[]>(POINTS_LEDGER.map((e) => ({ 
 export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ...s })));
 
 /* ---- Checkout — 真訂單 API 接縫（Task 16） ----
- * 取代原本本地結算的 commitCheckout+applyOrder 組合：金額/點數/報名/訂閱一律由
- * 後端算，前端只負責把購物車同步過去、送出訂單、再把 subscriptions/points 從
- * 後端 hydrate 回 store。commitCheckout/CheckoutResult 仍留在 checkout.ts（其
- * 測試套件保留），但已不再是真結帳路徑上的一環。 */
+ * 取代原本本地結算的 commitCheckout+applyOrder 組合（兩者已於 final review 移除）：
+ * 金額/點數/報名/訂閱的商業規則一律以後端為準，前端只負責把「可計費項目」
+ * （chargeableLines）同步過去、送出訂單、再把 subscriptions/points 從後端
+ * hydrate 回 store。 */
 
 export interface ApiOrderItem {
   id: string;
@@ -219,9 +231,10 @@ function describeLedgerReason(reason: string, delta: number): { type: LedgerType
 }
 
 /** 購物車同步到後端：先 DELETE 清空 server 端購物車，再逐項 POST /cart/items（upsert）。
- *  課程項目一律送 quantity 1 — 後端 DB constraint 也強制課程 qty=1，但
- *  CartDropdown 的 stepper 目前可把本地課程 qty 推超過 1（既有 UI 缺口，非本次
- *  範圍），這裡夾回 1，不讓本地缺口污染後端訂單。方案項目照本地 qty 送出。 */
+ *  課程項目一律送 quantity 1 — cart.updateQty 已在 store 層把課程 qty 鎖 1，
+ *  這裡的夾 1 是 belt-and-suspenders：舊 session 持久化在 localStorage
+ *  （dreamfly_cart_v3）的購物車仍可能帶著鎖 1 之前推上去的 qty>1 課程行。
+ *  方案項目照本地 qty 送出。 */
 export async function syncCartToServer(items: CartItem[]): Promise<void> {
   await api('/cart', { method: 'DELETE' });
   for (const it of items) {
@@ -248,7 +261,10 @@ export async function placeOrder(
   usePoints: boolean,
   idempotencyKey: string = crypto.randomUUID()
 ): Promise<ApiOrder> {
-  await syncCartToServer(get(cart));
+  // 只同步「可計費項目」— 與 CheckoutDialog 預覽用同一個 chargeableLines 過濾
+  // （已持有的 pass 不進 server 購物車）。預覽合計跳過的項目絕不能被請款：
+  // 同意的金額 ≡ 實際請款的金額，靠同一個過濾函式從建構上保證。
+  await syncCartToServer(chargeableLines(get(cart), get(subscriptions)));
   const order = await api<ApiOrder>('/orders', {
     method: 'POST',
     body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints }),
@@ -287,9 +303,9 @@ export async function refreshSubscriptions(): Promise<void> {
 
 /** 點數餘額 + 明細 — 從 GET /points/me 重新 hydrate。balance 給 checkout 用；
  *  ledger（Task 17 接線）用 date 的 YYYY/MM/DD 切法而非 ISO 切法，是因為
- *  points 頁本身有一段既有、依賴這個格式的「本月累積」篩選(見 points/+page.svelte
- *  的 l.date.startsWith('2026/06'))，換成 ISO 會讓那段篩選永遠不 match、悄悄把
- *  統計歸零 —— 這裡選「不動那個既有篩選」而非「順手把格式也改成 ISO」。 */
+ *  points 頁的「本月累積」依 `date.startsWith(當月 YYYY/MM prefix)` 篩選
+ *  （見 points/+page.svelte），格式依賴仍在 —— 換成 ISO 會讓那段篩選永遠不
+ *  match、悄悄把統計歸零。 */
 export async function refreshPoints(): Promise<void> {
   const data = await api<ApiPointsMe>('/points/me');
   points.set(data.balance);

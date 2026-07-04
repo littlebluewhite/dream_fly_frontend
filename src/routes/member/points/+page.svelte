@@ -14,8 +14,12 @@
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: PointsData | null = null;
 
+  // 「本月累積」動態取當下月份（與 pointsLedger 的 date 同為補零 YYYY/MM/DD 格式，
+  // 見 stores.ts 的 refreshPoints）——寫死月份會讓這個統計在真實資料下永遠是 0。
+  const now = new Date();
+  const thisMonthPrefix = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
   $: earnedThisMonth = $pointsLedger
-    .filter((l) => l.date.startsWith('2026/06') && l.delta > 0)
+    .filter((l) => l.date.startsWith(thisMonthPrefix) && l.delta > 0)
     .reduce((s, l) => s + l.delta, 0);
 
   function load() {
