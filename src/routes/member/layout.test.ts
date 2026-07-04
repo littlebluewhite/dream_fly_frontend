@@ -17,6 +17,24 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
+// authStore is API-backed (real network calls); this file only cares about
+// the logged-in/out UI state, so mock it with a tiny local store — auth
+// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
+vi.mock('$lib/stores/authStore', async () => {
+  const { writable, derived } = await import('svelte/store');
+  const state = writable({ loggedIn: false, member: null, roles: [] as string[] });
+  return {
+    authStore: {
+      subscribe: state.subscribe,
+      login: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
+      register: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
+      logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
+      hydrate: vi.fn(async () => {})
+    },
+    isLoggedIn: derived(state, ($s) => $s.loggedIn)
+  };
+});
+
 import Layout from './+layout.svelte';
 
 beforeEach(() => {
@@ -28,7 +46,7 @@ afterEach(() => vi.clearAllMocks());
 
 describe('member +layout — checkout gate receiver', () => {
   it('a logged-in member with ?checkout=1 opens the checkout dialog and strips the query', () => {
-    authStore.login();
+    authStore.login('member@test.com', 'password123');
     mockUrl = new URL('http://localhost/member?checkout=1');
     render(Layout);
     expect(get(checkoutOpen)).toBe(true);
@@ -41,15 +59,31 @@ describe('member +layout — checkout gate receiver', () => {
     mockUrl = new URL('http://localhost/member?checkout=1');
     render(Layout);
     expect(get(checkoutOpen)).toBe(false); // dialog never opens for a guest
-    expect(goto).toHaveBeenCalledWith(checkoutTarget(false)); // sent through the login round-trip
+    // sent through the login round-trip, preserving the checkout intent — the
+    // login guard defers to this (wantsCheckout) instead of firing a second,
+    // competing redirect that would drop the ?checkout=1 intent.
+    expect(goto).toHaveBeenCalledWith(checkoutTarget(false));
+    expect(goto).toHaveBeenCalledTimes(1);
     expect(replaceState).not.toHaveBeenCalled();
   });
 
-  it('a plain /member landing does NOT open checkout, redirect, or rewrite the URL', () => {
+  it('a logged-in /member landing (no checkout query) does not redirect, open checkout, or rewrite the URL', () => {
+    authStore.login('member@test.com', 'password123');
     mockUrl = new URL('http://localhost/member');
     render(Layout);
     expect(get(checkoutOpen)).toBe(false);
     expect(goto).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+});
+
+describe('member +layout — login guard', () => {
+  it('a logged-out /member landing (no checkout query) is redirected to login by the guard', () => {
+    // not logged in (beforeEach logged out)
+    mockUrl = new URL('http://localhost/member');
+    render(Layout);
+    expect(get(checkoutOpen)).toBe(false);
+    expect(goto).toHaveBeenCalledWith('/member/login?redirect=' + encodeURIComponent('/member'));
     expect(replaceState).not.toHaveBeenCalled();
   });
 });

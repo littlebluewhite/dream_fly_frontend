@@ -11,6 +11,24 @@ import { checkoutTarget } from '$lib/checkout-gate';
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import { goto } from '$app/navigation';
 
+// authStore is API-backed (real network calls); this file only cares about
+// the logged-in/out UI state, so mock it with a tiny local store — auth
+// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
+vi.mock('$lib/stores/authStore', async () => {
+  const { writable, derived } = await import('svelte/store');
+  const state = writable({ loggedIn: false, member: null, roles: [] as string[] });
+  return {
+    authStore: {
+      subscribe: state.subscribe,
+      login: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
+      register: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
+      logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
+      hydrate: vi.fn(async () => {})
+    },
+    isLoggedIn: derived(state, ($s) => $s.loggedIn)
+  };
+});
+
 const courseA = { ...CATALOG.find((c) => c.id === 1)!, spots: 9 };
 const courseB = { ...CATALOG.find((c) => c.id === 2)!, spots: 9 };
 
@@ -45,7 +63,7 @@ describe('member Topbar — cart badge is the qty sum', () => {
 
 describe('member Topbar — cart button gates checkout on login', () => {
   it('a logged-in member opens the checkout dialog directly', async () => {
-    authStore.login();
+    authStore.login('member@test.com', 'password123');
     render(Topbar);
     await fireEvent.click(screen.getByLabelText('購物車'));
     expect(get(checkoutOpen)).toBe(true);

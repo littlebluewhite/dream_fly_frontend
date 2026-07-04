@@ -1,12 +1,9 @@
 <script lang="ts">
-  /* 會員登入 Member Login. Ported from the prototype (client/login.jsx +
-   * login.html), now wired to the real backend instead of the fake social
-   * login it launched with. The `+page@.svelte` filename resets to the ROOT
-   * layout, so this renders full-screen without the member sidebar/topbar
-   * shell. The prototype's custom Field (icon input + password toggle) isn't
-   * in the foundation, so it's inline markup here. Button / Checkbox / Icon
-   * come from the shared foundation. */
-  import { Button, Checkbox, Icon } from '$lib/components/ui';
+  /* 會員註冊 Member Register — same split-screen shell as the login page
+   * (see src/routes/member/login/+page@.svelte). `+page@.svelte` resets to the
+   * ROOT layout, so this renders full-screen without the member sidebar/topbar
+   * shell. Button / Icon come from the shared foundation. */
+  import { Button, Icon } from '$lib/components/ui';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
@@ -16,14 +13,15 @@
   const HERO_IMG =
     'https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?auto=format&fit=crop&w=1400&q=80';
 
+  let name = '';
   let email = '';
   let pw = '';
   let show = false;
-  let remember = true;
   let busy = false;
   let error = '';
 
-  /* per-field focus → blue focus ring, matching the prototype's Field state */
+  /* per-field focus → blue focus ring, matching the login page's Field state */
+  let nameFocus = false;
   let emailFocus = false;
   let pwFocus = false;
 
@@ -32,10 +30,10 @@
     error = '';
     busy = true;
     try {
-      await authStore.login(email, pw);
+      await authStore.register(name, email, pw);
       goto(safeRedirect($page.url.searchParams.get('redirect')));
     } catch {
-      error = 'Email 或密碼錯誤';
+      error = '註冊失敗，請確認資料或稍後再試';
     } finally {
       busy = false;
     }
@@ -101,19 +99,50 @@
           style="margin:4px 0 0; font-family:var(--df-font-heading); font-size:28px;
             font-weight:700; color:var(--df-ink);"
         >
-          登入帳號
+          建立帳號
         </h1>
         <p style="margin:0; font-size:14px; color:var(--df-text-light);">
-          歡迎回來！請輸入您的帳號密碼
+          加入 Dream Fly，開始你的體操之旅
         </p>
       </div>
 
       <!-- fields -->
       <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- 姓名 -->
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label
+            for="register-name"
+            style="font-size:13px; font-weight:600; color:var(--df-text-dark);"
+          >
+            姓名
+          </label>
+          <div
+            class="field-box"
+            class:focus={nameFocus}
+            style="display:flex; align-items:center; gap:10px; height:48px; padding:0 16px;
+              border-radius:var(--df-radius-md); background:#fff;"
+          >
+            <Icon name="user" size={18} color="var(--df-text-muted)" />
+            <input
+              id="register-name"
+              type="text"
+              bind:value={name}
+              placeholder="您的姓名"
+              minlength="2"
+              maxlength="100"
+              on:keydown={onKey}
+              on:focus={() => (nameFocus = true)}
+              on:blur={() => (nameFocus = false)}
+              style="flex:1; border:none; outline:none; background:transparent; font-size:14px;
+                font-family:var(--df-font-body); color:var(--df-text-dark); min-width:0;"
+            />
+          </div>
+        </div>
+
         <!-- 電子信箱 -->
         <div style="display:flex; flex-direction:column; gap:6px;">
           <label
-            for="login-email"
+            for="register-email"
             style="font-size:13px; font-weight:600; color:var(--df-text-dark);"
           >
             電子信箱
@@ -126,7 +155,7 @@
           >
             <Icon name="mail" size={18} color="var(--df-text-muted)" />
             <input
-              id="login-email"
+              id="register-email"
               type="email"
               bind:value={email}
               placeholder="your@email.com"
@@ -142,7 +171,7 @@
         <!-- 密碼 -->
         <div style="display:flex; flex-direction:column; gap:6px;">
           <label
-            for="login-pw"
+            for="register-pw"
             style="font-size:13px; font-weight:600; color:var(--df-text-dark);"
           >
             密碼
@@ -155,10 +184,12 @@
           >
             <Icon name="lock" size={18} color="var(--df-text-muted)" />
             <input
-              id="login-pw"
+              id="register-pw"
               type={show ? 'text' : 'password'}
               bind:value={pw}
-              placeholder="請輸入密碼"
+              placeholder="至少 8 個字元"
+              minlength="8"
+              maxlength="128"
               on:keydown={onKey}
               on:focus={() => (pwFocus = true)}
               on:blur={() => (pwFocus = false)}
@@ -177,36 +208,22 @@
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between;">
-          <Checkbox
-            label="記住我"
-            bind:checked={remember}
-            style="font-size:13px; color:var(--df-text-light);"
-          />
-          <a
-            href="/member/forgot-password"
-            style="font-size:13px; color:var(--df-primary); text-decoration:none; font-weight:500;"
-          >
-            忘記密碼？
-          </a>
-        </div>
-
         {#if error}
           <p style="margin:0; font-size:13px; font-weight:600; color:var(--df-error);">{error}</p>
         {/if}
 
         <Button variant="primary" size="lg" fullWidth disabled={busy} on:click={submit}>
-          {busy ? '登入中…' : '登入'}
+          {busy ? '註冊中…' : '註冊'}
         </Button>
       </div>
 
       <!-- footer -->
       <div style="text-align:center; font-size:13px; color:var(--df-text-light);">
-        還沒有帳號？<a
-          href="/member/register"
+        已經有帳號？<a
+          href="/member/login"
           style="color:var(--df-primary); text-decoration:none; font-weight:600; margin-left:4px;"
         >
-          立即註冊
+          前往登入
         </a>
       </div>
       <div style="text-align:center;">

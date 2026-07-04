@@ -12,7 +12,19 @@
   import { checkoutOpen, toasts } from '$lib/member/stores';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
+  import { memberGuardTarget } from './guard';
   import '$lib/member/member.css';
+
+  // Login guard: every /member/* page (this layout) requires login. Skipped
+  // while wantsCheckout() is true — that case is already fully handled by the
+  // checkout-gate receiver below (goto(checkoutTarget(false))), which preserves
+  // the checkout intent through the login round-trip; the guard's own target
+  // would otherwise fire a second, competing goto() that drops it. Reactive
+  // (not "once"), so a session that expires mid-visit still gets caught.
+  $: if (browser && !wantsCheckout($page.url)) {
+    const guardTarget = memberGuardTarget($page.url.pathname, $isLoggedIn);
+    if (guardTarget) goto(guardTarget);
+  }
 
   // Receiver half of the checkout gate. A landing URL carrying ?checkout=1
   // auto-opens the checkout dialog — but ONLY for a logged-in member; a guest who
