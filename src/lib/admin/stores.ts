@@ -8,7 +8,7 @@
 import { writable } from 'svelte/store';
 
 import { createToasts } from '$lib/stores/toasts';
-import type { MembersFilter } from './components/members-filter';
+import type { MemberAccountFilter } from './components/member-account-filter';
 
 /* ---- Toasts (bottom-right stack, 4000ms — canonical store) ---- */
 export const toasts = createToasts();
@@ -17,13 +17,13 @@ export const toasts = createToasts();
 export const search = writable('');
 
 /* ---- 學員管理 advanced filter (進階篩選 panel) ----
- * Only the advanced dimensions live here (status tab + topbar query stay local to
- * MembersTable). The default is fully pass-through so the table behaves exactly
- * as before until the panel narrows it. */
-export const MEMBER_FILTER_DEFAULT: MembersFilter = {
-	course: '',
-	pay: '',
-	attMin: undefined,
-	attMax: undefined
+ * Task 5: retyped from MembersFilter (mock Member: course/pay/attMin/attMax) to
+ * MemberAccountFilter (real GET /users shape) now that the 學員管理 page's table
+ * consumes getMembers(). Only 點數 (pointsMin) lives here — 課程/繳費狀態/出席率 had no
+ * backend data source and were removed (P2, issue #8); 狀態 (啟用中/已停用) narrowing
+ * stays local to MembersTable's own tabs, same as before. The default is fully
+ * pass-through so the table is unnarrowed until the panel is used. */
+export const MEMBER_FILTER_DEFAULT: MemberAccountFilter = {
+	pointsMin: undefined
 };
-export const memberFilter = writable<MembersFilter>({ ...MEMBER_FILTER_DEFAULT });
+export const memberFilter = writable<MemberAccountFilter>({ ...MEMBER_FILTER_DEFAULT });

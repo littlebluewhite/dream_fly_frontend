@@ -10,6 +10,7 @@
 	import { Badge } from '$lib/components/ui';
 	import {
 		MEMBER_STATUS,
+		MEMBER_ACCOUNT_STATUS,
 		PAY_STATUS,
 		ORDER_STATUS,
 		VENUE_STATUS,
@@ -18,6 +19,7 @@
 		STATUS_TONE,
 		type Tone,
 		type MemberStatus,
+		type MemberAccountStatus,
 		type PayStatus,
 		type OrderStatus,
 		type VenueStatus,
@@ -28,6 +30,7 @@
 
 	type Kind =
 		| 'member'
+		| 'memberAccount'
 		| 'pay'
 		| 'order'
 		| 'classLevel'
@@ -38,6 +41,7 @@
 	export let kind: Kind;
 	export let value:
 		| MemberStatus
+		| MemberAccountStatus
 		| PayStatus
 		| OrderStatus
 		| VenueStatus
@@ -56,6 +60,10 @@
 		switch (kind) {
 			case 'member':
 				[tone, label] = MEMBER_STATUS[value as MemberStatus];
+				dot = true;
+				break;
+			case 'memberAccount':
+				[tone, label] = MEMBER_ACCOUNT_STATUS[value as MemberAccountStatus];
 				dot = true;
 				break;
 			case 'order':

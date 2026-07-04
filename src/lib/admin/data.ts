@@ -195,6 +195,12 @@ export const MEMBER_STATUS: Record<MemberStatus, [Tone, string]> = {
 	warning: ['warning', '出席偏低'],
 	paused: ['neutral', '暫停中']
 };
+/** MemberAccount 專用（GET /users 的 is_active 布林值）——語意跟 MemberStatus（出席率
+ *  導向的三態）不同，不能共用同一份 lookup，故獨立一份。 */
+export const MEMBER_ACCOUNT_STATUS: Record<MemberAccountStatus, [Tone, string]> = {
+	active: ['success', '啟用中'],
+	inactive: ['neutral', '已停用']
+};
 export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
 	paid: ['success', '已繳清'],
 	due: ['warning', '待續費'],

@@ -56,6 +56,17 @@ describe('StatusBadge', () => {
 		expect(dot(container)).not.toBeNull();
 	});
 
+	it('memberAccount/active → 啟用中 with a leading dot (Task 5: real GET /users is_active)', () => {
+		const { container, getByText } = render(StatusBadge, { kind: 'memberAccount', value: 'active' });
+		expect(getByText('啟用中')).toBeInTheDocument();
+		expect(dot(container)).not.toBeNull();
+	});
+
+	it('memberAccount/inactive → 已停用', () => {
+		const { getByText } = render(StatusBadge, { kind: 'memberAccount', value: 'inactive' });
+		expect(getByText('已停用')).toBeInTheDocument();
+	});
+
 	it('ticket/pass → 通行票, plain', () => {
 		const { container, getByText } = render(StatusBadge, { kind: 'ticket', value: 'pass' });
 		expect(getByText('通行票')).toBeInTheDocument();
