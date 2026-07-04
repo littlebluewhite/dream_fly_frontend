@@ -11,11 +11,10 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder } from '$lib/member/stores';
+  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';
-  import { chargeableLines, validateCoupon } from '$lib/member/checkout';
+  import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
-  import { ApiError } from '$lib/api/client';
   import { ntd } from '$lib/public/adapters';
 
   let step = 0;
@@ -33,38 +32,28 @@
   // below) stays local.
   let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
 
-  // 已知的後端英文錯誤訊息（integration-contract.md §3.10）→ 繁中 toast 文案；
-  // 未命中的錯誤（網路失敗等）落回通用訊息。
-  const ORDER_ERROR_MESSAGES: [string, string][] = [
-    ['cart is empty', '購物車是空的，請先加入商品'],
-    ['invalid coupon', '優惠碼無效，請確認後再試'],
-    ['course is full', '課程已額滿，請改選候補或其他班別'],
-    ['already enrolled', '你已經報名過這堂課程了'],
-    ['insufficient points', '點數不足，請取消使用點數折抵'],
-    ['insufficient stock', '商品庫存不足，請減少數量或移除該項目'],
-    ['duplicate checkout', '訂單處理中，請稍候再試']
-  ];
-  function orderErrorMessage(err: unknown): string {
-    if (err instanceof ApiError) {
-      const hit = ORDER_ERROR_MESSAGES.find(([needle]) => err.message.includes(needle));
-      if (hit) return hit[1];
-    }
-    return '結帳失敗，請稍後再試';
-  }
-
-  // Reset state whenever the dialog transitions closed → open.
+  // Reset state whenever the dialog transitions closed → open — EXCEPT while a
+  // payment is in flight（`!paying` 守衛）：付款請求發出後若 dialog 被外力關閉
+  // 再重開（close() 本身已擋，但 checkoutOpen 是公開 store，外部也能翻），重置
+  // 會蓋掉 paying 並換發新 idempotencyKey，使用者再按一次付款就會用「不同的
+  // key」開出第二張真訂單 —— 同一筆意圖被收兩次錢。守住不重置，重開時延續同
+  // 一個 in-flight 結帳流程（按鈕仍鎖在處理中、key 不變），promise 落定後才
+  // 允許下一次 open-transition 重置。
   let wasOpen = false;
   $: {
     const open = $checkoutOpen;
-    if (open && !wasOpen) {
+    if (open && !wasOpen && !paying) {
       step = 0;
       code = '';
       coupon = null;
       codeErr = '';
       usePoints = false;
-      paying = false;
       idempotencyKey = crypto.randomUUID();
       paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
+      // 開啟即水合「已持有訂閱」：chargeableLines 的持有判斷來源是後端訂閱清
+      // 單，不能只靠上一次結帳成功後的殘留。best-effort——失敗（未登入、離線）
+      // 就沿用本地現值，結帳送單時後端仍是最終防線（409 already enrolled）。
+      void refreshSubscriptions().catch(() => {});
     }
     wasOpen = open;
   }
@@ -87,6 +76,10 @@
     else { coupon = null; codeErr = '優惠碼無效或已過期'; }
   }
   function close() {
+    // 付款請求飛行中不可關閉（X／overlay／Escape 都走這裡）：關閉→重開會走
+    // open-reset，即使有 !paying 守衛擋住重置，允許關閉也只是把使用者跟進行中
+    // 的付款隔開——完成/失敗的結果就沒有畫面可回報了。鎖住直到 promise 落定。
+    if (paying) return;
     checkoutOpen.set(false);
   }
   function browse() {

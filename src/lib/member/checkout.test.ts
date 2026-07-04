@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { commitCheckout, chargeableLines, validateCoupon } from './checkout';
+import { commitCheckout, chargeableLines, validateCoupon, orderErrorMessage } from './checkout';
 import type { CartItem, CheckoutContext } from './checkout';
 import { api, ApiError } from '$lib/api/client';
 
@@ -230,5 +230,30 @@ describe('validateCoupon', () => {
     vi.mocked(api).mockRejectedValue(new ApiError(500, 'internal error'));
 
     await expect(validateCoupon('X')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+/* ─── orderErrorMessage（後端結帳錯誤 → 繁中 toast 文案）────────── */
+describe('orderErrorMessage', () => {
+  // 後端錯誤字串逐字對照 orders/enrolments/points service 原始碼
+  // 與 integration-contract.md §3.10 的錯誤清單。
+  it.each([
+    ['cart is empty', '購物車是空的，請先加入商品'],
+    ['invalid coupon', '優惠碼無效，請確認後再試'],
+    ['course is full', '課程已額滿，請改選候補或其他班別'],
+    ['already enrolled', '你已經報名過這堂課程了'],
+    ['insufficient points', '點數不足，請取消使用點數折抵'],
+    ['insufficient stock for product 單堂體驗課', '商品庫存不足，請減少數量或移除該項目'],
+    ['duplicate checkout', '訂單處理中，請稍候再試']
+  ])('後端 "%s" → 對應繁中文案', (backendMessage, expected) => {
+    expect(orderErrorMessage(new ApiError(400, backendMessage))).toBe(expected);
+  });
+
+  it('未知的 ApiError 訊息 → 通用 fallback', () => {
+    expect(orderErrorMessage(new ApiError(500, 'internal error'))).toBe('結帳失敗，請稍後再試');
+  });
+
+  it('非 ApiError（如 fetch 網路層 TypeError）→ 通用 fallback', () => {
+    expect(orderErrorMessage(new Error('fetch failed'))).toBe('結帳失敗，請稍後再試');
   });
 });

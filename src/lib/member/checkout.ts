@@ -19,6 +19,10 @@ import { ntd } from '$lib/public/adapters';
 
 export type { CartItem };
 
+/**
+ * @deprecated Task 16 起真結帳改走 stores.ts 的 placeOrder（真 API）；本型別僅供
+ * 既有 commitCheckout 測試使用，是否移除由 Task 20 全分支審查裁定。
+ */
 export interface CheckoutContext {
   points: number;
   usePoints: boolean;
@@ -29,6 +33,10 @@ export interface CheckoutContext {
   today: string;
 }
 
+/**
+ * @deprecated Task 16 起真結帳改走 stores.ts 的 placeOrder（真 API）；本型別僅供
+ * 既有 commitCheckout 測試使用，是否移除由 Task 20 全分支審查裁定。
+ */
 export interface CheckoutResult {
   /** 金額拆解（顯示用） */
   subtotal: number;
@@ -65,6 +73,9 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): CartI
  * 結算 — 鏡像 CheckoutDialog.confirmPay 的所有計算（Task 16 前的本地結帳路徑）。
  * 不寫 store，不呼叫 new Date()；原本的副作用留給 Task 3 的 applyOrder，該路徑
  * 已由 Task 16 的 placeOrder（真 API）取代，此函式現無 production 呼叫端。
+ *
+ * @deprecated Task 16 起真結帳改走 stores.ts 的 placeOrder（真 API）；僅供既有
+ * 測試釘住本地結算數學，是否移除由 Task 20 全分支審查裁定。
  *
  * 蓄意變更（vs 原 CheckoutDialog）：
  *  ① ledger date     = ctx.today（原寫死 '2026/06/15'）
@@ -135,4 +146,30 @@ export async function validateCoupon(code: string): Promise<{ code: string; off:
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
+}
+
+/* ─── orderErrorMessage — 結帳錯誤 → 繁中 toast 文案 ─────────────── */
+
+/** 已知的後端結帳錯誤（integration-contract.md §3.10；子字串逐字對照
+ *  orders/enrolments/points service 原始碼的英文錯誤訊息）→ 繁中文案。
+ *  insufficient stock 的完整訊息帶商品名（"insufficient stock for product X"），
+ *  所以用 includes 子字串比對，不做全等。 */
+const ORDER_ERROR_MESSAGES: [string, string][] = [
+  ['cart is empty', '購物車是空的，請先加入商品'],
+  ['invalid coupon', '優惠碼無效，請確認後再試'],
+  ['course is full', '課程已額滿，請改選候補或其他班別'],
+  ['already enrolled', '你已經報名過這堂課程了'],
+  ['insufficient points', '點數不足，請取消使用點數折抵'],
+  ['insufficient stock', '商品庫存不足，請減少數量或移除該項目'],
+  ['duplicate checkout', '訂單處理中，請稍候再試']
+];
+
+/** 純函式：把 placeOrder 拋出的錯誤翻成使用者可讀的繁中訊息；
+ *  未命中的錯誤（網路失敗、未知 5xx 等）落回通用文案。 */
+export function orderErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    const hit = ORDER_ERROR_MESSAGES.find(([needle]) => err.message.includes(needle));
+    if (hit) return hit[1];
+  }
+  return '結帳失敗，請稍後再試';
 }
