@@ -3,29 +3,28 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CheckoutDialog from './CheckoutDialog.svelte';
 import { cart, subscriptions, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-import { passToCartItem, passId, POINTS_LEDGER, ME } from '$lib/member/data';
+import { passToCartItem, POINTS_LEDGER, ME } from '$lib/member/data';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-// A marketing pass fixture (the /tickets page shape) routed through the adapter.
+// A marketing pass fixture (the /tickets page's public Ticket shape) routed
+// through the adapter.
 const PASS = passToCartItem({
-	id: 3,
+	id: 'product-uuid-3',
 	name: '競技啦啦隊月費',
-	price: 'NT$ 4,500',
-	duration: '每月8堂',
-	description: '專業競技啦啦隊訓練',
+	price: 4500,
+	desc: '專業競技啦啦隊訓練',
 	features: ['每週兩堂90分鐘訓練', '比賽代表隊選拔資格']
 });
 
-// A member-catalog course line shape (carries days/coach).
+// A course cart-item line shape (carries days; cart v3 dropped the coach field).
 const COURSE = {
-	id: 3,
+	id: 'course-uuid-3',
 	type: 'course' as const,
 	name: '競技啦啦隊 進階班',
 	price: 4800,
 	icon: 'sparkles',
-	days: '週二 / 週四 19:00',
-	coach: '林雅婷'
+	days: '週二 / 週四 19:00'
 };
 
 beforeEach(() => {
@@ -52,10 +51,10 @@ describe('CheckoutDialog — pure-pass checkout creates a Subscription (使用�
 
 		await payThrough(getByText);
 
-		// A Subscription was persisted, keyed by the pass id (= passId(3)).
+		// A Subscription was persisted, keyed by the pass's cart-item id.
 		const subs = get(subscriptions);
 		expect(subs).toHaveLength(1);
-		expect(subs[0].id).toBe(passId(3));
+		expect(subs[0].id).toBe(PASS.id);
 		expect(subs[0].name).toBe('競技啦啦隊月費');
 		expect(subs[0].price).toBe(4500);
 		expect(typeof subs[0].since).toBe('string');
@@ -96,25 +95,24 @@ describe('CheckoutDialog — course checkout stays a mock (points only, 報名 c
 });
 
 describe('CheckoutDialog — per-line display branches by type', () => {
-	it('a pass line shows its duration and hides the qty stepper', () => {
+	it('a pass line shows its desc and hides the qty stepper', () => {
 		cart.addItem(PASS);
 		checkoutOpen.set(true);
 		const { container, queryByLabelText } = render(CheckoutDialog);
 
-		// duration shown for a pass (no days/coach to render)
-		expect(container.textContent).toContain('每月8堂');
+		// desc shown for a pass (no days to render)
+		expect(container.textContent).toContain('專業競技啦啦隊訓練');
 		// qty steppers are hidden for a single-entitlement pass
 		expect(queryByLabelText('加量')).toBeNull();
 		expect(queryByLabelText('減量')).toBeNull();
 	});
 
-	it('a course line shows days · coach and keeps the qty stepper', () => {
+	it('a course line shows days and keeps the qty stepper', () => {
 		cart.addItem(COURSE);
 		checkoutOpen.set(true);
 		const { container, queryByLabelText } = render(CheckoutDialog);
 
 		expect(container.textContent).toContain('週二 / 週四 19:00');
-		expect(container.textContent).toContain('林雅婷 教練');
 		expect(queryByLabelText('加量')).not.toBeNull();
 	});
 });

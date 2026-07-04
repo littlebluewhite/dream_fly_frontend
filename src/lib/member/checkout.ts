@@ -16,7 +16,7 @@ export interface CheckoutContext {
   usePoints: boolean;
   coupon: { off: number } | null;
   /** 已持有使用權清單 → 去重 + 丟 no-op 收費（傳 $subscriptions 即可，結構相容）*/
-  ownedSubs: { id: number }[];
+  ownedSubs: { id: string }[];
   /** 補零 'YYYY/MM/DD'（呼叫端算好傳入）；寫進 since 與 ledger date */
   today: string;
 }
@@ -45,7 +45,7 @@ export interface CheckoutResult {
  * 過濾出「可計費項目」：已持有的 pass 是 no-op，不計費、不贈點。
  * 顯示與 commitCheckout 共用同一過濾邏輯，確保一致。
  */
-export function chargeableLines(cart: CartItem[], subs: { id: number }[]): CartItem[] {
+export function chargeableLines(cart: CartItem[], subs: { id: string }[]): CartItem[] {
   const subscribedIds = new Set(subs.map((s) => s.id));
   return cart.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id)));
 }

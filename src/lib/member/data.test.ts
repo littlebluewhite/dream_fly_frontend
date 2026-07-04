@@ -1,73 +1,69 @@
 import { describe, it, expect } from 'vitest';
-import {
-  CATALOG,
-  passId,
-  marketingCourseId,
-  parseNTD,
-  marketingCourseToCartItem,
-  passToCartItem,
-  type MarketingCourseInput,
-  type PassInput
-} from './data';
+import { courseToCartItem, passToCartItem } from './data';
+import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
-describe('parseNTD', () => {
-  it('extracts the dollar amount from a price label, ignoring suffix copy', () => {
-    expect(parseNTD('NT$ 3,200/月 (4堂)')).toBe(3200);
-    expect(parseNTD('NT$ 500')).toBe(500);
-  });
-  it('returns 0 when no amount is present', () => {
-    expect(parseNTD('洽詢')).toBe(0);
-  });
-});
+/* cart v3 — cart-item adapters now consume the API-shaped public CatalogCourse /
+ * Ticket objects (uuid string ids). No more number-id namespacing (PASS_ID_BASE /
+ * MARKETING_COURSE_ID_BASE / passId / marketingCourseId / parseNTD are gone —
+ * dedup is by (type, id) in the store now, see stores.test.ts). */
 
-describe('cart id namespaces', () => {
-  // The unified cart dedups by numeric id, so the three product sources MUST
-  // never share an id — otherwise a marketing course would bump a member course.
-  it('keeps member courses, marketing courses, and passes in disjoint id ranges', () => {
-    const courseIds = CATALOG.map((c) => c.id); // 1–6
-    const marketingIds = [1, 2, 3, 4].map(marketingCourseId); // 2001–2004
-    const passIds = [1, 2, 3, 4, 5, 6].map(passId); // 1001–1006
-    const all = [...courseIds, ...marketingIds, ...passIds];
-    expect(new Set(all).size).toBe(all.length);
-  });
-});
-
-const MK: MarketingCourseInput = {
-  id: 2,
-  name: '競技啦啦隊',
-  level: '競技',
-  duration: '每週兩次，每次90分鐘',
-  price: 'NT$ 4,500/月',
-  description: '專業競技啦啦隊訓練',
-  includes: ['特技動作訓練']
+const COURSE: CatalogCourse = {
+  id: 'course-uuid-1',
+  name: '幼兒體操 啟蒙班',
+  level: '初級',
+  cat: '幼兒體操',
+  age: '3–6 歲',
+  days: '週六 10:00',
+  price: 3200,
+  hot: true,
+  coach: '黃教練',
+  desc: '透過遊戲建立基礎動作能力',
+  spots: 2
 };
-const PASS: PassInput = {
-  id: 3,
+
+const TICKET: Ticket = {
+  id: 'product-uuid-1',
   name: '競技啦啦隊月費',
-  price: 'NT$ 4,500',
-  duration: '每月8堂',
-  description: '專業競技啦啦隊訓練',
-  features: ['每週兩堂90分鐘訓練']
+  price: 4500,
+  desc: '專業競技啦啦隊訓練',
+  features: ['每週兩堂90分鐘訓練', '比賽代表隊選拔資格']
 };
 
-describe('marketingCourseToCartItem', () => {
-  it('adapts a marketing course into a namespaced course CartItem', () => {
-    const item = marketingCourseToCartItem(MK);
+describe('courseToCartItem', () => {
+  it('adapts a public catalog course into a course cart item (uuid id passthrough, qty 1)', () => {
+    const item = courseToCartItem(COURSE);
     expect(item.type).toBe('course');
-    expect(item.id).toBe(2002); // 2000 + 2
-    expect(item.price).toBe(4500); // parsed from the label
-    expect(item.name).toBe('競技啦啦隊');
-    expect(item.icon).toBeTruthy(); // checkout renders an icon; the adapter must supply one
+    expect(item.id).toBe('course-uuid-1');
+    expect(item.qty).toBe(1);
+    expect(item.name).toBe('幼兒體操 啟蒙班');
+    expect(item.price).toBe(3200);
+    expect(item.icon).toBeTruthy(); // CatalogCourse carries no icon; the adapter must supply one
+  });
+
+  it('maps spots/desc/level/cat/days through onto the cart item', () => {
+    const item = courseToCartItem(COURSE);
+    expect(item.spots).toBe(2);
+    expect(item.desc).toBe('透過遊戲建立基礎動作能力');
+    expect(item.level).toBe('初級');
+    expect(item.cat).toBe('幼兒體操');
+    expect(item.days).toBe('週六 10:00');
+  });
+
+  it('always returns qty 1 regardless of spots remaining (waitlist branching is store-owned)', () => {
+    const full = { ...COURSE, spots: 0 };
+    expect(courseToCartItem(full).qty).toBe(1);
   });
 });
 
 describe('passToCartItem', () => {
-  it('adapts a pass into a namespaced pass CartItem (features → includes)', () => {
-    const item = passToCartItem(PASS);
+  it('adapts a public ticket into a pass cart item (uuid id passthrough, qty 1)', () => {
+    const item = passToCartItem(TICKET);
     expect(item.type).toBe('pass');
-    expect(item.id).toBe(1003); // 1000 + 3
+    expect(item.id).toBe('product-uuid-1');
+    expect(item.qty).toBe(1);
+    expect(item.name).toBe('競技啦啦隊月費');
     expect(item.price).toBe(4500);
-    expect(item.includes).toEqual(['每週兩堂90分鐘訓練']);
+    expect(item.desc).toBe('專業競技啦啦隊訓練');
     expect(item.icon).toBeTruthy();
   });
 });

@@ -49,7 +49,7 @@ describe('member Topbar — cart badge is the qty sum', () => {
 
   it('shows total quantity across lines, not the number of lines', () => {
     cart.add(courseA);
-    cart.updateQty(courseA.id, 2); // line A qty → 3
+    cart.updateQty(String(courseA.id), 2); // line A qty → 3 (cart v3: CartItem.id is a uuid string)
     cart.add(courseB); // line B qty 1 → sum = 4 over 2 lines
     render(Topbar);
     expect(cartBadge()?.textContent).toBe('4');

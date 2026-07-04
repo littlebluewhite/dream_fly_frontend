@@ -1,64 +1,110 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, subscriptions } from '$lib/member/stores';
-import { passId } from '$lib/member/data';
+import { listProducts } from '$lib/public/api';
+import type { ApiProduct } from '$lib/public/api';
 
-// The /tickets marketing page sells PASSES (方案/購票). 加入購物車 must route into
-// the unified member cart as a pass entitlement.
+// The /tickets marketing page sells PASSES (方案/購票). cart v3: the page now
+// fetches products via the public seam (mock ticketTypes' string-price/number-id
+// shape doesn't line up with the backend Ticket type) and 加入購物車 routes a
+// pass into the unified member cart keyed by the product's uuid.
+
+vi.mock('$lib/public/api', () => ({ listProducts: vi.fn() }));
+
+const PRODUCT: ApiProduct = {
+	id: 'product-uuid-1',
+	name: '單堂體驗課',
+	slug: 'trial',
+	product_type: 'ticket',
+	description: '首次體驗任一課程，感受專業體操訓練',
+	price_cents: 50000,
+	original_price_cents: null,
+	features: ['60-90分鐘完整課程', '專業教練一對一指導'],
+	is_highlighted: false,
+	badge: null,
+	stock: null,
+	valid_days: null,
+	session_count: 1,
+	is_active: true,
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z'
+};
 
 beforeEach(() => {
+	vi.mocked(listProducts).mockReset();
+	vi.mocked(listProducts).mockResolvedValue([PRODUCT]);
 	localStorage.clear();
 	cart.clear();
 	cart.waitlist.set([]);
 	subscriptions.set([]);
 });
 
-describe('購票資訊 — 加入購物車 routes a pass into the member cart', () => {
-	it('clicking 加入購物車 adds a pass line (passId, type:pass, qty 1) to the member cart', async () => {
-		const { getAllByRole } = render(Page);
+describe('購票資訊 — 接真 API', () => {
+	it('renders the adapted pass (name, price/100, description, features)', async () => {
+		const { container, findByText } = render(Page);
 
-		// Every open ticket card renders an 加入購物車 button; click the first (id 1 單堂體驗課).
-		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
+		await findByText('單堂體驗課');
+		expect(container.textContent).toContain('NT$ 500'); // ntd(50000)
+		expect(container.textContent).toContain('首次體驗任一課程，感受專業體操訓練');
+		expect(container.textContent).toContain('60-90分鐘完整課程');
+	});
+
+	it('error 態:顯示「載入失敗」', async () => {
+		vi.mocked(listProducts).mockReset();
+		vi.mocked(listProducts).mockRejectedValue(new Error('network'));
+
+		const { findByText } = render(Page);
+		await findByText('載入失敗');
+	});
+
+	it('loading 態:顯示骨架', () => {
+		vi.mocked(listProducts).mockReset();
+		vi.mocked(listProducts).mockReturnValue(new Promise(() => {})); // never resolves
+
+		const { getByTestId } = render(Page);
+		expect(getByTestId('tickets-skeleton')).toBeTruthy();
+	});
+});
+
+describe('購票資訊 — 加入購物車 routes a pass into the member cart', () => {
+	it('clicking 加入購物車 adds a pass line (uuid id, type:pass, qty 1) to the member cart', async () => {
+		const { container } = render(Page);
+
+		await fireEvent.click(await findByRole(container, 'button', { name: '加入購物車' }));
 
 		const items = get(cart);
 		expect(items).toHaveLength(1);
-		expect(items[0].id).toBe(passId(1)); // 1000 + ticketId — disjoint from course ids
+		expect(items[0].id).toBe('product-uuid-1');
 		expect(items[0].type).toBe('pass');
 		expect(items[0].name).toBe('單堂體驗課');
-		expect(items[0].price).toBe(500); // parsed from "NT$ 500"
+		expect(items[0].price).toBe(500); // ntd(50000)
 		expect(items[0].qty).toBe(1); // a pass is a single entitlement
 	});
 
 	it('a ticket already in the cart shows 已在購物車 and does not add a second line', async () => {
-		// Seed the cart with ticket id 1 already added as a pass.
-		cart.addItem({
-			id: passId(1),
-			type: 'pass',
-			name: '單堂體驗課',
-			price: 500,
-			icon: 'ticket'
-		});
+		// Seed the cart with the product already added as a pass.
+		cart.addItem({ id: 'product-uuid-1', type: 'pass', name: '單堂體驗課', price: 500, icon: 'ticket' });
 
-		const { getByText } = render(Page);
+		const { container, findByText } = render(Page);
 
-		// The first card (單堂體驗課) is already in the cart → its footer shows the
-		// disabled 已在購物車 state, not an 加入購物車 button.
-		expect(getByText('已在購物車')).toBeInTheDocument();
+		// Its footer shows the disabled 已在購物車 state, not an 加入購物車 button.
+		await findByText('已在購物車');
+		expect(await findAllByRole(container, 'button', { name: '已在購物車' })).toHaveLength(1);
 		// still exactly one line, no duplicate
 		expect(get(cart)).toHaveLength(1);
 	});
 
-	it('a pass the member already subscribes to shows 已訂閱 and cannot be re-added (blocks the paid no-op)', () => {
-		// Member already holds pass id 1 (單堂體驗課) as a persisted entitlement.
-		subscriptions.set([{ id: passId(1), name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
+	it('a pass the member already subscribes to shows 已訂閱 and cannot be re-added (blocks the paid no-op)', async () => {
+		// Member already holds this product as a persisted entitlement.
+		subscriptions.set([{ id: 'product-uuid-1', name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
 
-		const { getByText } = render(Page);
+		const { findByText } = render(Page);
 
 		// Its footer must read 已訂閱 (disabled), not 加入購物車 — re-buying would
-		// charge + reward points while confirmPay dedups the id to a no-op.
-		expect(getByText('已訂閱')).toBeInTheDocument();
+		// charge + reward points while commitCheckout dedups the id to a no-op.
+		await findByText('已訂閱');
 		expect(get(cart)).toHaveLength(0); // never enters the cart
 	});
 });

@@ -1,75 +1,40 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { cart, subscriptions } from '$lib/member/stores';
-  import { passToCartItem, passId } from '$lib/member/data';
+  import { passToCartItem } from '$lib/member/data';
   import { toasts } from '$lib/stores/marketingToasts';
+  import { listProducts } from '$lib/public/api';
+  import { toPass, type Ticket } from '$lib/public/adapters';
 
-  // Tickets Page - 購票資訊
-  const ticketTypes = [
-    {
-      id: 1,
-      name: '單堂體驗課',
-      price: 'NT$ 500',
-      duration: '單次',
-      description: '首次體驗任一課程，感受專業體操訓練',
-      features: ['60-90分鐘完整課程', '專業教練一對一指導', '所有訓練設施使用', '運動保險保障']
-    },
-    {
-      id: 2,
-      name: '幼兒體操月票',
-      price: 'NT$ 3,200',
-      originalPrice: 'NT$ 4,000',
-      duration: '每月4堂',
-      description: '適合3-6歲幼兒，培養運動興趣與基礎能力',
-      features: ['每週一堂60分鐘課程', '小班制教學 (每班8人)', '遊戲化教學方式', '每月進度追蹤報告']
-    },
-    {
-      id: 3,
-      name: '競技啦啦隊月費',
-      price: 'NT$ 4,500',
-      duration: '每月8堂',
-      description: '專業競技啦啦隊訓練，培養團隊精神',
-      features: ['每週兩堂90分鐘訓練', '專業編排與特技訓練', '比賽代表隊選拔資格', '演出服裝提供'],
-      highlight: true,
-      badge: '最熱門'
-    },
-    {
-      id: 4,
-      name: '成人體操月票',
-      price: 'NT$ 3,600',
-      originalPrice: 'NT$ 4,400',
-      duration: '每月4堂',
-      description: '適合18歲以上成人，提升體能與柔軟度',
-      features: ['每週一堂75分鐘課程', '彈性補課機制', '個人體適能追蹤', '淋浴更衣設施']
-    },
-    {
-      id: 5,
-      name: '跑酷訓練月票',
-      price: 'NT$ 4,000',
-      duration: '每月8堂',
-      description: '街頭運動與體操結合，挑戰極限',
-      features: ['每週兩堂90分鐘訓練', '進階技巧專業指導', '安全防護裝備提供', '戶外訓練活動機會']
-    },
-    {
-      id: 6,
-      name: '無限會員卡',
-      price: 'NT$ 6,000',
-      duration: '月費制',
-      description: '所有課程無限制參加，享受完整訓練',
-      features: ['所有課程無限制上課', '優先報名比賽資格', '專屬個人置物櫃', '會員專屬活動與講座'],
-      highlight: true,
-      badge: '超值方案'
-    }
-  ];
+  // Tickets Page - 購票資訊（cart v3：接真 API，uuid string id；mock ticketTypes 的
+  // string 價格 / number id 形狀與後端 Ticket 不相容，改走 public seam 取得真資料）。
 
-  function addTicketToCart(ticket: typeof ticketTypes[0]) {
-    // Already an active entitlement? Block it — confirmPay dedups by id, so a
-    // repurchase would charge + reward points without creating/renewing anything.
-    if ($subscriptions.some((s) => s.id === passId(ticket.id))) {
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let tickets: Ticket[] = [];
+
+  function load() {
+    phase = 'loading';
+    listProducts()
+      .then((products) => {
+        tickets = products.map(toPass);
+        phase = 'ready';
+      })
+      .catch(() => {
+        phase = 'error';
+      });
+  }
+  onMount(load);
+
+  function addTicketToCart(ticket: Ticket) {
+    // Already an active entitlement? Block it — commitCheckout dedups by id, so
+    // a repurchase would charge + reward points without creating/renewing anything.
+    if ($subscriptions.some((s) => s.id === ticket.id)) {
       toasts.notify('info', `您已訂閱「${ticket.name}」，無需重複購買`);
       return;
     }
 
-    const inCart = $cart.some((item) => item.id === passId(ticket.id) && item.type === 'pass');
+    const inCart = $cart.some((item) => item.id === ticket.id && item.type === 'pass');
 
     if (inCart) {
       toasts.notify('info', `${ticket.name} 已在購物車中`);
@@ -108,49 +73,53 @@
 
   <section class="tickets-list">
     <div class="container">
-      <div class="tickets-grid">
-        {#each ticketTypes as ticket (ticket.id)}
-          <div class="ticket-card card" class:highlighted={ticket.highlight}>
-            {#if ticket.badge}
-              <div class="discount-badge">{ticket.badge}</div>
-            {:else if ticket.originalPrice}
-              <div class="discount-badge">優惠中</div>
-            {/if}
-
-            <div class="ticket-header">
-              <h3>{ticket.name}</h3>
-              <div class="price-wrapper">
-                {#if ticket.originalPrice}
-                  <span class="original-price">{ticket.originalPrice}</span>
-                {/if}
-                <span class="price">{ticket.price}</span>
+      {#if phase === 'ready'}
+        <div class="tickets-grid">
+          {#each tickets as ticket (ticket.id)}
+            <div class="ticket-card card">
+              <div class="ticket-header">
+                <h3>{ticket.name}</h3>
+                <div class="price-wrapper">
+                  <span class="price">NT$ {ticket.price.toLocaleString()}</span>
+                </div>
               </div>
-              <p class="duration">{ticket.duration}</p>
-            </div>
 
-            <div class="ticket-body">
-              <p class="description">{ticket.description}</p>
-              <ul class="features-list">
-                {#each ticket.features as feature}
-                  <li>{feature}</li>
-                {/each}
-              </ul>
-            </div>
+              <div class="ticket-body">
+                <p class="description">{ticket.desc}</p>
+                <ul class="features-list">
+                  {#each ticket.features as feature}
+                    <li>{feature}</li>
+                  {/each}
+                </ul>
+              </div>
 
-            <div class="ticket-footer">
-              {#if $subscriptions.some((s) => s.id === passId(ticket.id))}
-                <button class="btn btn-secondary" disabled>已訂閱</button>
-              {:else if $cart.some((item) => item.id === passId(ticket.id) && item.type === 'pass')}
-                <button class="btn btn-secondary" disabled>已在購物車</button>
-              {:else}
-                <button class="btn btn-primary" on:click={() => addTicketToCart(ticket)}>
-                  加入購物車
-                </button>
-              {/if}
+              <div class="ticket-footer">
+                {#if $subscriptions.some((s) => s.id === ticket.id)}
+                  <button class="btn btn-secondary" disabled>已訂閱</button>
+                {:else if $cart.some((item) => item.id === ticket.id && item.type === 'pass')}
+                  <button class="btn btn-secondary" disabled>已在購物車</button>
+                {:else}
+                  <button class="btn btn-primary" on:click={() => addTicketToCart(ticket)}>
+                    加入購物車
+                  </button>
+                {/if}
+              </div>
             </div>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {:else if phase === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else}
+        <div class="tickets-grid" data-testid="tickets-skeleton">
+          {#each [0, 1, 2] as i (i)}
+            <SkelCard>
+              <Skeleton w="60%" h={24} r={6} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={80} r={8} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={40} r={8} />
+            </SkelCard>
+          {/each}
+        </div>
+      {/if}
     </div>
   </section>
 
@@ -250,23 +219,6 @@
     transform: translateY(-4px);
   }
 
-  .ticket-card.highlighted {
-    border: 2px solid var(--df-accent);
-    box-shadow: var(--df-shadow-card);
-  }
-
-  .discount-badge {
-    position: absolute;
-    top: -10px;
-    right: var(--df-space-5);
-    background-color: var(--df-error);
-    color: var(--df-white);
-    padding: 0.4rem 0.8rem;
-    border-radius: var(--df-radius-md);
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
   .ticket-header {
     text-align: center;
     margin-bottom: var(--df-space-5);
@@ -288,21 +240,10 @@
     margin-bottom: var(--df-space-2);
   }
 
-  .original-price {
-    text-decoration: line-through;
-    color: var(--df-text-light);
-    font-size: 0.9rem;
-  }
-
   .price {
     font-size: 2rem;
     font-weight: 700;
     color: var(--df-primary);
-  }
-
-  .duration {
-    color: var(--df-text-light);
-    font-size: 0.95rem;
   }
 
   .ticket-body {

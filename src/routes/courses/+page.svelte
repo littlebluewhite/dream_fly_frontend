@@ -5,6 +5,9 @@
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { listCourses, listCoaches } from '$lib/public/api';
   import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
+  import { cart } from '$lib/member/stores';
+  import { courseToCartItem } from '$lib/member/data';
+  import { toasts } from '$lib/stores/marketingToasts';
 
   // Courses Page - 課程介紹（seam 接真 API：課程 + 教練列表解出授課教練名稱）
 
@@ -26,6 +29,14 @@
       });
   }
   onMount(load);
+
+  // cart v3：加入購物車入口重新啟用（uuid string id + (type,id) 去重，見 Task 15）。
+  function addToCart(course: CatalogCourse) {
+    const r = cart.addItem(courseToCartItem(course));
+    if (r === 'waitlisted') toasts.notify('info', '已加入候補', `${course.name} — 有名額時將通知您。`);
+    else if (r === 'bumped') toasts.notify('info', `${course.name} 已在購物車中`);
+    else toasts.notify('success', '已加入購物車', `${course.name} 已加入購物車。`);
+  }
 </script>
 
 <svelte:head>
@@ -58,7 +69,7 @@
       {#if phase === 'ready'}
         <div class="courses-grid">
           {#each courses as course (course.id)}
-            <CourseCard {course} showCartButton={true} />
+            <CourseCard {course} showCartButton={true} onAdd={addToCart} />
           {/each}
         </div>
       {:else if phase === 'error'}

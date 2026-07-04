@@ -6,7 +6,7 @@
  * id 是後端來的 uuid string。`Coach` 則直接沿用既有行銷用型別（lib/data/coaches.ts），
  * 該檔的 `id` 欄位已放寬為 `number | string` 以容納真實教練的 uuid。 */
 
-import type { ApiCourse, ApiCoach } from './api';
+import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 import type { Coach } from '$lib/data/coaches';
 
 /** 全前端唯一 cents→NT$ 轉換點。 */
@@ -79,27 +79,6 @@ export function toMarketingCoach(c: ApiCoach): Coach {
 		certifications: c.certifications,
 		photo: c.photo_url ?? undefined
 	};
-}
-
-/** ProductResponse（integration-contract.md §3.7）的 wire 形狀。本任務尚未有頁面
- *  消費 toPass（/tickets 接線不在本任務檔案清單內），先落地形狀 + 轉換供後續任務使用。 */
-export interface ApiProduct {
-	id: string;
-	name: string;
-	slug: string;
-	product_type: string;
-	description: string | null;
-	price_cents: number;
-	original_price_cents: number | null;
-	features: string[];
-	is_highlighted: boolean;
-	badge: string | null;
-	stock: number | null;
-	valid_days: number | null;
-	session_count: number | null;
-	is_active: boolean;
-	created_at: string;
-	updated_at: string;
 }
 
 /** 行銷購票頁（/tickets）用的方案卡形狀（pass id 同樣從此任務起改為 uuid string）。 */

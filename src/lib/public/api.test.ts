@@ -6,7 +6,8 @@ import {
 	listVenues,
 	getSchedule,
 	sendContactInquiry,
-	listPosts
+	listPosts,
+	listProducts
 } from './api';
 
 vi.mock('$lib/api/client', () => ({ api: vi.fn() }));
@@ -72,5 +73,14 @@ describe('public/api.ts — 公開端點一律 auth:false', () => {
 
 		expect(api).toHaveBeenCalledWith('/posts?per_page=100', { auth: false });
 		expect(result).toEqual([{ id: 'p1' }]);
+	});
+
+	it('listProducts unwraps the {products,...} pagination envelope and requests per_page=100', async () => {
+		vi.mocked(api).mockResolvedValue({ products: [{ id: 'pr1' }], total: 1, page: 1, per_page: 100 });
+
+		const result = await listProducts();
+
+		expect(api).toHaveBeenCalledWith('/products?per_page=100', { auth: false });
+		expect(result).toEqual([{ id: 'pr1' }]);
 	});
 });

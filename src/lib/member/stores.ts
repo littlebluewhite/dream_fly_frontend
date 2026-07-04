@@ -23,11 +23,15 @@ import type { CheckoutResult } from './checkout';
 /* ---- Cart ---- */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';
 
-const CART_STORAGE_KEY = 'dreamfly_cart_v2';
+// cart v3: uuid string ids replace the mock-era number-id namespaces. No
+// v2→v3 migration — mock-era number ids are meaningless against the real
+// backend, so switching keys lets an old (v2) cart simply expire; its data
+// is left untouched in localStorage, just never read again.
+const CART_STORAGE_KEY = 'dreamfly_cart_v3';
 
 interface PersistedCart {
   items: CartItem[];
-  waitlist: number[];
+  waitlist: string[];
 }
 
 function loadCart(): PersistedCart {
@@ -51,7 +55,7 @@ export function createCart(persist = false) {
   const items = writable<CartItem[]>(initial.items);
   const { subscribe, update, set } = items;
   // 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
-  const waitlist = writable<number[]>(initial.waitlist);
+  const waitlist = writable<string[]>(initial.waitlist);
 
   if (persist && typeof window !== 'undefined') {
     const save = () => {
@@ -68,16 +72,23 @@ export function createCart(persist = false) {
     waitlist.subscribe(save);
   }
 
-  /** Add any pre-adapted item (marketing course / pass). Courses accumulate
-   *  qty; a pass is a single entitlement and never bumps past qty 1. */
+  /** Add any pre-adapted item (course / pass). Dedup is by (type, id) — a
+   *  course and a pass can never collide even if their ids somehow matched.
+   *  A full course (spots 0) never enters the paid cart; it's routed to the
+   *  waitlist instead. Neither a course (enrolment) nor a pass (entitlement)
+   *  accumulates qty on a repeat add — both lock at qty 1 and report
+   *  'bumped' so the caller can show the right toast. */
   function addItem(input: CartItemInput): AddResult {
+    if (input.type === 'course' && input.spots === 0) {
+      waitlist.update((ids) => (ids.includes(input.id) ? ids : [...ids, input.id]));
+      return 'waitlisted';
+    }
     let result: AddResult = 'added';
     update((list) => {
-      const existing = list.find((x) => x.id === input.id);
+      const existing = list.find((x) => x.id === input.id && x.type === input.type);
       if (existing) {
         result = 'bumped';
-        if (input.type === 'pass') return list; // single entitlement — locked at qty 1
-        return list.map((x) => (x.id === input.id ? { ...x, qty: x.qty + 1 } : x));
+        return list; // qty stays 1 — enrolments/entitlements aren't quantities
       }
       return [...list, { ...input, qty: 1 }];
     });
@@ -88,20 +99,17 @@ export function createCart(persist = false) {
     subscribe,
     waitlist,
     addItem,
-    /** Add a member-catalog course, or bump qty if already in the cart. A full
-     *  course (spots 0) is recorded on the waitlist instead of entering the paid
-     *  cart. Returns which happened so the caller can show the right toast. */
+    /** Add a member-catalog course (the not-yet-migrated member surface's own
+     *  catalog — numeric id; see Task 17). Normalises the id to the cart's
+     *  uuid-string CartItem shape and otherwise delegates entirely to
+     *  addItem, so waitlist/bump behaviour stays identical for both sources. */
     add(course: CatalogCourse): AddResult {
-      if (course.spots === 0) {
-        waitlist.update((ids) => (ids.includes(course.id) ? ids : [...ids, course.id]));
-        return 'waitlisted';
-      }
-      return addItem({ ...course, type: 'course' });
+      return addItem({ ...course, id: String(course.id), type: 'course' });
     },
-    remove(id: number) {
+    remove(id: string) {
       update((items) => items.filter((x) => x.id !== id));
     },
-    updateQty(id: number, delta: number) {
+    updateQty(id: string, delta: number) {
       update((items) =>
         items.map((x) => (x.id === id ? { ...x, qty: Math.max(1, x.qty + delta) } : x))
       );

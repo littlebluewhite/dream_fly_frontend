@@ -4,7 +4,8 @@ import { readable } from 'svelte/store';
 import Header from './Header.svelte';
 import { authStore } from '$lib/stores/authStore';
 import { cart } from '$lib/member/stores';
-import { CATALOG } from '$lib/member/data';
+import { courseToCartItem } from '$lib/member/data';
+import type { CatalogCourse } from '$lib/public/adapters';
 
 // Header reads $page.url.pathname (Navigation active state). Stub a static page.
 vi.mock('$app/stores', () => ({
@@ -29,9 +30,15 @@ vi.mock('$lib/stores/authStore', async () => {
   };
 });
 
-// Two distinct in-stock catalog courses (ids 1 & 2 both have spots > 0).
-const courseA = { ...CATALOG.find((c) => c.id === 1)!, spots: 9 };
-const courseB = { ...CATALOG.find((c) => c.id === 2)!, spots: 9 };
+// Two distinct in-stock catalog courses (uuid ids, spots > 0).
+const courseA: CatalogCourse = {
+  id: 'course-uuid-a', name: 'A', level: '', cat: '', age: '', days: '',
+  price: 100, hot: false, coach: '', desc: '', spots: 9
+};
+const courseB: CatalogCourse = {
+  id: 'course-uuid-b', name: 'B', level: '', cat: '', age: '', days: '',
+  price: 100, hot: false, coach: '', desc: '', spots: 9
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -66,9 +73,9 @@ describe('marketing Header — auth-aware controls', () => {
 
   it('cart badge reflects the unified member cart qty sum, not the line count', () => {
     // Two lines but qty 3 total → badge shows 3 (qty sum), proving it reads cartCount.
-    cart.add(courseA);
+    cart.addItem(courseToCartItem(courseA));
     cart.updateQty(courseA.id, 1); // line A qty → 2
-    cart.add(courseB); // line B qty 1  → sum = 3 across 2 lines
+    cart.addItem(courseToCartItem(courseB)); // line B qty 1  → sum = 3 across 2 lines
     render(Header);
     expect(screen.getByText('3')).toBeInTheDocument();
   });

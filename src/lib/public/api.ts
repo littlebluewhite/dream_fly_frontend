@@ -155,3 +155,34 @@ interface PostListResponse {
 
 export const listPosts = (): Promise<ApiPost[]> =>
 	api<PostListResponse>('/posts?per_page=100', { auth: false }).then((r) => r.posts);
+
+/* ---- Products（GET /products — 分頁，一次拉 per_page 上限 100；tickets 頁用來源） ---- */
+
+export interface ApiProduct {
+	id: string;
+	name: string;
+	slug: string;
+	product_type: string;
+	description: string | null;
+	price_cents: number;
+	original_price_cents: number | null;
+	features: string[];
+	is_highlighted: boolean;
+	badge: string | null;
+	stock: number | null;
+	valid_days: number | null;
+	session_count: number | null;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+interface ProductListResponse {
+	products: ApiProduct[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+export const listProducts = (): Promise<ApiProduct[]> =>
+	api<ProductListResponse>('/products?per_page=100', { auth: false }).then((r) => r.products);

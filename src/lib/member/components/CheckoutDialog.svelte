@@ -104,7 +104,7 @@
               <div class="line-info">
                 <div class="line-name">{c.name}</div>
                 <div class="line-sub">
-                  {#if c.type === 'pass'}{c.duration}{:else if c.days}{c.days}{c.coach ? ` · ${c.coach} 教練` : ''}{:else}{c.duration}{/if}
+                  {#if c.type === 'pass'}{c.desc ?? ''}{:else if c.days}{c.days}{:else}{c.desc ?? ''}{/if}
                 </div>
               </div>
               {#if c.type !== 'pass'}

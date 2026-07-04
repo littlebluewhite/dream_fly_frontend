@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ntd, toCatalogCourse, toMarketingCoach, toPass } from './adapters';
-import type { ApiProduct } from './adapters';
-import type { ApiCourse, ApiCoach } from './api';
+import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 
 describe('ntd — 全前端唯一 cents→NT$ 轉換點', () => {
 	it('converts whole-dollar cents', () => {

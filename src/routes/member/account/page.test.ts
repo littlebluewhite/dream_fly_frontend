@@ -34,8 +34,8 @@ describe('帳戶 — 我的訂閱 / 使用權 card', () => {
 	it('lists each active subscription (name, since, price)', async () => {
 		vi.mocked(getAccount).mockResolvedValue(SEED);
 		subscriptions.set([
-			{ id: 1003, name: '競技啦啦隊月費', since: '2026/06/17', price: 4500 },
-			{ id: 1006, name: '無限會員卡', since: '2026/06/10', price: 6000 }
+			{ id: 'product-uuid-3', name: '競技啦啦隊月費', since: '2026/06/17', price: 4500 },
+			{ id: 'product-uuid-6', name: '無限會員卡', since: '2026/06/10', price: 6000 }
 		]);
 
 		const { container } = render(Page);

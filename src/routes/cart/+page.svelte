@@ -87,11 +87,11 @@
                       </div>
                       <p class="item-duration">
                         {#if item.type === 'pass'}
-                          {item.duration ?? ''}
+                          {item.desc ?? ''}
                         {:else if item.days}
-                          {item.days}{#if item.coach} · {item.coach} 教練{/if}
+                          {item.days}
                         {:else}
-                          {item.duration ?? ''}
+                          {item.desc ?? ''}
                         {/if}
                       </p>
                     </div>

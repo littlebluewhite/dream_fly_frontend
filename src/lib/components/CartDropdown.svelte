@@ -23,7 +23,7 @@
     }
   }
 
-  function removeItem(itemId: number) {
+  function removeItem(itemId: string) {
     cart.remove(itemId);
   }
 
@@ -59,11 +59,11 @@
                 <h4>{item.name}</h4>
                 <p class="item-details">
                   {#if item.type === 'pass'}
-                    {item.duration ?? ''}
+                    {item.desc ?? ''}
                   {:else if item.days}
-                    {item.days}{#if item.coach} · {item.coach} 教練{/if}
+                    {item.days}
                   {:else}
-                    {item.duration ?? ''}
+                    {item.desc ?? ''}
                   {/if}
                   {#if item.level}
                     <span class="level-tag">{item.level}</span>

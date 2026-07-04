@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { createCart, cart, cartCount, subscriptions, points, pointsLedger, applyOrder } from './stores';
-import { CATALOG, ME, POINTS_LEDGER, marketingCourseToCartItem, passToCartItem } from './data';
+import { CATALOG, ME, POINTS_LEDGER, courseToCartItem, passToCartItem } from './data';
+import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 import type { CheckoutResult } from './checkout';
 
 // The singleton cart / subscriptions persist to localStorage; reset them (and
@@ -16,16 +17,40 @@ beforeEach(() => {
   pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
 });
 
-// A full course is any catalog course with no remaining spots.
-const full = { ...CATALOG[0], spots: 0 };
+// A public-catalog course fixture (uuid id) — the shape courseToCartItem consumes.
+const COURSE: CatalogCourse = {
+  id: 'course-uuid-1',
+  name: '幼兒體操 啟蒙班',
+  level: '初級',
+  cat: '幼兒體操',
+  age: '3–6 歲',
+  days: '週六 10:00',
+  price: 3200,
+  hot: false,
+  coach: '黃教練',
+  desc: '',
+  spots: 3
+};
+const TICKET: Ticket = {
+  id: 'product-uuid-1',
+  name: '單堂體驗課',
+  price: 500,
+  desc: '首次體驗任一課程',
+  features: []
+};
 
-describe('cart waitlist guard', () => {
+describe('cart waitlist guard (member-catalog course path — cart.add)', () => {
+  // cart.add() still serves the not-yet-migrated member surface (numeric
+  // CatalogCourse ids from $lib/domain/member-app); it normalises the id to
+  // the cart's uuid-string CartItem shape internally.
+  const full = { ...CATALOG[0], spots: 0 };
+
   it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
     const c = createCart();
     const r = c.add(full);
     expect(r).toBe('waitlisted');
     expect(get(c)).toHaveLength(0); // never enters the paid cart
-    expect(get(c.waitlist)).toContain(full.id); // registered for waitlist
+    expect(get(c.waitlist)).toContain(String(full.id)); // registered for waitlist as a string id
   });
 
   it('adds a course that still has spots to the paid cart and returns "added"', () => {
@@ -41,77 +66,97 @@ describe('cart waitlist guard', () => {
     const c = createCart();
     c.add(full);
     c.add(full);
-    expect(get(c.waitlist)).toEqual([full.id]); // recorded once
+    expect(get(c.waitlist)).toEqual([String(full.id)]); // recorded once
     expect(get(c)).toHaveLength(0); // still never in the paid cart
   });
 
-  it('still bumps qty (not waitlist) when a course with spots is added twice', () => {
+  it('bumps (not waitlist) when a course with spots is added twice — qty stays 1 (enrolment, not a quantity)', () => {
     const c = createCart();
     const normal = { ...CATALOG[0], spots: 3 };
     expect(c.add(normal)).toBe('added');
     expect(c.add(normal)).toBe('bumped');
-    expect(get(c)[0].qty).toBe(2);
+    expect(get(c)).toHaveLength(1);
+    expect(get(c)[0].qty).toBe(1);
   });
 });
 
-describe('cart — addItem (adapted marketing courses + passes)', () => {
-  it('adds an adapted marketing course under a namespaced id and bumps qty on repeat', () => {
+describe('cart — addItem (cart v3: uuid ids, dedup by (type,id))', () => {
+  it('adds an adapted public course under its uuid and bumps (qty stays 1) on repeat add', () => {
     const c = createCart();
-    const mk = marketingCourseToCartItem({
-      id: 2, name: '競技啦啦隊', level: '競技', duration: '',
-      price: 'NT$ 4,500/月', description: '', includes: []
-    });
-    expect(c.addItem(mk)).toBe('added');
-    expect(c.addItem(mk)).toBe('bumped');
-    expect(get(c)[0].id).toBe(2002); // namespaced — won't collide with member course id 2
-    expect(get(c)[0].qty).toBe(2);
+    const item = courseToCartItem(COURSE);
+    expect(c.addItem(item)).toBe('added');
+    expect(c.addItem(item)).toBe('bumped');
+    expect(get(c)).toHaveLength(1);
+    expect(get(c)[0].id).toBe('course-uuid-1');
+    expect(get(c)[0].qty).toBe(1); // courses are enrolments, not quantities
   });
 
-  it('locks a pass to qty 1 — a second add is recognised but never increments', () => {
+  it('locks a pass to qty 1 — a second add is recognised as bumped but never increments', () => {
     const c = createCart();
-    const pass = passToCartItem({
-      id: 3, name: '競技啦啦隊月費', price: 'NT$ 4,500',
-      duration: '每月8堂', description: '', features: []
-    });
+    const pass = passToCartItem(TICKET);
     expect(c.addItem(pass)).toBe('added');
     expect(c.addItem(pass)).toBe('bumped');
     expect(get(c)).toHaveLength(1);
     expect(get(c)[0].qty).toBe(1); // single entitlement — no qty > 1
   });
+
+  it('routes a full public course (spots 0) straight to the waitlist as a uuid string, never the paid cart', () => {
+    const c = createCart();
+    const full = courseToCartItem({ ...COURSE, spots: 0 });
+    const r = c.addItem(full);
+    expect(r).toBe('waitlisted');
+    expect(get(c)).toHaveLength(0);
+    expect(get(c.waitlist)).toEqual(['course-uuid-1']);
+  });
+
+  it('dedups by (type,id) — a course and a pass sharing the same id never collide', () => {
+    const c = createCart();
+    const sameId = 'shared-uuid';
+    expect(c.addItem(courseToCartItem({ ...COURSE, id: sameId }))).toBe('added');
+    expect(c.addItem(passToCartItem({ ...TICKET, id: sameId }))).toBe('added'); // NOT bumped
+    expect(get(c)).toHaveLength(2);
+    expect(get(c).map((x) => x.type).sort()).toEqual(['course', 'pass']);
+  });
 });
 
-describe('cart persistence (survives login / reload)', () => {
-  it('round-trips items and waitlist through localStorage for a fresh persisted cart', () => {
+describe('cart persistence (survives login / reload) — dreamfly_cart_v3', () => {
+  it('round-trips items and waitlist through localStorage under the v3 key for a fresh persisted cart', () => {
     const c1 = createCart(true);
     c1.add({ ...CATALOG[0], spots: 3 }); // normal → cart
     c1.add({ ...CATALOG[1], spots: 0 }); // full → waitlist
     const c2 = createCart(true); // simulate a reload
     expect(get(c2)).toHaveLength(1);
-    expect(get(c2.waitlist)).toContain(CATALOG[1].id);
+    expect(get(c2.waitlist)).toContain(String(CATALOG[1].id));
+    expect(localStorage.getItem('dreamfly_cart_v3')).toBeTruthy();
   });
 
   it('a non-persisted factory cart leaves localStorage untouched', () => {
-    const before = localStorage.getItem('dreamfly_cart_v2');
+    const before = localStorage.getItem('dreamfly_cart_v3');
     const c = createCart(); // persist defaults off
     c.add({ ...CATALOG[0], spots: 3 });
-    expect(localStorage.getItem('dreamfly_cart_v2')).toBe(before); // unchanged
+    expect(localStorage.getItem('dreamfly_cart_v3')).toBe(before); // unchanged
+  });
+
+  it('never reads the old v2 cart key — a v2 cart from a previous release is left alone, not migrated', () => {
+    localStorage.setItem('dreamfly_cart_v2', JSON.stringify({ items: [{ id: 2002, type: 'course', name: 'old', price: 1, qty: 1, icon: 'x' }], waitlist: [] }));
+    const c = createCart(true);
+    expect(get(c)).toHaveLength(0); // v3 cart starts fresh, ignoring v2 data
+    expect(localStorage.getItem('dreamfly_cart_v2')).toBeTruthy(); // v2 data itself is left in place
   });
 });
 
 describe('cartCount (badge source)', () => {
   it('sums qty across lines, not the number of lines', () => {
-    cart.add({ ...CATALOG[0], spots: 5 });
-    cart.add({ ...CATALOG[0], spots: 5 }); // same id → qty 2, one line
-    cart.addItem(
-      passToCartItem({ id: 1, name: '單堂體驗課', price: 'NT$ 500', duration: '單次', description: '', features: [] })
-    );
+    cart.addItem(courseToCartItem(COURSE)); // qty 1
+    cart.updateQty(COURSE.id, 1); // manual stepper bump → qty 2
+    cart.addItem(passToCartItem(TICKET)); // qty 1 (locked)
     expect(get(cartCount)).toBe(3); // 2 (course qty) + 1 (pass), though only 2 lines
   });
 });
 
 describe('subscriptions (entitlements persist)', () => {
   it('writes entitlements to localStorage so they survive reload', () => {
-    subscriptions.set([{ id: 1001, name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
+    subscriptions.set([{ id: 'product-uuid-1', name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
     expect(localStorage.getItem('dreamfly_subscriptions')).toContain('單堂體驗課');
   });
 });
@@ -178,9 +223,9 @@ describe('applyOrder — 結算寫入 stores', () => {
   });
 
   it('subscription 去重 — newSubscriptions 內 id 已存在於 subscriptions 時不重複加', () => {
-    subscriptions.set([{ id: 2003, name: '競技啦啦隊月費', since: '2026/01/01', price: 4500 }]);
+    subscriptions.set([{ id: 'product-uuid-2', name: '競技啦啦隊月費', since: '2026/01/01', price: 4500 }]);
     applyOrder(makeResult({
-      newSubscriptions: [{ id: 2003, name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 }]
+      newSubscriptions: [{ id: 'product-uuid-2', name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 }]
     }));
     const subs = get(subscriptions);
     expect(subs).toHaveLength(1);
@@ -190,20 +235,17 @@ describe('applyOrder — 結算寫入 stores', () => {
   it('subscription 批次冪等 — newSubscriptions 含相同 id 兩筆，只進一筆', () => {
     applyOrder(makeResult({
       newSubscriptions: [
-        { id: 2003, name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 },
-        { id: 2003, name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 }
+        { id: 'product-uuid-2', name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 },
+        { id: 'product-uuid-2', name: '競技啦啦隊月費', since: '2026/06/22', price: 4500 }
       ]
     }));
     const subs = get(subscriptions);
     expect(subs).toHaveLength(1);
-    expect(subs.filter((s) => s.id === 2003)).toHaveLength(1);
+    expect(subs.filter((s) => s.id === 'product-uuid-2')).toHaveLength(1);
   });
 
   it('cart 在 applyOrder 後清空', () => {
-    cart.addItem(passToCartItem({
-      id: 3, name: '競技啦啦隊月費', price: 'NT$ 4,500',
-      duration: '每月8堂', description: '', features: []
-    }));
+    cart.addItem(passToCartItem(TICKET));
     expect(get(cart)).toHaveLength(1);
     applyOrder(makeResult());
     expect(get(cart)).toHaveLength(0);

@@ -88,105 +88,64 @@ export interface Notification {
   read: boolean;
 }
 
-/* ---- Unified cart item (auth-at-checkout) ----
- * One cart holds three product sources — member-catalog courses, marketing-site
- * courses, and passes — so the item type is a superset. `type` drives display
- * and checkout branching; `id` is namespaced per source (see passId /
- * marketingCourseId) so dedup-by-id never merges items from different sources. */
+/* ---- Unified cart item (auth-at-checkout) — cart v3 ----
+ * One cart holds two product sources — courses and passes — both keyed by the
+ * backend uuid (course.id / product.id). No more number-id namespacing: the
+ * store dedups by (type, id) instead, so a course and a pass can never
+ * collide even if their uuids somehow matched. */
 export type CartItemType = 'course' | 'pass';
 
 export interface CartItem {
-  id: number;
+  id: string; // backend uuid (course.id or product.id)
   type: CartItemType;
   name: string;
-  price: number;
+  price: number; // NT$ integer
   qty: number;
   icon: string;
-  // member-catalog course fields (optional — marketing courses / passes omit them)
+  spots?: number;
+  desc?: string;
   level?: string;
   cat?: string;
-  age?: string;
   days?: string;
-  hot?: boolean;
-  coach?: string;
-  desc?: string;
-  spots?: number;
-  // marketing / pass display fields
-  duration?: string;
-  description?: string;
-  includes?: string[];
 }
 
 /** A cart item before it enters the cart — the cart owns qty. */
 export type CartItemInput = Omit<CartItem, 'qty'>;
 
-/* ---- id namespaces (keep the three product sources disjoint) ---- */
-const PASS_ID_BASE = 1000;
-const MARKETING_COURSE_ID_BASE = 2000;
-/** Pass (方案/購票) cart id — offset so it never collides with a course id. */
-export function passId(ticketId: number): number {
-  return PASS_ID_BASE + ticketId;
-}
-/** Marketing-site course cart id — offset so it never collides with a
- *  member-catalog course id (1–N) or a pass id. */
-export function marketingCourseId(courseId: number): number {
-  return MARKETING_COURSE_ID_BASE + courseId;
-}
+/* ---- Adapters: public/marketing API-shaped objects → unified cart item ----
+ * Consume Task 14's public-surface types (uuid string ids) directly — aliased
+ * on import since this file also re-exports a same-named, unrelated
+ * member-domain `CatalogCourse` (numeric id) above. */
+import type { CatalogCourse as PublicCatalogCourse, Ticket } from '$lib/public/adapters';
 
-/** Parse a NT$ price label like "NT$ 3,200/月 (4堂)" into the integer 3200.
- *  Returns 0 when the string carries no amount. */
-export function parseNTD(label: string): number {
-  const m = label.match(/NT\$\s*([\d,]+)/);
-  return m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
-}
-
-/* ---- Adapters: external product shapes → unified cart item ---- */
-
-/** Shape of a course on the marketing /courses page. */
-export interface MarketingCourseInput {
-  id: number;
-  name: string;
-  level: string;
-  duration: string;
-  price: string;
-  description: string;
-  includes: string[];
-}
-
-/** Shape of a pass/ticket on the marketing /tickets page. */
-export interface PassInput {
-  id: number;
-  name: string;
-  price: string;
-  duration: string;
-  description: string;
-  features: string[];
-}
-
-export function marketingCourseToCartItem(c: MarketingCourseInput): CartItemInput {
+/** type:'course', qty always 1 — a course is an enrolment, not a quantity;
+ *  a repeat add bumps (see stores.ts) rather than accumulating qty. */
+export function courseToCartItem(c: PublicCatalogCourse): CartItem {
   return {
-    id: marketingCourseId(c.id),
+    id: c.id,
     type: 'course',
     name: c.name,
-    price: parseNTD(c.price),
-    icon: 'sparkles', // marketing courses carry no icon; supply a sensible default
+    price: c.price,
+    qty: 1,
+    icon: 'sparkles', // CatalogCourse carries no icon; supply a sensible default
+    spots: c.spots,
+    desc: c.desc,
     level: c.level,
-    duration: c.duration,
-    description: c.description,
-    includes: c.includes
+    cat: c.cat,
+    days: c.days
   };
 }
 
-export function passToCartItem(p: PassInput): CartItemInput {
+/** type:'pass' — a single entitlement, locked at qty 1 (see stores.ts). */
+export function passToCartItem(t: Ticket): CartItem {
   return {
-    id: passId(p.id),
+    id: t.id,
     type: 'pass',
-    name: p.name,
-    price: parseNTD(p.price),
+    name: t.name,
+    price: t.price,
+    qty: 1,
     icon: 'ticket',
-    duration: p.duration,
-    description: p.description,
-    includes: p.features // unify: a pass's "features" are its includes
+    desc: t.desc
   };
 }
 
@@ -194,7 +153,7 @@ export function passToCartItem(p: PassInput): CartItemInput {
  * A member gains a Subscription when a pass checks out. Unlike points, these
  * persist (localStorage) — an entitlement must survive reload / re-login. */
 export interface Subscription {
-  id: number; // = passId(ticketId), so the same pass can't be subscribed twice
+  id: string; // = the pass's cart-item id (backend product uuid)
   name: string;
   since: string;
   price: number;

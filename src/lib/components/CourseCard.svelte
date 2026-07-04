@@ -4,10 +4,8 @@
   import type { CatalogCourse } from '$lib/public/adapters';
 
   export let course: CatalogCourse;
-
-  // 購物車升級中（cart 仍為 number id，courses 自本任務起改用 uuid string —— cart v3
-  // 見 Task 15）：加入購物車入口本任務一律停用，只保留視覺與 tooltip。
   export let showCartButton = false;
+  export let onAdd: (course: CatalogCourse) => void = () => {};
 
   // Map level to Badge tone
   const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {
@@ -66,7 +64,7 @@
 
   <div class="course-footer">
     {#if showCartButton}
-      <button class="btn btn-secondary" disabled title="購物車升級中">加入購物車</button>
+      <button class="btn btn-secondary" on:click={() => onAdd(course)}>加入購物車</button>
     {:else}
       <a href="/contact" class="btn btn-primary">立即報名</a>
     {/if}

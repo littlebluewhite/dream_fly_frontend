@@ -3,9 +3,10 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart } from '$lib/member/stores';
-import { marketingCourseToCartItem, passToCartItem, marketingCourseId } from '$lib/member/data';
+import { courseToCartItem, passToCartItem } from '$lib/member/data';
 import { authStore } from '$lib/stores/authStore';
 import { checkoutTarget } from '$lib/checkout-gate';
+import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import { goto } from '$app/navigation';
@@ -28,21 +29,24 @@ vi.mock('$lib/stores/authStore', async () => {
 	};
 });
 
-const MARKETING_COURSE = {
-	id: 1,
+const COURSE: CatalogCourse = {
+	id: 'course-uuid-1',
 	name: '幼兒體操',
 	level: '幼兒',
-	duration: '每週一次，每次60分鐘',
-	price: 'NT$ 3,200/月 (4堂)',
-	description: 'x',
-	includes: ['a']
+	cat: '幼兒體操',
+	age: '3–5 歲',
+	days: '每週一次，每次60分鐘',
+	price: 3200,
+	hot: false,
+	coach: '',
+	desc: 'x',
+	spots: 5
 };
-const PASS = {
-	id: 1,
+const PASS: Ticket = {
+	id: 'product-uuid-1',
 	name: '月票',
-	price: 'NT$ 1,800',
-	duration: '30 天無限次',
-	description: 'x',
+	price: 1800,
+	desc: '30 天無限次',
 	features: ['a']
 };
 
@@ -62,12 +66,12 @@ afterEach(() => {
 
 describe('購物車頁 — reads the member cart', () => {
 	it('plus increments qty, minus-at-1 removes', async () => {
-		cart.addItem(marketingCourseToCartItem(MARKETING_COURSE));
+		cart.addItem(courseToCartItem(COURSE));
 		const { getByLabelText } = render(Page);
 		await fireEvent.click(getByLabelText('增加數量'));
-		expect(get(cart).find((i) => i.id === marketingCourseId(1))!.qty).toBe(2);
+		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(2);
 		await fireEvent.click(getByLabelText('減少數量'));
-		expect(get(cart).find((i) => i.id === marketingCourseId(1))!.qty).toBe(1);
+		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1);
 		await fireEvent.click(getByLabelText('減少數量'));
 		expect(get(cart)).toHaveLength(0);
 	});
@@ -83,7 +87,7 @@ describe('購物車頁 — reads the member cart', () => {
 
 describe('購物車頁 — 結帳 gate', () => {
 	it('guest 結帳 routes through login', async () => {
-		cart.addItem(marketingCourseToCartItem(MARKETING_COURSE));
+		cart.addItem(courseToCartItem(COURSE));
 		const { getByRole } = render(Page);
 		await fireEvent.click(getByRole('button', { name: '前往結帳' }));
 		expect(goto).toHaveBeenCalledWith(checkoutTarget(false));
@@ -91,14 +95,14 @@ describe('購物車頁 — 結帳 gate', () => {
 
 	it('logged-in 結帳 routes to member checkout', async () => {
 		authStore.login('member@test.com', 'password123');
-		cart.addItem(marketingCourseToCartItem(MARKETING_COURSE));
+		cart.addItem(courseToCartItem(COURSE));
 		const { getByRole } = render(Page);
 		await fireEvent.click(getByRole('button', { name: '前往結帳' }));
 		expect(goto).toHaveBeenCalledWith(checkoutTarget(true));
 	});
 
 	it('no longer shows the 「專人聯繫」 contact-after-checkout copy', () => {
-		cart.addItem(marketingCourseToCartItem(MARKETING_COURSE));
+		cart.addItem(courseToCartItem(COURSE));
 		const { queryByText } = render(Page);
 		expect(queryByText('結帳後將由專人與您聯繫確認')).toBeNull();
 	});

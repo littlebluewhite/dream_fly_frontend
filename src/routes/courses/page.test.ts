@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, findByRole, findAllByRole } from '@testing-library/svelte';
+import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { listCourses, listCoaches } from '$lib/public/api';
 import type { ApiCourse, ApiCoach } from '$lib/public/api';
+import { cart } from '$lib/member/stores';
 
 vi.mock('$lib/public/api', () => ({ listCourses: vi.fn(), listCoaches: vi.fn() }));
 
@@ -49,6 +51,9 @@ beforeEach(() => {
 	vi.mocked(listCoaches).mockReset();
 	vi.mocked(listCourses).mockResolvedValue([COURSE]);
 	vi.mocked(listCoaches).mockResolvedValue([COACH]);
+	localStorage.clear();
+	cart.clear();
+	cart.waitlist.set([]);
 });
 
 describe('課程介紹 (marketing) — 接真 API', () => {
@@ -61,12 +66,19 @@ describe('課程介紹 (marketing) — 接真 API', () => {
 		expect(container.textContent).toContain('黃教練');
 	});
 
-	it('disables the 加入購物車 button with the 購物車升級中 tooltip (cart still expects number ids)', async () => {
+	it('加入購物車 is enabled (cart v3: uuid ids) and adds the course to the cart on click', async () => {
 		const { container } = render(Page);
 
 		const btn = await findByRole(container, 'button', { name: '加入購物車' });
-		expect(btn).toBeDisabled();
-		expect(btn.getAttribute('title')).toBe('購物車升級中');
+		expect(btn).not.toBeDisabled();
+
+		await fireEvent.click(btn);
+
+		const items = get(cart);
+		expect(items).toHaveLength(1);
+		expect(items[0].id).toBe('course-uuid-1');
+		expect(items[0].type).toBe('course');
+		expect(items[0].qty).toBe(1);
 	});
 
 	it('error 態:顯示「載入失敗」', async () => {
@@ -96,6 +108,6 @@ describe('課程介紹 (marketing) — 接真 API', () => {
 
 		const btns = await findAllByRole(container, 'button', { name: '加入購物車' });
 		expect(btns).toHaveLength(2);
-		expect(btns.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+		expect(btns.every((b) => !(b as HTMLButtonElement).disabled)).toBe(true);
 	});
 });
