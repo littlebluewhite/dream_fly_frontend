@@ -34,10 +34,10 @@ const COURSE: ApiCourse = {
 const COACH: ApiCoach = {
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
-	// name 未在此頁使用 —— routes/courses/+page.svelte 自己的 coachNameById 目前仍讀
-	// title(見 src/lib/member/api.ts getCourses 上方註解：同類殘留，非本次任務範圍)。
-	name: '黃小姐',
-	title: '黃教練',
+	// name(教練真實姓名)與 title(職稱)不同字 —— 課程卡的授課教練應顯示 name，
+	// 若回歸到 title 則 name 消失、title 現形，下方兩條斷言會同時失敗。
+	name: '黃詩涵',
+	title: '資深體操教練',
 	bio: null,
 	experience: null,
 	specialties: [],
@@ -59,13 +59,14 @@ beforeEach(() => {
 });
 
 describe('課程介紹 (marketing) — 接真 API', () => {
-	it('renders the adapted catalog course (level label, price/100, coach name resolved from coach_id)', async () => {
+	it('renders the adapted catalog course (level label, price/100, coach name resolved from coach_id — the real name, not the job title)', async () => {
 		const { container, findByText } = render(Page);
 
 		await findByText('幼兒體操 啟蒙班');
 		expect(container.textContent).toContain('初級'); // LEVEL_LABEL[beginner]
 		expect(container.textContent).toContain('NT$ 3,200'); // ntd(320000)
-		expect(container.textContent).toContain('黃教練');
+		expect(container.textContent).toContain('黃詩涵'); // CoachResponse.name（真實姓名）
+		expect(container.textContent).not.toContain('資深體操教練'); // 不是職稱 title — 回歸 .title 會踩到這條
 	});
 
 	it('加入購物車 is enabled (cart v3: uuid ids) and adds the course to the cart on click', async () => {

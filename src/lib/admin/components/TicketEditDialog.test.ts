@@ -67,10 +67,10 @@ describe('TicketEditDialog', () => {
 		expect(updated.sold).toBe(90);
 	});
 
-	/* P1 (plan B1): an empty/0 quota becomes max=0 in the ticket ProgressBar and
-	 * renders NaN% (ProgressBar.svelte:15 divides by max). Saving must clamp quota
-	 * to ≥ 1 so the bar stays honest. */
-	it('clamps a blank quota to ≥ 1 on save (guards the ProgressBar NaN%)', async () => {
+	/* 空白 配額 = 不限（null，見 ProductResponse.quota null=無限）。ProductResponse.quota
+	 * 對非 merchandise 票券幾乎恆為 null，會經 getTickets() 進到這個對話框；空白存檔必須
+	 * 保留 null，不可硬轉成 1（否則把「不限」悄悄改成「配額 1」，票券卡進度條瞬間爆到近 ∞%）。 */
+	it('treats a blank 配額 as 不限 (null) on save — an unlimited ticket, not a coerced 1', async () => {
 		const onSave = vi.fn();
 		const { getByDisplayValue, getByText } = render(TicketEditDialog, {
 			open: true,
@@ -79,10 +79,13 @@ describe('TicketEditDialog', () => {
 		});
 		await fireEvent.input(getByDisplayValue(String(base.quota)), { target: { value: '' } });
 		await fireEvent.click(getByText('儲存票券'));
-		expect(onSave.mock.calls[0][0].quota).toBeGreaterThanOrEqual(1);
+		expect(onSave.mock.calls[0][0].quota).toBeNull();
 	});
 
-	it('clamps a 0 quota to ≥ 1 on save', async () => {
+	/* A typed 0 is still floored to ≥ 1 (a 0 quota would make max=0 in the ticket
+	 * ProgressBar and render NaN% — ProgressBar.svelte:15 divides by max). Only a *blank*
+	 * field means 不限; an explicit 0 is a bad limited value, not "unlimited". */
+	it('clamps a typed 0 quota to ≥ 1 on save (guards the ProgressBar NaN%)', async () => {
 		const onSave = vi.fn();
 		const { getByDisplayValue, getByText } = render(TicketEditDialog, {
 			open: true,
@@ -92,6 +95,25 @@ describe('TicketEditDialog', () => {
 		await fireEvent.input(getByDisplayValue(String(base.quota)), { target: { value: '0' } });
 		await fireEvent.click(getByText('儲存票券'));
 		expect(onSave.mock.calls[0][0].quota).toBeGreaterThanOrEqual(1);
+	});
+
+	/* Regression (Task 4): quota went from a hardcoded 0 to the real ProductResponse.quota,
+	 * which is null (不限) for every non-merchandise ticket. String(null) rendered the literal
+	 * "null" in the 配額 field, and 儲存 ran parseInt("null")||1 → silently flipped 不限 to 1. */
+	it('renders a null quota (不限) as an empty 配額 field, not the literal "null"', () => {
+		const nullQuota: Ticket = { ...TICKETS[0], quota: null };
+		const { getByLabelText } = render(TicketEditDialog, { open: true, ticket: nullQuota });
+		const quotaInput = getByLabelText('配額') as HTMLInputElement;
+		expect(quotaInput.value).toBe('');
+		expect(quotaInput.value).not.toBe('null');
+	});
+
+	it('keeps a 不限 (null) quota null on save when the field is left untouched — no null→1 corruption', async () => {
+		const onSave = vi.fn();
+		const nullQuota: Ticket = { ...TICKETS[0], quota: null };
+		const { getByText } = render(TicketEditDialog, { open: true, ticket: nullQuota, onSave });
+		await fireEvent.click(getByText('儲存票券'));
+		expect(onSave.mock.calls[0][0].quota).toBeNull();
 	});
 
 	it('uses the 建立票券 primary and 新增票券 title in new mode', () => {

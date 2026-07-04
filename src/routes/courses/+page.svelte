@@ -18,7 +18,7 @@
     phase = 'loading';
     Promise.all([listCourses(), listCoaches()])
       .then(([apiCourses, apiCoaches]) => {
-        const coachNameById = new Map(apiCoaches.map((co) => [co.id, co.title]));
+        const coachNameById = new Map(apiCoaches.map((co) => [co.id, co.name]));
         courses = apiCourses.map((c) =>
           toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
         );

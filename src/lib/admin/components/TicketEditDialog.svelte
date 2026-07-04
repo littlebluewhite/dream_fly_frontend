@@ -6,8 +6,11 @@
    * to open. Numeric fields (票價 / 已售 / 配額) are edited as text and parsed back on
    * save. On 儲存 it fires onSave(updated) AND a success toast.
    *
-   * Quota clamp: an empty/0 配額 would make max=0 in the ticket ProgressBar and
-   * render NaN% (ProgressBar.svelte:15 divides by max), so we floor it at 1. */
+   * Quota semantics: 配額 is number | null where null = 不限 (unlimited, the common case
+   * for non-merchandise tickets — see ProductResponse.quota). A blank field means 不限 →
+   * saves as null (the ticket card renders 不限 and skips the ProgressBar). A typed 0 is a
+   * bad limited value, not "unlimited": it would make max=0 in the ProgressBar and render
+   * NaN% (ProgressBar.svelte:15 divides by max), so an explicit 0/NaN floors at 1. */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
   import { toasts } from '$lib/admin/stores';
@@ -27,24 +30,26 @@
   let f: Ticket | null = ticket;
   let priceText = ticket ? String(ticket.price) : '';
   let soldText = ticket ? String(ticket.sold) : '';
-  let quotaText = ticket ? String(ticket.quota) : '';
+  // null quota (不限) → empty field, never the literal "null".
+  let quotaText = ticket ? String(ticket.quota ?? '') : '';
   let lastTicket: Ticket | null = ticket;
   $: if (ticket !== lastTicket) {
     lastTicket = ticket;
     f = ticket ? { ...ticket } : null;
     priceText = ticket ? String(ticket.price) : '';
     soldText = ticket ? String(ticket.sold) : '';
-    quotaText = ticket ? String(ticket.quota) : '';
+    quotaText = ticket ? String(ticket.quota ?? '') : '';
   }
 
   function save() {
     if (!f) return;
+    const quotaRaw = quotaText.trim();
     const updated: Ticket = {
       ...f,
       price: parseInt(priceText, 10) || 0,
       sold: parseInt(soldText, 10) || 0,
-      // floor at 1 — a 0/empty quota makes the ProgressBar divide by zero → NaN%.
-      quota: Math.max(1, parseInt(quotaText, 10) || 1)
+      // 空白 = 不限（null）；否則 floor 於 1（0/NaN 會讓票券卡 ProgressBar 除以 0 → NaN%）。
+      quota: quotaRaw === '' ? null : Math.max(1, parseInt(quotaRaw, 10) || 1)
     };
     onSave(updated);
     toasts.notify('success', isNew ? '已新增票券' : '已儲存票券', '「' + updated.name + '」已' + (isNew ? '建立' : '更新') + '。');

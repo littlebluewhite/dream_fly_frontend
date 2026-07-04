@@ -225,11 +225,8 @@ export interface CoursesData { catalog: CatalogCourse[]; }
 
 /** 復用 Task 14 的 public seam($lib/public/api + $lib/public/adapters)，不重新
  *  實作課程/教練 join 邏輯 —— 跟行銷版課程介紹頁(src/routes/courses/+page.svelte)
- *  同一套 fetch 模式：courses + coaches 平行拉、以 coach_id 對照出教練姓名，這裡
- *  取 CoachResponse.name(教練真實姓名，非 title 職稱 —— 見 integration-contract.md
- *  §3.4)。routes/courses/+page.svelte 自己那份 coachNameById 目前仍用 title，
- *  是本次任務範圍外(Task 4 只處理 src/lib 的 member/admin/public 三個 seam)的
- *  同類殘留，留待後續一併處理。 */
+ *  同一套作法：courses + coaches 平行拉、以 coach_id 對照出教練姓名，兩處都取
+ *  CoachResponse.name(教練真實姓名，非 title 職稱 —— 見 integration-contract.md §3.4)。 */
 export const getCourses = async (): Promise<CoursesData> => {
   const [apiCourses, apiCoaches] = await Promise.all([listCourses(), listCoaches()]);
   const coachNameById = new Map(apiCoaches.map((c) => [c.id, c.name]));
