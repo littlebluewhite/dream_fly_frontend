@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
-import { get } from 'svelte/store';
 import CartDropdown from './CartDropdown.svelte';
 import { cart } from '$lib/member/stores';
 import { courseToCartItem, passToCartItem } from '$lib/member/data';
@@ -69,26 +68,28 @@ describe('CartDropdown — reads the member cart', () => {
 		expect(getByText('幼兒體操')).toBeInTheDocument();
 	});
 
-	it('plus on a course line is a no-op — courses are enrolments locked at qty 1 (store-level guard)', async () => {
+	// FE#13 item 1: the +/- stepper on a course line was a dead control —
+	// cart.updateQty is a no-op for type==='course' (courses are enrolments,
+	// not quantities), so clicking + never did anything. Round 2 removes the
+	// stepper for course lines entirely (matches CheckoutDialog, which never
+	// rendered one for any line); the qty-lock guarantee itself stays covered
+	// by stores.test.ts's 'cart.updateQty — course qty is locked' suite.
+	it('hides the +/- stepper for a course line (dead control removed) — 移除 still works', () => {
 		cart.addItem(courseToCartItem(COURSE));
-		const { getByLabelText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
-		await fireEvent.click(getByLabelText('增加數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1); // 不再累加
+		const { queryByLabelText, getByLabelText, getByText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
+		expect(getByText('幼兒體操')).toBeInTheDocument();
+		expect(queryByLabelText('增加數量')).toBeNull();
+		expect(queryByLabelText('減少數量')).toBeNull();
+		expect(getByLabelText('移除')).toBeInTheDocument();
 	});
 
-	it('minus on a qty===1 line removes the item from the cart', async () => {
-		cart.addItem(courseToCartItem(COURSE));
-		const { getByLabelText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
-		await fireEvent.click(getByLabelText('減少數量'));
-		expect(get(cart)).toHaveLength(0);
-	});
-
-	it('hides the +/- stepper for a pass (locked qty 1)', () => {
+	it('hides the +/- stepper for a pass (locked qty 1) — 移除 still works', () => {
 		cart.addItem(passToCartItem(PASS));
-		const { queryByLabelText, getByText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
+		const { queryByLabelText, getByLabelText, getByText } = render(CartDropdown, { isOpen: true, onClose: () => {} });
 		expect(getByText('月票')).toBeInTheDocument();
 		expect(queryByLabelText('增加數量')).toBeNull();
 		expect(queryByLabelText('減少數量')).toBeNull();
+		expect(getByLabelText('移除')).toBeInTheDocument();
 	});
 });
 

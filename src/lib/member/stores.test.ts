@@ -166,6 +166,30 @@ describe('cart persistence (survives login / reload) — dreamfly_cart_v3', () =
     expect(saved.items).toBeDefined();
   });
 
+  // FE#13 item 2: a dreamfly_cart_v3 payload persisted before the round-1
+  // course-qty-lock fix (cart.updateQty is now a no-op for type==='course')
+  // could still carry a course line with qty>1 — badge/preview would show 3×
+  // while checkout only ever charges 1× (user-favorable direction, but
+  // confusing). loadCart now clamps any type==='course' line to qty 1 once on
+  // load; a pass line's qty is left untouched.
+  it('clamps a legacy course line with qty>1 down to 1 on load; a pass line at qty 2 is left untouched', () => {
+    localStorage.setItem(
+      'dreamfly_cart_v3',
+      JSON.stringify({
+        items: [
+          { id: 'course-uuid-9', type: 'course', name: '舊課程', price: 3200, qty: 3, icon: 'sparkles' },
+          { id: 'product-uuid-9', type: 'pass', name: '舊方案', price: 1800, qty: 2, icon: 'ticket' }
+        ]
+      })
+    );
+
+    const c = createCart(true);
+    const items = get(c);
+
+    expect(items.find((i) => i.id === 'course-uuid-9')!.qty).toBe(1);
+    expect(items.find((i) => i.id === 'product-uuid-9')!.qty).toBe(2);
+  });
+
   it('a non-persisted factory cart leaves localStorage untouched', () => {
     const before = localStorage.getItem('dreamfly_cart_v3');
     const c = createCart(); // persist defaults off

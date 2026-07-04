@@ -51,7 +51,12 @@ function loadCart(): PersistedCart {
     const stored = localStorage.getItem(CART_STORAGE_KEY);
     if (!stored) return { items: [] };
     const parsed = JSON.parse(stored);
-    return { items: parsed.items ?? [] };
+    const items: CartItem[] = parsed.items ?? [];
+    // FE#13 item 2：round-1 把 updateQty 對課程鎖 1 之前持久化的舊購物車，課程行
+    // 仍可能帶著 qty>1（badge/預覽會顯示 3×，結帳仍只請款 1×——方向對使用者有
+    // 利但畫面誤導）。課程是報名不是數量，載入時一次性 clamp 為 1；pass 的 qty
+    // 不受影響。
+    return { items: items.map((item) => (item.type === 'course' && item.qty !== 1 ? { ...item, qty: 1 } : item)) };
   } catch (error) {
     console.error('Failed to load cart from storage:', error);
     return { items: [] };

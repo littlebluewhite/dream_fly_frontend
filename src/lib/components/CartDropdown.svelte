@@ -3,25 +3,12 @@
   import { cart } from '$lib/member/stores';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import type { CartItem } from '$lib/member/data';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
 
   $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-
-  function increaseQuantity(item: CartItem) {
-    cart.updateQty(item.id, +1);
-  }
-
-  function decreaseQuantity(item: CartItem) {
-    if (item.qty === 1) {
-      cart.remove(item.id);
-    } else {
-      cart.updateQty(item.id, -1);
-    }
-  }
 
   function removeItem(itemId: string) {
     cart.remove(itemId);
@@ -73,25 +60,10 @@
               </div>
 
               <div class="item-controls">
-                {#if item.type !== 'pass'}
-                  <div class="quantity-control">
-                    <button
-                      class="qty-btn"
-                      on:click={() => decreaseQuantity(item)}
-                      aria-label="減少數量"
-                    >
-                      <Icon name="minus" size={14} color="currentColor" />
-                    </button>
-                    <span class="quantity">{item.qty}</span>
-                    <button
-                      class="qty-btn"
-                      on:click={() => increaseQuantity(item)}
-                      aria-label="增加數量"
-                    >
-                      <Icon name="plus" size={14} color="currentColor" />
-                    </button>
-                  </div>
-                {/if}
+                <!-- FE#13 item 1：課程是報名、方案是使用權，qty 恆為 1，不提供
+                     +/- stepper（課程原本渲染死控制項——cart.updateQty 對
+                     type==='course' 已是 no-op，round 2 移除；與 CheckoutDialog
+                     的課程行一致）。 -->
                 <button class="remove-btn" on:click={() => removeItem(item.id)} aria-label="移除">
                   <Icon name="trash-2" size={16} color="currentColor" />
                 </button>
@@ -252,42 +224,6 @@
     flex-direction: column;
     align-items: flex-end;
     gap: var(--spacing-sm);
-  }
-
-  .quantity-control {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background-color: var(--df-bg-light);
-    border-radius: var(--df-radius-md);
-    padding: 0.25rem;
-  }
-
-  .qty-btn {
-    background-color: var(--df-surface);
-    border: 1px solid var(--df-border);
-    width: 24px;
-    height: 24px;
-    border-radius: var(--df-radius-md);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--df-primary);
-    transition: all var(--transition-fast);
-  }
-
-  .qty-btn:hover {
-    background-color: var(--df-primary);
-    color: var(--df-white);
-    border-color: var(--df-primary);
-  }
-
-  .quantity {
-    min-width: 24px;
-    text-align: center;
-    font-weight: 600;
-    color: var(--df-text-dark);
   }
 
   .remove-btn {
