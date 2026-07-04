@@ -1,6 +1,43 @@
 import { describe, it, expect } from 'vitest';
 import { ORDERS } from '$lib/admin/data';
+import type { Order, OrderStatus } from '$lib/admin/data';
 import { filterOrders, countByStatus, paidRevenue, applyMarkPaid } from './orders-filter';
+
+/* Task 6 (FE#9): the ORDERS seed only carries paid/pending/refunded rows, so a
+ * small hand-built fixture (one row per status) is needed to exercise
+ * processing/completed/cancelled — the 3 statuses the tab set didn't tally
+ * before this task. */
+function makeOrder(status: OrderStatus, id: string): Order {
+	return {
+		id,
+		member: '測試員',
+		initial: '測',
+		color: '#0066CC',
+		item: '測試項目',
+		amount: 1000,
+		status,
+		method: '信用卡',
+		date: '06/01 00:00',
+		invoice: 'QX-TEST',
+		discount: '—',
+		handler: '測試',
+		campus: '測試館',
+		tax: 48,
+		net: 952,
+		paidAt: status === 'pending' ? '—（待付款）' : '06/01 00:00',
+		taxId: '—'
+	};
+}
+
+const SIX_STATUSES: OrderStatus[] = [
+	'pending',
+	'paid',
+	'processing',
+	'completed',
+	'cancelled',
+	'refunded'
+];
+const ONE_OF_EACH_STATUS: Order[] = SIX_STATUSES.map((s, i) => makeOrder(s, `DF-TEST-${i}`));
 
 /* Pure filter derivation for the 訂單與金流 view (ported from admin.jsx
  * OrdersView). Exercised against the real ORDERS fixture so the behaviour is
@@ -29,6 +66,20 @@ describe('filterOrders', () => {
 
 		// the three status slices partition the full set
 		expect(paid.length + pending.length + refunded.length).toBe(ORDERS.length);
+	});
+
+	it('narrows to processing/completed/cancelled only (the 3 newly-added statuses)', () => {
+		const processing = filterOrders(ONE_OF_EACH_STATUS, { status: 'processing' });
+		expect(processing).toHaveLength(1);
+		expect(processing.every((o) => o.status === 'processing')).toBe(true);
+
+		const completed = filterOrders(ONE_OF_EACH_STATUS, { status: 'completed' });
+		expect(completed).toHaveLength(1);
+		expect(completed.every((o) => o.status === 'completed')).toBe(true);
+
+		const cancelled = filterOrders(ONE_OF_EACH_STATUS, { status: 'cancelled' });
+		expect(cancelled).toHaveLength(1);
+		expect(cancelled.every((o) => o.status === 'cancelled')).toBe(true);
 	});
 
 	it('matches by order id (case-insensitive)', () => {
@@ -76,6 +127,26 @@ describe('countByStatus', () => {
 		expect(c.pending).toBe(ORDERS.filter((o) => o.status === 'pending').length);
 		expect(c.refunded).toBe(ORDERS.filter((o) => o.status === 'refunded').length);
 		expect(c.paid + c.pending + c.refunded).toBe(c.all);
+	});
+});
+
+describe('countByStatus — 全部 6 態（含 processing/completed/cancelled）', () => {
+	it('tallies each of the 6 statuses independently', () => {
+		const c = countByStatus(ONE_OF_EACH_STATUS);
+		expect(c.all).toBe(6);
+		expect(c.pending).toBe(1);
+		expect(c.paid).toBe(1);
+		expect(c.processing).toBe(1);
+		expect(c.completed).toBe(1);
+		expect(c.cancelled).toBe(1);
+		expect(c.refunded).toBe(1);
+	});
+
+	it('the 6 status buckets sum back to the total', () => {
+		const c = countByStatus(ONE_OF_EACH_STATUS);
+		expect(c.pending + c.paid + c.processing + c.completed + c.cancelled + c.refunded).toBe(
+			c.all
+		);
 	});
 });
 

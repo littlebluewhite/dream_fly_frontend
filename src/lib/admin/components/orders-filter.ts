@@ -18,21 +18,27 @@ export interface OrdersFilter {
 	status?: OrderStatusFilter;
 }
 
-/** Per-status counts for the tab badges (全部 / 已付款 / 待付款 / 已退款). */
+/** Per-status counts for the tab badges (全部 + all 6 OrderStatus values). */
 export interface OrderCounts {
 	all: number;
 	paid: number;
 	pending: number;
 	refunded: number;
+	processing: number;
+	completed: number;
+	cancelled: number;
 }
 
-/** Tally the four tab counts off the full row set (counts ignore query). */
+/** Tally the seven tab counts (全部 + 6 statuses) off the full row set (counts ignore query). */
 export function countByStatus(rows: Order[]): OrderCounts {
 	return {
 		all: rows.length,
 		paid: rows.filter((o) => o.status === 'paid').length,
 		pending: rows.filter((o) => o.status === 'pending').length,
-		refunded: rows.filter((o) => o.status === 'refunded').length
+		refunded: rows.filter((o) => o.status === 'refunded').length,
+		processing: rows.filter((o) => o.status === 'processing').length,
+		completed: rows.filter((o) => o.status === 'completed').length,
+		cancelled: rows.filter((o) => o.status === 'cancelled').length
 	};
 }
 
