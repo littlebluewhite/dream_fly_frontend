@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { getNotifications } from '$lib/member/api';
 import { api } from '$lib/api/client';
-import { notifications, notificationsHydrated } from '$lib/member/stores';
+import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
 import { NOTIFS_SEED } from '$lib/member/data';
 import type { Notification } from '$lib/member/data';
 import Page from './+page.svelte';
@@ -19,6 +19,9 @@ beforeEach(() => {
   vi.mocked(getNotifications).mockReset();
   vi.mocked(api).mockReset();
   vi.mocked(api).mockResolvedValue(undefined);
+  // toasts 是 4000ms 自動過期的 singleton — 前一個測試的 toast 會殘留到下一個
+  // 測試,清掉才能對「某 toast 不得出現」做可靠斷言。
+  get(toasts).forEach((t) => toasts.dismiss(t.id));
   // Reset the load-once guard so each test starts un-hydrated. A store (not a
   // module boolean) so test order can't leak a prior successful hydrate.
   notificationsHydrated.set(false);
@@ -48,6 +51,46 @@ describe('member/notifications 頁', () => {
     await fireEvent.click(row);
 
     expect(api).toHaveBeenCalledWith('/notifications/n1/read', { method: 'PATCH' });
+  });
+
+  it('全部標為已讀:對每個未讀通知各發一次 PATCH(已讀的不重發),全部成功後顯示成功 toast', async () => {
+    // seed:n1–n3 未讀、n4–n6 已讀(見 NOTIFS_SEED)——只有 n1/n2/n3 該被 PATCH。
+    notificationsHydrated.set(true);
+    render(Page);
+    await screen.findByText('明日課程提醒');
+
+    await fireEvent.click(screen.getByRole('button', { name: /全部標為已讀/ }));
+
+    await waitFor(() => {
+      const patchCalls = vi.mocked(api).mock.calls.filter(([, init]) => (init as RequestInit)?.method === 'PATCH');
+      expect(patchCalls.map(([path]) => path).sort()).toEqual([
+        '/notifications/n1/read',
+        '/notifications/n2/read',
+        '/notifications/n3/read'
+      ]);
+      expect(get(toasts).some((t) => t.title === '已全部標為已讀')).toBe(true);
+    });
+    expect(get(notifications).every((n) => n.read)).toBe(true);
+  });
+
+  it('全部標為已讀:任一 PATCH 失敗時改報「部分通知標記失敗」,本地已讀狀態不還原', async () => {
+    notificationsHydrated.set(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(api).mockImplementation(async (path: string) => {
+      if (path === '/notifications/n2/read') throw new Error('network error');
+      return undefined;
+    });
+    render(Page);
+    await screen.findByText('明日課程提醒');
+
+    await fireEvent.click(screen.getByRole('button', { name: /全部標為已讀/ }));
+
+    await waitFor(() => {
+      expect(get(toasts).some((t) => t.title === '部分通知標記失敗')).toBe(true);
+    });
+    // 成功 toast 不得同時出現;樂觀更新一律保留(與 markRead 的不閃爍原則一致)。
+    expect(get(toasts).some((t) => t.title === '已全部標為已讀')).toBe(false);
+    expect(get(notifications).every((n) => n.read)).toBe(true);
   });
 
   it('PATCH 失敗時只記錄錯誤,樂觀更新的已讀狀態不還原', async () => {

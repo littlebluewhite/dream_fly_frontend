@@ -45,9 +45,23 @@
       console.error('Failed to mark notification as read:', err);
     });
   };
-  const markAll = () => {
+  // 全部已讀:同 markRead 的樂觀更新,但後端只有單筆 PATCH 端點(無批次已讀),
+  // 對每個「目前未讀」的 id 各發一次(allSettled 併發;已讀的不重發)。全部成功才報
+  // 成功;任何失敗改報「部分通知標記失敗」——本地已讀狀態一律不還原(與 markRead
+  // 的不閃爍原則一致;成功的那些後端已落地,失敗的重新整理後會恢復未讀)。
+  const markAll = async () => {
+    const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
     notifications.update((p) => p.map((n) => ({ ...n, read: true })));
-    toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');
+    const results = await Promise.allSettled(
+      unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
+    );
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failures.length > 0) {
+      failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
+      toasts.notify('error', '部分通知標記失敗', '部分通知未能同步已讀狀態，請稍後重新整理。');
+    } else {
+      toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');
+    }
   };
   // Explicit refresh always re-fetches — the user asked for the latest, so
   // resetting to server truth (re-seed) is acceptable.

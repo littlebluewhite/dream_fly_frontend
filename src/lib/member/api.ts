@@ -76,9 +76,10 @@ export const getReports = (): Promise<ReportsData> =>
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 
-// P2: 日程表沿用 mock —— 後端 GET /schedule 是「場館可預約時段」(依日期/場地查詢)，
-// 語意上是行銷/公開排班表；跟這裡「會員每週固定課表」(週次+教室+教練的固定格)不是
-// 同一件事，不是可以直接替換的資料源，非本次範圍。
+// P2: 後端 /schedule 為場館時段行事曆(依日期/場地查詢的可預約 slot，見契約 §3.6)，
+// 與這裡「會員每週固定課表」(週次+教室+教練的固定格)結構不相容——保留 mock，
+// 待後端提供 member schedule 端點。(controller sign-off:與 /orders/me 無 items
+// 同類的 plan/backend gap。)
 export const getSchedule = (): Promise<ScheduleData> => reply({ schedule: SCHEDULE });
 
 export interface MineData {
@@ -202,16 +203,18 @@ function mapProfile(u: ApiUser): AccountProfile {
 }
 
 /** GET /users/me + GET /orders/me；順手 refresh points/subscriptions —— 帳戶頁直接
- *  讀 $points / $subscriptions store(不是這裡的回傳值)。這兩支失敗就讓 getAccount()
- *  一起 reject(跟 dashboard 的「側效、失敗只記錄」不同：點數/訂閱是帳戶頁的主要
- *  內容之一，不是錦上添花)。 */
+ *  讀 $points / $subscriptions store(不是這裡的回傳值)。主資料(profile+orders)
+ *  fail-hard(Promise.all)；側效 hydrate 則 best-effort(allSettled、失敗只記錄，
+ *  同 getDashboard 模式)——主資料都到手了，不該因為側效暫時失敗把整頁打成 error，
+ *  store 保留前值仍可正常顯示。 */
 export const getAccount = async (): Promise<AccountData> => {
   const [user, orderList] = await Promise.all([
     api<ApiUser>('/users/me'),
-    api<ApiOrderListResponse>('/orders/me'),
-    refreshPoints(),
-    refreshSubscriptions()
+    api<ApiOrderListResponse>('/orders/me')
   ]);
+  const [pointsResult, subsResult] = await Promise.allSettled([refreshPoints(), refreshSubscriptions()]);
+  if (pointsResult.status === 'rejected') console.error('getAccount: 點數 hydrate 失敗', pointsResult.reason);
+  if (subsResult.status === 'rejected') console.error('getAccount: 訂閱 hydrate 失敗', subsResult.reason);
   return {
     orders: orderList.orders.map(mapOrder),
     profile: mapProfile(user)

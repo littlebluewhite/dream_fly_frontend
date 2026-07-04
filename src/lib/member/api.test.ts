@@ -256,6 +256,28 @@ describe('getAccount', () => {
     ]);
   });
 
+  it('側效 hydrate(points/subscriptions)失敗時仍成功回傳 profile+orders(主資料 fail-hard、側效 best-effort,同 getDashboard 模式)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'u3', email: 'a@b.com', name: '測試三', phone: null, created_at: '2026-01-01T00:00:00Z' },
+        'GET /orders/me': {
+          orders: [{ id: 'o9', order_number: 'DF-9', status: 'paid', total_cents: 100000, created_at: '2026-02-01T00:00:00Z' }],
+          total: 1, page: 1, per_page: 20
+        },
+        'GET /points/me': new Error('network down'),
+        'GET /subscriptions/me': new Error('network down')
+      })
+    );
+
+    const d = await getAccount();
+
+    expect(d.profile.name).toBe('測試三');
+    expect(d.orders).toEqual([
+      { id: 'DF-9', item: '訂單 DF-9', amount: 1000, status: ['success', '已付款'], date: '2026-02-01' }
+    ]);
+  });
+
   it('phone 為 null 時映射為空字串', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
