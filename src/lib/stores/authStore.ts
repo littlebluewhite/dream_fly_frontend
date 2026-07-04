@@ -115,21 +115,23 @@ function createAuthStore() {
   }
 
   async function logout(): Promise<void> {
+    // Local sign-out happens synchronously, BEFORE the network revoke — state
+    // truth must never depend on network I/O. If this awaited the revoke, an
+    // un-awaited caller (Sidebar's logout handler) could race it: log back in
+    // while the slow revoke is in flight, and its continuation would then wipe
+    // the fresh session. Snapshot the token first — clearTokens() drops it.
     const refresh = getRefresh();
-    if (refresh) {
-      try {
-        await api('/auth/logout', {
-          method: 'POST',
-          body: JSON.stringify({ refresh_token: refresh }),
-          auth: false
-        });
-      } catch {
-        // Fire-and-forget: never leave the UI logged in just because the
-        // revoke call failed — the local session is cleared below regardless.
-      }
-    }
     clearTokens();
     set(LOGGED_OUT);
+    if (refresh) {
+      // Best-effort revoke of the dropped token (endpoint is idempotent);
+      // fire-and-forget — a failed revoke never blocks or undoes the sign-out.
+      void api('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refresh_token: refresh }),
+        auth: false
+      }).catch(() => {});
+    }
   }
 
   async function hydrate(): Promise<void> {

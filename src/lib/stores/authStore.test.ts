@@ -159,6 +159,71 @@ describe('authStore.logout', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(get(authStore)).toEqual(LOGGED_OUT);
   });
+
+  it('clears the session synchronously — a slow revoke response cannot wipe a subsequent login', async () => {
+    // Regression: logout() used to await the revoke POST before clearing local
+    // state. An un-awaited caller (Sidebar's logout handler) would goto() away
+    // immediately; if the user logged back in before the slow revoke resolved,
+    // the logout continuation would then clearTokens()+set(LOGGED_OUT), wiping
+    // the fresh session. Local sign-out must not depend on network I/O.
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER }));
+    vi.stubGlobal('fetch', fetchMock);
+    await authStore.login('a@test.com', 'pw');
+
+    // Slow revoke endpoint — we control when it resolves.
+    let resolveRevoke!: (value: unknown) => void;
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => (resolveRevoke = resolve)));
+
+    const logoutPromise = authStore.logout();
+
+    // Signed out IMMEDIATELY — before the revoke response has resolved.
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(getAccess()).toBeNull();
+    expect(getRefresh()).toBeNull();
+    await logoutPromise; // resolves without waiting on the network
+
+    // Log back in while the stale revoke is still in flight.
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'a2', refresh_token: 'r2', user: SAMPLE_USER }));
+    await authStore.login('a@test.com', 'pw');
+    expect(get(authStore).loggedIn).toBe(true);
+
+    // The stale revoke NOW resolves — it must not touch the fresh session.
+    resolveRevoke(jsonResponse({ message: 'logged out successfully' }));
+    await new Promise((r) => setTimeout(r, 0)); // flush its continuation
+
+    expect(get(authStore).loggedIn).toBe(true);
+    expect(get(authStore).member?.id).toBe(SAMPLE_USER.id);
+    expect(getAccess()).toBe('a2');
+    expect(getRefresh()).toBe('r2');
+  });
+});
+
+describe('authStore — dreamfly_auth profile cache', () => {
+  it('caches the session to localStorage so a reload can first-paint it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authStore.login('a@test.com', 'pw');
+
+    expect(localStorage.getItem('dreamfly_auth')).toContain(SAMPLE_USER.id);
+  });
+
+  it('swallows storage write failures (quota / SSR) instead of propagating', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    await expect(authStore.login('a@test.com', 'pw')).resolves.toBeUndefined();
+    expect(get(isLoggedIn)).toBe(true); // in-memory state still updated
+  });
 });
 
 describe('authStore.hydrate', () => {
