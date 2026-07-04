@@ -76,10 +76,19 @@
       {#if phase === 'ready'}
         <div class="tickets-grid">
           {#each tickets as ticket (ticket.id)}
-            <div class="ticket-card card">
+            <div class="ticket-card card" class:highlighted={ticket.highlighted}>
+              {#if ticket.badge}
+                <div class="discount-badge">{ticket.badge}</div>
+              {:else if ticket.originalPrice}
+                <div class="discount-badge">優惠中</div>
+              {/if}
+
               <div class="ticket-header">
                 <h3>{ticket.name}</h3>
                 <div class="price-wrapper">
+                  {#if ticket.originalPrice}
+                    <span class="original-price">NT$ {ticket.originalPrice.toLocaleString()}</span>
+                  {/if}
                   <span class="price">NT$ {ticket.price.toLocaleString()}</span>
                 </div>
               </div>
@@ -219,6 +228,23 @@
     transform: translateY(-4px);
   }
 
+  .ticket-card.highlighted {
+    border: 2px solid var(--df-accent);
+    box-shadow: var(--df-shadow-card);
+  }
+
+  .discount-badge {
+    position: absolute;
+    top: -10px;
+    right: var(--df-space-5);
+    background-color: var(--df-error);
+    color: var(--df-white);
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--df-radius-md);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
   .ticket-header {
     text-align: center;
     margin-bottom: var(--df-space-5);
@@ -238,6 +264,12 @@
     align-items: center;
     gap: 0.25rem;
     margin-bottom: var(--df-space-2);
+  }
+
+  .original-price {
+    text-decoration: line-through;
+    color: var(--df-text-light);
+    font-size: 0.9rem;
   }
 
   .price {

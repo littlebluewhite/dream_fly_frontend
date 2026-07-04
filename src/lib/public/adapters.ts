@@ -81,13 +81,18 @@ export function toMarketingCoach(c: ApiCoach): Coach {
 	};
 }
 
-/** 行銷購票頁（/tickets）用的方案卡形狀（pass id 同樣從此任務起改為 uuid string）。 */
+/** 行銷購票頁（/tickets）用的方案卡形狀（pass id 同樣從此任務起改為 uuid string）。
+ *  badge/highlighted/originalPrice 是純展示用 merchandising 欄位 —— 只進票卡渲染，
+ *  不進購物車（CartItem 不帶它們）。 */
 export interface Ticket {
 	id: string;
 	name: string;
 	price: number;
 	desc: string;
 	features: string[];
+	badge?: string;
+	highlighted?: boolean;
+	originalPrice?: number; // NT$（原價，有折扣時才有）
 }
 
 export function toPass(p: ApiProduct): Ticket {
@@ -96,6 +101,9 @@ export function toPass(p: ApiProduct): Ticket {
 		name: p.name,
 		price: ntd(p.price_cents),
 		desc: p.description ?? '',
-		features: p.features
+		features: p.features,
+		badge: p.badge ?? undefined,
+		highlighted: p.is_highlighted,
+		originalPrice: p.original_price_cents != null ? ntd(p.original_price_cents) : undefined
 	};
 }

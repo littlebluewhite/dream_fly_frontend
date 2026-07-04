@@ -68,6 +68,52 @@ describe('購票資訊 — 接真 API', () => {
 	});
 });
 
+describe('購票資訊 — merchandising display (badge / highlight / original price)', () => {
+	it('renders the badge chip, highlighted card styling, and strikethrough original price when the product carries them', async () => {
+		vi.mocked(listProducts).mockResolvedValue([
+			{
+				...PRODUCT,
+				id: 'product-uuid-2',
+				name: '競技啦啦隊月費',
+				price_cents: 450000,
+				original_price_cents: 500000,
+				badge: '最熱門',
+				is_highlighted: true
+			}
+		]);
+
+		const { container, findByText } = render(Page);
+
+		await findByText('競技啦啦隊月費');
+		expect(await findByText('最熱門')).toBeTruthy(); // badge chip
+		const orig = container.querySelector('.original-price');
+		expect(orig?.textContent).toContain('NT$ 5,000'); // ntd(500000), struck through
+		expect(container.textContent).toContain('NT$ 4,500'); // selling price still shown
+		expect(container.querySelector('.ticket-card.highlighted')).toBeTruthy();
+	});
+
+	it('falls back to the 優惠中 badge when there is an original price but no explicit badge', async () => {
+		vi.mocked(listProducts).mockResolvedValue([
+			{ ...PRODUCT, original_price_cents: 400000, badge: null }
+		]);
+
+		const { findByText } = render(Page);
+
+		await findByText('單堂體驗課');
+		expect(await findByText('優惠中')).toBeTruthy();
+	});
+
+	it('renders no badge, no strikethrough, and no highlight when the product carries none', async () => {
+		// default PRODUCT: badge null, original_price_cents null, is_highlighted false
+		const { container, findByText } = render(Page);
+
+		await findByText('單堂體驗課');
+		expect(container.querySelector('.discount-badge')).toBeNull();
+		expect(container.querySelector('.original-price')).toBeNull();
+		expect(container.querySelector('.ticket-card.highlighted')).toBeNull();
+	});
+});
+
 describe('購票資訊 — 加入購物車 routes a pass into the member cart', () => {
 	it('clicking 加入購物車 adds a pass line (uuid id, type:pass, qty 1) to the member cart', async () => {
 		const { container } = render(Page);

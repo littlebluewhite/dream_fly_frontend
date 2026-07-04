@@ -171,11 +171,27 @@ describe('toPass', () => {
 			name: '月票 · 自由練習',
 			price: 2800,
 			desc: '當月不限堂數自由練習',
-			features: ['不限堂數', '全館設施']
+			features: ['不限堂數', '全館設施'],
+			highlighted: false
 		});
 	});
 
 	it('falls back to "" for a null description', () => {
 		expect(toPass(makeApiProduct({ description: null })).desc).toBe('');
+	});
+
+	it('maps merchandising fields: badge passthrough, is_highlighted → highlighted, original_price_cents via ntd', () => {
+		const out = toPass(
+			makeApiProduct({ badge: '最熱門', is_highlighted: true, original_price_cents: 400000 })
+		);
+		expect(out.badge).toBe('最熱門');
+		expect(out.highlighted).toBe(true);
+		expect(out.originalPrice).toBe(4000);
+	});
+
+	it('omits badge/originalPrice (undefined, not null) when the wire carries null', () => {
+		const out = toPass(makeApiProduct()); // badge: null, original_price_cents: null
+		expect(out.badge).toBeUndefined();
+		expect(out.originalPrice).toBeUndefined();
 	});
 });
