@@ -1,6 +1,25 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  // Venues Page - 場館介紹
+  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { listVenues, type ApiVenue } from '$lib/public/api';
+  // Venues Page - 場館介紹（僅列表接真 API；12 個詳頁保留在地文案，不在本任務範圍）
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let venues: ApiVenue[] = [];
+
+  function load() {
+    phase = 'loading';
+    listVenues()
+      .then((v) => {
+        venues = v;
+        phase = 'ready';
+      })
+      .catch(() => {
+        phase = 'error';
+      });
+  }
+  onMount(load);
 </script>
 
 <svelte:head>
@@ -25,45 +44,39 @@
         </p>
       </div>
 
-      <div class="facilities-grid">
-        <div class="facility-card card">
-          <h3><Icon name="activity" size={20} class="facility-icon" /> 訓練設施</h3>
-          <ul>
-            <li>大跳床 - 專業彈跳訓練，提升空中控制能力</li>
-            <li>小跳床 - 基礎彈跳練習，適合初學者使用</li>
-            <li>長跳床 - 助跑彈跳訓練，練習連續動作</li>
-            <li>9條體操墊 - 翻滾、倒立等基礎動作訓練</li>
-            <li>組合墊 - 可調整高度與角度的多功能訓練墊</li>
-          </ul>
+      {#if phase === 'ready'}
+        <div class="facilities-grid">
+          {#each venues as v (v.id)}
+            <div class="facility-card card">
+              {#if v.image_url}
+                <img class="venue-image" src={v.image_url} alt={v.name} />
+              {/if}
+              <h3><Icon name="dumbbell" size={20} class="facility-icon" /> {v.name}</h3>
+              {#if v.description}<p>{v.description}</p>{/if}
+              {#if v.features.length}
+                <ul>
+                  {#each v.features as feature}
+                    <li>{feature}</li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
+          {/each}
         </div>
-
-        <div class="facility-card card">
-          <h3><Icon name="shield-check" size={20} class="facility-icon" /> 安全設施</h3>
-          <ul>
-            <li>氣墊 - 高空落下緩衝保護，確保訓練安全</li>
-            <li>海綿池 - 大型海綿填充池，提供安全著陸環境</li>
-          </ul>
+      {:else if phase === 'error'}
+        <div class="card" style="padding:0; margin-bottom: var(--spacing-lg)">
+          <ErrorState onRetry={load} />
         </div>
-
-        <div class="facility-card card">
-          <h3><Icon name="dumbbell" size={20} class="facility-icon" /> 輔助訓練</h3>
-          <ul>
-            <li>小型健身房 - 體能訓練器材，增強肌力與耐力</li>
-            <li>小型攀岩場 - 手腳協調訓練，提升身體控制力</li>
-            <li>有鏡子的韻律教室 - 舞蹈韻律訓練，矯正動作姿勢</li>
-          </ul>
+      {:else}
+        <div class="facilities-grid" data-testid="venues-skeleton">
+          {#each [0, 1, 2, 3] as i (i)}
+            <SkelCard>
+              <Skeleton w="60%" h={22} r={6} style="margin-bottom:12px" />
+              <Skeleton w="100%" h={60} r={8} />
+            </SkelCard>
+          {/each}
         </div>
-
-        <div class="facility-card card">
-          <h3><Icon name="house" size={20} class="facility-icon" /> 配套設施</h3>
-          <ul>
-            <li>休息區 - 舒適的休息空間，家長觀課區</li>
-            <li>小教室 - 理論課程教學、影片分析使用</li>
-            <li>更衣室與淋浴間 - 男女分離，乾淨衛生</li>
-            <li>專屬置物櫃 - 會員專用，安全便利</li>
-          </ul>
-        </div>
-      </div>
+      {/if}
 
       <div class="venue-specs card">
         <h2>場地規格</h2>
@@ -168,6 +181,14 @@
     border-color: var(--df-primary);
   }
 
+  .venue-image {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    border-radius: var(--df-radius-md);
+    margin-bottom: var(--spacing-md);
+  }
+
   .facility-card h3 {
     color: var(--df-primary);
     margin-bottom: var(--spacing-md);
@@ -179,6 +200,11 @@
 
   :global(.facility-icon) {
     flex-shrink: 0;
+  }
+
+  .facility-card p {
+    color: var(--df-text-light);
+    margin-bottom: var(--spacing-sm);
   }
 
   .facility-card ul {

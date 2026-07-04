@@ -1,54 +1,31 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { cart } from '$lib/member/stores';
-  import { marketingCourseToCartItem } from '$lib/member/data';
-  import { toasts } from '$lib/stores/marketingToasts';
+  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { listCourses, listCoaches } from '$lib/public/api';
+  import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
 
-  // Courses Page - 課程介紹
-  const courses = [
-    {
-      id: 1,
-      name: '幼兒體操',
-      level: '幼兒',
-      duration: '每週一次，每次60分鐘',
-      price: 'NT$ 3,200/月 (4堂)',
-      description: '專為3-6歲幼兒設計的體操啟蒙課程，透過遊戲化教學培養基礎動作能力、協調性與柔軟度',
-      includes: ['基礎翻滾訓練 - 前滾翻、後滾翻', '平衡感訓練 - 平衡木、單腳站立', '柔軟度開發 - 伸展、劈腿練習', '小跳床入門 - 基礎彈跳技巧', '遊戲化教學 - 寓教於樂的課程設計']
-    },
-    {
-      id: 2,
-      name: '競技啦啦隊',
-      level: '競技',
-      duration: '每週兩次，每次90分鐘',
-      price: 'NT$ 4,500/月',
-      description: '專業競技啦啦隊訓練課程，培養團隊合作精神與特技技能，定期參加全國性比賽',
-      includes: ['特技動作訓練 - 翻騰、金字塔、拋接', '舞蹈編排 - 音樂配合、隊形變化', '團隊配合 - 默契培養、信任建立', '比賽準備 - 全國賽代表隊選拔', '音樂律動 - 節奏感與表現力訓練']
-    },
-    {
-      id: 3,
-      name: '成人體操',
-      level: '成人',
-      duration: '每週一次，每次75分鐘',
-      price: 'NT$ 3,600/月 (4堂)',
-      description: '專為18歲以上成人設計的體操課程，提升整體體能、柔軟度，同時釋放工作壓力',
-      includes: ['基礎體操動作 - 翻滾、倒立、側手翻', '跳床訓練 - 彈跳技巧、空中控制', '核心肌群強化 - 腹肌、背肌訓練', '伸展放鬆 - 全身柔軟度提升', '減壓運動 - 舒緩身心、建立自信']
-    },
-    {
-      id: 4,
-      name: '跑酷',
-      level: '進階',
-      duration: '每週兩次，每次90分鐘',
-      price: 'NT$ 4,000/月',
-      description: '結合體操與街頭運動的跑酷訓練課程，培養敏捷性、力量與空間感知能力',
-      includes: ['基礎翻滾技術 - 安全落地、前後空翻', '跳躍技巧 - 精準跳躍、距離判斷', '攀爬訓練 - 牆面攀爬、翻越障礙', '落地緩衝 - 減震技巧、保護關節', '障礙突破 - 創意路線、流暢動作']
-    }
-  ];
+  // Courses Page - 課程介紹（seam 接真 API：課程 + 教練列表解出授課教練名稱）
 
-  function addCourseToCart(course: typeof courses[0]) {
-    cart.addItem(marketingCourseToCartItem(course));
-    toasts.notify('success', `已將 ${course.name} 加入購物車`);
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let courses: CatalogCourse[] = [];
+
+  function load() {
+    phase = 'loading';
+    Promise.all([listCourses(), listCoaches()])
+      .then(([apiCourses, apiCoaches]) => {
+        const coachNameById = new Map(apiCoaches.map((co) => [co.id, co.title]));
+        courses = apiCourses.map((c) =>
+          toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
+        );
+        phase = 'ready';
+      })
+      .catch(() => {
+        phase = 'error';
+      });
   }
+  onMount(load);
 </script>
 
 <svelte:head>
@@ -78,11 +55,25 @@
 
   <section class="courses-list">
     <div class="container">
-      <div class="courses-grid">
-        {#each courses as course (course.id)}
-          <CourseCard {course} showCartButton={true} onAddToCart={() => addCourseToCart(course)} />
-        {/each}
-      </div>
+      {#if phase === 'ready'}
+        <div class="courses-grid">
+          {#each courses as course (course.id)}
+            <CourseCard {course} showCartButton={true} />
+          {/each}
+        </div>
+      {:else if phase === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else}
+        <div class="courses-grid" data-testid="courses-skeleton">
+          {#each [0, 1, 2, 3] as i (i)}
+            <SkelCard>
+              <Skeleton w="60%" h={24} r={6} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={80} r={8} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={40} r={8} />
+            </SkelCard>
+          {/each}
+        </div>
+      {/if}
     </div>
   </section>
 

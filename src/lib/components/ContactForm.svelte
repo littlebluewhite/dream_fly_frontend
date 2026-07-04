@@ -1,5 +1,8 @@
 <script lang="ts">
   import Icon from '$lib/components/ui/Icon.svelte';
+  import { sendContactInquiry } from '$lib/public/api';
+  import { ApiError } from '$lib/api/client';
+  import { toasts } from '$lib/stores/marketingToasts';
 
   let formData = {
     name: '',
@@ -51,10 +54,16 @@
 
     formStatus = 'submitting';
 
-    // Simulate form submission
-    setTimeout(() => {
-      console.log('Form submitted:', formData);
+    try {
+      await sendContactInquiry({
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject,
+        message: formData.message,
+        ...(formData.phone ? { phone: formData.phone } : {})
+      });
       formStatus = 'success';
+      toasts.notify('success', '訊息已送出，我們會盡快與您聯繫');
 
       // Reset form after 3 seconds
       setTimeout(() => {
@@ -67,7 +76,11 @@
         };
         formStatus = 'idle';
       }, 3000);
-    }, 1000);
+    } catch (err) {
+      formStatus = 'error';
+      errorMessage = err instanceof ApiError ? err.message : '送出失敗，請稍後再試';
+      toasts.notify('error', errorMessage);
+    }
   }
 </script>
 

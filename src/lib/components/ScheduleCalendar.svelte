@@ -2,30 +2,57 @@
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import Skeleton from '$lib/components/ui/Skeleton.svelte';
+  import ErrorState from '$lib/components/ui/ErrorState.svelte';
+  import { getSchedule, type ApiDaySchedule, type ApiTimeSlot } from '$lib/public/api';
 
   let currentDate = new Date();
   let selectedDate: Date | null = null;
   let selectedTimeSlot: string | null = null;
 
-  // Time slots from 6:00 to 23:00 in 2-hour blocks
-  const timeSlots = [
-    '06:00-08:00',
-    '08:00-10:00',
-    '10:00-12:00',
-    '12:00-14:00',
-    '14:00-16:00',
-    '16:00-18:00',
-    '18:00-20:00',
-    '20:00-22:00',
-    '21:00-23:00'
-  ];
+  // seam 接真 API：一次拉當月排課（每日一筆 slots），取代先前的 Math.random() 假資料。
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let days: ApiDaySchedule[] = [];
 
-  // Simulated availability (in real app, this would come from API)
-  function getAvailability(date: Date, timeSlot: string): 'available' | 'limited' | 'full' {
-    const random = Math.random();
-    if (random > 0.7) return 'available';
-    if (random > 0.3) return 'limited';
-    return 'full';
+  function load() {
+    phase = 'loading';
+    selectedDate = null;
+    selectedTimeSlot = null;
+    getSchedule(currentDate.getFullYear(), currentDate.getMonth() + 1)
+      .then((d) => {
+        days = d;
+        phase = 'ready';
+      })
+      .catch(() => {
+        phase = 'error';
+      });
+  }
+  onMount(load);
+
+  const STATUS_LABEL: Record<string, string> = {
+    available: '充足',
+    limited: '有限',
+    full: '額滿',
+    closed: '不開放'
+  };
+
+  function isoDate(year: number, month: number, day: number): string {
+    const mm = String(month + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+  }
+
+  function slotsForDay(day: number): ApiTimeSlot[] {
+    const dateStr = isoDate(currentDate.getFullYear(), currentDate.getMonth(), day);
+    return days.find((d) => d.date === dateStr)?.slots ?? [];
+  }
+
+  function slotLabel(slot: ApiTimeSlot): string {
+    return `${slot.start_time.slice(0, 5)}-${slot.end_time.slice(0, 5)}`;
+  }
+
+  function isSlotDisabled(slot: ApiTimeSlot): boolean {
+    return slot.status === 'full' || slot.status === 'closed';
   }
 
   function getDaysInMonth(year: number, month: number): number {
@@ -38,10 +65,12 @@
 
   function previousMonth() {
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    load();
   }
 
   function nextMonth() {
     currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    load();
   }
 
   function selectDate(day: number) {
@@ -49,12 +78,9 @@
     selectedTimeSlot = null;
   }
 
-  function selectTimeSlot(slot: string) {
-    if (!selectedDate) return;
-    const availability = getAvailability(selectedDate, slot);
-    if (availability === 'full') return;
-
-    selectedTimeSlot = slot;
+  function selectTimeSlot(slot: ApiTimeSlot) {
+    if (isSlotDisabled(slot)) return;
+    selectedTimeSlot = slotLabel(slot);
   }
 
   function isToday(day: number): boolean {
@@ -107,95 +133,102 @@
     }
     return days;
   })();
+
+  $: selectedSlots = selectedDate ? slotsForDay(selectedDate.getDate()) : [];
 </script>
 
 <div class="schedule-calendar card">
-  <div class="calendar-header">
-    <button class="nav-btn" on:click={previousMonth}>&lt;</button>
-    <h2>{monthName}</h2>
-    <button class="nav-btn" on:click={nextMonth}>&gt;</button>
-  </div>
+  {#if phase === 'error'}
+    <ErrorState onRetry={load} />
+  {:else}
+    <div class="calendar-header">
+      <button class="nav-btn" on:click={previousMonth} disabled={phase === 'loading'}>&lt;</button>
+      <h2>{monthName}</h2>
+      <button class="nav-btn" on:click={nextMonth} disabled={phase === 'loading'}>&gt;</button>
+    </div>
 
-  <div class="calendar-grid">
-    <div class="day-header">日</div>
-    <div class="day-header">一</div>
-    <div class="day-header">二</div>
-    <div class="day-header">三</div>
-    <div class="day-header">四</div>
-    <div class="day-header">五</div>
-    <div class="day-header">六</div>
+    {#if phase === 'loading'}
+      <div data-testid="schedule-skeleton">
+        <Skeleton w="100%" h={320} r={12} />
+      </div>
+    {:else}
+      <div class="calendar-grid">
+        <div class="day-header">日</div>
+        <div class="day-header">一</div>
+        <div class="day-header">二</div>
+        <div class="day-header">三</div>
+        <div class="day-header">四</div>
+        <div class="day-header">五</div>
+        <div class="day-header">六</div>
 
-    {#each calendarDays as day}
-      {#if day === null}
-        <div class="calendar-day empty"></div>
-      {:else}
-        <button
-          class="calendar-day"
-          class:today={isToday(day)}
-          class:selected={selectedDate?.getDate() === day}
-          class:past={isPastDate(day)}
-          disabled={isPastDate(day)}
-          on:click={() => selectDate(day)}
-        >
-          {day}
-        </button>
-      {/if}
-    {/each}
-  </div>
-
-  {#if selectedDate}
-    <div class="time-slots">
-      <h3>可預約時段 - {formatDate(selectedDate)}</h3>
-      <div class="slots-grid">
-        {#each timeSlots as slot}
-          {@const availability = getAvailability(selectedDate, slot)}
-          <button
-            class="time-slot"
-            class:available={availability === 'available'}
-            class:limited={availability === 'limited'}
-            class:full={availability === 'full'}
-            class:selected-slot={selectedTimeSlot === slot}
-            disabled={availability === 'full'}
-            on:click={() => selectTimeSlot(slot)}
-          >
-            <span class="slot-time">{slot}</span>
-            <span class="slot-status">
-              {#if availability === 'available'}
-                充足
-              {:else if availability === 'limited'}
-                有限
-              {:else}
-                額滿
-              {/if}
-            </span>
-          </button>
+        {#each calendarDays as day}
+          {#if day === null}
+            <div class="calendar-day empty"></div>
+          {:else}
+            <button
+              class="calendar-day"
+              class:today={isToday(day)}
+              class:selected={selectedDate?.getDate() === day}
+              class:past={isPastDate(day)}
+              disabled={isPastDate(day)}
+              on:click={() => selectDate(day)}
+            >
+              {day}
+            </button>
+          {/if}
         {/each}
       </div>
 
-      {#if selectedTimeSlot}
-        <div class="booking-action">
-          <button class="btn btn-primary" on:click={handleBooking}>
-            確認預約 {selectedTimeSlot}
-          </button>
+      {#if selectedDate}
+        <div class="time-slots">
+          <h3>可預約時段 - {formatDate(selectedDate)}</h3>
+          {#if selectedSlots.length === 0}
+            <p class="no-slots">當日尚無開放時段</p>
+          {:else}
+            <div class="slots-grid">
+              {#each selectedSlots as slot (slot.id)}
+                <button
+                  class="time-slot"
+                  class:available={slot.status === 'available'}
+                  class:limited={slot.status === 'limited'}
+                  class:full={isSlotDisabled(slot)}
+                  class:selected-slot={selectedTimeSlot === slotLabel(slot)}
+                  disabled={isSlotDisabled(slot)}
+                  on:click={() => selectTimeSlot(slot)}
+                >
+                  <span class="slot-time">{slotLabel(slot)}</span>
+                  <span class="slot-status">{STATUS_LABEL[slot.status] ?? slot.status}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+
+          {#if selectedTimeSlot}
+            <div class="booking-action">
+              <button class="btn btn-primary" on:click={handleBooking}>
+                確認預約 {selectedTimeSlot}
+              </button>
+            </div>
+          {/if}
         </div>
       {/if}
-    </div>
-  {/if}
 
-  <div class="legend">
-    <div class="legend-item">
-      <span class="legend-color available"></span>
-      <span>充足</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-color limited"></span>
-      <span>有限</span>
-    </div>
-    <div class="legend-item">
-      <span class="legend-color full"></span>
-      <span>額滿</span>
-    </div>
-  </div>
+      <div class="legend">
+        <div class="legend-item">
+          <span class="legend-color available"></span>
+          <span>充足</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color limited"></span>
+          <span>有限</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-color full"></span>
+          <span>額滿</span>
+        </div>
+      </div>
+    {/if}
+  {/if}
 </div>
 
 <style>
@@ -229,6 +262,11 @@
 
   .nav-btn:hover {
     background-color: var(--df-primary-dark);
+  }
+
+  .nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .calendar-grid {
@@ -294,6 +332,10 @@
   .time-slots h3 {
     color: var(--df-primary);
     margin-bottom: var(--spacing-md);
+  }
+
+  .no-slots {
+    color: var(--df-text-light);
   }
 
   .slots-grid {

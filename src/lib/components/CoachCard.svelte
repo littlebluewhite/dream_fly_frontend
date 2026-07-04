@@ -1,6 +1,6 @@
 <script lang="ts">
   export let coach: {
-    id: number;
+    id: number | string;
     name: string;
     title: string;
     specialties: string[];

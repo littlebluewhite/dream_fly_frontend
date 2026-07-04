@@ -1,9 +1,29 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import CoachCard from '$lib/components/CoachCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { coaches } from '$lib/data/coaches';
+  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { listCoaches } from '$lib/public/api';
+  import { toMarketingCoach } from '$lib/public/adapters';
+  import type { Coach } from '$lib/data/coaches';
 
-  // Coaches Page - 教練介紹
+  // Coaches Page - 教練介紹（seam 接真 API）
+
+  let phase: 'loading' | 'error' | 'ready' = 'loading';
+  let coaches: Coach[] = [];
+
+  function load() {
+    phase = 'loading';
+    listCoaches()
+      .then((apiCoaches) => {
+        coaches = apiCoaches.map(toMarketingCoach);
+        phase = 'ready';
+      })
+      .catch(() => {
+        phase = 'error';
+      });
+  }
+  onMount(load);
 </script>
 
 <svelte:head>
@@ -33,11 +53,25 @@
 
   <section class="coaches-list">
     <div class="container">
-      <div class="coaches-grid">
-        {#each coaches as coach (coach.id)}
-          <CoachCard {coach} />
-        {/each}
-      </div>
+      {#if phase === 'ready'}
+        <div class="coaches-grid">
+          {#each coaches as coach (coach.id)}
+            <CoachCard {coach} />
+          {/each}
+        </div>
+      {:else if phase === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else}
+        <div class="coaches-grid" data-testid="coaches-skeleton">
+          {#each [0, 1, 2, 3] as i (i)}
+            <SkelCard>
+              <Skeleton w={80} h={80} r={40} style="margin-bottom:14px" />
+              <Skeleton w="60%" h={22} r={6} style="margin-bottom:10px" />
+              <Skeleton w="100%" h={60} r={8} />
+            </SkelCard>
+          {/each}
+        </div>
+      {/if}
     </div>
   </section>
 
@@ -123,7 +157,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--df-space-2);
+    gap: var(--spacing-xs);
     color: var(--df-primary);
     margin-bottom: var(--df-space-4);
     font-size: 1.3rem;

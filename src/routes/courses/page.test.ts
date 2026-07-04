@@ -1,52 +1,101 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
-import { get } from 'svelte/store';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, findByRole, findAllByRole } from '@testing-library/svelte';
 import Page from './+page.svelte';
-import { cart } from '$lib/member/stores';
-import { marketingCourseId } from '$lib/member/data';
-import { toasts } from '$lib/stores/marketingToasts';
+import { listCourses, listCoaches } from '$lib/public/api';
+import type { ApiCourse, ApiCoach } from '$lib/public/api';
 
-function resetState() {
-	localStorage.clear();
-	cart.clear();
-	cart.waitlist.set([]);
-	// marketingToasts is a module singleton; dismiss any leftover toasts so a
-	// stale entry from a prior test can't satisfy the toast assertion (vacuous pass).
-	get(toasts).forEach((t) => toasts.dismiss(t.id));
-}
-beforeEach(resetState);
-afterEach(resetState);
+vi.mock('$lib/public/api', () => ({ listCourses: vi.fn(), listCoaches: vi.fn() }));
 
-describe('課程介紹 (marketing) — 加入購物車 unifies onto the member cart', () => {
-	it('adds the marketing course to the member cart under its namespaced id', async () => {
-		const { getAllByRole } = render(Page);
-		// First course card (id 1 幼兒體操) → cart id marketingCourseId(1) = 2001.
-		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
+const COURSE: ApiCourse = {
+	id: 'course-uuid-1',
+	name: '幼兒體操 啟蒙班',
+	slug: 'kids-gym-intro',
+	level: 'beginner',
+	description: '透過遊戲建立基礎動作能力',
+	duration_minutes: 60,
+	price_cents: 320000,
+	max_students: 10,
+	min_age: 3,
+	max_age: 6,
+	features: [],
+	is_active: true,
+	coach_id: 'coach-uuid-1',
+	category: '幼兒體操',
+	schedule_text: '週六 10:00',
+	is_highlighted: true,
+	created_at: '2026-01-01T00:00:00Z',
+	updated_at: '2026-01-01T00:00:00Z',
+	enrolled_count: 8,
+	waitlist_count: 0
+};
 
-		const items = get(cart);
-		expect(items).toHaveLength(1);
-		expect(items[0].id).toBe(marketingCourseId(1));
-		expect(items[0].type).toBe('course');
-		expect(items[0].name).toBe('幼兒體操');
-		expect(items[0].price).toBe(3200); // parsed from "NT$ 3,200/月 (4堂)"
-		expect(items[0].qty).toBe(1);
+const COACH: ApiCoach = {
+	id: 'coach-uuid-1',
+	user_id: 'user-uuid-1',
+	title: '黃教練',
+	bio: null,
+	experience: null,
+	specialties: [],
+	certifications: [],
+	is_active: true,
+	display_order: 1,
+	slug: 'huang',
+	photo_url: null,
+	created_at: '2026-01-01T00:00:00Z'
+};
+
+beforeEach(() => {
+	vi.mocked(listCourses).mockReset();
+	vi.mocked(listCoaches).mockReset();
+	vi.mocked(listCourses).mockResolvedValue([COURSE]);
+	vi.mocked(listCoaches).mockResolvedValue([COACH]);
+});
+
+describe('課程介紹 (marketing) — 接真 API', () => {
+	it('renders the adapted catalog course (level label, price/100, coach name resolved from coach_id)', async () => {
+		const { container, findByText } = render(Page);
+
+		await findByText('幼兒體操 啟蒙班');
+		expect(container.textContent).toContain('初級'); // LEVEL_LABEL[beginner]
+		expect(container.textContent).toContain('NT$ 3,200'); // ntd(320000)
+		expect(container.textContent).toContain('黃教練');
 	});
 
-	it('shows a marketing toast on add', async () => {
-		const { getAllByRole } = render(Page);
-		// Baseline: no toasts before the click, so the assertion below proves THIS
-		// click created the toast (not a leftover from a prior test).
-		expect(get(toasts)).toHaveLength(0);
-		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
+	it('disables the 加入購物車 button with the 購物車升級中 tooltip (cart still expects number ids)', async () => {
+		const { container } = render(Page);
 
-		expect(get(toasts).some((t) => t.title === '已將 幼兒體操 加入購物車')).toBe(true);
+		const btn = await findByRole(container, 'button', { name: '加入購物車' });
+		expect(btn).toBeDisabled();
+		expect(btn.getAttribute('title')).toBe('購物車升級中');
 	});
 
-	it('flips the added card to the disabled 已在購物車 state (CourseCard isInCart)', async () => {
-		const { getAllByRole, getByRole } = render(Page);
-		await fireEvent.click(getAllByRole('button', { name: '加入購物車' })[0]);
+	it('error 態:顯示「載入失敗」', async () => {
+		vi.mocked(listCourses).mockReset();
+		vi.mocked(listCourses).mockRejectedValue(new Error('network'));
 
-		// CourseCard recomputes isInCart from $cart against marketingCourseId(course.id).
-		expect(getByRole('button', { name: '已在購物車' })).toBeDisabled();
+		const { findByText } = render(Page);
+		await findByText('載入失敗');
+	});
+
+	it('loading 態:顯示課程骨架', async () => {
+		vi.mocked(listCourses).mockReset();
+		vi.mocked(listCourses).mockReturnValue(new Promise(() => {})); // never resolves
+
+		const { getByTestId } = render(Page);
+		expect(getByTestId('courses-skeleton')).toBeTruthy();
+	});
+
+	it('renders one card per fetched course', async () => {
+		vi.mocked(listCourses).mockResolvedValue([
+			COURSE,
+			{ ...COURSE, id: 'course-uuid-2', name: '競技啦啦隊 進階班', coach_id: null }
+		]);
+
+		const { container, findAllByText } = render(Page);
+		await findAllByText(/幼兒體操 啟蒙班|競技啦啦隊 進階班/);
+
+		const btns = await findAllByRole(container, 'button', { name: '加入購物車' });
+		expect(btns).toHaveLength(2);
+		expect(btns.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
 	});
 });

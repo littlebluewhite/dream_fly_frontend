@@ -13,7 +13,10 @@
  */
 
 export interface Coach {
-  id: number;
+  /** number for this file's hardcoded seed; the /coaches list page now also
+   *  populates this shape from the real API (toMarketingCoach), whose coaches
+   *  carry a uuid string id — widened to admit both, seed literals unaffected. */
+  id: number | string;
   /** route slug → /coaches/{slug} */
   slug: string;
   name: string;

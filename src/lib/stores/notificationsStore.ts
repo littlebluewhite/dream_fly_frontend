@@ -1,45 +1,32 @@
-/* Dream Fly — public/marketing surface notifications store. */
+/* Dream Fly — public/marketing surface notifications store。
+ * 來源自本任務起改為 GET /posts（見 lib/public/api.ts），過濾 category==='announcement'
+ * 並轉為 Notification 形狀 —— store 對外的 subscribe/markAsRead/... API 不變。 */
 
 import { writable, derived } from 'svelte/store';
 import type { Notification } from '$lib/types';
+import { listPosts, type ApiPost } from '$lib/public/api';
 
-// Load sample notifications from JSON
+/** 公開公告貼文 → 通知形狀。公開端點沒有已讀狀態，一律預設未讀。 */
+export function toAnnouncement(p: ApiPost): Notification {
+  return {
+    id: p.id,
+    type: 'announcement',
+    title: p.title,
+    message: p.excerpt ?? '',
+    timestamp: p.published_at ?? p.created_at,
+    read: false
+  };
+}
+
 async function loadNotifications(): Promise<Notification[]> {
   if (typeof window === 'undefined') return [];
 
   try {
-    const response = await fetch('/data/notifications.json');
-    if (!response.ok) throw new Error('Failed to fetch notifications');
-    return await response.json();
+    const posts = await listPosts();
+    return posts.filter((p) => p.category === 'announcement').map(toAnnouncement);
   } catch (error) {
     console.error('Failed to load notifications:', error);
-    // Return default notifications if fetch fails
-    return [
-      {
-        id: 'notif-001',
-        type: 'reminder',
-        title: '課程提醒',
-        message: '您的幼兒體操課程將在明天下午2點開始',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60).toISOString(), // 1 hour ago
-        read: false
-      },
-      {
-        id: 'notif-002',
-        type: 'promotion',
-        title: '限時優惠',
-        message: '本月競技啦啦隊課程享20%折扣！',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-        read: false
-      },
-      {
-        id: 'notif-003',
-        type: 'schedule',
-        title: '課程調整',
-        message: '成人體操課程時間已調整',
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-        read: true
-      }
-    ];
+    return [];
   }
 }
 
