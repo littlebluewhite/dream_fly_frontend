@@ -6,6 +6,8 @@
 
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
+import { api } from '$lib/api/client';
+import { ntd } from '$lib/public/adapters';
 import {
   ME,
   NOTIFS_SEED,
@@ -18,7 +20,6 @@ import {
   type Notification,
   type Subscription
 } from './data';
-import type { CheckoutResult } from './checkout';
 
 /* ---- Cart ---- */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';
@@ -158,23 +159,116 @@ if (typeof window !== 'undefined') {
   });
 }
 
-/* ---- applyOrder — store 寫入（Task 3 接縫） ----
- * 接收 commitCheckout 的純結果，統一寫入 points / pointsLedger / subscriptions / cart。
- * 不純：有副作用；不負責算錢（那是 commitCheckout 的事）。 */
-export function applyOrder(result: CheckoutResult): void {
-  points.update((p) => p + result.pointDelta);
-  if (result.ledgerEntries.length) pointsLedger.update((p) => {
-    // 全部 entry 共用同一 p.length，靠 e.type 區分 → id 唯一性賴「至多一 earn 一 redeem」不變量。
-    // 結果與舊碼 'co-earn-'+len / 'co-redeem-'+len 逐字相等。
-    const withIds = result.ledgerEntries.map((e) => ({ ...e, id: 'co-' + e.type + '-' + p.length }));
-    return [...withIds, ...p];
+/* ---- Checkout — 真訂單 API 接縫（Task 16） ----
+ * 取代原本本地結算的 commitCheckout+applyOrder 組合：金額/點數/報名/訂閱一律由
+ * 後端算，前端只負責把購物車同步過去、送出訂單、再把 subscriptions/points 從
+ * 後端 hydrate 回 store。commitCheckout/CheckoutResult 仍留在 checkout.ts（其
+ * 測試套件保留），但已不再是真結帳路徑上的一環。 */
+
+export interface ApiOrderItem {
+  id: string;
+  item_type: 'product' | 'course';
+  product_id: string | null;
+  course_id: string | null;
+  quantity: number;
+  unit_price_cents: number;
+}
+
+export interface ApiOrder {
+  id: string;
+  order_number: string;
+  status: string;
+  total_cents: number;
+  discount_cents: number;
+  coupon_code: string | null;
+  points_used: number;
+  points_earned: number;
+  paid_at: string | null;
+  created_at: string;
+  items: ApiOrderItem[];
+}
+
+export interface ApiSubscription {
+  id: string;
+  product_id: string;
+  product_name: string;
+  status: 'active' | 'expired' | 'cancelled';
+  started_at: string;
+  expires_at: string | null;
+  total_sessions: number | null;
+  remaining_sessions: number | null;
+  price_cents: number;
+}
+
+export interface ApiPointsMe {
+  balance: number;
+}
+
+/** 購物車同步到後端：先 DELETE 清空 server 端購物車，再逐項 POST /cart/items（upsert）。
+ *  課程項目一律送 quantity 1 — 後端 DB constraint 也強制課程 qty=1，但
+ *  CartDropdown 的 stepper 目前可把本地課程 qty 推超過 1（既有 UI 缺口，非本次
+ *  範圍），這裡夾回 1，不讓本地缺口污染後端訂單。方案項目照本地 qty 送出。 */
+export async function syncCartToServer(items: CartItem[]): Promise<void> {
+  await api('/cart', { method: 'DELETE' });
+  for (const it of items) {
+    await api('/cart/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        item_type: it.type === 'pass' ? 'product' : 'course',
+        item_id: it.id,
+        quantity: it.type === 'course' ? 1 : it.qty
+      })
+    });
+  }
+}
+
+/** 送出訂單 — 先同步購物車，再 POST /orders（mock payment：成功即代表付款完成，
+ *  見 integration-contract.md §1.8）。idempotencyKey 未指定時每次呼叫各自產生
+ *  一把新 uuid；同一次結帳流程重試時，呼叫端（CheckoutDialog）需自行保留並重
+ *  複傳入同一把 key，後端才會辨識為重放、回傳原訂單而不重複扣款/建立報名訂閱
+ *  （見 §1.7）。成功後把 subscriptions/points 從後端重新 hydrate、清空本地購
+ *  物車；任何失敗（400 購物車為空/優惠碼無效、409 滿班/已報名/點數不足等）一
+ *  律不清空本地購物車、不 hydrate，原樣把錯誤丟給呼叫端處理（顯示 toast）。 */
+export async function placeOrder(
+  coupon: string,
+  usePoints: boolean,
+  idempotencyKey: string = crypto.randomUUID()
+): Promise<ApiOrder> {
+  await syncCartToServer(get(cart));
+  const order = await api<ApiOrder>('/orders', {
+    method: 'POST',
+    body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints }),
+    headers: { 'Idempotency-Key': idempotencyKey }
   });
-  if (result.newSubscriptions.length) subscriptions.update((subs) => {
-    const owned = new Set(subs.map((s) => s.id));
-    // owned 邊濾邊長：即使 newSubscriptions 含同 id 兩筆（不該發生）也只進一筆 → 批次冪等。
-    return [...subs, ...result.newSubscriptions.filter((s) => !owned.has(s.id) && (owned.add(s.id), true))];
-  });
+  // 訂單此時已成立（伺服器已扣款、報名/訂閱已建立、server 端購物車已清空）—
+  // 後續 hydrate 只是 best-effort 的本地同步，用 allSettled 讓其中一支網路
+  // 失敗不會把「已成功的訂單」回報成失敗（呼叫序列仍是先 subscriptions 後
+  // points：陣列字面量會依序同步呼叫兩個 async function 直到各自第一個 await）。
+  const [subsResult, pointsResult] = await Promise.allSettled([refreshSubscriptions(), refreshPoints()]);
+  if (subsResult.status === 'rejected') console.error('Failed to refresh subscriptions after checkout:', subsResult.reason);
+  if (pointsResult.status === 'rejected') console.error('Failed to refresh points after checkout:', pointsResult.reason);
   cart.clear();
+  return order;
+}
+
+/** 訂閱清單 — 從 GET /subscriptions/me 重新 hydrate 本地 subscriptions store。
+ *  只留 status active 的項目：expired/cancelled 不算「已持有」，不該擋掉會員
+ *  重新購買同一張 pass。id 換成 product_id——chargeableLines 是拿 cart item 的
+ *  product/course id 去比對「是否已持有」，不是拿 subscription 自己的 id。 */
+export async function refreshSubscriptions(): Promise<void> {
+  const list = await api<ApiSubscription[]>('/subscriptions/me');
+  subscriptions.set(
+    list
+      .filter((s) => s.status === 'active')
+      .map((s) => ({ id: s.product_id, name: s.product_name, since: s.started_at.slice(0, 10), price: ntd(s.price_cents) }))
+  );
+}
+
+/** 點數餘額 — 從 GET /points/me 重新 hydrate。ledger 明細留給會員中心頁面
+ *  （Task 17）另外接線，這裡只需要 checkout 用得到的餘額數字。 */
+export async function refreshPoints(): Promise<void> {
+  const data = await api<ApiPointsMe>('/points/me');
+  points.set(data.balance);
 }
 
 /* ---- Notifications ---- */

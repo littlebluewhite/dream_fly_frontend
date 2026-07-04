@@ -2,10 +2,18 @@
  *
  * 把 CheckoutDialog.confirmPay 的計算邏輯抽成可單測的純函式。
  * 純 = 只回傳資料；不寫任何 store、不呼叫 new Date()、無副作用。
- * 時鐘由 ctx.today（補零 'YYYY/MM/DD' 字串）注入，確保單一來源。 */
+ * 時鐘由 ctx.today（補零 'YYYY/MM/DD' 字串）注入，確保單一來源。
+ *
+ * Task 16 起：真結帳改走 stores.ts 的 placeOrder（真 API，見該檔案），
+ * commitCheckout/CheckoutResult 不再是 confirmPay 的呼叫路徑，只留給既有測試
+ * 釘住本地結算數學（未來若不再需要可整段移除）；chargeableLines 仍是真結帳
+ * 預覽用的「跳過已持有 pass」過濾邏輯，繼續在用。validateCoupon 是本檔新增的
+ * 真 API 版優惠碼查詢，取代 checkout-math 的本地 lookupCoupon 查表。 */
 
 import { checkoutMath } from '$lib/checkout-math';
 import type { CartItem, LedgerEntry, Subscription } from '$lib/member/data';
+import { api, ApiError } from '$lib/api/client';
+import { ntd } from '$lib/public/adapters';
 
 /* ─── 公開型別 ────────────────────────────────────────────────── */
 
@@ -33,7 +41,8 @@ export interface CheckoutResult {
   hasPass: boolean;
   /** 點數淨變動 = earned − ptRedeem */
   pointDelta: number;
-  /** 去 id（applyOrder 補）；不變量：至多一筆 earn + 一筆 redeem */
+  /** 去 id（原由 applyOrder 補上；該路徑已由 Task 16 的 placeOrder 取代）；
+   *  不變量：至多一筆 earn + 一筆 redeem */
   ledgerEntries: Omit<LedgerEntry, 'id'>[];
   /** 已去重（id 唯一）、since 已蓋 ctx.today */
   newSubscriptions: Subscription[];
@@ -53,8 +62,9 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): CartI
 /* ─── commitCheckout ──────────────────────────────────────────── */
 
 /**
- * 結算 — 鏡像 CheckoutDialog.confirmPay 的所有計算。
- * 不寫 store，不呼叫 new Date()；所有副作用留給 Task 3 的 applyOrder。
+ * 結算 — 鏡像 CheckoutDialog.confirmPay 的所有計算（Task 16 前的本地結帳路徑）。
+ * 不寫 store，不呼叫 new Date()；原本的副作用留給 Task 3 的 applyOrder，該路徑
+ * 已由 Task 16 的 placeOrder（真 API）取代，此函式現無 production 呼叫端。
  *
  * 蓄意變更（vs 原 CheckoutDialog）：
  *  ① ledger date     = ctx.today（原寫死 '2026/06/15'）
@@ -102,4 +112,27 @@ export function commitCheckout(cart: CartItem[], ctx: CheckoutContext): Checkout
   }
 
   return { subtotal, couponOff, ptRedeem, total, earned, hasCourse, hasPass, pointDelta, ledgerEntries, newSubscriptions };
+}
+
+/* ─── validateCoupon — 真實 API 驗證（取代 checkout-math 的 lookupCoupon 查表）── */
+
+export interface CouponValidateResponse {
+  code: string;
+  discount_cents: number;
+}
+
+/**
+ * 呼叫 GET /coupons/{code}/validate（需登入）。後端本身就會 trim + 轉大寫比對
+ * （見 coupons::repository::normalize_code），這裡只 trim，不用再自己轉大寫。
+ * 404（不存在／未啟用／已過期，後端三者不區分）→ null；其餘錯誤（網路、5xx 等）原樣拋出，
+ * 交由呼叫端決定怎麼呈現。discount_cents → NT$ 一律經 ntd()（全前端唯一轉換點）。
+ */
+export async function validateCoupon(code: string): Promise<{ code: string; off: number } | null> {
+  try {
+    const res = await api<CouponValidateResponse>(`/coupons/${encodeURIComponent(code.trim())}/validate`);
+    return { code: res.code, off: ntd(res.discount_cents) };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }

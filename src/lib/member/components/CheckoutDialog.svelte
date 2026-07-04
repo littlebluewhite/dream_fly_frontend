@@ -11,19 +11,46 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, subscriptions, checkoutOpen, toasts, applyOrder } from '$lib/member/stores';
+  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';
-  import { commitCheckout, chargeableLines } from '$lib/member/checkout';
-  import { checkoutMath, lookupCoupon } from '$lib/checkout-math';
+  import { chargeableLines, validateCoupon } from '$lib/member/checkout';
+  import { checkoutMath } from '$lib/checkout-math';
+  import { ApiError } from '$lib/api/client';
+  import { ntd } from '$lib/public/adapters';
 
   let step = 0;
   let code = '';
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
+  let paying = false;
+  // 每次結帳流程（dialog 開啟）產生一次、重試沿用同一把，讓後端能辨識重放而不
+  // 重複扣款/建立報名訂閱（integration-contract.md §1.7）。
+  let idempotencyKey = crypto.randomUUID();
   // Amounts + cart composition snapshotted at payment time so the success step
-  // keeps showing them after the cart is cleared.
-  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false };
+  // keeps showing them after the cart is cleared. Now sourced straight from the
+  // API's OrderResponse, not local math — only the pre-payment preview (m,
+  // below) stays local.
+  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
+
+  // 已知的後端英文錯誤訊息（integration-contract.md §3.10）→ 繁中 toast 文案；
+  // 未命中的錯誤（網路失敗等）落回通用訊息。
+  const ORDER_ERROR_MESSAGES: [string, string][] = [
+    ['cart is empty', '購物車是空的，請先加入商品'],
+    ['invalid coupon', '優惠碼無效，請確認後再試'],
+    ['course is full', '課程已額滿，請改選候補或其他班別'],
+    ['already enrolled', '你已經報名過這堂課程了'],
+    ['insufficient points', '點數不足，請取消使用點數折抵'],
+    ['insufficient stock', '商品庫存不足，請減少數量或移除該項目'],
+    ['duplicate checkout', '訂單處理中，請稍候再試']
+  ];
+  function orderErrorMessage(err: unknown): string {
+    if (err instanceof ApiError) {
+      const hit = ORDER_ERROR_MESSAGES.find(([needle]) => err.message.includes(needle));
+      if (hit) return hit[1];
+    }
+    return '結帳失敗，請稍後再試';
+  }
 
   // Reset state whenever the dialog transitions closed → open.
   let wasOpen = false;
@@ -35,19 +62,27 @@
       coupon = null;
       codeErr = '';
       usePoints = false;
-      paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false };
+      paying = false;
+      idempotencyKey = crypto.randomUUID();
+      paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
     }
     wasOpen = open;
   }
 
   $: items = $cart;
-  // chargeableLines + checkoutMath：顯示與 commit 同源，避免計算漂移。
+  // chargeableLines + checkoutMath：顯示用預覽，與送單前同源，避免計算漂移；
+  // 成交金額改以 API 回應（paid.*）為準，見 confirmPay。
   $: chargeable = chargeableLines($cart, $subscriptions);
   $: m = checkoutMath(chargeable, coupon, $points, usePoints);
 
-  function applyCode() {
+  async function applyCode() {
     if (!code.trim()) return;                    // 保留空守衛：空輸入按「套用」不顯示錯誤（決策 #4）
-    const hit = lookupCoupon(code);              // lookupCoupon 內部已 trim+toUpperCase，回 {code,off}|null
+    let hit: { code: string; off: number } | null;
+    try {
+      hit = await validateCoupon(code);
+    } catch {
+      hit = null; // 網路/未預期錯誤與「查無優惠碼」一視同仁，不另開技術性錯誤文案
+    }
     if (hit) { coupon = hit; codeErr = ''; }
     else { coupon = null; codeErr = '優惠碼無效或已過期'; }
   }
@@ -61,17 +96,33 @@
   // Commit the order when the user confirms payment (step 1 → 2), NOT on the
   // final 完成 button — otherwise closing the success step via X/overlay/Escape
   // would leave the cart and points uncommitted while the UI says 已付款.
-  function confirmPay() {
-    // 本地補零 today（勿用 toISOString=UTC，台灣 UTC+8 近午夜會 off-by-one）；在函式內算，勿 module-scope。
-    const n = new Date();
-    const today = `${n.getFullYear()}/${String(n.getMonth() + 1).padStart(2, '0')}/${String(n.getDate()).padStart(2, '0')}`;
-    const r = commitCheckout($cart, { points: $points, usePoints, coupon, ownedSubs: $subscriptions, today });
-    paid = { total: r.total, earned: r.earned, ptRedeem: r.ptRedeem, hasCourse: r.hasCourse, hasPass: r.hasPass };
-    applyOrder(r);
-    const redeemNote = r.ptRedeem > 0 ? '，使用 ' + r.ptRedeem + ' 點折抵' : '';
-    if (r.hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (r.hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + r.earned + ' 點回饋。');
-    else             toasts.notify('success', '訂閱開通', '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + r.earned + ' 點回饋。');
-    step = 2;
+  // placeOrder 打真實 POST /orders（mock payment：成功即付款完成）；任何失敗
+  // 都不會清空本地購物車，只顯示錯誤 toast，讓使用者可以直接重試（沿用同一把
+  // idempotencyKey，不會重複扣款/建立報名訂閱）。
+  async function confirmPay() {
+    if (paying) return; // 避免連點造成 syncCartToServer 競態
+    paying = true;
+    try {
+      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
+      const hasCourse = order.items.some((i) => i.item_type === 'course');
+      const hasPass = order.items.some((i) => i.item_type === 'product');
+      paid = {
+        total: ntd(order.total_cents),
+        earned: order.points_earned,
+        ptRedeem: order.points_used,
+        hasCourse,
+        hasPass,
+        orderNumber: order.order_number
+      };
+      const redeemNote = paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '';
+      if (hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。');
+      else           toasts.notify('success', '訂閱開通', '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。');
+      step = 2;
+    } catch (err) {
+      toasts.notify('error', '結帳失敗', orderErrorMessage(err));
+    } finally {
+      paying = false;
+    }
   }
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
@@ -161,9 +212,9 @@
             <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
           </div>
         {:else if paid.hasCourse}
-          <SuccessBody title="報名完成！" body={`課程已加入你的日程${paid.hasPass ? '，方案使用權已啟用' : ''}，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數。`} />
+          <SuccessBody title="報名完成！" body={`課程已加入你的日程${paid.hasPass ? '，方案使用權已啟用' : ''}，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數（訂單編號 ${paid.orderNumber}）。`} />
         {:else}
-          <SuccessBody title="訂閱開通！" body={`方案已開通,使用權已啟用,可在帳戶頁查看。本次獲得 ${paid.earned} 點會員點數。`} />
+          <SuccessBody title="訂閱開通！" body={`方案已開通,使用權已啟用,可在帳戶頁查看。本次獲得 ${paid.earned} 點會員點數（訂單編號 ${paid.orderNumber}）。`} />
         {/if}
       </div>
 
@@ -176,8 +227,8 @@
           <Button variant="primary" disabled={items.length === 0} on:click={() => (step = 1)}>前往付款 <Icon name="arrow-right" size={16} /></Button>
         {:else if step === 1}
           <div class="foot-actions">
-            <Button variant="secondary" on:click={() => (step = 0)}>返回</Button>
-            <Button variant="primary" on:click={confirmPay}>確認付款</Button>
+            <Button variant="secondary" disabled={paying} on:click={() => (step = 0)}>返回</Button>
+            <Button variant="primary" disabled={paying} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
           </div>
         {:else}
           <Button variant="primary" on:click={close}>完成</Button>

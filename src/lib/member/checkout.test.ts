@@ -12,9 +12,16 @@
  * 這裡的 id 只是字串字面量，不代表真的 uuid 格式）。
  */
 
-import { describe, it, expect } from 'vitest';
-import { commitCheckout, chargeableLines } from './checkout';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { commitCheckout, chargeableLines, validateCoupon } from './checkout';
 import type { CartItem, CheckoutContext } from './checkout';
+import { api, ApiError } from '$lib/api/client';
+
+// 只替換 api()，ApiError 用回真實類別（validateCoupon 靠 instanceof 判斷 404）。
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 
 /* ─── 輔助 builders ─────────────────────────────────────────────── */
 function makeCourse(id: string, price: number, qty = 1): CartItem {
@@ -193,5 +200,35 @@ describe('chargeableLines', () => {
     expect(result.newSubscriptions).toHaveLength(0); // pass 已持有，不再加訂閱
     expect(result.hasCourse).toBe(true);
     expect(result.hasPass).toBe(false);            // 已持有的 pass 被排除後無 pass 行
+  });
+});
+
+/* ─── validateCoupon（真實 API 版，取代 checkout-math 的 lookupCoupon 查表）─── */
+describe('validateCoupon', () => {
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+  });
+
+  it('有效碼 → 呼叫 GET /coupons/{code}/validate（trim 過），discount_cents 換算 NT$', async () => {
+    vi.mocked(api).mockResolvedValue({ code: 'DREAMFLY100', discount_cents: 10000 });
+
+    const result = await validateCoupon('  dreamfly100  ');
+
+    expect(api).toHaveBeenCalledWith('/coupons/dreamfly100/validate');
+    expect(result).toEqual({ code: 'DREAMFLY100', off: 100 });
+  });
+
+  it('404（不存在／未啟用／已過期）→ null', async () => {
+    vi.mocked(api).mockRejectedValue(new ApiError(404, 'coupon not found'));
+
+    const result = await validateCoupon('NOPE');
+
+    expect(result).toBeNull();
+  });
+
+  it('非 404 錯誤（如網路失敗、5xx）原樣拋出，不吞成 null', async () => {
+    vi.mocked(api).mockRejectedValue(new ApiError(500, 'internal error'));
+
+    await expect(validateCoupon('X')).rejects.toBeInstanceOf(ApiError);
   });
 });
