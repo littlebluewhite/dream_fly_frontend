@@ -174,6 +174,10 @@ export interface Order extends OrderBase {
 	net: number;
 	paidAt: string;
 	taxId: string;
+	// Task 8 piece 2: 真實後端訂單 UUID（PATCH /orders/{id}/status 要用這個，不是
+	// 上面顯示用的 `id`——後者其實是 order_number，見 admin/api.ts 的 mapAdminOrder）。
+	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
+	orderId: string;
 }
 
 export const ORDERS: Order[] = ORDERS_BASE.map((o, i) => {
@@ -184,7 +188,8 @@ export const ORDERS: Order[] = ORDERS_BASE.map((o, i) => {
 		tax,
 		net: o.amount - tax,
 		paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
-		taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—'
+		taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
+		orderId: o.id
 	};
 });
 

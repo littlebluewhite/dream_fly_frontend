@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { ORDERS } from '$lib/admin/data';
-import { search } from '$lib/admin/stores';
+import { search, toasts } from '$lib/admin/stores';
 import { fmtNT } from '$lib/admin/format';
 import { countByStatus, paidRevenue } from '$lib/admin/components/orders-filter';
-import { getOrders } from '$lib/admin/api';
+import { getOrders, updateOrderStatus } from '$lib/admin/api';
+import { ApiError } from '$lib/api/client';
 
-vi.mock('$lib/admin/api', () => ({ getOrders: vi.fn() }));
+vi.mock('$lib/admin/api', () => ({ getOrders: vi.fn(), updateOrderStatus: vi.fn() }));
 
 beforeEach(() => {
 	search.set('');
 	vi.mocked(getOrders).mockReset();
 	vi.mocked(getOrders).mockResolvedValue({ orders: ORDERS });
+	vi.mocked(updateOrderStatus).mockReset();
 });
 
 /* 訂單與金流 page — PageHead + four summary StatCards (本月已收/待付款/本月訂單/退款)
@@ -52,6 +55,52 @@ describe('orders +page', () => {
 		// at least one order status badge label is present
 		const badges = [...container.querySelectorAll('.badge')].map((b) => b.textContent?.trim());
 		expect(badges.some((b) => b === '已付款' || b === '待付款' || b === '已退款')).toBe(true);
+	});
+});
+
+describe('orders +page — 變更狀態接真 API（Task 8 piece 2：PATCH /orders/{id}/status）', () => {
+	it('點開一筆 paid 訂單、選「已退款」並套用 → 呼叫 updateOrderStatus(真實 orderId, next)，成功後 KPI/表格反映新狀態', async () => {
+		const target = ORDERS.find((o) => o.status === 'paid')!;
+		const initial = countByStatus(ORDERS);
+		vi.mocked(updateOrderStatus).mockResolvedValue({
+			id: target.orderId,
+			order_number: target.id,
+			status: 'refunded'
+		});
+
+		const { getByText, getByLabelText, findByText, container } = render(Page);
+		await findByText(target.id);
+		await fireEvent.click(getByText(target.id));
+		await fireEvent.change(getByLabelText('變更狀態為'), { target: { value: 'refunded' } });
+		await fireEvent.click(getByText('套用'));
+
+		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalledTimes(1));
+		expect(updateOrderStatus).toHaveBeenCalledWith(target.orderId, 'refunded'); // 真實 uuid，不是顯示用 id
+
+		await vi.waitFor(() => {
+			expect(container.textContent).toContain(initial.refunded + 1 + ' 筆'); // 退款 KPI +1
+		});
+	});
+
+	it('狀態更新失敗（400 非法轉換）→ 顯示繁中錯誤 toast，KPI 維持原值（未套用任何本地變更）', async () => {
+		const target = ORDERS.find((o) => o.status === 'paid')!;
+		vi.mocked(updateOrderStatus).mockRejectedValue(new ApiError(400, 'illegal status transition'));
+		const before = get(toasts).length;
+		const initial = countByStatus(ORDERS);
+
+		const { getByText, findByText, container } = render(Page);
+		await findByText(target.id);
+		await fireEvent.click(getByText(target.id));
+		await fireEvent.click(getByText('套用')); // 預設選項（第一個合法下一狀態）
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toContain('不合法');
+
+		// 失敗時 catch 分支不套用任何本地變更，本月訂單總數（不受狀態變更影響的基準值）
+		// 與待付款筆數（跟這筆 paid→refunded 嘗試無關）皆維持原值。
+		expect(container.textContent).toContain(initial.all + ' 筆');
+		expect(container.textContent).toContain(initial.pending + ' 筆');
 	});
 });
 

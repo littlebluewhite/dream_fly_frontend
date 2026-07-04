@@ -14,7 +14,8 @@ import {
 	getCoaches,
 	getMembers,
 	createCourse,
-	updateCourse
+	updateCourse,
+	updateOrderStatus
 } from './api';
 import { api } from '$lib/api/client';
 import { mapMemberAccount } from './data';
@@ -185,7 +186,8 @@ describe('getOrders — GET /orders（admin）', () => {
 		expect(d.orders.map((o) => o.status)).toEqual(['pending', 'paid', 'processing', 'completed', 'cancelled', 'refunded']);
 
 		const first = d.orders[0];
-		expect(first.id).toBe('DF-1');
+		expect(first.id).toBe('DF-1'); // 顯示用 id = order_number
+		expect(first.orderId).toBe('1'); // 真實後端 UUID = o.id（Task 8 piece 2 PATCH 用這個）
 		expect(first.member).toBe('王小明');
 		expect(first.initial).toBe('王');
 		expect(first.amount).toBe(4800); // ntd(480000)
@@ -244,6 +246,28 @@ describe('getOrders — GET /orders（admin）', () => {
 		expect(d.orders[0].item).toBe('訂單 DF-1'); // 0 項 → fallback
 		expect(d.orders[1].item).toBe('體操基礎班'); // 1 項 → 該項名稱
 		expect(d.orders[2].item).toBe('體操基礎班 外 2 項'); // 3 項 → 第一項 外 2 項
+	});
+});
+
+describe('updateOrderStatus — PATCH /orders/{id}/status（admin，Task 8 piece 2）', () => {
+	it('PATCHes /orders/{real uuid}/status with { status } and returns the response', async () => {
+		const response = { id: 'uuid-1', order_number: 'DF-1', status: 'processing' };
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /orders/uuid-1/status': response }));
+
+		const result = await updateOrderStatus('uuid-1', 'processing');
+
+		expect(api).toHaveBeenCalledWith('/orders/uuid-1/status', {
+			method: 'PATCH',
+			body: JSON.stringify({ status: 'processing' })
+		});
+		expect(result).toEqual(response);
+	});
+
+	it('propagates a rejected request (e.g. 400 illegal transition) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /orders/uuid-1/status': new Error('illegal transition') })
+		);
+		await expect(updateOrderStatus('uuid-1', 'paid')).rejects.toThrow('illegal transition');
 	});
 });
 

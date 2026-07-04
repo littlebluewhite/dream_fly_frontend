@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { ORDERS } from '$lib/admin/data';
 import type { Order, OrderStatus } from '$lib/admin/data';
-import { filterOrders, countByStatus, paidRevenue, applyMarkPaid } from './orders-filter';
+import {
+	filterOrders,
+	countByStatus,
+	paidRevenue,
+	applyMarkPaid,
+	legalNextStatuses,
+	applyStatusChange
+} from './orders-filter';
 
 /* Task 6 (FE#9): the ORDERS seed only carries paid/pending/refunded rows, so a
  * small hand-built fixture (one row per status) is needed to exercise
@@ -25,7 +32,8 @@ function makeOrder(status: OrderStatus, id: string): Order {
 		tax: 48,
 		net: 952,
 		paidAt: status === 'pending' ? '—（待付款）' : '06/01 00:00',
-		taxId: '—'
+		taxId: '—',
+		orderId: 'uuid-' + id
 	};
 }
 
@@ -192,5 +200,60 @@ describe('applyMarkPaid — KPI/table consistency after 標記已付款', () => 
 		expect(o.paidAt).toBe('—（待付款）'); // pending shows the placeholder
 		const out = applyMarkPaid(ORDERS, o.id);
 		expect(out.find((x) => x.id === o.id)!.paidAt).toBe(o.date);
+	});
+});
+
+/* Task 8 piece 2: 契約 §3.10 的訂單狀態機 —— PATCH /orders/{id}/status 非法轉換回
+ * 400，UI 應只提供合法的下一狀態，讓 admin 不會踩到。 */
+describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', () => {
+	it('pending → paid | cancelled', () => {
+		expect(legalNextStatuses('pending')).toEqual(['paid', 'cancelled']);
+	});
+
+	it('paid → processing | refunded | cancelled', () => {
+		expect(legalNextStatuses('paid')).toEqual(['processing', 'refunded', 'cancelled']);
+	});
+
+	it('processing → completed | refunded', () => {
+		expect(legalNextStatuses('processing')).toEqual(['completed', 'refunded']);
+	});
+
+	it('completed → refunded only', () => {
+		expect(legalNextStatuses('completed')).toEqual(['refunded']);
+	});
+
+	it('cancelled/refunded are terminal (no legal next state to offer in the UI)', () => {
+		expect(legalNextStatuses('cancelled')).toEqual([]);
+		expect(legalNextStatuses('refunded')).toEqual([]);
+	});
+});
+
+describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地working copy', () => {
+	const rows: Order[] = [
+		makeOrder('paid', 'DF-1'),
+		makeOrder('pending', 'DF-2')
+	];
+
+	it('matches by orderId (真實後端 UUID)，不是顯示用的 id (order_number)', () => {
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
+		expect(out.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('processing');
+		expect(out.find((o) => o.orderId === 'uuid-DF-2')!.status).toBe('pending'); // 其餘不動
+	});
+
+	it('never mutates the input array', () => {
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
+		expect(out).not.toBe(rows);
+		expect(rows.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('paid');
+	});
+
+	it('sets paidAt to the order date for any non-pending target status (mirrors mapAdminOrder)', () => {
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'refunded');
+		const o = out.find((x) => x.orderId === 'uuid-DF-1')!;
+		expect(o.paidAt).toBe(o.date);
+	});
+
+	it('is a no-op for an unknown orderId', () => {
+		const out = applyStatusChange(rows, '___nope___', 'refunded');
+		expect(out.map((o) => o.status)).toEqual(rows.map((o) => o.status));
 	});
 });

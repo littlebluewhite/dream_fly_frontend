@@ -149,12 +149,15 @@ interface ApiAdminOrderListResponse {
  *  mapOrder 共用同一份措辭)；tax/net 由 amount 反推 5% 內含稅(沿用既有 data.ts
  *  ORDERS 的算法，非後端資料)；status 直接沿用後端 6 態原值(pending/paid/
  *  processing/completed/cancelled/refunded)，中文標籤由 ORDER_STATUS 查表
- *  (已於 data.ts 擴充至 6 態)。 */
+ *  (已於 data.ts 擴充至 6 態)。orderId 是真實後端 UUID（`o.id`）——Task 8 piece 2
+ *  的 PATCH /orders/{id}/status 要用這個，`id` 欄位其實是 order_number（顯示用，
+ *  維持既有 UI 不變)。 */
 function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 	const amount = ntd(o.total_cents);
 	const tax = Math.round(amount - amount / 1.05);
 	return {
 		id: o.order_number,
+		orderId: o.id,
 		member: o.user_name,
 		initial: o.user_name.charAt(0) || '?',
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
@@ -181,6 +184,24 @@ export const getOrders = (): Promise<OrdersData> =>
 	api<ApiAdminOrderListResponse>('/orders?per_page=100').then((r) => ({
 		orders: r.orders.map(mapAdminOrder)
 	}));
+
+/* ── 訂單狀態變更（PATCH /orders/{id}/status，admin-only，Task 8 piece 2） ──
+ * `id` here MUST be the real backend UUID (Order.orderId — see admin/data.ts),
+ * not the display order_number (Order.id). Response is the FULL OrderResponse
+ * (契約 §3.10）——不同於清單用的 AdminOrderSummary（缺 user_name/user_email，items
+ * 也沒有 name），呼叫端只取其中的 status 套回本地working copy（orders-filter.ts 的
+ * applyStatusChange），不整包重新映射。 */
+export interface ApiOrderStatusResponse {
+	id: string;
+	order_number: string;
+	status: string;
+}
+
+export const updateOrderStatus = (id: string, status: OrderStatus): Promise<ApiOrderStatusResponse> =>
+	api<ApiOrderStatusResponse>(`/orders/${id}/status`, {
+		method: 'PATCH',
+		body: JSON.stringify({ status })
+	});
 
 /* ═════════════════════════ 報表分析（P2：無對應後端彙總端點，整包沿用 mock） ═════════════════════════ */
 

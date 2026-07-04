@@ -58,6 +58,42 @@ export function applyMarkPaid(rows: Order[], id: string): Order[] {
 	return rows.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: o.date } : o));
 }
 
+/* ───────────────────────── Task 8 piece 2: 訂單狀態變更（PATCH /orders/{id}/status） ─────────────────────────
+ * applyMarkPaid（above）is UNTOUCHED — kept for any purely-local preview. The two
+ * functions below are the general, real-API-backed replacement: the UI only
+ * offers legalNextStatuses()'s options (so a 400 illegal-transition can't be hit
+ * by design), and applyStatusChange() folds the PATCH response's new status into
+ * the working copy once the call succeeds (persisted truth comes from the API). */
+
+/** 契約 §3.10 訂單狀態機：目前狀態 → 合法的下一狀態清單（不含同狀態幂等）。
+ * cancelled/refunded 無合法的下一狀態（終態），回傳空陣列。 */
+const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
+	pending: ['paid', 'cancelled'],
+	paid: ['processing', 'refunded', 'cancelled'],
+	processing: ['completed', 'refunded'],
+	completed: ['refunded'],
+	cancelled: [],
+	refunded: []
+};
+
+export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
+	return LEGAL_NEXT[current];
+}
+
+/**
+ * Fold a successful PATCH /orders/{id}/status response into the working copy.
+ * Matches by `orderId` (the real backend UUID — `id` above is actually the
+ * display order_number, see admin/api.ts's mapAdminOrder). paidAt mirrors the
+ * same rule mapAdminOrder already applies on read (pending → placeholder, any
+ * other status → the order's date), so the row stays consistent with what a
+ * fresh getOrders() would show. Returns a NEW array; the input is never mutated.
+ */
+export function applyStatusChange(rows: Order[], orderId: string, status: OrderStatus): Order[] {
+	return rows.map((o) =>
+		o.orderId === orderId ? { ...o, status, paidAt: status === 'pending' ? '—（待付款）' : o.date } : o
+	);
+}
+
 /**
  * Filter the order rows. Order mirrors the source: status tab → search term.
  * Returns a new array; the input is never mutated.

@@ -1,21 +1,46 @@
 <script lang="ts">
-  /* 訂單明細 — read-only order detail modal. Faithful port of admin.jsx
-   * OrderDialog: a centered 訂單金額 (large) + status badge, then a 2-col field
-   * grid covering 訂單編號/學員/項目/所屬分校/優惠/付款方式/收款時間/未稅金額/營業稅 5%/
-   * 發票號碼/統一編號/經手人/建立時間, plus 退款原因 when the order is refunded.
-   * Built on the shared Dialog (matches the source's ADialog). A pending order
-   * gets a 標記已付款 primary + 發送催繳 secondary; otherwise just 關閉. Both
-   * actions are surfaced as callbacks the page wires to toasts — the dialog
-   * itself never mutates the order. */
-  import { Dialog } from '$lib/components/ui';
+  /* 訂單明細 — order detail modal. Faithful port of admin.jsx OrderDialog: a
+   * centered 訂單金額 (large) + status badge, then a 2-col field grid covering
+   * 訂單編號/學員/項目/所屬分校/優惠/付款方式/收款時間/未稅金額/營業稅 5%/發票號碼/統一編號/
+   * 經手人/建立時間, plus 退款原因 when the order is refunded. Built on the shared
+   * Dialog (matches the source's ADialog). Footer is always 關閉 + (pending-only)
+   * 發送催繳 — 發送催繳 stays a page-level toast only (no backend endpoint, out of
+   * this task's scope).
+   *
+   * Task 8 piece 2: the old hardcoded "pending → 標記已付款" primary action is
+   * replaced with a general 變更狀態 control in the body — a Select offering ONLY
+   * legalNextStatuses(order.status) (契約 §3.10 狀態機), so the admin can never
+   * pick an illegal transition, plus a 套用 button that calls onChangeStatus(order,
+   * next). Terminal statuses (cancelled/refunded) have no legal next state, so the
+   * control simply doesn't render. The dialog never mutates the order itself —
+   * both actions are callbacks the page wires to the real PATCH call. */
+  import { Dialog, Select, Button } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
   import { fmtNT } from '$lib/admin/format';
-  import type { Order } from '$lib/admin/data';
+  import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
+  import { legalNextStatuses } from './orders-filter';
 
   export let order: Order | null = null;
   export let onClose: () => void = () => {};
-  export let onMarkPaid: (o: Order) => void = () => {};
+  export let onChangeStatus: (o: Order, next: OrderStatus) => void = () => {};
   export let onRemind: (o: Order) => void = () => {};
+
+  $: legalNext = order ? legalNextStatuses(order.status) : [];
+  $: nextOptions = legalNext.map((s) => ({ value: s, label: ORDER_STATUS[s][1] }));
+
+  // Reset the chosen next-status whenever a different order opens (mirrors the
+  // lastKlass/syncedId reset pattern elsewhere in this codebase).
+  let nextStatus: OrderStatus | '' = '';
+  let lastOrderId: string | null = null;
+  $: if (order && order.orderId !== lastOrderId) {
+    lastOrderId = order.orderId;
+    nextStatus = legalNext[0] ?? '';
+  }
+  $: if (!order) lastOrderId = null;
+
+  function applyChange() {
+    if (order && nextStatus) onChangeStatus(order, nextStatus);
+  }
 
   // [label, value, mono?] field grid — mirrors the source row list order.
   $: rows = order
@@ -43,9 +68,7 @@
   title="訂單明細"
   width={460}
   {onClose}
-  primaryAction={order && order.status === 'pending'
-    ? { label: '標記已付款', onClick: () => onMarkPaid(order) }
-    : { label: '關閉', onClick: onClose }}
+  primaryAction={{ label: '關閉', onClick: onClose }}
   secondaryAction={order && order.status === 'pending'
     ? { label: '發送催繳', onClick: () => onRemind(order) }
     : null}
@@ -60,6 +83,13 @@
       </div>
       <StatusBadge kind="order" value={order.status} />
     </div>
+
+    {#if legalNext.length > 0}
+      <div class="status-change">
+        <Select label="變更狀態為" bind:value={nextStatus} options={nextOptions} style="flex:1" />
+        <Button variant="primary" size="sm" on:click={applyChange}>套用</Button>
+      </div>
+    {/if}
 
     <div
       style="display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;border-top:1px solid var(--df-border);padding-top:16px"
@@ -77,3 +107,12 @@
     </div>
   {/if}
 </Dialog>
+
+<style>
+  .status-change {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding-bottom: 16px;
+  }
+</style>

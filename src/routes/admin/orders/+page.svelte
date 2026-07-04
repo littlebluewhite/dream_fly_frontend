@@ -4,24 +4,34 @@
    * 退款), then the orders table. Filtering + the detail dialog live in
    * OrdersTable; the summary numbers derive from the same orders working copy.
    *
-   * Data now arrives async via getOrders() (mock-API seam): onMount loads it
-   * into a three-state gate (loading/error/ready); `orders` is the local
-   * mutable working copy 標記已付款 edits in place. */
+   * Data arrives async via getOrders() (admin seam): onMount loads it into a
+   * three-state gate (loading/error/ready); `orders` is the local mutable
+   * working copy.
+   *
+   * Task 8 piece 2: 變更狀態 now calls the real PATCH /orders/{id}/status
+   * (updateOrderStatus) instead of only flipping status locally. OrderDialog only
+   * offers legalNextStatuses(order.status), so a 400 illegal-transition shouldn't
+   * be reachable by design — the catch branch below is a defensive fallback
+   * (e.g. a concurrent change on the backend) with a 繁中 error toast; on success
+   * applyStatusChange() folds the response's new status into the working copy,
+   * so the KPIs + table stay consistent with the persisted truth. applyMarkPaid
+   * stays available/tested as-is for any purely-local preview. */
   import { onMount } from 'svelte';
   import { Button, Card, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
-  import type { Order } from '$lib/admin/data';
+  import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
   import { fmtNT } from '$lib/admin/format';
-  import { countByStatus, paidRevenue, applyMarkPaid } from '$lib/admin/components/orders-filter';
-  import { getOrders } from '$lib/admin/api';
+  import { countByStatus, paidRevenue, applyStatusChange } from '$lib/admin/components/orders-filter';
+  import { getOrders, updateOrderStatus } from '$lib/admin/api';
+  import { ApiError } from '$lib/api/client';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
 
   // Single source of truth for the orders surface: both the summary KPIs and the
-  // table derive from this mutable copy, so 標記已付款 keeps the StatCards in sync
+  // table derive from this mutable copy, so 變更狀態 keeps the StatCards in sync
   // with the table (instead of the stats staying frozen on the original fixture).
   let orders: Order[] = [];
   $: counts = countByStatus(orders);
@@ -35,9 +45,25 @@
   }
   onMount(load);
 
-  function markPaid(o: Order) {
-    orders = applyMarkPaid(orders, o.id);
-    toasts.notify('success', '已標記收款', o.id + ' · ' + fmtNT(o.amount) + ' 已入帳。');
+  // 400（非法轉換，理論上不會發生——OrderDialog 只提供合法選項）/ 403 權限 →
+  // 對應繁中提示；其餘（連線問題等）給通用訊息，同 classes 頁的 ApiError 判斷慣例。
+  function statusErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 400) return '狀態轉換不合法，請重新整理後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function changeStatus(o: Order, next: OrderStatus) {
+    try {
+      const res = await updateOrderStatus(o.orderId, next);
+      const newStatus = res.status as OrderStatus;
+      orders = applyStatusChange(orders, o.orderId, newStatus);
+      toasts.notify('success', '狀態已更新', o.id + ' 已更新為「' + ORDER_STATUS[newStatus][1] + '」。');
+    } catch (e) {
+      toasts.notify('error', '狀態更新失敗', statusErrorMessage(e));
+    }
   }
   function remind(o: Order) {
     toasts.notify('info', '已發送催繳', o.member + ' 將收到繳費提醒。');
@@ -87,7 +113,7 @@
     />
   </div>
 
-  <OrdersTable rows={orders} onMarkPaid={markPaid} onRemind={remind} />
+  <OrdersTable rows={orders} onChangeStatus={changeStatus} onRemind={remind} />
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}

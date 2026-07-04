@@ -4,8 +4,9 @@
    * ORDER_STATUS 查表，不另建第二份對照) over a table: 訂單編號 / 學員 (avatar+name) /
    * 項目 / 優惠 / 金額 (right, mono) / 付款方式 / 經手人 / 狀態 (order StatusBadge) / 時間.
    * Filtering lives in the pure filterOrders() (orders-filter.ts); the topbar
-   * `search` store feeds the query. A row click opens the read-only OrderDialog;
-   * 標記已付款 updates the local working copy + toast, 發送催繳 toasts only. */
+   * `search` store feeds the query. A row click opens the OrderDialog; 變更狀態
+   * (Task 8 piece 2: legalNextStatuses-driven, real PATCH /orders/{id}/status via
+   * the page) and 發送催繳 (toast only) are both forwarded up unchanged. */
   import { Avatar, Card, Tabs } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
   import OrderDialog from './OrderDialog.svelte';
@@ -17,7 +18,7 @@
   // The orders page owns the mutable order state (so the summary KPIs and this
   // table stay in sync); we render straight from `rows` and report actions up.
   export let rows: Order[] = ORDERS;
-  export let onMarkPaid: (o: Order) => void = () => {};
+  export let onChangeStatus: (o: Order, next: OrderStatus) => void = () => {};
   export let onRemind: (o: Order) => void = () => {};
 
   let tab: OrderStatusFilter = 'all';
@@ -42,9 +43,9 @@
 
   $: visible = filterOrders(rows, { query: $search, status: tab });
 
-  function handleMarkPaid(o: Order) {
+  function handleChangeStatus(o: Order, next: OrderStatus) {
     active = null;
-    onMarkPaid(o);
+    onChangeStatus(o, next);
   }
 
   function handleRemind(o: Order) {
@@ -107,7 +108,7 @@
 <OrderDialog
   order={active}
   onClose={() => (active = null)}
-  onMarkPaid={handleMarkPaid}
+  onChangeStatus={handleChangeStatus}
   onRemind={handleRemind}
 />
 

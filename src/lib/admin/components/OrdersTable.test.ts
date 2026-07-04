@@ -26,7 +26,8 @@ const paid: Order = {
 	tax: 229,
 	net: 4571,
 	paidAt: '06/08 14:22',
-	taxId: '53901240'
+	taxId: '53901240',
+	orderId: 'uuid-DF-90001'
 };
 const pending: Order = {
 	id: 'DF-90002',
@@ -45,7 +46,8 @@ const pending: Order = {
 	tax: 152,
 	net: 3048,
 	paidAt: '—（待付款）',
-	taxId: '—'
+	taxId: '—',
+	orderId: 'uuid-DF-90002'
 };
 // Task 6 (FE#9): fixtures for the 3 statuses the tab set didn't cover before
 // this task (處理中/已完成/已取消), plus 已退款 which existed in orders-filter but
@@ -67,7 +69,8 @@ const processing: Order = {
 	tax: 171,
 	net: 3429,
 	paidAt: '06/09 09:00',
-	taxId: '—'
+	taxId: '—',
+	orderId: 'uuid-DF-90003'
 };
 const completed: Order = {
 	id: 'DF-90004',
@@ -86,7 +89,8 @@ const completed: Order = {
 	tax: 295,
 	net: 5905,
 	paidAt: '06/10 10:00',
-	taxId: '—'
+	taxId: '—',
+	orderId: 'uuid-DF-90004'
 };
 const cancelled: Order = {
 	id: 'DF-90005',
@@ -105,7 +109,8 @@ const cancelled: Order = {
 	tax: 152,
 	net: 3048,
 	paidAt: '06/11 11:00',
-	taxId: '—'
+	taxId: '—',
+	orderId: 'uuid-DF-90005'
 };
 const refunded: Order = {
 	id: 'DF-90006',
@@ -124,7 +129,8 @@ const refunded: Order = {
 	tax: 29,
 	net: 571,
 	paidAt: '06/12 12:00',
-	taxId: '—'
+	taxId: '—',
+	orderId: 'uuid-DF-90006'
 };
 
 beforeEach(() => search.set(''));
