@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
-import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart } from '$lib/member/stores';
 import { courseToCartItem, passToCartItem } from '$lib/member/data';
@@ -63,21 +62,27 @@ afterEach(() => {
 });
 
 describe('購物車頁 — reads the member cart', () => {
-	it('plus on a course is a no-op (enrolment locked at qty 1), minus-at-1 removes', async () => {
+	// FE#13 item 1 (round 3): the +/- stepper on a course line was a dead
+	// control — cart.updateQty is a no-op for type==='course' (courses are
+	// enrolments, not quantities), so clicking + never did anything. Mirrors
+	// the CartDropdown.svelte fix: the stepper is removed for course lines
+	// entirely; 移除 keeps working.
+	it('hides the +/- stepper for a course line (dead control removed) — 移除 still works', () => {
 		cart.addItem(courseToCartItem(COURSE));
-		const { getByLabelText } = render(Page);
-		await fireEvent.click(getByLabelText('增加數量'));
-		expect(get(cart).find((i) => i.id === 'course-uuid-1')!.qty).toBe(1); // 課程數量鎖 1
-		await fireEvent.click(getByLabelText('減少數量'));
-		expect(get(cart)).toHaveLength(0);
+		const { queryByLabelText, getByText } = render(Page);
+		expect(getByText('幼兒體操')).toBeInTheDocument();
+		expect(queryByLabelText('增加數量')).toBeNull();
+		expect(queryByLabelText('減少數量')).toBeNull();
+		expect(getByText('移除')).toBeInTheDocument();
 	});
 
-	it('hides the +/- stepper for a pass (locked qty 1)', () => {
+	it('hides the +/- stepper for a pass (locked qty 1) — 移除 still works', () => {
 		cart.addItem(passToCartItem(PASS));
 		const { queryByLabelText, getByText } = render(Page);
 		expect(getByText('月票')).toBeInTheDocument();
 		expect(queryByLabelText('增加數量')).toBeNull();
 		expect(queryByLabelText('減少數量')).toBeNull();
+		expect(getByText('移除')).toBeInTheDocument();
 	});
 });
 

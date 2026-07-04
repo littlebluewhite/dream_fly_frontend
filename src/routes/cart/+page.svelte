@@ -9,19 +9,6 @@
 
   $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  function increaseQuantity(item: CartItem) {
-    cart.updateQty(item.id, +1);
-  }
-
-  function decreaseQuantity(item: CartItem) {
-    if (item.qty === 1) {
-      cart.remove(item.id);
-      toasts.notify('info', '已從購物車移除項目');
-    } else {
-      cart.updateQty(item.id, -1);
-    }
-  }
-
   function removeItem(item: CartItem) {
     cart.remove(item.id);
     toasts.notify('success', `已移除 ${item.name}`);
@@ -103,26 +90,6 @@
                           小計：NT$ {(item.price * item.qty).toLocaleString()}
                         </p>
                       </div>
-
-                      {#if item.type !== 'pass'}
-                        <div class="quantity-control">
-                          <button
-                            class="qty-btn"
-                            on:click={() => decreaseQuantity(item)}
-                            aria-label="減少數量"
-                          >
-                            -
-                          </button>
-                          <span class="quantity">{item.qty}</span>
-                          <button
-                            class="qty-btn"
-                            on:click={() => increaseQuantity(item)}
-                            aria-label="增加數量"
-                          >
-                            +
-                          </button>
-                        </div>
-                      {/if}
 
                       <button class="remove-btn" on:click={() => removeItem(item)}>
                         移除
@@ -326,42 +293,6 @@
     margin: 0;
     color: var(--df-primary);
     font-weight: 700;
-    font-size: 1.1rem;
-  }
-
-  .quantity-control {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    background-color: var(--df-bg-light);
-    border-radius: var(--df-radius-md);
-    padding: 0.5rem;
-  }
-
-  .qty-btn {
-    background-color: var(--df-white);
-    border: 1px solid var(--df-border-strong);
-    width: 32px;
-    height: 32px;
-    border-radius: var(--df-radius-md);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    color: var(--df-primary);
-    transition: all var(--transition-fast);
-  }
-
-  .qty-btn:hover {
-    background-color: var(--df-primary);
-    color: var(--df-white);
-  }
-
-  .quantity {
-    min-width: 32px;
-    text-align: center;
-    font-weight: 600;
     font-size: 1.1rem;
   }
 
