@@ -9,14 +9,25 @@
    *
    * 訊息中心 gets slightly reduced content padding (20px 26px vs 26px,
    * app.jsx:58,65) so its fixed-height 3-column card fits. */
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
-  import { afterNavigate } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import Sidebar from '$lib/coach/components/Sidebar.svelte';
   import Topbar from '$lib/coach/components/Topbar.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { resolve } from '$lib/coach/nav';
   import { search, toasts } from '$lib/coach/stores';
+  import { authStore } from '$lib/stores/authStore';
+  import { staffGuardTarget } from '$lib/staff/roles';
   import '$lib/coach/coach.css';
+
+  // Guard: not logged in → /staff/login; logged in but missing the coach
+  // portal role → /staff/login?blocked=1 (shows 此帳號無後台權限 there).
+  // Reactive (not "once"), so a session that expires mid-visit is caught too.
+  $: if (browser) {
+    const guardTarget = staffGuardTarget('coach', $authStore.loggedIn, $authStore.roles);
+    if (guardTarget) goto(guardTarget);
+  }
 
   let content: HTMLElement;
   $: [crumb, title] = resolve($page.url.pathname);
