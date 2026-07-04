@@ -26,6 +26,13 @@ function noContentResponse() {
   };
 }
 
+/** A minimal fake LockManager whose request() just awaits a tick and runs the
+ *  callback — enough to exercise the "locks are available" branch without
+ *  actually serializing anything. */
+function passthroughLocks() {
+  return { request: vi.fn((_name: string, callback: () => Promise<boolean>) => Promise.resolve().then(callback)) };
+}
+
 beforeEach(() => {
   clearTokens();
   localStorage.clear();
@@ -275,5 +282,111 @@ describe('refreshTokens()', () => {
 
     await expect(refreshTokens()).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
+  it('falls back to the current direct-refresh behavior when navigator.locks is unavailable', async () => {
+    setTokens('expired-access', 'refresh-good');
+    vi.stubGlobal('navigator', {}); // no .locks — older browsers, and jsdom's default in this test env
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getAccess()).toBe('new-access');
+    expect(getRefresh()).toBe('new-refresh');
+  });
+
+  it('with locks available but no contention, a genuinely expired token still refreshes normally', async () => {
+    setTokens('expired-access', 'refresh-good');
+    vi.stubGlobal('navigator', { locks: passthroughLocks() });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getAccess()).toBe('new-access');
+    expect(getRefresh()).toBe('new-refresh');
+  });
+
+  it('in-lock re-read: a token already rotated by another tab is accepted without a second fetch', async () => {
+    setTokens('expired-access', 'refresh-original');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: vi.fn(async (_name: string, callback: () => Promise<boolean>) => {
+          // Simulate another tab completing its own refresh while this tab waited for the lock.
+          setTokens('leader-access', 'refresh-rotated-by-leader');
+          return callback();
+        })
+      }
+    });
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getRefresh()).toBe('refresh-rotated-by-leader');
+  });
+
+  it('a genuine refresh failure inside the lock still clears tokens and returns false', async () => {
+    setTokens('expired-access', 'refresh-bad');
+    vi.stubGlobal('navigator', { locks: passthroughLocks() });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: 'invalid refresh token' }, 401, 'Unauthorized'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getAccess()).toBeNull();
+    expect(getRefresh()).toBeNull();
+  });
+
+  it('two tabs racing a refresh: exactly one POST /auth/refresh; the follower detects the rotation and also resolves true', async () => {
+    setTokens('expired-access', 'refresh-shared');
+
+    // A minimal fake LockManager that actually serializes callers, like a real mutex:
+    // the second request()'s callback only starts once the first one's has settled.
+    let queue: Promise<unknown> = Promise.resolve();
+    const request = vi.fn((_name: string, callback: () => Promise<boolean>) => {
+      const turn = queue.then(() => callback());
+      queue = turn.catch(() => undefined);
+      return turn;
+    });
+    vi.stubGlobal('navigator', { locks: { request } });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ access_token: 'leader-access', refresh_token: 'refresh-rotated' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Two separate module instances stand in for two separate browser tabs: each
+    // gets its own top-level `inFlightRefresh` closure, but both share the same
+    // real localStorage and the same (stubbed) browser-wide navigator.locks.
+    vi.resetModules();
+    const tabA = await import('./client');
+    vi.resetModules();
+    const tabB = await import('./client');
+
+    const [resultA, resultB] = await Promise.all([tabA.refreshTokens(), tabB.refreshTokens()]);
+
+    expect(resultA).toBe(true);
+    expect(resultB).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[0][0]).toBe('dreamfly-refresh');
   });
 });

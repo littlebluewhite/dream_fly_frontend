@@ -5,7 +5,11 @@
  * the token pair once and retries the original request. Concurrent 401s share
  * a single in-flight refresh: per docs/api/integration-contract.md §1.2, the
  * backend treats a replayed/reused refresh token as credential theft and
- * revokes the whole token family, so at most one refresh may ever be in flight. */
+ * revokes the whole token family, so at most one refresh may ever be in
+ * flight per tab (module-level promise) — and, since the refresh token itself
+ * is shared across tabs via localStorage, at most one across the whole
+ * browser too, via the Web Locks API where available (see
+ * performRefreshExclusive below). */
 
 import { getAccess, setTokens, getRefresh, clearTokens } from './tokens';
 
@@ -78,15 +82,45 @@ export async function api<T>(path: string, init: RequestInit & { auth?: boolean 
 
 let inFlightRefresh: Promise<boolean> | null = null;
 
+const REFRESH_LOCK_NAME = 'dreamfly-refresh';
+
 /** POST /auth/refresh with the stored refresh token; rotates the pair on success.
- *  Single-flight: concurrent callers share the one in-flight request. */
+ *  Single-flight: concurrent callers *in this tab* share the one in-flight request. */
 export async function refreshTokens(): Promise<boolean> {
   if (!inFlightRefresh) {
-    inFlightRefresh = performRefresh().finally(() => {
+    inFlightRefresh = performRefreshExclusive().finally(() => {
       inFlightRefresh = null;
     });
   }
   return inFlightRefresh;
+}
+
+/** Cross-tab exclusive wrapper around performRefresh(). The refresh token is
+ *  shared across tabs (localStorage), so two tabs whose access token expires
+ *  at the same moment must not both replay it — the backend treats a
+ *  replayed refresh token as theft and revokes the whole family (see module
+ *  docstring). Where the Web Locks API is available, only one tab across the
+ *  whole browser runs a refresh at a time; a tab that had to wait re-reads
+ *  the stored refresh token once inside the lock, and if it no longer
+ *  matches what this tab saw before requesting the lock, some other tab
+ *  already rotated it while this one waited — so this tab is already
+ *  refreshed and returns true without a second network round trip. Browsers
+ *  without navigator.locks (and jsdom in tests) fall back to the direct
+ *  call, unchanged from before this cross-tab layer existed. */
+async function performRefreshExclusive(): Promise<boolean> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) {
+    return performRefresh();
+  }
+
+  const before = getRefresh();
+  return locks.request(REFRESH_LOCK_NAME, async () => {
+    const current = getRefresh();
+    if (current && current !== before) {
+      return true;
+    }
+    return performRefresh();
+  });
 }
 
 async function performRefresh(): Promise<boolean> {
