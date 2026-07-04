@@ -7,7 +7,10 @@ export interface OrderBase {
 	color: string;
 	item: string;
 	amount: number;
-	status: 'paid' | 'pending' | 'refunded';
+	// Task 18: widened from 'paid'|'pending'|'refunded' to the real backend's full
+	// 6-value order status (GET /orders admin) — see admin/data.ts's OrderStatus/
+	// ORDER_STATUS (same 6 values, kept in sync) for the 中文 label table.
+	status: 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
 	method: string;
 	date: string;
 	invoice: string;

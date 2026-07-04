@@ -16,7 +16,10 @@ export type Tone =
 
 export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
-export type OrderStatus = 'paid' | 'pending' | 'refunded';
+// Task 18: widened to the real backend's full 6-value order status (GET /orders
+// admin) so getOrders() (api.ts) can carry the real status through untranslated;
+// ORDER_STATUS below supplies the 中文 label for all 6 (see admin/api.ts's mapAdminOrder).
+export type OrderStatus = 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
 export type TicketType = 'pass' | 'trial' | 'event';
 export type VenueStatus = 'available' | 'maintenance';
@@ -119,6 +122,51 @@ export const MEMBERS: Member[] = MEMBERS_BASE.map((m, i) => {
 	};
 });
 
+/* ───────────────────────── members：GET /users 映射（Task 18） ─────────────────────────
+ * MEMBERS／MEMBERS_BASE 上面維持既有 mock 不變（學員管理頁 MembersTable 目前仍吃這份
+ * seed，不在本次任務變動範圍）。這裡另外新增一組「從真實 GET /users 回應映射」的型別
+ * ＋函式，供 api.ts 的 getMembers() 使用 —— GET /users 是通用帳號端點，只有 id/name/
+ * phone/is_active/points_balance/created_at 這類帳號欄位，沒有課程/教練/出席/繳費/
+ * 緊急聯絡人等健身房專屬資料，因此輸出型別是 Member 的一個小子集（MemberAccount），
+ * 而非硬塞成完整 Member。 */
+
+/** `GET /users`（admin）單筆使用者的 wire 形狀（僅本次映射用到的欄位）。 */
+export interface ApiUserAccount {
+	id: string;
+	name: string;
+	phone: string | null;
+	created_at: string;
+	is_active: boolean;
+	points_balance: number;
+}
+
+/** 帳號啟用狀態 —— GET /users 只有 is_active 這個二元旗標，跟既有 MemberStatus
+ *  （active/warning/paused，出席率導向）語意不同，不強塞成同一個型別。 */
+export type MemberAccountStatus = 'active' | 'inactive';
+
+export interface MemberAccount {
+	id: string;
+	name: string;
+	initial: string;
+	phone: string;
+	joined: string;
+	status: MemberAccountStatus;
+	points: number;
+}
+
+/** `GET /users` → 學員名單所需欄位映射（id/name/initial/phone/joined/status/points）。 */
+export function mapMemberAccount(u: ApiUserAccount): MemberAccount {
+	return {
+		id: u.id,
+		name: u.name,
+		initial: u.name.charAt(0) || '?',
+		phone: u.phone ?? '',
+		joined: u.created_at.slice(0, 10),
+		status: u.is_active ? 'active' : 'inactive',
+		points: u.points_balance
+	};
+}
+
 /* ───────────────────────── orders ───────────────────────── */
 export interface Order extends OrderBase {
 	campus: string;
@@ -153,8 +201,11 @@ export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
 	trial: ['info', '體驗中']
 };
 export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
-	paid: ['success', '已付款'],
 	pending: ['warning', '待付款'],
+	paid: ['success', '已付款'],
+	processing: ['info', '處理中'],
+	completed: ['neutral', '已完成'],
+	cancelled: ['error', '已取消'],
 	refunded: ['neutral', '已退款']
 };
 export const VENUE_STATUS: Record<VenueStatus, [Tone, string]> = {
