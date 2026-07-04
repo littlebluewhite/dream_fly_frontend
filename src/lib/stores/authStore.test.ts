@@ -117,6 +117,39 @@ describe('authStore.register', () => {
   });
 });
 
+describe('authStore.loginWithGoogle', () => {
+  it('success: POSTs /auth/google without auth, stores tokens, and logs the member in (same applySession path as login/register)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'access-3', refresh_token: 'refresh-3', user: SAMPLE_USER })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authStore.loginWithGoogle('auth-code-xyz');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/auth/google`);
+    expect(JSON.parse(init.body as string)).toEqual({ code: 'auth-code-xyz' });
+    expect(getAccess()).toBe('access-3');
+    expect(getRefresh()).toBe('refresh-3');
+    const state = get(authStore);
+    expect(state.loggedIn).toBe(true);
+    expect(state.member?.id).toBe(SAMPLE_USER.id);
+    expect(state.roles).toEqual(['member']);
+  });
+
+  it('failure (invalid/expired code): throws ApiError and leaves state and tokens unchanged', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ error: 'invalid grant' }, 400, 'Bad Request'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(authStore.loginWithGoogle('bad-code')).rejects.toBeInstanceOf(ApiError);
+
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(getAccess()).toBeNull();
+    expect(getRefresh()).toBeNull();
+  });
+});
+
 describe('authStore.logout', () => {
   it('POSTs /auth/logout with the refresh token, then clears tokens and resets state', async () => {
     const fetchMock = vi.fn();

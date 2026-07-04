@@ -114,6 +114,22 @@ function createAuthStore() {
     applySession(res);
   }
 
+  /** Google OAuth authorization-code exchange (member login, Task 9). The
+   *  callback route verifies `state` (CSRF) and then hands the `code` here;
+   *  success runs through the exact same applySession as login()/register()
+   *  above — token storage + auth state are never reinvented per login
+   *  method. First login auto-creates a `member` account; if the email is
+   *  already a password account, the backend auto-links the Google identity
+   *  (see docs/api/integration-contract.md §3.1). */
+  async function loginWithGoogle(code: string): Promise<void> {
+    const res = await api<AuthResponse>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+      auth: false
+    });
+    applySession(res);
+  }
+
   async function logout(): Promise<void> {
     // Local sign-out happens synchronously, BEFORE the network revoke — state
     // truth must never depend on network I/O. If this awaited the revoke, an
@@ -153,7 +169,7 @@ function createAuthStore() {
     }
   }
 
-  return { subscribe, login, register, logout, hydrate };
+  return { subscribe, login, register, loginWithGoogle, logout, hydrate };
 }
 
 export const authStore = createAuthStore();

@@ -51,6 +51,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   vi.clearAllMocks();
 });
@@ -117,10 +118,9 @@ describe('member login — auth + redirect', () => {
     expect(getRefresh()).toBeNull();
   });
 
-  it('no longer offers social login buttons', () => {
+  it('still offers no LINE login button (out of scope — Google only, Task 9)', () => {
     mockUrl = new URL('http://localhost/member/login');
     render(Login);
-    expect(screen.queryByLabelText('使用 Google 登入')).toBeNull();
     expect(screen.queryByLabelText('使用 LINE 登入')).toBeNull();
   });
 
@@ -129,5 +129,42 @@ describe('member login — auth + redirect', () => {
     render(Login);
     expect(screen.getByText('立即註冊').getAttribute('href')).toBe('/member/register');
     expect(screen.getByText('忘記密碼？').getAttribute('href')).toBe('/member/forgot-password');
+  });
+});
+
+describe('member login — Google 登入 button (progressive enhancement)', () => {
+  it('is absent when VITE_GOOGLE_CLIENT_ID is unset — the app still works password-only', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
+    mockUrl = new URL('http://localhost/member/login');
+    render(Login);
+
+    expect(screen.queryByLabelText('使用 Google 登入')).toBeNull();
+  });
+
+  it('is present when VITE_GOOGLE_CLIENT_ID is set', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
+    mockUrl = new URL('http://localhost/member/login');
+    render(Login);
+
+    expect(screen.getByLabelText('使用 Google 登入')).toBeInTheDocument();
+  });
+
+  it('clicking it redirects to Google with the correct params and stashes state (for the callback\'s CSRF check)', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client-id.apps.googleusercontent.com');
+    vi.stubGlobal('location', { href: '', origin: 'http://localhost:5173' });
+    mockUrl = new URL('http://localhost/member/login');
+    render(Login);
+
+    await fireEvent.click(screen.getByLabelText('使用 Google 登入'));
+
+    const url = new URL(window.location.href);
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+    expect(url.searchParams.get('client_id')).toBe('test-client-id.apps.googleusercontent.com');
+    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173/member/login/google');
+    expect(url.searchParams.get('response_type')).toBe('code');
+    expect(url.searchParams.get('scope')).toBe('openid email profile');
+    const state = url.searchParams.get('state');
+    expect(state).toBeTruthy();
+    expect(sessionStorage.getItem('dreamfly_google_oauth_state')).toBe(state);
   });
 });

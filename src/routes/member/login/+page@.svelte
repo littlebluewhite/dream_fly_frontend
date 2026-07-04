@@ -5,12 +5,24 @@
    * layout, so this renders full-screen without the member sidebar/topbar
    * shell. The prototype's custom Field (icon input + password toggle) isn't
    * in the foundation, so it's inline markup here. Button / Checkbox / Icon
-   * come from the shared foundation. */
+   * come from the shared foundation.
+   *
+   * Task 9: the Google button is back, this time wired for real — an
+   * authorization-code redirect (not the fake social-login stub the
+   * prototype had, and not a Google Identity Services popup). Progressive
+   * enhancement: no VITE_GOOGLE_CLIENT_ID configured → no button, the
+   * password flow above works unchanged. See $lib/member/google-oauth for
+   * the redirect URL construction + CSRF `state` handling, and the callback
+   * route at ./google/+page@.svelte for the return leg. LINE stays out
+   * (never wired — out of this task's scope). */
   import { Button, Checkbox, Icon } from '$lib/components/ui';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
   import { safeRedirect } from '$lib/checkout-gate';
+  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
+
+  const googleEnabled = isGoogleLoginEnabled();
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -198,6 +210,30 @@
         <Button variant="primary" size="lg" fullWidth disabled={busy} on:click={submit}>
           {busy ? '登入中…' : '登入'}
         </Button>
+
+        {#if googleEnabled}
+          <!-- divider -->
+          <div style="display:flex; align-items:center; gap:16px;">
+            <div style="flex:1; height:1px; background:var(--df-border);"></div>
+            <span style="font-size:13px; color:var(--df-text-light);">或</span>
+            <div style="flex:1; height:1px; background:var(--df-border);"></div>
+          </div>
+
+          <!-- Google（authorization-code redirect — 見 $lib/member/google-oauth） -->
+          <button
+            type="button"
+            class="social-btn"
+            aria-label="使用 Google 登入"
+            on:click={startGoogleLogin}
+            style="height:48px; display:inline-flex; align-items:center;
+              justify-content:center; gap:8px; border-radius:var(--df-radius-md); cursor:pointer;
+              font-size:14px; font-weight:600; font-family:var(--df-font-body);
+              background:#fff; color:var(--df-text-dark); border:1.5px solid var(--df-border-strong);"
+          >
+            <span style="font-family:var(--df-font-heading); font-weight:700; font-size:15px;">G</span>
+            使用 Google 登入
+          </button>
+        {/if}
       </div>
 
       <!-- footer -->
@@ -233,6 +269,12 @@
   .field-box.focus {
     border-color: var(--df-primary);
     box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.18);
+  }
+  .social-btn {
+    transition: filter 0.15s ease;
+  }
+  .social-btn:hover {
+    filter: brightness(0.96);
   }
   /* responsive: drop the photo pane on narrow viewports */
   @media (max-width: 860px) {
