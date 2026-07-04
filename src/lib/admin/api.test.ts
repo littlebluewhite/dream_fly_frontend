@@ -15,7 +15,9 @@ import {
 	getMembers,
 	createCourse,
 	updateCourse,
-	updateOrderStatus
+	updateOrderStatus,
+	getCoupons,
+	createCoupon
 } from './api';
 import { api } from '$lib/api/client';
 import { mapMemberAccount } from './data';
@@ -439,6 +441,54 @@ describe('getCoaches — GET /coaches（公開端點）', () => {
 				phone: ''
 			}
 		]);
+	});
+});
+
+describe('getCoupons — GET /coupons（admin，Task 8 piece 3）', () => {
+	it('映射 discount_cents→NT$(ntd)、is_active→active、expires_at 取日期前 10 碼', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /coupons?per_page=100': {
+					coupons: [
+						{ id: 'cp1', code: 'SPRING10', discount_cents: 30000, is_active: true, expires_at: '2026-12-31T23:59:59Z', created_at: '2026-01-01T00:00:00Z' },
+						{ id: 'cp2', code: 'WELCOME50', discount_cents: 5000, is_active: false, expires_at: null, created_at: '2026-01-01T00:00:00Z' }
+					],
+					total: 2,
+					page: 1,
+					per_page: 100
+				}
+			})
+		);
+
+		const d = await getCoupons();
+
+		expect(api).toHaveBeenCalledWith('/coupons?per_page=100');
+		expect(d.coupons).toEqual([
+			{ id: 'cp1', code: 'SPRING10', discount: 300, active: true, expiresAt: '2026-12-31' },
+			{ id: 'cp2', code: 'WELCOME50', discount: 50, active: false, expiresAt: '—' }
+		]);
+	});
+});
+
+describe('createCoupon — POST /coupons（admin，Task 8 piece 3）', () => {
+	it('POSTs the given body as-is and returns the CouponResponse', async () => {
+		const created = { id: 'cp-new', code: 'NEWCODE', discount_cents: 20000, is_active: true, expires_at: null, created_at: '' };
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /coupons': created }));
+
+		const body = { code: 'NEWCODE', discount_cents: 20000 };
+		const result = await createCoupon(body);
+
+		expect(api).toHaveBeenCalledWith('/coupons', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 409 duplicate code / 422 validation) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /coupons': new Error('coupon code already exists') })
+		);
+		await expect(createCoupon({ code: 'DUP', discount_cents: 100 })).rejects.toThrow(
+			'coupon code already exists'
+		);
 	});
 });
 

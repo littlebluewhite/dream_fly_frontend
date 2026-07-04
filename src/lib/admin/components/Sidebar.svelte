@@ -25,6 +25,7 @@
     { href: '/admin/coaches', label: '教練管理', icon: 'user-check' },
     { href: '/admin/classes', label: '課程管理', icon: 'book-open' },
     { href: '/admin/orders', label: '訂單管理', icon: 'shopping-bag' },
+    { href: '/admin/coupons', label: '優惠碼管理', icon: 'percent' },
     { href: '/admin/venues', label: '場館管理', icon: 'building-2' },
     { href: '/admin/tickets', label: '票券管理', icon: 'ticket' },
     { href: '/admin/reports', label: '報表分析', icon: 'bar-chart-3' },

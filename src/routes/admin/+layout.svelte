@@ -28,6 +28,7 @@
     '/admin/coaches': ['教練團隊', '專任教練'],
     '/admin/classes': ['課程管理', '班級與招生'],
     '/admin/orders': ['訂單與金流', '繳費紀錄'],
+    '/admin/coupons': ['優惠碼管理', '折扣代碼與使用期限'],
     '/admin/venues': ['場館管理', '場地與器材'],
     '/admin/tickets': ['票券管理', '方案與銷售'],
     '/admin/reports': ['報表分析', '營運數據概覽'],

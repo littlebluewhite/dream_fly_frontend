@@ -406,3 +406,61 @@ export const getMembers = (): Promise<MembersData> =>
 	api<ApiUserListResponse>('/users?per_page=100').then((r) => ({
 		members: r.users.map(mapMemberAccount)
 	}));
+
+/* ═════════════════════════ 優惠碼（GET /coupons、POST /coupons，admin-only，Task 8 piece 3） ═════════════════════════
+ * 後端只有「建立 + 列表」，沒有 update/delete 端點（issue #4 已註記，本輪刻意不開新
+ * 端點）——對應頁面（routes/admin/coupons）只做列表 + 建立，不渲染編輯/刪除（同
+ * MembersTable 對缺端點欄位的處理原則：沒有端點就誠實不做，不留假按鈕）。 */
+
+export interface ApiCoupon {
+	id: string;
+	code: string;
+	discount_cents: number;
+	is_active: boolean;
+	expires_at: string | null;
+	created_at: string;
+}
+
+interface ApiCouponListResponse {
+	coupons: ApiCoupon[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+/** discount 經 ntd() 換成 NT$；expiresAt 取日期前 10 碼（同其餘日期欄位慣例），
+ *  null（永久有效）顯示 '—'。 */
+export interface Coupon {
+	id: string;
+	code: string;
+	discount: number;
+	active: boolean;
+	expiresAt: string;
+}
+
+function mapCoupon(c: ApiCoupon): Coupon {
+	return {
+		id: c.id,
+		code: c.code,
+		discount: ntd(c.discount_cents),
+		active: c.is_active,
+		expiresAt: c.expires_at ? c.expires_at.slice(0, 10) : '—'
+	};
+}
+
+export interface CouponsData {
+	coupons: Coupon[];
+}
+export const getCoupons = (): Promise<CouponsData> =>
+	api<ApiCouponListResponse>('/coupons?per_page=100').then((r) => ({
+		coupons: r.coupons.map(mapCoupon)
+	}));
+
+export interface CreateCouponBody {
+	code: string;
+	discount_cents: number;
+	expires_at?: string;
+}
+
+export const createCoupon = (body: CreateCouponBody): Promise<ApiCoupon> =>
+	api<ApiCoupon>('/coupons', { method: 'POST', body: JSON.stringify(body) });
