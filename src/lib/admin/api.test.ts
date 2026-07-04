@@ -95,7 +95,7 @@ describe('getVenues — GET /venues（公開端點）', () => {
 });
 
 describe('getTickets — GET /products（公開端點）', () => {
-	it('ntd 轉換價格；sold/quota 一律 0；merchandise 濾除；product_type 對照 pass/event', async () => {
+	it('ntd 轉換價格；sold/quota 直接來自後端；merchandise 濾除；product_type 對照 pass/event', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /products?per_page=100': {
@@ -103,25 +103,25 @@ describe('getTickets — GET /products（公開端點）', () => {
 						{
 							id: 'p1', name: '月票', slug: 'month', product_type: 'membership', description: '不限堂數',
 							price_cents: 280000, original_price_cents: null, features: [], is_highlighted: false,
-							badge: null, stock: null, valid_days: 30, session_count: null, is_active: true,
+							badge: null, stock: null, quota: null, sold: 45, valid_days: 30, session_count: null, is_active: true,
 							created_at: '', updated_at: ''
 						},
 						{
 							id: 'p2', name: '10 堂回數票', slug: 'pack10', product_type: 'course_package', description: null,
 							price_cents: 540000, original_price_cents: null, features: [], is_highlighted: false,
-							badge: null, stock: null, valid_days: null, session_count: 10, is_active: true,
+							badge: null, stock: 100, quota: 100, sold: 12, valid_days: null, session_count: 10, is_active: true,
 							created_at: '', updated_at: ''
 						},
 						{
 							id: 'p3', name: '比賽觀賽票', slug: 'watch', product_type: 'ticket', description: null,
 							price_cents: 35000, original_price_cents: null, features: [], is_highlighted: false,
-							badge: null, stock: null, valid_days: null, session_count: null, is_active: true,
+							badge: null, stock: null, quota: null, sold: 200, valid_days: null, session_count: null, is_active: true,
 							created_at: '', updated_at: ''
 						},
 						{
 							id: 'p4', name: '護具組', slug: 'gear', product_type: 'merchandise', description: null,
 							price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false,
-							badge: null, stock: 20, valid_days: null, session_count: null, is_active: true,
+							badge: null, stock: 20, quota: 20, sold: 3, valid_days: null, session_count: null, is_active: true,
 							created_at: '', updated_at: ''
 						}
 					],
@@ -136,15 +136,18 @@ describe('getTickets — GET /products（公開端點）', () => {
 
 		expect(api).toHaveBeenCalledWith('/products?per_page=100', { auth: false });
 		expect(d.tickets).toHaveLength(3); // merchandise 濾除
-		expect(d.tickets.find((t) => t.id === 'p1')).toMatchObject({ type: 'pass', price: 2800, sold: 0, quota: 0 });
-		expect(d.tickets.find((t) => t.id === 'p2')).toMatchObject({ type: 'pass', price: 5400, sold: 0, quota: 0 });
-		expect(d.tickets.find((t) => t.id === 'p3')).toMatchObject({ type: 'event', price: 350, sold: 0, quota: 0 });
+		expect(d.tickets.find((t) => t.id === 'p1')).toMatchObject({ type: 'pass', price: 2800, sold: 45, quota: null });
+		expect(d.tickets.find((t) => t.id === 'p2')).toMatchObject({ type: 'pass', price: 5400, sold: 12, quota: 100 });
+		expect(d.tickets.find((t) => t.id === 'p3')).toMatchObject({ type: 'event', price: 350, sold: 200, quota: null });
 		expect(d.tickets.find((t) => t.id === 'p4')).toBeUndefined();
 	});
 });
 
 describe('getOrders — GET /orders（admin）', () => {
-	const base = { user_email: 'a@b.com', points_used: 0, coupon_code: null as string | null, created_at: '2026-06-08T14:22:00Z' };
+	const base = {
+		user_email: 'a@b.com', points_used: 0, coupon_code: null as string | null, created_at: '2026-06-08T14:22:00Z',
+		items: [{ name: '競技體操 選手班', quantity: 1 }]
+	};
 
 	it('映射 id/member/initial/amount/method/date/discount，涵蓋全部 6 種 status', async () => {
 		vi.mocked(api).mockImplementation(
@@ -202,6 +205,36 @@ describe('getOrders — GET /orders（admin）', () => {
 		const o = d.orders[0];
 		expect(o.net + o.tax).toBe(o.amount);
 	});
+
+	it('item 摘要依 items 數量組成：0 項 fallback 訂單編號、1 項用該項名稱、N>1 項用「第一項 外 N-1 項」', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /orders?per_page=100': {
+					orders: [
+						{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [] },
+						{ id: '2', order_number: 'DF-2', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [{ name: '體操基礎班', quantity: 1 }] },
+						{
+							id: '3', order_number: 'DF-3', user_name: '王小明', status: 'paid', total_cents: 100000, ...base,
+							items: [
+								{ name: '體操基礎班', quantity: 1 },
+								{ name: '護具組', quantity: 2 },
+								{ name: '月票 · 自由練習', quantity: 1 }
+							]
+						}
+					],
+					total: 3,
+					page: 1,
+					per_page: 100
+				}
+			})
+		);
+
+		const d = await getOrders();
+
+		expect(d.orders[0].item).toBe('訂單 DF-1'); // 0 項 → fallback
+		expect(d.orders[1].item).toBe('體操基礎班'); // 1 項 → 該項名稱
+		expect(d.orders[2].item).toBe('體操基礎班 外 2 項'); // 3 項 → 第一項 外 2 項
+	});
 });
 
 describe('ORDER_STATUS — 中文對照涵蓋全部 6 態', () => {
@@ -247,7 +280,7 @@ describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）
 				},
 				'GET /coaches': [
 					{
-						id: 'co1', user_id: 'u1', title: '林教練', bio: null, experience: null,
+						id: 'co1', user_id: 'u1', name: '林教練', title: '資深體操教練', bio: null, experience: null,
 						specialties: ['競技體操'], certifications: [], is_active: true, display_order: 1,
 						slug: null, photo_url: null, created_at: ''
 					}
@@ -292,12 +325,12 @@ describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）
 });
 
 describe('getCoaches — GET /coaches（公開端點）', () => {
-	it('name/initial 沿用 title；phone/years/students/awards/classes/status 無對應欄位給誠實預設值', async () => {
+	it('name/initial 改用真 name 欄位（不再借用 title）；title 為職稱且不同字；phone/years/students/awards/classes/status 無對應欄位給誠實預設值', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /coaches': [
 					{
-						id: 'co1', user_id: 'u1', title: '林雅婷', bio: null, experience: '12年資深教練',
+						id: 'co1', user_id: 'u1', name: '林雅婷', title: '資深競技體操教練', bio: null, experience: '12年資深教練',
 						specialties: ['競技體操', '競技啦啦隊'], certifications: ['國家級'], is_active: true,
 						display_order: 1, slug: null, photo_url: null, created_at: ''
 					}
@@ -313,7 +346,7 @@ describe('getCoaches — GET /coaches（公開端點）', () => {
 				id: 'co1',
 				name: '林雅婷',
 				initial: '林',
-				title: '林雅婷',
+				title: '資深競技體操教練',
 				color: expect.any(String),
 				tags: ['競技體操', '競技啦啦隊'],
 				years: 0,

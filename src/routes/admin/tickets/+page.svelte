@@ -110,7 +110,8 @@
 
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
       {#each tickets as t (t.id)}
-        {@const pct = soldPct(t.sold, t.quota)}
+        {@const quota = t.quota}
+        {@const pct = soldPct(t.sold, quota)}
         <Card padding={0} hoverable style="overflow:hidden;">
           <div style="display:flex; align-items:flex-start; gap:14px; padding:18px 20px 16px;">
             <div
@@ -142,10 +143,12 @@
             <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px;">
               <span style="color:var(--df-text-light);">已售 / 配額</span>
               <span style="font-weight:700; color:var(--df-text-dark); white-space:nowrap;"
-                >{t.sold} / {t.quota} 張</span
+                >{t.sold} / {quota == null ? '不限' : quota} 張</span
               >
             </div>
-            <ProgressBar value={t.sold} max={t.quota} height={7} tone={ticketTone(pct)} />
+            {#if quota != null}
+              <ProgressBar value={t.sold} max={quota} height={7} tone={ticketTone(pct)} />
+            {/if}
           </div>
 
           <div

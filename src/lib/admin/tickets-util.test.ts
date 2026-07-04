@@ -16,6 +16,9 @@ describe('soldPct', () => {
 	it('guards a zero quota (no divide-by-zero)', () => {
 		expect(soldPct(5, 0)).toBe(0);
 	});
+	it('is 0 when quota is null (不限 — no ceiling to compute a percentage against)', () => {
+		expect(soldPct(128, null)).toBe(0);
+	});
 });
 
 describe('ticketTone', () => {

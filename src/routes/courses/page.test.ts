@@ -34,6 +34,9 @@ const COURSE: ApiCourse = {
 const COACH: ApiCoach = {
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
+	// name 未在此頁使用 —— routes/courses/+page.svelte 自己的 coachNameById 目前仍讀
+	// title(見 src/lib/member/api.ts getCourses 上方註解：同類殘留，非本次任務範圍)。
+	name: '黃小姐',
 	title: '黃教練',
 	bio: null,
 	experience: null,

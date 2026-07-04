@@ -5,7 +5,7 @@
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches, listVenues, listProducts } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
-import { ntd } from '$lib/public/adapters';
+import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import {
 	REPORT_KPIS,
 	REVENUE_BREAKDOWN,
@@ -94,17 +94,20 @@ const PRODUCT_TYPE_TO_TICKET_TYPE: Record<string, TicketType> = {
 	ticket: 'event'
 };
 
-/** ProductResponse 沒有銷售量/配額欄位 —— sold/quota 一律給 0(P2：待後端補對應
- *  統計欄位)；圖示固定用通用 icon(後端無圖示欄位)；color 依序輪替既有色票
- *  (後端無代表色欄位，純視覺裝飾)。 */
+/** sold/quota 現直接來自 ProductResponse（見 integration-contract.md §3.7）：
+ *  `sold` 是已付款訂單的 quantity 加總；`quota` 是 `stock` 的直接映射，`null` = 不限
+ *  （票券/方案類幾乎都是 null —— 只有 merchandise 才有限量庫存數字，而 merchandise
+ *  已被 getTickets() 濾除）。null 顯示層由 routes/admin/tickets/+page.svelte 渲染
+ *  「不限」，不用 0 頂替（0 在既有 UI 語意上會誤讀成「已無配額」）。圖示固定用通用
+ *  icon(後端無圖示欄位)；color 依序輪替既有色票(後端無代表色欄位，純視覺裝飾)。 */
 function mapProduct(p: ApiProduct, i: number): Ticket {
 	return {
 		id: p.id,
 		name: p.name,
 		type: PRODUCT_TYPE_TO_TICKET_TYPE[p.product_type] ?? 'pass',
 		price: ntd(p.price_cents),
-		sold: 0, // P2: 後端無銷售量欄位
-		quota: 0, // P2: 後端無配額欄位
+		sold: p.sold,
+		quota: p.quota,
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
 		icon: 'ticket',
 		desc: p.description ?? ''
@@ -131,6 +134,7 @@ interface ApiAdminOrder {
 	points_used: number;
 	coupon_code: string | null;
 	created_at: string;
+	items: { name: string; quantity: number }[];
 }
 interface ApiAdminOrderListResponse {
 	orders: ApiAdminOrder[];
@@ -140,10 +144,12 @@ interface ApiAdminOrderListResponse {
 }
 
 /** `AdminOrderSummary` → 既有 Order 形狀，讓 OrdersTable/OrderDialog 樣板不用改。
- *  AdminOrderSummary 沒有 item/發票/經手人/分校欄位 —— 誠實給預設值(P2，各欄位見
- *  行內註解)；tax/net 由 amount 反推 5% 內含稅(沿用既有 data.ts ORDERS 的算法，非
- *  後端資料)；status 直接沿用後端 6 態原值(pending/paid/processing/completed/
- *  cancelled/refunded)，中文標籤由 ORDER_STATUS 查表(已於 data.ts 擴充至 6 態)。 */
+ *  AdminOrderSummary 沒有發票/經手人/分校欄位 —— 誠實給預設值(P2，各欄位見
+ *  行內註解)；item 現由 items 摘要組成(orderItemsSummary，與 member/api.ts
+ *  mapOrder 共用同一份措辭)；tax/net 由 amount 反推 5% 內含稅(沿用既有 data.ts
+ *  ORDERS 的算法，非後端資料)；status 直接沿用後端 6 態原值(pending/paid/
+ *  processing/completed/cancelled/refunded)，中文標籤由 ORDER_STATUS 查表
+ *  (已於 data.ts 擴充至 6 態)。 */
 function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 	const amount = ntd(o.total_cents);
 	const tax = Math.round(amount - amount / 1.05);
@@ -152,7 +158,7 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		member: o.user_name,
 		initial: o.user_name.charAt(0) || '?',
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
-		item: `訂單 ${o.order_number}`, // P2: AdminOrderSummary 無 items 摘要(同 member/api.ts mapOrder 的處理)
+		item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
 		amount,
 		status: o.status,
 		method: '線上', // 後端目前僅有模擬付款，沒有真實付款方式欄位
@@ -259,8 +265,9 @@ function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus
 }
 
 /** `CourseResponse` → 既有 ClassRow 形狀。coach 姓名需靠 coach_id 對照教練列表
- *  (CoachResponse 沒有姓名欄位，同 getClasses() 內的 coachNameById)；room/term/
- *  sessions/startDate/checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
+ *  (CourseResponse 本身沒有教練姓名欄位，需靠 getClasses() 內的 coachNameById 對照
+ *  ——該表現在存的是 mapCoach() 輸出的真實 name)；room/term/sessions/startDate/
+ *  checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
 function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
 	const { day, time } = splitSchedule(c.schedule_text);
 	return {
@@ -302,15 +309,15 @@ export const getClasses = async (): Promise<ClassesData> => {
 
 /* ═════════════════════════ 教練（GET /coaches，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
-/** `CoachResponse` 沒有 name/phone/status/年資/學員/班級/獲獎統計欄位(見
- *  integration-contract.md §3.4 附註) —— name 沿用 title(唯一可用的姓名替代來源，
- *  同 public/adapters.ts 的 toMarketingCoach 慣例)；其餘無對應欄位的一律誠實給
- *  預設值(P2：待後端補對應欄位或 join 出真實統計)。 */
+/** `CoachResponse` 現帶 `name`(教練真實姓名)與 `title`(職稱)，兩者分開映射(同
+ *  public/adapters.ts 的 toMarketingCoach，見 integration-contract.md §3.4)。
+ *  phone/status/年資/學員/班級/獲獎統計欄位仍無對應，一律誠實給預設值(P2：待
+ *  後端補對應欄位或 join 出真實統計)。 */
 function mapCoach(c: ApiCoach, i: number): Coach {
 	return {
 		id: c.id,
-		name: c.title,
-		initial: c.title.charAt(0) || '?',
+		name: c.name,
+		initial: c.name.charAt(0) || '?',
 		title: c.title,
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
 		tags: c.specialties,

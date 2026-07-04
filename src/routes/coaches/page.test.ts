@@ -9,6 +9,7 @@ vi.mock('$lib/public/api', () => ({ listCoaches: vi.fn() }));
 const COACH: ApiCoach = {
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
+	name: '王雅婷',
 	title: '資深體操教練',
 	bio: null,
 	experience: '15年教學經驗',
@@ -27,17 +28,16 @@ beforeEach(() => {
 });
 
 describe('教練介紹 (marketing) — 接真 API', () => {
-	it('renders the adapted coach (title used as name fallback — CoachResponse has no name field)', async () => {
-		const { findAllByText } = render(Page);
+	it('renders the adapted coach with name and title as distinct fields (CoachResponse §3.4 now carries both)', async () => {
+		const { findByText } = render(Page);
 
-		const matches = await findAllByText('資深體操教練');
-		// name + title both render the same fallback text — at least 2 occurrences.
-		expect(matches.length).toBeGreaterThanOrEqual(2);
+		await findByText('王雅婷'); // <h3>{coach.name}</h3>
+		await findByText('資深體操教練'); // <p class="coach-title">{coach.title}</p>
 	});
 
 	it('renders specialties and certifications from the API', async () => {
-		const { findAllByText, findByText } = render(Page);
-		await findAllByText('資深體操教練');
+		const { findByText } = render(Page);
+		await findByText('王雅婷');
 		await findByText('競技體操');
 		await findByText('體操A級教練證');
 	});

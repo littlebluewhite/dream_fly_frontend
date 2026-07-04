@@ -49,6 +49,7 @@ export const listCourses = (): Promise<ApiCourse[]> =>
 export interface ApiCoach {
 	id: string;
 	user_id: string;
+	name: string;
 	title: string;
 	bio: string | null;
 	experience: string | null;
@@ -170,6 +171,8 @@ export interface ApiProduct {
 	is_highlighted: boolean;
 	badge: string | null;
 	stock: number | null;
+	quota: number | null;
+	sold: number;
 	valid_days: number | null;
 	session_count: number | null;
 	is_active: boolean;

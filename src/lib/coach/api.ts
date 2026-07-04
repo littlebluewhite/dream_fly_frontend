@@ -87,6 +87,10 @@ function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
 		full: `${user.name} 教練`,
 		en: '', // P2: 後端無英文姓名欄位
 		initial: surname,
+		// Task 4 判斷：CoachResponse 新增的 name 欄位在此不適用 —— name/display/full/
+		// initial 已經正確取自 user.name(教練本人的真實姓名，見上方函式註解)；role 這裡
+		// 語意上是「職稱」(routes/coach/settings 渲染成「{role} · {id}」的職銜列)，不是
+		// 姓名欄位，繼續用 coach.title 才是對的欄位，不需要也不應該改成 coach.name。
 		role: coach.title,
 		id: coach.id, // P2: 舊員編格式(DF-C2019-007)無對應欄位，改用教練 uuid
 		email: user.email,

@@ -204,7 +204,10 @@ describe('getAccount', () => {
       fakeRouter({
         'GET /users/me': { id: 'user-uuid-1', email: 'wang@example.com', name: '王承恩', phone: '0911222333', created_at: '2023-09-15T00:00:00Z' },
         'GET /orders/me': {
-          orders: [{ id: 'order-1', order_number: 'DF-20260701AAAA', status: 'paid', total_cents: 480000, created_at: '2026-07-01T10:00:00Z' }],
+          orders: [{
+            id: 'order-1', order_number: 'DF-20260701AAAA', status: 'paid', total_cents: 480000, created_at: '2026-07-01T10:00:00Z',
+            items: [{ name: '競技啦啦隊 進階班', quantity: 1 }]
+          }],
           total: 1, page: 1, per_page: 20
         },
         'GET /points/me': { balance: 1250, ledger: [] },
@@ -216,7 +219,7 @@ describe('getAccount', () => {
 
     expect(d).toEqual({
       orders: [
-        { id: 'DF-20260701AAAA', item: '訂單 DF-20260701AAAA', amount: 4800, status: ['success', '已付款'], date: '2026-07-01' }
+        { id: 'DF-20260701AAAA', item: '競技啦啦隊 進階班', amount: 4800, status: ['success', '已付款'], date: '2026-07-01' }
       ],
       profile: {
         name: '王承恩', initial: '王', color: '#0066CC', id: 'user-uuid-1', since: '2023/09',
@@ -227,17 +230,48 @@ describe('getAccount', () => {
     expect(get(subscriptions)).toEqual([]);
   });
 
+  it('item 摘要依 items 數量組成：0 項 fallback 訂單編號、1 項用該項名稱、N>1 項用「第一項 外 N-1 項」', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z' },
+        'GET /orders/me': {
+          orders: [
+            { id: 'o1', order_number: 'DF-1', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [] },
+            { id: 'o2', order_number: 'DF-2', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: '體操基礎班', quantity: 1 }] },
+            {
+              id: 'o3', order_number: 'DF-3', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z',
+              items: [
+                { name: '體操基礎班', quantity: 1 },
+                { name: '護具組', quantity: 2 },
+                { name: '月票 · 自由練習', quantity: 1 }
+              ]
+            }
+          ],
+          total: 3, page: 1, per_page: 20
+        },
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /subscriptions/me': []
+      })
+    );
+
+    const d = await getAccount();
+
+    expect(d.orders[0].item).toBe('訂單 DF-1'); // 0 項 → fallback
+    expect(d.orders[1].item).toBe('體操基礎班'); // 1 項 → 該項名稱
+    expect(d.orders[2].item).toBe('體操基礎班 外 2 項'); // 3 項 → 第一項 外 2 項
+  });
+
   it('order status 對照表涵蓋 pending/processing/cancelled/refunded；未知值 fallback 為 neutral + 原字串', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z' },
         'GET /orders/me': {
           orders: [
-            { id: 'o1', order_number: 'DF-1', status: 'pending', total_cents: 100000, created_at: '2026-01-01T00:00:00Z' },
-            { id: 'o2', order_number: 'DF-2', status: 'processing', total_cents: 200000, created_at: '2026-01-02T00:00:00Z' },
-            { id: 'o3', order_number: 'DF-3', status: 'cancelled', total_cents: 300000, created_at: '2026-01-03T00:00:00Z' },
-            { id: 'o4', order_number: 'DF-4', status: 'refunded', total_cents: 400000, created_at: '2026-01-04T00:00:00Z' },
-            { id: 'o5', order_number: 'DF-5', status: 'brand_new_status', total_cents: 500000, created_at: '2026-01-05T00:00:00Z' }
+            { id: 'o1', order_number: 'DF-1', status: 'pending', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
+            { id: 'o2', order_number: 'DF-2', status: 'processing', total_cents: 200000, created_at: '2026-01-02T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
+            { id: 'o3', order_number: 'DF-3', status: 'cancelled', total_cents: 300000, created_at: '2026-01-03T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
+            { id: 'o4', order_number: 'DF-4', status: 'refunded', total_cents: 400000, created_at: '2026-01-04T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
+            { id: 'o5', order_number: 'DF-5', status: 'brand_new_status', total_cents: 500000, created_at: '2026-01-05T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }
           ],
           total: 5, page: 1, per_page: 20
         },
@@ -262,7 +296,7 @@ describe('getAccount', () => {
       fakeRouter({
         'GET /users/me': { id: 'u3', email: 'a@b.com', name: '測試三', phone: null, created_at: '2026-01-01T00:00:00Z' },
         'GET /orders/me': {
-          orders: [{ id: 'o9', order_number: 'DF-9', status: 'paid', total_cents: 100000, created_at: '2026-02-01T00:00:00Z' }],
+          orders: [{ id: 'o9', order_number: 'DF-9', status: 'paid', total_cents: 100000, created_at: '2026-02-01T00:00:00Z', items: [] }],
           total: 1, page: 1, per_page: 20
         },
         'GET /points/me': new Error('network down'),
@@ -305,7 +339,7 @@ describe('getAccount', () => {
 });
 
 describe('getCourses', () => {
-  it('復用 public seam：listCourses + listCoaches join，映射為 CatalogCourse[]', async () => {
+  it('復用 public seam：listCourses + listCoaches join，映射為 CatalogCourse[]（coach 取真 name，非 title）', async () => {
     vi.mocked(listCourses).mockResolvedValue([
       {
         id: 'course-uuid-1', name: '競技啦啦隊 進階班', slug: 'advanced', level: 'advanced',
@@ -317,7 +351,7 @@ describe('getCourses', () => {
       }
     ]);
     vi.mocked(listCoaches).mockResolvedValue([
-      { id: 'coach-1', user_id: 'u1', title: '林雅婷', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' }
+      { id: 'coach-1', user_id: 'u1', name: '林雅婷', title: '資深競技啦啦隊教練', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' }
     ]);
 
     const d = await getCourses();

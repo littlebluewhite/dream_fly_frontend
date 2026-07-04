@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ntd, toCatalogCourse, toMarketingCoach, toPass } from './adapters';
+import { ntd, toCatalogCourse, toMarketingCoach, toPass, orderItemsSummary } from './adapters';
 import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 
 describe('ntd — 全前端唯一 cents→NT$ 轉換點', () => {
@@ -99,6 +99,7 @@ function makeApiCoach(overrides: Partial<ApiCoach> = {}): ApiCoach {
 	return {
 		id: 'coach-uuid-1',
 		user_id: 'user-uuid-1',
+		name: '王雅婷',
 		title: '資深體操教練',
 		bio: '簡介',
 		experience: '15年教學經驗',
@@ -114,11 +115,11 @@ function makeApiCoach(overrides: Partial<ApiCoach> = {}): ApiCoach {
 }
 
 describe('toMarketingCoach', () => {
-	it('maps slug/photo_url, and derives name/discipline/tags from title/specialties (CoachResponse 無 name 欄位，見 contract §3.4)', () => {
+	it('maps name/title as distinct fields (CoachResponse 兩者不同語意，見 contract §3.4), plus slug/photo_url/discipline/tags from specialties', () => {
 		expect(toMarketingCoach(makeApiCoach())).toEqual({
 			id: 'coach-uuid-1',
 			slug: 'wang',
-			name: '資深體操教練',
+			name: '王雅婷',
 			title: '資深體操教練',
 			discipline: '競技體操',
 			years: '',
@@ -155,6 +156,8 @@ function makeApiProduct(overrides: Partial<ApiProduct> = {}): ApiProduct {
 		is_highlighted: false,
 		badge: null,
 		stock: null,
+		quota: null,
+		sold: 0,
 		valid_days: 30,
 		session_count: null,
 		is_active: true,
@@ -193,5 +196,54 @@ describe('toPass', () => {
 		const out = toPass(makeApiProduct()); // badge: null, original_price_cents: null
 		expect(out.badge).toBeUndefined();
 		expect(out.originalPrice).toBeUndefined();
+	});
+});
+
+describe('orderItemsSummary — 訂單品項摘要（member/admin 共用，見 contract §3.10 items）', () => {
+	it('0 項時回傳呼叫端傳入的 fallback（防禦性分支 —— 結帳前購物車不可為空）', () => {
+		expect(orderItemsSummary([], '訂單 DF-1')).toBe('訂單 DF-1');
+	});
+
+	it('1 項時回傳該項名稱', () => {
+		expect(orderItemsSummary([{ name: '競技啦啦隊 進階班', quantity: 1 }], '訂單 DF-1')).toBe(
+			'競技啦啦隊 進階班'
+		);
+	});
+
+	it('2 項時回傳「第一項名稱 外 1 項」', () => {
+		expect(
+			orderItemsSummary(
+				[
+					{ name: '競技啦啦隊 進階班', quantity: 1 },
+					{ name: '護具組', quantity: 2 }
+				],
+				'訂單 DF-1'
+			)
+		).toBe('競技啦啦隊 進階班 外 1 項');
+	});
+
+	it('N>2 項時回傳「第一項名稱 外 N-1 項」', () => {
+		expect(
+			orderItemsSummary(
+				[
+					{ name: '競技啦啦隊 進階班', quantity: 1 },
+					{ name: '護具組', quantity: 2 },
+					{ name: '月票 · 自由練習', quantity: 1 }
+				],
+				'訂單 DF-1'
+			)
+		).toBe('競技啦啦隊 進階班 外 2 項');
+	});
+
+	it('第一項名稱以外的其餘品項名稱不影響摘要（只取第一項 + 計數）', () => {
+		expect(
+			orderItemsSummary(
+				[
+					{ name: 'A', quantity: 1 },
+					{ name: 'B', quantity: 1 }
+				],
+				'x'
+			)
+		).toBe('A 外 1 項');
 	});
 });

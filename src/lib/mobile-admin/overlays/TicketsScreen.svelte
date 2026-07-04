@@ -41,7 +41,8 @@
       {#each TICKETS as t (t.id)}
         {@const tone = TICKET_TYPE[t.type][0] as BadgeTone}
         {@const label = TICKET_TYPE[t.type][1]}
-        {@const pct = Math.round((t.sold / t.quota) * 100)}
+        {@const quota = t.quota}
+        {@const pct = quota == null ? 0 : Math.round((t.sold / quota) * 100)}
         <div
           style="background:#fff; border:1px solid var(--df-border); border-radius:16px;
             box-shadow:var(--df-shadow-card); padding:16px;"
@@ -64,7 +65,7 @@
           </div>
           <div style="margin-top:13px;">
             <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
-              <span style="color:var(--df-text-light);">已售 {t.sold} / {t.quota} 張</span>
+              <span style="color:var(--df-text-light);">已售 {t.sold} / {quota == null ? '不限' : quota} 張</span>
               <span style="font-weight:700; color:var(--df-text-dark);">{pct}%</span>
             </div>
             <MiniBar value={pct} tone={t.color} height={6} />

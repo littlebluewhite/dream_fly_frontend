@@ -3,7 +3,7 @@
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
-import { toCatalogCourse, ntd, type CatalogCourse } from '$lib/public/adapters';
+import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, SCHEDULE, REWARDS, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock, Order, Reward, Notification, Tone, ApiNotification } from './data';
@@ -146,6 +146,7 @@ interface ApiOrderSummary {
   status: string;
   total_cents: number;
   created_at: string;
+  items: { name: string; quantity: number }[];
 }
 
 interface ApiOrderListResponse {
@@ -164,14 +165,13 @@ const ORDER_STATUS: Record<string, [Tone, string]> = {
   refunded: ['neutral', '已退款']
 };
 
-/** OrderSummary 沒有 items(見 integration-contract.md §3.10 —— 摘要，不含
- *  items/artifacts)；不為此對每筆訂單多打一次 GET /orders/{id}(N+1)，改用
- *  order_number 組出可讀的佔位字串。
- *  // P2: order items summary 需後端 OrderSummary 提供 items 摘要 */
+/** OrderSummary 現含 items 摘要(見 integration-contract.md §3.10：`{ name, quantity }[]`，
+ *  name 是下單當時的快照)；item 欄由 orderItemsSummary 組成(與 admin/api.ts
+ *  mapAdminOrder 共用同一份措辭，見 public/adapters.ts)。 */
 function mapOrder(o: ApiOrderSummary): Order {
   return {
     id: o.order_number,
-    item: `訂單 ${o.order_number}`,
+    item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
     amount: ntd(o.total_cents),
     status: ORDER_STATUS[o.status] ?? ['neutral', o.status],
     date: o.created_at.slice(0, 10)
@@ -225,10 +225,14 @@ export interface CoursesData { catalog: CatalogCourse[]; }
 
 /** 復用 Task 14 的 public seam($lib/public/api + $lib/public/adapters)，不重新
  *  實作課程/教練 join 邏輯 —— 跟行銷版課程介紹頁(src/routes/courses/+page.svelte)
- *  完全同一套作法：courses + coaches 平行拉、以 coach_id 對照出教練姓名。 */
+ *  同一套 fetch 模式：courses + coaches 平行拉、以 coach_id 對照出教練姓名，這裡
+ *  取 CoachResponse.name(教練真實姓名，非 title 職稱 —— 見 integration-contract.md
+ *  §3.4)。routes/courses/+page.svelte 自己那份 coachNameById 目前仍用 title，
+ *  是本次任務範圍外(Task 4 只處理 src/lib 的 member/admin/public 三個 seam)的
+ *  同類殘留，留待後續一併處理。 */
 export const getCourses = async (): Promise<CoursesData> => {
   const [apiCourses, apiCoaches] = await Promise.all([listCourses(), listCoaches()]);
-  const coachNameById = new Map(apiCoaches.map((c) => [c.id, c.title]));
+  const coachNameById = new Map(apiCoaches.map((c) => [c.id, c.name]));
   const catalog = apiCourses.map((c) =>
     toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
   );

@@ -7,7 +7,7 @@ export interface Ticket {
 	type: 'pass' | 'trial' | 'event';
 	price: number;
 	sold: number;
-	quota: number;
+	quota: number | null; // null = 不限（見 ProductResponse.quota，src/lib/admin/api.ts getTickets()）
 	color: string;
 	icon: string;
 	desc: string;

@@ -25,6 +25,8 @@ const PRODUCT: ApiProduct = {
 	is_highlighted: false,
 	badge: null,
 	stock: null,
+	quota: null,
+	sold: 0,
 	valid_days: null,
 	session_count: 1,
 	is_active: true,

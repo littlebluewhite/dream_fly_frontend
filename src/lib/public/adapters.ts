@@ -12,6 +12,22 @@ import type { Coach } from '$lib/data/coaches';
 /** 全前端唯一 cents→NT$ 轉換點。 */
 export const ntd = (cents: number): number => Math.round(cents / 100);
 
+/** 訂單品項摘要（member `src/lib/member/api.ts` mapOrder 與 admin `src/lib/admin/api.ts`
+ *  mapAdminOrder 共用，避免兩處各自實作同一份措辭）。對應 `OrderSummary`/
+ *  `AdminOrderSummary.items`（見 integration-contract.md §3.10）：`{ name, quantity }[]`，
+ *  `name` 是下單當時的快照，非即時查目錄。
+ *  0 項 → fallback（理論上不會發生 —— 結帳前購物車不可為空，此為防禦性分支，呼叫端
+ *  傳入原本的 `訂單 ${order_number}` 佔位字串）；1 項 → 該項名稱；N>1 項 →
+ *  「第一項名稱 外 N-1 項」。 */
+export function orderItemsSummary(
+	items: { name: string; quantity: number }[],
+	fallback: string
+): string {
+	if (items.length === 0) return fallback;
+	if (items.length === 1) return items[0].name;
+	return `${items[0].name} 外 ${items.length - 1} 項`;
+}
+
 /** 後端 level enum（beginner/intermediate/advanced）→ 繁中 label；
  *  未知值 fallback 回原字串，不會讓頁面因為後端新增 enum 值而炸掉。 */
 const LEVEL_LABEL: Record<string, string> = {
@@ -43,8 +59,8 @@ function ageRange(min: number | null, max: number | null): string {
 	return '';
 }
 
-/** `coachName` 由呼叫端解出（CoachResponse 沒有姓名欄位，需靠 course.coach_id 對照
- *  教練列表後傳入 —— 通常也只能是 toMarketingCoach 裡同樣 fallback 用的 title）。 */
+/** `coachName` 由呼叫端解出（`CourseResponse` 本身沒有教練姓名欄位，需靠
+ *  course.coach_id 對照教練列表後傳入 —— 教練列表現在帶 `name`，見 toMarketingCoach）。 */
 export function toCatalogCourse(c: ApiCourse, coachName?: string): CatalogCourse {
 	return {
 		id: c.id,
@@ -61,15 +77,14 @@ export function toCatalogCourse(c: ApiCourse, coachName?: string): CatalogCourse
 	};
 }
 
-/** CoachResponse 沒有姓名欄位（見 integration-contract.md §3.4 附註 — 姓名存在
- *  users 表、公開端點不 join 出來，本次任務範圍外）。只能沿用 `title`
- *  （職稱文字）作為卡片標題與大頭貼縮寫的替代來源；`years`（資歷徒手數字）同樣
- *  無對應欄位，誠實留空而非用正規表示式硬猜 `experience` 段落。 */
+/** CoachResponse 現帶 `name`（教練真實姓名，join users.name）與 `title`（職稱，如
+ *  「資深體操教練」）——兩者不同語意，分開映射（見 integration-contract.md §3.4）。
+ *  `years`（資歷純數字）仍無對應欄位，誠實留空而非用正規表示式硬猜 `experience` 段落。 */
 export function toMarketingCoach(c: ApiCoach): Coach {
 	return {
 		id: c.id,
 		slug: c.slug ?? '',
-		name: c.title,
+		name: c.name,
 		title: c.title,
 		discipline: c.specialties[0] ?? '',
 		years: '',
