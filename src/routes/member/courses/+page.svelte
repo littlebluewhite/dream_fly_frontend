@@ -5,7 +5,8 @@
   import { onMount } from 'svelte';
   import { Tabs, FilterChip, Card, Badge, Button, Icon, EmptyState, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
-  import { LEVEL_TONE, type CatalogCourse } from '$lib/member/data';
+  import { LEVEL_TONE } from '$lib/member/data';
+  import type { CatalogCourse } from '$lib/public/adapters';
   import { getCourses, type CoursesData } from '$lib/member/api';
   import { cart, search, toasts } from '$lib/member/stores';
 
@@ -83,7 +84,9 @@
             on:click={() => (detail = c)}
             aria-label={`查看 ${c.name} 詳情`}
           >
-            <div class="course-icon"><Icon name={c.icon} size={30} color="var(--df-primary)" /></div>
+            <!-- CatalogCourse(public seam)無 icon 欄位(見 $lib/public/adapters 的
+                 courseToCartItem 對此的既有處理慣例)，卡頭一律用同一個預設圖示。 -->
+            <div class="course-icon"><Icon name="sparkles" size={30} color="var(--df-primary)" /></div>
             {#if c.hot}
               <span style="position:absolute; top:12px; right:12px"><Badge tone="accent" solid>熱門</Badge></span>
             {/if}

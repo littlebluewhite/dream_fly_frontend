@@ -177,7 +177,12 @@ export const LEVEL_TONE: Record<string, Tone> = {
   入門: 'info',
   基礎: 'primary',
   進階: 'warning',
-  選手: 'accent'
+  選手: 'accent',
+  // 後端課程等級（beginner/intermediate/advanced）經 adapters.ts 的 LEVEL_LABEL／
+  // api.ts 的同義對照表轉繁中後的三個值 —— 課程介紹、我的課程頁改吃真 API 後會用到。
+  初級: 'info',
+  中級: 'primary',
+  高級: 'warning'
 };
 
 /* Weekly schedule grid — member's classes */
@@ -238,6 +243,47 @@ export const NOTIF_TONE_FG: Record<string, string> = {
   warning: 'var(--df-warning)',
   accent: 'var(--df-accent-dark)'
 };
+
+/* ---- 通知中心：後端形狀 → 前端形狀（Task 17）----
+ * 共用給 member/api.ts 的 getNotifications() 與 member/stores.ts 的
+ * refreshNotifications()，放在這裡是唯一不會在兩者間造成循環 import 的位置
+ * （api.ts 需要呼叫 stores.ts 的 refresh* 函式；stores.ts 不會回頭 import api.ts）。
+ * 後端沒有「教練訊息」型別 → 'coach' 分類目前恆為空,是已知落差,非本次範圍。 */
+export interface ApiNotification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  is_read: boolean;
+  metadata: unknown;
+  created_at: string;
+}
+const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: string; tone: Tone }> = {
+  booking_confirmed: { cat: 'class', icon: 'calendar-check', tone: 'success' },
+  booking_cancelled: { cat: 'class', icon: 'calendar-off', tone: 'warning' },
+  order_placed: { cat: 'order', icon: 'credit-card', tone: 'success' },
+  order_status: { cat: 'order', icon: 'rotate-cw', tone: 'info' },
+  system: { cat: 'system', icon: 'bell', tone: 'neutral' },
+  promotion: { cat: 'system', icon: 'megaphone', tone: 'accent' }
+};
+// 未知型別 fallback：不讓頁面因後端新增 enum 值而炸掉（同 adapters.ts 的慣例）。
+const DEFAULT_NOTIF_META = { cat: 'system' as NotifCat, icon: 'bell', tone: 'neutral' as Tone };
+
+export function mapNotification(n: ApiNotification): Notification {
+  const meta = NOTIF_TYPE_MAP[n.type] ?? DEFAULT_NOTIF_META;
+  return {
+    id: n.id,
+    cat: meta.cat,
+    icon: meta.icon,
+    tone: meta.tone,
+    title: n.title,
+    body: n.message,
+    // 後端只給絕對時間戳；mock 原本的「N 小時前」相對時間需要「現在」當基準，會讓
+    // 映射變成非決定性、難以穩定測試 —— 改採簡單、可測試的絕對時間切片。
+    time: n.created_at.slice(0, 16).replace('T', ' '),
+    read: n.is_read
+  };
+}
 
 /* Member points (點數明細與兌換) */
 export const PT_TYPE: Record<LedgerType, [Tone, string]> = {

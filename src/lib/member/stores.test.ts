@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { createCart, cart, cartCount, subscriptions, points, pointsLedger } from './stores';
-import { CATALOG, ME, POINTS_LEDGER, courseToCartItem, passToCartItem } from './data';
+import { ME, POINTS_LEDGER, courseToCartItem, passToCartItem } from './data';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 // The singleton cart / subscriptions persist to localStorage; reset them (and
@@ -30,6 +30,21 @@ const COURSE: CatalogCourse = {
   desc: '',
   spots: 3
 };
+// A second, distinct public-catalog course fixture — needed wherever a test
+// requires two different course ids in the same cart (e.g. persistence round-trip).
+const COURSE2: CatalogCourse = {
+  id: 'course-uuid-2',
+  name: '兒童基礎 B 班',
+  level: '基礎',
+  cat: '兒童基礎',
+  age: '7–9 歲',
+  days: '週一 / 週三 17:30',
+  price: 3200,
+  hot: true,
+  coach: '陳教練',
+  desc: '',
+  spots: 2
+};
 const TICKET: Ticket = {
   id: 'product-uuid-1',
   name: '單堂體驗課',
@@ -38,23 +53,22 @@ const TICKET: Ticket = {
   features: []
 };
 
-describe('cart waitlist guard (member-catalog course path — cart.add)', () => {
-  // cart.add() still serves the not-yet-migrated member surface (numeric
-  // CatalogCourse ids from $lib/domain/member-app); it normalises the id to
-  // the cart's uuid-string CartItem shape internally.
-  const full = { ...CATALOG[0], spots: 0 };
+describe('cart waitlist guard (public-seam course path — cart.add)', () => {
+  // Task 17: cart.add() now takes the same public-seam CatalogCourse (uuid id)
+  // as the marketing course list, and delegates to courseToCartItem internally.
+  const full = { ...COURSE, spots: 0 };
 
   it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
     const c = createCart();
     const r = c.add(full);
     expect(r).toBe('waitlisted');
     expect(get(c)).toHaveLength(0); // never enters the paid cart
-    expect(get(c.waitlist)).toContain(String(full.id)); // registered for waitlist as a string id
+    expect(get(c.waitlist)).toContain(full.id);
   });
 
   it('adds a course that still has spots to the paid cart and returns "added"', () => {
     const c = createCart();
-    const normal = { ...CATALOG[0], spots: 3 };
+    const normal = { ...COURSE, spots: 3 };
     const r = c.add(normal);
     expect(r).toBe('added');
     expect(get(c)).toHaveLength(1);
@@ -65,13 +79,13 @@ describe('cart waitlist guard (member-catalog course path — cart.add)', () => 
     const c = createCart();
     c.add(full);
     c.add(full);
-    expect(get(c.waitlist)).toEqual([String(full.id)]); // recorded once
+    expect(get(c.waitlist)).toEqual([full.id]); // recorded once
     expect(get(c)).toHaveLength(0); // still never in the paid cart
   });
 
   it('bumps (not waitlist) when a course with spots is added twice — qty stays 1 (enrolment, not a quantity)', () => {
     const c = createCart();
-    const normal = { ...CATALOG[0], spots: 3 };
+    const normal = { ...COURSE, spots: 3 };
     expect(c.add(normal)).toBe('added');
     expect(c.add(normal)).toBe('bumped');
     expect(get(c)).toHaveLength(1);
@@ -121,18 +135,18 @@ describe('cart — addItem (cart v3: uuid ids, dedup by (type,id))', () => {
 describe('cart persistence (survives login / reload) — dreamfly_cart_v3', () => {
   it('round-trips items and waitlist through localStorage under the v3 key for a fresh persisted cart', () => {
     const c1 = createCart(true);
-    c1.add({ ...CATALOG[0], spots: 3 }); // normal → cart
-    c1.add({ ...CATALOG[1], spots: 0 }); // full → waitlist
+    c1.add({ ...COURSE, spots: 3 }); // normal → cart
+    c1.add({ ...COURSE2, spots: 0 }); // full → waitlist
     const c2 = createCart(true); // simulate a reload
     expect(get(c2)).toHaveLength(1);
-    expect(get(c2.waitlist)).toContain(String(CATALOG[1].id));
+    expect(get(c2.waitlist)).toContain(COURSE2.id);
     expect(localStorage.getItem('dreamfly_cart_v3')).toBeTruthy();
   });
 
   it('a non-persisted factory cart leaves localStorage untouched', () => {
     const before = localStorage.getItem('dreamfly_cart_v3');
     const c = createCart(); // persist defaults off
-    c.add({ ...CATALOG[0], spots: 3 });
+    c.add({ ...COURSE, spots: 3 });
     expect(localStorage.getItem('dreamfly_cart_v3')).toBe(before); // unchanged
   });
 
@@ -153,10 +167,10 @@ describe('cartCount (badge source)', () => {
   });
 });
 
-describe('subscriptions (entitlements persist)', () => {
-  it('writes entitlements to localStorage so they survive reload', () => {
+describe('subscriptions (truth is the server now — Task 17 removed client persistence)', () => {
+  it('does NOT write entitlements to localStorage; the server (refreshSubscriptions) is the only source of truth', () => {
     subscriptions.set([{ id: 'product-uuid-1', name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
-    expect(localStorage.getItem('dreamfly_subscriptions')).toContain('單堂體驗課');
+    expect(localStorage.getItem('dreamfly_subscriptions')).toBeNull();
   });
 });
 

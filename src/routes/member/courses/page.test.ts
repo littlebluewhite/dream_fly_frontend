@@ -3,13 +3,23 @@ import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/s
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, toasts } from '$lib/member/stores';
-import { CATALOG } from '$lib/member/data';
 import { getCourses } from '$lib/member/api';
 
 vi.mock('$lib/member/api', () => ({ getCourses: vi.fn() }));
 
-const FULL = CATALOG.find((c) => c.spots === 0)!; // id 5 跑酷入門班 (spots: 0)
-const OPEN = CATALOG.find((c) => c.spots > 0)!; // id 1 幼兒體操 啟蒙班 (spots > 0)
+// Task 17: getCourses() now returns the public-seam CatalogCourse (uuid id, no
+// icon field) — a local fixture replaces the old member-domain CATALOG mock.
+const CATALOG = [
+	{ id: 'course-1', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '', spots: 2 },
+	{ id: 'course-2', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', days: '週一 / 週三 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '', spots: 2 },
+	{ id: 'course-3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '', spots: 1 },
+	{ id: 'course-4', name: '成人體操 基礎班', level: '基礎', cat: '成人體操', age: '16 歲以上', days: '週五 20:00', price: 3600, hot: false, coach: '王思齊', desc: '', spots: 3 },
+	{ id: 'course-5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '', spots: 0 },
+	{ id: 'course-6', name: '親子體操 同樂班', level: '啟蒙', cat: '幼兒體操', age: '2–4 歲', days: '週日 10:00', price: 2600, hot: false, coach: '黃詩涵', desc: '', spots: 3 }
+];
+
+const FULL = CATALOG.find((c) => c.spots === 0)!; // course-5 跑酷入門班 (spots: 0)
+const OPEN = CATALOG.find((c) => c.spots > 0)!; // course-1 幼兒體操 啟蒙班 (spots > 0)
 
 // The catalog must contain exactly one full course for the 候補-button lookup
 // below to be unambiguous; assert that here so the fixture can't drift silently.
@@ -29,7 +39,7 @@ describe('課程介紹 — addToCart branches on the store AddResult (waitlist g
 	it('a full course shows a waitlist toast and never enters the paid cart', async () => {
 		cart.clear();
 		expect(fullCount).toBe(1); // only the full course renders a 候補 button
-		expect(FULL.id).toBe(5);
+		expect(FULL.id).toBe('course-5');
 
 		const { container } = render(Page);
 		// Wait for the ready branch — the full course renders a 候補 button once loaded.

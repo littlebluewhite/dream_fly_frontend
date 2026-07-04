@@ -1,14 +1,27 @@
-/* Dream Fly — member 結帳「真訂單」API 層單測（Task 16）
+/* Dream Fly — member 結帳「真訂單」API 層單測（Task 16；Task 17 加了 refreshPoints
+ * 的 ledger 映射與 refreshNotifications）
  *
  * 覆蓋 stores.ts 新增的網路層：syncCartToServer / placeOrder / refreshSubscriptions /
- * refreshPoints。只替換 $lib/api/client 的 api()，ApiError 用回真實類別（判斷
- * 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→POST /orders→GET×2）
- * 是這裡的核心斷言，不是只驗證最終 state。 */
+ * refreshPoints / refreshNotifications。只替換 $lib/api/client 的 api()，ApiError
+ * 用回真實類別（判斷 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→
+ * POST /orders→GET×2）是這裡的核心斷言，不是只驗證最終 state。 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
-import { cart, subscriptions, points, syncCartToServer, placeOrder, refreshSubscriptions, refreshPoints } from './stores';
+import {
+  cart,
+  subscriptions,
+  points,
+  pointsLedger,
+  notifications,
+  notificationsHydrated,
+  syncCartToServer,
+  placeOrder,
+  refreshSubscriptions,
+  refreshPoints,
+  refreshNotifications
+} from './stores';
 import type { ApiOrder } from './stores';
 import type { CartItem } from './data';
 
@@ -58,6 +71,9 @@ beforeEach(() => {
   cart.waitlist.set([]);
   subscriptions.set([]);
   points.set(0);
+  pointsLedger.set([]);
+  notifications.set([]);
+  notificationsHydrated.set(false);
   vi.mocked(api).mockReset();
 });
 
@@ -300,5 +316,69 @@ describe('refreshPoints', () => {
     await refreshPoints();
 
     expect(get(points)).toBe(888);
+  });
+
+  it('ledger 依 reason 映射 desc/type；date 取 created_at 前 10 碼並轉成 YYYY/MM/DD(Task 17)', async () => {
+    vi.mocked(api).mockResolvedValue({
+      balance: 500,
+      ledger: [
+        { id: 'l1', delta: 120, balance_after: 500, reason: 'checkout_earn', order_id: 'o1', created_at: '2026-07-01T09:00:00Z' },
+        { id: 'l2', delta: -300, balance_after: 380, reason: 'checkout_redeem', order_id: 'o2', created_at: '2026-06-20T00:00:00Z' }
+      ],
+      total: 2, page: 1, per_page: 20
+    });
+
+    await refreshPoints();
+
+    expect(get(pointsLedger)).toEqual([
+      { id: 'l1', date: '2026/07/01', desc: '消費獲得點數', type: 'earn', delta: 120 },
+      { id: 'l2', date: '2026/06/20', desc: '消費折抵點數', type: 'redeem', delta: -300 }
+    ]);
+  });
+
+  it('admin_adjust 沒有專屬 UI bucket，依 delta 正負號借用 earn/expire', async () => {
+    vi.mocked(api).mockResolvedValue({
+      balance: 0,
+      ledger: [
+        { id: 'l3', delta: 50, balance_after: 50, reason: 'admin_adjust', order_id: null, created_at: '2026-05-01T00:00:00Z' },
+        { id: 'l4', delta: -20, balance_after: 30, reason: 'admin_adjust', order_id: null, created_at: '2026-05-02T00:00:00Z' }
+      ],
+      total: 2, page: 1, per_page: 20
+    });
+
+    await refreshPoints();
+
+    expect(get(pointsLedger)).toEqual([
+      { id: 'l3', date: '2026/05/01', desc: '會員點數調整（增加）', type: 'earn', delta: 50 },
+      { id: 'l4', date: '2026/05/02', desc: '會員點數調整（扣除）', type: 'expire', delta: -20 }
+    ]);
+  });
+});
+
+describe('refreshNotifications(Task 17)', () => {
+  it('把 GET /notifications 映射後寫入 notifications store，並把 notificationsHydrated 設為 true', async () => {
+    vi.mocked(api).mockResolvedValue([
+      { id: 'n1', type: 'order_placed', title: '付款成功', message: '訂單已完成付款', is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' }
+    ]);
+
+    await refreshNotifications();
+
+    expect(get(notifications)).toEqual([
+      { id: 'n1', cat: 'order', icon: 'credit-card', tone: 'success', title: '付款成功', body: '訂單已完成付款', time: '2026-07-04 06:30', read: false }
+    ]);
+    expect(get(notificationsHydrated)).toBe(true);
+    expect(api).toHaveBeenCalledWith('/notifications');
+  });
+
+  it('已經 hydrate 過就不重覆抓 —— 避免蓋掉本地已讀狀態(同通知頁 load() 的既有守衛)', async () => {
+    notificationsHydrated.set(true);
+    const sentinel = [{ id: 's1', cat: 'system' as const, icon: 'bell', tone: 'neutral' as const, title: '哨兵', body: '', time: '2026-01-01 00:00', read: true }];
+    notifications.set(sentinel);
+    vi.mocked(api).mockResolvedValue([{ id: 'n2', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
+
+    await refreshNotifications();
+
+    expect(api).not.toHaveBeenCalled();
+    expect(get(notifications)).toEqual(sentinel); // 未被覆寫
   });
 });

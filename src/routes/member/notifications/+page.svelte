@@ -13,6 +13,7 @@
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { getNotifications } from '$lib/member/api';
   import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
+  import { api } from '$lib/api/client';
 
   let cat = 'all';
   let phase: 'loading' | 'error' | 'ready' = 'loading';
@@ -36,8 +37,14 @@
   const countOf = (c: string) =>
     c === 'all' ? $notifications.length : $notifications.filter((n) => n.cat === c).length;
 
-  const markRead = (id: string) =>
+  // 樂觀更新本地 store,再送 PATCH 到後端;失敗只記錄錯誤、不還原(避免使用者感覺
+  // 「點了又跳回未讀」的閃爍) —— markAll 目前仍是純本地操作,後端沒有批次已讀端點。
+  const markRead = (id: string) => {
     notifications.update((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    api(`/notifications/${id}/read`, { method: 'PATCH' }).catch((err) => {
+      console.error('Failed to mark notification as read:', err);
+    });
+  };
   const markAll = () => {
     notifications.update((p) => p.map((n) => ({ ...n, read: true })));
     toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');

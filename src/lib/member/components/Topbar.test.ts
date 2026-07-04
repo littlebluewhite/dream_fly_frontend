@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Topbar from './Topbar.svelte';
 import { cart, checkoutOpen } from '$lib/member/stores';
-import { CATALOG } from '$lib/member/data';
 import { authStore } from '$lib/stores/authStore';
 import { checkoutTarget } from '$lib/checkout-gate';
 
@@ -29,8 +28,9 @@ vi.mock('$lib/stores/authStore', async () => {
   };
 });
 
-const courseA = { ...CATALOG.find((c) => c.id === 1)!, spots: 9 };
-const courseB = { ...CATALOG.find((c) => c.id === 2)!, spots: 9 };
+// Task 17: cart.add() now takes the public-seam CatalogCourse (uuid id).
+const courseA = { id: 'course-a', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '', spots: 9 };
+const courseB = { id: 'course-b', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', days: '週一 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '', spots: 9 };
 
 beforeEach(() => {
   localStorage.clear();

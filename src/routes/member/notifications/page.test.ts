@@ -3,15 +3,22 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { getNotifications } from '$lib/member/api';
+import { api } from '$lib/api/client';
 import { notifications, notificationsHydrated } from '$lib/member/stores';
 import { NOTIFS_SEED } from '$lib/member/data';
 import type { Notification } from '$lib/member/data';
 import Page from './+page.svelte';
 
 vi.mock('$lib/member/api', () => ({ getNotifications: vi.fn() }));
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 
 beforeEach(() => {
   vi.mocked(getNotifications).mockReset();
+  vi.mocked(api).mockReset();
+  vi.mocked(api).mockResolvedValue(undefined);
   // Reset the load-once guard so each test starts un-hydrated. A store (not a
   // module boolean) so test order can't leak a prior successful hydrate.
   notificationsHydrated.set(false);
@@ -31,6 +38,30 @@ describe('member/notifications 頁', () => {
     render(Page);
     expect(screen.queryByText('明日課程提醒')).toBeNull();
     expect(await screen.findByText('明日課程提醒')).toBeInTheDocument();
+  });
+
+  it('點擊通知(標為已讀)會呼叫 PATCH /notifications/{id}/read(Task 17)', async () => {
+    notificationsHydrated.set(true); // 直接用 store 裡已有的 seed,略過 load()
+    render(Page);
+    const row = (await screen.findByText('明日課程提醒')).closest('button')!;
+
+    await fireEvent.click(row);
+
+    expect(api).toHaveBeenCalledWith('/notifications/n1/read', { method: 'PATCH' });
+  });
+
+  it('PATCH 失敗時只記錄錯誤,樂觀更新的已讀狀態不還原', async () => {
+    notificationsHydrated.set(true);
+    vi.mocked(api).mockRejectedValue(new Error('network error'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(Page);
+    const row = (await screen.findByText('明日課程提醒')).closest('button')!;
+
+    await fireEvent.click(row);
+    await tick();
+
+    // 樂觀更新已經套用 —— 該通知的未讀圓點消失(見 notif-row 樣板:!n.read 才畫點)。
+    expect(row.querySelector('span[style*="border-radius:50%"]')).toBeNull();
   });
 
   it('載入失敗顯示 ErrorState', async () => {

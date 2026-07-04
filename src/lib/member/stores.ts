@@ -7,16 +7,19 @@
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { api } from '$lib/api/client';
-import { ntd } from '$lib/public/adapters';
+import { ntd, type CatalogCourse } from '$lib/public/adapters';
 import {
   ME,
   NOTIFS_SEED,
   POINTS_LEDGER,
   SUBS_SEED,
+  courseToCartItem,
+  mapNotification,
+  type ApiNotification,
   type CartItem,
   type CartItemInput,
-  type CatalogCourse,
   type LedgerEntry,
+  type LedgerType,
   type Notification,
   type Subscription
 } from './data';
@@ -100,12 +103,13 @@ export function createCart(persist = false) {
     subscribe,
     waitlist,
     addItem,
-    /** Add a member-catalog course (the not-yet-migrated member surface's own
-     *  catalog — numeric id; see Task 17). Normalises the id to the cart's
-     *  uuid-string CartItem shape and otherwise delegates entirely to
-     *  addItem, so waitlist/bump behaviour stays identical for both sources. */
+    /** Add a course from the member catalog (Task 17: now the same public-seam
+     *  CatalogCourse the marketing course list uses — uuid id, no icon field).
+     *  Delegates to the same courseToCartItem adapter the marketing surface
+     *  already uses, so both sources fill the missing icon identically and
+     *  waitlist/bump behaviour stays identical. */
     add(course: CatalogCourse): AddResult {
-      return addItem({ ...course, id: String(course.id), type: 'course' });
+      return addItem(courseToCartItem(course));
     },
     remove(id: string) {
       update((items) => items.filter((x) => x.id !== id));
@@ -135,29 +139,12 @@ export const points = writable<number>(ME.points);
 export const pointsLedger = writable<LedgerEntry[]>(POINTS_LEDGER.map((e) => ({ ...e })));
 
 /* ---- Subscriptions / entitlements ----
- * Unlike points, entitlements PERSIST (localStorage) — a paid pass must survive
- * reload / re-login, so the system always knows what the member is subscribed to. */
-const SUBS_STORAGE_KEY = 'dreamfly_subscriptions';
-function loadSubs(): Subscription[] {
-  if (typeof window === 'undefined') return SUBS_SEED.map((s) => ({ ...s }));
-  try {
-    const stored = localStorage.getItem(SUBS_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : SUBS_SEED.map((s) => ({ ...s }));
-  } catch (error) {
-    console.error('Failed to load subscriptions from storage:', error);
-    return SUBS_SEED.map((s) => ({ ...s }));
-  }
-}
-export const subscriptions = writable<Subscription[]>(loadSubs());
-if (typeof window !== 'undefined') {
-  subscriptions.subscribe((subs) => {
-    try {
-      localStorage.setItem(SUBS_STORAGE_KEY, JSON.stringify(subs));
-    } catch (error) {
-      console.error('Failed to save subscriptions to storage:', error);
-    }
-  });
-}
+ * Task 17: localStorage persistence removed — truth is the server now
+ * (GET /subscriptions/me via refreshSubscriptions, called from getAccount()
+ * and after placeOrder()). A client-cached snapshot could out-live the real
+ * entitlement (e.g. an admin-side change) with no event to invalidate it, so
+ * the store simply starts empty/seeded and is hydrated on demand instead. */
+export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ...s })));
 
 /* ---- Checkout — 真訂單 API 接縫（Task 16） ----
  * 取代原本本地結算的 commitCheckout+applyOrder 組合：金額/點數/報名/訂閱一律由
@@ -200,8 +187,35 @@ export interface ApiSubscription {
   price_cents: number;
 }
 
+export interface ApiLedgerEntry {
+  id: string;
+  delta: number;
+  balance_after: number;
+  reason: string;
+  order_id: string | null;
+  created_at: string;
+}
+
 export interface ApiPointsMe {
   balance: number;
+  ledger: ApiLedgerEntry[];
+}
+
+/** reason → 中文 desc + 本地 LedgerType 對照。checkout_earn/checkout_redeem 依契約
+ *  恆為正/負，可以直接定案；admin_adjust 可正可負且沒有專屬的 UI bucket（LedgerType
+ *  只有 earn/redeem/expire 三值），借用既有兩值、依 delta 正負號分類 —— desc 文字
+ *  仍誠實描述「管理員調整」，只有 badge 的分類/色調是借用近似值。 */
+function describeLedgerReason(reason: string, delta: number): { type: LedgerType; desc: string } {
+  switch (reason) {
+    case 'checkout_earn':
+      return { type: 'earn', desc: '消費獲得點數' };
+    case 'checkout_redeem':
+      return { type: 'redeem', desc: '消費折抵點數' };
+    default:
+      return delta < 0
+        ? { type: 'expire', desc: '會員點數調整（扣除）' }
+        : { type: 'earn', desc: '會員點數調整（增加）' };
+  }
 }
 
 /** 購物車同步到後端：先 DELETE 清空 server 端購物車，再逐項 POST /cart/items（upsert）。
@@ -254,7 +268,14 @@ export async function placeOrder(
 /** 訂閱清單 — 從 GET /subscriptions/me 重新 hydrate 本地 subscriptions store。
  *  只留 status active 的項目：expired/cancelled 不算「已持有」，不該擋掉會員
  *  重新購買同一張 pass。id 換成 product_id——chargeableLines 是拿 cart item 的
- *  product/course id 去比對「是否已持有」，不是拿 subscription 自己的 id。 */
+ *  product/course id 去比對「是否已持有」，不是拿 subscription 自己的 id。
+ *
+ *  since 的日期格式(Task 16→17 parked issue的解法)：保留 ISO 切法(YYYY-MM-DD)，
+ *  不改成 legacy mock 的 YYYY/MM/DD —— 帳戶頁(account/+page.svelte)同時顯示這個
+ *  欄位跟 Task 17 新接的訂單 date 欄位(也是 ISO 切法)，兩者維持同一種格式互相一致
+ *  比較重要，帳戶頁本身沒有依賴任何特定分隔符的字串比對邏輯，兩種格式對它來說都
+ *  一樣能正常顯示。（points 頁的 pointsLedger 則是反過來選 YYYY/MM/DD——因為那裡
+ *  有一段既有邏輯依賴這個格式，見 refreshPoints 的註解。） */
 export async function refreshSubscriptions(): Promise<void> {
   const list = await api<ApiSubscription[]>('/subscriptions/me');
   subscriptions.set(
@@ -264,11 +285,20 @@ export async function refreshSubscriptions(): Promise<void> {
   );
 }
 
-/** 點數餘額 — 從 GET /points/me 重新 hydrate。ledger 明細留給會員中心頁面
- *  （Task 17）另外接線，這裡只需要 checkout 用得到的餘額數字。 */
+/** 點數餘額 + 明細 — 從 GET /points/me 重新 hydrate。balance 給 checkout 用；
+ *  ledger（Task 17 接線）用 date 的 YYYY/MM/DD 切法而非 ISO 切法，是因為
+ *  points 頁本身有一段既有、依賴這個格式的「本月累積」篩選(見 points/+page.svelte
+ *  的 l.date.startsWith('2026/06'))，換成 ISO 會讓那段篩選永遠不 match、悄悄把
+ *  統計歸零 —— 這裡選「不動那個既有篩選」而非「順手把格式也改成 ISO」。 */
 export async function refreshPoints(): Promise<void> {
   const data = await api<ApiPointsMe>('/points/me');
   points.set(data.balance);
+  pointsLedger.set(
+    data.ledger.map((l) => {
+      const { type, desc } = describeLedgerReason(l.reason, l.delta);
+      return { id: l.id, date: l.created_at.slice(0, 10).replace(/-/g, '/'), desc, type, delta: l.delta };
+    })
+  );
 }
 
 /* ---- Notifications ---- */
@@ -281,6 +311,20 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
 // unread badge) survive navigation. Independent of `notifications`/`unreadCount`
 // so it never affects the badge. Resettable in tests.
 export const notificationsHydrated = writable(false);
+
+/** 通知中心 — 從 GET /notifications 重新 hydrate(Task 17)。目前的呼叫端是
+ *  api.ts 的 getDashboard()：會員登入後第一個會進的頁面，讓 Topbar/Sidebar 的未讀
+ *  角標一開始就是真資料，不用等使用者先逛過通知頁。守衛跟 notifications 頁的
+ *  load() 用同一顆 notificationsHydrated flag——已經 hydrate 過就不重覆抓，避免
+ *  蓋掉使用者在通知頁的本地已讀狀態（不論是哪一邊先觸發都一樣：先到者 hydrate、
+ *  後到者直接讀已經在 store 裡的資料）。type→cat/icon/tone 對照表跟 api.ts 的
+ *  getNotifications() 共用 data.ts 的 mapNotification，避免兩處各自維護一份。 */
+export async function refreshNotifications(): Promise<void> {
+  if (get(notificationsHydrated)) return;
+  const list = await api<ApiNotification[]>('/notifications');
+  notifications.set(list.map(mapNotification));
+  notificationsHydrated.set(true);
+}
 
 /* ---- Cross-route UI state ---- */
 export const checkoutOpen = writable(false);

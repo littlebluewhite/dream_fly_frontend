@@ -5,7 +5,8 @@
    * CourseDetail (client/views.jsx). */
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { LEVEL_TONE, type CatalogCourse } from '$lib/member/data';
+  import { LEVEL_TONE } from '$lib/member/data';
+  import type { CatalogCourse } from '$lib/public/adapters';
 
   export let course: CatalogCourse | null = null;
   export let onClose: () => void = () => {};
