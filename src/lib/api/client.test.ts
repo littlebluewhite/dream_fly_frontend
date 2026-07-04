@@ -33,6 +33,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('api()', () => {
@@ -194,6 +195,29 @@ describe('api()', () => {
     expect(err.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(1); // never touched /auth/refresh
   });
+
+  it('on a 401, throws ApiError(401) — not a raw storage error — when the refresh-token read throws (SecurityError)', async () => {
+    // Reproduces the concrete failure path: performRefresh() reads the refresh
+    // token via getRefresh(); if that access throws (privacy-hardened browser /
+    // sandboxed iframe), the exception must be absorbed into refreshTokens()
+    // returning false, so api() still surfaces the specified ApiError(401).
+    setTokens('expired-access', 'refresh-good'); // writes memory + localStorage before we break reads
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: access to localStorage is denied');
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: 'token expired' }, 401, 'Unauthorized'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const err = (await api('/users/me').catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    // original request only; the refresh short-circuits on the read failure without a network call
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('refreshTokens()', () => {
@@ -238,5 +262,18 @@ describe('refreshTokens()', () => {
     expect(ok).toBe(false);
     expect(getAccess()).toBeNull();
     expect(getRefresh()).toBeNull();
+  });
+
+  it('resolves false (never rejects) when the refresh-token storage read throws', async () => {
+    setTokens('access', 'refresh'); // seed memory + storage before breaking reads
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: access to localStorage is denied');
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(refreshTokens()).resolves.toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

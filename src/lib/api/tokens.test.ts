@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { getAccess, setTokens, getRefresh, clearTokens } from './tokens';
 
 const REFRESH_KEY = 'dreamfly_refresh';
@@ -9,6 +9,7 @@ beforeEach(() => {
   clearTokens();
   localStorage.clear();
 });
+afterEach(() => vi.restoreAllMocks());
 
 describe('tokens', () => {
   it('starts with no access or refresh token', () => {
@@ -49,5 +50,41 @@ describe('tokens', () => {
 
     expect(getAccess()).toBe('access-2');
     expect(getRefresh()).toBe('refresh-2');
+  });
+});
+
+// Restrictive contexts (privacy-hardened browsers, sandboxed iframes) throw
+// SecurityError on localStorage access itself; quota errors throw on write.
+// Storage failures must degrade gracefully, never propagate (same convention
+// as authStore.ts).
+describe('tokens — storage unavailable', () => {
+  it('getRefresh returns null instead of throwing when the storage read throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError: access denied');
+    });
+
+    expect(getRefresh()).toBe(null);
+  });
+
+  it('setTokens swallows a storage write failure and still records the access token in memory', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    expect(() => setTokens('access-123', 'refresh-456')).not.toThrow();
+    expect(getAccess()).toBe('access-123');
+  });
+
+  it('clearTokens swallows a storage removal failure and still clears the in-memory access token', () => {
+    setTokens('access-123', 'refresh-456');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+
+    expect(() => clearTokens()).not.toThrow();
+    expect(getAccess()).toBe(null);
   });
 });
