@@ -10,9 +10,10 @@
   import type { Student } from '$lib/coach/data';
 
   export let s: Student;
-  /** 發證書入口（Task 13；POST /certificates，見 integration-contract.md §3.22）。
-   *  「寫評語」(POST /report-cards) 需要 enrolment_id，MyStudentResponse 未提供、
-   *  亦無合適途徑取得，本次任務判定 BLOCKED，故此處只有發證書一個教練發放動作。 */
+  /** 教練發放入口（Task 13；integration-contract.md §3.22）：寫評語 POST
+   *  /report-cards（enrolment_id 由 Student.courses 提供，後端 97668d2 起）、
+   *  發證書 POST /certificates。 */
+  export let onReportCard: (s: Student) => void = () => {};
   export let onCertificate: (s: Student) => void = () => {};
 
   $: tint = LEVEL_TINT[s.level];
@@ -60,12 +61,17 @@
     >查看詳情 <Icon name="chevron-right" size={14} color="var(--df-primary)" /></button>
   </div>
 
-  <!-- 教練發放：發證書（Task 13，POST /certificates §3.22） -->
-  <div style="border-top:1px solid var(--df-border);margin-top:14px;padding-top:12px">
+  <!-- 教練發放：寫評語 + 發證書（Task 13，POST /report-cards + /certificates §3.22） -->
+  <div style="border-top:1px solid var(--df-border);margin-top:14px;padding-top:12px;display:flex;gap:8px">
+    <button
+      type="button"
+      on:click={() => onReportCard(s)}
+      style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--df-primary);cursor:pointer;font-family:var(--df-font-body)"
+    ><Icon name="clipboard-list" size={14} color="var(--df-primary)" />寫評語</button>
     <button
       type="button"
       on:click={() => onCertificate(s)}
-      style="display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--df-primary);cursor:pointer;font-family:var(--df-font-body)"
+      style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--df-primary);cursor:pointer;font-family:var(--df-font-body)"
     ><Icon name="award" size={14} color="var(--df-primary)" />發證書</button>
   </div>
 </Card>

@@ -44,9 +44,9 @@ const THREAD_C1 = [
 /* 撰寫新對話 picker 名冊(getStudents)——陳爸爸 對應既有對話 c2 的 peer，供 get-or-create
  * 合併情境使用。 */
 const MY_STUDENTS = [
-	{ user_id: 'su1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', level: '初階' as const, skill: '', pct: 0, att: 0 },
-	{ user_id: 'su2', name: '林小美', initial: '林', color: '#0066CC', cls: '幼兒體操啟蒙班', level: '初階' as const, skill: '', pct: 0, att: 0 },
-	{ user_id: 'su3', name: '陳爸爸', initial: '陳', color: '#0066CC', cls: '成人體適能班', level: '初階' as const, skill: '', pct: 0, att: 0 }
+	{ user_id: 'su1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }], level: '初階' as const, skill: '', pct: 0, att: 0 },
+	{ user_id: 'su2', name: '林小美', initial: '林', color: '#0066CC', cls: '幼兒體操啟蒙班', courses: [{ course_id: 'c2', course_name: '幼兒體操啟蒙班', enrolment_id: 'en2' }], level: '初階' as const, skill: '', pct: 0, att: 0 },
+	{ user_id: 'su3', name: '陳爸爸', initial: '陳', color: '#0066CC', cls: '成人體適能班', courses: [{ course_id: 'c3', course_name: '成人體適能班', enrolment_id: 'en3' }], level: '初階' as const, skill: '', pct: 0, att: 0 }
 ];
 
 const NEW_CONVO = {

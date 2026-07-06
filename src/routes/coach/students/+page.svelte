@@ -17,6 +17,7 @@
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import StudentCard from '$lib/coach/components/StudentCard.svelte';
   import CertificateDialog from '$lib/coach/components/CertificateDialog.svelte';
+  import ReportCardDialog from '$lib/coach/components/ReportCardDialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
@@ -39,6 +40,18 @@
   }
   function closeCertificate() {
     certOpen = false;
+  }
+
+  /* 寫評語 dialog（Task 13 續；POST /report-cards，§3.22——enrolment_id 來自
+   * getStudents() 的 Student.courses，後端 97668d2 起提供）。 */
+  let rcOpen = false;
+  let rcStudent: Student | null = null;
+  function openReportCard(s: Student) {
+    rcStudent = s;
+    rcOpen = true;
+  }
+  function closeReportCard() {
+    rcOpen = false;
   }
 
   /* ---- filter state ---- */
@@ -109,7 +122,7 @@
   {#if filtered.length > 0}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
       {#each filtered as s (s.name)}
-        <StudentCard {s} onCertificate={openCertificate} />
+        <StudentCard {s} onReportCard={openReportCard} onCertificate={openCertificate} />
       {/each}
     </div>
   {:else}
@@ -122,6 +135,7 @@
 
 </div>
 <CertificateDialog open={certOpen} student={certStudent} onClose={closeCertificate} />
+<ReportCardDialog open={rcOpen} student={rcStudent} onClose={closeReportCard} />
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}

@@ -448,6 +448,9 @@ export const createConversation = async (userId: string, peerName: string): Prom
 interface ApiMyStudentCourse {
 	course_id: string;
 	course_name: string;
+	/** 該學員在該課程的 active enrolment id（後端 97668d2 起，§3.19）——寫評語
+	 *  POST /report-cards 的必要識別。 */
+	enrolment_id: string;
 }
 interface ApiMyStudent {
 	user_id: string;
@@ -457,7 +460,8 @@ interface ApiMyStudent {
 }
 
 /** MyStudentResponse → 既有 Student 形狀。user_id 穿透(訊息中心「撰寫新對話」的
- *  POST /conversations 需要對方 user id，picker 直接用 getStudents() 名冊)；cls 由
+ *  POST /conversations 需要對方 user id，picker 直接用 getStudents() 名冊)；courses
+ *  結構化穿透(寫評語 dialog 需要 enrolment_id，多堂課時供教練選擇，Task 13)；cls 由
  *  courses(該學員在這位教練名下的所有課程)以「、」串接組成——忠實反映可能不只一堂
  *  課，而非只取第一堂丟掉其餘資訊；initial 由姓名首字推導(同 mapProfile 慣例)；
  *  color 無代表色欄位,固定預設值(P2，同 mapScheduleEntry 慣例)。level/skill/pct/att
@@ -471,6 +475,7 @@ function mapStudent(s: ApiMyStudent): Student {
 		initial: s.name.charAt(0) || '?',
 		color: '#0066CC', // P2: 後端無代表色欄位
 		cls: s.courses.map((c) => c.course_name).join('、'),
+		courses: s.courses,
 		level: '初階', // P2: MyStudentResponse 無學員程度欄位
 		skill: '', // P2: 無技能評量欄位
 		pct: 0, // P2: 無技能評量百分比欄位
@@ -613,3 +618,30 @@ interface ApiCertificate {
  *  createCoupon 慣例：呼叫端自行處理 toast/錯誤訊息，本函式不做映射）。 */
 export const createCertificate = (body: CreateCertificateBody): Promise<ApiCertificate> =>
 	api<ApiCertificate>('/certificates', { method: 'POST', body: JSON.stringify(body) });
+
+/* ═════════════════════════ 寫評語（POST /report-cards，見 integration-contract.md §3.22） ═════════════════════════ */
+
+export interface CreateReportCardBody {
+	enrolment_id: string;
+	term_label: string;
+	comment?: string;
+	rating?: number; // 1–5
+}
+
+interface ApiReportCard {
+	id: string;
+	course_id: string;
+	course_name: string;
+	term_label: string;
+	comment: string | null;
+	rating: number | null;
+	created_by_name: string;
+	created_at: string;
+}
+
+/** POST /report-cards — coach 限自己課程的 enrolment（§3.22）。同一 enrolment 同一
+ *  期別僅能建立一次（UNIQUE(enrolment_id, term_label)），重複回 409「此期別已建立過
+ *  成績單」；rating 選填 1–5（0/6 回 422）。回應直接透傳（同 createCertificate 慣例：
+ *  呼叫端自行處理 toast/錯誤訊息，本函式不做映射）。 */
+export const createReportCard = (body: CreateReportCardBody): Promise<ApiReportCard> =>
+	api<ApiReportCard>('/report-cards', { method: 'POST', body: JSON.stringify(body) });

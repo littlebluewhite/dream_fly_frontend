@@ -4,10 +4,11 @@ import StudentsPage from './+page.svelte';
 import { STUDENTS } from '$lib/coach/data';
 import { getStudents } from '$lib/coach/api';
 
-// createCertificate 也在此一併 mock（不執行真呼叫）——CertificateDialog（Task 13）
-// 從同一個模組 import，若省略會在 dialog 元件初始化時解析成 undefined 的具名匯出;
-// 本檔案只驗證「發證書」開啟 dialog 的接線，送出/錯誤分支見 CertificateDialog.test.ts。
-vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn() }));
+// createCertificate/createReportCard 也在此一併 mock（不執行真呼叫）——
+// CertificateDialog/ReportCardDialog（Task 13）從同一個模組 import，若省略會在
+// dialog 元件初始化時解析成 undefined 的具名匯出;本檔案只驗證「發證書」「寫評語」
+// 開啟 dialog 的接線，送出/錯誤分支見各 dialog 自己的測試檔。
+vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn(), createReportCard: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getStudents).mockReset();
@@ -110,5 +111,42 @@ describe('/coach/students — 發證書', () => {
 
 		await fireEvent.click(getByText('取消'));
 		expect(queryByText(`頒發對象：${STUDENTS[0].name}`)).toBeNull();
+	});
+});
+
+/* 寫評語入口（Task 13 續；POST /report-cards，§3.22）——同發證書的分工：只驗證
+ * 開啟/帶入學員/關閉的接線，payload/409/多課選擇分支見 ReportCardDialog.test.ts。 */
+describe('/coach/students — 寫評語', () => {
+	it('點擊某位學員的「寫評語」開啟 dialog 並帶入正確學員', async () => {
+		const { getAllByText, findByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('寫評語');
+		await fireEvent.click(buttons[0]);
+
+		expect(await findByText(`評語對象：${STUDENTS[0].name}`)).toBeInTheDocument();
+	});
+
+	it('不同學員各自帶入正確的評語對象', async () => {
+		const { getAllByText, findByText, queryByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('寫評語');
+		await fireEvent.click(buttons[1]);
+
+		expect(await findByText(`評語對象：${STUDENTS[1].name}`)).toBeInTheDocument();
+		expect(queryByText(`評語對象：${STUDENTS[0].name}`)).toBeNull();
+	});
+
+	it('點擊「取消」關閉 dialog', async () => {
+		const { getAllByText, findByText, getByText, queryByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('寫評語');
+		await fireEvent.click(buttons[0]);
+		await findByText(`評語對象：${STUDENTS[0].name}`);
+
+		await fireEvent.click(getByText('取消'));
+		expect(queryByText(`評語對象：${STUDENTS[0].name}`)).toBeNull();
 	});
 });

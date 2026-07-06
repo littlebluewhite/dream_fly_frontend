@@ -16,7 +16,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 const STUDENT: Student = {
   user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC',
-  cls: '兒童體操初階 B 班', level: '初階', skill: '前滾翻', pct: 80, att: 98
+  cls: '兒童體操初階 B 班',
+  courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }],
+  level: '初階', skill: '前滾翻', pct: 80, att: 98
 };
 
 /** 同元件的 today()：本地日期，非 toISOString()(避免 UTC 位移，見元件註解)。 */

@@ -50,6 +50,14 @@ export interface TodayClass {
 	cat: SchedCat;
 	status: TodayStatus;
 }
+/** MyStudentResponse.courses 條目（§3.19，後端 97668d2 起含 enrolment_id）——
+ *  enrolment_id 是該學員在該課程的 active enrolment id，寫評語 POST /report-cards
+ *  以此指定「哪一堂課的成績單」（§3.22）。 */
+export interface StudentCourse {
+	course_id: string;
+	course_name: string;
+	enrolment_id: string;
+}
 export interface Student {
 	/** users.id — 訊息中心「撰寫新對話」POST /conversations 的對方識別（Task 12）。 */
 	user_id: string;
@@ -57,6 +65,9 @@ export interface Student {
 	initial: string;
 	color: string;
 	cls: string;
+	/** 結構化課程清單（cls 是其 course_name 的「、」串接顯示形）——Task 13 寫評語
+	 *  dialog 需要 enrolment_id，多堂課時供教練選擇。 */
+	courses: StudentCourse[];
 	level: StudentLevel;
 	skill: string;
 	pct: number;
@@ -183,19 +194,21 @@ export const LEVEL_TINT: Record<StudentLevel, { bg: string; fg: string }> = {
 	選手: { bg: '#EDE9FE', fg: '#5B21B6' }
 };
 
+/* courses：單堂課 mock（course_name 即 cls；同班學員共用 course_id），enrolment_id
+ * 每人一組——寫評語 dialog（Task 13）吃結構化清單。 */
 export const STUDENTS: Student[] = [
-	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', level: '初階', skill: '前滾翻', pct: 80, att: 98 },
-	{ user_id: 'su02', name: '陳柏睿', initial: '陳', color: '#EC4899', cls: '兒童體操中階 A 班', level: '中階', skill: '後空翻', pct: 72, att: 95 },
-	{ user_id: 'su03', name: '林芷晴', initial: '林', color: '#10B981', cls: '幼兒體操初階班', level: '初階', skill: '倒立', pct: 65, att: 90 },
-	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '空中轉體', pct: 88, att: 99 },
-	{ user_id: 'su05', name: '黃詩涵', initial: '黃', color: '#F59E0B', cls: '兒童體操中階 B 班', level: '中階', skill: '側手翻', pct: 78, att: 86 },
-	{ user_id: 'su06', name: '吳承翰', initial: '吳', color: '#0EA5E9', cls: '兒童體操初階 A 班', level: '初階', skill: '橋式', pct: 58, att: 72 },
-	{ user_id: 'su07', name: '劉若彤', initial: '劉', color: '#EF4444', cls: '競技選手培訓班', level: '選手', skill: '後空翻兩周', pct: 91, att: 97 },
-	{ user_id: 'su08', name: '蔡明軒', initial: '蔡', color: '#0066CC', cls: '兒童體操中階 A 班', level: '中階', skill: '前空翻', pct: 70, att: 93 },
-	{ user_id: 'su09', name: '鄭雅雯', initial: '鄭', color: '#14B8A6', cls: '幼兒體操初階班', level: '初階', skill: '平衡木走步', pct: 62, att: 68 },
-	{ user_id: 'su10', name: '許書豪', initial: '許', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '團身後空翻', pct: 85, att: 96 },
-	{ user_id: 'su11', name: '楊子萱', initial: '楊', color: '#EC4899', cls: '兒童體操中階 B 班', level: '中階', skill: '跳箱', pct: 75, att: 88 },
-	{ user_id: 'su12', name: '周冠廷', initial: '周', color: '#F59E0B', cls: '兒童體操初階 B 班', level: '初階', skill: '蹲撐', pct: 68, att: 91 }
+	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }], level: '初階', skill: '前滾翻', pct: 80, att: 98 },
+	{ user_id: 'su02', name: '陳柏睿', initial: '陳', color: '#EC4899', cls: '兒童體操中階 A 班', courses: [{ course_id: 'c-mid-a', course_name: '兒童體操中階 A 班', enrolment_id: 'en-su02' }], level: '中階', skill: '後空翻', pct: 72, att: 95 },
+	{ user_id: 'su03', name: '林芷晴', initial: '林', color: '#10B981', cls: '幼兒體操初階班', courses: [{ course_id: 'c-kids', course_name: '幼兒體操初階班', enrolment_id: 'en-su03' }], level: '初階', skill: '倒立', pct: 65, att: 90 },
+	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }], level: '選手', skill: '空中轉體', pct: 88, att: 99 },
+	{ user_id: 'su05', name: '黃詩涵', initial: '黃', color: '#F59E0B', cls: '兒童體操中階 B 班', courses: [{ course_id: 'c-mid-b', course_name: '兒童體操中階 B 班', enrolment_id: 'en-su05' }], level: '中階', skill: '側手翻', pct: 78, att: 86 },
+	{ user_id: 'su06', name: '吳承翰', initial: '吳', color: '#0EA5E9', cls: '兒童體操初階 A 班', courses: [{ course_id: 'c-jr-a', course_name: '兒童體操初階 A 班', enrolment_id: 'en-su06' }], level: '初階', skill: '橋式', pct: 58, att: 72 },
+	{ user_id: 'su07', name: '劉若彤', initial: '劉', color: '#EF4444', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su07' }], level: '選手', skill: '後空翻兩周', pct: 91, att: 97 },
+	{ user_id: 'su08', name: '蔡明軒', initial: '蔡', color: '#0066CC', cls: '兒童體操中階 A 班', courses: [{ course_id: 'c-mid-a', course_name: '兒童體操中階 A 班', enrolment_id: 'en-su08' }], level: '中階', skill: '前空翻', pct: 70, att: 93 },
+	{ user_id: 'su09', name: '鄭雅雯', initial: '鄭', color: '#14B8A6', cls: '幼兒體操初階班', courses: [{ course_id: 'c-kids', course_name: '幼兒體操初階班', enrolment_id: 'en-su09' }], level: '初階', skill: '平衡木走步', pct: 62, att: 68 },
+	{ user_id: 'su10', name: '許書豪', initial: '許', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su10' }], level: '選手', skill: '團身後空翻', pct: 85, att: 96 },
+	{ user_id: 'su11', name: '楊子萱', initial: '楊', color: '#EC4899', cls: '兒童體操中階 B 班', courses: [{ course_id: 'c-mid-b', course_name: '兒童體操中階 B 班', enrolment_id: 'en-su11' }], level: '中階', skill: '跳箱', pct: 75, att: 88 },
+	{ user_id: 'su12', name: '周冠廷', initial: '周', color: '#F59E0B', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su12' }], level: '初階', skill: '蹲撐', pct: 68, att: 91 }
 ];
 
 /* ──────────────── weekly schedule (排課管理) ──────────────── */

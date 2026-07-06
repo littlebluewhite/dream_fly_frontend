@@ -21,6 +21,7 @@ import {
 	getSettings,
 	saveSettings,
 	createCertificate,
+	createReportCard,
 	deriveSessionStatus,
 	getPendingLeaveRequests,
 	decideLeaveRequest,
@@ -611,14 +612,14 @@ describe('createConversation — POST /conversations（§3.21，get-or-create）
 });
 
 describe('getStudents — GET /coaches/me/students（§3.19）', () => {
-	it('映射為 Student[]；user_id 穿透(訊息中心撰寫新對話 POST /conversations 需要)；cls 由 courses 陣列以「、」串接；level/skill/pct/att 皆為誠實預設值(P2)', async () => {
+	it('映射為 Student[]；user_id 穿透(訊息中心撰寫新對話 POST /conversations 需要)；courses 結構化穿透(含 enrolment_id，寫評語 POST /report-cards 需要)；cls 由 courses 陣列以「、」串接；level/skill/pct/att 皆為誠實預設值(P2)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /coaches/me/students': [
-					{ user_id: 'u1', name: '王小明', phone: '0912-000-000', courses: [{ course_id: 'c1', course_name: '兒童體操初階班' }] },
+					{ user_id: 'u1', name: '王小明', phone: '0912-000-000', courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }] },
 					{ user_id: 'u2', name: '陳小華', phone: null, courses: [
-						{ course_id: 'c1', course_name: '兒童體操初階班' },
-						{ course_id: 'c2', course_name: '競技選手班' }
+						{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en2' },
+						{ course_id: 'c2', course_name: '競技選手班', enrolment_id: 'en3' }
 					] }
 				]
 			})
@@ -627,8 +628,19 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 		const d = await getStudents();
 
 		expect(d.students).toEqual([
-			{ user_id: 'u1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', level: '初階', skill: '', pct: 0, att: 0 },
-			{ user_id: 'u2', name: '陳小華', initial: '陳', color: '#0066CC', cls: '兒童體操初階班、競技選手班', level: '初階', skill: '', pct: 0, att: 0 }
+			{
+				user_id: 'u1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班',
+				courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }],
+				level: '初階', skill: '', pct: 0, att: 0
+			},
+			{
+				user_id: 'u2', name: '陳小華', initial: '陳', color: '#0066CC', cls: '兒童體操初階班、競技選手班',
+				courses: [
+					{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en2' },
+					{ course_id: 'c2', course_name: '競技選手班', enrolment_id: 'en3' }
+				],
+				level: '初階', skill: '', pct: 0, att: 0
+			}
 		]);
 	});
 
@@ -760,6 +772,48 @@ describe('decideLeaveRequest — PATCH /leave-requests/{id}（§3.20）', () => 
 			method: 'PATCH',
 			body: JSON.stringify({ status: 'rejected' })
 		});
+	});
+});
+
+describe('createReportCard — POST /report-cards（Task 13 續，§3.22）', () => {
+	it('POSTs the given body as-is (含 rating) and returns the ReportCardResponse', async () => {
+		const created = {
+			id: 'rc-new', course_id: 'c1', course_name: '兒童體操初階班',
+			term_label: '2026 夏季', comment: '進步很多', rating: 4,
+			created_by_name: '林雅婷', created_at: '2026-07-07T00:00:00Z'
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': created }));
+
+		const body = { enrolment_id: 'en1', term_label: '2026 夏季', comment: '進步很多', rating: 4 };
+		const result = await createReportCard(body);
+
+		expect(api).toHaveBeenCalledWith('/report-cards', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('rating 省略時 body 不含 rating 欄位', async () => {
+		const created = {
+			id: 'rc-new', course_id: 'c1', course_name: '兒童體操初階班',
+			term_label: '2026 夏季', comment: '進步很多', rating: null,
+			created_by_name: '林雅婷', created_at: '2026-07-07T00:00:00Z'
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': created }));
+
+		await createReportCard({ enrolment_id: 'en1', term_label: '2026 夏季', comment: '進步很多' });
+
+		expect(api).toHaveBeenCalledWith('/report-cards', {
+			method: 'POST',
+			body: JSON.stringify({ enrolment_id: 'en1', term_label: '2026 夏季', comment: '進步很多' })
+		});
+	});
+
+	it('propagates a rejected request (e.g. 409 重複期別) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /report-cards': new Error('此期別已建立過成績單') })
+		);
+		await expect(
+			createReportCard({ enrolment_id: 'en1', term_label: '2026 夏季', comment: 'x' })
+		).rejects.toThrow('此期別已建立過成績單');
 	});
 });
 

@@ -4,7 +4,7 @@
    * Overlay click and Escape both call onClose. */
   import Button from './Button.svelte';
   type Variant = 'primary' | 'secondary' | 'accent' | 'danger' | 'ghost';
-  type Action = { label: string; onClick: () => void; variant?: Variant };
+  type Action = { label: string; onClick: () => void; variant?: Variant; disabled?: boolean };
 
   export let open = false;
   export let title = '';
@@ -36,12 +36,12 @@
       {#if primaryAction || secondaryAction}
         <div class="foot">
           {#if secondaryAction}
-            <Button variant={secondaryAction.variant ?? 'secondary'} on:click={secondaryAction.onClick}>
+            <Button variant={secondaryAction.variant ?? 'secondary'} disabled={secondaryAction.disabled ?? false} on:click={secondaryAction.onClick}>
               {secondaryAction.label}
             </Button>
           {/if}
           {#if primaryAction}
-            <Button variant={primaryAction.variant ?? 'primary'} on:click={primaryAction.onClick}>
+            <Button variant={primaryAction.variant ?? 'primary'} disabled={primaryAction.disabled ?? false} on:click={primaryAction.onClick}>
               {primaryAction.label}
             </Button>
           {/if}
