@@ -41,6 +41,12 @@ describe('member/schedule 頁', () => {
     expect(els.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('沒有任何排課時顯示「尚未報名任何課程」空狀態', async () => {
+    vi.mocked(getSchedule).mockResolvedValue({ schedule: [] });
+    render(Page);
+    expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
+  });
+
   it('loading 分支有可辨識骨架標記', () => {
     // 永遠 pending — 不 flush
     vi.mocked(getSchedule).mockReturnValue(new Promise(() => {}));

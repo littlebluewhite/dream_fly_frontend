@@ -15,6 +15,7 @@ import {
 	getStudents,
 	getSettings,
 	saveSettings,
+	deriveSessionStatus,
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
@@ -93,66 +94,39 @@ describe('myCoachProfile — GET /users/me → GET /coaches → find(user_id ===
 	});
 });
 
-describe('getDashboard — GET /courses 過濾 coach_id === myCoach.id', () => {
-	const COURSES_RESPONSE = {
-		courses: [
-			{
-				id: 'c1', name: '兒童體操初級班', slug: 'x', level: 'beginner', description: null,
-				duration_minutes: 60, price_cents: 100000, max_students: 12, min_age: 5, max_age: 8,
-				features: [], is_active: true, coach_id: 'co1', category: '體操',
-				schedule_text: '週二、四 16:00-17:00', is_highlighted: false, created_at: '', updated_at: '',
-				enrolled_count: 9, waitlist_count: 0
-			},
-			{
-				id: 'c2', name: '別的教練的課', slug: 'y', level: 'advanced', description: null,
-				duration_minutes: 60, price_cents: 100000, max_students: 10, min_age: 5, max_age: 8,
-				features: [], is_active: true, coach_id: 'co2', category: '跑酷', schedule_text: null,
-				is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 3, waitlist_count: 0
-			},
-			{
-				id: 'c3', name: '啦啦隊基礎班', slug: 'z', level: 'intermediate', description: null,
-				duration_minutes: 60, price_cents: 100000, max_students: 10, min_age: 5, max_age: 8,
-				features: [], is_active: true, coach_id: 'co1', category: '啦啦', schedule_text: null,
-				is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 5, waitlist_count: 0
-			}
-		],
-		total: 3, page: 1, per_page: 100
-	};
+describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己課程且依 start_time 排序）', () => {
+	const SESSIONS_TODAY = [
+		{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9 },
+		{ id: 's2', course_id: 'c2', course_name: '青少年體操中級班', start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8 }
+	];
 
-	it('coach 由 myCoachProfile() 對映；todayClasses 只含 coach_id 相符的課程；統計欄位一律 0(P2)；conversations 仍為 mock', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /users/me': ME,
-				'GET /coaches': [MY_COACH, OTHER_COACH],
-				'GET /courses?per_page=100': COURSES_RESPONSE
-			})
-		);
+	it('coach 由 myCoachProfile() 對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room/level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；統計欄位一律 0(P2)；conversations 仍為 mock', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0)); // 09:30 落在 s1 場次(09:00–10:00)中
+		try {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({
+					'GET /users/me': ME,
+					'GET /coaches': [MY_COACH, OTHER_COACH],
+					'GET /sessions/today': SESSIONS_TODAY
+				})
+			);
 
-		const d = await getDashboard();
+			const d = await getDashboard();
 
-		expect(d.todayClasses).toHaveLength(2); // c2 (別的教練) 濾除
-		const c1 = d.todayClasses.find((c) => c.id === 'c1')!;
-		expect(c1.name).toBe('兒童體操初級班');
-		expect(c1.start).toBe('16:00');
-		expect(c1.end).toBe('17:00');
-		expect(c1.count).toBe(9); // enrolled_count
-		expect(c1.level).toBe('初級'); // beginner
-		expect(c1.cat).toBe('體操');
-		expect(c1.room).toBe(''); // P2
-		expect(c1.status).toBe('wait'); // P2
-
-		const c3 = d.todayClasses.find((c) => c.id === 'c3')!;
-		expect(c3.start).toBe(''); // schedule_text: null
-		expect(c3.end).toBe('');
-		expect(c3.level).toBe('中級'); // intermediate
-		expect(c3.cat).toBe('啦啦隊'); // category '啦啦' → SchedCat '啦啦隊'
-
-		expect(d.coach).toEqual(MAPPED_COACH);
-		expect(d.todayLabel).toBe(TODAY_LABEL);
-		expect(d.conversations).toEqual(CONVERSATIONS);
-		expect(d.pendingClasses).toBe('0 班');
-		expect(d.attendanceRate).toBe('0%');
-		expect(d.pendingReplies).toBe('0 則');
+			expect(d.todayClasses).toEqual([
+				{ id: 's1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '', count: 9, level: '基礎', cat: '體操', status: 'live' },
+				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '', count: 8, level: '基礎', cat: '體操', status: 'wait' }
+			]);
+			expect(d.coach).toEqual(MAPPED_COACH);
+			expect(d.todayLabel).toBe(TODAY_LABEL);
+			expect(d.conversations).toEqual(CONVERSATIONS);
+			expect(d.pendingClasses).toBe('0 班');
+			expect(d.attendanceRate).toBe('0%');
+			expect(d.pendingReplies).toBe('0 則');
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
@@ -163,30 +137,15 @@ describe('getDashboard — GET /courses 過濾 coach_id === myCoach.id', () => {
 	});
 });
 
-describe('getToday — 同 getDashboard 的課程過濾，只回 todayLabel/todayClasses', () => {
-	it('todayClasses 只含 coach_id 相符的課程', async () => {
+describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabel/todayClasses', () => {
+	it('todayClasses 直接反映 GET /sessions/today', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /users/me': ME,
-				'GET /coaches': [MY_COACH, OTHER_COACH],
-				'GET /courses?per_page=100': {
-					courses: [
-						{
-							id: 'c1', name: '兒童體操初級班', slug: 'x', level: 'beginner', description: null,
-							duration_minutes: 60, price_cents: 100000, max_students: 12, min_age: 5, max_age: 8,
-							features: [], is_active: true, coach_id: 'co1', category: '體操',
-							schedule_text: '週二、四 16:00-17:00', is_highlighted: false, created_at: '', updated_at: '',
-							enrolled_count: 9, waitlist_count: 0
-						},
-						{
-							id: 'c2', name: '別的教練的課', slug: 'y', level: 'advanced', description: null,
-							duration_minutes: 60, price_cents: 100000, max_students: 10, min_age: 5, max_age: 8,
-							features: [], is_active: true, coach_id: 'co2', category: '跑酷', schedule_text: null,
-							is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 3, waitlist_count: 0
-						}
-					],
-					total: 2, page: 1, per_page: 100
-				}
+				'GET /coaches': [MY_COACH],
+				'GET /sessions/today': [
+					{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9 }
+				]
 			})
 		);
 
@@ -194,34 +153,17 @@ describe('getToday — 同 getDashboard 的課程過濾，只回 todayLabel/toda
 
 		expect(d.todayLabel).toBe(TODAY_LABEL);
 		expect(d.todayClasses).toHaveLength(1);
-		expect(d.todayClasses[0].id).toBe('c1');
+		expect(d.todayClasses[0].id).toBe('s1');
 	});
 
-	it('todayClasses 依 start 時間升冪排序，無時間(schedule_text null)者排最後 —— getDashboard 共用同一映射', async () => {
-		const base = {
-			slug: 'x', level: 'beginner', description: null, duration_minutes: 60,
-			price_cents: 100000, max_students: 12, min_age: 5, max_age: 8, features: [],
-			is_active: true, coach_id: 'co1', category: '體操', is_highlighted: false,
-			created_at: '', updated_at: '', enrolled_count: 5, waitlist_count: 0
-		};
+	it('沒有今日場次時回傳空陣列(頁面顯示空狀態)', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /users/me': ME,
-				'GET /coaches': [MY_COACH],
-				'GET /courses?per_page=100': {
-					courses: [
-						{ ...base, id: 'c-late', name: '下午班', schedule_text: '週六 16:00-17:00' },
-						{ ...base, id: 'c-none', name: '未排時間班', schedule_text: null },
-						{ ...base, id: 'c-early', name: '早上班', schedule_text: '週六 09:00-10:00' }
-					],
-					total: 3, page: 1, per_page: 100
-				}
-			})
+			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH], 'GET /sessions/today': [] })
 		);
 
 		const d = await getToday();
 
-		expect(d.todayClasses.map((c) => c.id)).toEqual(['c-early', 'c-late', 'c-none']);
+		expect(d.todayClasses).toEqual([]);
 	});
 
 	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
@@ -229,6 +171,28 @@ describe('getToday — 同 getDashboard 的課程過濾，只回 todayLabel/toda
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
 		await expect(getToday()).rejects.toThrow(CoachNotFoundError);
+	});
+});
+
+describe('deriveSessionStatus — §3.18 裁決 2(場次時間為牆鐘語意，本地直接比較，不做時區換算)', () => {
+	it('now < start_time → wait', () => {
+		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 8, 59, 59))).toBe('wait');
+	});
+
+	it('now === start_time(邊界)→ live', () => {
+		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 9, 0, 0))).toBe('live');
+	});
+
+	it('start_time < now < end_time → live', () => {
+		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 9, 30, 0))).toBe('live');
+	});
+
+	it('now === end_time(邊界，已結束)→ done', () => {
+		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 10, 0, 0))).toBe('done');
+	});
+
+	it('now > end_time → done', () => {
+		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 10, 0, 1))).toBe('done');
 	});
 });
 

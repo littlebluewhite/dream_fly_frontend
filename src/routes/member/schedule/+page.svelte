@@ -5,7 +5,7 @@
    * are visual-only; clicking a class block raises an info toast. Data +
    * primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import { WEEK, TIME_ROWS, type ScheduleBlock } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
   import { getSchedule, type ScheduleData } from '$lib/member/api';
@@ -33,6 +33,11 @@
 </script>
 
 {#if phase === 'ready' && data}
+  {#if data.schedule.length === 0}
+    <div class="df-view">
+      <EmptyState icon="calendar-x" title="尚未報名任何課程" body="完成報名後，你的每週課表將會在這裡顯示。" />
+    </div>
+  {:else}
   <div class="df-view">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
       <div style="display:flex;align-items:center;gap:12px">
@@ -78,6 +83,7 @@
       </div>
     </Card>
   </div>
+  {/if}
 {:else if phase === 'error'}
   <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
 {:else}

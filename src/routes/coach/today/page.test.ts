@@ -51,6 +51,13 @@ describe('/coach/today (+page)', () => {
 		// innerHTML 同時涵蓋文字與 style 屬性(出勤進度條的 width:{attendancePct}%)。
 		expect(container.innerHTML).not.toContain('NaN');
 	});
+
+	it('沒有今日場次時，今日課表顯示「今日尚無場次」空狀態', async () => {
+		vi.mocked(getToday).mockReset();
+		vi.mocked(getToday).mockResolvedValue({ todayLabel: TODAY_LABEL, todayClasses: [] });
+		const { findByText } = render(TodayPage);
+		await findByText('今日尚無場次');
+	});
 });
 
 describe('/coach/today — 三態', () => {

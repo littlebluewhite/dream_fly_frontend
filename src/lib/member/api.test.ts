@@ -10,7 +10,7 @@ import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses,
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, SCHEDULE, ATT_HISTORY, REWARDS } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, ATT_HISTORY, REWARDS } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -129,12 +129,33 @@ describe('getReports (P2: 成績單後端未實作 — 沿用 mock)', () => {
   });
 });
 
-describe('getSchedule (P2: 沿用 mock — 後端 /schedule 語意不同，非可替換資料源)', () => {
-  it('回傳整包行事曆資料', async () => {
+describe('getSchedule — GET /schedule/me 週模式映射（§3.18）', () => {
+  it('day_of_week(0=Sun..6=Sat)對映既有 UI 週欄位(0=Mon..6=Sun)；HH:MM:SS 裁切為 HH:MM；coach_name/venue 為 null 時給空字串', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /schedule/me': [
+          { course_id: 'c1', course_name: '競技啦啦隊 進階班', coach_name: '林雅婷', day_of_week: 2, start_time: '19:00:00', end_time: '20:30:00', venue: 'A 訓練館' },
+          { course_id: 'c2', course_name: '幼兒體操 啟蒙班', coach_name: null, day_of_week: 0, start_time: '10:00:00', end_time: '11:00:00', venue: null }
+        ]
+      })
+    );
+
     const d = await getSchedule();
-    expect(d).toEqual({ schedule: SCHEDULE });
+
+    expect(d.schedule).toEqual([
+      { day: 1, start: '19:00', end: '20:30', name: '競技啦啦隊 進階班', room: 'A 訓練館', coach: '林雅婷', color: '#0066CC', tone: 'primary' },
+      { day: 6, start: '10:00', end: '11:00', name: '幼兒體操 啟蒙班', room: '', coach: '', color: '#0066CC', tone: 'primary' }
+    ]);
   });
+
+  it('沒有任何排課時回傳空陣列(頁面顯示空狀態)', async () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /schedule/me': [] }));
+    const d = await getSchedule();
+    expect(d).toEqual({ schedule: [] });
+  });
+
   it('是 async 接縫(回 Promise)', () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /schedule/me': [] }));
     expect(getSchedule()).toBeInstanceOf(Promise);
   });
 });

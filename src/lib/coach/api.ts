@@ -9,8 +9,8 @@
  * —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，import 進來的
  * class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號未綁定教練檔案」。 */
 import { api } from '$lib/api/client';
-import { listCoaches, listCourses } from '$lib/public/api';
-import type { ApiCoach, ApiCourse } from '$lib/public/api';
+import { listCoaches } from '$lib/public/api';
+import type { ApiCoach } from '$lib/public/api';
 import {
 	TODAY_LABEL,
 	CONVERSATIONS,
@@ -23,8 +23,7 @@ import {
 import type {
 	Coach,
 	TodayClass,
-	TodayLevel,
-	SchedCat,
+	TodayStatus,
 	Conversation,
 	AttClassFull,
 	SchedCourse,
@@ -105,71 +104,56 @@ function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
 	};
 }
 
-/* ═════════════════════════ 今日課程 / 儀表板（GET /courses，過濾 coach_id） ═════════════════════════ */
+/* ═════════════════════════ 今日課程 / 儀表板（GET /sessions/today，見 integration-contract.md §3.18） ═════════════════════════ */
 
-/** schedule_text 實測格式為 "週二、四 16:00-17:00"（day-part 與 time-part 以第一個空白
- *  分隔，time-part 再以 '-' 拆出 start/end；同 admin/api.ts mapCourse 對此欄位的解析
- *  慣例，這裡另存一份小 helper，避免為了共用而改動 admin 自己的檔案）。null 或找不到
- *  對應分隔者，start/end 一律回空字串。 */
-function splitTimeRange(text: string | null): { start: string; end: string } {
-	if (!text) return { start: '', end: '' };
-	const sp = text.indexOf(' ');
-	const timePart = sp === -1 ? text : text.slice(sp + 1);
-	const dash = timePart.indexOf('-');
-	return dash === -1 ? { start: '', end: '' } : { start: timePart.slice(0, dash), end: timePart.slice(dash + 1) };
+/** TodaySessionResponse（§3.18）。教練呼叫時後端已只回自己課程（courses.coach_id 對應
+ *  呼叫者 coaches.id）的今日場次，並依 start_time 排序——前端不再需要自行過濾/排序。 */
+interface ApiTodaySession {
+	id: string;
+	course_id: string;
+	course_name: string;
+	start_time: string; // "HH:MM:SS"
+	end_time: string;
+	enrolled_count: number;
 }
 
-/** CourseResponse.level 只有 3 級，對照到 TodayLevel 的其中 3 個可用值（同 member/
- *  api.ts COURSE_LEVEL_LABEL 用字；啟蒙/基礎兩級後端無法還原，一律不會出現）。 */
-const COURSE_LEVEL_TO_TODAY_LEVEL: Record<string, TodayLevel> = {
-	beginner: '初級',
-	intermediate: '中級',
-	advanced: '高級'
-};
-
-/** category 實測值為「體操/啦啦/跑酷」（見 backend seed.rs），與 SchedCat 的「體操/
- *  啦啦隊/跑酷」不完全同字（啦啦 vs 啦啦隊），需要對照表而非直接 cast；其餘/未知值
- *  一律預設體操。 */
-const CATEGORY_TO_SCHED_CAT: Record<string, SchedCat> = {
-	體操: '體操',
-	啦啦: '啦啦隊',
-	跑酷: '跑酷'
-};
-function toSchedCat(category: string | null): SchedCat {
-	return (category && CATEGORY_TO_SCHED_CAT[category]) || '體操'; // P2: 未知類別預設體操
+/** now 轉為本地牆鐘 "HH:MM:SS"，供與 start_time/end_time 直接字典序比較(§3.18 裁決 2：
+ *  場次時間為牆鐘語意，前端以本地時間直接比較，不做時區換算)。 */
+function wallClockTime(now: Date): string {
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
-/** CourseResponse → 既有 TodayClass 形狀。room 無對應欄位（同 admin/api.ts mapCourse）；
- *  count 用 enrolled_count；status 後端無「今日即時狀態」概念（courses 是課程定義，非
- *  當日實際場次），一律預設 wait（尚未開始，最中性的預設）。 */
-function mapTodayClass(c: ApiCourse): TodayClass {
-	const { start, end } = splitTimeRange(c.schedule_text);
+/** 場次狀態推導：now < start_time → 'wait'；start_time ≤ now < end_time → 'live'；
+ *  now ≥ end_time → 'done'。now 由呼叫端傳入的純函式，不吃系統時鐘，獨立可測。 */
+export function deriveSessionStatus(startTime: string, endTime: string, now: Date): TodayStatus {
+	const wall = wallClockTime(now);
+	if (wall < startTime) return 'wait';
+	if (wall < endTime) return 'live';
+	return 'done';
+}
+
+/** TodaySessionResponse → 既有 TodayClass 形狀。room/level/cat 無對應欄位(場次回應不含
+ *  場地/課程等級/課程分類)，一律誠實給預設值(P2)；count 用 enrolled_count；status 由
+ *  deriveSessionStatus 依目前時間推導(§3.18 裁決 2)。 */
+function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 	return {
-		id: c.id,
-		start,
-		end,
-		name: c.name,
-		room: '', // P2: CourseResponse 無場地欄位
-		count: c.enrolled_count,
-		level: COURSE_LEVEL_TO_TODAY_LEVEL[c.level] ?? '基礎',
-		cat: toSchedCat(c.category),
-		status: 'wait' // P2: 後端無「今日即時狀態」概念
+		id: s.id,
+		start: s.start_time.slice(0, 5),
+		end: s.end_time.slice(0, 5),
+		name: s.course_name,
+		room: '', // P2: TodaySessionResponse 無場地欄位
+		count: s.enrolled_count,
+		level: '基礎', // P2: TodaySessionResponse 無課程等級欄位
+		cat: '體操', // P2: TodaySessionResponse 無課程分類欄位
+		status: deriveSessionStatus(s.start_time, s.end_time, now)
 	};
 }
 
-/** 依 start 升冪排序 —— 零填充的 "HH:MM" 可直接字典序比較；無時間者(schedule_text
- *  為 null → start '')排最後，不讓未知時間的課搶走頁面「下一堂課」的位置。mock seed
- *  的 TODAY_CLASSES 本來就是時間序,頁面(dashboard 的 nextClass、today 的課表)一直
- *  依賴這個隱含順序,接縫在此恢復同一保證。 */
-function byStartTime(a: TodayClass, b: TodayClass): number {
-	const ka = a.start || '99:99';
-	const kb = b.start || '99:99';
-	return ka < kb ? -1 : ka > kb ? 1 : 0;
-}
-
-async function myTodayClasses(coachId: string): Promise<TodayClass[]> {
-	const courses = await listCourses();
-	return courses.filter((c) => c.coach_id === coachId).map(mapTodayClass).sort(byStartTime);
+async function myTodayClasses(): Promise<TodayClass[]> {
+	const sessions = await api<ApiTodaySession[]>('/sessions/today');
+	const now = new Date();
+	return sessions.map((s) => mapTodayClass(s, now));
 }
 
 /** 首頁 KPI 卡數字(待點名/出席率/待回覆)原為頁面硬編字串,一併移入接縫。 */
@@ -187,7 +171,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 	return {
 		coach: mapCoach(user, coach),
 		todayLabel: TODAY_LABEL,
-		todayClasses: await myTodayClasses(coach.id),
+		todayClasses: await myTodayClasses(),
 		conversations: CONVERSATIONS, // getMessages 領域，仍為 mock
 		pendingClasses: '0 班', // P2: 後端無「待點名班級數」統計端點
 		attendanceRate: '0%', // P2: 後端無「學員出席率」統計端點
@@ -197,8 +181,8 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 
 export interface TodayData { todayLabel: string; todayClasses: TodayClass[] }
 export const getToday = async (): Promise<TodayData> => {
-	const { coach } = await requireMyCoach();
-	return { todayLabel: TODAY_LABEL, todayClasses: await myTodayClasses(coach.id) };
+	await requireMyCoach(); // 仍需先確認教練檔案存在(CoachNotFoundError 閘門)，即使 todayClasses 不再需要 coach.id
+	return { todayLabel: TODAY_LABEL, todayClasses: await myTodayClasses() };
 };
 
 // P2: 後端無對應的點名/出勤端點，整包沿用 mock。

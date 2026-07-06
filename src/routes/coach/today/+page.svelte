@@ -10,7 +10,7 @@
   import { CLASS_STATUS } from '$lib/coach/data';
   import { getToday, type TodayData } from '$lib/coach/api';
   import { coachPath } from '$lib/coach/nav';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
@@ -97,11 +97,15 @@
 
     <!-- LEFT: 今日課表 -->
     <PanelCard title="今日課表">
-      <div style="display:flex;flex-direction:column;gap:10px">
-        {#each todayClasses as c (c.id)}
-          <TodayClassCard {c} />
-        {/each}
-      </div>
+      {#if todayClasses.length === 0}
+        <EmptyState icon="calendar-x" title="今日尚無場次" body="今天沒有排定課程，好好休息一下吧。" pad="32px 0" />
+      {:else}
+        <div style="display:flex;flex-direction:column;gap:10px">
+          {#each todayClasses as c (c.id)}
+            <TodayClassCard {c} />
+          {/each}
+        </div>
+      {/if}
     </PanelCard>
 
     <!-- RIGHT: 3 stacked panels -->

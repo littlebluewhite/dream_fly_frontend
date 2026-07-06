@@ -1,11 +1,12 @@
-/* 會員中心 API 接縫。Task 17：8 個 getter 換成真後端資料（getReports／getSchedule
- * 仍為 mock，見各自的 P2 註記）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。 */
+/* 會員中心 API 接縫。Task 17：8 個 getter 換成真後端資料（getReports 仍為 mock，見
+ * 該 getter 的 P2 註記）；Task 9：getSchedule 換成真後端資料(GET /schedule/me，
+ * 見 integration-contract.md §3.18)。回傳「形狀」盡量維持不變，頁面不用重寫樣板。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, SCHEDULE, REWARDS, mapNotification } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, REWARDS, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock, Order, Reward, Notification, Tone, ApiNotification } from './data';
 
 /** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。 */
@@ -76,11 +77,45 @@ export const getReports = (): Promise<ReportsData> =>
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 
-// P2: 後端 /schedule 為場館時段行事曆(依日期/場地查詢的可預約 slot，見契約 §3.6)，
-// 與這裡「會員每週固定課表」(週次+教室+教練的固定格)結構不相容——保留 mock，
-// 待後端提供 member schedule 端點。(controller sign-off:與 /orders/me 無 items
-// 同類的 plan/backend gap。)
-export const getSchedule = (): Promise<ScheduleData> => reply({ schedule: SCHEDULE });
+/** MyScheduleEntryResponse（integration-contract.md §3.18）。與 GET /schedule(場館時段
+ *  行事曆，§3.6)是完全不同的資源(§3.18 裁決 1)——這裡是呼叫者 active enrolments 對應
+ *  課程的週模式,不物化、不查日期範圍。 */
+interface ApiScheduleEntry {
+  course_id: string;
+  course_name: string;
+  coach_name: string | null;
+  day_of_week: number; // 0=Sun..6=Sat（PostgreSQL EXTRACT(DOW) / JS Date.getDay() 慣例）
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  venue: string | null;
+}
+
+/** day_of_week(後端 0=Sun..6=Sat)→ ScheduleBlock.day(既有 UI 週欄位索引 0=Mon..6=Sun，
+ *  即 WEEK[0]='一'…WEEK[6]='日'；見 +page.svelte 的 colOf 慣例與 SCHEDULE mock 的既有
+ *  day 用法)。 */
+const DOW_TO_SCHEDULE_DAY = [6, 0, 1, 2, 3, 4, 5];
+
+/** MyScheduleEntryResponse → 既有 ScheduleBlock 形狀。coach_name 為 null(尚未指定教練)
+ *  /venue 為 null(無場地資料)時一律給空字串；color/tone 無對應後端欄位，一律給預設
+ *  主色(P2，同 mapProfile 對「無品牌色」欄位的預設慣例)。 */
+function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
+  return {
+    day: DOW_TO_SCHEDULE_DAY[e.day_of_week],
+    start: e.start_time.slice(0, 5),
+    end: e.end_time.slice(0, 5),
+    name: e.course_name,
+    room: e.venue ?? '', // P2: 無場地資料
+    coach: e.coach_name ?? '', // 尚未指定教練
+    color: '#0066CC', // P2: 後端無區塊顏色欄位
+    tone: 'primary' // P2: 同上
+  };
+}
+
+/** GET /schedule/me — 回呼叫者 active enrolments 對應課程的週模式(§3.18)。 */
+export const getSchedule = async (): Promise<ScheduleData> => {
+  const entries = await api<ApiScheduleEntry[]>('/schedule/me');
+  return { schedule: entries.map(mapScheduleEntry) };
+};
 
 export interface MineData {
   courses: EnrolledCourse[];
