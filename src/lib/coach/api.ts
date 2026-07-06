@@ -425,15 +425,20 @@ function mapCoachLeaveRequest(r: ApiCoachLeaveRequest): CoachLeaveRequest {
 
 export interface PendingLeaveRequestsData {
 	requests: CoachLeaveRequest[];
+	/** 伺服器端 pending 總數——單頁上限 100，可能大於 requests.length。頁面計數一律
+	 *  用 total（以截斷後陣列長度計數會低報），total > requests.length 時另行提示。 */
+	total: number;
 }
 
-/** GET /leave-requests?status=pending。無需 requireMyCoach() 閘門——同 getStudents()
- *  慣例，呼叫者掛 coach 角色但查無對應 coaches 資料列時後端本身回空頁而非錯誤
- *  （§3.20 引用 §3.18/§3.19 既有慣例）。教練只會看到自己課程的待審核假單，後端
- *  已按 courses.coach_id 過濾，前端不需要另外篩選。 */
+/** GET /leave-requests?status=pending&per_page=100。per_page 顯式帶滿單頁上限
+ *  （同 public/api.ts listCourses 的 per_page=100 慣例——後端預設 20 會截斷長清單）；
+ *  total 穿透供頁面誠實計數，>100 筆時清單仍截斷，由頁面以 total 對比載入筆數提示。
+ *  無需 requireMyCoach() 閘門——同 getStudents() 慣例，呼叫者掛 coach 角色但查無對應
+ *  coaches 資料列時後端本身回空頁而非錯誤（§3.20 引用 §3.18/§3.19 既有慣例）。教練
+ *  只會看到自己課程的待審核假單，後端已按 courses.coach_id 過濾，前端不需要另外篩選。 */
 export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsData> => {
-	const res = await api<ApiLeaveRequestListResponse>('/leave-requests?status=pending');
-	return { requests: res.leave_requests.map(mapCoachLeaveRequest) };
+	const res = await api<ApiLeaveRequestListResponse>('/leave-requests?status=pending&per_page=100');
+	return { requests: res.leave_requests.map(mapCoachLeaveRequest), total: res.total };
 };
 
 /** PATCH /leave-requests/{id}（帶 { status: 'approved' | 'rejected' }）。核准會在同一

@@ -450,11 +450,13 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 /* Task 11：請假審核（GET /leave-requests?status=pending + PATCH /leave-requests/{id}，
  * §3.20）。同 getStudents 慣例——無需 requireMyCoach() 閘門，呼叫者掛 coach 角色但查無
  * 對應 coaches 資料列時後端本身回空頁而非錯誤(§3.20 引用§3.18/§3.19既有慣例)。 */
-describe('getPendingLeaveRequests — GET /leave-requests?status=pending（§3.20）', () => {
-	it('映射 leave_requests 分頁包裝為 CoachLeaveRequest[]（course_name/user_name/場次/事由/建立時間）', async () => {
+describe('getPendingLeaveRequests — GET /leave-requests?status=pending&per_page=100（§3.20）', () => {
+	// fakeRouter 對未交代的 key 一律丟錯——下列測試同時釘住「請求必須帶 per_page=100」
+	// （後端預設 20 會截斷長清單）：若實作漏帶參數，key 不吻合直接紅。
+	it('映射 leave_requests 分頁包裝為 CoachLeaveRequest[]（course_name/user_name/場次/事由/建立時間），total 穿透', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /leave-requests?status=pending': {
+				'GET /leave-requests?status=pending&per_page=100': {
 					leave_requests: [
 						{
 							id: 'lr-1', course_id: 'c1', course_name: '兒童體操初階班',
@@ -465,7 +467,7 @@ describe('getPendingLeaveRequests — GET /leave-requests?status=pending（§3.2
 							decided_at: null, created_at: '2026-07-01T00:00:00Z'
 						}
 					],
-					total: 1, page: 1, per_page: 20
+					total: 1, page: 1, per_page: 100
 				}
 			})
 		);
@@ -479,19 +481,46 @@ describe('getPendingLeaveRequests — GET /leave-requests?status=pending（§3.2
 				reason: '生病', created_at: '2026-07-01T00:00:00Z'
 			}
 		]);
+		expect(d.total).toBe(1);
 	});
 
-	it('沒有待審核假單時回傳空陣列', async () => {
+	it('total 大於本頁筆數時原樣穿透（伺服器端總數，不得以截斷後陣列長度頂替）', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /leave-requests?status=pending': { leave_requests: [], total: 0, page: 1, per_page: 20 } })
+			fakeRouter({
+				'GET /leave-requests?status=pending&per_page=100': {
+					leave_requests: [
+						{
+							id: 'lr-1', course_id: 'c1', course_name: '兒童體操初階班',
+							user_id: 'u9', user_name: '王小明',
+							session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00',
+							reason: null, status: 'pending',
+							makeup_session_id: null, makeup_session_date: null, makeup_start_time: null,
+							decided_at: null, created_at: '2026-07-01T00:00:00Z'
+						}
+					],
+					total: 150, page: 1, per_page: 100
+				}
+			})
+		);
+
+		const d = await getPendingLeaveRequests();
+
+		expect(d.requests).toHaveLength(1);
+		expect(d.total).toBe(150);
+	});
+
+	it('沒有待審核假單時回傳空陣列與 total 0', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /leave-requests?status=pending&per_page=100': { leave_requests: [], total: 0, page: 1, per_page: 100 } })
 		);
 		const d = await getPendingLeaveRequests();
 		expect(d.requests).toEqual([]);
+		expect(d.total).toBe(0);
 	});
 
 	it('是 async 接縫(回 Promise)', () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /leave-requests?status=pending': { leave_requests: [], total: 0, page: 1, per_page: 20 } })
+			fakeRouter({ 'GET /leave-requests?status=pending&per_page=100': { leave_requests: [], total: 0, page: 1, per_page: 100 } })
 		);
 		expect(getPendingLeaveRequests()).toBeInstanceOf(Promise);
 	});

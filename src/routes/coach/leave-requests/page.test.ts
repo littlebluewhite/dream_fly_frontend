@@ -21,7 +21,7 @@ const REQUESTS: CoachLeaveRequest[] = [
 beforeEach(() => {
 	vi.mocked(getPendingLeaveRequests).mockReset();
 	vi.mocked(decideLeaveRequest).mockReset();
-	vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: REQUESTS });
+	vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: REQUESTS, total: REQUESTS.length });
 });
 
 describe('/coach/leave-requests (+page) — 渲染', () => {
@@ -37,9 +37,56 @@ describe('/coach/leave-requests (+page) — 渲染', () => {
 
 	it('shows an empty state when there are no pending requests', async () => {
 		vi.mocked(getPendingLeaveRequests).mockReset();
-		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: [] });
+		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: [], total: 0 });
 		const { findByText } = render(LeaveRequestsPage);
 		await findByText('目前沒有待審核的請假申請');
+	});
+});
+
+describe('/coach/leave-requests — 分頁截斷（total 穿透，防計數/空狀態說謊）', () => {
+	it('total 大於載入筆數：計數顯示 total、清單底部出現截斷提示', async () => {
+		vi.mocked(getPendingLeaveRequests).mockReset();
+		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: REQUESTS, total: 150 });
+		const { findByText, container } = render(LeaveRequestsPage);
+		await findByText('王小明 · 兒童體操初階班');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('共 150 筆待審核');
+		expect(txt).toContain('僅顯示前 2 筆');
+	});
+
+	it('total 等於載入筆數：計數一致且無截斷提示', async () => {
+		// beforeEach 預設 total = REQUESTS.length = 2
+		const { findByText, container } = render(LeaveRequestsPage);
+		await findByText('王小明 · 兒童體操初階班');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('共 2 筆待審核');
+		expect(txt).not.toContain('僅顯示前');
+	});
+
+	it('審核成功後計數以 total 遞減（非以截斷後陣列長度重算）', async () => {
+		vi.mocked(getPendingLeaveRequests).mockReset();
+		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: REQUESTS, total: 150 });
+		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[0] });
+		const { findByText, getAllByText, container } = render(LeaveRequestsPage);
+		await findByText('王小明 · 兒童體操初階班');
+
+		await fireEvent.click(getAllByText('核准')[0]);
+
+		await vi.waitFor(() => expect(container.textContent).toContain('共 149 筆待審核'));
+	});
+
+	it('本頁全部審完但 total 仍有剩：不顯示「目前沒有待審核」空狀態，改示未載入提示', async () => {
+		vi.mocked(getPendingLeaveRequests).mockReset();
+		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: [REQUESTS[0]], total: 21 });
+		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[0] });
+		const { findByText, getAllByText, queryByText, container } = render(LeaveRequestsPage);
+		await findByText('王小明 · 兒童體操初階班');
+
+		await fireEvent.click(getAllByText('核准')[0]);
+
+		await vi.waitFor(() => expect(queryByText('王小明 · 兒童體操初階班')).toBeNull());
+		expect(queryByText('目前沒有待審核的請假申請')).toBeNull(); // 空狀態不得說謊
+		expect(container.textContent).toContain('尚有 20 筆待審核尚未載入');
 	});
 });
 
