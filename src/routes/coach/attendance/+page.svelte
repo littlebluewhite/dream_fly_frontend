@@ -59,6 +59,15 @@
         marks = first ? buildMarks(first.roster) : {};
         dirtyCount = first ? first.roster.filter((r) => r.def !== 'present').length : 0;
         phase = 'ready';
+        // 部分名冊載入失敗(seam 已做 allSettled 隔離)：成功班級照常可點名，
+        // 失敗班級以 toast 提示，不整頁打成 error。
+        if (d.failedClasses.length > 0) {
+          toasts.notify(
+            'warning',
+            '部分名冊載入失敗',
+            d.failedClasses.join('、') + ' 的名冊暫時無法載入，其他班級可正常點名，請稍後重新整理再試。'
+          );
+        }
       })
       .catch(() => { phase = 'error'; });
   }
@@ -181,6 +190,10 @@
 
   function doSave() {
     state = 'saving';
+    // 送出前先記錄本批是否含「遲到」標記——後端不區分遲到(status 僅 present/absent/
+    // leave)，遲到會以出席送出、儲存後名冊同步也會把遲到列翻成出席；成功 toast 追加
+    // 一句說明，避免教練誤以為點選沒存到。在呼叫前快照，不受 in-flight 期間的編輯影響。
+    const hadLate = Object.values(marks).some((m) => m === 'late');
     saveAttendance(curClassId, marks)
       .then((updatedRoster) => {
         // codex r3 (P2)：若在請求進行中又被編輯過(state 已變回 dirty)，不要用這次
@@ -191,7 +204,12 @@
         state = 'saved';
         savedAt = nowHHMM();
         dirtyCount = 0;
-        toasts.notify('success', '點名已儲存', curClass.name + ' · ' + updatedRoster.length + ' 位學員出勤已同步至雲端。');
+        toasts.notify(
+          'success',
+          '點名已儲存',
+          curClass.name + ' · ' + updatedRoster.length + ' 位學員出勤已同步至雲端。' +
+            (hadLate ? '遲到已以出席紀錄（系統不區分遲到）。' : '')
+        );
       })
       .catch((e) => {
         state = 'dirty';

@@ -221,18 +221,42 @@ function mapAttendanceClass(s: ApiTodaySession, roster: ApiRosterEntry[], coachN
 	};
 }
 
-export interface AttendanceData { classes: AttClassFull[] }
+export interface AttendanceData {
+	classes: AttClassFull[];
+	/** 名冊載入失敗而被排除的場次課名(部分失敗隔離)；頁面以 toast 提示。 */
+	failedClasses: string[];
+}
 
 /** 今日場次(GET /sessions/today)× 各場次名冊(GET /sessions/{id}/roster)組成點名頁的
  *  「切換班級」清單——沿用既有 UI 的全預載切換模式(選班級是本地即時切換，不是逐一
- *  非同步載入)，所以這裡一次把今日所有場次的名冊平行拉回來。requireMyCoach() 閘門
- *  同 getToday()(即使本函式主要需要的是 user.name 顯示用，不是 coach.id)——教練檔案
+ *  非同步載入)，所以這裡一次把今日所有場次的名冊平行拉回來。名冊拉取採 allSettled
+ *  部分失敗隔離：單一場次名冊暫時失敗(或觸發 rate limit)時，其餘場次照常可點名——
+ *  失敗場次排除於 classes 之外、課名列入 failedClasses 供頁面提示(失敗細節只記錄，
+ *  同 member getDashboard 對 best-effort hydrate 失敗的處理精神)；但今日有場次而
+ *  「全部」名冊都失敗時，沒有任何可點名的班級，視為整體失敗直接拋出(頁面走 error
+ *  state 可重試，而非誤導性的「今日尚無場次」空狀態)。requireMyCoach() 閘門同
+ *  getToday()(即使本函式主要需要的是 user.name 顯示用，不是 coach.id)——教練檔案
  *  不存在時兩者一致丟 CoachNotFoundError。 */
 export const getAttendance = async (): Promise<AttendanceData> => {
 	const { user } = await requireMyCoach();
 	const sessions = await api<ApiTodaySession[]>('/sessions/today');
-	const rosters = await Promise.all(sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`)));
-	return { classes: sessions.map((s, i) => mapAttendanceClass(s, rosters[i], user.name)) };
+	const results = await Promise.allSettled(
+		sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`))
+	);
+	const classes: AttClassFull[] = [];
+	const failedClasses: string[] = [];
+	sessions.forEach((s, i) => {
+		const r = results[i];
+		if (r.status === 'fulfilled') {
+			classes.push(mapAttendanceClass(s, r.value, user.name));
+		} else {
+			failedClasses.push(s.course_name);
+			console.error(`getAttendance: ${s.course_name} 名冊載入失敗`, r.reason);
+		}
+	});
+	const firstFailure = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+	if (sessions.length > 0 && classes.length === 0 && firstFailure) throw firstFailure.reason;
+	return { classes, failedClasses };
 };
 
 /** PUT /sessions/{id}/attendance —— 頁面本地 marks(mid→狀態草稿)轉成 API 的

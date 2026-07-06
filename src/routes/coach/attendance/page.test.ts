@@ -10,7 +10,7 @@ vi.mock('$lib/coach/api', () => ({ getAttendance: vi.fn(), saveAttendance: vi.fn
 
 beforeEach(() => {
 	vi.mocked(getAttendance).mockReset();
-	vi.mocked(getAttendance).mockResolvedValue({ classes: ATT_TODAY_CLASSES });
+	vi.mocked(getAttendance).mockResolvedValue({ classes: ATT_TODAY_CLASSES, failedClasses: [] });
 	vi.mocked(saveAttendance).mockReset();
 	vi.mocked(saveAttendance).mockResolvedValue([]);
 });
@@ -179,6 +179,43 @@ describe('/coach/attendance (+page) — 儲存點名 PUT /sessions/{id}/attendan
 			expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', '連線發生問題，請稍後再試。');
 		});
 	});
+
+	it('本批含「遲到」標記時，成功 toast 追加折疊說明(後端不區分遲到、以出席紀錄)', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		notifySpy.mockClear();
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockResolvedValue(C1.roster.map((r) => ({ ...r, def: 'present' as const })));
+
+		// C1 名冊預設含一筆遲到(林佳穎 def:'late')，直接儲存即屬「含遲到」批次。
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => {
+			expect(notifySpy).toHaveBeenCalledWith(
+				'success',
+				'點名已儲存',
+				expect.stringContaining('遲到已以出席紀錄（系統不區分遲到）')
+			);
+		});
+	});
+
+	it('本批不含「遲到」標記時，成功 toast 不出現折疊說明', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, getAllByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockResolvedValue(C1.roster.map((r) => ({ ...r, def: 'present' as const })));
+
+		// 先全部標記出席(請假列除外) → marks 不再含 late，再儲存。
+		await fireEvent.click(getAllByText('全部標記出席')[0]);
+		notifySpy.mockClear(); // 清掉先前累積的呼叫,只驗證本次儲存產生的 toast
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => {
+			const successCall = notifySpy.mock.calls.find((c) => c[0] === 'success' && c[1] === '點名已儲存');
+			expect(successCall).toBeTruthy();
+			expect(successCall![2]).not.toContain('遲到已以出席紀錄');
+		});
+	});
 });
 
 describe('/coach/attendance — 三態', () => {
@@ -198,9 +235,28 @@ describe('/coach/attendance — 三態', () => {
 
 	it('今日沒有場次時顯示空狀態，不渲染名冊/儲存列', async () => {
 		vi.mocked(getAttendance).mockReset();
-		vi.mocked(getAttendance).mockResolvedValue({ classes: [] });
+		vi.mocked(getAttendance).mockResolvedValue({ classes: [], failedClasses: [] });
 		const { findByText, queryByText } = render(AttendancePage);
 		await findByText('今日尚無場次');
 		expect(queryByText('儲存點名')).toBeNull();
+	});
+
+	it('部分名冊載入失敗：成功班級照常渲染可點名，並顯示提示 toast(不整頁 error)', async () => {
+		vi.mocked(getAttendance).mockReset();
+		vi.mocked(getAttendance).mockResolvedValue({ classes: [C1], failedClasses: ['青少年體操中級班'] });
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		notifySpy.mockClear();
+		const { findByText, getByText, queryByText } = render(AttendancePage);
+
+		// 成功班級名冊照常渲染、儲存列可操作。
+		await findByText(C1.roster[0].name);
+		expect(getByText('儲存點名')).toBeInTheDocument();
+		expect(queryByText('載入失敗')).toBeNull();
+		// 失敗班級以 warning toast 提示。
+		expect(notifySpy).toHaveBeenCalledWith(
+			'warning',
+			'部分名冊載入失敗',
+			expect.stringContaining('青少年體操中級班')
+		);
 	});
 });

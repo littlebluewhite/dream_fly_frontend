@@ -309,6 +309,42 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 				roster: [{ n: '01', name: '林小美', initial: '林', color: '#0066CC', mid: 'en-3', def: 'leave' }]
 			}
 		]);
+		expect(d.failedClasses).toEqual([]);
+	});
+
+	it('部分失敗隔離：一場次名冊失敗時，成功場次照常回傳可點名，失敗場次課名列入 failedClasses', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME,
+				'GET /coaches': [MY_COACH],
+				'GET /sessions/today': SESSIONS_TODAY,
+				'GET /sessions/s1/roster': ROSTER_S1,
+				'GET /sessions/s2/roster': new Error('rate limited')
+			})
+		);
+
+		const d = await getAttendance();
+
+		expect(d.classes).toHaveLength(1);
+		expect(d.classes[0].id).toBe('s1');
+		expect(d.classes[0].roster).toHaveLength(2); // 成功場次名冊完整可操作
+		expect(d.failedClasses).toEqual(['青少年體操中級班']);
+	});
+
+	it('全部名冊都失敗時整體拋出(頁面走 error state 可重試，而非誤導性空狀態)', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME,
+				'GET /coaches': [MY_COACH],
+				'GET /sessions/today': SESSIONS_TODAY,
+				'GET /sessions/s1/roster': new Error('boom 1'),
+				'GET /sessions/s2/roster': new Error('boom 2')
+			})
+		);
+
+		await expect(getAttendance()).rejects.toThrow('boom 1');
 	});
 
 	it('今日沒有場次時 classes 為空陣列(頁面顯示空狀態)', async () => {
@@ -318,6 +354,7 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 
 		const d = await getAttendance();
 		expect(d.classes).toEqual([]);
+		expect(d.failedClasses).toEqual([]);
 	});
 
 	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
