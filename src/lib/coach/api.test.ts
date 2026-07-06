@@ -12,7 +12,10 @@ import {
 	getAttendance,
 	saveAttendance,
 	getSchedule,
-	getMessages,
+	getConversations,
+	getThread,
+	sendMessage,
+	markRead,
 	getStudents,
 	getSettings,
 	saveSettings,
@@ -22,7 +25,7 @@ import {
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
-import { TODAY_LABEL, CONVERSATIONS, MSG_DIRECTORY, THREAD, SHARED_FILES } from './data';
+import { TODAY_LABEL, CONVERSATIONS } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -398,18 +401,158 @@ describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
 	});
 });
 
-describe('getMessages — 仍為 mock(P2：無對應後端訊息中心端點)', () => {
-	it('getMessages 回傳整包訊息中心資料', async () => {
-		const d = await getMessages();
-		expect(d).toEqual({
-			conversations: CONVERSATIONS,
-			directory: MSG_DIRECTORY,
-			thread: THREAD,
-			sharedFiles: SHARED_FILES
-		});
+/* Task 12：訊息中心（GET /conversations/me + GET .../messages + POST .../messages +
+ * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——CONTEXT.md 明定
+ * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故 kind 一律映射'會員'；
+ * urgent/sla/slaTone 無資料來源，皆為不觸發顯示的誠實預設值(P2)。 */
+const ME2 = {
+	id: 'u9', email: 'chen@dreamfly.com.tw', name: '陳雅婷',
+	phone: null, last_login: null, created_at: '2020-01-01T00:00:00Z'
+};
+
+describe('getConversations — GET /conversations/me（§3.21，純陣列不分頁）', () => {
+	it('映射 peer_name/last_message_body/last_message_at/unread_count；kind 一律"會員"；保留伺服器排序', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /conversations/me': [
+					{ id: 'c1', peer_id: 'u1', peer_name: '王小明', last_message_body: '老師您好', last_message_at: '2026-07-05T09:42:00Z', unread_count: 2 },
+					{ id: 'c2', peer_id: 'u2', peer_name: '陳小華', last_message_body: null, last_message_at: null, unread_count: 0 }
+				]
+			})
+		);
+
+		const d = await getConversations();
+
+		expect(d.conversations).toEqual([
+			{
+				id: 'c1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+				time: '2026-07-05 09:42', badge: 2, preview: '老師您好', sla: '', slaTone: 'muted'
+			},
+			{
+				id: 'c2', name: '陳小華', initial: '陳', color: '#0066CC', kind: '會員',
+				time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+			}
+		]);
 	});
-	it('getMessages 是 async 接縫(回 Promise)', () => {
-		expect(getMessages()).toBeInstanceOf(Promise);
+
+	it('沒有對話時回傳空陣列', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
+		const d = await getConversations();
+		expect(d.conversations).toEqual([]);
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
+		expect(getConversations()).toBeInstanceOf(Promise);
+	});
+});
+
+describe('getThread — GET /conversations/{id}/messages?per_page=100（§3.21，同 getPendingLeaveRequests 的 per_page=100 穿透模式）', () => {
+	it('who 由 sender_id 與 GET /users/me 比對；API 依 created_at 新到舊，映射後反轉為舊到新；total 穿透', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME2,
+				'GET /conversations/c1/messages?per_page=100': {
+					messages: [
+						{ id: 'm2', sender_id: 'u9', body: '好的，謝謝老師', created_at: '2026-07-05T09:16:00Z', read_at: null },
+						{ id: 'm1', sender_id: 'u1', body: '老師您好', created_at: '2026-07-05T09:10:00Z', read_at: '2026-07-05T09:11:00Z' }
+					],
+					total: 2, page: 1, per_page: 100
+				}
+			})
+		);
+
+		const d = await getThread('c1');
+
+		expect(d.messages).toEqual([
+			{ who: 'them', text: '老師您好', time: '2026-07-05 09:10' },
+			{ who: 'me', text: '好的，謝謝老師', time: '2026-07-05 09:16' }
+		]);
+		expect(d.total).toBe(2);
+	});
+
+	it('total 大於本頁筆數時原樣穿透（伺服器端總數，較舊訊息被截斷）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME2,
+				'GET /conversations/c1/messages?per_page=100': {
+					messages: [{ id: 'm1', sender_id: 'u1', body: '嗨', created_at: '2026-07-05T09:10:00Z', read_at: null }],
+					total: 150, page: 1, per_page: 100
+				}
+			})
+		);
+
+		const d = await getThread('c1');
+
+		expect(d.messages).toHaveLength(1);
+		expect(d.total).toBe(150);
+	});
+
+	it('沒有訊息時回傳空陣列', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME2,
+				'GET /conversations/c1/messages?per_page=100': { messages: [], total: 0, page: 1, per_page: 100 }
+			})
+		);
+		const d = await getThread('c1');
+		expect(d.messages).toEqual([]);
+		expect(d.total).toBe(0);
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME2,
+				'GET /conversations/c1/messages?per_page=100': { messages: [], total: 0, page: 1, per_page: 100 }
+			})
+		);
+		expect(getThread('c1')).toBeInstanceOf(Promise);
+	});
+});
+
+describe('sendMessage — POST /conversations/{id}/messages（§3.21）', () => {
+	it('送出 { body }；回應 sender_id 保證為呼叫者自己，直接映射 who="me"', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /conversations/c1/messages': {
+					id: 'm3', sender_id: 'u9', body: '好的，明天見', created_at: '2026-07-05T09:20:00Z', read_at: null
+				}
+			})
+		);
+
+		const msg = await sendMessage('c1', '好的，明天見');
+
+		expect(api).toHaveBeenCalledWith('/conversations/c1/messages', {
+			method: 'POST',
+			body: JSON.stringify({ body: '好的，明天見' })
+		});
+		expect(msg).toEqual({ who: 'me', text: '好的，明天見', time: '2026-07-05 09:20' });
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /conversations/c1/messages': { id: 'm1', sender_id: 'u9', body: 'x', created_at: '2026-07-05T09:20:00Z', read_at: null }
+			})
+		);
+		expect(sendMessage('c1', 'x')).toBeInstanceOf(Promise);
+	});
+});
+
+describe('markRead — PATCH /conversations/{id}/read（§3.21）', () => {
+	it('無 body，回傳已讀則數', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /conversations/c1/read': { updated: 2 } }));
+
+		const d = await markRead('c1');
+
+		expect(api).toHaveBeenCalledWith('/conversations/c1/read', { method: 'PATCH' });
+		expect(d).toEqual({ updated: 2 });
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /conversations/c1/read': { updated: 0 } }));
+		expect(markRead('c1')).toBeInstanceOf(Promise);
 	});
 });
 

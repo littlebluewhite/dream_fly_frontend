@@ -1,7 +1,7 @@
 /* 教練工作台 API 接縫。Task 19：getDashboard/getToday/getSchedule/getSettings 換真後端
  * 資料 + saveSettings 新增；Task 10：getAttendance/getStudents 換真後端資料；
- * getMessages 沒有對應後端端點，仍整包沿用 mock（P2，附註於原處）。回傳「形狀」盡量
- * 維持不變，頁面不用重寫樣板。
+ * Task 12：getConversations/getThread/sendMessage/markRead 換真後端資料（訊息中心，
+ * §3.21）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。
  *
  * myCoachProfile()：GET /users/me → GET /coaches → find(user_id === me.id) 是本檔案
  * 的核心（登入的使用者本人就是教練，教練姓名只能從 users.name 來，見 integration-
@@ -13,7 +13,7 @@
 import { api } from '$lib/api/client';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
-import { TODAY_LABEL, CONVERSATIONS, MSG_DIRECTORY, THREAD, SHARED_FILES } from './data';
+import { TODAY_LABEL, CONVERSATIONS } from './data';
 import type {
 	Coach,
 	TodayClass,
@@ -24,13 +24,8 @@ import type {
 	AttDefault,
 	SchedCourse,
 	Student,
-	MsgRecipient,
-	ThreadMsg,
-	SharedFile
+	ThreadMsg
 } from './data';
-
-/** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。getMessages 仍沿用此 helper。 */
-const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
 
 /** myCoachProfile() 找不到對應教練檔案時拋出；UI 顯示「此帳號未綁定教練檔案」。 */
 export class CoachNotFoundError extends Error {
@@ -317,17 +312,107 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 	};
 };
 
-/* ═════════════════════════ 訊息中心（P2：無對應後端端點，整包沿用 mock） ═════════════════════════ */
+/* ═════════════════════════ 訊息中心（GET /conversations/me + GET/POST .../messages + PATCH .../read，見 integration-contract.md §3.21） ═════════════════════════ */
 
-// P2: 後端無對應的訊息中心端點，整包沿用 mock。
-export interface MessagesData {
-	conversations: Conversation[];
-	directory: MsgRecipient[];
-	thread: ThreadMsg[];
-	sharedFiles: SharedFile[];
+interface ApiConversationSummary {
+	id: string;
+	peer_id: string;
+	peer_name: string;
+	last_message_body: string | null;
+	last_message_at: string | null;
+	unread_count: number;
 }
-export const getMessages = (): Promise<MessagesData> =>
-	reply({ conversations: CONVERSATIONS, directory: MSG_DIRECTORY, thread: THREAD, sharedFiles: SHARED_FILES });
+
+interface ApiMessage {
+	id: string;
+	sender_id: string;
+	body: string;
+	created_at: string;
+	read_at: string | null;
+}
+
+interface ApiMessageListResponse {
+	messages: ApiMessage[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+/** ISO8601 → "YYYY-MM-DD HH:MM"，同 mapCoach 的 lastLogin 轉換慣例。 */
+const toDisplayTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
+
+/** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
+ *  member（§3.21 角色規則），且 CONTEXT.md 明定「會員」帳號即學員本人、不分家長/學員
+ *  （Avoid: 家長），故 kind 一律誠實給 '會員'；urgent/sla/slaTone 是 mock 時代「緊急
+ *  對話/回覆 SLA 倒數」的展示概念，後端無對應資料，一律給不觸發顯示的預設值(P2)；
+ *  color 無代表色欄位，同其餘 mapXxx 慣例固定預設值(P2)。time 由 last_message_at 轉換
+ *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有
+ *  「撰寫新對話」的建立文案 '尚無訊息'；badge 直接用 unread_count(brief 明定)。清單
+ *  順序完全依後端排序(last_message_at DESC NULLS LAST, created_at DESC)，前端不重排。 */
+function mapConversation(r: ApiConversationSummary): Conversation {
+	return {
+		id: r.id,
+		name: r.peer_name,
+		initial: r.peer_name.charAt(0) || '?',
+		color: '#0066CC', // P2: 後端無代表色欄位
+		kind: '會員', // P2: 無家長/學員/群組之分，見上方函式註解
+		time: r.last_message_at ? toDisplayTime(r.last_message_at) : '',
+		badge: r.unread_count,
+		preview: r.last_message_body ?? '尚無訊息',
+		sla: '', // P2: 後端無回覆時效(SLA)欄位
+		slaTone: 'muted'
+	};
+}
+
+export interface ConversationsData {
+	conversations: Conversation[];
+}
+
+/** GET /conversations/me（純陣列，不分頁，見§3.21）。 */
+export const getConversations = async (): Promise<ConversationsData> => {
+	const list = await api<ApiConversationSummary[]>('/conversations/me');
+	return { conversations: list.map(mapConversation) };
+};
+
+/** MessageResponse → 既有 ThreadMsg 形狀。who 由 sender_id 與呼叫者自己的 user id 比對
+ *  得出；attach/failed 兩個 mock 概念皆不設(v1 不支援檔案附件，見§3.21「v1 不支援檔案
+ *  附件」——MessageBubble 對兩者皆未提供時自然落到純文字泡泡分支)。 */
+function mapMessage(m: ApiMessage, selfId: string): ThreadMsg {
+	return { who: m.sender_id === selfId ? 'me' : 'them', text: m.body, time: toDisplayTime(m.created_at) };
+}
+
+export interface ThreadData {
+	messages: ThreadMsg[];
+	/** 伺服器端該對話訊息總數——單頁上限 100(同 getPendingLeaveRequests 的 per_page=100
+	 *  穿透模式)。total > messages.length 代表更早的訊息(超過 100 則的部分)被截斷。 */
+	total: number;
+}
+
+/** GET /conversations/{id}/messages?per_page=100（見§3.21）。per_page 顯式帶滿單頁上限
+ *  （同 getPendingLeaveRequests 慣例，避免後端預設頁大小截斷長對話串）；total 穿透供
+ *  呼叫端誠實呈現截斷狀況。後端依 created_at DESC(新到舊)排序，但對話串泡泡由上到下
+ *  應是舊到新時序(同既有 THREAD mock 資料的時序)，故映射後反轉。判斷 who='me'|'them'
+ *  需另外知道呼叫者自己的 user id，與訊息列表平行拉取(GET /users/me)。 */
+export const getThread = async (conversationId: string): Promise<ThreadData> => {
+	const [me, res] = await Promise.all([
+		api<ApiUser>('/users/me'),
+		api<ApiMessageListResponse>(`/conversations/${conversationId}/messages?per_page=100`)
+	]);
+	return { messages: res.messages.map((m) => mapMessage(m, me.id)).reverse(), total: res.total };
+};
+
+/** POST /conversations/{id}/messages（body 1–2000 字，見§3.21）。回應的 sender_id 契約
+ *  保證為呼叫者自己，直接標記 who='me'，不需要再另外取得/比對 self id。 */
+export const sendMessage = (conversationId: string, body: string): Promise<ThreadMsg> =>
+	api<ApiMessage>(`/conversations/${conversationId}/messages`, {
+		method: 'POST',
+		body: JSON.stringify({ body })
+	}).then((m) => ({ who: 'me' as const, text: m.body, time: toDisplayTime(m.created_at) }));
+
+/** PATCH /conversations/{id}/read（無 body，見§3.21）——將該對話中對方寄出、尚未讀取
+ *  的訊息全數標記已讀；回應為本次標記已讀的則數。 */
+export const markRead = (conversationId: string): Promise<{ updated: number }> =>
+	api<{ updated: number }>(`/conversations/${conversationId}/read`, { method: 'PATCH' });
 
 /* ═════════════════════════ 我的學員（GET /coaches/me/students，見 integration-contract.md §3.19） ═════════════════════════ */
 

@@ -3,12 +3,20 @@
    * bubble area, composer, info panel reconstructed from spec).
    * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root.
    *
-   * Data arrives async via getMessages()(mock-API seam): onMount loads
-   * conversations/directory/thread/sharedFiles into a three-state gate
-   * (loading/error/ready); `convos` is the local working copy the compose flow
-   * prepends to. `sel`'s initial value can no longer assume the seed's first id
-   * ('v1') synchronously, so it's seeded from the loaded list with an empty-array
-   * guard once ready. */
+   * Task 12：接真對話 API（$lib/coach/api，見 integration-contract.md §3.21）。
+   * - 清單：getConversations()(GET /conversations/me)，onMount 載入，phase 三態閘門。
+   * - 串：選定對話(sel)變動時 loadThread() 呼叫 getThread(id)(GET .../messages) +
+   *   markRead(id)(PATCH .../read)——兩者各自 best-effort、互不阻塞；markRead 成功後
+   *   本地把該對話 badge 清零(避免已讀後徽章卡在舊數字)。thread=null 代表載入中，
+   *   `[]` 代表已載入但無訊息，兩者分開渲染避免誤判空狀態。
+   * - 傳送：sendMessage(id, body)(POST .../messages)，回應直接附加到本地 thread(同
+   *   saveAttendance 用 mutation 回應同步本地狀態的慣例)，失敗則還原輸入框內容並
+   *   toast 錯誤。
+   * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約§3.21 明文）。
+   * - 撰寫新對話：MSG_DIRECTORY 維持既有前端本地示範建立對話（未串接 POST
+   *   /conversations——不在本任務端點清單內，見 task-12-brief），新建對話 id 固定
+   *   'new-' 前綴；loadThread() 對此類本地對話直接顯示空對話串，不呼叫任何端點
+   *   （後端不存在對應資料，呼叫必然 404）。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
@@ -19,24 +27,26 @@
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
-  import type { Conversation, MsgRecipient } from '$lib/coach/data';
-  import { getMessages, type MessagesData } from '$lib/coach/api';
+  import type { Conversation, MsgRecipient, ThreadMsg } from '$lib/coach/data';
+  import { MSG_DIRECTORY } from '$lib/coach/data';
+  import { getConversations, getThread, sendMessage, markRead } from '$lib/coach/api';
+  import { ApiError } from '$lib/api/client';
   import { toasts, search } from '$lib/coach/stores';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
-  let data: MessagesData | null = null;
 
   /* ── state (legacy, no runes) ── */
   let convos: Conversation[] = [];
   let tab = '全部';
   let sel: string | null = null;
   let reply = '';
+  // null = 該對話串載入中；[] = 已載入但尚無訊息。
+  let thread: ThreadMsg[] | null = null;
 
   function load() {
     phase = 'loading';
-    getMessages()
+    getConversations()
       .then((d) => {
-        data = d;
         convos = [...d.conversations];
         sel = d.conversations[0]?.id ?? null;
         phase = 'ready';
@@ -45,6 +55,36 @@
   }
   onMount(load);
 
+  /** 選定對話變動時載入其對話串並標記已讀。本地示範對話('new-' 前綴，見上方撰寫
+   *  附註)後端不存在對應資料，直接顯示空對話串，不呼叫任何端點。
+   *
+   *  `sel === conversationId` 重新檢查：快速連續切換對話時，較舊對話的請求可能比
+   *  新選取對話的請求更晚回來(網路先後順序不保證)——套用回應前先確認使用者這時
+   *  還停留在同一個對話，避免舊回應蓋掉目前正在看的對話串。 */
+  function loadThread(conversationId: string) {
+    if (conversationId.startsWith('new-')) {
+      thread = [];
+      return;
+    }
+    thread = null;
+    getThread(conversationId)
+      .then((d) => {
+        if (sel === conversationId) thread = d.messages;
+      })
+      .catch(() => {
+        if (sel === conversationId) {
+          thread = [];
+          toasts.notify('error', '載入訊息失敗', '請稍後再試。');
+        }
+      });
+    markRead(conversationId)
+      .then(() => {
+        convos = convos.map((c) => (c.id === conversationId ? { ...c, badge: 0 } : c));
+      })
+      .catch(() => {}); // best-effort：已讀標記失敗不影響訊息顯示(同 auth logout 的 fire-and-forget revoke 慣例)
+  }
+  $: if (sel) loadThread(sel);
+
   /* compose dialog */
   let composeOpen = false;
   let composePick: MsgRecipient | null = null;
@@ -52,7 +92,7 @@
 
   const tabs = [
     { k: '全部', label: '全部' },
-    { k: '緊急', label: '緊急 2' },
+    { k: '緊急', label: '緊急' },
     { k: '未讀', label: '未讀' },
     { k: '家長', label: '家長' },
   ];
@@ -72,18 +112,38 @@
   $: if (list.length && !list.some((c) => c.id === sel)) sel = list[0].id;
 
   $: cur = convos.find((c) => c.id === sel) || convos[0];
-  // optional-chain guard: during the pre-load reactive tick `convos` is still []
-  // so `cur` is undefined — dereferencing `.id` directly would throw before the
-  // getMessages() seam ever resolves.
-  $: showThread = cur?.id === 'v1';
 
   function handleSelect(e: CustomEvent<string>) {
     sel = e.detail;
   }
 
-  function handleSend() {
-    toasts.notify('success', '訊息已傳送', '（示範）');
-    reply = '';
+  function sendErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) return e.message;
+    return '連線發生問題，請稍後再試。';
+  }
+
+  /** conversationId 在送出當下(sel 目前指向的對話)被捕捉為區域變數；await 期間使用者
+   *  可能已切到另一個對話(sel 改變)——套用回應/還原輸入框前皆以 `sel === conversationId`
+   *  重新檢查，避免遲來的回應附加到「現在正在看」的另一個對話串，或覆蓋另一個對話
+   *  已經在輸入的內容(同 loadThread 的過期回應防護)。convos 的 preview 更新則不受此
+   *  限制——不論目前選取哪個對話，那筆訊息確實已送達 conversationId 對應的對話。 */
+  async function handleSend(e: CustomEvent<string>) {
+    const text = e.detail;
+    const conversationId = sel;
+    if (!conversationId) return;
+    if (conversationId.startsWith('new-')) {
+      // 本地示範對話，尚無真實後端對話 id 可送出——同既有 mock 示範行為。
+      toasts.notify('success', '訊息已傳送', '（示範）');
+      return;
+    }
+    try {
+      const msg = await sendMessage(conversationId, text);
+      if (sel === conversationId) thread = [...(thread ?? []), msg];
+      convos = convos.map((c) => (c.id === conversationId ? { ...c, preview: text, time: msg.time } : c));
+    } catch (err) {
+      if (sel === conversationId) reply = text; // 送出失敗，還原輸入框內容，避免使用者遺失已輸入文字
+      toasts.notify('error', '傳送失敗', sendErrorMessage(err));
+    }
   }
 
   function openCompose() {
@@ -117,7 +177,7 @@
   }
 </script>
 
-{#if phase === 'ready' && data}
+{#if phase === 'ready'}
 <div style="height:calc(100vh - 68px - 52px);min-height:560px;padding:0">
   <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;box-shadow:var(--df-shadow-card)">
 
@@ -175,7 +235,7 @@
         <span style="width:40px;height:40px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:15.5px;font-weight:700;color:var(--df-ink)">{cur.name}</div>
-          <div style="font-size:12.5px;color:var(--df-text-light)">{showThread ? '王小明 的家長 · 兒童體操初階班' : cur.kind}</div>
+          <div style="font-size:12.5px;color:var(--df-text-light)">{cur.kind}</div>
         </div>
         {#each ['phone', 'video', 'more-horizontal'] as ic}
           <button
@@ -188,8 +248,9 @@
         {/each}
       </div>
 
-      <!-- SLA banner (only for v1 / 王媽媽 緊急對話) -->
-      {#if showThread}
+      <!-- SLA banner (only for conversations flagged urgent; 目前後端無回覆時效資料，
+           恆為預設值，見 api.ts mapConversation 附註——保留區塊供未來若有此欄位時沿用) -->
+      {#if cur.urgent}
         <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:var(--df-warning-bg);border-bottom:1px solid var(--df-border)">
           <Icon name="clock" size={15} color="#92400E" />
           <span style="flex:1;font-size:12.5px;color:#92400E;font-weight:500">緊急對話 · 需於 30 分鐘內回覆（回覆 SLA）</span>
@@ -202,12 +263,14 @@
 
       <!-- bubble area -->
       <div style="flex:1;overflow-y:auto;min-height:0;padding:20px;display:flex;flex-direction:column;gap:14px">
-        {#if showThread}
-          {#each data.thread as m}
+        {#if thread === null}
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--df-text-muted);font-size:13px">載入訊息中…</div>
+        {:else if thread.length === 0}
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--df-text-muted);font-size:13px">尚無訊息</div>
+        {:else}
+          {#each thread as m}
             <MessageBubble {m} />
           {/each}
-        {:else}
-          <div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--df-text-muted);font-size:13px">選擇對話以檢視訊息</div>
         {/if}
       </div>
 
@@ -218,34 +281,19 @@
 
     <!-- ══════════════ Col 3: 資訊面板 ══════════════ -->
     <div style="background:#fff;border-left:1px solid var(--df-border);display:flex;flex-direction:column;min-height:0;overflow-y:auto">
-      <!-- 學員資訊 -->
+      <!-- 學員資訊：cur 在沒有任何對話(convos 為空)時為 undefined，須另外判斷，
+           否則沒有符合任何 col2 的 {#if list.length === 0} 保護 -->
+      {#if cur}
       <InfoSection title="學員資訊">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <span style="width:38px;height:38px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">{showThread ? '王小明' : cur.name}</div>
-            <div style="font-size:12px;color:var(--df-text-light)">{showThread ? '兒童體操初階班' : cur.kind}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">{cur.name}</div>
+            <div style="font-size:12px;color:var(--df-text-light)">{cur.kind}</div>
           </div>
         </div>
-        {#if showThread}
-          <!-- codex r3 (P2): these stats are 王小明's; show only for the 王媽媽 thread
-               rather than the wrong student's numbers on other conversations. -->
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;justify-content:space-between;font-size:12.5px">
-              <span style="color:var(--df-text-muted)">出席率</span>
-              <span style="color:var(--df-text-dark);font-weight:600">98%</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:12.5px">
-              <span style="color:var(--df-text-muted)">學習進度</span>
-              <span style="color:var(--df-text-dark);font-weight:600">初階</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:12.5px">
-              <span style="color:var(--df-text-muted)">最近課程</span>
-              <span style="color:var(--df-text-dark);font-weight:600">今日 09:00</span>
-            </div>
-          </div>
-        {/if}
       </InfoSection>
+      {/if}
 
       <!-- 快捷操作 -->
       <InfoSection title="快捷操作">
@@ -270,23 +318,6 @@
           </button>
         </div>
       </InfoSection>
-
-      <!-- 共用檔案 -->
-      <InfoSection title="共用檔案">
-        <div style="display:flex;flex-direction:column;gap:8px">
-          {#each data.sharedFiles as f}
-            <div style="display:flex;align-items:center;gap:10px">
-              <div style="width:36px;height:36px;border-radius:8px;background:var(--df-primary-bg);display:flex;align-items:center;justify-content:center;flex:none">
-                <Icon name={f.icon} size={16} color={f.tint} />
-              </div>
-              <div style="min-width:0">
-                <div style="font-size:12.5px;font-weight:600;color:var(--df-text-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{f.name}</div>
-                <div style="font-size:11px;color:var(--df-text-muted);margin-top:1px">{f.meta}</div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </InfoSection>
     </div>
 
   </div>
@@ -302,7 +333,7 @@
 >
   <div style="font-size:13px;color:var(--df-text-light);margin-bottom:10px">選擇收件對象</div>
   <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
-    {#each data.directory as r (r.name)}
+    {#each MSG_DIRECTORY as r (r.name)}
       {@const on = composePick?.name === r.name}
       <button
         type="button"
