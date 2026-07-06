@@ -414,6 +414,35 @@ export const sendMessage = (conversationId: string, body: string): Promise<Threa
 export const markRead = (conversationId: string): Promise<{ updated: number }> =>
 	api<{ updated: number }>(`/conversations/${conversationId}/read`, { method: 'PATCH' });
 
+/** ConversationResponse 只取用得到的欄位（member_id/coach_id/created_at 無顯示用途，
+ *  同 api.ts 窄化 local interface 慣例）。 */
+interface ApiConversation {
+	id: string;
+	last_message_at: string | null;
+}
+
+/** POST /conversations（get-or-create，見§3.21）——撰寫新對話：user_id 帶對方(學員)的
+ *  user id。同一對使用者無論呼叫幾次都回同一筆對話（無序對唯一），重複選同一位學員
+ *  是安全的。回應不含 peer_name/unread_count/last_message_body（ConversationResponse
+ *  非 Summary），故 peerName 由呼叫端(picker 已知選了誰)帶入，其餘欄位以「尚無訊息、
+ *  未讀 0」映射——get-or-create 命中既有對話時這些值可能失真，但頁面對已在清單中的
+ *  id 走合併(保留既有列)不會用到本映射值，僅全新對話會插入。錯誤(422「僅支援教練與
+ *  會員間的對話」等)原樣拋出，呼叫端以 ApiError.message 顯示繁中訊息。 */
+export const createConversation = async (userId: string, peerName: string): Promise<Conversation> => {
+	const c = await api<ApiConversation>('/conversations', {
+		method: 'POST',
+		body: JSON.stringify({ user_id: userId })
+	});
+	return mapConversation({
+		id: c.id,
+		peer_id: userId,
+		peer_name: peerName,
+		last_message_body: null,
+		last_message_at: c.last_message_at,
+		unread_count: 0
+	});
+};
+
 /* ═════════════════════════ 我的學員（GET /coaches/me/students，見 integration-contract.md §3.19） ═════════════════════════ */
 
 interface ApiMyStudentCourse {
@@ -427,14 +456,17 @@ interface ApiMyStudent {
 	courses: ApiMyStudentCourse[];
 }
 
-/** MyStudentResponse → 既有 Student 形狀。cls 由 courses(該學員在這位教練名下的所有
- *  課程)以「、」串接組成——忠實反映可能不只一堂課，而非只取第一堂丟掉其餘資訊；
- *  initial 由姓名首字推導(同 mapProfile 慣例)；color 無代表色欄位,固定預設值(P2，同
- *  mapScheduleEntry 慣例)。level/skill/pct/att 無對應欄位(此端點不含技能評量/出勤
- *  統計——§3.19 的 attended/total 是 member 視角的單一課程統計，見 GET /enrolments/me，
- *  非教練視角的單一學員數字)，一律誠實給預設值(P2，各自附註)。 */
+/** MyStudentResponse → 既有 Student 形狀。user_id 穿透(訊息中心「撰寫新對話」的
+ *  POST /conversations 需要對方 user id，picker 直接用 getStudents() 名冊)；cls 由
+ *  courses(該學員在這位教練名下的所有課程)以「、」串接組成——忠實反映可能不只一堂
+ *  課，而非只取第一堂丟掉其餘資訊；initial 由姓名首字推導(同 mapProfile 慣例)；
+ *  color 無代表色欄位,固定預設值(P2，同 mapScheduleEntry 慣例)。level/skill/pct/att
+ *  無對應欄位(此端點不含技能評量/出勤統計——§3.19 的 attended/total 是 member 視角
+ *  的單一課程統計，見 GET /enrolments/me，非教練視角的單一學員數字)，一律誠實給
+ *  預設值(P2，各自附註)。 */
 function mapStudent(s: ApiMyStudent): Student {
 	return {
+		user_id: s.user_id,
 		name: s.name,
 		initial: s.name.charAt(0) || '?',
 		color: '#0066CC', // P2: 後端無代表色欄位

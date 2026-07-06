@@ -51,6 +51,8 @@ export interface TodayClass {
 	status: TodayStatus;
 }
 export interface Student {
+	/** users.id — 訊息中心「撰寫新對話」POST /conversations 的對方識別（Task 12）。 */
+	user_id: string;
 	name: string;
 	initial: string;
 	color: string;
@@ -182,18 +184,18 @@ export const LEVEL_TINT: Record<StudentLevel, { bg: string; fg: string }> = {
 };
 
 export const STUDENTS: Student[] = [
-	{ name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', level: '初階', skill: '前滾翻', pct: 80, att: 98 },
-	{ name: '陳柏睿', initial: '陳', color: '#EC4899', cls: '兒童體操中階 A 班', level: '中階', skill: '後空翻', pct: 72, att: 95 },
-	{ name: '林芷晴', initial: '林', color: '#10B981', cls: '幼兒體操初階班', level: '初階', skill: '倒立', pct: 65, att: 90 },
-	{ name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '空中轉體', pct: 88, att: 99 },
-	{ name: '黃詩涵', initial: '黃', color: '#F59E0B', cls: '兒童體操中階 B 班', level: '中階', skill: '側手翻', pct: 78, att: 86 },
-	{ name: '吳承翰', initial: '吳', color: '#0EA5E9', cls: '兒童體操初階 A 班', level: '初階', skill: '橋式', pct: 58, att: 72 },
-	{ name: '劉若彤', initial: '劉', color: '#EF4444', cls: '競技選手培訓班', level: '選手', skill: '後空翻兩周', pct: 91, att: 97 },
-	{ name: '蔡明軒', initial: '蔡', color: '#0066CC', cls: '兒童體操中階 A 班', level: '中階', skill: '前空翻', pct: 70, att: 93 },
-	{ name: '鄭雅雯', initial: '鄭', color: '#14B8A6', cls: '幼兒體操初階班', level: '初階', skill: '平衡木走步', pct: 62, att: 68 },
-	{ name: '許書豪', initial: '許', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '團身後空翻', pct: 85, att: 96 },
-	{ name: '楊子萱', initial: '楊', color: '#EC4899', cls: '兒童體操中階 B 班', level: '中階', skill: '跳箱', pct: 75, att: 88 },
-	{ name: '周冠廷', initial: '周', color: '#F59E0B', cls: '兒童體操初階 B 班', level: '初階', skill: '蹲撐', pct: 68, att: 91 }
+	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', level: '初階', skill: '前滾翻', pct: 80, att: 98 },
+	{ user_id: 'su02', name: '陳柏睿', initial: '陳', color: '#EC4899', cls: '兒童體操中階 A 班', level: '中階', skill: '後空翻', pct: 72, att: 95 },
+	{ user_id: 'su03', name: '林芷晴', initial: '林', color: '#10B981', cls: '幼兒體操初階班', level: '初階', skill: '倒立', pct: 65, att: 90 },
+	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '空中轉體', pct: 88, att: 99 },
+	{ user_id: 'su05', name: '黃詩涵', initial: '黃', color: '#F59E0B', cls: '兒童體操中階 B 班', level: '中階', skill: '側手翻', pct: 78, att: 86 },
+	{ user_id: 'su06', name: '吳承翰', initial: '吳', color: '#0EA5E9', cls: '兒童體操初階 A 班', level: '初階', skill: '橋式', pct: 58, att: 72 },
+	{ user_id: 'su07', name: '劉若彤', initial: '劉', color: '#EF4444', cls: '競技選手培訓班', level: '選手', skill: '後空翻兩周', pct: 91, att: 97 },
+	{ user_id: 'su08', name: '蔡明軒', initial: '蔡', color: '#0066CC', cls: '兒童體操中階 A 班', level: '中階', skill: '前空翻', pct: 70, att: 93 },
+	{ user_id: 'su09', name: '鄭雅雯', initial: '鄭', color: '#14B8A6', cls: '幼兒體操初階班', level: '初階', skill: '平衡木走步', pct: 62, att: 68 },
+	{ user_id: 'su10', name: '許書豪', initial: '許', color: '#8B5CF6', cls: '競技選手培訓班', level: '選手', skill: '團身後空翻', pct: 85, att: 96 },
+	{ user_id: 'su11', name: '楊子萱', initial: '楊', color: '#EC4899', cls: '兒童體操中階 B 班', level: '中階', skill: '跳箱', pct: 75, att: 88 },
+	{ user_id: 'su12', name: '周冠廷', initial: '周', color: '#F59E0B', cls: '兒童體操初階 B 班', level: '初階', skill: '蹲撐', pct: 68, att: 91 }
 ];
 
 /* ──────────────── weekly schedule (排課管理) ──────────────── */
@@ -290,24 +292,6 @@ export const CONVERSATIONS: Conversation[] = [
 	{ id: 'v4', name: '黃媽媽', initial: '黃', color: '#F59E0B', kind: '家長', time: '昨天', preview: '孩子在課堂上跌倒，想了解處理狀況…', urgent: true, sla: '已逾時 1.5h', slaTone: 'error' },
 	{ id: 'v5', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '家長', time: '昨天', preview: '謝謝老師這學期的細心指導！', sla: '已回覆', slaTone: 'success' },
 	{ id: 'v6', name: '吳媽媽', initial: '吳', color: '#0EA5E9', kind: '家長', time: '週一', preview: '收到，謝謝您。', sla: '已回覆', slaTone: 'success' }
-];
-
-/* ──────────────── compose recipient directory (撰寫 新訊息) ────────────────
- * Contacts the coach can start a NEW conversation with. Deliberately disjoint
- * from CONVERSATIONS (those threads already exist). */
-export interface MsgRecipient {
-	name: string;
-	initial: string;
-	color: string;
-	kind: string;
-}
-export const MSG_DIRECTORY: MsgRecipient[] = [
-	{ name: '張媽媽', initial: '張', color: '#8B5CF6', kind: '家長' },
-	{ name: '劉同學', initial: '劉', color: '#EF4444', kind: '學員' },
-	{ name: '蔡爸爸', initial: '蔡', color: '#0066CC', kind: '家長' },
-	{ name: '幼兒體操班 群組', initial: '群', color: '#10B981', kind: '群組' },
-	{ name: '鄭媽媽', initial: '鄭', color: '#14B8A6', kind: '家長' },
-	{ name: '楊同學', initial: '楊', color: '#EC4899', kind: '學員' }
 ];
 
 /* thread for 王媽媽 — me = 李教練 (right aligned) */

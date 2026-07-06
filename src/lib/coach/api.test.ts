@@ -16,6 +16,7 @@ import {
 	getThread,
 	sendMessage,
 	markRead,
+	createConversation,
 	getStudents,
 	getSettings,
 	saveSettings,
@@ -556,8 +557,60 @@ describe('markRead — PATCH /conversations/{id}/read（§3.21）', () => {
 	});
 });
 
+describe('createConversation — POST /conversations（§3.21，get-or-create）', () => {
+	it('送出 { user_id }；回應與 peer 姓名映射為既有 Conversation 形狀(全新對話 last_message_at null → time 空字串、preview 尚無訊息)', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /conversations': {
+					id: 'cv1', member_id: 'u9', coach_id: 'u1',
+					created_at: '2026-07-06T00:00:00Z', last_message_at: null
+				}
+			})
+		);
+
+		const convo = await createConversation('u9', '王小明');
+
+		expect(api).toHaveBeenCalledWith('/conversations', {
+			method: 'POST',
+			body: JSON.stringify({ user_id: 'u9' })
+		});
+		expect(convo).toEqual({
+			id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+			time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+		});
+	});
+
+	it('get-or-create 回既有對話(last_message_at 非 null)時 time 正常轉換', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /conversations': {
+					id: 'cv2', member_id: 'u9', coach_id: 'u1',
+					created_at: '2026-07-01T00:00:00Z', last_message_at: '2026-07-05T09:42:00Z'
+				}
+			})
+		);
+
+		const convo = await createConversation('u9', '陳小華');
+
+		expect(convo.id).toBe('cv2');
+		expect(convo.time).toBe('2026-07-05 09:42');
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /conversations': {
+					id: 'cv1', member_id: 'u9', coach_id: 'u1',
+					created_at: '2026-07-06T00:00:00Z', last_message_at: null
+				}
+			})
+		);
+		expect(createConversation('u9', '王小明')).toBeInstanceOf(Promise);
+	});
+});
+
 describe('getStudents — GET /coaches/me/students（§3.19）', () => {
-	it('映射為 Student[]；cls 由 courses 陣列以「、」串接；level/skill/pct/att 皆為誠實預設值(P2)', async () => {
+	it('映射為 Student[]；user_id 穿透(訊息中心撰寫新對話 POST /conversations 需要)；cls 由 courses 陣列以「、」串接；level/skill/pct/att 皆為誠實預設值(P2)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /coaches/me/students': [
@@ -573,8 +626,8 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 		const d = await getStudents();
 
 		expect(d.students).toEqual([
-			{ name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', level: '初階', skill: '', pct: 0, att: 0 },
-			{ name: '陳小華', initial: '陳', color: '#0066CC', cls: '兒童體操初階班、競技選手班', level: '初階', skill: '', pct: 0, att: 0 }
+			{ user_id: 'u1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', level: '初階', skill: '', pct: 0, att: 0 },
+			{ user_id: 'u2', name: '陳小華', initial: '陳', color: '#0066CC', cls: '兒童體操初階班、競技選手班', level: '初階', skill: '', pct: 0, att: 0 }
 		]);
 	});
 

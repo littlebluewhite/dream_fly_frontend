@@ -9,7 +9,6 @@ import {
 	ATT_CLASS,
 	ATT_TODAY_CLASSES,
 	CONVERSATIONS,
-	MSG_DIRECTORY,
 	THREAD,
 	SHARED_FILES,
 	NOTIFS,
@@ -93,16 +92,5 @@ describe('coach data — ATT_TODAY_CLASSES (switch-class roster)', () => {
 			expect(c.roster.length).toBeGreaterThan(0);
 		}
 		expect(ids.size).toBe(ATT_TODAY_CLASSES.length); // ids unique
-	});
-});
-
-describe('coach data — MSG_DIRECTORY (compose recipients)', () => {
-	it('is non-empty', () => {
-		expect(MSG_DIRECTORY.length).toBeGreaterThan(0);
-	});
-
-	it('no recipient name collides with an existing conversation', () => {
-		const convoNames = new Set(CONVERSATIONS.map((c) => c.name));
-		for (const r of MSG_DIRECTORY) expect(convoNames.has(r.name)).toBe(false);
 	});
 });

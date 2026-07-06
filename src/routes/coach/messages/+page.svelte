@@ -13,10 +13,13 @@
    *   saveAttendance 用 mutation 回應同步本地狀態的慣例)，失敗則還原輸入框內容並
    *   toast 錯誤。
    * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約§3.21 明文）。
-   * - 撰寫新對話：MSG_DIRECTORY 維持既有前端本地示範建立對話（未串接 POST
-   *   /conversations——不在本任務端點清單內，見 task-12-brief），新建對話 id 固定
-   *   'new-' 前綴；loadThread() 對此類本地對話直接顯示空對話串，不呼叫任何端點
-   *   （後端不存在對應資料，呼叫必然 404）。 */
+   * - 撰寫新對話：picker 名冊來自 getStudents()(GET /coaches/me/students，Task 10
+   *   已接真——取代原 MSG_DIRECTORY 虛構名單)，確認即 createConversation(user_id,
+   *   name)(POST /conversations，get-or-create，§3.21)。回傳 id 已在清單中(既有對話)
+   *   就選中既有列不重複插入；全新對話插入清單頂端並選中(伺服器排序把尚無訊息的
+   *   對話排最後，本地置頂是「剛發起」的工作階段 UX，下次整頁載入回歸伺服器排序)。
+   *   失敗(422「僅支援教練與會員間的對話」等)以 ApiError.message 繁中 toast 提示，
+   *   對話框保持開啟供改選。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
@@ -27,9 +30,8 @@
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
-  import type { Conversation, MsgRecipient, ThreadMsg } from '$lib/coach/data';
-  import { MSG_DIRECTORY } from '$lib/coach/data';
-  import { getConversations, getThread, sendMessage, markRead } from '$lib/coach/api';
+  import type { Conversation, Student, ThreadMsg } from '$lib/coach/data';
+  import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { ApiError } from '$lib/api/client';
   import { toasts, search } from '$lib/coach/stores';
 
@@ -55,17 +57,12 @@
   }
   onMount(load);
 
-  /** 選定對話變動時載入其對話串並標記已讀。本地示範對話('new-' 前綴，見上方撰寫
-   *  附註)後端不存在對應資料，直接顯示空對話串，不呼叫任何端點。
+  /** 選定對話變動時載入其對話串並標記已讀。
    *
    *  `sel === conversationId` 重新檢查：快速連續切換對話時，較舊對話的請求可能比
    *  新選取對話的請求更晚回來(網路先後順序不保證)——套用回應前先確認使用者這時
    *  還停留在同一個對話，避免舊回應蓋掉目前正在看的對話串。 */
   function loadThread(conversationId: string) {
-    if (conversationId.startsWith('new-')) {
-      thread = [];
-      return;
-    }
     thread = null;
     getThread(conversationId)
       .then((d) => {
@@ -85,10 +82,12 @@
   }
   $: if (sel) loadThread(sel);
 
-  /* compose dialog */
+  /* compose dialog（撰寫新對話）*/
   let composeOpen = false;
-  let composePick: MsgRecipient | null = null;
-  let newSeq = 1;
+  let composePhase: 'loading' | 'error' | 'ready' = 'loading';
+  let recipients: Student[] = [];
+  let composePick: Student | null = null;
+  let creating = false;
 
   const tabs = [
     { k: '全部', label: '全部' },
@@ -117,7 +116,7 @@
     sel = e.detail;
   }
 
-  function sendErrorMessage(e: unknown): string {
+  function apiErrorMessage(e: unknown): string {
     if (e instanceof ApiError) return e.message;
     return '連線發生問題，請稍後再試。';
   }
@@ -131,49 +130,54 @@
     const text = e.detail;
     const conversationId = sel;
     if (!conversationId) return;
-    if (conversationId.startsWith('new-')) {
-      // 本地示範對話，尚無真實後端對話 id 可送出——同既有 mock 示範行為。
-      toasts.notify('success', '訊息已傳送', '（示範）');
-      return;
-    }
     try {
       const msg = await sendMessage(conversationId, text);
       if (sel === conversationId) thread = [...(thread ?? []), msg];
       convos = convos.map((c) => (c.id === conversationId ? { ...c, preview: text, time: msg.time } : c));
     } catch (err) {
       if (sel === conversationId) reply = text; // 送出失敗，還原輸入框內容，避免使用者遺失已輸入文字
-      toasts.notify('error', '傳送失敗', sendErrorMessage(err));
+      toasts.notify('error', '傳送失敗', apiErrorMessage(err));
     }
   }
 
+  /** 每次開啟都重新拉 getStudents() 名冊——失敗後關閉重開即重試，不需要另外的重試按鈕。 */
   function openCompose() {
     composePick = null;
     composeOpen = true;
+    composePhase = 'loading';
+    getStudents()
+      .then((d) => {
+        recipients = d.students;
+        composePhase = 'ready';
+      })
+      .catch(() => {
+        composePhase = 'error';
+      });
   }
 
-  function createConversation() {
-    if (!composePick) return;
+  /** POST /conversations（get-or-create）。回傳 id 已在清單中就選中既有列（保留其
+   *  badge/preview，不用 create 回應的貧乏映射覆蓋）；全新對話插入頂端並選中——選中
+   *  觸發 loadThread 載入串（既有對話載出歷史訊息、全新對話顯示「尚無訊息」空狀態）。
+   *  失敗以 ApiError.message 繁中 toast 提示（§3.21 的 422 等後端本身回繁中訊息，同
+   *  decideLeaveRequest 直接透傳慣例），對話框保持開啟供改選。 */
+  async function confirmCompose() {
+    if (!composePick || creating) return;
     const r = composePick;
-    const id = 'new-' + newSeq++;
-    const convo: Conversation = {
-      id,
-      name: r.name,
-      initial: r.initial,
-      color: r.color,
-      kind: r.kind,
-      time: '剛剛',
-      preview: '尚無訊息',
-      sla: '尚未回覆',
-      slaTone: 'muted',
-    };
-    convos = [convo, ...convos];
-    // reset the filters so the guard can't re-select the first visible row over us.
-    tab = '全部';
-    search.set('');
-    sel = id;
-    composeOpen = false;
-    composePick = null;
-    toasts.notify('success', '已建立對話', '與 ' + r.name + ' 的新對話已建立。');
+    creating = true;
+    try {
+      const convo = await createConversation(r.user_id, r.name);
+      if (!convos.some((c) => c.id === convo.id)) convos = [convo, ...convos];
+      // reset the filters so the guard can't re-select the first visible row over us.
+      tab = '全部';
+      search.set('');
+      sel = convo.id;
+      composeOpen = false;
+      composePick = null;
+    } catch (err) {
+      toasts.notify('error', '建立對話失敗', apiErrorMessage(err));
+    } finally {
+      creating = false;
+    }
   }
 </script>
 
@@ -323,36 +327,44 @@
   </div>
 </div>
 
-<!-- ══════════════ 撰寫 新對話 Dialog ══════════════ -->
+<!-- ══════════════ 撰寫 新對話 Dialog（getStudents 名冊選人 → POST /conversations） ══════════════ -->
 <Dialog
   open={composeOpen}
   title="撰寫新訊息"
   onClose={() => (composeOpen = false)}
-  primaryAction={{ label: '建立對話', onClick: createConversation }}
+  primaryAction={{ label: '建立對話', onClick: confirmCompose }}
   secondaryAction={{ label: '取消', onClick: () => (composeOpen = false) }}
 >
-  <div style="font-size:13px;color:var(--df-text-light);margin-bottom:10px">選擇收件對象</div>
-  <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
-    {#each MSG_DIRECTORY as r (r.name)}
-      {@const on = composePick?.name === r.name}
-      <button
-        type="button"
-        on:click={() => (composePick = r)}
-        style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1.5px solid {on
-          ? 'var(--df-primary)'
-          : 'var(--df-border)'};background:{on
-          ? 'var(--df-primary-bg)'
-          : '#fff'};border-radius:10px;padding:10px 12px;cursor:pointer;font-family:var(--df-font-body)"
-      >
-        <span style="width:36px;height:36px;border-radius:50%;background:{r.color};color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none">{r.initial}</span>
-        <span style="flex:1;min-width:0">
-          <span style="display:block;font-size:13.5px;font-weight:700;color:var(--df-text-dark)">{r.name}</span>
-          <span style="display:block;font-size:12px;color:var(--df-text-light)">{r.kind}</span>
-        </span>
-        {#if on}<Icon name="check" size={16} color="var(--df-primary)" />{/if}
-      </button>
-    {/each}
-  </div>
+  {#if composePhase === 'loading'}
+    <div style="padding:20px 0;text-align:center;font-size:13px;color:var(--df-text-muted)">載入學員名單中…</div>
+  {:else if composePhase === 'error'}
+    <div style="padding:20px 0;text-align:center;font-size:13px;color:var(--df-text-muted)">無法載入學員名單，請關閉後重試。</div>
+  {:else if recipients.length === 0}
+    <div style="padding:20px 0;text-align:center;font-size:13px;color:var(--df-text-muted)">目前沒有學員可發起對話。</div>
+  {:else}
+    <div style="font-size:13px;color:var(--df-text-light);margin-bottom:10px">選擇收件對象</div>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
+      {#each recipients as r (r.user_id)}
+        {@const on = composePick?.user_id === r.user_id}
+        <button
+          type="button"
+          on:click={() => (composePick = r)}
+          style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1.5px solid {on
+            ? 'var(--df-primary)'
+            : 'var(--df-border)'};background:{on
+            ? 'var(--df-primary-bg)'
+            : '#fff'};border-radius:10px;padding:10px 12px;cursor:pointer;font-family:var(--df-font-body)"
+        >
+          <span style="width:36px;height:36px;border-radius:50%;background:{r.color};color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none">{r.initial}</span>
+          <span style="flex:1;min-width:0">
+            <span style="display:block;font-size:13.5px;font-weight:700;color:var(--df-text-dark)">{r.name}</span>
+            <span style="display:block;font-size:12px;color:var(--df-text-light)">{r.cls}</span>
+          </span>
+          {#if on}<Icon name="check" size={16} color="var(--df-primary)" />{/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 </Dialog>
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
