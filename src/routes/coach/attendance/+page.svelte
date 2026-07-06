@@ -7,17 +7,25 @@
    * edit snapshots the WHOLE save-bar state so 復原 restores marks + dirtyCount +
    * state, not just marks.
    *
-   * Data arrives async via getAttendance()(mock-API seam): onMount loads the班級
-   * 清單 into a three-state gate (loading/error/ready). `curClass` keeps its
-   * non-null assertion (safe once ready — curClassId always matches a loaded
-   * class); `roster` is derived independently with an optional-chain guard so the
-   * pre-load reactive tick (classes still []) can't throw. */
+   * Data arrives async via getAttendance()(真實 API 接縫，Task 10：今日場次 ×
+   * 各自名冊，見 $lib/coach/api)：onMount loads the班級清單 into a three-state gate
+   * (loading/error/ready)。`curClass` keeps its non-null assertion (safe once
+   * ready 且 classes 非空 — curClassId 一律指向已載入的班級；`classes.length === 0`
+   * 時改走獨立的空狀態分支，不會走到用到 curClass 的樣板)；`roster` 是衍生獨立、帶
+   * optional-chain guard 的(pre-load reactive tick、classes 仍為 [] 不會 throw)。
+   *
+   * 儲存(doSave)呼叫真實 saveAttendance(sessionId, marks) → PUT /sessions/{id}/
+   * attendance；成功以伺服器回傳的最新名冊同步 marks/classes(而非樂觀本地值 ——
+   * 'late'(遲到)沒有對應後端狀態、送出時併入 'present'，若不用伺服器回應同步，畫面會
+   * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
+   * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。 */
   import { onMount } from 'svelte';
-  import { getAttendance } from '$lib/coach/api';
+  import { getAttendance, saveAttendance } from '$lib/coach/api';
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { ApiError } from '$lib/api/client';
+  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -28,7 +36,7 @@
   let classes: AttClassFull[] = [];
 
   // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
-  let curClassId = 'ac1';
+  let curClassId = '';
   $: curClass = classes.find((c) => c.id === curClassId)!;
   $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
 
@@ -46,8 +54,10 @@
     getAttendance()
       .then((d) => {
         classes = d.classes;
-        marks = buildMarks(classes[0].roster);
-        dirtyCount = classes[0].roster.filter((r) => r.def !== 'present').length;
+        const first = classes[0];
+        curClassId = first?.id ?? '';
+        marks = first ? buildMarks(first.roster) : {};
+        dirtyCount = first ? first.roster.filter((r) => r.def !== 'present').length : 0;
         phase = 'ready';
       })
       .catch(() => { phase = 'error'; });
@@ -149,17 +159,44 @@
     curClassId = next.id;
   }
 
+  /** 目前時間 "HH:MM"，供儲存成功後的「已同步至雲端」時間戳使用(真實存檔時間，取代
+   *  舊 mock 版本的硬編 '14:32')。 */
+  function nowHHMM(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  /** PUT /sessions/{id}/attendance 的錯誤分支(§3.19：404/403/422，此端點無 409) —
+   *  對應繁中錯誤提示；其餘(連線問題等)給通用訊息，同 coach/+page.svelte 的 ApiError
+   *  判斷慣例。 */
+  function attendanceErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 403) return '沒有權限為此堂課點名。';
+      if (e.status === 404) return '找不到此場次，請重新整理頁面後再試。';
+      if (e.status === 422) return '點名資料有誤，本次變更未儲存，請重新整理後再試。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
+
   function doSave() {
     state = 'saving';
-    setTimeout(() => {
-      // codex r3 (P2): if an edit re-dirtied the page during the in-flight save,
-      // don't clobber it with 'saved' — leave the new change pending.
-      if (state !== 'saving') return;
-      state = 'saved';
-      savedAt = '14:32';
-      dirtyCount = 0;
-      toasts.notify('success', '點名已儲存', curClass.name + ' · ' + roster.length + ' 位學員出勤已同步至雲端。');
-    }, 1100);
+    saveAttendance(curClassId, marks)
+      .then((updatedRoster) => {
+        // codex r3 (P2)：若在請求進行中又被編輯過(state 已變回 dirty)，不要用這次
+        // 回應蓋掉新的未存變更 —— 同既有(原 setTimeout 版)guard。
+        if (state !== 'saving') return;
+        classes = classes.map((c) => (c.id === curClassId ? { ...c, roster: updatedRoster } : c));
+        marks = buildMarks(updatedRoster);
+        state = 'saved';
+        savedAt = nowHHMM();
+        dirtyCount = 0;
+        toasts.notify('success', '點名已儲存', curClass.name + ' · ' + updatedRoster.length + ' 位學員出勤已同步至雲端。');
+      })
+      .catch((e) => {
+        state = 'dirty';
+        toasts.notify('error', '點名儲存失敗', attendanceErrorMessage(e));
+      });
   }
 
   // ── 衍生 ──────────────────────────────────────────────────────────────
@@ -177,11 +214,15 @@
   $: SS = {
     dirty:  { icon: 'circle-alert', tone: 'var(--df-warning)',  bg: 'var(--df-warning-bg)',  title: '尚未儲存', desc: dirtyCount + ' 筆出席變更尚未儲存，離開前請記得儲存' },
     saving: { icon: 'loader',       tone: 'var(--df-primary)',  bg: 'var(--df-primary-bg)', title: '儲存中…',  desc: '正在同步至雲端，請勿關閉頁面' },
-    saved:  { icon: 'circle-check', tone: 'var(--df-success)',  bg: 'var(--df-success-bg)', title: '已儲存',   desc: (savedAt || '14:32') + ' 已同步至雲端 · 全部 ' + roster.length + ' 位學員' },
+    saved:  { icon: 'circle-check', tone: 'var(--df-success)',  bg: 'var(--df-success-bg)', title: '已儲存',   desc: (savedAt || nowHHMM()) + ' 已同步至雲端 · 全部 ' + roster.length + ' 位學員' },
   }[state];
 </script>
 
 {#if phase === 'ready'}
+{#if classes.length === 0}
+  <!-- ── 今日無場次：空狀態(同 coach/today 頁「今日尚無場次」用詞慣例) ──────── -->
+  <Card padding={0}><EmptyState icon="calendar-x" title="今日尚無場次" body="今天沒有排定課程，無需點名。" pad="56px 24px" /></Card>
+{:else}
 <!-- 根容器：不加 df-view（layout 已包） -->
 <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;">
 
@@ -318,7 +359,7 @@
       color={state === 'saved' ? 'var(--df-success)' : 'var(--df-text-muted)'}
     />
     {#if state === 'saved'}
-      {(savedAt || '14:32')} 已同步至雲端 · 全部 {roster.length} 位學員
+      {(savedAt || nowHHMM())} 已同步至雲端 · 全部 {roster.length} 位學員
     {:else}
       尚未儲存 · {dirtyCount} 筆變更 · 已自動暫存於本機 14:30
     {/if}
@@ -358,6 +399,7 @@
     ></textarea>
   {/if}
 </Dialog>
+{/if}
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}

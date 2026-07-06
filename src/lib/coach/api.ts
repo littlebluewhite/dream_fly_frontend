@@ -1,31 +1,27 @@
 /* 教練工作台 API 接縫。Task 19：getDashboard/getToday/getSchedule/getSettings 換真後端
- * 資料 + saveSettings 新增；getAttendance/getMessages/getStudents 沒有對應後端端點，
- * 整包沿用 mock（P2，各自附註）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。
+ * 資料 + saveSettings 新增；Task 10：getAttendance/getStudents 換真後端資料；
+ * getMessages 沒有對應後端端點，仍整包沿用 mock（P2，附註於原處）。回傳「形狀」盡量
+ * 維持不變，頁面不用重寫樣板。
  *
  * myCoachProfile()：GET /users/me → GET /coaches → find(user_id === me.id) 是本檔案
  * 的核心（登入的使用者本人就是教練，教練姓名只能從 users.name 來，見 integration-
  * contract.md §3.4 附註）。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
- * getSettings 一律拋出 CoachNotFoundError，頁面 catch 用 e.name 判斷（不是 instanceof
- * —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，import 進來的
- * class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號未綁定教練檔案」。 */
+ * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面 catch 用 e.name 判斷
+ * （不是 instanceof —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，
+ * import 進來的 class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號
+ * 未綁定教練檔案」。 */
 import { api } from '$lib/api/client';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
-import {
-	TODAY_LABEL,
-	CONVERSATIONS,
-	ATT_TODAY_CLASSES,
-	STUDENTS,
-	MSG_DIRECTORY,
-	THREAD,
-	SHARED_FILES
-} from './data';
+import { TODAY_LABEL, CONVERSATIONS, MSG_DIRECTORY, THREAD, SHARED_FILES } from './data';
 import type {
 	Coach,
 	TodayClass,
 	TodayStatus,
 	Conversation,
 	AttClassFull,
+	AttRow,
+	AttDefault,
 	SchedCourse,
 	Student,
 	MsgRecipient,
@@ -33,8 +29,7 @@ import type {
 	SharedFile
 } from './data';
 
-/** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。getAttendance/getMessages/getStudents
- *  仍沿用此 helper。 */
+/** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。getMessages 仍沿用此 helper。 */
 const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
 
 /** myCoachProfile() 找不到對應教練檔案時拋出；UI 顯示「此帳號未綁定教練檔案」。 */
@@ -185,9 +180,81 @@ export const getToday = async (): Promise<TodayData> => {
 	return { todayLabel: TODAY_LABEL, todayClasses: await myTodayClasses() };
 };
 
-// P2: 後端無對應的點名/出勤端點，整包沿用 mock。
+/* ═════════════════════════ 點名（GET /sessions/{id}/roster + PUT .../attendance，見 integration-contract.md §3.19） ═════════════════════════ */
+
+interface ApiRosterEntry {
+	enrolment_id: string;
+	user_id: string;
+	user_name: string;
+	attendance_status: 'present' | 'absent' | 'leave' | null;
+}
+
+/** RosterEntryResponse → 既有 AttRow 形狀。mid 原為「GY2024001」格式的會員編號(無對應
+ *  欄位)，改用 enrolment_id(同時也是 saveAttendance 送出時要回傳的鍵值)；n 為依姓名
+ *  排序後(後端回應本就依姓名排序)的顯示序號，純前端呈現;color 無代表色欄位,固定預設值
+ *  (P2，同 mapScheduleEntry 慣例)。attendance_status 為 null(尚未點名)時，本地草稿預設
+ *  'present'(同既有「全部標記出席」/dirtyCount 以出席為基準狀態的慣例，未儲存前不代表
+ *  已送出任何資料)；'late'(遲到)沒有對應後端狀態(§3.19：status 僅 present/absent/leave
+ *  三選一)——維持既有 UI 分段可選，儲存時併入 'present'(見 saveAttendance)。 */
+function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
+	return {
+		n: String(i + 1).padStart(2, '0'),
+		name: r.user_name,
+		initial: r.user_name.charAt(0) || '?',
+		color: '#0066CC', // P2: 後端無代表色欄位
+		mid: r.enrolment_id,
+		def: r.attendance_status ?? 'present'
+	};
+}
+
+/** TodaySessionResponse + 該場次名冊 → 既有 AttClassFull 形狀。time 組成「今日 HH:MM–
+ *  HH:MM」(場次本來就是今日的，同既有 mock 格式慣例)；room 無對應欄位(P2，同
+ *  mapTodayClass 慣例)；coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)。 */
+function mapAttendanceClass(s: ApiTodaySession, roster: ApiRosterEntry[], coachName: string): AttClassFull {
+	return {
+		id: s.id,
+		name: s.course_name,
+		time: `今日 ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`,
+		room: '', // P2: TodaySessionResponse 無場地欄位
+		coach: coachName,
+		roster: roster.map(mapRosterRow)
+	};
+}
+
 export interface AttendanceData { classes: AttClassFull[] }
-export const getAttendance = (): Promise<AttendanceData> => reply({ classes: ATT_TODAY_CLASSES });
+
+/** 今日場次(GET /sessions/today)× 各場次名冊(GET /sessions/{id}/roster)組成點名頁的
+ *  「切換班級」清單——沿用既有 UI 的全預載切換模式(選班級是本地即時切換，不是逐一
+ *  非同步載入)，所以這裡一次把今日所有場次的名冊平行拉回來。requireMyCoach() 閘門
+ *  同 getToday()(即使本函式主要需要的是 user.name 顯示用，不是 coach.id)——教練檔案
+ *  不存在時兩者一致丟 CoachNotFoundError。 */
+export const getAttendance = async (): Promise<AttendanceData> => {
+	const { user } = await requireMyCoach();
+	const sessions = await api<ApiTodaySession[]>('/sessions/today');
+	const rosters = await Promise.all(sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`)));
+	return { classes: sessions.map((s, i) => mapAttendanceClass(s, rosters[i], user.name)) };
+};
+
+/** PUT /sessions/{id}/attendance —— 頁面本地 marks(mid→狀態草稿)轉成 API 的
+ *  { records: [{ enrolment_id, status }] } 送出；'late'(遲到)沒有對應後端狀態，併入
+ *  'present'(有到場、非缺席也非請假，三態語意上最接近的對應，見 mapRosterRow 附註)。
+ *  回應為更新後的完整名冊，重新映射回傳讓頁面拿來同步 marks(以伺服器為準，而非樂觀
+ *  本地值)——避免一位學員被標記「遲到」存檔後，畫面仍顯示遲到、但後端其實已存成
+ *  「出席」的視覺落差。 */
+export const saveAttendance = async (
+	sessionId: string,
+	marks: Record<string, AttDefault>
+): Promise<AttRow[]> => {
+	const records = Object.entries(marks).map(([enrolment_id, mark]) => ({
+		enrolment_id,
+		status: mark === 'late' ? 'present' : mark
+	}));
+	const roster = await api<ApiRosterEntry[]>(`/sessions/${sessionId}/attendance`, {
+		method: 'PUT',
+		body: JSON.stringify({ records })
+	});
+	return roster.map(mapRosterRow);
+};
 
 /* ═════════════════════════ 排課管理（GET /coaches/{id}/schedule） ═════════════════════════ */
 
@@ -226,7 +293,7 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 	};
 };
 
-/* ═════════════════════════ 訊息中心 / 學員（P2：無對應後端端點，整包沿用 mock） ═════════════════════════ */
+/* ═════════════════════════ 訊息中心（P2：無對應後端端點，整包沿用 mock） ═════════════════════════ */
 
 // P2: 後端無對應的訊息中心端點，整包沿用 mock。
 export interface MessagesData {
@@ -238,9 +305,47 @@ export interface MessagesData {
 export const getMessages = (): Promise<MessagesData> =>
 	reply({ conversations: CONVERSATIONS, directory: MSG_DIRECTORY, thread: THREAD, sharedFiles: SHARED_FILES });
 
-// P2: 後端無對應的學員名冊端點，整包沿用 mock。
+/* ═════════════════════════ 我的學員（GET /coaches/me/students，見 integration-contract.md §3.19） ═════════════════════════ */
+
+interface ApiMyStudentCourse {
+	course_id: string;
+	course_name: string;
+}
+interface ApiMyStudent {
+	user_id: string;
+	name: string;
+	phone: string | null;
+	courses: ApiMyStudentCourse[];
+}
+
+/** MyStudentResponse → 既有 Student 形狀。cls 由 courses(該學員在這位教練名下的所有
+ *  課程)以「、」串接組成——忠實反映可能不只一堂課，而非只取第一堂丟掉其餘資訊；
+ *  initial 由姓名首字推導(同 mapProfile 慣例)；color 無代表色欄位,固定預設值(P2，同
+ *  mapScheduleEntry 慣例)。level/skill/pct/att 無對應欄位(此端點不含技能評量/出勤
+ *  統計——§3.19 的 attended/total 是 member 視角的單一課程統計，見 GET /enrolments/me，
+ *  非教練視角的單一學員數字)，一律誠實給預設值(P2，各自附註)。 */
+function mapStudent(s: ApiMyStudent): Student {
+	return {
+		name: s.name,
+		initial: s.name.charAt(0) || '?',
+		color: '#0066CC', // P2: 後端無代表色欄位
+		cls: s.courses.map((c) => c.course_name).join('、'),
+		level: '初階', // P2: MyStudentResponse 無學員程度欄位
+		skill: '', // P2: 無技能評量欄位
+		pct: 0, // P2: 無技能評量百分比欄位
+		att: 0 // P2: 無出勤率統計欄位
+	};
+}
+
 export interface StudentsData { students: Student[] }
-export const getStudents = (): Promise<StudentsData> => reply({ students: STUDENTS });
+
+/** 無需 requireMyCoach() 閘門——呼叫者掛 coach 角色但查無對應 coaches 資料列時，後端
+ *  本身就回空陣列而非錯誤(同 GET /sessions/today 的慣例，見 §3.19)，不需要前端另外
+ *  判斷教練檔案是否存在。 */
+export const getStudents = async (): Promise<StudentsData> => {
+	const students = await api<ApiMyStudent[]>('/coaches/me/students');
+	return { students: students.map(mapStudent) };
+};
 
 /* ═════════════════════════ 個人設定（GET /users/me；儲存 → PATCH /users/me） ═════════════════════════ */
 

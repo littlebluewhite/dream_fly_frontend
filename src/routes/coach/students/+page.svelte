@@ -3,9 +3,9 @@
    * Reconstructed from views_students.jsx L1-59 (gap, per RECOVERY-STATUS) +
    * per-view spec in the task prompt. Legacy Svelte (no runes).
    *
-   * Data arrives async via getStudents()(mock-API seam): onMount loads the roster
-   * into a three-state gate (loading/error/ready); `students` is the local working
-   * copy the filters read from. */
+   * Data arrives async via getStudents()(真實 API 接縫，Task 10：GET /coaches/me/
+   * students): onMount loads the roster into a three-state gate (loading/error/
+   * ready); `students` is the local working copy the filters read from. */
   import { onMount } from 'svelte';
   import { LEVEL_TINT } from '$lib/coach/data';
   import type { Student } from '$lib/coach/data';

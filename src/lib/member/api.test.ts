@@ -161,12 +161,12 @@ describe('getSchedule — GET /schedule/me 週模式映射（§3.18）', () => {
 });
 
 describe('getMine', () => {
-  it('GET /enrolments/me → EnrolledCourse[]；只留 active；level 轉繁中；cat/coach/room 缺省空字串；出勤欄位一律 0(P2)', async () => {
+  it('GET /enrolments/me → EnrolledCourse[]；只留 active；level 轉繁中；cat/coach/room 缺省空字串；attended/total 為真值、att 為兩者比率', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
-          { id: 'enrol-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班', course_level: 'advanced', schedule_text: '週二 / 週四 19:00–20:30', status: 'active', enrolled_at: '2026-06-01T00:00:00Z' },
-          { id: 'enrol-2', course_id: 'course-2', course_name: '已取消課程', course_level: 'beginner', schedule_text: '週三 10:00', status: 'cancelled', enrolled_at: '2026-01-01T00:00:00Z' }
+          { id: 'enrol-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班', course_level: 'advanced', schedule_text: '週二 / 週四 19:00–20:30', status: 'active', enrolled_at: '2026-06-01T00:00:00Z', attended: 18, total: 24 },
+          { id: 'enrol-2', course_id: 'course-2', course_name: '已取消課程', course_level: 'beginner', schedule_text: '週三 10:00', status: 'cancelled', enrolled_at: '2026-01-01T00:00:00Z', attended: 5, total: 5 }
         ]
       })
     );
@@ -178,21 +178,36 @@ describe('getMine', () => {
         {
           id: 'enrol-1', name: '競技啦啦隊 進階班', cat: '', level: '高級', coach: '',
           icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: '',
-          att: 0, attended: 0, total: 0, next: '', term: '', remain: 0
+          att: 75, attended: 18, total: 24, next: '', term: '', remain: 0
         }
       ],
       attendance: ATT_HISTORY
     });
   });
 
+  it('沒有任何點名紀錄(total 為 0)時 attended/total/att 皆為 0，不除以零', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [
+          { id: 'e1', course_id: 'c1', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
+        ]
+      })
+    );
+
+    const d = await getMine();
+    expect(d.courses[0].att).toBe(0);
+    expect(d.courses[0].attended).toBe(0);
+    expect(d.courses[0].total).toBe(0);
+  });
+
   it('course_level 對照表涵蓋 beginner/intermediate/advanced，未知值 fallback 為原字串', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
-          { id: 'e1', course_id: 'c1', course_name: 'A', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z' },
-          { id: 'e2', course_id: 'c2', course_name: 'B', course_level: 'intermediate', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z' },
-          { id: 'e3', course_id: 'c3', course_name: 'C', course_level: 'advanced', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z' },
-          { id: 'e4', course_id: 'c4', course_name: 'D', course_level: 'brand_new_level', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z' }
+          { id: 'e1', course_id: 'c1', course_name: 'A', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
+          { id: 'e2', course_id: 'c2', course_name: 'B', course_level: 'intermediate', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
+          { id: 'e3', course_id: 'c3', course_name: 'C', course_level: 'advanced', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
+          { id: 'e4', course_id: 'c4', course_name: 'D', course_level: 'brand_new_level', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
         ]
       })
     );
@@ -205,7 +220,7 @@ describe('getMine', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
-          { id: 'enrol-3', course_id: 'course-3', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-06-01T00:00:00Z' }
+          { id: 'enrol-3', course_id: 'course-3', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-06-01T00:00:00Z', attended: 0, total: 0 }
         ]
       })
     );

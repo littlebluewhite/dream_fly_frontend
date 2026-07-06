@@ -36,6 +36,8 @@ interface ApiEnrolment {
   schedule_text: string | null;
   status: string;
   enrolled_at: string;
+  attended: number;
+  total: number;
 }
 
 /** GET /enrolments/me 是純陣列、新到舊；member 端只認 active —— cancelled 不算「已
@@ -130,7 +132,17 @@ const COURSE_LEVEL_LABEL: Record<string, string> = { beginner: '初級', interme
 /** GET /enrolments/me → EnrolledCourse。cat/coach/room 後端沒有對應欄位(enrolment
  *  不含課程分類/教練/教室)，icon/color 也沒有，一律給合理預設值(icon 沿用 Task 14
  *  adapter 對「無 icon 欄位」的處理慣例：'sparkles')。
- *  // P2: attendance —— att/attended/total/next/term/remain 後端未提供對應資料，一律 0 / 空字串。 */
+ *
+ *  Task 10：attended/total 為真值(§3.19 即時計算——attended 為標記 present 的筆數、
+ *  total 為已點名的場次數，尚未點名的場次不計入；無點名紀錄時兩者皆為 0)；att(出席率
+ *  百分比)由兩者相除而來，total 為 0 時併為 0 避免除以零，也維持與 attended/total 的
+ *  數字一致(不會出現「0% 但 23/24 堂」這種自相矛盾的顯示)。
+ *  // P2: next(下一堂)——GET /courses/{id}/sessions 可依「依 session_date, start_time
+ *  排序」的第一筆推導最近未來場次，但需要每堂已報名課程各呼叫一次、且要另外處理
+ *  「明日/週X」相對日期格式化與 studio_timezone 牆鐘語意(§3.18 裁決 2)；盤點 UI 用途
+ *  後(僅 member/mine/+page.svelte 一個「下一堂」KPI 小卡使用，非核心流程)，維持誠實
+ *  空字串預設，暫不推導。
+ *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。 */
 export const getMine = async (): Promise<MineData> => {
   const active = await activeEnrolments();
   const courses: EnrolledCourse[] = active.map((e) => ({
@@ -143,10 +155,10 @@ export const getMine = async (): Promise<MineData> => {
     color: '#0066CC',
     schedule: e.schedule_text ?? '',
     room: '',
-    att: 0,
-    attended: 0,
-    total: 0,
-    next: '',
+    att: e.total > 0 ? Math.round((e.attended / e.total) * 100) : 0,
+    attended: e.attended,
+    total: e.total,
+    next: '', // P2: 見上方註解
     term: '',
     remain: 0
   }));

@@ -2,13 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import AttendancePage from './+page.svelte';
 import { ATT_TODAY_CLASSES } from '$lib/coach/data';
-import { getAttendance } from '$lib/coach/api';
+import { getAttendance, saveAttendance } from '$lib/coach/api';
+import { toasts } from '$lib/coach/stores';
+import { ApiError } from '$lib/api/client';
 
-vi.mock('$lib/coach/api', () => ({ getAttendance: vi.fn() }));
+vi.mock('$lib/coach/api', () => ({ getAttendance: vi.fn(), saveAttendance: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getAttendance).mockReset();
 	vi.mocked(getAttendance).mockResolvedValue({ classes: ATT_TODAY_CLASSES });
+	vi.mocked(saveAttendance).mockReset();
+	vi.mocked(saveAttendance).mockResolvedValue([]);
 });
 
 /* 出勤記錄 — switch-class + undo.
@@ -67,25 +71,21 @@ describe('/coach/attendance (+page) — switch class', () => {
 		// state:'saving'; the in-flight callback (keyed on the live state) never
 		// completes A, leaving it stuck on 儲存中 forever. Block the switch instead.
 		const { getByText, getAllByText, queryByText, container, findByText } = render(AttendancePage);
-		// let the async getAttendance() seam resolve under REAL timers first —
-		// fake timers would otherwise stall findByText's internal polling.
 		await findByText(C1.roster[0].name);
-		vi.useFakeTimers();
-		try {
-			// start saving class C1 (bottom-bar 儲存點名 button) → state goes 'saving'.
-			await fireEvent.click(getByText('儲存點名'));
-			expect(container.textContent).toContain('儲存中');
-			// attempt to switch to C2 while saving.
-			const opener = getAllByText(C1.name).find((el) => el.closest('button'));
-			await fireEvent.click(opener!);
-			const opt = getAllByText(C2.name).find((el) => el.closest('button'));
-			if (opt) await fireEvent.click(opt);
-			// switch was blocked: still on C1 (王承恩 present, 周彥廷 absent).
-			expect(getByText(C1.roster[0].name)).toBeInTheDocument();
-			expect(queryByText(C2.roster[0].name)).toBeNull();
-		} finally {
-			vi.useRealTimers();
-		}
+		// saveAttendance never resolves — 模擬請求進行中，同真實網路慢速情境。
+		vi.mocked(saveAttendance).mockReturnValue(new Promise(() => {}));
+
+		// start saving class C1 (bottom-bar 儲存點名 button) → state goes 'saving'.
+		await fireEvent.click(getByText('儲存點名'));
+		expect(container.textContent).toContain('儲存中');
+		// attempt to switch to C2 while saving.
+		const opener = getAllByText(C1.name).find((el) => el.closest('button'));
+		await fireEvent.click(opener!);
+		const opt = getAllByText(C2.name).find((el) => el.closest('button'));
+		if (opt) await fireEvent.click(opt);
+		// switch was blocked: still on C1 (王承恩 present, 周彥廷 absent).
+		expect(getByText(C1.roster[0].name)).toBeInTheDocument();
+		expect(queryByText(C2.roster[0].name)).toBeNull();
 	});
 });
 
@@ -114,6 +114,73 @@ describe('/coach/attendance (+page) — undo', () => {
 	});
 });
 
+describe('/coach/attendance (+page) — 儲存點名 PUT /sessions/{id}/attendance', () => {
+	it('點擊「儲存點名」呼叫 saveAttendance(場次 id, 目前 marks)；成功後顯示成功 toast 且以回應同步名冊', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		const updatedRoster = C1.roster.map((r) => ({ ...r, def: 'present' as const }));
+		vi.mocked(saveAttendance).mockResolvedValue(updatedRoster);
+
+		await fireEvent.click(getByText('儲存點名'));
+
+		expect(saveAttendance).toHaveBeenCalledWith(C1.id, expect.any(Object));
+		expect(await findByText('已儲存 ✓')).toBeInTheDocument();
+		expect(notifySpy).toHaveBeenCalledWith('success', '點名已儲存', expect.stringContaining(C1.name));
+	});
+
+	it('403(非本課教練) → 顯示對應繁中錯誤 toast，state 回到可重試', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockRejectedValue(new ApiError(403, 'forbidden'));
+
+		await fireEvent.click(getByText('儲存點名'));
+
+		expect(await findByText('儲存點名')).toBeInTheDocument(); // 按鈕文案退回可再次點擊(非停在「儲存中…」)
+		expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', expect.stringContaining('權限'));
+	});
+
+	it('404(場次不存在) → 顯示對應繁中錯誤 toast', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockRejectedValue(new ApiError(404, 'session not found'));
+
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => {
+			expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', expect.stringContaining('場次'));
+		});
+	});
+
+	it('422(驗證失敗，整批未寫入) → 顯示對應繁中錯誤 toast', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockRejectedValue(new ApiError(422, 'invalid status'));
+
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => {
+			expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', expect.stringContaining('未儲存'));
+		});
+	});
+
+	it('非 ApiError(如網路失敗) → 顯示通用錯誤 toast', async () => {
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		vi.mocked(saveAttendance).mockRejectedValue(new Error('network down'));
+
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => {
+			expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', '連線發生問題，請稍後再試。');
+		});
+	});
+});
+
 describe('/coach/attendance — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
 		vi.mocked(getAttendance).mockReset();
@@ -127,5 +194,13 @@ describe('/coach/attendance — 三態', () => {
 		vi.mocked(getAttendance).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(AttendancePage);
 		expect(getByTestId('attendance-skeleton')).toBeTruthy();
+	});
+
+	it('今日沒有場次時顯示空狀態，不渲染名冊/儲存列', async () => {
+		vi.mocked(getAttendance).mockReset();
+		vi.mocked(getAttendance).mockResolvedValue({ classes: [] });
+		const { findByText, queryByText } = render(AttendancePage);
+		await findByText('今日尚無場次');
+		expect(queryByText('儲存點名')).toBeNull();
 	});
 });
