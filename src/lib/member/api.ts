@@ -1,22 +1,17 @@
-/* 會員中心 API 接縫。Task 17：8 個 getter 換成真後端資料（getReports 仍為 mock，見
- * 該 getter 的 P2 註記）；Task 9：getSchedule 換成真後端資料(GET /schedule/me，
- * 見 integration-contract.md §3.18)。回傳「形狀」盡量維持不變，頁面不用重寫樣板。 */
+/* 會員中心 API 接縫。Task 17：8 個 getter 換成真後端資料；Task 9：getSchedule 換成真
+ * 後端資料(GET /schedule/me，見 integration-contract.md §3.18)；Task 13：getReports
+ * 換成真後端資料(GET /report-cards/me + GET /certificates/me，見 §3.22)。回傳「形狀」
+ * 盡量維持不變，頁面不用重寫樣板。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, ATT_HISTORY, REPORTS, CERTS, REWARDS, mapNotification } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, Report, Certificate, ScheduleBlock, Order, Reward, Notification, Tone, ApiNotification } from './data';
-
-/** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。 */
-const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, REWARDS, mapNotification } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Reward, Notification, Tone, ApiNotification } from './data';
 
 /** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
 const me = (): Member => ME;
-
-/** 「我的報名課程」單一內部存取點——getReports 仍為 mock，沿用此 helper。 */
-const myCourses = (): EnrolledCourse[] => MY_COURSES;
 
 export interface DashboardData {
   me: Member;
@@ -67,15 +62,86 @@ export const getDashboard = async (): Promise<DashboardData> => {
   };
 };
 
-export interface ReportsData {
-  courses: EnrolledCourse[];
-  reports: Record<string, Report>;
-  certs: Certificate[];
+interface ApiReportCard {
+  id: string;
+  course_id: string;
+  course_name: string;
+  term_label: string;
+  comment: string | null;
+  rating: number | null;
+  created_by_name: string;
+  created_at: string;
 }
 
-// P2: 成績單後端未實作 —— 沒有 term report / 教練評語對應端點，整包沿用 mock。
-export const getReports = (): Promise<ReportsData> =>
-  reply({ courses: myCourses(), reports: REPORTS, certs: CERTS });
+interface ApiCertificate {
+  id: string;
+  course_id: string | null;
+  course_name: string | null;
+  title: string;
+  level: string | null;
+  issued_on: string; // "YYYY-MM-DD"
+  note: string | null;
+  created_at: string;
+}
+
+export interface ReportCard {
+  id: string;
+  courseName: string;
+  termLabel: string;
+  comment: string | null;
+  rating: number | null;
+  issuerName: string;
+  createdAt: string;
+}
+
+export interface Certificate {
+  id: string;
+  title: string;
+  level: string | null;
+  courseName: string | null;
+  issuedOn: string;
+  note: string | null;
+  createdAt: string;
+}
+
+function mapReportCard(r: ApiReportCard): ReportCard {
+  return {
+    id: r.id,
+    courseName: r.course_name,
+    termLabel: r.term_label,
+    comment: r.comment,
+    rating: r.rating,
+    issuerName: r.created_by_name,
+    createdAt: r.created_at
+  };
+}
+
+function mapCertificate(c: ApiCertificate): Certificate {
+  return {
+    id: c.id,
+    title: c.title,
+    level: c.level,
+    courseName: c.course_name,
+    issuedOn: c.issued_on,
+    note: c.note,
+    createdAt: c.created_at
+  };
+}
+
+export interface ReportsData {
+  reportCards: ReportCard[];
+  certificates: Certificate[];
+}
+
+/** GET /report-cards/me + GET /certificates/me（純陣列，不分頁，新到舊，見 §3.22）。
+ *  兩者皆為呼叫者自己的資料，無需額外過濾;v1 純 metadata，無 PDF/檔案欄位。 */
+export const getReports = async (): Promise<ReportsData> => {
+  const [reportCards, certificates] = await Promise.all([
+    api<ApiReportCard[]>('/report-cards/me'),
+    api<ApiCertificate[]>('/certificates/me')
+  ]);
+  return { reportCards: reportCards.map(mapReportCard), certificates: certificates.map(mapCertificate) };
+};
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 

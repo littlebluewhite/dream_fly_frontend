@@ -584,3 +584,32 @@ export const saveSettings = async (fields: { name?: string; phone?: string }): P
 	const { user, coach } = await requireMyCoach();
 	return { coach: mapCoach(user, coach) };
 };
+
+/* ═════════════════════════ 發證書（POST /certificates，見 integration-contract.md §3.22） ═════════════════════════ */
+
+export interface CreateCertificateBody {
+	user_id: string;
+	course_id?: string;
+	title: string;
+	level?: string;
+	issued_on: string; // "YYYY-MM-DD"
+	note?: string;
+}
+
+interface ApiCertificate {
+	id: string;
+	course_id: string | null;
+	course_name: string | null;
+	title: string;
+	level: string | null;
+	issued_on: string;
+	note: string | null;
+	created_at: string;
+}
+
+/** POST /certificates — coach 限「曾是或現是自己課程學員」的使用者（§3.22，與 body
+ *  是否帶 course_id 無關）；v1 純 metadata，無 PDF/檔案上傳。回應直接透傳——students
+ *  頁的發證書 dialog 只需要知道成功與否，不需要顯示欄位（同 admin/api.ts 的
+ *  createCoupon 慣例：呼叫端自行處理 toast/錯誤訊息，本函式不做映射）。 */
+export const createCertificate = (body: CreateCertificateBody): Promise<ApiCertificate> =>
+	api<ApiCertificate>('/certificates', { method: 'POST', body: JSON.stringify(body) });

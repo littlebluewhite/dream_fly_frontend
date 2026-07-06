@@ -10,7 +10,7 @@ import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses,
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, MY_COURSES, REPORTS, CERTS, ATT_HISTORY, REWARDS } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, REWARDS } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -119,12 +119,59 @@ describe('getDashboard', () => {
   });
 });
 
-describe('getReports (P2: 成績單後端未實作 — 沿用 mock)', () => {
-  it('回傳整包成績單資料', async () => {
+describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）', () => {
+  it('report cards 與 certificates 映射為 UI 形狀（created_by_name→issuerName 等欄位改名）', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /report-cards/me': [
+          { id: 'rc1', course_id: 'c1', course_name: '競技啦啦隊 進階班', term_label: '2026 夏季', comment: '進步很多', rating: 5, created_by_name: '林雅婷', created_at: '2026-07-01T00:00:00Z' }
+        ],
+        'GET /certificates/me': [
+          { id: 'ct1', course_id: 'c1', course_name: '競技啦啦隊 進階班', title: '結業證書', level: '結業', issued_on: '2026-06-20', note: null, created_at: '2026-06-20T00:00:00Z' }
+        ]
+      })
+    );
+
     const d = await getReports();
-    expect(d).toEqual({ courses: MY_COURSES, reports: REPORTS, certs: CERTS });
+
+    expect(d).toEqual({
+      reportCards: [
+        { id: 'rc1', courseName: '競技啦啦隊 進階班', termLabel: '2026 夏季', comment: '進步很多', rating: 5, issuerName: '林雅婷', createdAt: '2026-07-01T00:00:00Z' }
+      ],
+      certificates: [
+        { id: 'ct1', title: '結業證書', level: '結業', courseName: '競技啦啦隊 進階班', issuedOn: '2026-06-20', note: null, createdAt: '2026-06-20T00:00:00Z' }
+      ]
+    });
   });
+
+  it('rating/comment 為 null、certificate 的 course_id/level 為 null 時原樣映射(不竄改)', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /report-cards/me': [
+          { id: 'rc2', course_id: 'c2', course_name: '幼兒體操 啟蒙班', term_label: '2026 春季', comment: null, rating: null, created_by_name: '陳冠宇', created_at: '2026-03-01T00:00:00Z' }
+        ],
+        'GET /certificates/me': [
+          { id: 'ct2', course_id: null, course_name: null, title: '市賽 團體第三名', level: null, issued_on: '2026-05-01', note: null, created_at: '2026-05-01T00:00:00Z' }
+        ]
+      })
+    );
+
+    const d = await getReports();
+
+    expect(d.reportCards[0].rating).toBeNull();
+    expect(d.reportCards[0].comment).toBeNull();
+    expect(d.certificates[0].courseName).toBeNull();
+    expect(d.certificates[0].level).toBeNull();
+  });
+
+  it('沒有任何成績單/證書時回傳空陣列(頁面顯示空狀態)', async () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /report-cards/me': [], 'GET /certificates/me': [] }));
+    const d = await getReports();
+    expect(d).toEqual({ reportCards: [], certificates: [] });
+  });
+
   it('是 async 接縫(回 Promise)', () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /report-cards/me': [], 'GET /certificates/me': [] }));
     expect(getReports()).toBeInstanceOf(Promise);
   });
 });

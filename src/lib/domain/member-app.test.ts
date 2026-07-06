@@ -32,7 +32,12 @@ import {
 	CERTS
 } from './member-app';
 
-/* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ── */
+/* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ──
+ * REPORTS/CERTS 不在此列——Task 13 把 member/api.ts 的 getReports() 換成真 API
+ * (GET /report-cards/me + GET /certificates/me,見 integration-contract.md §3.22)
+ * 後，member facade(`$lib/member/data`)不再重新匯出這兩個 mock 常數(僅 mobile
+ * 仍消費,見檔案開頭註解的 mobile/data.test.ts)，故它們不再是「member facade
+ * 的同參照」守衛範圍;domain 本身的字面不變量/row-count 仍在下方第 2、3 節涵蓋。 */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
 		expect(MemberData.ME).toBe(ME);
@@ -49,8 +54,6 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);
 		expect(MemberData.POINTS_LEDGER).toBe(POINTS_LEDGER);
 		expect(MemberData.REWARDS).toBe(REWARDS);
-		expect(MemberData.REPORTS).toBe(REPORTS);
-		expect(MemberData.CERTS).toBe(CERTS);
 	});
 });
 

@@ -22,8 +22,6 @@ export { CATALOG, type CatalogCourse } from '$lib/domain/member-app';
 export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
 export { CONTACT_THREAD, type ChatMessage } from '$lib/domain/member-app';
 export { REWARDS, type Reward } from '$lib/domain/member-app';
-export { REPORTS, type Report } from '$lib/domain/member-app';
-export { CERTS, type Certificate } from '$lib/domain/member-app';
 export { POINTS_LEDGER, type LedgerEntry } from '$lib/domain/member-app';
 // LedgerType is also referenced locally (PT_TYPE below), so import it as well as re-export it.
 import { type LedgerType } from '$lib/domain/member-app';

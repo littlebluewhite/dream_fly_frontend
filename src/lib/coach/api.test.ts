@@ -20,6 +20,7 @@ import {
 	getStudents,
 	getSettings,
 	saveSettings,
+	createCertificate,
 	deriveSessionStatus,
 	getPendingLeaveRequests,
 	decideLeaveRequest,
@@ -759,5 +760,30 @@ describe('decideLeaveRequest — PATCH /leave-requests/{id}（§3.20）', () => 
 			method: 'PATCH',
 			body: JSON.stringify({ status: 'rejected' })
 		});
+	});
+});
+
+describe('createCertificate — POST /certificates（Task 13，§3.22）', () => {
+	it('POSTs the given body as-is and returns the CertificateResponse', async () => {
+		const created = {
+			id: 'ct-new', course_id: null, course_name: null, title: '結業證書',
+			level: '結業', issued_on: '2026-07-06', note: null, created_at: '2026-07-06T00:00:00Z'
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': created }));
+
+		const body = { user_id: 'su01', title: '結業證書', level: '結業', issued_on: '2026-07-06' };
+		const result = await createCertificate(body);
+
+		expect(api).toHaveBeenCalledWith('/certificates', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 403 非自己課程學員 / 422 驗證) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /certificates': new Error('僅能發給自己課程的學員') })
+		);
+		await expect(
+			createCertificate({ user_id: 'su99', title: '結業證書', issued_on: '2026-07-06' })
+		).rejects.toThrow('僅能發給自己課程的學員');
 	});
 });

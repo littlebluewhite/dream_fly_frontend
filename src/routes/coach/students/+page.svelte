@@ -16,6 +16,7 @@
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import StudentCard from '$lib/coach/components/StudentCard.svelte';
+  import CertificateDialog from '$lib/coach/components/CertificateDialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
@@ -28,6 +29,17 @@
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  /* 發證書 dialog（Task 13；POST /certificates，見 integration-contract.md §3.22）。 */
+  let certOpen = false;
+  let certStudent: Student | null = null;
+  function openCertificate(s: Student) {
+    certStudent = s;
+    certOpen = true;
+  }
+  function closeCertificate() {
+    certOpen = false;
+  }
 
   /* ---- filter state ---- */
   let cls = '全部班級';
@@ -97,7 +109,7 @@
   {#if filtered.length > 0}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
       {#each filtered as s (s.name)}
-        <StudentCard {s} />
+        <StudentCard {s} onCertificate={openCertificate} />
       {/each}
     </div>
   {:else}
@@ -109,6 +121,7 @@
   {/if}
 
 </div>
+<CertificateDialog open={certOpen} student={certStudent} onClose={closeCertificate} />
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}

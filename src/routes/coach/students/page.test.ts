@@ -4,7 +4,10 @@ import StudentsPage from './+page.svelte';
 import { STUDENTS } from '$lib/coach/data';
 import { getStudents } from '$lib/coach/api';
 
-vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn() }));
+// createCertificate 也在此一併 mock（不執行真呼叫）——CertificateDialog（Task 13）
+// 從同一個模組 import，若省略會在 dialog 元件初始化時解析成 undefined 的具名匯出;
+// 本檔案只驗證「發證書」開啟 dialog 的接線，送出/錯誤分支見 CertificateDialog.test.ts。
+vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getStudents).mockReset();
@@ -67,5 +70,45 @@ describe('/coach/students — 三態', () => {
 		vi.mocked(getStudents).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(StudentsPage);
 		expect(getByTestId('students-skeleton')).toBeTruthy();
+	});
+});
+
+/* 發證書入口（Task 13；POST /certificates，見 integration-contract.md §3.22）——只驗證
+ * 「點擊某位學員的發證書」開啟 CertificateDialog 並帶入該學員，且可關閉。實際送出/
+ * 403/422 分支由 CertificateDialog.test.ts 覆蓋（該元件的送出邏輯與這裡的開關接線
+ * 是獨立關注點，同 member/mine 頁對 LeaveDialog/MakeupDialog 開啟接線 vs 元件自身
+ * 送出邏輯的分工）。 */
+describe('/coach/students — 發證書', () => {
+	it('點擊某位學員的「發證書」開啟 dialog 並帶入正確學員', async () => {
+		const { getAllByText, findByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('發證書');
+		await fireEvent.click(buttons[0]);
+
+		expect(await findByText(`頒發對象：${STUDENTS[0].name}`)).toBeInTheDocument();
+	});
+
+	it('不同學員各自帶入正確的頒發對象', async () => {
+		const { getAllByText, findByText, queryByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('發證書');
+		await fireEvent.click(buttons[1]);
+
+		expect(await findByText(`頒發對象：${STUDENTS[1].name}`)).toBeInTheDocument();
+		expect(queryByText(`頒發對象：${STUDENTS[0].name}`)).toBeNull();
+	});
+
+	it('點擊「取消」關閉 dialog', async () => {
+		const { getAllByText, findByText, getByText, queryByText } = render(StudentsPage);
+		await findByText(STUDENTS[0].name);
+
+		const buttons = getAllByText('發證書');
+		await fireEvent.click(buttons[0]);
+		await findByText(`頒發對象：${STUDENTS[0].name}`);
+
+		await fireEvent.click(getByText('取消'));
+		expect(queryByText(`頒發對象：${STUDENTS[0].name}`)).toBeNull();
 	});
 });

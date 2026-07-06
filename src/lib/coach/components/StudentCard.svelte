@@ -10,6 +10,10 @@
   import type { Student } from '$lib/coach/data';
 
   export let s: Student;
+  /** 發證書入口（Task 13；POST /certificates，見 integration-contract.md §3.22）。
+   *  「寫評語」(POST /report-cards) 需要 enrolment_id，MyStudentResponse 未提供、
+   *  亦無合適途徑取得，本次任務判定 BLOCKED，故此處只有發證書一個教練發放動作。 */
+  export let onCertificate: (s: Student) => void = () => {};
 
   $: tint = LEVEL_TINT[s.level];
   $: lowAtt = s.att < 75;
@@ -54,5 +58,14 @@
       on:click={() => toasts.notify('info', s.name + ' · 學員檔案', '顯示完整技能評量與出勤紀錄（示範）。')}
       style="display:inline-flex;align-items:center;gap:4px;border:none;background:transparent;color:var(--df-primary);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--df-font-body)"
     >查看詳情 <Icon name="chevron-right" size={14} color="var(--df-primary)" /></button>
+  </div>
+
+  <!-- 教練發放：發證書（Task 13，POST /certificates §3.22） -->
+  <div style="border-top:1px solid var(--df-border);margin-top:14px;padding-top:12px">
+    <button
+      type="button"
+      on:click={() => onCertificate(s)}
+      style="display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;border:1px solid var(--df-border);background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--df-primary);cursor:pointer;font-family:var(--df-font-body)"
+    ><Icon name="award" size={14} color="var(--df-primary)" />發證書</button>
   </div>
 </Card>
