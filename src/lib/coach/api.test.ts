@@ -17,6 +17,8 @@ import {
 	getSettings,
 	saveSettings,
 	deriveSessionStatus,
+	getPendingLeaveRequests,
+	decideLeaveRequest,
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
@@ -442,5 +444,95 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 	it('是 async 接縫(回 Promise)', () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /coaches/me/students': [] }));
 		expect(getStudents()).toBeInstanceOf(Promise);
+	});
+});
+
+/* Task 11：請假審核（GET /leave-requests?status=pending + PATCH /leave-requests/{id}，
+ * §3.20）。同 getStudents 慣例——無需 requireMyCoach() 閘門，呼叫者掛 coach 角色但查無
+ * 對應 coaches 資料列時後端本身回空頁而非錯誤(§3.20 引用§3.18/§3.19既有慣例)。 */
+describe('getPendingLeaveRequests — GET /leave-requests?status=pending（§3.20）', () => {
+	it('映射 leave_requests 分頁包裝為 CoachLeaveRequest[]（course_name/user_name/場次/事由/建立時間）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /leave-requests?status=pending': {
+					leave_requests: [
+						{
+							id: 'lr-1', course_id: 'c1', course_name: '兒童體操初階班',
+							user_id: 'u9', user_name: '王小明',
+							session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00',
+							reason: '生病', status: 'pending',
+							makeup_session_id: null, makeup_session_date: null, makeup_start_time: null,
+							decided_at: null, created_at: '2026-07-01T00:00:00Z'
+						}
+					],
+					total: 1, page: 1, per_page: 20
+				}
+			})
+		);
+
+		const d = await getPendingLeaveRequests();
+
+		expect(d.requests).toEqual([
+			{
+				id: 'lr-1', course_name: '兒童體操初階班', user_name: '王小明',
+				session_date: '2026-07-10', start_time: '19:00:00',
+				reason: '生病', created_at: '2026-07-01T00:00:00Z'
+			}
+		]);
+	});
+
+	it('沒有待審核假單時回傳空陣列', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /leave-requests?status=pending': { leave_requests: [], total: 0, page: 1, per_page: 20 } })
+		);
+		const d = await getPendingLeaveRequests();
+		expect(d.requests).toEqual([]);
+	});
+
+	it('是 async 接縫(回 Promise)', () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /leave-requests?status=pending': { leave_requests: [], total: 0, page: 1, per_page: 20 } })
+		);
+		expect(getPendingLeaveRequests()).toBeInstanceOf(Promise);
+	});
+});
+
+describe('decideLeaveRequest — PATCH /leave-requests/{id}（§3.20）', () => {
+	const API_RESPONSE = {
+		id: 'lr-1', course_id: 'c1', course_name: '兒童體操初階班',
+		user_id: 'u9', user_name: '王小明',
+		session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00',
+		reason: '生病', status: 'approved',
+		makeup_session_id: null, makeup_session_date: null, makeup_start_time: null,
+		decided_at: '2026-07-02T00:00:00Z', created_at: '2026-07-01T00:00:00Z'
+	};
+
+	it('核准：送出 { status: "approved" }，回傳映射後的 CoachLeaveRequest', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /leave-requests/lr-1': API_RESPONSE }));
+
+		const d = await decideLeaveRequest('lr-1', 'approved');
+
+		expect(api).toHaveBeenCalledWith('/leave-requests/lr-1', {
+			method: 'PATCH',
+			body: JSON.stringify({ status: 'approved' })
+		});
+		expect(d).toEqual({
+			id: 'lr-1', course_name: '兒童體操初階班', user_name: '王小明',
+			session_date: '2026-07-10', start_time: '19:00:00',
+			reason: '生病', created_at: '2026-07-01T00:00:00Z'
+		});
+	});
+
+	it('婉拒：送出 { status: "rejected" }', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /leave-requests/lr-1': { ...API_RESPONSE, status: 'rejected' } })
+		);
+
+		await decideLeaveRequest('lr-1', 'rejected');
+
+		expect(api).toHaveBeenCalledWith('/leave-requests/lr-1', {
+			method: 'PATCH',
+			body: JSON.stringify({ status: 'rejected' })
+		});
 	});
 });

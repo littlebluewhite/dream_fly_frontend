@@ -1,153 +1,124 @@
 <script lang="ts">
-  /* 預約補課 (Makeup booking) — radio list of open makeup slots; confirming
-   * shows a success confirmation. Ported from the prototype's MakeupDialog
-   * (client/components.jsx). */
-  import { Button, Badge, Icon, EmptyState } from '$lib/components/ui';
+  /* 預約補課 (Makeup booking) — Task 11：integration-contract.md §3.20 + §3.18。
+   * 現在是針對「一張已核准且尚未補課的請假申請」開啟的動作（「我的請假」清單裡
+   * 逐筆的「預約補課」按鈕），不再是課程層級的一般動作——所以吃 leaveRequest
+   * prop，不是 course。開啟時打 GET /courses/{course_id}/sessions 列出同課程的
+   * 未來場次；選場次 → 送出打 POST /leave-requests/{id}/makeup。 */
+  import { Button, Select, Icon, Skeleton, ErrorState, EmptyState } from '$lib/components/ui';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { MAKEUP_SLOTS, type EnrolledCourse, type MakeupSlot } from '$lib/member/data';
+  import { sessionOptions, formatSessionDateTime } from '$lib/member/session-format';
+  import {
+    getCourseSessions,
+    bookMakeup,
+    leaveRequestErrorMessage,
+    toasts,
+    type CourseSession,
+    type LeaveRequest
+  } from '$lib/member/stores';
 
   export let open = false;
-  export let course: EnrolledCourse | null = null;
+  export let leaveRequest: LeaveRequest | null = null;
   export let onClose: () => void = () => {};
-  export let onSubmit: ((slot: MakeupSlot | undefined) => void) | undefined = undefined;
 
-  let pick = '';
+  let sessionsPhase: 'loading' | 'error' | 'ready' = 'loading';
+  let sessions: CourseSession[] = [];
+  let sessionId = '';
+  let submitting = false;
   let done = false;
+  let bookedAt: LeaveRequest | null = null;
 
-  // Reset state each time the dialog transitions to open.
-  let wasOpen = false;
-  $: if (open && !wasOpen) {
-    pick = '';
-    done = false;
+  function loadSessions(courseId: string) {
+    sessionsPhase = 'loading';
+    getCourseSessions(courseId)
+      .then((list) => {
+        sessions = list;
+        sessionsPhase = 'ready';
+      })
+      .catch(() => {
+        sessionsPhase = 'error';
+      });
   }
-  $: wasOpen = open;
 
-  const slots = MAKEUP_SLOTS;
-  $: chosen = slots.find((s) => s.id === pick);
-  $: anyOpen = slots.some((s) => s.spots > 0);
+  // Reset state each time the dialog transitions to open, and kick off the
+  // sessions fetch. Check-and-update lives in ONE reactive statement (the
+  // CouponCreateDialog idiom) — see LeaveDialog for why the split two-statement
+  // (PasswordDialog) form is unreliable here.
+  let lastOpen = false;
+  $: {
+    if (open && !lastOpen && leaveRequest) {
+      sessionId = '';
+      submitting = false;
+      done = false;
+      bookedAt = null;
+      loadSessions(leaveRequest.course_id);
+    }
+    lastOpen = open;
+  }
 
-  function confirm() {
-    done = true;
-    onSubmit?.(chosen);
+  $: valid = !!sessionId;
+
+  async function confirm() {
+    if (!leaveRequest || !valid || submitting) return;
+    submitting = true;
+    try {
+      const updated = await bookMakeup(leaveRequest.id, sessionId);
+      bookedAt = updated;
+      done = true;
+      toasts.notify(
+        'success',
+        '補課預約成功',
+        leaveRequest.course_name + ' · ' + formatSessionDateTime(updated.makeup_session_date ?? '', updated.makeup_start_time ?? '') + '，已加入你的日程表。'
+      );
+    } catch (err) {
+      toasts.notify('error', '預約補課失敗', leaveRequestErrorMessage(err));
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
-{#if open && course}
+{#if open && leaveRequest}
   {#if done}
-    <FormModal open {onClose} icon="rotate-cw" title="預約補課" subtitle={course.name}>
+    <FormModal open {onClose} icon="rotate-cw" title="預約補課" subtitle={leaveRequest.course_name}>
       <SuccessBody
         title="補課預約成功"
-        body={chosen ? `已預約 ${chosen.date} ${chosen.time} · ${chosen.room}，已加入你的日程表。` : ''}
+        body={bookedAt
+          ? `已預約 ${formatSessionDateTime(bookedAt.makeup_session_date ?? '', bookedAt.makeup_start_time ?? '')}，已加入你的日程表。`
+          : ''}
       />
       <svelte:fragment slot="footer">
         <Button variant="primary" on:click={onClose}>完成</Button>
       </svelte:fragment>
     </FormModal>
   {:else}
-    <FormModal
-      open
-      {onClose}
-      icon="rotate-cw"
-      title="預約補課"
-      subtitle={course.name + ' · 選擇一個可補課時段'}
-    >
-      {#if !anyOpen}
+    <FormModal open {onClose} icon="rotate-cw" title="預約補課" subtitle={leaveRequest.course_name + ' · 選擇一個未來場次'}>
+      {#if sessionsPhase === 'loading'}
+        <Skeleton w="100%" h={44} r={8} />
+      {:else if sessionsPhase === 'error'}
+        <ErrorState onRetry={() => leaveRequest && loadSessions(leaveRequest.course_id)} />
+      {:else if sessions.length === 0}
         <EmptyState
           icon="calendar-x"
-          title="目前沒有可預約的補課時段"
-          body="新的補課時段開放時，我們會以通知提醒你，也可聯絡櫃台協助安排。"
+          title="目前沒有可預約的補課場次"
+          body="新的場次開放時，我們會以通知提醒你，也可聯絡櫃台協助安排。"
           pad="32px 12px"
         />
       {:else}
-        <div class="slots">
-          {#each slots as s (s.id)}
-            {@const full = s.spots === 0}
-            {@const on = pick === s.id}
-            <button
-              type="button"
-              class="slot"
-              class:on
-              disabled={full}
-              style="opacity:{full ? 0.55 : 1};cursor:{full ? 'not-allowed' : 'pointer'}"
-              on:click={() => (pick = s.id)}
-            >
-              <span class="radio" class:on>{#if on}<span class="dot"></span>{/if}</span>
-              <div class="meta">
-                <div class="slot-title">{s.date} · {s.time}</div>
-                <div class="slot-sub">{s.room} · {s.coach} 教練</div>
-              </div>
-              {#if full}
-                <Badge tone="error">已額滿</Badge>
-              {:else}
-                <Badge tone={s.spots <= 1 ? 'warning' : 'success'} dot>剩 {s.spots} 位</Badge>
-              {/if}
-            </button>
-          {/each}
-        </div>
+        <Select
+          label="補課場次"
+          required
+          placeholder="選擇要補課的場次"
+          bind:value={sessionId}
+          options={sessionOptions(sessions)}
+        />
       {/if}
       <svelte:fragment slot="footer">
         <Button variant="secondary" on:click={onClose}>取消</Button>
-        <Button variant="primary" disabled={!pick} on:click={confirm}>
-          <Icon name="calendar-check" size={16} />確認預約
+        <Button variant="primary" disabled={!valid || submitting} on:click={confirm}>
+          <Icon name="calendar-check" size={16} />{submitting ? '預約中…' : '確認預約'}
         </Button>
       </svelte:fragment>
     </FormModal>
   {/if}
 {/if}
-
-<style>
-  .slots {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .slot {
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 13px;
-    padding: 13px 15px;
-    border-radius: 12px;
-    width: 100%;
-    background: #fff;
-    border: 1.5px solid var(--df-border);
-    font-family: var(--df-font-body);
-  }
-  .slot.on {
-    background: var(--df-primary-bg);
-    border-color: var(--df-primary);
-  }
-  .radio {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    border: 2px solid var(--df-border-strong);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-  }
-  .radio.on {
-    border-color: var(--df-primary);
-  }
-  .radio .dot {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    background: var(--df-primary);
-  }
-  .meta {
-    flex: 1;
-  }
-  .slot-title {
-    font-size: 14.5px;
-    font-weight: 700;
-    color: var(--df-ink);
-  }
-  .slot-sub {
-    font-size: 12.5px;
-    color: var(--df-text-light);
-    margin-top: 2px;
-  }
-</style>

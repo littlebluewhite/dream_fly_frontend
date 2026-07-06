@@ -99,6 +99,12 @@ export interface EnrolledCourse {
 	next: string;
 	term: string;
 	remain: number;
+	/** 課程 uuid（區別於 `id`——member/api.ts 的 getMine() 把 `id` 設為「報名」uuid，
+	 *  非課程 uuid）。Task 11（請假/補課 UI）新增：請假入口需要課程 id 才能呼叫
+	 *  GET /courses/{id}/sessions。選填——mock 資料（MY_COURSES，member/mobile 共用）
+	 *  與 mobile 側目前皆未提供真正課程 id，只有桌面 member/api.ts 的 getMine() 會
+	 *  填入真值；非本次範圍的既有呼叫端不受影響。 */
+	course_id?: string;
 }
 
 /* Enrolled courses (我的課程) */

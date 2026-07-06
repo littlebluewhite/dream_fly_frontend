@@ -176,7 +176,7 @@ describe('getMine', () => {
     expect(d).toEqual({
       courses: [
         {
-          id: 'enrol-1', name: '競技啦啦隊 進階班', cat: '', level: '高級', coach: '',
+          id: 'enrol-1', course_id: 'course-1', name: '競技啦啦隊 進階班', cat: '', level: '高級', coach: '',
           icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: '',
           att: 75, attended: 18, total: 24, next: '', term: '', remain: 0
         }

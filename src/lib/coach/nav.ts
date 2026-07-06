@@ -13,13 +13,16 @@ export interface CoachNav {
 	badge?: number;
 }
 
-/* 7 flat nav items (shell.jsx:7-15). Badge only on 訊息中心 (faithful). */
+/* 8 flat nav items (shell.jsx:7-15 + Task 11's 請假審核). Badge only on 訊息中心
+ * (faithful). 請假審核 sits next to 出勤記錄 — both are attendance-adjacent
+ * concerns (a leave request writes an attendance record on approval, §3.20). */
 export const NAV: CoachNav[] = [
 	{ id: 'dashboard', label: '儀表板', icon: 'layout-dashboard' },
 	{ id: 'today', label: '今日課程', icon: 'calendar-clock' },
 	{ id: 'students', label: '我的學員', icon: 'users' },
 	{ id: 'schedule', label: '排課管理', icon: 'calendar-days' },
 	{ id: 'attendance', label: '出勤記錄', icon: 'clipboard-check' },
+	{ id: 'leave-requests', label: '請假審核', icon: 'calendar-off' },
 	{ id: 'messages', label: '訊息中心', icon: 'message-circle', badge: 3 },
 	{ id: 'settings', label: '個人設定', icon: 'settings' }
 ];
@@ -42,6 +45,7 @@ const TITLES: Record<string, [string, string]> = {
 	'/coach/students': ['首頁 / 我的學員', '我的學員'],
 	'/coach/schedule': ['首頁 / 排課管理', '排課管理'],
 	'/coach/attendance': ['首頁 / 出勤記錄', '點名'],
+	'/coach/leave-requests': ['首頁 / 請假審核', '請假審核'],
 	'/coach/messages': ['首頁 / 訊息中心', '訊息中心'],
 	'/coach/settings': ['首頁 / 個人設定', '個人設定']
 };

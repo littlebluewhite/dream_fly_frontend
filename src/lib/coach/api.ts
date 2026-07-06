@@ -371,6 +371,81 @@ export const getStudents = async (): Promise<StudentsData> => {
 	return { students: students.map(mapStudent) };
 };
 
+/* ═════════════════════════ 請假審核（GET /leave-requests?status=pending + PATCH /leave-requests/{id}，見 integration-contract.md §3.20） ═════════════════════════ */
+
+export interface CoachLeaveRequest {
+	id: string;
+	course_name: string;
+	user_name: string;
+	session_date: string; // "YYYY-MM-DD"
+	start_time: string; // "HH:MM:SS"
+	reason: string | null;
+	created_at: string;
+}
+
+interface ApiCoachLeaveRequest {
+	id: string;
+	course_id: string;
+	course_name: string;
+	user_id: string;
+	user_name: string;
+	session_id: string;
+	session_date: string;
+	start_time: string;
+	reason: string | null;
+	status: string;
+	makeup_session_id: string | null;
+	makeup_session_date: string | null;
+	makeup_start_time: string | null;
+	decided_at: string | null;
+	created_at: string;
+}
+
+interface ApiLeaveRequestListResponse {
+	leave_requests: ApiCoachLeaveRequest[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+/** LeaveRequestResponse(教練/admin 清單版) → 待審核清單只需要的窄化形狀——course_id/
+ *  user_id/session_id/status/makeup_* 對這個頁面(只列 pending、決定後就從清單消失)
+ *  沒有顯示用途，同 api.ts 窄化 local interface 的慣例。 */
+function mapCoachLeaveRequest(r: ApiCoachLeaveRequest): CoachLeaveRequest {
+	return {
+		id: r.id,
+		course_name: r.course_name,
+		user_name: r.user_name,
+		session_date: r.session_date,
+		start_time: r.start_time,
+		reason: r.reason,
+		created_at: r.created_at
+	};
+}
+
+export interface PendingLeaveRequestsData {
+	requests: CoachLeaveRequest[];
+}
+
+/** GET /leave-requests?status=pending。無需 requireMyCoach() 閘門——同 getStudents()
+ *  慣例，呼叫者掛 coach 角色但查無對應 coaches 資料列時後端本身回空頁而非錯誤
+ *  （§3.20 引用 §3.18/§3.19 既有慣例）。教練只會看到自己課程的待審核假單，後端
+ *  已按 courses.coach_id 過濾，前端不需要另外篩選。 */
+export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsData> => {
+	const res = await api<ApiLeaveRequestListResponse>('/leave-requests?status=pending');
+	return { requests: res.leave_requests.map(mapCoachLeaveRequest) };
+};
+
+/** PATCH /leave-requests/{id}（帶 { status: 'approved' | 'rejected' }）。核准會在同一
+ *  交易內把該場次寫入 attendance leave 紀錄；駁回僅更新假單狀態(見 §3.20)——兩者對
+ *  前端來說是同一個動作,差別只在送出的 status 值。404/403/409/422 原樣拋出，呼叫端
+ *  (leave-requests/+page.svelte)依 ApiError 顯示對應繁中錯誤(這個模組後端本身就已
+ *  回繁中訊息，同 member/stores.ts 的 leaveRequestErrorMessage 慣例)。 */
+export const decideLeaveRequest = (id: string, status: 'approved' | 'rejected'): Promise<CoachLeaveRequest> =>
+	api<ApiCoachLeaveRequest>(`/leave-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(
+		mapCoachLeaveRequest
+	);
+
 /* ═════════════════════════ 個人設定（GET /users/me；儲存 → PATCH /users/me） ═════════════════════════ */
 
 export interface CoachSettingsData { coach: Coach }

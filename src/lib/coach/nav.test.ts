@@ -9,6 +9,7 @@ describe('coachPath', () => {
 		expect(coachPath('today')).toBe('/coach/today');
 		expect(coachPath('attendance')).toBe('/coach/attendance');
 		expect(coachPath('settings')).toBe('/coach/settings');
+		expect(coachPath('leave-requests')).toBe('/coach/leave-requests');
 	});
 });
 
@@ -33,17 +34,26 @@ describe('resolve', () => {
 		expect(resolve('/coach/attendance')).toEqual(['首頁 / 出勤記錄', '點名']);
 		expect(resolve('/coach/messages')).toEqual(['首頁 / 訊息中心', '訊息中心']);
 	});
+	it('returns crumb + title for 請假審核 (Task 11)', () => {
+		expect(resolve('/coach/leave-requests')).toEqual(['首頁 / 請假審核', '請假審核']);
+	});
 	it('falls back to the dashboard meta for unknown paths', () => {
 		expect(resolve('/coach/nope')).toEqual(['首頁 / 儀表板', '教練儀表板']);
 	});
 });
 
 describe('NAV', () => {
-	it('has 7 items with a badge only on 訊息中心', () => {
-		expect(NAV).toHaveLength(7);
+	it('has 8 items (Task 11 adds 請假審核) with a badge only on 訊息中心', () => {
+		expect(NAV).toHaveLength(8);
 		const badged = NAV.filter((n) => n.badge != null);
 		expect(badged).toHaveLength(1);
 		expect(badged[0].id).toBe('messages');
 		expect(badged[0].badge).toBe(3);
+	});
+	it('has a 請假審核 item positioned between 出勤記錄 and 訊息中心', () => {
+		const ids = NAV.map((n) => n.id);
+		expect(ids).toContain('leave-requests');
+		expect(ids.indexOf('leave-requests')).toBeGreaterThan(ids.indexOf('attendance'));
+		expect(ids.indexOf('leave-requests')).toBeLessThan(ids.indexOf('messages'));
 	});
 });

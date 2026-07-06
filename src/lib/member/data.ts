@@ -175,6 +175,16 @@ export const ATT_STATE: Record<AttState, [Tone, string]> = {
   absent: ['error', '缺席']
 };
 
+/* 「我的請假」清單狀態 badge（Task 11；integration-contract.md §3.20 的四值
+ * status）。未知值 fallback 為原字串（同 api.ts 的 ORDER_STATUS 慣例）— mine/
+ * +page.svelte 用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值。 */
+export const LEAVE_STATUS: Record<string, [Tone, string]> = {
+  pending: ['warning', '待審核'],
+  approved: ['success', '已核准'],
+  rejected: ['error', '已婉拒'],
+  cancelled: ['neutral', '已取消']
+};
+
 export const LEVEL_TONE: Record<string, Tone> = {
   啟蒙: 'info',
   入門: 'info',
@@ -204,14 +214,6 @@ export const ANNOUNCE: Announcement[] = [
 /* Order history (帳戶) — status is Tone-typed here; domain stores the loose
  * shape, so assert back to this file's stricter type. */
 export const ORDERS: Order[] = ORDERS_BASE as Order[];
-
-/* Upcoming sessions per enrolled course — used by the 請假 form */
-export const COURSE_SESSIONS: Record<string, string[]> = {
-  k1: ['2026/06/11 (四) 19:00–20:30', '2026/06/16 (二) 19:00–20:30', '2026/06/18 (四) 19:00–20:30', '2026/06/23 (二) 19:00–20:30'],
-  k6: ['2026/06/12 (五) 17:00–19:00', '2026/06/19 (五) 17:00–19:00', '2026/06/26 (五) 17:00–19:00'],
-  k8: ['2026/06/13 (五) 18:00–19:00', '2026/06/20 (五) 18:00–19:00', '2026/06/27 (五) 18:00–19:00']
-};
-export const LEAVE_REASONS = ['生病 / 身體不適', '家庭因素', '學校活動', '出國 / 旅遊', '其他'];
 
 /* Canned coach replies for the contact thread (聯絡教練 / 訊息 — 罐頭回覆;
  * CONTACT_THREAD 本體在 $lib/domain/member-app) */

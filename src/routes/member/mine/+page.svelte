@@ -1,29 +1,52 @@
 <script lang="ts">
   /* 我的課程 (My Courses) — enrolled-course list on the left, active-course
-   * detail on the right (stats, attendance history, and 請假 / 預約補課 /
-   * 聯絡教練 actions). Ported from the prototype's MyCourses (client/views.jsx).
-   * Data + primitives come from the shared foundation. */
+   * detail on the right (stats, attendance history, and 請假 / 聯絡教練 actions).
+   * Ported from the prototype's MyCourses (client/views.jsx). Data + primitives
+   * come from the shared foundation.
+   *
+   * Task 11：「我的請假」清單（GET /leave-requests/me）+ 候補中課程並列在課程
+   * 清單下方——pending 可取消、approved 且未補課可逐筆「預約補課」（MakeupDialog
+   * 現在吃 leaveRequest，不是課程層級動作，所以課程詳情動作列不再有「預約補課」
+   * 按鈕）。 */
   import { onMount } from 'svelte';
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
-  import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
-  import { toasts, waitlist, refreshWaitlist, cancelWaitlist, type WaitlistEntry } from '$lib/member/stores';
+  import { ATT_STATE, LEVEL_TONE, LEAVE_STATUS } from '$lib/member/data';
+  import { formatSessionDateTime } from '$lib/member/session-format';
+  import {
+    toasts,
+    waitlist,
+    refreshWaitlist,
+    cancelWaitlist,
+    leaveRequests,
+    refreshLeaveRequests,
+    cancelLeaveRequest,
+    leaveRequestErrorMessage,
+    type WaitlistEntry,
+    type LeaveRequest
+  } from '$lib/member/stores';
   import { getMine, type MineData } from '$lib/member/api';
 
   let active: string | null = null;
-  let dialog: 'leave' | 'makeup' | 'contact' | null = null;
+  let dialog: 'leave' | 'contact' | null = null;
+  let makeupFor: LeaveRequest | null = null;
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MineData | null = null;
   let cancellingId: string | null = null;
+  let cancellingLeaveId: string | null = null;
 
   function load() {
     phase = 'loading';
-    // 候補清單是 best-effort 的旁路 hydrate（同 getDashboard/getAccount 對 points
-    // /notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的「我的
-    // 課程」資料流程（getMine 走 Promise.all 仍是 fail-hard）。
-    Promise.all([getMine(), refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err))])
+    // 候補清單/我的請假皆為 best-effort 的旁路 hydrate（同 getDashboard/getAccount
+    // 對 points/notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的
+    // 「我的課程」資料流程（getMine 走 Promise.all 仍是 fail-hard）。
+    Promise.all([
+      getMine(),
+      refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err)),
+      refreshLeaveRequests().catch((err) => console.error('mine: 我的請假 hydrate 失敗', err))
+    ])
       .then(([d]) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
@@ -39,6 +62,19 @@
       toasts.notify('error', '取消候補失敗', '請稍後再試。');
     } finally {
       cancellingId = null;
+    }
+  }
+
+  async function doCancelLeave(lr: LeaveRequest) {
+    if (cancellingLeaveId) return;
+    cancellingLeaveId = lr.id;
+    try {
+      await cancelLeaveRequest(lr.id);
+      toasts.notify('success', '已取消請假申請', lr.course_name + ' 的請假申請已取消。');
+    } catch (err) {
+      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(err));
+    } finally {
+      cancellingLeaveId = null;
     }
   }
 
@@ -142,9 +178,6 @@
             <Button variant="secondary" fullWidth on:click={() => (dialog = 'leave')}>
               <Icon name="calendar-off" size={16} />請假
             </Button>
-            <Button variant="secondary" fullWidth on:click={() => (dialog = 'makeup')}>
-              <Icon name="rotate-cw" size={16} />預約補課
-            </Button>
             <Button variant="primary" fullWidth on:click={() => (dialog = 'contact')}>
               <Icon name="message-circle" size={16} />聯絡教練
             </Button>
@@ -154,27 +187,66 @@
     {/if}
   </div>
   {#if cur}
-    <LeaveDialog
-      open={dialog === 'leave'}
-      course={cur}
-      onClose={() => (dialog = null)}
-      onSubmit={({ session, makeup }) =>
-        toasts.notify(
-          'warning',
-          '已送出請假申請',
-          cur.name + ' · ' + session + (makeup ? ' — 已保留補課額度。' : '。')
-        )}
-    />
-    <MakeupDialog
-      open={dialog === 'makeup'}
-      course={cur}
-      onClose={() => (dialog = null)}
-      onSubmit={(slot) =>
-        slot && toasts.notify('success', '補課預約成功', slot.date + ' ' + slot.time + ' · 已加入日程表。')}
-    />
+    <LeaveDialog open={dialog === 'leave'} course={cur} onClose={() => (dialog = null)} />
     <ContactDialog open={dialog === 'contact'} course={cur} onClose={() => (dialog = null)} />
   {/if}
   {/if}
+
+  <!-- 我的請假（Task 11：GET /leave-requests/me 水合；pending 可取消、approved 且
+       未補課可預約補課）—— 同候補中課程,不論上面是空狀態或兩欄式課程清單都要顯示,
+       放在 courses.length 的 if/else 外面(退選課程後歷史請假紀錄仍可能存在)。 -->
+  <div class="df-view" style="margin-top:18px">
+    <Card padding={0} style="overflow:hidden">
+      <div style="padding:16px 22px;border-bottom:1px solid var(--df-border)">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">我的請假</h3>
+      </div>
+      {#if $leaveRequests.length === 0}
+        <EmptyState
+          icon="calendar-off"
+          title="目前沒有請假紀錄"
+          body="申請請假後，審核進度與補課狀態會顯示在這裡。"
+          pad="20px 0"
+        />
+      {:else}
+        <div style="padding:2px 22px 8px">
+          {#each $leaveRequests as lr, i (lr.id)}
+            {@const [tone, label] = LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]}
+            <div
+              style="display:flex;align-items:center;gap:12px;padding:14px 0;{i < $leaveRequests.length - 1
+                ? 'border-bottom:1px solid var(--df-border)'
+                : ''}"
+            >
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{lr.course_name}</div>
+                <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">
+                  {formatSessionDateTime(lr.session_date, lr.start_time)}{#if lr.reason} · {lr.reason}{/if}
+                </div>
+                {#if lr.status === 'approved' && lr.makeup_session_id}
+                  <div style="font-size:12.5px;color:var(--df-success);margin-top:2px">
+                    已預約補課：{formatSessionDateTime(lr.makeup_session_date ?? '', lr.makeup_start_time ?? '')}
+                  </div>
+                {/if}
+              </div>
+              <Badge {tone} dot>{label}</Badge>
+              {#if lr.status === 'pending'}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={cancellingLeaveId === lr.id}
+                  on:click={() => doCancelLeave(lr)}
+                >
+                  取消
+                </Button>
+              {:else if lr.status === 'approved' && !lr.makeup_session_id}
+                <Button variant="secondary" size="sm" on:click={() => (makeupFor = lr)}>預約補課</Button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </Card>
+  </div>
+  <MakeupDialog open={makeupFor !== null} leaveRequest={makeupFor} onClose={() => (makeupFor = null)} />
 
   <!-- 候補中課程（Task 3：GET /waitlist/me 水合 + DELETE 取消）—— 不論上面是空
        狀態或兩欄式課程清單都要顯示，所以放在 courses.length 的 if/else 外面。 -->

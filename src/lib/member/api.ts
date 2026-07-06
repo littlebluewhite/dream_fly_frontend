@@ -147,6 +147,7 @@ export const getMine = async (): Promise<MineData> => {
   const active = await activeEnrolments();
   const courses: EnrolledCourse[] = active.map((e) => ({
     id: e.id,
+    course_id: e.course_id, // Task 11：請假入口需要課程 id 呼叫 GET /courses/{id}/sessions
     name: e.course_name,
     cat: '',
     level: COURSE_LEVEL_LABEL[e.course_level] ?? e.course_level,

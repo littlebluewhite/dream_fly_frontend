@@ -1,61 +1,91 @@
 <script lang="ts">
-  /* 請假申請 (Leave request) — pick a session + reason, optional note, and a
-   * "keep makeup credit" toggle; submitting shows a success confirmation.
-   * Ported from the prototype's LeaveDialog (client/components.jsx). */
-  import { Button, Select, Switch, Icon } from '$lib/components/ui';
+  /* 請假申請 (Leave request) — Task 11：integration-contract.md §3.20 + §3.18。
+   * 開啟時打 GET /courses/{course_id}/sessions 列出未來場次；選場次 + 選填事由 →
+   * 送出打 POST /leave-requests。核准後的補課預約是另一個獨立動作（在「我的
+   * 請假」清單裡，見 MakeupDialog），本 dialog 不再有舊 mock 版的「同時保留補課
+   * 額度」開關——契約裁決 4 明確把兩者分成兩步。 */
+  import { Button, Select, Icon, Skeleton, ErrorState, EmptyState } from '$lib/components/ui';
   import Textarea from '$lib/components/ui/Textarea.svelte';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import NoteBox from './NoteBox.svelte';
-  import { COURSE_SESSIONS, LEAVE_REASONS, type EnrolledCourse } from '$lib/member/data';
+  import { sessionOptions } from '$lib/member/session-format';
+  import {
+    getCourseSessions,
+    createLeaveRequest,
+    leaveRequestErrorMessage,
+    toasts,
+    type CourseSession
+  } from '$lib/member/stores';
+  import type { EnrolledCourse } from '$lib/member/data';
 
   export let open = false;
   export let course: EnrolledCourse | null = null;
   export let onClose: () => void = () => {};
-  export let onSubmit: ((d: { session: string; reason: string; makeup: boolean }) => void) | undefined =
-    undefined;
 
-  let session = '';
+  let sessionsPhase: 'loading' | 'error' | 'ready' = 'loading';
+  let sessions: CourseSession[] = [];
+  let sessionId = '';
   let reason = '';
-  let note = '';
-  let makeup = true;
+  let submitting = false;
   let done = false;
 
-  // Reset all state each time the dialog transitions to open.
-  let wasOpen = false;
-  $: if (open && !wasOpen) {
-    session = '';
-    reason = '';
-    note = '';
-    makeup = true;
-    done = false;
+  function loadSessions(courseId: string) {
+    sessionsPhase = 'loading';
+    getCourseSessions(courseId)
+      .then((list) => {
+        sessions = list;
+        sessionsPhase = 'ready';
+      })
+      .catch(() => {
+        sessionsPhase = 'error';
+      });
   }
-  $: wasOpen = open;
 
-  $: sessions = course ? COURSE_SESSIONS[course.id] || [] : [];
-  $: valid = !!session && !!reason;
+  // Reset all state each time the dialog transitions to open, and kick off the
+  // sessions fetch. Check-and-update must live in ONE reactive statement (the
+  // CouponCreateDialog idiom) — splitting the `lastOpen` write into its own
+  // trailing `$:` (as PasswordDialog does) is unreliable: Svelte topologically
+  // orders reactive statements by dependency, so the writer can run BEFORE this
+  // reader in the same flush, making the transition undetectable.
+  let lastOpen = false;
+  $: {
+    if (open && !lastOpen && course) {
+      sessionId = '';
+      reason = '';
+      submitting = false;
+      done = false;
+      // course_id 在 EnrolledCourse 型別上因 mobile/mock 未提供而標為 optional；
+      // 這個 dialog 只會被桌面 member/mine 頁掛載（真實 getMine() 資料），
+      // course_id 保證存在。
+      loadSessions(course.course_id!);
+    }
+    lastOpen = open;
+  }
 
-  function submit() {
-    done = true;
-    onSubmit?.({ session, reason, makeup });
+  $: valid = !!sessionId;
+
+  async function submit() {
+    if (!course || !valid || submitting) return;
+    submitting = true;
+    try {
+      await createLeaveRequest(sessionId, reason.trim() || undefined);
+      done = true;
+      toasts.notify('success', '請假申請已送出', course.name + '，請等候教練或管理員審核。');
+    } catch (err) {
+      toasts.notify('error', '請假申請失敗', leaveRequestErrorMessage(err));
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
 {#if open && course}
   {#if done}
-    <FormModal
-      open
-      {onClose}
-      icon="calendar-off"
-      color="var(--df-warning)"
-      title="請假申請"
-      subtitle={course.name}
-    >
+    <FormModal open {onClose} icon="calendar-off" color="var(--df-warning)" title="請假申請" subtitle={course.name}>
       <SuccessBody
         title="請假申請已送出"
-        body={makeup
-          ? '已為你保留補課額度，可至「我的課程 → 預約補課」選擇時段。'
-          : '教練將收到通知，課堂出席將標記為請假。'}
+        body="教練或管理員審核後，結果會顯示在「我的請假」清單，並收到系統通知。核准後可預約一次同課程的未來場次補課。"
       />
       <svelte:fragment slot="footer">
         <Button variant="primary" on:click={onClose}>完成</Button>
@@ -70,61 +100,42 @@
       title="請假申請"
       subtitle={course.name + ' · ' + course.coach + ' 教練'}
     >
-      <Select
-        label="請假日期"
-        required
-        placeholder="選擇要請假的課堂"
-        bind:value={session}
-        options={sessions}
-      />
-      <Select
-        label="請假事由"
-        required
-        placeholder="選擇事由"
-        bind:value={reason}
-        options={LEAVE_REASONS}
-      />
-      <Textarea
-        label="補充說明"
-        placeholder="（選填）若需提供更多資訊，可在此說明…"
-        bind:value={note}
-        rows={3}
-        maxLength={120}
-      />
-      <div class="switch-row">
-        <div>
-          <div class="switch-title">同時保留補課額度</div>
-          <div class="switch-sub">稍後可自行預約補課時段</div>
-        </div>
-        <Switch bind:checked={makeup} />
-      </div>
-      <NoteBox icon="clock">
-        請於課程開始 <b>24 小時前</b> 提出，逾時恕無法保留補課額度。
-      </NoteBox>
+      {#if sessionsPhase === 'loading'}
+        <Skeleton w="100%" h={44} r={8} />
+      {:else if sessionsPhase === 'error'}
+        <ErrorState onRetry={() => course && loadSessions(course.course_id!)} />
+      {:else if sessions.length === 0}
+        <EmptyState
+          icon="calendar-x"
+          title="沒有可請假的未來場次"
+          body="這堂課近期沒有排定場次，暫時無法申請請假。"
+          pad="32px 12px"
+        />
+      {:else}
+        <Select
+          label="請假場次"
+          required
+          placeholder="選擇要請假的場次"
+          bind:value={sessionId}
+          options={sessionOptions(sessions)}
+        />
+        <Textarea
+          label="請假事由（選填）"
+          placeholder="（選填）讓教練了解請假原因…"
+          bind:value={reason}
+          rows={3}
+          maxLength={500}
+        />
+        <NoteBox icon="info">
+          開課前皆可申請請假，教練或管理員審核後會通知你；核准後可在「我的請假」預約一次同課程的未來場次補課。
+        </NoteBox>
+      {/if}
       <svelte:fragment slot="footer">
         <Button variant="secondary" on:click={onClose}>取消</Button>
-        <Button variant="primary" disabled={!valid} on:click={submit}>
-          <Icon name="check" size={16} />送出申請
+        <Button variant="primary" disabled={!valid || submitting} on:click={submit}>
+          <Icon name="check" size={16} />{submitting ? '送出中…' : '送出申請'}
         </Button>
       </svelte:fragment>
     </FormModal>
   {/if}
 {/if}
-
-<style>
-  .switch-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 2px;
-  }
-  .switch-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--df-text-dark);
-  }
-  .switch-sub {
-    font-size: 12.5px;
-    color: var(--df-text-light);
-  }
-</style>
