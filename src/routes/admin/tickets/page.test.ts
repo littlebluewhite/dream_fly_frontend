@@ -146,3 +146,21 @@ describe('票券管理 — 分頁（Task 17：PaginationBar 接上 getTickets() 
 		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
+
+describe('票券管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
+	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getTickets', async () => {
+		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+
+		vi.mocked(getTickets).mockRejectedValueOnce(new Error('network'));
+		await fireEvent.click(getByText('下一頁')); // page 1 → 2，此次請求失敗
+		await findByText('載入失敗');
+
+		vi.mocked(getTickets).mockResolvedValueOnce({ tickets: TICKETS, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('重新載入')); // 重試
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getTickets).toHaveBeenLastCalledWith(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+	});
+});

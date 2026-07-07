@@ -245,3 +245,48 @@ describe('學員管理 — 分頁（Task 17：PaginationBar 接上 getMembers() 
 		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
+
+describe('學員管理 — 複審修復（Finding 1）：搜尋/篩選僅作用於目前頁面的提示', () => {
+	const HINT = '搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。';
+
+	it('total > perPage（還有下一頁）時顯示提示', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+		expect(getByText(HINT)).toBeInTheDocument();
+	});
+
+	it('total <= perPage（只有一頁）時不顯示提示，避免全部資料一頁裝得下時的多餘雜訊', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: FIXTURE.length, page: 1, perPage: 20 });
+		const { findByText, queryByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+		expect(queryByText(HINT)).toBeNull();
+	});
+});
+
+describe('學員管理 — 複審修復（Finding 2）：「N 位學員」headline 改用 seam total', () => {
+	it('total=57、目前頁只有 2 筆時，標題仍顯示「57 位學員」（非 members.length）', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 57, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+		expect(getByText('57 位學員')).toBeInTheDocument();
+	});
+});
+
+describe('學員管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
+	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getMembers', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		vi.mocked(getMembers).mockRejectedValueOnce(new Error('network'));
+		await fireEvent.click(getByText('下一頁')); // page 1 → 2，此次請求失敗
+		await findByText('載入失敗');
+
+		vi.mocked(getMembers).mockResolvedValueOnce({ members: FIXTURE, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('重新載入')); // 重試
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getMembers).toHaveBeenLastCalledWith(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+	});
+});

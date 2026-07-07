@@ -42,7 +42,11 @@
   let total = 0;
   let perPage = 20;
 
+  // 複審修復（Finding 3）：page 樂觀更新，寫在 getOrders() 之前——即使這次換頁失敗，
+  // page 也已經是使用者實際要求的目標頁，讓下面 <ErrorState onRetry> 的重試能對到正確
+  // 頁碼（而非停留在換頁前的舊頁碼）。
   function load(p = page) {
+    page = p;
     phase = 'loading';
     getOrders(p)
       .then((d) => {
@@ -128,10 +132,20 @@
     />
   </div>
 
+  <!-- 複審修復（Finding 1）：OrdersTable 內部狀態分頁籤 + topbar 搜尋皆為純前端記憶體
+       篩選（filterOrders），只作用在目前已載入的這一頁（見上 Task 17 分頁）。只在還有
+       下一頁時才提示，避免全部資料剛好一頁裝得下時的多餘雜訊。 -->
+  {#if total > perPage}
+    <p class="scope-hint">搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。</p>
+  {/if}
+
   <OrdersTable rows={orders} onChangeStatus={changeStatus} onRemind={remind} />
   <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
 {:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+  <!-- 複審修復（Finding 3）：onRetry 包一層無參數箭頭函式——ErrorState 內部的 Button 會把
+       原生 click 事件轉發給 onRetry，若直接傳 load，p 收到的會是 MouseEvent 而非
+       page，讓上面的樂觀賦值失真；包成 () => load() 才能讓 p 正確地退回預設值 page。 -->
+  <Card padding={0}><ErrorState onRetry={() => load()} /></Card>
 {:else}
   <div data-testid="orders-skeleton">
     <div class="stats">
@@ -154,5 +168,10 @@
     .stats {
       grid-template-columns: repeat(2, 1fr);
     }
+  }
+  .scope-hint {
+    margin: 0 0 20px;
+    font-size: 13px;
+    color: var(--df-text-light);
   }
 </style>

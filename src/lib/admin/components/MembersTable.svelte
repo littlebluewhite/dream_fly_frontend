@@ -39,6 +39,10 @@
   export let compact = false;
   // 兩種模式共用同一份真實資料（GET /users，見 admin/api.ts 的 getMembers()）。
   export let members: MemberAccount[] = [];
+  // 複審修復（Finding 2）：!compact 標題「N 位學員」要用 getMembers() 回應的未篩選總數，
+  // 不是目前這一頁的 members.length（Task 17 分頁後 members 只剩該頁 ≤20 筆，會低報）。
+  // 未提供時退回 members.length，維持 compact（dashboard 預覽，不讀這個值）等既有呼叫端相容。
+  export let total: number = members.length;
   // !compact-only（Task 16）：新增/編輯的實際 dialog + API 呼叫由 members/+page.svelte
   // 負責，這裡只是單純的按鈕/圖示觸發。
   export let onNew: () => void = () => {};
@@ -130,7 +134,7 @@
   <MemberDialog account={activePreview} onClose={() => (activePreview = null)} />
 {:else}
   <Card padding={0} style="overflow:hidden">
-    <PanelHead title="學員名單" sub={accCounts.all + ' 位學員'}>
+    <PanelHead title="學員名單" sub={total + ' 位學員'}>
       <Button slot="right" size="sm" variant="primary" on:click={onNew}>
         <Icon name="plus" size={15} />新增學員
       </Button>

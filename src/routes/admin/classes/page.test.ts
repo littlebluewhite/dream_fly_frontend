@@ -240,3 +240,63 @@ describe('課程管理 — 分頁（Task 17：PaginationBar 接上 getClasses() 
 		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
+
+describe('課程管理 — 複審修復（Finding 1）：搜尋/篩選僅作用於目前頁面的提示', () => {
+	const HINT = '搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。';
+
+	it('total > perPage（還有下一頁）時顯示提示', async () => {
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 1,
+			perPage: 20
+		});
+		const { findByText, getByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+		expect(getByText(HINT)).toBeInTheDocument();
+	});
+
+	it('total <= perPage（只有一頁）時不顯示提示，避免全部資料一頁裝得下時的多餘雜訊', async () => {
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 20,
+			page: 1,
+			perPage: 20
+		});
+		const { findByText, queryByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+		expect(queryByText(HINT)).toBeNull();
+	});
+});
+
+describe('課程管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
+	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getClasses', async () => {
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 1,
+			perPage: 20
+		});
+		const { findByText, getByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+
+		vi.mocked(getClasses).mockRejectedValueOnce(new Error('network'));
+		await fireEvent.click(getByText('下一頁')); // page 1 → 2，此次請求失敗
+		await findByText('載入失敗');
+
+		vi.mocked(getClasses).mockResolvedValueOnce({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 2,
+			perPage: 20
+		});
+		await fireEvent.click(getByText('重新載入')); // 重試
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getClasses).toHaveBeenLastCalledWith(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+	});
+});

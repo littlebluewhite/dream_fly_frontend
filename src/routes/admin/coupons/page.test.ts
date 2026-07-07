@@ -157,3 +157,21 @@ describe('優惠碼管理 — 分頁（Task 17：PaginationBar 接上 getCoupons
 		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
+
+describe('優惠碼管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
+	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getCoupons', async () => {
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(CouponsPage);
+		await findByText('SPRING10');
+
+		vi.mocked(getCoupons).mockRejectedValueOnce(new Error('network'));
+		await fireEvent.click(getByText('下一頁')); // page 1 → 2，此次請求失敗
+		await findByText('載入失敗');
+
+		vi.mocked(getCoupons).mockResolvedValueOnce({ coupons: FIXTURE, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('重新載入')); // 重試
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getCoupons).toHaveBeenLastCalledWith(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+	});
+});

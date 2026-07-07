@@ -168,6 +168,19 @@ describe('MembersTable (full/honest — real getMembers() data)', () => {
 	});
 });
 
+describe('MembersTable — 複審修復（Finding 2）：「N 位學員」headline 改用 total prop', () => {
+	it('total=57 時標題顯示「57 位學員」，即使 members 陣列只有 1 筆（分頁後目前頁筆數 ≠ 總數）', () => {
+		const { getByText } = render(MembersTable, { members: [acc], total: 57 });
+		expect(getByText('57 位學員')).toBeInTheDocument();
+	});
+
+	it('未提供 total 時退回 members.length（相容未傳入 total 的既有呼叫端）', () => {
+		const other: MemberAccount = { ...acc, id: 'u-002', name: '第二位' };
+		const { getByText } = render(MembersTable, { members: [acc, other] });
+		expect(getByText('2 位學員')).toBeInTheDocument();
+	});
+});
+
 describe('MembersTable memberFilter folding (honest full variant — 最低點數)', () => {
 	afterEach(() => memberFilter.set({ ...MEMBER_FILTER_DEFAULT }));
 
