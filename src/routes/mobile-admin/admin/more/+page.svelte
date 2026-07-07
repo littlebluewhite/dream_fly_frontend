@@ -16,18 +16,17 @@
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import { overlay, role, switchRole, session } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
+  import { createLoadGate } from '$lib/load-gate';
   import { getMore, type MoreData } from '$lib/mobile-admin/api';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MoreData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getMore()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getMore,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: groups = data
     ? ([
@@ -56,7 +55,7 @@
   }
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 {@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={0} onBell={() => {}} {onRole} greeting="更多功能" sub="管理後台延伸模組" />
 
@@ -125,8 +124,8 @@
     <div style="text-align:center; font-size:11.5px; color:var(--df-text-muted); padding-bottom:8px;">Dream Fly 夢飛體操館 · 後台 v1.0</div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="more-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:20px;">
     <SkelCard><Skeleton w="100%" h={80} r={16} /></SkelCard>

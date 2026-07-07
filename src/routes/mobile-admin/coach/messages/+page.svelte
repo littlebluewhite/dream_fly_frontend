@@ -7,7 +7,7 @@
    * markMessageRead 的已讀狀態,refreshMessages() 供 ErrorState 重試(不受守衛短路)。
    * alive 旗標防止 unmount 後解析的 in-flight fetch 影響本頁狀態。markMessageRead
    * 既有 mutation 不動。 */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -16,27 +16,18 @@
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead, hydrateMessages, refreshMessages } from '$lib/mobile-admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import type { MessageRow } from '$lib/mobile-admin/data';
 
-  let alive = true;
-  onDestroy(() => { alive = false; });
-
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let q = '';
 
-  function load() {
-    phase = 'loading';
-    hydrateMessages()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
-  onMount(load);
-  function refresh() {
-    phase = 'loading';
-    refreshMessages()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
+  const gate = createLoadGate({
+    fetch: hydrateMessages,
+    refresh: refreshMessages
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
   const openThread = (m: MessageRow) => { markMessageRead(m.id); overlay.push('messageThread', { m }); };
@@ -44,7 +35,7 @@
   $: list = q ? $messages.filter((m) => (m.from + m.preview).toLowerCase().includes(q.toLowerCase())) : $messages;
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <ScreenHeader title="訊息" sub="家長與館務溝通">
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
@@ -80,8 +71,8 @@
     {/if}
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="messages-skeleton" style="padding:14px; display:flex; flex-direction:column; gap:10px;">
     <Skeleton w="100%" h={42} r={11} />

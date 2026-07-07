@@ -17,21 +17,21 @@
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getStudents } from '$lib/mobile-admin/api';
   import type { MemberRow, Skill } from '$lib/mobile-admin/data';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let members: MemberRow[] = [];
   let skills: Record<string, Skill[]> = {};
   let q = '';
 
-  function load() {
-    phase = 'loading';
-    getStudents()
-      .then((d) => { members = d.members; skills = d.skills; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getStudents,
+    onData: (d) => { members = d.members; skills = d.skills; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: mine = members.filter((m) => m.coach === '林雅婷');
 
@@ -42,7 +42,7 @@
   $: list = q ? mine.filter((m) => (m.name + m.id + m.course).toLowerCase().includes(q.toLowerCase())) : mine;
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <ScreenHeader title="我的學員" sub={mine.length + ' 位 · 競技啦啦隊 / 競技體操'}>
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
@@ -96,8 +96,8 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="students-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
     {#each [0, 1, 2] as i (i)}

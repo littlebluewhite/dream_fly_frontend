@@ -6,7 +6,7 @@
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
    * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。alive 旗標防止 unmount
    * 後解析的 in-flight fetch 影響本頁狀態。 */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -20,26 +20,17 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, classes, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
+  import { createLoadGate } from '$lib/load-gate';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  let alive = true;
-  onDestroy(() => { alive = false; });
-
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
-  function load() {
-    phase = 'loading';
-    hydrateOps()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
-  onMount(load);
-  function refresh() {
-    phase = 'loading';
-    refreshOps()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
+  const gate = createLoadGate({
+    fetch: hydrateOps,
+    refresh: refreshOps
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   let cat = '全部';
   let q = '';
@@ -54,7 +45,7 @@
     .filter((k) => !q || (k.name + k.coach).toLowerCase().includes(q.toLowerCase()));
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 
 <ScreenHeader title="課程管理" sub={$classes.length + ' 個開課班級 · 本季招生中'}>
   <div slot="right" style="display:flex; gap:8px;">
@@ -126,8 +117,8 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="classes-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
     {#each [0, 1, 2] as i (i)}

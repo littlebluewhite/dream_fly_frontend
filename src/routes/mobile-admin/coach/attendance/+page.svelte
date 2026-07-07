@@ -16,6 +16,7 @@
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getRoster } from '$lib/mobile-admin/api';
   import type { RosterEntry } from '$lib/mobile-admin/data';
 
@@ -29,7 +30,6 @@
   // 進階班 roster on screen, letting a coach mark/save the wrong class.
   const classOpts = [{ key: 'k1', label: '19:00 競技啦啦隊 進階班' }];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let roster: RosterEntry[] = [];
   let cls = 'k1';
   let marks: Record<string, string> = {};
@@ -38,17 +38,16 @@
   let noteText = '';
   let notes: Record<string, string> = {};
 
-  function load() {
-    phase = 'loading';
-    getRoster()
-      .then((d) => {
-        roster = d.roster;
-        marks = Object.fromEntries(roster.map((r) => [r.id, r.default]));
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getRoster,
+    onData: (d) => {
+      roster = d.roster;
+      marks = Object.fromEntries(roster.map((r) => [r.id, r.default]));
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
   const setMark = (id: string, v: string) => { marks = { ...marks, [id]: v }; saved = false; };
@@ -67,7 +66,7 @@
   const saveNote = () => { if (noteFor) notes = { ...notes, [noteFor.id]: noteText }; noteFor = null; };
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <ScreenHeader title="課堂點名" sub="2026/06/10 · 逐一標記出勤">
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
@@ -158,8 +157,8 @@
   ></textarea>
   <Button slot="footer" variant="primary" fullWidth on:click={saveNote}>儲存備註</Button>
 </Sheet>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="attendance-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:9px;">

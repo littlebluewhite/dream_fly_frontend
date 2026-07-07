@@ -19,20 +19,19 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, role, switchRole, adminNotifs, adminUnreadCount, toasts, orders } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
+  import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MAdminHomeData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getAdminHome()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getAdminHome,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: members = data?.members ?? [];
   $: today = data?.today ?? [];
@@ -54,7 +53,7 @@
   ];
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 {@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openNotif} onRole={openRole}
   greeting="營運總覽" sub={data.dateLabel + ' · 全館即時概況'} />
@@ -146,8 +145,8 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="madmin-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">

@@ -16,18 +16,17 @@
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
+  import { createLoadGate } from '$lib/load-gate';
   import { getCoachHome, type MCoachHomeData } from '$lib/mobile-admin/api';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MCoachHomeData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getCoachHome()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getCoachHome,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: coachToday = data?.coachToday ?? [];
   $: classCount = coachToday.length;
@@ -48,7 +47,7 @@
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 {@const p = data.profiles.coach}
 <HeroHeader
   role="coach"
@@ -113,8 +112,8 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="mcoach-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <SkelCard><Skeleton w="100%" h={90} r={16} /></SkelCard>

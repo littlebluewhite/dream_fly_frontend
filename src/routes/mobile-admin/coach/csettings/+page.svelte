@@ -21,18 +21,17 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, role, switchRole, session, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
+  import { createLoadGate } from '$lib/load-gate';
   import { getCsettings, type CsettingsData } from '$lib/mobile-admin/api';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CsettingsData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getCsettings()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getCsettings,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: cInfo = data ? data.coaches.find((c) => c.name === '林雅婷') || data.coaches[0] : undefined;
 
@@ -68,7 +67,7 @@
   }
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 {@const p = data.profiles.coach}
 <HeroHeader role="coach" {p} unread={0} onBell={() => {}} {onRole} greeting="個人設定" sub="個人資料、通知偏好與帳號安全" />
 
@@ -217,8 +216,8 @@
     </Button>
   </svelte:fragment>
 </Sheet>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="csettings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <SkelCard><Skeleton w="100%" h={100} r={16} /></SkelCard>

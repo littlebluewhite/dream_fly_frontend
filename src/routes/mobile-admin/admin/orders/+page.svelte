@@ -5,7 +5,7 @@
    * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $orders store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 markOrderPaid
    * 等 mutation,refreshOps() 供 ErrorState 重試(不受守衛短路)。 */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -17,26 +17,17 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, adminNotifs, adminUnreadCount, toasts, orders, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { ORDER_STATUS, fmtNT } from '$lib/mobile-admin/data';
+  import { createLoadGate } from '$lib/load-gate';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  let alive = true;
-  onDestroy(() => { alive = false; });
-
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
-  function load() {
-    phase = 'loading';
-    hydrateOps()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
-  onMount(load);
-  function refresh() {
-    phase = 'loading';
-    refreshOps()
-      .then(() => { if (alive) phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
+  const gate = createLoadGate({
+    fetch: hydrateOps,
+    refresh: refreshOps
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   let tab = 'all';
   let q = '';
@@ -64,7 +55,7 @@
     .filter((o) => !q || (o.id + o.member + o.item).toLowerCase().includes(q.toLowerCase()));
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <ScreenHeader title="訂單與金流" sub="報名繳費紀錄">
   <div slot="right">
     <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
@@ -120,8 +111,8 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="orders-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
