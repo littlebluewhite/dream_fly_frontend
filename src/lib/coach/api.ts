@@ -92,7 +92,7 @@ function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
 		bio: coach.bio ?? '',
 		chips: coach.certifications,
 		registered: coach.created_at.slice(0, 10),
-		lastLogin: user.last_login ? user.last_login.slice(0, 16).replace('T', ' ') : ''
+		lastLogin: user.last_login ? isoDateTime(user.last_login) : ''
 	};
 }
 

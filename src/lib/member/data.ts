@@ -7,6 +7,7 @@
 /** Semantic tone shared with the Badge / ProgressBar primitives. */
 import type { Tone } from '$lib/api/wire';
 export type { Tone } from '$lib/api/wire';
+// compat shim:目前無下游消費者;保留本 facade 的 Tone 匯出路徑(見 ADR 0007)
 
 /* ---- single-source domain seed ----
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
