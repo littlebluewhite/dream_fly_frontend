@@ -1,28 +1,40 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/svelte';
+import { render, fireEvent, screen } from '@testing-library/svelte';
 import CsettingsPage from './+page.svelte';
-import { getCsettings } from '$lib/mobile-admin/api';
-import type { Profile, Coach } from '$lib/mobile-admin/data';
+import { getCsettings, saveSettings, CoachNotFoundError } from '$lib/mobile-admin/api';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getCsettings: vi.fn() }));
+vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
+	return { ...actual, getCsettings: vi.fn(), saveSettings: vi.fn() };
+});
+vi.mock('$lib/stores/authStore', () => ({ authStore: { logout: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-const FIXTURE_PROFILES: Record<'admin' | 'coach', Profile> = {
-	admin: { name: '測試管理員', initial: '測', role: '測試角色', desc: '', color: '#000', id: 'T-1' },
-	coach: { name: '林雅婷', initial: '林', role: '測試教練職稱', desc: '', color: '#000', id: 'T-2' }
+// 與桌面 PROFILES.coach mock(林雅婷)刻意不同的真實教練 fixture，證明頁面讀
+// getCsettings() 的真 Coach 物件，而非殘留的 mock 對照。
+const FIXTURE_COACH = {
+	name: '測試教練',
+	display: '測教練',
+	full: '測試教練 教練',
+	en: '',
+	initial: '測',
+	role: '測試特級教練',
+	id: 'coach-1',
+	email: 'test.coach@dreamfly.tw',
+	phone: '0900-000-000',
+	gender: '',
+	birth: '',
+	emergency: '',
+	bio: '測試簡介',
+	chips: ['測試專長'],
+	registered: '2020-01-01',
+	lastLogin: ''
 };
-// 與 seed(COACHES 裡的林雅婷:年資/學員/班級/獲獎皆不同)相異的 fixture,證明
-// cInfo 讀 payload 而非殘留的 COACHES 直接 import。
-const FIXTURE_COACHES: Coach[] = [
-	{
-		id: 'zz1', name: '林雅婷', initial: '林', color: '#000', title: '測試特級教練',
-		years: 42, students: 999, classes: 111, awards: 77, phone: '0900-000-000',
-		tags: ['測試專長'], status: 'online'
-	} as unknown as Coach
-];
 
 beforeEach(() => {
 	vi.mocked(getCsettings).mockReset();
-	vi.mocked(getCsettings).mockResolvedValue({ profiles: FIXTURE_PROFILES, coaches: FIXTURE_COACHES });
+	vi.mocked(getCsettings).mockResolvedValue({ coach: FIXTURE_COACH });
+	vi.mocked(saveSettings).mockReset();
 });
 
 describe('mobile-admin/coach/csettings 頁', () => {
@@ -32,11 +44,42 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		expect(container.querySelector('[data-testid="csettings-skeleton"]')).not.toBeNull();
 	});
 
-	it('async 載入後顯示 payload 的教練資料(相異 fixture)', async () => {
-		const { findByText, getAllByText } = render(CsettingsPage);
-		expect(await findByText('測試特級教練')).toBeInTheDocument();
-		expect(getAllByText('42 年').length).toBeGreaterThan(0);
-		expect(getAllByText('999 位').length).toBeGreaterThan(0);
+	it('async 載入後顯示真實教練資料(相異 fixture，非殘留 PROFILES.coach/COACHES mock)', async () => {
+		const { findAllByText, findByText } = render(CsettingsPage);
+		// 「測試特級教練」同時出現在 HeroHeader(p.role) 與個人資料卡自己的職稱列。
+		expect((await findAllByText('測試特級教練')).length).toBeGreaterThan(0);
+		expect(await findByText('測試教練 教練')).toBeInTheDocument();
+	});
+
+	it('姓名/聯絡電話欄位帶入真值，職稱/Email 唯讀顯示(契約不支援寫入)', async () => {
+		render(CsettingsPage);
+		await screen.findByDisplayValue('測試教練');
+		expect(screen.getByDisplayValue('測試教練')).not.toBeDisabled();
+		expect(screen.getByDisplayValue('0900-000-000')).not.toBeDisabled();
+		expect(screen.getByDisplayValue('測試特級教練')).toBeDisabled();
+		expect(screen.getByDisplayValue('test.coach@dreamfly.tw')).toBeDisabled();
+	});
+
+	it('儲存變更真打 PATCH /users/me(saveSettings)，只送 name/phone', async () => {
+		vi.mocked(saveSettings).mockResolvedValue({ coach: { ...FIXTURE_COACH, name: '改名教練', full: '改名教練 教練' } });
+		const { findByText, getByText } = render(CsettingsPage);
+		await screen.findByDisplayValue('測試教練');
+
+		const nameInput = screen.getByDisplayValue('測試教練');
+		await fireEvent.input(nameInput, { target: { value: '改名教練' } });
+		await fireEvent.click(getByText('儲存變更'));
+
+		expect(saveSettings).toHaveBeenCalledWith({ name: '改名教練', phone: '0900-000-000' });
+		expect(await findByText('改名教練 教練')).toBeInTheDocument();
+	});
+
+	it('登出真呼叫 authStore.logout()（不再是 localStorage 旗標清除）', async () => {
+		const { getByText } = render(CsettingsPage);
+		await screen.findByDisplayValue('測試教練');
+
+		const { authStore } = await import('$lib/stores/authStore');
+		await fireEvent.click(getByText('登出'));
+		expect(authStore.logout).toHaveBeenCalled();
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
@@ -45,9 +88,9 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
-	it('coaches 空集合(找不到本人資料)不當機,顯示 EmptyState 而非拋錯', async () => {
-		vi.mocked(getCsettings).mockResolvedValue({ profiles: FIXTURE_PROFILES, coaches: [] });
+	it('找不到教練檔案(CoachNotFoundError)顯示對應錯誤，不當機', async () => {
+		vi.mocked(getCsettings).mockRejectedValue(new CoachNotFoundError());
 		const { findByText } = render(CsettingsPage);
-		expect(await findByText('找不到教練資料')).toBeInTheDocument();
+		expect(await findByText('此帳號未綁定教練檔案')).toBeInTheDocument();
 	});
 });

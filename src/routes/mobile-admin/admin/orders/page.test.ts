@@ -9,7 +9,7 @@ import type { OrderRow } from '$lib/mobile-admin/data';
 vi.mock('$lib/mobile-admin/api', () => ({ getOpsCollections: vi.fn() }));
 
 const mkOrder = (over: Partial<OrderRow>): OrderRow => ({
-	id: 'DF-X', member: 'X', initial: 'X', color: '#000', item: '測試項目', amount: 1000,
+	id: 'DF-X', orderId: 'uuid-x', member: 'X', initial: 'X', color: '#000', item: '測試項目', amount: 1000,
 	status: 'paid', method: '信用卡', date: '2026/01/01', invoice: '', discount: '',
 	handler: '', campus: '', tax: 0, net: 1000, paidAt: '2026/01/01', taxId: '—', ...over
 });

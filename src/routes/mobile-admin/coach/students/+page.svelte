@@ -1,54 +1,61 @@
 <script lang="ts">
   /* 教練 · 我的學員。port coach.jsx CoachStudentsScreen (165-210)。
-   * 點學員卡 → overlay.sheet('studentSkills',{student})；onBell → overlay.sheet('notif')。
+   * onBell → overlay.sheet('notif')。
    *
-   * 資料改由 getStudents()(mock-API 接縫)非同步載入,三態閘門(loading/error/
-   * ready);members/skills 為本頁本地一次性快照。 */
+   * Task 20：改讀真 getStudents()(coach/api.ts，Task 19：GET /coaches/me/students，
+   * 只回這位教練名下的學員)，取代舊 mock 對「全體 MEMBERS 用姓名字串比對 coach
+   * 欄位」的克難篩選——真資料本身已是「我的學員」，不需要再篩一次。真實 Student
+   * 型別(coach/data.ts)沒有 age/parent/phone 欄位，也沒有可編輯的多技能評量表
+   * （後端只有單一 skill/pct，且為 P2 佔位值），故：
+   *  1. 卡片頭部拿掉「{age} 歲」（無對應欄位）。
+   *  2. 舊「更新評量」(可調整技能分數) 與「聯絡家長」(無 phone 可打) 兩個動作—
+   *     前者純本地假調整、後者無資料可用 — 一併移除，換成桌面 StudentCard 真正
+   *     提供的兩個動作：寫評語(POST /report-cards)、發證書(POST /certificates)
+   *     （Task 13，integration-contract.md §3.22）。原本的 StudentSkillsSheet 改名
+   *     為 StudentActionSheet，改渲染這兩個真表單。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
-  import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
-  import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
-  import Panel from '$lib/mobile-admin/components/Panel.svelte';
+  import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
-  import { getStudents } from '$lib/mobile-admin/api';
-  import type { MemberRow, Skill } from '$lib/mobile-admin/data';
+  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
+  import { getStudents, type MStudentsData } from '$lib/mobile-admin/api';
+  import { LEVEL_TINT } from '$lib/coach/data';
+  import type { Student } from '$lib/coach/data';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
-  let members: MemberRow[] = [];
-  let skills: Record<string, Skill[]> = {};
+  let students: Student[] = [];
   let q = '';
 
   function load() {
     phase = 'loading';
     getStudents()
-      .then((d) => { members = d.members; skills = d.skills; phase = 'ready'; })
+      .then((d: MStudentsData) => { students = d.students; phase = 'ready'; })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
 
-  $: mine = members.filter((m) => m.coach === '林雅婷');
-
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
-  const openSkills = (student: MemberRow) => overlay.sheet('studentSkills', { student });
-  const skillsOf = (m: MemberRow): Skill[] => skills[m.id] || [['基本動作', m.att], ['體能', Math.max(60, m.att - 8)]];
+  const openReportCard = (student: Student) => overlay.sheet('studentAction', { student, mode: 'reportCard' });
+  const openCertificate = (student: Student) => overlay.sheet('studentAction', { student, mode: 'certificate' });
 
-  $: list = q ? mine.filter((m) => (m.name + m.id + m.course).toLowerCase().includes(q.toLowerCase())) : mine;
+  $: list = q
+    ? students.filter((m) => (m.name + m.cls + m.skill).toLowerCase().includes(q.toLowerCase()))
+    : students;
 </script>
 
 {#if phase === 'ready'}
-<ScreenHeader title="我的學員" sub={mine.length + ' 位 · 競技啦啦隊 / 競技體操'}>
+<ScreenHeader title="我的學員" sub={students.length + ' 位學員'}>
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
 
 <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border);">
-  <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、編號…" />
+  <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、班級…" />
 </div>
 
 <div class="df-scroll df-view">
@@ -56,39 +63,36 @@
     {#if list.length === 0}
       <MEmpty icon="search-x" title="找不到符合的學員" />
     {:else}
-      {#each list as m (m.id)}
+      {#each list as m (m.user_id)}
+        {@const tint = LEVEL_TINT[m.level]}
         <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
-          <button
-            on:click={() => openSkills(m)}
-            class="df-tapscale"
-            style="display:flex; align-items:center; gap:12px; margin-bottom:13px; width:100%; border:none; background:none; padding:0; cursor:pointer; text-align:left;"
-          >
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:13px;">
             <Avatar name={m.initial} size="md" color={m.color} />
             <div style="flex:1; min-width:0;">
               <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{m.name}</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px;">{m.age} 歲 · {m.course}</div>
+              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px;">{m.cls}</div>
             </div>
-            <StatusBadgeM s={m.status} />
-          </button>
-          <div style="display:flex; flex-direction:column; gap:9px; margin-bottom:13px;">
-            {#each skillsOf(m) as [sk, v] (sk)}
-              <div>
-                <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px;"><span style="color:var(--df-text-light);">{sk}熟練度</span><span style="font-weight:700; color:var(--df-text-dark);">{v}%</span></div>
-                <MiniBar value={v} tone={v >= 85 ? 'success' : 'primary'} height={6} />
-              </div>
-            {/each}
+            <span style="background:{tint.bg}; color:{tint.fg}; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; flex:none;">{m.level}</span>
+          </div>
+          <div style="margin-bottom:13px;">
+            <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px;"><span style="color:var(--df-text-light);">{m.skill}熟練度</span><span style="font-weight:700; color:var(--df-text-dark);">{m.pct}%</span></div>
+            <MiniBar value={m.pct} tone={m.pct >= 85 ? 'success' : 'primary'} height={6} />
+          </div>
+          <div style="display:flex; align-items:center; gap:7px; margin-bottom:13px; font-size:12px; color:var(--df-text-light);">
+            <Icon name="calendar-check" size={14} color={m.att < 75 ? 'var(--df-error)' : 'var(--df-success)'} />
+            出席率 <span style="font-weight:700; color:{m.att < 75 ? 'var(--df-error)' : 'var(--df-text-dark)'};">{m.att}%</span>
           </div>
           <div style="display:flex; gap:8px;">
             <button
-              on:click={() => openSkills(m)}
+              on:click={() => openReportCard(m)}
               class="df-tapscale"
               style="flex:1; height:38px; border-radius:10px; border:1.5px solid var(--df-border); background:#fff; color:var(--df-text-dark); font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;"
-            ><Icon name="trending-up" size={15} color="var(--df-primary)" />更新評量</button>
+            ><Icon name="clipboard-list" size={15} color="var(--df-primary)" />寫評語</button>
             <button
-              on:click={() => toasts.notify('info', '聯絡家長', m.parent + ' · ' + m.phone)}
+              on:click={() => openCertificate(m)}
               class="df-tapscale"
               style="flex:1; height:38px; border-radius:10px; border:1.5px solid var(--df-border); background:#fff; color:var(--df-text-dark); font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;"
-            ><Icon name="message-circle" size={15} color="var(--df-primary)" />聯絡家長</button>
+            ><Icon name="award" size={15} color="var(--df-primary)" />發證書</button>
           </div>
         </div>
       {/each}

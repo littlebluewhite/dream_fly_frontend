@@ -1,13 +1,21 @@
 <script lang="ts">
   /* 教練 · 個人設定。port coach.jsx CoachSettingsScreen (276-401)。
    * SettingRow 內聯（kit 未提供）；CTag selected 內聯選取樣式。
-   * onRole → overlay.sheet('role')；notify → toasts.notify；logout 清 localStorage 導向登入。
+   * onRole → overlay.sheet('role')；notify → toasts.notify；logout 清真 authStore session。
    *
-   * 資料改由 getCsettings()(mock-API 接縫)非同步載入,三態閘門(loading/error/
-   * ready)。cInfo 在 payload 的 coaches 裡找不到本人(含空集合)時顯示 EmptyState,
-   * 不當機(既有 `|| COACHES[0]` fallback 在空陣列時仍是 undefined)。 */
+   * Task 20：改讀真 getCsettings()(coach/api.ts getSettings()，GET /users/me +
+   * GET /coaches)，取代舊 mock 對 PROFILES.coach + COACHES.find(name==='林雅婷')
+   * 的拼湊方式——真實 Coach 型別(coach/data.ts)沒有 years/students/classes/awards
+   * 統計欄位(舊 $lib/domain/coaches 型別才有，行動版專屬豐富化、後端從未提供)，
+   * 改用桌面 coach/settings 頁自己在這個位置的固定假統計(授課時數/學員數/年資，
+   * 3 格，同該頁「Stats — sensible values derived from data / mock」的決定，不
+   * 新發明第 4 格)。姓名/聯絡電話改真送 PATCH /users/me(saveSettings)；職稱/
+   * Email/簡介維持頁面本地編輯、不送出(契約不支援寫入這些欄位，同桌面 ProfileTab
+   * 的決定)。通知偏好/帳號安全(密碼/2FA/登入裝置)桌面自己在這兩個位置也是全部
+   * mock(NotifTab/SecurityTab 皆無對應後端)，鏡射同一決定原樣保留。
+   * cInfo 找不到本人資料(coach 為 null，通常是 CoachNotFoundError)時顯示
+   * EmptyState，不當機。 */
   import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -19,22 +27,53 @@
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
-  import { overlay, role, switchRole, session, toasts } from '$lib/mobile-admin/stores';
+  import { overlay, role, switchRole, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
-  import { getCsettings, type CsettingsData } from '$lib/mobile-admin/api';
+  import { getCsettings, saveSettings, CoachNotFoundError, type CsettingsData } from '$lib/mobile-admin/api';
+  import { authStore } from '$lib/stores/authStore';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CsettingsData | null = null;
+  let errorTitle = '載入失敗';
+  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
   function load() {
     phase = 'loading';
     getCsettings()
       .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
+      .catch((e) => {
+        if (e instanceof CoachNotFoundError || e?.name === 'CoachNotFoundError') {
+          errorTitle = '此帳號未綁定教練檔案';
+          errorBody = '請聯繫系統管理員協助設定教練檔案。';
+        } else {
+          errorTitle = '載入失敗';
+          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+        }
+        phase = 'error';
+      });
   }
   onMount(load);
 
-  $: cInfo = data ? data.coaches.find((c) => c.name === '林雅婷') || data.coaches[0] : undefined;
+  $: cInfo = data?.coach;
+
+  // 編輯欄位：姓名/電話有真實後端 PATCH /users/me 欄位；職稱/Email/簡介後端不支援
+  // 寫入，維持本地編輯、不送出(同桌面 ProfileTab 的決定)——但每次 cInfo 變動(載入
+  // 完成)都要重新帶入真值，不能只在宣告時取一次快照。
+  let name = '';
+  let phone = '';
+  let bio = '';
+  let saving = false;
+  $: if (cInfo) {
+    name = cInfo.name;
+    phone = cInfo.phone;
+    bio = cInfo.bio;
+  }
+
+  const STATS: [string, string][] = [
+    ['312 hr', '授課時數'],
+    ['36 人', '學員數'],
+    ['6 年', '年資']
+  ];
 
   let notif = { parentMsg: true, classRemind: true, attUndone: true, lowAtt: true, weekly: false, sms: false };
   let twoFA = true;
@@ -56,20 +95,28 @@
   ];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
-  function logout() {
-    if (browser) {
-      try {
-        localStorage.removeItem('df_madmin_session');
-        localStorage.removeItem('df_madmin_role');
-      } catch (_) {}
+
+  async function save() {
+    saving = true;
+    try {
+      const saved = await saveSettings({ name, phone });
+      data = { coach: saved.coach };
+      toasts.notify('success', '已儲存', '個人設定已更新。');
+    } catch {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    } finally {
+      saving = false;
     }
-    session.set(false);
+  }
+
+  async function logout() {
+    await authStore.logout();
     goto('/mobile-admin/login');
   }
 </script>
 
 {#if phase === 'ready' && data}
-{@const p = data.profiles.coach}
+{@const p = cInfo ? { name: cInfo.name, initial: cInfo.initial, role: cInfo.role, desc: '', color: 'var(--df-primary)', id: cInfo.id } : { name: '', initial: '?', role: '', desc: '', color: 'var(--df-primary)', id: '' }}
 <HeroHeader role="coach" {p} unread={0} onBell={() => {}} {onRole} greeting="個人設定" sub="個人資料、通知偏好與帳號安全" />
 
 <div class="df-scroll df-view">
@@ -81,12 +128,12 @@
     <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
       <div style="display:flex; align-items:center; gap:13px;">
         <div style="position:relative; flex:none;">
-          <Avatar name={cInfo.initial} size="lg" color={cInfo.color} />
+          <Avatar name={cInfo.initial} size="lg" color="var(--df-primary)" />
           <span style="position:absolute; right:0; bottom:0; width:14px; height:14px; border-radius:999px; background:var(--df-success); border:2.5px solid #fff;"></span>
         </div>
         <div style="flex:1; min-width:0;">
-          <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{cInfo.name} 教練</span></div>
-          <div style="font-size:12px; color:var(--df-primary); margin-top:2px;">{cInfo.title}</div>
+          <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{cInfo.full}</span></div>
+          <div style="font-size:12px; color:var(--df-primary); margin-top:2px;">{cInfo.role}</div>
         </div>
         <button
           on:click={() => toasts.notify('info', '更換照片', '請上傳正方形大頭照。')}
@@ -94,8 +141,8 @@
           style="width:40px; height:40px; border-radius:11px; border:1.5px solid var(--df-border); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"
         ><Icon name="camera" size={18} color="var(--df-text-light)" /></button>
       </div>
-      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:15px; border-top:1px solid var(--df-border); padding-top:14px;">
-        {#each [[cInfo.years + ' 年', '年資'], [cInfo.students + ' 位', '學員'], [cInfo.classes + ' 班', '班級'], [cInfo.awards + ' 座', '獲獎']] as [v, l] (l)}
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:15px; border-top:1px solid var(--df-border); padding-top:14px;">
+        {#each STATS as [v, l] (l)}
           <div style="text-align:center;">
             <div style="font-size:16.5px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{v}</div>
             <div style="font-size:11px; color:var(--df-text-light); margin-top:1px;">{l}</div>
@@ -107,20 +154,30 @@
     <!-- contact info -->
     <Panel title="基本資料" pad={16}>
       <div style="display:flex; flex-direction:column; gap:12px;">
-        {#each [['姓名', cInfo.name], ['職稱', cInfo.title], ['聯絡電話', cInfo.phone], ['Email', 'ya-ting.lin@dreamfly.tw']] as [l, v] (l)}
-          <div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">{l}</div>
-            <input value={v} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
-          </div>
-        {/each}
+        <div>
+          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">姓名</div>
+          <input bind:value={name} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">職稱</div>
+          <input value={cInfo.role} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
+        </div>
+        <div>
+          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
+          <input bind:value={phone} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
+        </div>
+        <div>
+          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">Email</div>
+          <input value={cInfo.email} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
+        </div>
         <div>
           <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">教練簡介</div>
-          <textarea rows={3} style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;">專注於競技啦啦隊與競技體操訓練，重視動作安全與循序漸進。帶領選手班備賽全國錦標賽。</textarea>
+          <textarea bind:value={bio} rows={3} style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;"></textarea>
         </div>
         <div>
           <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:7px;">專長領域</div>
           <div style="display:flex; gap:7px; flex-wrap:wrap;">
-            {#each cInfo.tags as t (t)}
+            {#each cInfo.chips as t (t)}
               <span style="display:inline-flex; align-items:center; padding:4px 10px; border-radius:var(--df-radius-sm); background:var(--df-primary-bg); border:1px solid var(--df-primary); font-size:var(--df-text-xs); font-weight:var(--df-weight-medium); color:var(--df-primary); white-space:nowrap;">{t}</span>
             {/each}
           </div>
@@ -185,8 +242,8 @@
       {/each}
     </Panel>
 
-    <Button variant="primary" fullWidth on:click={() => toasts.notify('success', '已儲存', '個人設定已更新。')}>
-      <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />儲存變更</span>
+    <Button variant="primary" fullWidth disabled={saving} on:click={save}>
+      <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />{saving ? '儲存中…' : '儲存變更'}</span>
     </Button>
     <button
       on:click={logout}
@@ -218,7 +275,7 @@
   </svelte:fragment>
 </Sheet>
 {:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="csettings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <SkelCard><Skeleton w="100%" h={100} r={16} /></SkelCard>

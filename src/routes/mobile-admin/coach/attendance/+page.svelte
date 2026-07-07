@@ -2,8 +2,14 @@
   /* 教練 · 課堂點名。port coach.jsx AttendanceScreen (63-162) + Segmented (70-79)。
    * onBell → overlay.sheet('notif')；notify → toasts.notify。備註用 kit Sheet（本地狀態）。
    *
-   * 資料改由 getRoster()(mock-API 接縫)非同步載入,三態閘門(loading/error/ready);
-   * `roster` 是本頁本地一次性快照,marks 的初始值待載入完成後才依 roster 建立。 */
+   * Task 20：改讀真 getAttendance()(coach/api.ts，Task 2：GET /sessions/today ×
+   * 各場次 GET /sessions/{id}/roster)，取代舊 mock 只有單一硬編班級(k1)的限制——
+   * 「切換班級」FilterChips 原本就設計成可切換多堂課，只是 mock 只給一筆資料而形同
+   * 虛設(見舊版註解)；接上真資料後如實列出「今日全部場次」，切換班級恢復多選功能。
+   * 「儲存點名」改真打 PUT /sessions/{id}/attendance(saveAttendance)，成功後以
+   * 伺服器回傳的名冊覆寫本地 marks(以伺服器為準，同 coach/api.ts 的既有理由)。
+   * 「備註」維持本地草稿(後端無對應欄位，同既有行為，不宣稱已儲存到伺服器)。
+   * 部分場次名冊載入失敗(failedClasses)以 toast 提示，其餘場次照常可點名。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -13,10 +19,11 @@
   import FilterChips from '$lib/mobile-admin/components/FilterChips.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
+  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
-  import { getRoster } from '$lib/mobile-admin/api';
+  import { getAttendance, saveAttendance, type MAttendanceClass } from '$lib/mobile-admin/api';
   import type { RosterEntry } from '$lib/mobile-admin/data';
 
   const ATT_STATES = [
@@ -24,26 +31,39 @@
     { key: 'late', label: '遲到', color: 'var(--df-warning)' },
     { key: 'absent', label: '缺席', color: 'var(--df-error)' }
   ];
-  // The mock only carries ROSTER for this one class, so offer just it. The
-  // prototype's second (k6) chip was non-functional — selecting it kept the
-  // 進階班 roster on screen, letting a coach mark/save the wrong class.
-  const classOpts = [{ key: 'k1', label: '19:00 競技啦啦隊 進階班' }];
+
+  /* 本地牆鐘日期(YYYY/MM/DD)，非 toISOString()——後者取 UTC 日期，在 Asia/Taipei
+   * (UTC+8)的凌晨會早報一天(同 CertificateDialog.svelte 的 today() 慣例)。 */
+  function todayLabel(): string {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}/${mm}/${dd}`;
+  }
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
-  let roster: RosterEntry[] = [];
-  let cls = 'k1';
+  let classesToday: MAttendanceClass[] = [];
+  let cls = '';
   let marks: Record<string, string> = {};
+  let saving = false;
   let saved = false;
   let noteFor: RosterEntry | null = null;
   let noteText = '';
   let notes: Record<string, string> = {};
 
+  const marksFor = (roster: RosterEntry[]): Record<string, string> =>
+    Object.fromEntries(roster.map((r) => [r.id, r.default]));
+
   function load() {
     phase = 'loading';
-    getRoster()
+    getAttendance()
       .then((d) => {
-        roster = d.roster;
-        marks = Object.fromEntries(roster.map((r) => [r.id, r.default]));
+        classesToday = d.classes;
+        cls = classesToday[0]?.id ?? '';
+        marks = marksFor(classesToday[0]?.roster ?? []);
+        if (d.failedClasses.length) {
+          toasts.notify('warning', '部分場次名冊載入失敗', d.failedClasses.join('、') + ' 暫時無法點名，請稍後重試。');
+        }
         phase = 'ready';
       })
       .catch(() => { phase = 'error'; });
@@ -51,6 +71,17 @@
   onMount(load);
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
+
+  $: current = classesToday.find((c) => c.id === cls) ?? null;
+  $: roster = current?.roster ?? [];
+  $: classOpts = classesToday.map((c) => ({ key: c.id, label: c.label }));
+
+  function selectClass(id: string) {
+    cls = id;
+    saved = false;
+    marks = marksFor(classesToday.find((c) => c.id === id)?.roster ?? []);
+  }
+
   const setMark = (id: string, v: string) => { marks = { ...marks, [id]: v }; saved = false; };
 
   $: tally = roster.reduce<Record<string, number>>((a, r) => { a[marks[r.id]] = (a[marks[r.id]] || 0) + 1; return a; }, {});
@@ -62,18 +93,37 @@
   ];
 
   const markAllPresent = () => { marks = Object.fromEntries(roster.map((r) => [r.id, r.default === 'leave' ? 'leave' : 'present'])); saved = false; };
-  const onSave = () => { saved = true; toasts.notify('success', '點名已儲存', '競技啦啦隊 進階班 · ' + roster.length + ' 位學員出勤已記錄。'); };
+
+  async function onSave() {
+    if (!current || saving) return;
+    const target = current;
+    saving = true;
+    try {
+      const rows = await saveAttendance(target.id, marks as Record<string, RosterEntry['default']>);
+      classesToday = classesToday.map((c) => (c.id === target.id ? { ...c, roster: rows } : c));
+      marks = marksFor(rows);
+      saved = true;
+      toasts.notify('success', '點名已儲存', target.label + ' · ' + rows.length + ' 位學員出勤已記錄。');
+    } catch {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    } finally {
+      saving = false;
+    }
+  }
   const openNote = (r: RosterEntry) => { noteFor = r; noteText = notes[r.id] || ''; };
   const saveNote = () => { if (noteFor) notes = { ...notes, [noteFor.id]: noteText }; noteFor = null; };
 </script>
 
 {#if phase === 'ready'}
-<ScreenHeader title="課堂點名" sub="2026/06/10 · 逐一標記出勤">
+<ScreenHeader title="課堂點名" sub={todayLabel() + ' · 逐一標記出勤'}>
   <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
 </ScreenHeader>
 
+{#if classesToday.length === 0}
+  <MEmpty icon="calendar-x" title="今日尚無場次" body="今天沒有排定的課程，暫時不需要點名。" />
+{:else}
 <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border);">
-  <FilterChips items={classOpts} value={cls} onChange={(k) => (cls = k)} />
+  <FilterChips items={classOpts} value={cls} onChange={selectClass} />
 </div>
 
 <div class="df-scroll df-view">
@@ -95,7 +145,7 @@
     ><Icon name="check-check" size={16} color="var(--df-primary)" />全部標記出席</button>
 
     <!-- roster -->
-    <Panel title="學員出勤" sub={roster.length + ' 位 · 競技啦啦隊 進階班'}>
+    <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current?.label ?? '')}>
       {#each roster as r, i (r.id)}
         {@const onLeave = marks[r.id] === 'leave'}
         <div style="padding:11px 14px; border-bottom:{i < roster.length - 1 ? '1px solid var(--df-border)' : 'none'};">
@@ -141,10 +191,11 @@
 <div style="flex:none; padding:12px 16px; background:rgba(255,255,255,0.96); backdrop-filter:blur(10px); border-top:1px solid var(--df-border); z-index:45;">
   <button
     on:click={onSave}
+    disabled={saving}
     class="df-tapscale"
     style="width:100%; height:50px; border-radius:13px; border:none; background:{saved ? 'var(--df-success)' : 'var(--df-primary)'}; color:#fff; font-size:15.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-family:var(--df-font-body);"
   >
-    <Icon name={saved ? 'check-circle' : 'check'} size={19} color="#fff" />{saved ? '點名已儲存' : '儲存點名'}
+    <Icon name={saved ? 'check-circle' : 'check'} size={19} color="#fff" />{saving ? '儲存中…' : saved ? '點名已儲存' : '儲存點名'}
   </button>
 </div>
 
@@ -158,6 +209,7 @@
   ></textarea>
   <Button slot="footer" variant="primary" fullWidth on:click={saveNote}>儲存備註</Button>
 </Sheet>
+{/if}
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}

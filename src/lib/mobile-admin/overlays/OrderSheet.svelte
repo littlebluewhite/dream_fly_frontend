@@ -1,15 +1,32 @@
 <script lang="ts">
-  /* 訂單明細 sheet。admin.jsx OrderSheet (346)。 */
+  /* 訂單明細 sheet。admin.jsx OrderSheet (346)。
+   * Task 20：標記已付款改真打 PATCH /orders/{id}/status(updateOrderStatus，
+   * admin/api.ts Task 8 piece 2)——用 orderId(真實後端 UUID，非顯示用的 order_
+   * number)呼叫；成功後才用 markOrderPaid() 把確認後的狀態同步進 $orders store
+   * (該函式的本地 store 機制本身沒問題，問題只在於它先前完全沒有真的打 API 就
+   * 直接呼叫——同 desktop admin/orders/+page.svelte 的 changeStatus() 慣例)。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
   import { ORDER_STATUS, fmtNT, type OrderRow } from '$lib/mobile-admin/data';
+  import { updateOrderStatus } from '$lib/mobile-admin/api';
+  import { ApiError } from '$lib/api/client';
 
   export let onClose: () => void;
   export let o: OrderRow | null = null;
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+
+  let saving = false;
+
+  function statusErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 409) return '訂單狀態已變更，請重新整理後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
 
   $: [tone, label] = (o ? ORDER_STATUS[o.status] : ['neutral', '-']) as [Tone, string];
   $: rows = o
@@ -39,11 +56,20 @@
     toasts.notify('info', '已發送催繳', o.member + ' 將收到繳費提醒。');
     onClose();
   }
-  function markPaid() {
-    if (!o) return;
-    markOrderPaid(o.id);
-    toasts.notify('success', '已標記收款', o.id + ' · ' + fmtNT(o.amount) + ' 已入帳。');
-    onClose();
+  async function markPaid() {
+    if (!o || saving) return;
+    const target = o;
+    saving = true;
+    try {
+      await updateOrderStatus(target.orderId, 'paid');
+      markOrderPaid(target.id);
+      toasts.notify('success', '已標記收款', target.id + ' · ' + fmtNT(target.amount) + ' 已入帳。');
+      onClose();
+    } catch (e) {
+      toasts.notify('error', '標記失敗', statusErrorMessage(e));
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -78,7 +104,7 @@
         style="flex:1; height:48px; border-radius:12px; border:1.5px solid var(--df-border); background:#fff;
           color:var(--df-text-dark); font-size:14.5px; font-weight:700; cursor:pointer;"
       >發送催繳</button>
-      <Button variant="primary" on:click={markPaid} style="flex:1;">標記已付款</Button>
+      <Button variant="primary" disabled={saving} on:click={markPaid} style="flex:1;">{saving ? '處理中…' : '標記已付款'}</Button>
     {:else}
       <Button variant="secondary" fullWidth on:click={onClose}>關閉</Button>
     {/if}

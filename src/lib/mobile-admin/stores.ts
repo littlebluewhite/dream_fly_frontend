@@ -5,13 +5,17 @@
  * routes, role + tab are URLs but push-screens + sheets are overlay state; the
  * live collections, notifs and toasts are shared stores here. Factories are
  * exported for isolated test instances; the app uses the singletons.
- * Self-contained (does NOT re-export from the desktop admin). Mock-only. */
+ *
+ * Task 20：members/classes/coaches/orders/messages 現由 $lib/mobile-admin/api
+ * 的 getOpsCollections()/getMessages() 供給真資料(該檔再往下委派桌面 admin/coach
+ * seams)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
+ * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
 
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import type { Role } from './nav';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
-import { getOpsCollections, getMessages } from './api';
+import { getOpsCollections, getMessages, markRead } from './api';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 export interface OverlayEntry {
@@ -148,10 +152,14 @@ export function refreshOps(): Promise<void> {
 export const messages = writable<MessageRow[]>(MESSAGES.map((m) => ({ ...m })));
 /** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
  *  (同 ops 集合的 save* / markOrderPaid — mutation 即宣告水合真相,防止首次水合
- *  覆寫)。 */
+ *  覆寫)。Task 20：本地立即翻已讀(樂觀更新，同既有 UX)之餘，一併 best-effort 打真
+ *  PATCH /conversations/{id}/read(markRead，coach/api.ts)——已讀回條屬於「最終
+ *  一致即可」的次要狀態，失敗不影響本地已讀顯示，也不阻塞使用者操作，故 fire-
+ *  and-forget、不 await、吞掉錯誤(id 即 getMessages() 映射出的 conversation id)。 */
 export function markMessageRead(id: string) {
 	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
 	messagesHydrated.set(true);
+	void markRead(id).catch(() => {});
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 
@@ -177,9 +185,15 @@ export function refreshMessages(): Promise<void> {
 	});
 }
 
-/* ---------- Role + demo auth session ---------- */
+/* ---------- Role (current section, synced from the URL by +layout.svelte) ----------
+ * Task 20: the demo `session` writable is gone (real login state lives in
+ * authStore; nothing ever read `$session` reactively — it was write-only, so
+ * removing it is a straight orphan cleanup, not a behaviour change). `role` is
+ * no longer the security-relevant bit either (the layout guard checks the
+ * real authStore roles against the URL's role segment) — it survives purely
+ * as the "which section am I looking at" display value the 更多/設定頁 profile
+ * chip and RoleSheet read. */
 export const role = writable<Role>('admin');
-export const session = writable(false);
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);
@@ -188,12 +202,14 @@ export const toasts = createToasts(2800);
 export const adminUnreadCount = derived(adminNotifs, ($n) => adminUnread($n));
 export const coachUnreadCount = derived(coachNotifs, ($n) => adminUnread($n));
 
-/** Switch role AND persist it, so a reload / return to `/mobile-admin` restores
- *  the chosen role (the layout + index page read `df_madmin_role`). Guarded on
- *  `localStorage` so it stays SSR-safe and remains unit-testable. */
+/** Switch the displayed role. Task 20: no longer persists to localStorage
+ *  (`df_madmin_role` was one of the two demo flags removed with real auth) —
+ *  the caller always follows this with `goto(adminPath(r, …))`, and the real
+ *  destination on a fresh visit to the bare `/mobile-admin` root is decided by
+ *  `mobileAdminRootTarget()` from the account's actual staff roles, not a
+ *  remembered preference. */
 export function switchRole(r: Role) {
 	role.set(r);
-	if (typeof localStorage !== 'undefined') localStorage.setItem('df_madmin_role', r);
 }
 
 /** Mark every bell notification read, toast, then close the sheet. The open

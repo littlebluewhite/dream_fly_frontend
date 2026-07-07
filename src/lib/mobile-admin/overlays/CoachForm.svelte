@@ -1,7 +1,14 @@
 <script lang="ts">
   /* 教練 新增 / 編輯 sheet。forms.jsx CoachForm (121)。
    * 透過 OverlayHost 掛載：每次 overlay.sheet('coachForm',{c}) 都是新實例。
-   * 儲存 → onSave(rec,isNew)（未提供時退回 store saveCoach），再 onClose()。 */
+   * 儲存 → onSave(rec,isNew)（未提供時退回 store saveCoach），再 onClose()。
+   *
+   * Task 20 檢視：教練建立/編輯故意維持本地 store 寫入，未接真後端——admin/api.ts
+   * 沒有 createCoach/updateCoach（GET /coaches 只有讀端點），且這不是行動版獨有
+   * 的缺口：桌面 admin/components/CoachEditDialog.svelte 現在也是同樣的本地
+   * onSave(updated) + 固定成功 toast，同一個 P2（見 issue #4 一類的「後端無此
+   * 端點」清單）。這裡鏡射桌面既有決定，不單獨在行動版發明「誠實降級」文案，避免
+   * 兩個 surface 對同一個缺口顯示不一致的訊息。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';

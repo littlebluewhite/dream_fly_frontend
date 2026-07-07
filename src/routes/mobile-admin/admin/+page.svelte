@@ -5,9 +5,13 @@
    *
    * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
    * ready)。$orders 維持原樣直接讀共享 store(待付款橫幅,與本頁 payload 無關,
-   * store 本身已同步 seed)。Hero 日期與「在學學員/本週課堂/本月營收」KPI 原為頁面
-   * 硬編字串,一併移入 getAdminHome() payload(換後端只改 api.ts 這一層;「出席
-   * 偏低」KPI 維持由 payload 的 members 動態算出,不受影響)。 */
+   * store 本身已同步 seed)。
+   *
+   * Task 20：Hero KPI 改讀真 GET /reports/admin(admin/api.ts getReports())——同
+   * 桌面 admin/+page.svelte 的裁決 9：原 4 張 KPI 卡中「本週課堂」「出席偏低」在
+   * /reports/admin 沒有對應資料源，已隨桌面版一併移除，不留假數字；硬編 hero 日期
+   * (dateLabel)同理移除。「新增學員」快速操作改開真表單並接 createMember(同
+   * admin/members 頁的寫入邏輯)，不再是本地假寫入。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
@@ -19,7 +23,8 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { overlay, role, switchRole, adminNotifs, adminUnreadCount, toasts, orders } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
-  import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
+  import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
+  import { ApiError } from '$lib/api/client';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -34,10 +39,8 @@
   }
   onMount(load);
 
-  $: members = data?.members ?? [];
   $: today = data?.today ?? [];
   $: activity = data?.activity ?? [];
-  $: lowAtt = members.filter((m) => m.att < 80).length;
   $: pending = $orders.filter((o) => o.status === 'pending').length;
   $: liveNow = today.find((t) => t.label === '進行中');
 
@@ -47,9 +50,22 @@
   }
   const openRole = () => overlay.sheet('role', { role: $role, setRole: (r: typeof $role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 
+  function memberErrorMessage(e: unknown): string {
+    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
+  }
+  async function quickCreateMember(body: CreateMemberBody) {
+    try {
+      await createMember(body);
+    } catch (e) {
+      toasts.notify('error', '新增失敗', memberErrorMessage(e));
+      return;
+    }
+    toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
+  }
+
   const actions: [string, string, () => void][] = [
     ['plus', '新增課程', () => { go('classes'); toasts.notify('info', '新增課程', '已開啟新班級建立精靈。'); }],
-    ['user-plus', '新增學員', () => overlay.sheet('memberForm', { m: null })],
+    ['user-plus', '新增學員', () => overlay.sheet('memberForm', { m: null, onSave: (body: CreateMemberBody) => quickCreateMember(body) })],
     ['download', '匯出報表', () => toasts.notify('info', '報表匯出中', '本月營運報表將寄送至您的信箱。')]
   ];
 </script>
@@ -57,15 +73,13 @@
 {#if phase === 'ready' && data}
 {@const p = data.profiles.admin}
 <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openNotif} onRole={openRole}
-  greeting="營運總覽" sub={data.dateLabel + ' · 全館即時概況'} />
+  greeting="營運總覽" sub="全館即時概況" />
 
 <div class="df-scroll df-view">
   <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px; margin-top:-2px;">
-      <KpiCard icon="users" label="在學學員" value={data.enrolledValue} delta={data.enrolledDelta} up tint="var(--df-primary-bg)" color="var(--df-primary)" onClick={() => go('members')} />
-      <KpiCard icon="calendar-check" label="本週課堂" value={data.classesWeekValue} delta={data.classesWeekDelta} up tint="var(--df-success-bg)" color="var(--df-success)" />
-      <KpiCard icon="receipt" label="本月營收" value={data.revenueMonthValue} delta={data.revenueMonthDelta} up tint="#FFF8DB" color="var(--df-accent-dark)" />
-      <KpiCard icon="user-x" label="出席偏低" value={String(lowAtt)} delta="需關注" up={false} tint="var(--df-warning-bg)" color="var(--df-warning)" onClick={() => go('members')} />
+      <KpiCard icon="users" label="在學學員" value={data.enrolledValue} tint="var(--df-primary-bg)" color="var(--df-primary)" onClick={() => go('members')} />
+      <KpiCard icon="receipt" label="本月營收" value={data.revenueMonthValue} tint="#FFF8DB" color="var(--df-accent-dark)" />
     </div>
 
     <div style="display:flex; gap:9px;">
@@ -151,7 +165,7 @@
 {:else}
   <div class="df-scroll df-view" data-testid="madmin-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
-      {#each [0, 1, 2, 3] as i (i)}
+      {#each [0, 1] as i (i)}
         <SkelCard><Skeleton w="100%" h={90} r={14} /></SkelCard>
       {/each}
     </div>

@@ -5,7 +5,16 @@
    * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $classes store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
    * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。alive 旗標防止 unmount
-   * 後解析的 in-flight fetch 影響本頁狀態。 */
+   * 後解析的 in-flight fetch 影響本頁狀態。
+   *
+   * Task 20：新增/編輯改接真 POST /courses、PATCH /courses/{id}（復用桌面
+   * createCourse/updateCourse/mapCourse，經 $lib/mobile-admin/api 薄層）——
+   * buildCourseBody()（course-request.ts，桌面 Task 8 piece 1 既有的請求體組裝
+   * 純函式，兩邊 ClassRow/Coach 形狀相同，直接沿用不重寫）組出共用欄位；openEdit
+   * 統一收斂「班級卡編輯鈕」與「班級詳情 sheet 的編輯鈕」兩個入口，兩者都需要真正
+   * 呼叫後端，不能其中一條路徑漏接。成功後 refreshOps() 整包重抓（同桌面 members
+   * 頁的「新增/編輯後全量重抓」慣例，比起手動合併單筆映射結果更不容易漏同步
+   * classes/coaches 兩個 store 的交叉引用）。 */
   import { onMount, onDestroy } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -18,8 +27,12 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
-  import { overlay, classes, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
+  import { overlay, classes, coaches, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
+  import type { ClassRow } from '$lib/mobile-admin/data';
+  import { createCourse, updateCourse } from '$lib/mobile-admin/api';
+  import { buildCourseBody } from '$lib/admin/components/course-request';
+  import { ApiError } from '$lib/api/client';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -49,6 +62,44 @@
     overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
   }
 
+  function openNew() {
+    overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: save });
+  }
+  function openEdit(k: ClassRow) {
+    overlay.sheet('classForm', { k, coaches: $coaches, onSave: save });
+  }
+  function openDetail(k: ClassRow) {
+    overlay.sheet('class', { k, onEdit: openEdit });
+  }
+
+  // 422 驗證 / 403 權限 / 409 衝突 → 對應的繁中錯誤提示；其餘給通用訊息，同桌面
+  // classes/+page.svelte 的 courseErrorMessage 慣例。
+  function courseErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+      if (e.status === 409) return '課程名稱或代碼已存在，請調整後再試。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function save(updated: ClassRow, durationMinutes: number, isNew: boolean) {
+    const body = buildCourseBody(updated, $coaches);
+    try {
+      if (isNew) {
+        await createCourse({ ...body, duration_minutes: durationMinutes });
+        toasts.notify('success', '已新增班級', `「${updated.name}」已建立。`);
+      } else {
+        await updateCourse(updated.id, { ...body, duration_minutes: durationMinutes });
+        toasts.notify('success', '已儲存課程', `「${updated.name}」已更新。`);
+      }
+    } catch (e) {
+      toasts.notify('error', isNew ? '新增失敗' : '儲存失敗', courseErrorMessage(e));
+      return;
+    }
+    await refreshOps();
+  }
+
   $: list = $classes
     .filter((k) => cat === '全部' || k.cat === cat)
     .filter((k) => !q || (k.name + k.coach).toLowerCase().includes(q.toLowerCase()));
@@ -58,7 +109,7 @@
 
 <ScreenHeader title="課程管理" sub={$classes.length + ' 個開課班級 · 本季招生中'}>
   <div slot="right" style="display:flex; gap:8px;">
-    <HeaderIcon icon="plus" label="新增班級" onClick={() => overlay.sheet('classForm', { k: null })} />
+    <HeaderIcon icon="plus" label="新增班級" onClick={openNew} />
     <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
   </div>
 </ScreenHeader>
@@ -78,7 +129,7 @@
         {@const pct = Math.round((k.enrolled / k.cap) * 100)}
         <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); overflow:hidden;">
           <button
-            on:click={() => overlay.sheet('class', { k })}
+            on:click={() => openDetail(k)}
             class="df-tapscale"
             style="display:block; width:100%; border:none; background:transparent; cursor:pointer; text-align:left; padding:15px 16px 13px;"
           >
@@ -112,7 +163,7 @@
               <Icon name="users" size={15} color="var(--df-text-light)" />學員
             </button>
             <button
-              on:click={() => overlay.sheet('classForm', { k })}
+              on:click={() => openEdit(k)}
               class="df-tapscale"
               style="flex:1; height:38px; border-radius:10px; border:none; background:var(--df-primary); color:#fff;
                 font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;"

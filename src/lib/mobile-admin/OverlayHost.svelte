@@ -20,7 +20,7 @@
   import CoachForm from '$lib/mobile-admin/overlays/CoachForm.svelte';
   import NotifSheet from '$lib/mobile-admin/overlays/NotifSheet.svelte';
   import RoleSheet from '$lib/mobile-admin/overlays/RoleSheet.svelte';
-  import StudentSkillsSheet from '$lib/mobile-admin/overlays/StudentSkillsSheet.svelte';
+  import StudentActionSheet from '$lib/mobile-admin/overlays/StudentActionSheet.svelte';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type Comp = any;
@@ -42,7 +42,7 @@
     coachForm: CoachForm,
     notif: NotifSheet,
     role: RoleSheet,
-    studentSkills: StudentSkillsSheet
+    studentAction: StudentActionSheet
   };
 
   $: top = $overlay.stack[$overlay.stack.length - 1];
