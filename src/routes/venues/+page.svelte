@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { listVenues, type ApiVenue } from '$lib/public/api';
   // Venues Page - 場館介紹（僅列表接真 API；12 個詳頁保留在地文案，不在本任務範圍）
@@ -41,7 +41,16 @@
         </p>
       </div>
 
-      {#if $gate === 'ready'}
+      <LoadGate {gate}>
+        <div class="facilities-grid" data-testid="venues-skeleton" slot="loading">
+          {#each [0, 1, 2, 3] as i (i)}
+            <SkelCard>
+              <Skeleton w="60%" h={22} r={6} style="margin-bottom:12px" />
+              <Skeleton w="100%" h={60} r={8} />
+            </SkelCard>
+          {/each}
+        </div>
+
         <div class="facilities-grid">
           {#each venues as v (v.id)}
             <div class="facility-card card">
@@ -60,20 +69,11 @@
             </div>
           {/each}
         </div>
-      {:else if $gate === 'error'}
-        <div class="card" style="padding:0; margin-bottom: var(--spacing-lg)">
+
+        <div class="card" style="padding:0; margin-bottom: var(--spacing-lg)" slot="error">
           <ErrorState onRetry={gate.refresh} />
         </div>
-      {:else}
-        <div class="facilities-grid" data-testid="venues-skeleton">
-          {#each [0, 1, 2, 3] as i (i)}
-            <SkelCard>
-              <Skeleton w="60%" h={22} r={6} style="margin-bottom:12px" />
-              <Skeleton w="100%" h={60} r={8} />
-            </SkelCard>
-          {/each}
-        </div>
-      {/if}
+      </LoadGate>
 
       <div class="venue-specs card">
         <h2>場地規格</h2>

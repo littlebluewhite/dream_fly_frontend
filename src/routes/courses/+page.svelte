@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { listCourses, listCoaches } from '$lib/public/api';
   import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
@@ -80,16 +80,8 @@
 
   <section class="courses-list">
     <div class="container">
-      {#if $gate === 'ready'}
-        <div class="courses-grid">
-          {#each courses as course (course.id)}
-            <CourseCard {course} showCartButton={true} onAdd={addToCart} />
-          {/each}
-        </div>
-      {:else if $gate === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
-      {:else}
-        <div class="courses-grid" data-testid="courses-skeleton">
+      <LoadGate {gate}>
+        <div class="courses-grid" data-testid="courses-skeleton" slot="loading">
           {#each [0, 1, 2, 3] as i (i)}
             <SkelCard>
               <Skeleton w="60%" h={24} r={6} style="margin-bottom:14px" />
@@ -98,7 +90,15 @@
             </SkelCard>
           {/each}
         </div>
-      {/if}
+
+        <div class="courses-grid">
+          {#each courses as course (course.id)}
+            <CourseCard {course} showCartButton={true} onAdd={addToCart} />
+          {/each}
+        </div>
+
+        <div class="card" style="padding:0" slot="error"><ErrorState onRetry={gate.refresh} /></div>
+      </LoadGate>
     </div>
   </section>
 
