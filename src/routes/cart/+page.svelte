@@ -3,11 +3,12 @@
   import { cart } from '$lib/member/stores';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
+  import { subtotalOf } from '$lib/checkout-math';
   import { toasts } from '$lib/stores/marketingToasts';
   import type { CartItem } from '$lib/member/data';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  $: total = subtotalOf($cart);
 
   function removeItem(item: CartItem) {
     cart.remove(item.id);
