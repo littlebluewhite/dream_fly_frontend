@@ -1,19 +1,26 @@
 <script lang="ts">
   /* 帳戶 tab。app.jsx AccountScreen (48)。
    * 深色漸層 hero（Avatar + 編輯）→ 點數高光卡 → 選單卡（push points/orders/report/settings）
-   * → 切換到管理後台（goto /mobile-admin）→ 登出（清 df_mobile_session + session.set(false) + goto /mobile/login）。
+   * → 切換到管理後台（goto /mobile-admin）→ 登出（authStore.logout() + goto /mobile/login）。
    * Legacy Svelte（無 runes）。繁體中文文案。
    *
-   * 訂單筆數改由 getAccount()(mock-API 接縫)非同步取得:onMount 進三態閘門
-   * (loading/error/ready);points/profile/session 等既有 store 互動不動。 */
+   * 訂單筆數改由 getAccount()(真後端接縫,見 $lib/mobile/api.ts)非同步取得:
+   * onMount 進三態閘門(loading/error/ready)。Task 19:登出改真 authStore.logout()
+   * (清 token,不再是示範性的 df_mobile_session)；會員點數改讀真 $lib/member/stores
+   * 的 points(getAccount() 內部已呼叫 refreshPoints() 側效水合,見 member/api.ts
+   * getAccount() 註解) — 不再是 mobile 本地、永遠停在 mock 種子值的 points store
+   * (那顆本地 store 仍保留給 CartSheet 的既有假結帳流程使用,兩者現在是分開的,
+   * 見 task-19-report.md 的顧慮)。profile 沿用 mobile 本地 store(編輯個人資料
+   * 本來就是本地端行為,同 desktop ProfileEditDialog,非本任務範圍)。 */
   import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, points, profile, session } from '$lib/mobile/stores';
+  import { overlay, profile } from '$lib/mobile/stores';
+  import { points } from '$lib/member/stores';
+  import { authStore } from '$lib/stores/authStore';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
 
   type Item = { id: string; icon: string; label: string; sub: string; tone: string; tint: string };
@@ -37,12 +44,7 @@
   ] as Item[];
 
   function logout() {
-    if (browser) {
-      try {
-        localStorage.removeItem('df_mobile_session');
-      } catch (_) {}
-    }
-    session.set(false);
+    authStore.logout();
     goto('/mobile/login');
   }
 </script>

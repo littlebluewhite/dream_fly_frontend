@@ -53,7 +53,12 @@
   $: hot = catalog.filter((c) => c.hot).concat(catalog.filter((c) => !c.hot)).slice(0, 4);
   // 下一堂課卡的日期/時間:與 mine 頁課程卡同一欄位(next.next,如「明日 19:00」)
   // 同源拆解,不再各自硬編一次。載入完成前 myCourses 仍是 [],用可選鏈防呆。
-  $: next = myCourses[0];
+  // Task 19:真後端的 EnrolledCourse.next 目前一律是空字串(member/api.ts 的
+  // getMine() P2——後端無法誠實推導「下一堂」相對時間,見該檔案註解),空字串
+  // split(' ') 只會產生 1 個元素、第二個變數解構成 undefined——這裡多一層「有
+  // 值才顯示」的空集合守衛,同整張卡「零報名時不顯示」的既有慣例,避免顯示一個
+  // 內容殘缺的日期卡。
+  $: next = myCourses[0]?.next ? myCourses[0] : undefined;
   $: [nextDay, nextTime] = next ? next.next.split(' ') : ['', ''];
 
   function addToCart(c: Course) {

@@ -1,23 +1,39 @@
 <script lang="ts">
   /* 我的課程 · 課程詳情 push screen。mine.jsx MyCourseDetail (99) · app.jsx (88)。
-   * 課程 hero（出席環）+ 動作（請假 / 補課 / 聯絡）+ 技巧熟練度 + 出席紀錄。 */
+   * 課程 hero（出席環）+ 動作（請假 / 聯絡）+ 我的請假 + 成績單入口 + 出席紀錄。
+   *
+   * Task 19：動作列拿掉舊 mock 版「預約補課」快捷按鈕 —— 真後端的補課預約是
+   * 針對「一張已核准且尚未補課的請假申請」的動作(見 MakeupSheet.svelte)，不是
+   * 課程層級可以隨時點的按鈕，鏡射桌面 mine 頁的既有決定(同一份 Task 11 註解：
+   * 「課程詳情動作列不再有預約補課按鈕」)。改為新增「我的請假」卡片，列出這門
+   * 課程的請假紀錄(復用 $lib/member/stores 的 leaveRequests store)：pending 可
+   * 取消、approved 且未補課才顯示「預約補課」進 MakeupSheet(帶 leaveRequest)。
+   *
+   * 舊「技巧熟練度」卡片(REPORTS[c.id]/SKILLS 逐技巧拆解百分比)已移除 —— 真
+   * 後端成績單(getReports())完全沒有這個概念(只有 comment/rating/term_label
+   * 三個欄位)，改為一個誠實的「成績單與證書」導覽列(同帳戶頁的選單項寫法：
+   * 不論資料是否存在都顯示入口，由 ReportScreen 自己處理空狀態)，取代原本
+   * 對這門課程假裝有的逐技巧百分比。ReportScreen 現在是列表呈現全部成績單
+   * (同桌面 /member/reports 頁)，不再是單一課程 scope，故此處不再傳 course
+   * prop 進去。 */
+  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import ProgressBar from '$lib/components/ui/ProgressBar.svelte';
-  import { overlay } from '$lib/mobile/stores';
+  import { overlay, toasts } from '$lib/mobile/stores';
   import {
-    REPORTS,
-    SKILLS,
-    ATT_HISTORY,
-    ATT_STATE,
-    LEVEL_TONE,
-    type MyCourse,
-    type Skill
-  } from '$lib/mobile/data';
+    leaveRequests,
+    refreshLeaveRequests,
+    cancelLeaveRequest,
+    leaveRequestErrorMessage,
+    type LeaveRequest
+  } from '$lib/member/stores';
+  import { LEAVE_STATUS } from '$lib/member/data';
+  import { formatSessionDateTime } from '$lib/member/session-format';
+  import { ATT_HISTORY, ATT_STATE, LEVEL_TONE, type MyCourse } from '$lib/mobile/data';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -25,8 +41,6 @@
   export let course: MyCourse | null = null;
 
   $: c = course as MyCourse;
-  $: report = c ? REPORTS[c.id] : undefined;
-  $: skills = (report ? report.skills.slice(0, 4) : SKILLS) as Skill[];
   $: levelTone = (c ? LEVEL_TONE[c.level] || 'primary' : 'primary') as Tone;
 
   /* 出席環 — mine.jsx AttRing (6)。size 92、stroke 9。 */
@@ -42,6 +56,29 @@
         ['ticket', '本季尚餘 ' + c.remain + ' 堂']
       ] as [string, string][])
     : [];
+
+  // 我的請假 —— 復用桌面 mine 頁同一顆 leaveRequests store，範圍收斂到這門課程
+  // (course_id 比對；mock 時代 MyCourse.course_id 為 optional，真 getMine() 已
+  // 填入真值，比對不到時 courseLeaves 安全落空，不拋錯)。best-effort 水合，
+  // 失敗不擋課程詳情本身的顯示(同 mine 頁 load() 對候補/請假清單的處理慣例)。
+  onMount(() => {
+    refreshLeaveRequests().catch((err) => console.error('courseDetail: 我的請假 hydrate 失敗', err));
+  });
+  $: courseLeaves = c ? $leaveRequests.filter((lr) => lr.course_id === c.course_id) : [];
+
+  let cancellingId: string | null = null;
+  async function doCancelLeave(lr: LeaveRequest) {
+    if (cancellingId) return;
+    cancellingId = lr.id;
+    try {
+      await cancelLeaveRequest(lr.id);
+      toasts.notify('success', '已取消請假申請', lr.course_name + ' 的請假申請已取消。');
+    } catch (err) {
+      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(err));
+    } finally {
+      cancellingId = null;
+    }
+  }
 </script>
 
 <PushScreen>
@@ -128,18 +165,6 @@
             <span style="font-size:12px; font-weight:600; color:var(--df-text-dark);">請假</span>
           </button>
           <button
-            on:click={() => overlay.sheet('makeup', { course: c })}
-            class="df-tapscale"
-            style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; padding:13px 4px;
-              border-radius:13px; border:1px solid var(--df-border); background:#fff; cursor:pointer;"
-          >
-            <div
-              style="width:38px; height:38px; border-radius:11px; background:var(--df-primary-bg); display:flex;
-                align-items:center; justify-content:center;"
-            ><Icon name="rotate-cw" size={20} color="var(--df-primary)" /></div>
-            <span style="font-size:12px; font-weight:600; color:var(--df-text-dark);">預約補課</span>
-          </button>
-          <button
             on:click={() => overlay.sheet('contact', { course: c })}
             class="df-tapscale"
             style="flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; padding:13px 4px;
@@ -153,24 +178,68 @@
           </button>
         </div>
 
-        <!-- skills -->
+        <!-- 我的請假(Task 19：真後端，範圍收斂到這門課程) -->
         <Card padding={16}>
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:13px;">
-            <h3 style="margin:0; font-size:15.5px; font-weight:700; color:var(--df-ink);">技巧熟練度</h3>
-            {#if report}
-              <button
-                on:click={() => overlay.push('report', { course: c })}
-                style="border:none; background:none; font-size:12.5px; font-weight:600; color:var(--df-primary);
-                  cursor:pointer; display:flex; align-items:center; gap:2px;"
-              >完整成績單<Icon name="chevron-right" size={14} /></button>
-            {/if}
-          </div>
-          <div style="display:flex; flex-direction:column; gap:12px;">
-            {#each skills as [n, v]}
-              <ProgressBar value={v} showLabel label={n} />
-            {/each}
-          </div>
+          <h3 style="margin:0 0 12px; font-size:15.5px; font-weight:700; color:var(--df-ink);">我的請假</h3>
+          {#if courseLeaves.length === 0}
+            <p style="margin:0; font-size:13px; color:var(--df-text-light);">目前沒有這門課程的請假紀錄。</p>
+          {:else}
+            <div style="display:flex; flex-direction:column;">
+              {#each courseLeaves as lr, i (lr.id)}
+                {@const [tone, label] = LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]}
+                <div
+                  style="display:flex; align-items:center; gap:10px; padding:10px 0;
+                    border-top:{i ? '1px solid var(--df-border)' : 'none'};"
+                >
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; color:var(--df-text-dark); font-family:var(--df-font-mono);">
+                      {formatSessionDateTime(lr.session_date, lr.start_time)}
+                    </div>
+                    {#if lr.status === 'approved' && lr.makeup_session_id}
+                      <div style="font-size:12px; color:var(--df-success); margin-top:2px;">
+                        已預約補課：{formatSessionDateTime(lr.makeup_session_date ?? '', lr.makeup_start_time ?? '')}
+                      </div>
+                    {/if}
+                  </div>
+                  <Badge {tone} dot>{label}</Badge>
+                  {#if lr.status === 'pending'}
+                    <button
+                      disabled={cancellingId === lr.id}
+                      on:click={() => doCancelLeave(lr)}
+                      class="df-tapscale"
+                      style="flex:none; height:30px; padding:0 12px; border-radius:8px; border:1px solid var(--df-border);
+                        background:#fff; font-size:12px; font-weight:600; color:var(--df-text-dark); cursor:pointer;"
+                    >取消</button>
+                  {:else if lr.status === 'approved' && !lr.makeup_session_id}
+                    <button
+                      on:click={() => overlay.sheet('makeup', { leaveRequest: lr })}
+                      class="df-tapscale"
+                      style="flex:none; height:30px; padding:0 12px; border-radius:8px; border:1px solid var(--df-primary);
+                        background:var(--df-primary-bg); font-size:12px; font-weight:600; color:var(--df-primary); cursor:pointer;"
+                    >預約補課</button>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
         </Card>
+
+        <!-- 成績單與證書入口(取代舊「技巧熟練度」逐項百分比卡片) -->
+        <button
+          on:click={() => overlay.push('report')}
+          class="df-tapscale"
+          style="display:flex; align-items:center; gap:13px; padding:14px 16px; border-radius:14px;
+            border:1px solid var(--df-border); background:#fff; cursor:pointer; width:100%; text-align:left;"
+        >
+          <div style="width:38px; height:38px; border-radius:11px; background:var(--df-success-bg); display:flex; align-items:center; justify-content:center; flex:none;">
+            <Icon name="clipboard-list" size={20} color="var(--df-success)" />
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:14.5px; font-weight:600; color:var(--df-ink);">成績單與證書</div>
+            <div style="font-size:12px; color:var(--df-text-light);">查看教練評語、評分與已獲得的證書</div>
+          </div>
+          <Icon name="chevron-right" size={18} color="var(--df-text-muted)" />
+        </button>
 
         <!-- attendance history -->
         <Card padding={16}>

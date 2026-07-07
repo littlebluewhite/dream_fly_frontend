@@ -1,17 +1,27 @@
 <script lang="ts">
-  /* 行動版會員 App · 啟動 / 登入入口。auth.jsx AuthScreen 的視覺移植（drop StatusBar）。
+  /* 行動版會員 App · 登入頁。auth.jsx AuthScreen 的視覺移植（drop StatusBar）。
    * `+page@.svelte` 重置回 ROOT layout（全螢幕）→ 不套用 /mobile layout，避免重導迴圈。
-   * 「登入」與「訪客瀏覽」皆寫入 df_mobile_session 並 goto('/mobile')，由 browser 守門。
-   * Legacy Svelte（無 runes）。繁體中文文案。 */
-  import { browser } from '$app/environment';
+   *
+   * Task 19：移除示範性的「手機號碼 + 訪客瀏覽」假登入（寫 df_mobile_session
+   * 即視為登入，未驗證任何憑證）——改真 email/密碼表單打 POST /auth/login
+   * （authStore.login，同 member 登入頁的既有 token 路徑：$lib/stores/
+   * authStore.ts 的 setTokens/refresh 機制不變，這裡只是換一張表單）。沒有
+   * 「訪客瀏覽」：mobile 是會員專屬 app，後端沒有訪客身分,不再假裝有。也沒有
+   * Google 登入(mobile 尚未接,非本任務範圍)、沒有忘記密碼連結(mobile 無對應
+   * 路由,不硬連去 /member/forgot-password 混淆兩個 surface)。 */
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { session } from '$lib/mobile/stores';
+  import { authStore } from '$lib/stores/authStore';
   import '$lib/styles/mobile-frame.css';
 
-  let phone = '';
-  let phoneFocus = false;
+  let email = '';
+  let password = '';
+  let showPw = false;
+  let busy = false;
+  let error = '';
+  let emailFocus = false;
+  let pwFocus = false;
 
   const TRUST: [string, string, string][] = [
     ['shield-check', '安全有保障', '小班 6–8 人 · 雙教練保護'],
@@ -19,13 +29,21 @@
     ['users', '專業教練群', '競賽選手出身 · 循序漸進']
   ];
 
-  function enter() {
-    if (!browser) return;
+  async function submit() {
+    if (busy) return;
+    error = '';
+    busy = true;
     try {
-      localStorage.setItem('df_mobile_session', '1');
-    } catch (_) {}
-    session.set(true);
-    goto('/mobile');
+      await authStore.login(email, password);
+      goto('/mobile');
+    } catch {
+      error = 'Email 或密碼錯誤';
+    } finally {
+      busy = false;
+    }
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Enter') submit();
   }
 </script>
 
@@ -61,34 +79,71 @@
 
         <!-- ── 表單卡 ── -->
         <div class="df-scroll" style="flex:1;">
-          <div style="padding:20px 22px calc(24px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:18px;">
-            <!-- 手機號碼 -->
+          <div style="padding:20px 22px calc(24px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:14px;">
+            <!-- Email -->
             <div style="display:flex; flex-direction:column; gap:7px;">
-              <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">手機號碼</span>
+              <label for="mlogin-email" style="font-size:13px; font-weight:600; color:var(--df-text-dark);">電子信箱</label>
               <div
                 style="display:flex; align-items:center; gap:10px; height:50px; padding:0 14px; background:#fff;
-                  border:1.5px solid {phoneFocus ? 'var(--df-primary)' : 'var(--df-border-strong)'}; border-radius:12px;
-                  box-shadow:{phoneFocus ? '0 0 0 3px rgba(0,102,204,.18)' : 'none'};
+                  border:1.5px solid {emailFocus ? 'var(--df-primary)' : 'var(--df-border-strong)'}; border-radius:12px;
+                  box-shadow:{emailFocus ? '0 0 0 3px rgba(0,102,204,.18)' : 'none'};
                   transition:border .15s ease, box-shadow .15s ease;"
               >
-                <Icon name="smartphone" size={18} color="var(--df-text-muted)" />
+                <Icon name="mail" size={18} color="var(--df-text-muted)" />
                 <input
-                  bind:value={phone}
-                  inputmode="tel"
-                  placeholder="0912-345-678"
-                  on:focus={() => (phoneFocus = true)}
-                  on:blur={() => (phoneFocus = false)}
+                  id="mlogin-email"
+                  type="email"
+                  bind:value={email}
+                  placeholder="your@email.com"
+                  on:keydown={onKey}
+                  on:focus={() => (emailFocus = true)}
+                  on:blur={() => (emailFocus = false)}
                   style="flex:1; border:none; background:transparent; outline:none; font-size:15px;
                     color:var(--df-text-dark); font-family:var(--df-font-body); height:100%; min-width:0;"
                 />
               </div>
             </div>
 
-            <div style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--df-text-muted);">
-              <Icon name="info" size={14} color="var(--df-text-muted)" />示範用 · 直接登入或以訪客瀏覽
+            <!-- 密碼 -->
+            <div style="display:flex; flex-direction:column; gap:7px;">
+              <label for="mlogin-pw" style="font-size:13px; font-weight:600; color:var(--df-text-dark);">密碼</label>
+              <div
+                style="display:flex; align-items:center; gap:10px; height:50px; padding:0 14px; background:#fff;
+                  border:1.5px solid {pwFocus ? 'var(--df-primary)' : 'var(--df-border-strong)'}; border-radius:12px;
+                  box-shadow:{pwFocus ? '0 0 0 3px rgba(0,102,204,.18)' : 'none'};
+                  transition:border .15s ease, box-shadow .15s ease;"
+              >
+                <Icon name="lock" size={18} color="var(--df-text-muted)" />
+                <input
+                  id="mlogin-pw"
+                  type={showPw ? 'text' : 'password'}
+                  bind:value={password}
+                  placeholder="請輸入密碼"
+                  on:keydown={onKey}
+                  on:focus={() => (pwFocus = true)}
+                  on:blur={() => (pwFocus = false)}
+                  style="flex:1; border:none; background:transparent; outline:none; font-size:15px;
+                    color:var(--df-text-dark); font-family:var(--df-font-body); height:100%; min-width:0;"
+                />
+                <button
+                  type="button"
+                  aria-label={showPw ? '隱藏密碼' : '顯示密碼'}
+                  on:click={() => (showPw = !showPw)}
+                  style="border:none; background:transparent; cursor:pointer; padding:0;
+                    display:inline-flex; color:var(--df-text-muted);"
+                >
+                  <Icon name={showPw ? 'eye' : 'eye-off'} size={18} />
+                </button>
+              </div>
             </div>
 
-            <Button variant="primary" size="lg" fullWidth on:click={enter}>登入</Button>
+            {#if error}
+              <p style="margin:0; font-size:13px; font-weight:600; color:var(--df-error);">{error}</p>
+            {/if}
+
+            <Button variant="primary" size="lg" fullWidth disabled={busy} on:click={submit}>
+              {busy ? '登入中…' : '登入'}
+            </Button>
 
             <!-- 信任列 -->
             <div style="display:flex; flex-direction:column; gap:12px; margin-top:4px; padding:16px 0 4px; border-top:1px solid var(--df-border);">
@@ -104,15 +159,6 @@
                 </div>
               {/each}
             </div>
-
-            <button
-              on:click={enter}
-              class="df-tapscale"
-              style="align-self:center; border:none; background:transparent; cursor:pointer; font-size:13px;
-                font-weight:600; color:var(--df-text-light); display:flex; align-items:center; gap:5px; padding:4px 8px;"
-            >
-              先以訪客身分瀏覽<Icon name="arrow-right" size={14} color="var(--df-text-light)" />
-            </button>
           </div>
         </div>
       </div>

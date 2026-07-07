@@ -64,7 +64,7 @@ describe('課程介紹 — 三態 + 接縫 wiring', () => {
 		const fixture = {
 			catalog: [
 				{
-					id: 9001,
+					id: 'zz-9001',
 					name: '接縫測試專用課程',
 					level: '入門',
 					cat: '幼兒體操',

@@ -1,16 +1,19 @@
 <script lang="ts">
   /* 帳號設定 push screen。account.jsx SettingsScreen (288)。
    * 頭像 + 編輯個人資料（overlay.sheet）→ 個人資料欄位 → 通知偏好 / 一般（prefs Switch 列）
-   * → 儲存變更（toast）→ 登出帳號（清 df_mobile_session + session.set(false) + goto /mobile/login）。
-   * Legacy Svelte（無 runes）。 */
-  import { browser } from '$app/environment';
+   * → 儲存變更（toast）→ 登出帳號（authStore.logout() + goto /mobile/login）。
+   * Legacy Svelte（無 runes）。Task 19:登出改真 authStore.logout()(清 token,
+   * 不再是示範性的 df_mobile_session，同 account/+page.svelte 的 logout()）。
+   * 「儲存變更」按鈕與通知偏好本身仍是本地端 prefs store(無對應後端端點,
+   * 同 desktop 完全未接的等值狀態,P2)。 */
   import { goto } from '$app/navigation';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import { overlay, prefs, profile, session, toasts } from '$lib/mobile/stores';
+  import { authStore } from '$lib/stores/authStore';
+  import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
 
   export let onBack: () => void;
@@ -36,12 +39,7 @@
   }
 
   function logout() {
-    if (browser) {
-      try {
-        localStorage.removeItem('df_mobile_session');
-      } catch (_) {}
-    }
-    session.set(false);
+    authStore.logout();
     goto('/mobile/login');
   }
 </script>

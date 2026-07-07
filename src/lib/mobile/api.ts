@@ -1,27 +1,76 @@
-/* 會員 app(手機)mock API 接縫。今天回傳 seed;未來把函式體換成 fetch 即可,呼叫端不變。 */
-import { CATALOG, ANNOUNCE, MY_COURSES, SCHEDULE, ORDERS, NOTIFS_SEED } from './data';
-import type { Course, Announce, MyCourse, ScheduleBlock, Order, NotifItem } from './data';
+/* 會員 app(手機)API 接縫。
+ *
+ * Task 19：從整包 reply() mock 改為 desktop member seams 的薄層——直接 import
+ * `$lib/member/api.ts`(有的直接 re-export/passthrough，形狀完全相同時不重新
+ * 宣告一次型別;有的做薄映射，僅在行動版形狀真的不同處，例如 catalog 課程卡
+ * 需要一個真後端沒有的 icon 欄位)。凡是桌面 seam 本身仍是 mock(無後端來源)
+ * 的欄位，這裡原樣沿用同一份 mock/預設值——不發明桌面沒有的假來源，也不重新
+ * 實作桌面已經做過的映射邏輯。逐函式來源見 task-19-report.md 的盤點表。 */
+import type { CatalogCourse } from '$lib/public/adapters';
+// 刻意從 $lib/domain/member-app 取寬鬆版型別(tone/status 為 string，非窄化
+// union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
+// 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
+// 一直以來都是對這個寬鬆版型別寫的，沿用它才不會逼既有呼叫端也跟著窄化。
+import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, Notification } from '$lib/domain/member-app';
+import {
+	getCourses as memberGetCourses,
+	getMine as memberGetMine,
+	getSchedule as memberGetSchedule,
+	getAccount as memberGetAccount,
+	getNotifications as memberGetNotifications,
+	getPoints as memberGetPoints,
+	getReports as memberGetReports,
+	type PointsData,
+	type Reward,
+	type ReportsData
+} from '$lib/member/api';
+import { ANNOUNCE, type Announce, type Course } from './data';
 
-const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
+/** 課程分類 → icon。真後端 CatalogCourse(`$lib/public/adapters`)沒有 icon 欄位
+ *  (courses 表本身不存這個欄位)——對照首頁/課程介紹頁既有 CATS 分類清單的圖示
+ *  選擇(6 個分類皆已在別處驗證過是有效註冊的 icon 名稱)。未知分類(admin 可自
+ *  由輸入 category 文字)一律給預設值，同 TrialScreen catIcon 的 fallback 慣例。 */
+const CATEGORY_ICON: Record<string, string> = {
+	幼兒體操: 'baby',
+	兒童基礎: 'rotate-cw',
+	競技啦啦隊: 'sparkles',
+	競技體操: 'medal',
+	成人體操: 'dumbbell',
+	跑酷: 'flame'
+};
+const DEFAULT_COURSE_ICON = 'graduation-cap';
 
-/** 「我的報名課程」單一內部存取點;未來 fetch 只改此處。 */
-const myCourses = (): MyCourse[] => MY_COURSES;
+/** CatalogCourse → mobile Course：欄位逐一相同，只加 icon 薄映射。 */
+function toMobileCourse(c: CatalogCourse): Course {
+	return { ...c, icon: CATEGORY_ICON[c.cat] ?? DEFAULT_COURSE_ICON };
+}
 
 export interface MobileHomeData {
 	catalog: Course[];
 	announce: Announce[];
 	myCourses: MyCourse[];
 }
-export const getHome = (): Promise<MobileHomeData> =>
-	reply({ catalog: CATALOG, announce: ANNOUNCE, myCourses: myCourses() });
+
+/** 首頁 — catalog 復用桌面 getCourses()(GET /courses + GET /coaches join，只加
+ *  icon 薄映射)；myCourses 復用桌面 getMine().courses(EnrolledCourse 形狀兩側
+ *  同源，零映射)。兩者互不相依，平行拉取。
+ *  // P2: announce(最新公告)後端無對應資料源，沿用 mock —— 同桌面 getDashboard()
+ *  對 announce 的決定(桌面也是原樣顯示 mock、不隱藏)，此處鏡射該決定。 */
+export const getHome = async (): Promise<MobileHomeData> => {
+	const [{ catalog }, { courses }] = await Promise.all([memberGetCourses(), memberGetMine()]);
+	return { catalog: catalog.map(toMobileCourse), announce: ANNOUNCE, myCourses: courses };
+};
 
 export interface MobileCoursesData {
 	catalog: Course[];
 }
-export const getCourses = (): Promise<MobileCoursesData> => reply({ catalog: CATALOG });
 
-/** 摘要統計(本月出席率/連續到課/已掌握技巧)原為頁面硬編字串,一併移入接縫
- *  (比照 coach getDashboard 的 KPI 字串前例)。 */
+/** 課程介紹 — 復用桌面 getCourses()，同 getHome() 的 catalog 映射。 */
+export const getCourses = async (): Promise<MobileCoursesData> => {
+	const { catalog } = await memberGetCourses();
+	return { catalog: catalog.map(toMobileCourse) };
+};
+
 export interface MineData {
 	courses: MyCourse[];
 	schedule: ScheduleBlock[];
@@ -29,19 +78,63 @@ export interface MineData {
 	streak: string;
 	skillsMastered: string;
 }
-export const getMine = (): Promise<MineData> =>
-	reply({
-		courses: myCourses(),
-		schedule: SCHEDULE,
-		attendanceRate: '95%',
-		streak: '14',
-		skillsMastered: '8'
-	});
+
+/** 我的課程 — courses 復用桌面 getMine().courses；schedule 復用桌面
+ *  getSchedule().schedule(Task 9 週課表 seam)。兩者互不相依，平行拉取。
+ *  // P2: attendanceRate(本月出席率)/streak(連續到課)/skillsMastered(已掌握
+ *  技巧)三個摘要統計後端皆無對應資料源，沿用 mock 字串——streak/skillsMastered
+ *  後端完全沒有對應概念(無「連續到課天數」「技巧掌握度」欄位)；attendanceRate
+ *  雖然 getReports().stats.attendanceRate 已有真值，但桌面自己的 dashboard 摘要
+ *  卡(STATS)至今也還沒接上這個真值、仍是同一份 mock —— 此處鏡射桌面尚未做的
+ *  決定，不搶先在行動版單獨接線製造兩側不一致。 */
+export const getMine = async (): Promise<MineData> => {
+	const [{ courses }, { schedule }] = await Promise.all([memberGetMine(), memberGetSchedule()]);
+	return { courses, schedule, attendanceRate: '95%', streak: '14', skillsMastered: '8' };
+};
 
 export interface MobileAccountData {
 	orders: Order[];
 }
-export const getAccount = (): Promise<MobileAccountData> => reply({ orders: ORDERS });
 
-/** 通知 feed(store-getter,非包物件)。與 stores.ts 同源、同樣 clone。 */
-export const getNotifications = (): Promise<NotifItem[]> => reply(NOTIFS_SEED.map((n) => ({ ...n })));
+/** 帳戶 — 復用桌面 getAccount().orders(GET /users/me + GET /orders/me；桌面
+ *  getAccount() 內部已 side-effect 呼叫 refreshPoints()/refreshSubscriptions()，
+ *  讓帳戶頁的 $points 一開始就是真資料——見 member/api.ts getAccount() 註解)。
+ *  本頁不需要 profile 欄位(行動版帳戶頁的個人資料仍是本地 profile store，見
+ *  mobile/stores.ts 的既有慣例，非本任務範圍)，只取 orders。 */
+export const getAccount = async (): Promise<MobileAccountData> => {
+	const { orders } = await memberGetAccount();
+	return { orders };
+};
+
+/** 通知中心 feed — 復用桌面 getNotifications()(GET /notifications)，零映射
+ *  (Notification 形狀兩側同源)。 */
+export const getNotifications = (): Promise<Notification[]> => memberGetNotifications();
+
+export interface ScheduleData {
+	schedule: ScheduleBlock[];
+}
+
+/** 完整日程 push screen(ScheduleScreen)— 復用桌面 getSchedule()(GET
+ *  /schedule/me，Task 9 週課表 seam)，零映射。 */
+export const getSchedule = (): Promise<ScheduleData> => memberGetSchedule();
+
+export type { PointsData, Reward };
+
+/** 會員點數 push screen(PointsScreen)— 復用桌面 getPoints()(GET /rewards，
+ *  Task 14 rewards seam)，零映射。桌面 getPoints() 內部已呼叫 refreshPoints()
+ *  整包水合 points/pointsLedger store——PointsScreen 直接讀 `$lib/member/stores`
+ *  的 points/pointsLedger(不是這裡的回傳值)，兌換動作也走同一個 store 的
+ *  redeemReward()(同桌面「動作留在 stores.ts、取資料留在 api.ts」的慣例)。
+ *  // P2: expiring(即將到期點數)/expiryDate(到期日)後端無點數到期排程，
+ *  桌面本身也是硬編這兩個字串——原樣透傳，不重新硬編一份。 */
+export const getPoints = (): Promise<PointsData> => memberGetPoints();
+
+export type { ReportsData };
+
+/** 成績單與證書 push screen(ReportScreen)— 復用桌面 getReports()(GET
+ *  /report-cards/me + GET /certificates/me + GET /reports/me，Task 13 seam)，
+ *  零映射。真後端成績單只有 comment/rating/term_label 三個欄位，沒有 mock 舊版
+ *  的「評等字母/技巧熟練度百分比/學習表現雷達圖」——ReportScreen 已改為列表
+ *  呈現每一筆成績單(同桌面 /member/reports 頁的呈現方式)，不再顯示這些後端
+ *  沒有的欄位。 */
+export const getReports = (): Promise<ReportsData> => memberGetReports();

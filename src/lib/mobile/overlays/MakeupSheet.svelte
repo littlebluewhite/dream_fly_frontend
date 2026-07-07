@@ -1,77 +1,98 @@
 <script lang="ts">
-  /* 預約補課 sheet。mobile/mine.jsx MakeupSheet (253-290)。
-   * MAKEUP_SLOTS 清單（spots 0 → 額滿 disabled）→ toast + 切成功畫面。 */
+  /* 預約補課 sheet。Task 19：改真後端 —— 現在是針對「一張已核准且尚未補課的
+   * 請假申請」開啟的動作(同桌面 MakeupDialog 的既有裁決，見 $lib/member/
+   * components/MakeupDialog.svelte)——所以吃 leaveRequest prop，不是 course。
+   * 開啟時打 GET /courses/{course_id}/sessions 列出同課程的未來場次；選場次 →
+   * 送出打 POST /leave-requests/{id}/makeup。舊 mock 版「MAKEUP_SLOTS 課程層級
+   * 補課」入口已隨 MyCourseDetail 的動作列移除(同桌面「課程詳情動作列不再有
+   * 預約補課按鈕」的既有決定，見 MyCourseDetail.svelte)。 */
+  import { onMount } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
-  import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
+  import Select from '$lib/components/ui/Select.svelte';
+  import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
   import { toasts } from '$lib/mobile/stores';
-  import { MAKEUP_SLOTS, type MyCourse } from '$lib/mobile/data';
+  import { sessionOptions, formatSessionDateTime } from '$lib/member/session-format';
+  import {
+    getCourseSessions,
+    bookMakeup,
+    leaveRequestErrorMessage,
+    type CourseSession,
+    type LeaveRequest
+  } from '$lib/member/stores';
 
   export let onClose: () => void;
-  export let course: MyCourse | null = null;
+  export let leaveRequest: LeaveRequest | null = null;
 
-  let pick = '';
+  let sessionsPhase: 'loading' | 'error' | 'ready' = 'loading';
+  let sessions: CourseSession[] = [];
+  let sessionId = '';
+  let submitting = false;
   let isDone = false;
+  let bookedAt: LeaveRequest | null = null;
 
-  $: chosen = MAKEUP_SLOTS.find((s) => s.id === pick);
-  $: anyOpen = MAKEUP_SLOTS.some((s) => s.spots > 0);
+  function loadSessions(courseId: string) {
+    sessionsPhase = 'loading';
+    getCourseSessions(courseId)
+      .then((list) => { sessions = list; sessionsPhase = 'ready'; })
+      .catch(() => { sessionsPhase = 'error'; });
+  }
 
-  function confirm() {
-    if (!chosen) return;
-    isDone = true;
-    toasts.notify('success', '補課已預約', chosen.date + ' ' + chosen.time);
+  onMount(() => {
+    if (leaveRequest) loadSessions(leaveRequest.course_id);
+  });
+
+  $: valid = !!sessionId;
+
+  async function confirm() {
+    if (!leaveRequest || !valid || submitting) return;
+    submitting = true;
+    try {
+      const updated = await bookMakeup(leaveRequest.id, sessionId);
+      bookedAt = updated;
+      isDone = true;
+      toasts.notify(
+        'success',
+        '補課已預約',
+        formatSessionDateTime(updated.makeup_session_date ?? '', updated.makeup_start_time ?? '')
+      );
+    } catch (err) {
+      toasts.notify('error', '預約補課失敗', leaveRequestErrorMessage(err));
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
-{#if course}
+{#if leaveRequest}
   {#if isDone}
-    <Sheet open {onClose} title="預約補課" sub={course.name}>
+    <Sheet open {onClose} title="預約補課" sub={leaveRequest.course_name}>
       <SuccessBody
         icon="calendar-check"
         title="補課預約成功"
-        body={chosen ? `已預約 ${chosen.date} ${chosen.time} · ${chosen.room}，已加入你的日程表。` : ''}
+        body={bookedAt ? `已預約 ${formatSessionDateTime(bookedAt.makeup_session_date ?? '', bookedAt.makeup_start_time ?? '')}，已加入你的日程表。` : ''}
       />
       <svelte:fragment slot="footer">
         <Button variant="primary" fullWidth on:click={onClose}>完成</Button>
       </svelte:fragment>
     </Sheet>
   {:else}
-    <Sheet open {onClose} title="預約補課" sub={course.name + ' · 選擇可補課時段'} maxHeight="88%">
-      {#if !anyOpen}
-        <MEmpty icon="calendar-x" title="目前沒有可預約的補課時段" body="新時段開放時將以通知提醒你，也可聯絡櫃台協助安排。" />
+    <Sheet open {onClose} title="預約補課" sub={leaveRequest.course_name + ' · 選擇一個未來場次'} maxHeight="88%">
+      {#if sessionsPhase === 'loading'}
+        <Skeleton w="100%" h={44} r={8} />
+      {:else if sessionsPhase === 'error'}
+        <ErrorState onRetry={() => leaveRequest && loadSessions(leaveRequest.course_id)} />
+      {:else if sessions.length === 0}
+        <EmptyState icon="calendar-x" title="目前沒有可預約的補課場次" body="新的場次開放時，我們會以通知提醒你，也可聯絡櫃台協助安排。" pad="32px 12px" />
       {:else}
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          {#each MAKEUP_SLOTS as s (s.id)}
-            {@const full = s.spots === 0}
-            {@const on = pick === s.id}
-            <button
-              disabled={full}
-              on:click={() => (pick = s.id)}
-              style="text-align:left; display:flex; align-items:center; gap:12px; padding:13px 14px; border-radius:13px; cursor:{full ? 'not-allowed' : 'pointer'}; width:100%; background:{on ? 'var(--df-primary-bg)' : '#fff'}; border:1.5px solid {on ? 'var(--df-primary)' : 'var(--df-border)'}; opacity:{full ? 0.55 : 1};"
-            >
-              <div style="width:22px; height:22px; border-radius:50%; border:2px solid {on ? 'var(--df-primary)' : 'var(--df-border-strong)'}; display:flex; align-items:center; justify-content:center; flex:none;">
-                {#if on}<div style="width:11px; height:11px; border-radius:50%; background:var(--df-primary);"></div>{/if}
-              </div>
-              <div style="flex:1;">
-                <div style="font-size:14px; font-weight:700; color:var(--df-ink);">{s.date} · {s.time}</div>
-                <div style="font-size:12.5px; color:var(--df-text-light); margin-top:2px;">{s.room} · {s.coach} 教練</div>
-              </div>
-              {#if full}
-                <Badge tone="error">已額滿</Badge>
-              {:else}
-                <Badge tone={s.spots <= 1 ? 'warning' : 'success'} dot>剩 {s.spots} 位</Badge>
-              {/if}
-            </button>
-          {/each}
-        </div>
+        <Select label="補課場次" required placeholder="選擇要補課的場次" bind:value={sessionId} options={sessionOptions(sessions)} />
       {/if}
       <svelte:fragment slot="footer">
         <Button variant="secondary" on:click={onClose}>取消</Button>
-        <Button variant="primary" disabled={!pick} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={confirm}>
-          <Icon name="calendar-check" size={16} />確認預約
+        <Button variant="primary" disabled={!valid || submitting} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={confirm}>
+          <Icon name="calendar-check" size={16} />{submitting ? '預約中…' : '確認預約'}
         </Button>
       </svelte:fragment>
     </Sheet>

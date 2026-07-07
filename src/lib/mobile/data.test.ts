@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 /* Regression guard (Task 1, member-app 單一來源): mobile's data facade re-exports
- * both VALUES and TYPES from `$lib/domain/member-app` for the 16 seed constants
+ * both VALUES and TYPES from `$lib/domain/member-app` for the 15 seed constants
  * that are byte-equal between member and mobile (ANNOUNCE differs by one item's
  * `bg` colour, so it stays local as its own literal array — not covered here).
  * The value assertions below prove each one is the SAME reference as domain's
@@ -9,7 +9,13 @@ import { describe, it, expect } from 'vitest';
  * The type block mirrors `src/lib/admin/facade-type-exports.test.ts`: if mobile
  * ever drops a type re-export (including a renamed alias like `Upcoming` /
  * `MyCourse`), this file fails to COMPILE under `npm run check`, not just at
- * runtime (vitest alone can't catch a missing type-only export). */
+ * runtime (vitest alone can't catch a missing type-only export).
+ *
+ * Task 19：CATALOG/Course 移出這份 domain 對照 —— getCourses()/getHome() 已改真接
+ * 後端(見 api.ts)，Course 也跟著改為擴充 `$lib/public/adapters` 的真實
+ * CatalogCourse(uuid string id)，不再是 domain/member-app 的 mock 形狀(number
+ * id)。CATALOG 常數本身仍在 mobile/data.ts 保留(僅供既有測試當 fixture)，但
+ * 不再是 domain 那份的同一參照，故移出下面兩個 facade 一致性測試。 */
 
 import {
 	ME,
@@ -18,7 +24,6 @@ import {
 	UPCOMING,
 	MY_COURSES,
 	ATT_HISTORY,
-	CATALOG,
 	SCHEDULE,
 	ORDERS,
 	MAKEUP_SLOTS,
@@ -34,7 +39,6 @@ import {
 	type Upcoming,
 	type MyCourse,
 	type AttRecord,
-	type Course,
 	type ScheduleBlock,
 	type Order,
 	type MakeupSlot,
@@ -52,7 +56,6 @@ import {
 	UPCOMING as D_UPCOMING,
 	MY_COURSES as D_MY_COURSES,
 	ATT_HISTORY as D_ATT_HISTORY,
-	CATALOG as D_CATALOG,
 	SCHEDULE as D_SCHEDULE,
 	ORDERS as D_ORDERS,
 	MAKEUP_SLOTS as D_MAKEUP_SLOTS,
@@ -72,7 +75,6 @@ describe('mobile facade re-exports domain/member-app by reference (single source
 		expect(UPCOMING).toBe(D_UPCOMING);
 		expect(MY_COURSES).toBe(D_MY_COURSES);
 		expect(ATT_HISTORY).toBe(D_ATT_HISTORY);
-		expect(CATALOG).toBe(D_CATALOG);
 		expect(SCHEDULE).toBe(D_SCHEDULE);
 		expect(ORDERS).toBe(D_ORDERS);
 		expect(MAKEUP_SLOTS).toBe(D_MAKEUP_SLOTS);
@@ -93,7 +95,6 @@ describe('mobile facade preserves every TYPE export (zero-API-change guard)', ()
 		const d: Upcoming = UPCOMING[0];
 		const e: MyCourse = MY_COURSES[0];
 		const f: AttRecord = ATT_HISTORY[0];
-		const g: Course = CATALOG[0];
 		const h: ScheduleBlock = SCHEDULE[0];
 		const i: Order = ORDERS[0];
 		const j: MakeupSlot = MAKEUP_SLOTS[0];
@@ -103,6 +104,6 @@ describe('mobile facade preserves every TYPE export (zero-API-change guard)', ()
 		const n: Reward = REWARDS[0];
 		const o: Report = REPORTS['k1'];
 		const p: Cert = CERTS[0];
-		expect([a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p].every((x) => x != null)).toBe(true);
+		expect([a, b, c, d, e, f, h, i, j, k, l, m, n, o, p].every((x) => x != null)).toBe(true);
 	});
 });

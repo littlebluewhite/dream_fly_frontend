@@ -1,8 +1,11 @@
 /* Dream Fly — 行動版會員 App · mock data + helpers (ported from mobile/data.jsx).
  *
- * Mock-only, no backend — typed `const` exports mirroring the prototype's data
- * verbatim (member 王承恩, ties to admin GY2024001). Screens read these; the
- * stores seed their initial state from NOTIFS_SEED / ME.points / ME profile. */
+ * Task 19：`getHome()`/`getCourses()`/`getMine()`/`getAccount()`/`getNotifications()`
+ * 在 `$lib/mobile/api.ts` 已改接真後端(復用 `$lib/member/api.ts` 的既有 seam)——
+ * 這個檔案現在混合兩種常數：(a) 仍是畫面唯一資料源的 mock(如 ANNOUNCE、
+ * COACH_REPLIES — 對應的桌面版同樣是 mock，見各自的 P2 註解)；(b) 已改為
+ * 「只供既有測試當 fixture 用、production code 不再讀取」的舊 mock(如
+ * CATALOG — 見下方個別註解)。 */
 
 export const fmtNT = (n: number): string => 'NT$' + n.toLocaleString('en-US');
 
@@ -37,33 +40,34 @@ export { POINTS_LEDGER } from '$lib/domain/member-app';
 export type { LedgerEntry as PointsEntry } from '$lib/domain/member-app';
 export { CERTS } from '$lib/domain/member-app';
 export type { Certificate as Cert } from '$lib/domain/member-app';
-// CATALOG's shape differs (Course below carries an extra index signature for the
-// cart), so keep this file's own interface and only source the value from domain.
-import { CATALOG as CATALOG_BASE } from '$lib/domain/member-app';
+import type { CatalogCourse } from '$lib/public/adapters';
 
 /* ---- Attendance history (active course) ---- */
 export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'], late: ['warning', '遲到'], leave: ['info', '請假'], absent: ['error', '缺席'] };
 
-/* ---- Course catalog (課程介紹) ---- */
-export interface Course {
-	id: number;
-	name: string;
-	level: string;
-	cat: string;
-	age: string;
+/* ---- Course catalog (課程介紹) ----
+ * Task 19：getCourses()/getHome() 改接真後端(見 api.ts，復用 member/api.ts 的
+ * getCourses() —— $lib/public/adapters 的 CatalogCourse，id 是後端 uuid string，
+ * 沒有 icon 欄位)。這裡的 Course 改為擴充該真實形狀 + 補一個 icon 欄位(api.ts
+ * 依課程分類薄映射)，id 型別由 number 改 string。 index signature 保留，讓
+ * Course 仍滿足購物車 CartInput 的形狀(把 icon/level/desc…等欄位原樣帶進
+ * cart line)。 */
+export interface Course extends CatalogCourse {
 	icon: string;
-	days: string;
-	price: number;
-	hot: boolean;
-	coach: string;
-	desc: string;
-	spots: number;
-	/* index signature so a Course satisfies the cart's CartInput (carries the
-	 * extra fields — icon / level / desc … — verbatim into a cart line). */
 	[k: string]: unknown;
 }
-// domain's CatalogCourse has no index signature; assert it into this file's Course.
-export const CATALOG: Course[] = CATALOG_BASE as Course[];
+/** 僅供既有測試當 fixture 用(data.test.ts 形狀測試、courses/page.test.ts 候補
+ *  守門測試、home page.test.ts)—— getCourses()/getHome() 已改真接後端，
+ *  production code 不再讀這個常數；id 由舊 mock 的 number 改 string，對齊
+ *  Course 型別(見上)。 */
+export const CATALOG: Course[] = [
+	{ id: '1', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', icon: 'baby', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '透過遊戲與軟墊活動建立平衡、協調與身體覺察，循序漸進培養孩子對體操的興趣。', spots: 2 },
+	{ id: '2', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', icon: 'rotate-cw', days: '週一 / 週三 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '從前滾翻、後滾翻到基礎倒立，建立扎實的體操底子，每班 6–8 人小班制。', spots: 2 },
+	{ id: '3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', icon: 'sparkles', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '適合已有翻滾基礎、想挑戰特技與團隊編排的學員。小班 12 人內、雙教練保護。', spots: 1 },
+	{ id: '4', name: '成人體操 基礎班', level: '基礎', cat: '成人體操', age: '16 歲以上', icon: 'dumbbell', days: '週五 20:00', price: 3600, hot: false, coach: '王思齊', desc: '為成人設計的入門體操，著重柔軟度、核心力量與安全保護，零基礎可上。', spots: 3 },
+	{ id: '5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', icon: 'flame', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '在安全環境中學習翻越、落地與移動技巧，建立空間判斷與身體控制。', spots: 0 },
+	{ id: '6', name: '親子體操 同樂班', level: '啟蒙', cat: '幼兒體操', age: '2–4 歲', icon: 'heart', days: '週日 10:00', price: 2600, hot: false, coach: '黃詩涵', desc: '家長與孩子一起參與，透過親子互動建立信任與運動習慣。', spots: 3 }
+];
 export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
 
 /* ---- Weekly schedule grid ---- */
@@ -84,14 +88,6 @@ export const ANNOUNCE: Announce[] = [
 	{ icon: 'calendar-off', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', title: '端午連假停課公告', body: '6/14–6/16 全館停課，請留意補課時段。', time: '5 天前' },
 	{ icon: 'award', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', title: '市賽報名開始', body: '台中市體操錦標賽選手班報名開放中。', time: '1 週前' }
 ];
-
-/* ---- Upcoming sessions per enrolled course — used by the 請假 form ---- */
-export const COURSE_SESSIONS: Record<string, string[]> = {
-	k1: ['2026/06/11 (四) 19:00–20:30', '2026/06/16 (二) 19:00–20:30', '2026/06/18 (四) 19:00–20:30', '2026/06/23 (二) 19:00–20:30'],
-	k6: ['2026/06/12 (五) 17:00–19:00', '2026/06/19 (五) 17:00–19:00', '2026/06/26 (五) 17:00–19:00'],
-	k8: ['2026/06/13 (五) 18:00–19:00', '2026/06/20 (五) 18:00–19:00', '2026/06/27 (五) 18:00–19:00']
-};
-export const LEAVE_REASONS = ['生病 / 身體不適', '家庭因素', '學校活動', '出國 / 旅遊', '其他'];
 
 /* ---- Notification center (通知中心) ---- */
 export const NOTIF_CATS: Tone[] = [['all', '全部'], ['class', '課程'], ['order', '訂單'], ['coach', '教練'], ['system', '系統']];

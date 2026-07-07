@@ -6,7 +6,15 @@
  * cart / points / notifs / toasts / prefs / profile are shared stores that live
  * here. Toasts come from the canonical shared store (`createToasts` imported
  * from `$lib/stores/toasts`); no local factory is defined or exported here.
- * Mock-only, no backend. */
+ *
+ * Task 19：登入守門與 auth 狀態改用真實 `$lib/stores/authStore`(見
+ * routes/mobile/+layout.svelte + guard.ts)——這個檔案不再有本地的 demo
+ * `session` gate 旗標。`notifs`/`notifsHydrated` 由 `$lib/mobile/api.ts` 的
+ * getNotifications() 水合真資料(同 member notifications 前例)；`points`/
+ * `cart`/`checkout`/`redeemReward` 仍是本地端 —— 目前只有 CartSheet(購物車/
+ * 結帳)在用，該流程尚未接真後端訂單 API(P2，見 task-19-report.md 的顧慮：
+ * 範圍與 member 的 placeOrder/cart 尚未合併)。帳戶頁/點數頁的即時點數餘額改
+ * 讀 `$lib/member/stores` 的真 `points`/`pointsLedger`，不是這裡的 `points`。 */
 
 import { writable, derived } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
@@ -173,6 +181,3 @@ export const profile = writable({
 	email: 'wang.family@example.com',
 	guardian: '王先生 · 0911-222-333'
 });
-
-/* ---------- Demo auth session (gate flag only; layout owns localStorage) ---------- */
-export const session = writable(false);
