@@ -37,7 +37,10 @@ import {
  * (GET /report-cards/me + GET /certificates/me,見 integration-contract.md §3.22)
  * 後，member facade(`$lib/member/data`)不再重新匯出這兩個 mock 常數(僅 mobile
  * 仍消費,見檔案開頭註解的 mobile/data.test.ts)，故它們不再是「member facade
- * 的同參照」守衛範圍;domain 本身的字面不變量/row-count 仍在下方第 2、3 節涵蓋。 */
+ * 的同參照」守衛範圍;domain 本身的字面不變量/row-count 仍在下方第 2、3 節涵蓋。
+ * REWARDS 同理——Task 14 把 member 的兌換品項目錄換成真 GET /rewards(§3.23)後，
+ * member facade 也不再重新匯出這個 mock 常數(僅 mobile 的 PointsScreen 仍消費，
+ * 留給 Task 19)。 */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
 		expect(MemberData.ME).toBe(ME);
@@ -53,7 +56,6 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);
 		expect(MemberData.POINTS_LEDGER).toBe(POINTS_LEDGER);
-		expect(MemberData.REWARDS).toBe(REWARDS);
 	});
 });
 

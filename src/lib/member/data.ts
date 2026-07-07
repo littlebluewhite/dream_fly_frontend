@@ -21,7 +21,9 @@ export { ATT_HISTORY, type AttRecord } from '$lib/domain/member-app';
 export { CATALOG, type CatalogCourse } from '$lib/domain/member-app';
 export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
 export { CONTACT_THREAD, type ChatMessage } from '$lib/domain/member-app';
-export { REWARDS, type Reward } from '$lib/domain/member-app';
+// REWARDS/Reward 不在此列——Task 14 把 member 的兌換品項目錄換成真 GET /rewards
+// (integration-contract.md §3.23，見 member/api.ts 的 Reward/mapReward)；domain 的
+// mock 常數僅供 mobile 的 PointsScreen 消費(Task 19)，故不再從這個 facade 轉出。
 export { POINTS_LEDGER, type LedgerEntry } from '$lib/domain/member-app';
 // LedgerType is also referenced locally (PT_TYPE below), so import it as well as re-export it.
 import { type LedgerType } from '$lib/domain/member-app';

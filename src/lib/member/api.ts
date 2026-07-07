@@ -1,14 +1,15 @@
 /* 會員中心 API 接縫。Task 17：8 個 getter 換成真後端資料；Task 9：getSchedule 換成真
  * 後端資料(GET /schedule/me，見 integration-contract.md §3.18)；Task 13：getReports
- * 換成真後端資料(GET /report-cards/me + GET /certificates/me，見 §3.22)。回傳「形狀」
- * 盡量維持不變，頁面不用重寫樣板。 */
+ * 換成真後端資料(GET /report-cards/me + GET /certificates/me，見 §3.22)；Task 14：
+ * getPoints 的 rewards 換成真後端資料(GET /rewards，見 §3.23)。回傳「形狀」盡量
+ * 維持不變，頁面不用重寫樣板。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, REWARDS, mapNotification } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Reward, Notification, Tone, ApiNotification } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, mapNotification } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, Tone, ApiNotification } from './data';
 
 /** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
 const me = (): Member => ME;
@@ -350,18 +351,49 @@ export const getCourses = async (): Promise<CoursesData> => {
   return { catalog };
 };
 
+interface ApiReward {
+  id: string;
+  name: string;
+  description: string | null;
+  points_cost: number;
+  stock: number | null;
+  is_active: boolean;
+  display_order: number;
+}
+
+interface ApiRewardListResponse {
+  rewards: ApiReward[];
+}
+
+/** 點數兌換品項(Task 14；integration-contract.md §3.23)。is_active/display_order
+ *  不進 UI 形狀——member 端 GET /rewards 已經只回 is_active 品項、且依 display_order
+ *  排序，前端不用再過濾/排序一次(見 mapReward)。 */
+export interface Reward {
+  id: string;
+  name: string;
+  description: string | null;
+  pointsCost: number;
+  stock: number | null; // null = 不限量；0 = 已兌換完畢
+}
+
+function mapReward(r: ApiReward): Reward {
+  return { id: r.id, name: r.name, description: r.description, pointsCost: r.points_cost, stock: r.stock };
+}
+
 export interface PointsData {
-  rewards: Reward[];     // = REWARDS —— 點數兌換品項後端無對應資料(無 /rewards 端點)，沿用 mock
-  expiring: string;      // 原 markup 硬編「360 點」(即將到期) —— 後端無點數到期排程，沿用 mock
-  expiryDate: string;    // 原 markup 硬編「2026/12/31」(到期日) —— 同上
+  rewards: Reward[];  // GET /rewards（member 僅 is_active，依 display_order 排序，見 §3.23）
+  expiring: string;   // 原 markup 硬編「360 點」(即將到期) —— 後端無點數到期排程，沿用 mock
+  expiryDate: string; // 原 markup 硬編「2026/12/31」(到期日) —— 同上
 }
 
 /** 餘額/明細真正的顯示由 points/pointsLedger store 負責(頁面直接讀 store，見
- *  stores.ts 的 refreshPoints)；這裡呼叫 refreshPoints() 只是確保進頁面時已經
- *  hydrate 過一次真資料。 */
+ *  stores.ts 的 refreshPoints)；兌換品項目錄(GET /rewards)則是這裡唯一的真資料
+ *  來源——兩個端點互不相依，平行拉取。兌換動作本身(POST /rewards/{id}/redeem)
+ *  在 stores.ts 的 redeemReward()，不在這裡(那是「動作」不是「取資料映射」，
+ *  同 checkout 的 placeOrder 慣例留在 stores.ts)。 */
 export const getPoints = async (): Promise<PointsData> => {
-  await refreshPoints();
-  return { rewards: REWARDS, expiring: '360 點', expiryDate: '2026/12/31' };
+  const [rewardsRes] = await Promise.all([api<ApiRewardListResponse>('/rewards'), refreshPoints()]);
+  return { rewards: rewardsRes.rewards.map(mapReward), expiring: '360 點', expiryDate: '2026/12/31' };
 };
 
 /** 通知中心 feed(store-getter，非包物件)。GET /notifications 是純陣列(吃 page/

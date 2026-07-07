@@ -380,6 +380,20 @@ describe('refreshPoints', () => {
       { id: 'l4', date: '2026/05/02', desc: '會員點數調整（扣除）', type: 'expire', delta: -20 }
     ]);
   });
+
+  it('redeem（點數兌換扣點，Task 14）有專屬 desc/type，與 checkout_redeem 分開', async () => {
+    vi.mocked(api).mockResolvedValue({
+      balance: 400,
+      ledger: [{ id: 'l5', delta: -100, balance_after: 400, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }],
+      total: 1, page: 1, per_page: 20
+    });
+
+    await refreshPoints();
+
+    expect(get(pointsLedger)).toEqual([
+      { id: 'l5', date: '2026/07/06', desc: '兌換點數獎勵', type: 'redeem', delta: -100 }
+    ]);
+  });
 });
 
 describe('refreshNotifications(Task 17)', () => {

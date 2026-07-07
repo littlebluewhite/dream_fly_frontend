@@ -10,7 +10,7 @@ import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses,
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, REWARDS } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -473,10 +473,16 @@ describe('getCourses', () => {
   });
 });
 
-describe('getPoints', () => {
-  it('回傳整包點數兌換資料(rewards/expiring/expiryDate 沿用 mock)，並順手 hydrate points/pointsLedger store', async () => {
+describe('getPoints — Task 14：rewards 換成真 GET /rewards（expiring/expiryDate 仍沿用 mock，後端無點數到期排程）', () => {
+  it('rewards 映射為 UI 形狀(points_cost→pointsCost 改名；is_active/display_order 不進 UI)，並順手 hydrate points/pointsLedger store', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
+        'GET /rewards': {
+          rewards: [
+            { id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', points_cost: 100, stock: null, is_active: true, display_order: 1, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
+            { id: 'rw-2', name: '限量托特包', description: null, points_cost: 300, stock: 0, is_active: true, display_order: 2, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
+          ]
+        },
         'GET /points/me': {
           balance: 999,
           ledger: [{ id: 'l1', delta: 120, balance_after: 999, reason: 'checkout_earn', order_id: 'o1', created_at: '2026-07-01T00:00:00Z' }]
@@ -486,13 +492,30 @@ describe('getPoints', () => {
 
     const d = await getPoints();
 
-    expect(d).toEqual({ rewards: REWARDS, expiring: '360 點', expiryDate: '2026/12/31' });
+    expect(d).toEqual({
+      rewards: [
+        { id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', pointsCost: 100, stock: null },
+        { id: 'rw-2', name: '限量托特包', description: null, pointsCost: 300, stock: 0 }
+      ],
+      expiring: '360 點',
+      expiryDate: '2026/12/31'
+    });
     expect(get(points)).toBe(999);
     expect(get(pointsLedger)).toEqual([{ id: 'l1', date: '2026/07/01', desc: '消費獲得點數', type: 'earn', delta: 120 }]);
   });
 
+  it('沒有任何品項時 rewards 回傳空陣列', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': { balance: 0, ledger: [] } })
+    );
+    const d = await getPoints();
+    expect(d.rewards).toEqual([]);
+  });
+
   it('是 async 接縫(回 Promise)', () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /points/me': { balance: 0, ledger: [] } }));
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': { balance: 0, ledger: [] } })
+    );
     expect(getPoints()).toBeInstanceOf(Promise);
   });
 });

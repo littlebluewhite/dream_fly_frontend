@@ -2,15 +2,23 @@
   /* 會員點數 (Points) — points balance hero + ledger on the left, reward
    * redemption on the right. Ported from the prototype's PointsView /
    * PointsSkeleton (client/views2.jsx). Data + primitives come from the shared
-   * foundation; the live balance lives in the `points` store so redemptions
-   * persist across routes (mock-only, resets on reload). */
+   * foundation; the live balance lives in the `points`/`pointsLedger` store,
+   * hydrated from the real backend (see stores.ts refreshPoints).
+   *
+   * Task 14（integration-contract.md §3.23）：兌換品項清單來自 GET /rewards
+   * （member/api.ts 的 getPoints()）；兌換動作打 POST /rewards/{id}/redeem
+   * （member/stores.ts 的 redeemReward()），成功後整包 hydrate points/
+   * pointsLedger（不做本地扣減）。沒有「兌換紀錄」專區——GET /rewards/
+   * redemptions/me 未接：本頁的「點數明細」（左側 pointsLedger）本來就會在
+   * refreshPoints() 後含入這筆 reason="redeem" 的扣點紀錄，不需要另一張表。 */
   import { onMount } from 'svelte';
   import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
-  import { PT_TYPE, type Reward } from '$lib/member/data';
-  import { points, pointsLedger, toasts } from '$lib/member/stores';
-  import { getPoints, type PointsData } from '$lib/member/api';
+  import { PT_TYPE } from '$lib/member/data';
+  import { points, pointsLedger, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
+  import { getPoints, type PointsData, type Reward } from '$lib/member/api';
 
   let confirm: Reward | null = null;
+  let redeeming = false;
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: PointsData | null = null;
 
@@ -31,22 +39,30 @@
   onMount(load);
 
   function redeem(rw: Reward) {
-    if ($points < rw.cost) {
-      toasts.notify('warning', '點數不足', `兌換「${rw.name}」需 ${rw.cost} 點，你目前有 ${$points} 點。`);
+    if (redeeming || rw.stock === 0) return; // 售罄/兌換中——按鈕本身也停用，這裡是防禦性的雙重把關
+    if ($points < rw.pointsCost) {
+      toasts.notify('warning', '點數不足', `兌換「${rw.name}」需 ${rw.pointsCost} 點，你目前有 ${$points} 點。`);
       return;
     }
     confirm = rw;
   }
-  function doRedeem() {
-    if (!confirm) return;
+
+  // 送出兌換——比照 LeaveDialog/MakeupDialog 的 in-flight guard 慣例：submitting
+  // 旗標於 await 前同步設定，擋掉重複點擊；失敗時不清空 confirm(對話框留著讓使用
+  // 者可重試或手動取消，同 leave/makeup 對話框對錯誤的處理方式)。
+  async function doRedeem() {
+    if (!confirm || redeeming) return;
     const rw = confirm;
-    points.update((p) => p - rw.cost);
-    pointsLedger.update((p) => [
-      { id: 'rw' + p.length + '-' + rw.id, date: '2026/06/10', desc: '兌換 · ' + rw.name, type: 'redeem', delta: -rw.cost },
-      ...p
-    ]);
-    toasts.notify('success', '兌換成功', `已兌換「${rw.name}」，扣除 ${rw.cost} 點。`);
-    confirm = null;
+    redeeming = true;
+    try {
+      await redeemReward(rw.id); // 成功後內部已呼叫 refreshPoints() 整包 hydrate，這裡不做本地扣減
+      toasts.notify('success', '兌換成功', `已兌換「${rw.name}」，扣除 ${rw.pointsCost} 點。`);
+      confirm = null;
+    } catch (err) {
+      toasts.notify('error', '兌換失敗', redeemRewardErrorMessage(err));
+    } finally {
+      redeeming = false;
+    }
   }
 </script>
 
@@ -105,21 +121,27 @@
       </div>
       <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
         {#each data.rewards as rw (rw.id)}
-          {@const afford = $points >= rw.cost}
+          {@const soldOut = rw.stock === 0}
+          {@const afford = $points >= rw.pointsCost}
           <div style="display:flex;align-items:center;gap:14px;padding:14px;border-radius:12px;border:1px solid var(--df-border);background:#fff">
             <div style="width:46px;height:46px;border-radius:12px;background:var(--df-accent-bg, #FFF8DB);display:flex;align-items:center;justify-content:center;flex:none">
-              <Icon name={rw.icon} size={23} color="var(--df-accent-dark)" />
+              <Icon name="ticket" size={23} color="var(--df-accent-dark)" />
             </div>
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:7px">
                 <span style="font-size:14.5px;font-weight:700;color:var(--df-ink)">{rw.name}</span>
-                {#if rw.tag}<Badge tone="accent" solid>{rw.tag}</Badge>{/if}
               </div>
-              <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px;line-height:1.5">{rw.desc}</div>
+              <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px;line-height:1.5">{rw.description ?? ''}</div>
             </div>
             <div style="text-align:right;flex:none">
-              <div style="font-family:var(--df-font-heading);font-size:18px;font-weight:800;color:var(--df-ink)">{rw.cost}<span style="font-size:12px;font-weight:600;color:var(--df-text-light);margin-left:2px">點</span></div>
-              <Button size="sm" variant={afford ? 'primary' : 'secondary'} disabled={!afford} style="margin-top:7px" on:click={() => redeem(rw)}>{afford ? '兌換' : '點數不足'}</Button>
+              <div style="font-family:var(--df-font-heading);font-size:18px;font-weight:800;color:var(--df-ink)">{rw.pointsCost}<span style="font-size:12px;font-weight:600;color:var(--df-text-light);margin-left:2px">點</span></div>
+              <Button
+                size="sm"
+                variant={!soldOut && afford ? 'primary' : 'secondary'}
+                disabled={soldOut || !afford || redeeming}
+                style="margin-top:7px"
+                on:click={() => redeem(rw)}
+              >{soldOut ? '已兌換完畢' : afford ? '兌換' : '點數不足'}</Button>
             </div>
           </div>
         {/each}
@@ -158,10 +180,10 @@
   open={!!confirm}
   title="確認兌換"
   onClose={() => (confirm = null)}
-  primaryAction={{ label: '確認兌換', onClick: doRedeem }}
+  primaryAction={{ label: redeeming ? '兌換中…' : '確認兌換', onClick: doRedeem, disabled: redeeming }}
   secondaryAction={{ label: '取消', onClick: () => (confirm = null) }}
 >
   {#if confirm}
-    <span>確定要使用 <b style="color:var(--df-ink)">{confirm.cost} 點</b> 兌換「{confirm.name}」嗎？兌換後將從會員點數中扣除，餘額為 {($points - confirm.cost).toLocaleString()} 點。</span>
+    <span>確定要使用 <b style="color:var(--df-ink)">{confirm.pointsCost} 點</b> 兌換「{confirm.name}」嗎？兌換後將從會員點數中扣除，餘額為 {($points - confirm.pointsCost).toLocaleString()} 點。</span>
   {/if}
 </Dialog>
