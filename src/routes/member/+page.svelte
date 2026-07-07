@@ -6,20 +6,20 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type DashboardData } from '$lib/member/api';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: DashboardData | null = null;
-  function load() {
-    phase = 'loading';
-    getDashboard()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getDashboard,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 <div class="df-view" style="display:flex;flex-direction:column;gap:22px">
   <!-- Welcome banner -->
   <div
@@ -113,8 +113,8 @@
     </div>
   </Card>
 </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" style="display:flex;flex-direction:column;gap:22px">
     <SkelCard padding={30}><Skeleton w="40%" h={26} /></SkelCard>

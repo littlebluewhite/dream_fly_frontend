@@ -15,11 +15,11 @@
   import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { PT_TYPE } from '$lib/member/data';
   import { points, pointsLedger, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getPoints, type PointsData, type Reward } from '$lib/member/api';
 
   let confirm: Reward | null = null;
   let redeeming = false;
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: PointsData | null = null;
 
   // 「本月累積」動態取當下月份（與 pointsLedger 的 date 同為補零 YYYY/MM/DD 格式，
@@ -30,13 +30,13 @@
     .filter((l) => l.date.startsWith(thisMonthPrefix) && l.delta > 0)
     .reduce((s, l) => s + l.delta, 0);
 
-  function load() {
-    phase = 'loading';
-    getPoints()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getPoints,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   function redeem(rw: Reward) {
     if (redeeming || rw.stock === 0) return; // 售罄/兌換中——按鈕本身也停用，這裡是防禦性的雙重把關
@@ -66,7 +66,7 @@
   }
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   <div class="df-view" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <!-- Left: balance hero + ledger -->
     <div style="display:flex;flex-direction:column;gap:18px">
@@ -148,8 +148,8 @@
       </div>
     </Card>
   </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" data-testid="points-skeleton" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">

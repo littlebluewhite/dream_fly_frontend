@@ -8,20 +8,20 @@
   import { fmtNT } from '$lib/member/format';
   import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
+  import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type AccountData, type AccountProfile } from '$lib/member/api';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: AccountData | null = null;
   let profile: AccountProfile | null = null;
   let editing = false;
 
-  function load() {
-    phase = 'loading';
-    getAccount()
-      .then((d) => { data = d; profile = d.profile; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getAccount,
+    onData: (d) => { data = d; profile = d.profile; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: contacts = profile ? [
     ['phone', profile.phone],
@@ -30,7 +30,7 @@
   ] as [string, string][] : [];
 </script>
 
-{#if phase === 'ready' && data && profile}
+{#if $gate === 'ready' && data && profile}
   <div class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">
       <Card padding={24} style="text-align:center">
@@ -118,8 +118,8 @@
       }}
     />
   </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div data-testid="account-skeleton" class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">

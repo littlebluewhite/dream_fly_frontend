@@ -8,6 +8,7 @@
   import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import { WEEK, TIME_ROWS, type ScheduleBlock } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ScheduleData } from '$lib/member/api';
 
   const rowOf = (t: string) => TIME_ROWS.indexOf(t);
@@ -20,19 +21,18 @@
   // gutter and columns 2–8 are Mon–Sun, so a class sits in column day + 2.
   const colOf = (day: number) => day + 2;
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ScheduleData | null = null;
 
-  function load() {
-    phase = 'loading';
-    getSchedule()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getSchedule,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   {#if data.schedule.length === 0}
     <div class="df-view">
       <EmptyState icon="calendar-x" title="尚未報名任何課程" body="完成報名後，你的每週課表將會在這裡顯示。" />
@@ -84,8 +84,8 @@
     </Card>
   </div>
   {/if}
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" data-testid="schedule-skeleton">
     <Skeleton w="100%" h={46} r={9} style="margin-bottom:18px" />

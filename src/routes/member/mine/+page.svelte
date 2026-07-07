@@ -27,30 +27,31 @@
     type WaitlistEntry,
     type LeaveRequest
   } from '$lib/member/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getMine, type MineData } from '$lib/member/api';
 
   let active: string | null = null;
   let dialog: 'leave' | 'contact' | null = null;
   let makeupFor: LeaveRequest | null = null;
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MineData | null = null;
   let cancellingId: string | null = null;
   let cancellingLeaveId: string | null = null;
 
-  function load() {
-    phase = 'loading';
-    // 候補清單/我的請假皆為 best-effort 的旁路 hydrate（同 getDashboard/getAccount
-    // 對 points/notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的
-    // 「我的課程」資料流程（getMine 走 Promise.all 仍是 fail-hard）。
-    Promise.all([
-      getMine(),
-      refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err)),
-      refreshLeaveRequests().catch((err) => console.error('mine: 我的請假 hydrate 失敗', err))
-    ])
-      .then(([d]) => { data = d; active = d.courses[0]?.id ?? null; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  // 候補清單/我的請假皆為 best-effort 的旁路 hydrate（同 getDashboard/getAccount
+  // 對 points/notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的
+  // 「我的課程」資料流程（getMine 走 Promise.all 仍是 fail-hard）。
+  const gate = createLoadGate({
+    fetch: () =>
+      Promise.all([
+        getMine(),
+        refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err)),
+        refreshLeaveRequests().catch((err) => console.error('mine: 我的請假 hydrate 失敗', err))
+      ]),
+    onData: ([d]) => { data = d; active = d.courses[0]?.id ?? null; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   async function doCancelWaitlist(w: WaitlistEntry) {
     if (cancellingId) return;
@@ -87,7 +88,7 @@
   ] : [];
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   {#if data.courses.length === 0}
     <div class="df-view">
       <EmptyState
@@ -287,8 +288,8 @@
       {/if}
     </Card>
   </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div data-testid="mine-skeleton" class="df-view" style="display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:14px">

@@ -4,33 +4,27 @@
    * Notifications + NotifSkeleton (client/views2.jsx). The list now lives in the
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-
-  let alive = true;
-  onDestroy(() => { alive = false; });
   import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState } from '$lib/components/ui';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getNotifications } from '$lib/member/api';
   import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
   import { api } from '$lib/api/client';
 
   let cat = 'all';
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
 
   // First client mount hydrates the feed once via the seam; re-visits skip the
   // fetch (guard already true) so read-state / unread badge aren't clobbered.
-  function load() {
-    phase = 'loading';
-    if (get(notificationsHydrated)) {
-      phase = 'ready';
-      return;
-    }
-    getNotifications()
-      .then((d) => { if (!alive) return; notifications.set(d); notificationsHydrated.set(true); phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getNotifications,
+    skip: () => get(notificationsHydrated),
+    onData: (d) => { notifications.set(d); notificationsHydrated.set(true); }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: list = $notifications.filter((n) => cat === 'all' || n.cat === cat);
   $: unread = $notifications.filter((n) => !n.read).length;
@@ -63,17 +57,9 @@
       toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');
     }
   };
-  // Explicit refresh always re-fetches — the user asked for the latest, so
-  // resetting to server truth (re-seed) is acceptable.
-  function refresh() {
-    phase = 'loading';
-    getNotifications()
-      .then((d) => { if (!alive) return; notifications.set(d); notificationsHydrated.set(true); phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
 </script>
 
-{#if phase === 'loading'}
+{#if $gate === 'loading'}
   <div class="df-view" data-testid="notifs-skeleton">
     <div style="display:flex;gap:8px;margin-bottom:18px">
       {#each [60, 50, 50, 50, 50] as w, i (i)}
@@ -97,10 +83,10 @@
       {/each}
     </SkelCard>
   </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="df-view">
     <Card padding={0}>
-      <ErrorState onRetry={refresh} />
+      <ErrorState onRetry={gate.refresh} />
     </Card>
   </div>
 {:else}
@@ -117,7 +103,7 @@
         {/each}
       </div>
       <div style="display:flex;gap:8px">
-        <Button variant="ghost" size="sm" on:click={refresh}>
+        <Button variant="ghost" size="sm" on:click={gate.refresh}>
           <Icon name="rotate-cw" size={15} />重新整理
         </Button>
         <Button variant="secondary" size="sm" disabled={unread === 0} on:click={markAll}>

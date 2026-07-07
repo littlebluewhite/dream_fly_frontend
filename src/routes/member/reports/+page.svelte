@@ -7,25 +7,25 @@
    * 成績單，故改為列表呈現每一筆成績單（新到舊，同後端排序），不再有「課程picker」。 */
   import { onMount } from 'svelte';
   import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/member/api';
   import { fmtRate } from '$lib/member/format';
 
   let tab = 'report';
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ReportsData | null = null;
 
-  function load() {
-    phase = 'loading';
-    getReports()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getReports,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   const STARS = [1, 2, 3, 4, 5];
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   <div class="df-view">
     <div class="stats-row">
       <Card padding={16}>
@@ -139,8 +139,8 @@
       {/if}
     {/if}
   </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" data-testid="reports-skeleton">
     <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />

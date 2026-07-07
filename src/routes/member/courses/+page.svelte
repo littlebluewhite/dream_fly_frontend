@@ -7,23 +7,21 @@
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
   import { LEVEL_TONE } from '$lib/member/data';
   import type { CatalogCourse } from '$lib/public/adapters';
+  import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type CoursesData } from '$lib/member/api';
   import { cart, search, toasts, waitlist, refreshWaitlist, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
 
   let tab = 'all';
   let filter = '全部';
   let detail: CatalogCourse | null = null;
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CoursesData | null = null;
 
-  function load() {
-    phase = 'loading';
-    getCourses()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
+  const gate = createLoadGate({
+    fetch: getCourses,
+    onData: (d) => { data = d; }
+  });
   onMount(() => {
-    load();
+    gate.load();
     // best-effort：候補狀態只影響「候補」按鈕要不要顯示已候補，失敗就先當作
     // 尚未候補，仍可手動點擊候補（後端 409 會擋掉真的重複）。
     void refreshWaitlist().catch(() => {});
@@ -66,7 +64,7 @@
   }
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   <div class="df-view">
     <Tabs {tabs} bind:value={tab} style="margin-bottom:18px" />
     <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
@@ -144,8 +142,8 @@
 
     <CourseDetailDialog course={detail} onClose={() => (detail = null)} onAdd={addToCart} />
   </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" data-testid="courses-skeleton">
     <Skeleton w={320} h={36} r={9} style="margin-bottom:18px" />
