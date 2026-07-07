@@ -7,6 +7,14 @@ import Page from './+page.svelte';
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/member/api', () => ({ getReports: vi.fn() }));
 
+const STATS: ReportsData['stats'] = {
+  attendedTotal: 18,
+  attendanceRate: 0.9,
+  pointsBalance: 1250,
+  activeEnrolments: 2,
+  upcomingSessions7d: 3
+};
+
 const SEED: ReportsData = {
   reportCards: [
     {
@@ -29,7 +37,8 @@ const SEED: ReportsData = {
       note: null,
       createdAt: '2026-06-20T00:00:00Z'
     }
-  ]
+  ],
+  stats: STATS
 };
 
 beforeEach(() => {
@@ -45,6 +54,22 @@ describe('member/reports 頁', () => {
     expect(screen.getByText('競技啦啦隊 進階班')).toBeInTheDocument();
     expect(screen.getByText('2026 夏季')).toBeInTheDocument();
     expect(screen.getByText('林雅婷 教練 · 2026-07-01')).toBeInTheDocument();
+  });
+
+  it('顯示 GET /reports/me 統計欄位（累計出席/出席率/點數餘額/有效報名/未來 7 天課程）', async () => {
+    vi.mocked(getReports).mockResolvedValue(SEED);
+    render(Page);
+    expect(await screen.findByText('18')).toBeInTheDocument(); // attendedTotal
+    expect(screen.getByText('90%')).toBeInTheDocument(); // attendanceRate
+    expect(screen.getByText('1250')).toBeInTheDocument(); // pointsBalance
+    expect(screen.getByText('2')).toBeInTheDocument(); // activeEnrolments
+    expect(screen.getByText('3')).toBeInTheDocument(); // upcomingSessions7d
+  });
+
+  it('attendanceRate 為 null(無出勤資料)時顯示「尚無資料」而非 0%', async () => {
+    vi.mocked(getReports).mockResolvedValue({ ...SEED, stats: { ...STATS, attendanceRate: null } });
+    render(Page);
+    expect(await screen.findByText('尚無資料')).toBeInTheDocument();
   });
 
   it('載入失敗顯示 ErrorState', async () => {
@@ -68,7 +93,8 @@ describe('member/reports 頁', () => {
           comment: null, rating: null, issuerName: '陳冠宇', createdAt: '2026-03-01T00:00:00Z'
         }
       ],
-      certificates: []
+      certificates: [],
+      stats: STATS
     });
     render(Page);
     expect(await screen.findByText('尚未評分')).toBeInTheDocument();
@@ -77,7 +103,7 @@ describe('member/reports 頁', () => {
 
   // 迴歸:新會員 reportCards 為空時,成功 resolve 不應落入 catch → error state。
   it('reportCards 為空陣列時成功載入並顯示空狀態(不進 error state)', async () => {
-    vi.mocked(getReports).mockResolvedValue({ reportCards: [], certificates: [] });
+    vi.mocked(getReports).mockResolvedValue({ reportCards: [], certificates: [], stats: STATS });
     render(Page);
     expect(await screen.findByText('尚無成績單')).toBeInTheDocument();
     expect(screen.queryByText('載入失敗')).toBeNull();
@@ -91,7 +117,8 @@ describe('member/reports 頁', () => {
           id: 'ct2', title: '2026 台中市體操錦標賽 · 團體第三名', level: null,
           courseName: null, issuedOn: '2026-05-01', note: '恭喜獲獎', createdAt: '2026-05-01T00:00:00Z'
         }
-      ]
+      ],
+      stats: STATS
     });
     render(Page);
     await screen.findByText('尚無成績單'); // reportCards 空狀態,確認已到 ready
@@ -102,7 +129,7 @@ describe('member/reports 頁', () => {
   });
 
   it('certificates 為空時「我的證書」tab 顯示空狀態(不進 error state)', async () => {
-    vi.mocked(getReports).mockResolvedValue({ reportCards: SEED.reportCards, certificates: [] });
+    vi.mocked(getReports).mockResolvedValue({ reportCards: SEED.reportCards, certificates: [], stats: STATS });
     render(Page);
     await screen.findByText('競技啦啦隊 進階班');
     await fireEvent.click(screen.getByText('我的證書'));

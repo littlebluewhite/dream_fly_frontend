@@ -39,32 +39,11 @@ export { COACHES, type Coach } from '$lib/domain/coaches';
 export { VENUES, type Venue } from '$lib/domain/venues';
 export { TICKETS, type Ticket } from '$lib/domain/tickets';
 export { ACTIVITY, type Activity } from '$lib/domain/activity';
-export {
-	CATEGORY_SPLIT,
-	TOP_COURSES,
-	VENUE_USAGE,
-	ATT_DIST,
-	RETENTION,
-	AGE_DIST,
-	CAMPUS_REVENUE,
-	PAYMENT_SPLIT,
-	FUNNEL,
-	WEEKDAY_LOAD,
-	TIER_DIST,
-	INCOME_SOURCES,
-	COACH_PERF,
-	// Row types were part of admin's public API on `main` — re-export them too (not just values).
-	type PctSlice,
-	type TopCourse,
-	type VenueUsage,
-	type CountBar,
-	type RetentionBar,
-	type CampusRevenue,
-	type FunnelStage,
-	type WeekdayLoad,
-	type IncomeSource,
-	type CoachPerf
-} from '$lib/domain/reports';
+// Task 15: admin's report analytics (getReports()) now maps GET /reports/admin
+// (integration-contract.md §3.24) instead of this mock seed — the re-export of
+// domain/reports.ts's 13 arrays/types was dropped here (nothing in admin/ imports
+// them anymore). domain/reports.ts itself is untouched — mobile-admin/data.ts still
+// re-exports it independently for the mobile-admin surface (still mock, out of scope).
 
 // Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).
 import { CLASSES_BASE, type ClassBase } from '$lib/domain/classes';
@@ -281,51 +260,16 @@ export const TODAY: TodayClass[] = [
 /* ───────────────────────── activity / venues / tickets ─────────────────────────
  * `COACHES`, `ACTIVITY`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top. */
 
-/* ═════════════════════════ 報表分析 datasets ═════════════════════════ */
-export interface ReportKpi {
-	icon: string;
-	label: string;
-	value: string;
-	delta: string;
-	tint: string;
-	color: string;
-}
-export const REPORT_KPIS: ReportKpi[] = [
-	{ icon: 'dollar-sign', label: '本月營收', value: 'NT$ 458,200', delta: '+12.5%', tint: '#0066CC14', color: 'var(--df-primary)' },
-	{ icon: 'book-open', label: '課程報名', value: '142 筆', delta: '+8.3%', tint: '#10B98114', color: '#10B981' },
-	{ icon: 'user-plus', label: '新增會員', value: '86 位', delta: '+24.8%', tint: '#F59E0B14', color: '#F59E0B' },
-	{ icon: 'ticket', label: '票券銷售', value: '234 張', delta: '+18.7%', tint: '#8B5CF614', color: '#8B5CF6' },
-	{ icon: 'repeat', label: '會員留存率', value: '88.4%', delta: '+3.1%', tint: '#0EA5E914', color: '#0EA5E9' },
-	{ icon: 'calendar-check', label: '平均出席率', value: '91.2%', delta: '+1.4%', tint: '#10B98114', color: '#10B981' }
-];
-
-export interface RevenueRow {
-	name: string;
-	meta: string;
-	amount: string;
-	drill: string;
-	dot: string;
-}
-export const REVENUE_BREAKDOWN: RevenueRow[] = [
-	{ name: '課程報名訂單', meta: '142 筆 · 平均客單 NT$ 2,197', amount: 'NT$ 312,000', drill: '下鑽班級／訂單', dot: 'var(--df-primary)' },
-	{ name: '票券銷售', meta: '234 張 · 月票 / 體驗券 / 比賽票', amount: 'NT$ 98,400', drill: '下鑽票券來源', dot: '#8B5CF6' },
-	{ name: '裝備與週邊', meta: '86 筆 · 護具 / 隊服', amount: 'NT$ 47,800', drill: '下鑽訂單', dot: 'var(--df-warning)' }
-];
-export const REVENUE_TOTAL = 'NT$ 458,200';
-
+/* ═════════════════════════ 報表分析 ═════════════════════════
+ * Task 15: getReports() now maps real GET /reports/admin data (revenue/members/
+ * courses/coaches — integration-contract.md §3.24); the old mock KPI band/revenue
+ * breakdown/trend seed (REPORT_KPIS/REVENUE_BREAKDOWN/REVENUE_TOTAL/REVENUE_TREND)
+ * and the domain/reports.ts re-export (CATEGORY_SPLIT 等 13 組) have no backend data
+ * source and were removed from the UI along with their chart components (裁決 9).
+ * `TrendBar` survives — RevenueTrend.svelte still renders it, now fed real
+ * ntd()-converted monthly revenue via admin/api.ts's getReports(). */
 export interface TrendBar {
 	m: string;
 	h: number;
 	peak?: boolean;
 }
-export const REVENUE_TREND: TrendBar[] = [
-	{ m: '1月', h: 102 }, { m: '2月', h: 112 }, { m: '3月', h: 107 }, { m: '4月', h: 121 },
-	{ m: '5月', h: 128 }, { m: '6月', h: 138 }, { m: '7月', h: 133 }, { m: '8月', h: 144 },
-	{ m: '9月', h: 151 }, { m: '10月', h: 160, peak: true }, { m: '11月', h: 148 }, { m: '12月', h: 156 }
-];
-
-/* The other report datasets are re-exported from `$lib/domain/reports` at the top of this
- * file: CATEGORY_SPLIT, TOP_COURSES, VENUE_USAGE, ATT_DIST, RETENTION, AGE_DIST,
- * CAMPUS_REVENUE, PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST, INCOME_SOURCES, COACH_PERF.
- * Kept local above (values still diverge from mobile by more than NT$ spacing): REPORT_KPIS,
- * REVENUE_BREAKDOWN, REVENUE_TOTAL, REVENUE_TREND. */

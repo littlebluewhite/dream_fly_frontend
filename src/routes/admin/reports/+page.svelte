@@ -1,37 +1,26 @@
 <script lang="ts">
-  /* 報表分析 — faithful SvelteKit port of reports.jsx `ReportsView`. The shell wraps
-   * /admin, so this renders page content only: a PageHead (period picker + 匯出報表),
-   * the KPI 3-col grid, the full-width RevenueBreakdown, then the prototype's
-   * paired panel rows (flex, gap 18, wrap) — each pairs one flexible chart with one
-   * fixed-width chart exactly as ReportsView lays them out. Every chart is pure CSS.
+  /* 報表分析 — SvelteKit port of reports.jsx `ReportsView`, re-scoped in Task 15 to
+   * real data. The shell wraps /admin, so this renders page content only: a
+   * PageHead (匯出報表), a real-data KPI band (revenue this/last month + member
+   * counts), the 12-month RevenueTrend chart, and two honest tables (courses/
+   * coaches). The prototype's period-picker + 15 mock chart panels (kpis/
+   * revenueBreakdown/categorySplit/topCourses/incomeSources/coachPerf/venueUsage/
+   * attDist/retention/ageDist/tierDist/campusRevenue/paymentSplit/funnel/
+   * weekdayLoad) had no GET /reports/admin data source (integration-contract.md
+   * §3.24「mock 有但契約無」清單) and were removed along with their chart
+   * components/period picker (裁決 9：不留假數字) — see admin/api.ts's ReportsData
+   * for the surviving real shape (revenue/members/courses/coaches).
    *
-   * Data arrives async via getReports() (mock-API seam): onMount loads the KPI band
-   * AND every chart dataset into a three-state gate (loading/error/ready). The 15
-   * charts take their datasets as REQUIRED props from this payload — no chart reads
-   * seed data itself, so swapping the mock for a real backend touches api.ts only. */
+   * Data arrives async via getReports(): onMount loads it into a three-state gate
+   * (loading/error/ready). */
   import { onMount } from 'svelte';
-  import { Button, Icon, Select, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
+  import StatCard from '$lib/admin/components/StatCard.svelte';
   import { toasts } from '$lib/admin/stores';
-  import { REPORT_PERIODS, DEFAULT_PERIOD, kpisForPeriod } from '$lib/admin/components/reports-period';
   import { getReports, type ReportsData } from '$lib/admin/api';
-
-  import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
-  import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
+  import { fmtNT, fmtPct } from '$lib/admin/format';
   import RevenueTrend from '$lib/admin/components/reports/RevenueTrend.svelte';
-  import CategoryDonut from '$lib/admin/components/reports/CategoryDonut.svelte';
-  import TopCourses from '$lib/admin/components/reports/TopCourses.svelte';
-  import IncomeSources from '$lib/admin/components/reports/IncomeSources.svelte';
-  import CoachPerf from '$lib/admin/components/reports/CoachPerf.svelte';
-  import VenueUsage from '$lib/admin/components/reports/VenueUsage.svelte';
-  import AttDist from '$lib/admin/components/reports/AttDist.svelte';
-  import RetentionTrend from '$lib/admin/components/reports/RetentionTrend.svelte';
-  import AgeDist from '$lib/admin/components/reports/AgeDist.svelte';
-  import TierDist from '$lib/admin/components/reports/TierDist.svelte';
-  import CampusRevenue from '$lib/admin/components/reports/CampusRevenue.svelte';
-  import PaymentSplit from '$lib/admin/components/reports/PaymentSplit.svelte';
-  import ConversionFunnel from '$lib/admin/components/reports/ConversionFunnel.svelte';
-  import WeekdayLoad from '$lib/admin/components/reports/WeekdayLoad.svelte';
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ReportsData | null = null;
@@ -43,21 +32,12 @@
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
-
-  // The period picker re-scales ONLY the KPI band (kpisForPeriod); the 15 charts
-  // render their payload datasets as-is (the prototype's period control never
-  // touched the charts either).
-  let period = DEFAULT_PERIOD;
-  $: kpis = data ? kpisForPeriod(data.kpis, period) : [];
 </script>
 
 {#if phase === 'ready' && data}
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
       <svelte:fragment slot="actions">
-        <div class="period-select">
-          <Select bind:value={period} options={REPORT_PERIODS} />
-        </div>
         <Button
           variant="primary"
           size="sm"
@@ -71,41 +51,70 @@
     </PageHead>
 
     <div class="kpi-grid">
-      {#each kpis as k, i (i)}
-        <ReportKpi {k} />
-      {/each}
+      <StatCard icon="dollar-sign" label="本月營收" value={fmtNT(data.revenue.thisMonth)} tint="var(--df-primary-bg)" color="var(--df-primary)" />
+      <StatCard icon="circle-dollar-sign" label="上月營收" value={fmtNT(data.revenue.lastMonth)} tint="var(--df-bg-light)" color="var(--df-text-light)" />
+      <StatCard icon="users" label="會員總數" value={data.members.total} tint="var(--df-success-bg)" color="var(--df-success)" />
+      <StatCard icon="user-plus" label="本月新增會員" value={data.members.newThisMonth} tint="#F59E0B14" color="#F59E0B" />
+      <StatCard icon="user-check" label="在學會員" value={data.members.active} tint="#8B5CF614" color="#8B5CF6" />
     </div>
 
-    <RevenueBreakdown rows={data.revenueBreakdown} total={data.revenueTotal} />
+    <RevenueTrend rows={data.revenue.trend} />
 
-    <div class="panel-row">
-      <RevenueTrend rows={data.revenueTrend} />
-      <CategoryDonut rows={data.categorySplit} />
-    </div>
-    <div class="panel-row">
-      <TopCourses rows={data.topCourses} />
-      <IncomeSources rows={data.incomeSources} />
-    </div>
-    <div class="panel-row">
-      <CoachPerf rows={data.coachPerf} />
-      <VenueUsage rows={data.venueUsage} />
-    </div>
-    <div class="panel-row">
-      <AttDist rows={data.attDist} />
-      <RetentionTrend rows={data.retention} />
-    </div>
-    <div class="panel-row">
-      <AgeDist rows={data.ageDist} />
-      <TierDist rows={data.tierDist} />
-    </div>
-    <div class="panel-row">
-      <CampusRevenue rows={data.campusRevenue} />
-      <PaymentSplit rows={data.paymentSplit} />
-    </div>
-    <div class="panel-row">
-      <ConversionFunnel rows={data.funnel} />
-      <WeekdayLoad rows={data.weekdayLoad} />
-    </div>
+    <Card padding={0} style="overflow:hidden">
+      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">課程報名狀況</h3>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--df-bg-light)">
+            <th class="th">課程</th>
+            <th class="th">已報名 / 名額</th>
+            <th class="th">滿班率</th>
+            <th class="th">候補人數</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.courses as c (c.id)}
+            <tr class="row">
+              <td class="td">{c.name}</td>
+              <td class="td td-muted">{c.enrolled} / {c.maxStudents}</td>
+              <td class="td">{fmtPct(c.fillRate)}</td>
+              <td class="td td-muted">{c.waitlistCount}</td>
+            </tr>
+          {/each}
+          {#if data.courses.length === 0}
+            <tr><td colspan="4" class="empty">尚無課程資料</td></tr>
+          {/if}
+        </tbody>
+      </table>
+    </Card>
+
+    <Card padding={0} style="overflow:hidden">
+      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">教練授課概況</h3>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--df-bg-light)">
+            <th class="th">教練</th>
+            <th class="th">授課班級數</th>
+            <th class="th">學員人數</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each data.coaches as c (c.id)}
+            <tr class="row">
+              <td class="td">{c.name}</td>
+              <td class="td td-muted">{c.courseCount}</td>
+              <td class="td td-muted">{c.studentCount}</td>
+            </tr>
+          {/each}
+          {#if data.coaches.length === 0}
+            <tr><td colspan="3" class="empty">尚無教練資料</td></tr>
+          {/if}
+        </tbody>
+      </table>
+    </Card>
   </div>
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
@@ -113,7 +122,7 @@
   <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
     <Skeleton w={220} h={32} r={8} />
     <div class="kpi-grid">
-      {#each [0, 1, 2] as i (i)}
+      {#each [0, 1, 2, 3, 4] as i (i)}
         <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
       {/each}
     </div>
@@ -124,20 +133,36 @@
 <style>
   .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 16px;
   }
-  .panel-row {
-    display: flex;
-    gap: 18px;
-    align-items: stretch;
-    flex-wrap: wrap;
+  .th {
+    text-align: left;
+    padding: 11px 22px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--df-text-light);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
   }
-  /* keep the period Select compact inside the PageHead actions row */
-  .period-select {
-    min-width: 150px;
+  .row {
+    border-bottom: 1px solid var(--df-border);
   }
-  .period-select :global(.control) {
-    height: 38px;
+  .row:last-child {
+    border-bottom: none;
+  }
+  .td {
+    padding: 13px 22px;
+    font-size: 13.5px;
+    color: var(--df-text-dark);
+  }
+  .td-muted {
+    color: var(--df-text-light);
+  }
+  .empty {
+    padding: 40px 22px;
+    text-align: center;
+    color: var(--df-text-muted);
+    font-size: 14px;
   }
 </style>

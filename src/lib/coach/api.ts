@@ -146,6 +146,22 @@ async function myTodayClasses(): Promise<TodayClass[]> {
 	return sessions.map((s) => mapTodayClass(s, now));
 }
 
+/* ═════════════════════════ 報表彙總（GET /reports/coach，見 integration-contract.md §3.24） ═════════════════════════ */
+
+interface ApiCoachReports {
+	today_sessions: number;
+	pending_attendance: number;
+	unread_messages: number;
+	student_count: number;
+	attendance_rate_30d: number | null;
+}
+
+/** attendance_rate_30d 為 null(無出勤資料，裁決 3)時顯示「尚無資料」，不是 0%(0% 會
+ *  誤導成「有資料、出席率為零」)；否則四捨五入為整數百分比。 */
+function formatAttendanceRate(rate: number | null): string {
+	return rate == null ? '尚無資料' : `${Math.round(rate * 100)}%`;
+}
+
 /** 首頁 KPI 卡數字(待點名/出席率/待回覆)原為頁面硬編字串,一併移入接縫。 */
 export interface CoachDashboardData {
 	coach: Coach;
@@ -156,16 +172,26 @@ export interface CoachDashboardData {
 	attendanceRate: string;
 	pendingReplies: string;
 }
+
+/** todayClasses(GET /sessions/today)與 reports(GET /reports/coach)彼此獨立、平行拉取。
+ *  待點名/學員出席率/待回覆訊息 3 個原 P2 佔位欄位改讀 pending_attendance/
+ *  attendance_rate_30d/unread_messages(§3.24)；today_sessions/student_count 這支端點
+ *  也有回，但目前頁面沒有對應顯示欄位(today 課程數已由 todayClasses.length 呈現)，
+ *  不強塞新卡片。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
 	const { user, coach } = await requireMyCoach();
+	const [todayClasses, reports] = await Promise.all([
+		myTodayClasses(),
+		api<ApiCoachReports>('/reports/coach')
+	]);
 	return {
 		coach: mapCoach(user, coach),
 		todayLabel: TODAY_LABEL,
-		todayClasses: await myTodayClasses(),
+		todayClasses,
 		conversations: CONVERSATIONS, // getMessages 領域，仍為 mock
-		pendingClasses: '0 班', // P2: 後端無「待點名班級數」統計端點
-		attendanceRate: '0%', // P2: 後端無「學員出席率」統計端點
-		pendingReplies: '0 則' // P2: 後端無「待回覆訊息數」統計端點(getMessages 仍為 mock)
+		pendingClasses: `${reports.pending_attendance} 班`,
+		attendanceRate: formatAttendanceRate(reports.attendance_rate_30d),
+		pendingReplies: `${reports.unread_messages} 則`
 	};
 };
 

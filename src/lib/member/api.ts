@@ -129,19 +129,54 @@ function mapCertificate(c: ApiCertificate): Certificate {
   };
 }
 
+/** GET /reports/me 回應（integration-contract.md §3.24）。 */
+interface ApiMemberReportStats {
+  attended_total: number;
+  attendance_rate: number | null;
+  points_balance: number;
+  active_enrolments: number;
+  upcoming_sessions_7d: number;
+}
+
+export interface MemberReportStats {
+  attendedTotal: number;
+  attendanceRate: number | null; // null = 無出勤資料(裁決 3)，非 0
+  pointsBalance: number;
+  activeEnrolments: number;
+  upcomingSessions7d: number;
+}
+
+function mapReportStats(s: ApiMemberReportStats): MemberReportStats {
+  return {
+    attendedTotal: s.attended_total,
+    attendanceRate: s.attendance_rate,
+    pointsBalance: s.points_balance,
+    activeEnrolments: s.active_enrolments,
+    upcomingSessions7d: s.upcoming_sessions_7d
+  };
+}
+
 export interface ReportsData {
   reportCards: ReportCard[];
   certificates: Certificate[];
+  stats: MemberReportStats;
 }
 
-/** GET /report-cards/me + GET /certificates/me（純陣列，不分頁，新到舊，見 §3.22）。
- *  兩者皆為呼叫者自己的資料，無需額外過濾;v1 純 metadata，無 PDF/檔案欄位。 */
+/** GET /report-cards/me + GET /certificates/me（純陣列，不分頁，新到舊，見 §3.22）+
+ *  GET /reports/me（統計欄位，見 §3.24）——三者互不相依，平行拉取。成績單/證書 v1 純
+ *  metadata，無 PDF/檔案欄位(Task 13 既有邏輯，本次未變動)；stats 是本任務新增的統計
+ *  彙總(出席次數/出席率/點數餘額/有效報名/未來 7 天場次)。 */
 export const getReports = async (): Promise<ReportsData> => {
-  const [reportCards, certificates] = await Promise.all([
+  const [reportCards, certificates, stats] = await Promise.all([
     api<ApiReportCard[]>('/report-cards/me'),
-    api<ApiCertificate[]>('/certificates/me')
+    api<ApiCertificate[]>('/certificates/me'),
+    api<ApiMemberReportStats>('/reports/me')
   ]);
-  return { reportCards: reportCards.map(mapReportCard), certificates: certificates.map(mapCertificate) };
+  return {
+    reportCards: reportCards.map(mapReportCard),
+    certificates: certificates.map(mapCertificate),
+    stats: mapReportStats(stats)
+  };
 };
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }

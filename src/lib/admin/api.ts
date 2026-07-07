@@ -1,32 +1,13 @@
 /* 管理後台 API 接縫。Task 18：venues/tickets/orders/classes/coaches 換真後端資料；
- * getReports 沒有對應後端彙總端點，整包沿用 mock（P2）。回傳「形狀」盡量維持不變，
- * 頁面不用重寫樣板 —— 既有 Order/ClassRow/Coach/Venue/Ticket 型別維持原樣，後端沒有
- * 對應的欄位一律給誠實預設值（見各函式註解），呼叫端不用改。 */
+ * Task 15：getReports 換成真後端彙總資料（GET /reports/admin，見 integration-
+ * contract.md §3.24）。回傳「形狀」盡量維持不變，頁面不用重寫樣板 —— 既有 Order/
+ * ClassRow/Coach/Venue/Ticket 型別維持原樣，後端沒有對應的欄位一律給誠實預設值
+ * （見各函式註解），呼叫端不用改。 */
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches, listVenues, listProducts } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
-import {
-	REPORT_KPIS,
-	REVENUE_BREAKDOWN,
-	REVENUE_TOTAL,
-	REVENUE_TREND,
-	CATEGORY_SPLIT,
-	TOP_COURSES,
-	INCOME_SOURCES,
-	COACH_PERF,
-	VENUE_USAGE,
-	ATT_DIST,
-	RETENTION,
-	AGE_DIST,
-	TIER_DIST,
-	CAMPUS_REVENUE,
-	PAYMENT_SPLIT,
-	FUNNEL,
-	WEEKDAY_LOAD,
-	MEMBER_COLORS,
-	mapMemberAccount
-} from './data';
+import { MEMBER_COLORS, mapMemberAccount } from './data';
 import type {
 	Ticket,
 	TicketType,
@@ -37,25 +18,10 @@ import type {
 	Venue,
 	Order,
 	OrderStatus,
-	ReportKpi,
-	RevenueRow,
 	TrendBar,
-	PctSlice,
-	TopCourse,
-	IncomeSource,
-	CoachPerf,
-	VenueUsage,
-	CountBar,
-	RetentionBar,
-	CampusRevenue,
-	FunnelStage,
-	WeekdayLoad,
 	MemberAccount,
 	ApiUserAccount
 } from './data';
-
-/** 未來可在此單點加入延遲 / 失敗注入,呼叫端無感。getReports 仍為 mock,沿用此 helper。 */
-const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
 
 /* ═════════════════════════ 場館（GET /venues，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
@@ -203,49 +169,102 @@ export const updateOrderStatus = (id: string, status: OrderStatus): Promise<ApiO
 		body: JSON.stringify({ status })
 	});
 
-/* ═════════════════════════ 報表分析（P2：無對應後端彙總端點，整包沿用 mock） ═════════════════════════ */
+/* ═════════════════════════ 報表分析（GET /reports/admin，admin-only，見 integration-contract.md §3.24） ═════════════════════════ */
 
-/** 報表分析整包:KPI 帶 + 15 個圖表元件消費的全部資料集。
- *  P2: 營收/出席/留存/客源等皆為多表聚合統計，後端目前無對應彙總端點，整包沿用 mock。 */
-export interface ReportsData {
-	kpis: ReportKpi[];
-	revenueBreakdown: RevenueRow[];
-	revenueTotal: string;
-	revenueTrend: TrendBar[];
-	categorySplit: PctSlice[];
-	topCourses: TopCourse[];
-	incomeSources: IncomeSource[];
-	coachPerf: CoachPerf[];
-	venueUsage: VenueUsage[];
-	attDist: CountBar[];
-	retention: RetentionBar[];
-	ageDist: PctSlice[];
-	tierDist: CountBar[];
-	campusRevenue: CampusRevenue[];
-	paymentSplit: PctSlice[];
-	funnel: FunnelStage[];
-	weekdayLoad: WeekdayLoad[];
+interface ApiAdminRevenueTrendPoint {
+	month: string; // "YYYY-MM"
+	revenue_cents: number;
 }
+interface ApiAdminReportsCourse {
+	course_id: string;
+	name: string;
+	enrolled: number;
+	max_students: number;
+	fill_rate: number | null;
+	waitlist_count: number;
+}
+interface ApiAdminReportsCoach {
+	coach_id: string;
+	name: string;
+	course_count: number;
+	student_count: number;
+}
+interface ApiAdminReports {
+	revenue: {
+		this_month_cents: number;
+		last_month_cents: number;
+		trend: ApiAdminRevenueTrendPoint[];
+	};
+	members: { total: number; new_this_month: number; active: number };
+	courses: ApiAdminReportsCourse[];
+	coaches: ApiAdminReportsCoach[];
+}
+
+/** courses[]/coaches[] 的 UI 形狀——`fillRate` 維持契約的 0–1 比例(null 只在
+ *  max_students=0 的防禦性情境出現，見裁決 4)，由頁面用 fmtPct() 格式化，不在此層
+ *  轉成百分比字串(cents→dollar 才是 ntd() 的職責，比例不是金額)。 */
+export interface AdminReportCourseRow {
+	id: string;
+	name: string;
+	enrolled: number;
+	maxStudents: number;
+	fillRate: number | null;
+	waitlistCount: number;
+}
+export interface AdminReportCoachRow {
+	id: string;
+	name: string;
+	courseCount: number;
+	studentCount: number;
+}
+
+/** 報表分析頁消費的全部資料——Task 15 起改吃 GET /reports/admin 的四組真實彙總。
+ *  舊 mock 的 kpis/revenueBreakdown/revenueTotal/categorySplit/topCourses/
+ *  incomeSources/coachPerf/venueUsage/attDist/retention/ageDist/tierDist/
+ *  campusRevenue/paymentSplit/funnel/weekdayLoad 皆無對應後端資料源(見契約 §3.24
+ *  「mock 有但契約無」清單)，已隨對應圖表/卡片區塊一併移除(裁決 9)，不留假數字。 */
+export interface ReportsData {
+	revenue: {
+		thisMonth: number; // ntd(this_month_cents)
+		lastMonth: number; // ntd(last_month_cents)
+		trend: TrendBar[]; // 12 筆，舊到新；h 為 ntd() 後的當月營收
+	};
+	members: { total: number; newThisMonth: number; active: number };
+	courses: AdminReportCourseRow[];
+	coaches: AdminReportCoachRow[];
+}
+
+function mapAdminReportCourse(c: ApiAdminReportsCourse): AdminReportCourseRow {
+	return {
+		id: c.course_id,
+		name: c.name,
+		enrolled: c.enrolled,
+		maxStudents: c.max_students,
+		fillRate: c.fill_rate,
+		waitlistCount: c.waitlist_count
+	};
+}
+
+function mapAdminReportCoach(c: ApiAdminReportsCoach): AdminReportCoachRow {
+	return { id: c.coach_id, name: c.name, courseCount: c.course_count, studentCount: c.student_count };
+}
+
+/** GET /reports/admin — 單一物件回應，不分頁(裁決 1)。trend 固定 12 筆、舊到新、
+ *  缺資料月份已由後端補 0(裁決 2)；`m` 直接沿用後端 "YYYY-MM"(12 個月可能跨兩個
+ *  日曆年，不裁成純「N月」以免年份混淆)；不設 peak——契約沒有「最高月份」欄位，
+ *  不無中生有標記，讓 RevenueTrend 的長條維持單一主色。空庫時 revenue 全 0、
+ *  members 全 0、courses/coaches 皆 []，此處原樣穿透(裁決文末「空庫」段落)。 */
 export const getReports = (): Promise<ReportsData> =>
-	reply({
-		kpis: REPORT_KPIS,
-		revenueBreakdown: REVENUE_BREAKDOWN,
-		revenueTotal: REVENUE_TOTAL,
-		revenueTrend: REVENUE_TREND,
-		categorySplit: CATEGORY_SPLIT,
-		topCourses: TOP_COURSES,
-		incomeSources: INCOME_SOURCES,
-		coachPerf: COACH_PERF,
-		venueUsage: VENUE_USAGE,
-		attDist: ATT_DIST,
-		retention: RETENTION,
-		ageDist: AGE_DIST,
-		tierDist: TIER_DIST,
-		campusRevenue: CAMPUS_REVENUE,
-		paymentSplit: PAYMENT_SPLIT,
-		funnel: FUNNEL,
-		weekdayLoad: WEEKDAY_LOAD
-	});
+	api<ApiAdminReports>('/reports/admin').then((r) => ({
+		revenue: {
+			thisMonth: ntd(r.revenue.this_month_cents),
+			lastMonth: ntd(r.revenue.last_month_cents),
+			trend: r.revenue.trend.map((t) => ({ m: t.month, h: ntd(t.revenue_cents) }))
+		},
+		members: { total: r.members.total, newThisMonth: r.members.new_this_month, active: r.members.active },
+		courses: r.courses.map(mapAdminReportCourse),
+		coaches: r.coaches.map(mapAdminReportCoach)
+	}));
 
 /* ═════════════════════════ 課程（GET /courses，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 

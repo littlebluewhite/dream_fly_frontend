@@ -1,49 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import ReportsPage from './+page.svelte';
-import {
-	REPORT_KPIS,
-	REVENUE_BREAKDOWN,
-	REVENUE_TOTAL,
-	REVENUE_TREND,
-	CATEGORY_SPLIT,
-	TOP_COURSES,
-	INCOME_SOURCES,
-	COACH_PERF,
-	VENUE_USAGE,
-	ATT_DIST,
-	RETENTION,
-	AGE_DIST,
-	TIER_DIST,
-	CAMPUS_REVENUE,
-	PAYMENT_SPLIT,
-	FUNNEL,
-	WEEKDAY_LOAD
-} from '$lib/admin/data';
-import { REPORT_PERIODS, DEFAULT_PERIOD, kpisForPeriod } from '$lib/admin/components/reports-period';
+import type { ReportsData } from '$lib/admin/api';
 import { getReports } from '$lib/admin/api';
 
 vi.mock('$lib/admin/api', () => ({ getReports: vi.fn() }));
 
-/** getReports() 的完整 seed 聚合 — 頁面把每個資料集下傳給對應圖表元件。 */
-const PAYLOAD = {
-	kpis: REPORT_KPIS,
-	revenueBreakdown: REVENUE_BREAKDOWN,
-	revenueTotal: REVENUE_TOTAL,
-	revenueTrend: REVENUE_TREND,
-	categorySplit: CATEGORY_SPLIT,
-	topCourses: TOP_COURSES,
-	incomeSources: INCOME_SOURCES,
-	coachPerf: COACH_PERF,
-	venueUsage: VENUE_USAGE,
-	attDist: ATT_DIST,
-	retention: RETENTION,
-	ageDist: AGE_DIST,
-	tierDist: TIER_DIST,
-	campusRevenue: CAMPUS_REVENUE,
-	paymentSplit: PAYMENT_SPLIT,
-	funnel: FUNNEL,
-	weekdayLoad: WEEKDAY_LOAD
+/* 報表分析 (reports.jsx ReportsView, re-scoped Task 15): a PageHead with 匯出報表,
+ * a real-data KPI band (revenue this/last month + member counts), the 12-month
+ * RevenueTrend chart, and two honest courses/coaches tables. Data arrives through
+ * the getReports() seam (async), so every assertion first awaits the ready phase. */
+const PAYLOAD: ReportsData = {
+	revenue: {
+		thisMonth: 458200,
+		lastMonth: 400000,
+		trend: [
+			{ m: '2025-08', h: 300000 },
+			{ m: '2025-09', h: 320000 },
+			{ m: '2025-10', h: 458200 }
+		]
+	},
+	members: { total: 120, newThisMonth: 8, active: 96 },
+	courses: [
+		{ id: 'c1', name: '競技體操 選手班', enrolled: 12, maxStudents: 12, fillRate: 1, waitlistCount: 4 },
+		{ id: 'c2', name: '兒童基礎 B 班', enrolled: 7, maxStudents: 10, fillRate: 0.7, waitlistCount: 0 }
+	],
+	coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28 }]
 };
 
 beforeEach(() => {
@@ -51,72 +33,78 @@ beforeEach(() => {
 	vi.mocked(getReports).mockResolvedValue(PAYLOAD);
 });
 
-/* 報表分析 (reports.jsx ReportsView): a PageHead with a real period Select + 匯出報表,
- * the KPI band (reactive to the period), and the 15 CSS charts fed from the same
- * getReports() payload via required props. The period Select re-scales only the
- * KPI band (kpisForPeriod). Data arrives through the seam (async), so every
- * assertion first awaits the ready phase. */
 describe('報表分析 (+page)', () => {
-	it('renders the title and the default-period KPI values', async () => {
-		const revenue = REPORT_KPIS.find((k) => k.label === '本月營收')!;
-		const { container, findByText } = render(ReportsPage);
-		// default band: 本月營收 NT$ 458,200 is shown verbatim
-		await findByText('報表分析');
-		const txt = container.textContent ?? '';
-		expect(txt).toContain('報表分析');
-		expect(txt).toContain(revenue.value);
-	});
-
-	it('renders the period Select seeded with every REPORT_PERIODS option', async () => {
-		const { container, findByText } = render(ReportsPage);
-		await findByText('報表分析');
-		const select = container.querySelector('select') as HTMLSelectElement;
-		expect(select).not.toBeNull();
-		const optionValues = [...select.options].map((o) => o.value);
-		for (const p of REPORT_PERIODS) {
-			expect(optionValues).toContain(p);
-		}
-		expect(select.value).toBe(DEFAULT_PERIOD);
-	});
-
-	it('re-scales a numeric KPI when the period Select changes', async () => {
-		const { container, findByText } = render(ReportsPage);
-		await findByText('報表分析');
-		const select = container.querySelector('select') as HTMLSelectElement;
-		const other = REPORT_PERIODS.find((p) => p !== DEFAULT_PERIOD)!;
-
-		// the default value is on screen before the change
-		const enrollBase = REPORT_KPIS.find((k) => k.label === '課程報名')!.value; // '142 筆'
-		expect(container.textContent).toContain(enrollBase);
-
-		await fireEvent.change(select, { target: { value: other } });
-
-		const scaled = kpisForPeriod(REPORT_KPIS, other);
-		const enrollScaled = scaled[REPORT_KPIS.findIndex((k) => k.label === '課程報名')].value;
-		expect(enrollScaled).not.toBe(enrollBase); // sanity: the window actually moved it
-		expect(container.textContent).toContain(enrollScaled);
-	});
-
-	it('feeds every chart from the seam payload (抽樣斷言各圖表資料上畫面)', async () => {
+	it('renders the title and the real revenue/member KPI values', async () => {
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
 		const txt = container.textContent ?? '';
-		expect(txt).toContain(REVENUE_TOTAL); // RevenueBreakdown 合計
-		expect(txt).toContain(TOP_COURSES[0].name); // TopCourses 排行第 1 名
-		expect(txt).toContain(VENUE_USAGE[0].hours); // VenueUsage 時數
-		expect(txt).toContain(INCOME_SOURCES[0].amount); // IncomeSources 金額
-		expect(txt).toContain(CAMPUS_REVENUE[0].name); // CampusRevenue 分校名
-		expect(txt).toContain(`轉化 ${Math.round((FUNNEL[1].pct / FUNNEL[0].pct) * 100)}%`); // ConversionFunnel 逐步轉化
+		expect(txt).toContain('本月營收');
+		expect(txt).toContain('NT$458,200');
+		expect(txt).toContain('上月營收');
+		expect(txt).toContain('NT$400,000');
+		expect(txt).toContain('會員總數');
+		expect(txt).toContain('120');
+		expect(txt).toContain('本月新增會員');
+		expect(txt).toContain('8');
+		expect(txt).toContain('在學會員');
+		expect(txt).toContain('96');
 	});
 
-	it('keeps a %-valued KPI honest across a period change', async () => {
+	it('renders the 12-month revenue trend chart with real month labels and a computed total', async () => {
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
-		const select = container.querySelector('select') as HTMLSelectElement;
-		const other = REPORT_PERIODS.find((p) => p !== DEFAULT_PERIOD)!;
-		await fireEvent.change(select, { target: { value: other } });
-		const att = REPORT_KPIS.find((k) => k.label === '平均出席率')!.value; // '91.2%'
-		expect(container.textContent).toContain(att);
+		const txt = container.textContent ?? '';
+		for (const t of PAYLOAD.revenue.trend) expect(txt).toContain(t.m);
+		expect(txt).toContain('總計 NT$1,078,200'); // 300,000+320,000+458,200
+	});
+
+	it('renders the courses table with fill rate and waitlist count', async () => {
+		const { container, findByText } = render(ReportsPage);
+		await findByText('報表分析');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('競技體操 選手班');
+		expect(txt).toContain('12 / 12');
+		expect(txt).toContain('100%');
+		expect(txt).toContain('兒童基礎 B 班');
+		expect(txt).toContain('7 / 10');
+		expect(txt).toContain('70%');
+	});
+
+	it('renders the coaches table with course/student counts', async () => {
+		const { container, findByText } = render(ReportsPage);
+		await findByText('報表分析');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('林雅婷');
+		expect(txt).toContain('3');
+		expect(txt).toContain('28');
+	});
+
+	it('fillRate 為 null 時課程表格顯示「—」而非 0%', async () => {
+		vi.mocked(getReports).mockResolvedValue({
+			...PAYLOAD,
+			courses: [{ id: 'c3', name: '空堂', enrolled: 0, maxStudents: 0, fillRate: null, waitlistCount: 0 }]
+		});
+		const { findByText, container } = render(ReportsPage);
+		await findByText('報表分析');
+		expect(container.textContent).toContain('—');
+	});
+
+	it('空庫：revenue 全 0(12 筆 trend 皆 0)、courses/coaches 皆空陣列時顯示尚無資料，不是空白或崩潰', async () => {
+		const zeroTrend = Array.from({ length: 12 }, (_, i) => ({ m: `2025-${String(i + 1).padStart(2, '0')}`, h: 0 }));
+		vi.mocked(getReports).mockResolvedValue({
+			revenue: { thisMonth: 0, lastMonth: 0, trend: zeroTrend },
+			members: { total: 0, newThisMonth: 0, active: 0 },
+			courses: [],
+			coaches: []
+		});
+		const { findByText, container } = render(ReportsPage);
+		await findByText('報表分析');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('尚無課程資料');
+		expect(txt).toContain('尚無教練資料');
+		expect(txt).toContain('NT$0'); // KPI 帶本月/上月營收
+		expect(txt).toContain('總計 NT$0'); // RevenueTrend：12 筆全 0，max 保底 1 不產生 NaN
+		for (const t of zeroTrend) expect(txt).toContain(t.m);
 	});
 });
 

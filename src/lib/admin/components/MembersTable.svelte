@@ -2,11 +2,13 @@
   /* 學員名單 — the shared learner table (admin.jsx MembersTable), used both
    * embedded in the dashboard (compact) and on the 學員管理 page (full).
    *
-   * compact (dashboard preview, `rows` prop): UNCHANGED mock-data behaviour, out
-   * of this task's scope (getMembers() wiring is 學員管理-page-only — see issue #8).
-   * Shows 學員/課程/出席率/狀態, capped at 6 rows, and keeps its own mock-only 新增/編輯
-   * flow (MemberEditDialog mutating local state — this was never backend-wired,
-   * even before Task 5).
+   * compact (dashboard preview) — Task 15: now shares the SAME real GET /users
+   * data as the full page (`members` prop, MemberAccount[]), just capped at 6 rows
+   * and without the status tabs. No more mock MEMBERS import and no mock-only
+   * 新增/編輯 flow — those were never backend-wired anyway (no admin create-or-
+   * edit-another-user endpoint, see the P2 note below), so the preview now follows
+   * the exact same honest rule as the full table instead of carrying its own
+   * separate mock-mutation code path.
    *
    * full (學員管理 page, `members` prop) — Task 5: 誠實精簡表格. Real GET /users data
    * (MemberAccount: id/name/initial/phone/joined/status/points — the only fields
@@ -19,68 +21,28 @@
    * add/edit form here would silently fail to persist. A read-only detail view
    * (MemberDialog's `account` branch) is offered instead of a fake-working edit
    * form. */
-  import { Avatar, Card, Button, IconButton, Icon, Tabs, ProgressBar } from '$lib/components/ui';
+  import { Avatar, Card, IconButton, Icon, Tabs } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import MemberDialog from './MemberDialog.svelte';
-  import MemberEditDialog from './MemberEditDialog.svelte';
-  import { MEMBERS, type Member, type MemberAccount } from '$lib/admin/data';
+  import type { MemberAccount } from '$lib/admin/data';
   import { search, memberFilter } from '$lib/admin/stores';
-  import { filterMembers, blankMember } from './members-filter';
   import { filterMemberAccounts, countByAccountStatus, type MemberAccountStatusFilter } from './member-account-filter';
 
   const COMPACT_PREVIEW_LIMIT = 6;
 
   export let compact = false;
-  // compact-only（dashboard 預覽）：維持既有 mock Member[]，本次任務未變動範圍。
-  export let rows: Member[] = MEMBERS;
-  // 學員管理頁（!compact）：getMembers() 回傳的真實資料。
+  // 兩種模式共用同一份真實資料（GET /users，見 admin/api.ts 的 getMembers()）。
   export let members: MemberAccount[] = [];
 
-  /* ───────────────────────── compact（dashboard 預覽，邏輯未變動） ───────────────────────── */
+  /* ───────────────────────── compact（dashboard 預覽，Task 15：改吃真實 members） ───────────────────────── */
 
-  // Local working copy so saves reflect immediately (mirrors the source useState).
-  let compactRows: Member[] = rows;
-  $: compactRows = rows;
+  let activePreview: MemberAccount | null = null;
 
-  let active: Member | null = null;
-  let editing: Member | null = null;
-  let editOpen = false;
-
-  $: visible = filterMembers(compactRows, { query: $search, status: 'all' }).slice(
+  $: visible = filterMemberAccounts(members, { query: $search, status: 'all' }).slice(
     0,
     COMPACT_PREVIEW_LIMIT
   );
-
-  function openEdit(m: Member) {
-    active = null;
-    editing = m;
-    editOpen = true;
-  }
-
-  function onSaved(updated: Member) {
-    compactRows = compactRows.map((x) => (x.id === updated.id ? updated : x));
-    editOpen = false;
-    editing = null;
-  }
-
-  // 新增學員 flow — compact-only (dashboard preview's mock add flow; unrelated to
-  // 學員管理頁, which hides 新增 below — see the P2 note in the !compact branch).
-  let addOpen = false;
-  let adding: Member | null = null;
-  export function openAdd() {
-    adding = blankMember(compactRows.length);
-    addOpen = true;
-  }
-  function onAdded(m: Member) {
-    compactRows = [m, ...compactRows];
-    addOpen = false;
-    adding = null;
-  }
-  function closeAdd() {
-    addOpen = false;
-    adding = null;
-  }
 
   /* ───────────────────────── !compact（學員管理頁，Task 5：真實 getMembers() 資料） ───────────────────────── */
 
@@ -102,29 +64,31 @@
 
 {#if compact}
   <Card padding={0} style="overflow:hidden">
-    <PanelHead title="學員名單" sub={`最近活躍 ${COMPACT_PREVIEW_LIMIT} 位`}>
-      <Button slot="right" size="sm" variant="primary" on:click={openAdd}>
-        <Icon name="plus" size={15} />新增學員
-      </Button>
-    </PanelHead>
+    <PanelHead title="學員名單" sub={`最近活躍 ${COMPACT_PREVIEW_LIMIT} 位`} />
+    <!-- P2 (issue #8): 新增學員按鈕已隱藏 —— integration-contract.md §3.2 沒有 admin
+         新增使用者端點（只有 GET /users、GET /users/{id}、PATCH /users/me），假的新增
+         表單無法真正持久化（同下方 !compact 分支）。 -->
 
     <table style="width:100%;border-collapse:collapse">
       <thead>
+        <!-- P2 (issue #8)：課程/出席率/分校/繳費等欄位在 GET /users 沒有對應資料來源，誠實
+             隱藏——欄位與下方 !compact 分支完全一致（5 欄真實資料）。 -->
         <tr style="background:var(--df-bg-light)">
           <th class="th">學員</th>
-          <th class="th">課程</th>
-          <th class="th">出席率</th>
+          <th class="th">電話</th>
+          <th class="th">加入日</th>
           <th class="th">狀態</th>
+          <th class="th">點數</th>
           <th class="th th-right"></th>
         </tr>
       </thead>
       <tbody>
         {#each visible as m (m.id)}
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <tr class="df-rowhover row" on:click={() => (active = m)}>
+          <tr class="df-rowhover row" on:click={() => (activePreview = m)}>
             <td class="td">
               <div style="display:flex;align-items:center;gap:11px">
-                <Avatar name={m.initial} size="sm" color={m.color} />
+                <Avatar name={m.initial} size="sm" />
                 <div>
                   <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{m.name}</div>
                   <div
@@ -133,21 +97,13 @@
                 </div>
               </div>
             </td>
-            <td class="td td-muted">{m.course}</td>
-            <td class="td" style="width:150px">
-              <div style="display:flex;align-items:center;gap:8px">
-                <div style="flex:1">
-                  <ProgressBar value={m.att} height={6} tone={m.att >= 80 ? 'success' : 'warning'} />
-                </div>
-                <span
-                  style="font-size:13px;font-weight:700;color:var(--df-text-dark);width:34px;text-align:right"
-                >{m.att}%</span>
-              </div>
-            </td>
-            <td class="td"><StatusBadge kind="member" value={m.status} /></td>
+            <td class="td td-muted">{m.phone || '—'}</td>
+            <td class="td td-muted">{m.joined}</td>
+            <td class="td"><StatusBadge kind="memberAccount" value={m.status} /></td>
+            <td class="td td-dark">{m.points}</td>
             <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <td class="td td-right" on:click|stopPropagation>
-              <IconButton aria-label="檢視" variant="ghost" on:click={() => (active = m)}>
+              <IconButton aria-label="檢視" variant="ghost" on:click={() => (activePreview = m)}>
                 <Icon name="chevron-right" size={18} color="var(--df-text-light)" />
               </IconButton>
             </td>
@@ -155,24 +111,14 @@
         {/each}
         {#if visible.length === 0}
           <tr>
-            <td colspan="12" class="empty">找不到符合的學員</td>
+            <td colspan="6" class="empty">找不到符合的學員</td>
           </tr>
         {/if}
       </tbody>
     </table>
   </Card>
 
-  <MemberDialog member={active} onClose={() => (active = null)} onEdit={openEdit} />
-  <MemberEditDialog
-    member={editing}
-    open={editOpen}
-    onClose={() => {
-      editOpen = false;
-      editing = null;
-    }}
-    onSave={onSaved}
-  />
-  <MemberEditDialog member={adding} open={addOpen} onClose={closeAdd} onSave={onAdded} />
+  <MemberDialog account={activePreview} onClose={() => (activePreview = null)} />
 {:else}
   <Card padding={0} style="overflow:hidden">
     <PanelHead title="學員名單" sub={accCounts.all + ' 位學員'} />

@@ -21,26 +21,7 @@ import {
 } from './api';
 import { api } from '$lib/api/client';
 import { mapMemberAccount } from './data';
-import {
-	ORDER_STATUS,
-	REPORT_KPIS,
-	REVENUE_BREAKDOWN,
-	REVENUE_TOTAL,
-	REVENUE_TREND,
-	CATEGORY_SPLIT,
-	TOP_COURSES,
-	INCOME_SOURCES,
-	COACH_PERF,
-	VENUE_USAGE,
-	ATT_DIST,
-	RETENTION,
-	AGE_DIST,
-	TIER_DIST,
-	CAMPUS_REVENUE,
-	PAYMENT_SPLIT,
-	FUNNEL,
-	WEEKDAY_LOAD
-} from './data';
+import { ORDER_STATUS } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -526,29 +507,91 @@ describe('mapMemberAccount（純函式）', () => {
 	});
 });
 
-describe('getReports — 保留 mock（P2：無對應後端彙總端點）', () => {
-	it('回傳整包報表資料，不打任何網路請求', async () => {
+describe('getReports — GET /reports/admin（admin，§3.24）', () => {
+	it('revenue/members 經 ntd() 換算並改名為 camelCase；courses/coaches 依 course_id/coach_id 映射', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin': {
+					revenue: {
+						this_month_cents: 45820000,
+						last_month_cents: 40000000,
+						trend: [
+							{ month: '2025-08', revenue_cents: 10000000 },
+							{ month: '2025-09', revenue_cents: 11000000 }
+						]
+					},
+					members: { total: 120, new_this_month: 8, active: 96 },
+					courses: [
+						{ course_id: 'c1', name: '競技體操 選手班', enrolled: 12, max_students: 12, fill_rate: 1, waitlist_count: 4 },
+						{ course_id: 'c2', name: '兒童基礎 B 班', enrolled: 7, max_students: 10, fill_rate: 0.7, waitlist_count: 0 }
+					],
+					coaches: [
+						{ coach_id: 'co1', name: '林雅婷', course_count: 3, student_count: 28 }
+					]
+				}
+			})
+		);
+
 		const d = await getReports();
 
+		expect(api).toHaveBeenCalledWith('/reports/admin');
 		expect(d).toEqual({
-			kpis: REPORT_KPIS,
-			revenueBreakdown: REVENUE_BREAKDOWN,
-			revenueTotal: REVENUE_TOTAL,
-			revenueTrend: REVENUE_TREND,
-			categorySplit: CATEGORY_SPLIT,
-			topCourses: TOP_COURSES,
-			incomeSources: INCOME_SOURCES,
-			coachPerf: COACH_PERF,
-			venueUsage: VENUE_USAGE,
-			attDist: ATT_DIST,
-			retention: RETENTION,
-			ageDist: AGE_DIST,
-			tierDist: TIER_DIST,
-			campusRevenue: CAMPUS_REVENUE,
-			paymentSplit: PAYMENT_SPLIT,
-			funnel: FUNNEL,
-			weekdayLoad: WEEKDAY_LOAD
+			revenue: {
+				thisMonth: 458200,
+				lastMonth: 400000,
+				trend: [
+					{ m: '2025-08', h: 100000 },
+					{ m: '2025-09', h: 110000 }
+				]
+			},
+			members: { total: 120, newThisMonth: 8, active: 96 },
+			courses: [
+				{ id: 'c1', name: '競技體操 選手班', enrolled: 12, maxStudents: 12, fillRate: 1, waitlistCount: 4 },
+				{ id: 'c2', name: '兒童基礎 B 班', enrolled: 7, maxStudents: 10, fillRate: 0.7, waitlistCount: 0 }
+			],
+			coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28 }]
 		});
-		expect(api).not.toHaveBeenCalled();
+	});
+
+	it('fill_rate 為 null(裁決 4：分母為 0 的防禦性 null)時原樣穿透，不竄改成 0', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin': {
+					revenue: { this_month_cents: 0, last_month_cents: 0, trend: [] },
+					members: { total: 0, new_this_month: 0, active: 0 },
+					courses: [{ course_id: 'c1', name: '空堂', enrolled: 0, max_students: 0, fill_rate: null, waitlist_count: 0 }],
+					coaches: []
+				}
+			})
+		);
+
+		const d = await getReports();
+		expect(d.courses[0].fillRate).toBeNull();
+	});
+
+	it('空庫：revenue 全 0(trend 12 筆皆 0)、members 全 0、courses/coaches 皆 []，不是 500', async () => {
+		const zeroTrend = Array.from({ length: 12 }, (_, i) => ({
+			month: `2025-${String(i + 1).padStart(2, '0')}`,
+			revenue_cents: 0
+		}));
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin': {
+					revenue: { this_month_cents: 0, last_month_cents: 0, trend: zeroTrend },
+					members: { total: 0, new_this_month: 0, active: 0 },
+					courses: [],
+					coaches: []
+				}
+			})
+		);
+
+		const d = await getReports();
+		expect(d.revenue.thisMonth).toBe(0);
+		expect(d.revenue.lastMonth).toBe(0);
+		expect(d.revenue.trend).toHaveLength(12);
+		expect(d.revenue.trend.every((t) => t.h === 0)).toBe(true);
+		expect(d.members).toEqual({ total: 0, newThisMonth: 0, active: 0 });
+		expect(d.courses).toEqual([]);
+		expect(d.coaches).toEqual([]);
 	});
 });

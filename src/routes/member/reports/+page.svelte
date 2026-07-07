@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
   import { getReports, type ReportsData } from '$lib/member/api';
+  import { fmtRate } from '$lib/member/format';
 
   let tab = 'report';
   let phase: 'loading' | 'error' | 'ready' = 'loading';
@@ -26,6 +27,29 @@
 
 {#if phase === 'ready' && data}
   <div class="df-view">
+    <div class="stats-row">
+      <Card padding={16}>
+        <div class="stat-label">累計出席</div>
+        <div class="stat-value">{data.stats.attendedTotal}</div>
+      </Card>
+      <Card padding={16}>
+        <div class="stat-label">出席率</div>
+        <div class="stat-value">{fmtRate(data.stats.attendanceRate)}</div>
+      </Card>
+      <Card padding={16}>
+        <div class="stat-label">點數餘額</div>
+        <div class="stat-value">{data.stats.pointsBalance}</div>
+      </Card>
+      <Card padding={16}>
+        <div class="stat-label">有效報名</div>
+        <div class="stat-value">{data.stats.activeEnrolments}</div>
+      </Card>
+      <Card padding={16}>
+        <div class="stat-label">未來 7 天課程</div>
+        <div class="stat-value">{data.stats.upcomingSessions7d}</div>
+      </Card>
+    </div>
+
     <Tabs
       bind:value={tab}
       tabs={[
@@ -123,3 +147,22 @@
     <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
   </div>
 {/if}
+
+<style>
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--df-text-light);
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--df-ink);
+    margin-top: 4px;
+  }
+</style>

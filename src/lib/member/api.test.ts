@@ -119,8 +119,23 @@ describe('getDashboard', () => {
   });
 });
 
-describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）', () => {
-  it('report cards 與 certificates 映射為 UI 形狀（created_by_name→issuerName 等欄位改名）', async () => {
+describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）+ GET /reports/me（統計欄位，§3.24）', () => {
+  const STATS_API = {
+    attended_total: 18,
+    attendance_rate: 0.9,
+    points_balance: 1250,
+    active_enrolments: 2,
+    upcoming_sessions_7d: 3
+  };
+  const STATS_UI = {
+    attendedTotal: 18,
+    attendanceRate: 0.9,
+    pointsBalance: 1250,
+    activeEnrolments: 2,
+    upcomingSessions7d: 3
+  };
+
+  it('report cards 與 certificates 映射為 UI 形狀（created_by_name→issuerName 等欄位改名）；stats 由 GET /reports/me 映射（欄位改 camelCase，值不竄改）', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /report-cards/me': [
@@ -128,7 +143,8 @@ describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）
         ],
         'GET /certificates/me': [
           { id: 'ct1', course_id: 'c1', course_name: '競技啦啦隊 進階班', title: '結業證書', level: '結業', issued_on: '2026-06-20', note: null, created_at: '2026-06-20T00:00:00Z' }
-        ]
+        ],
+        'GET /reports/me': STATS_API
       })
     );
 
@@ -140,7 +156,8 @@ describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）
       ],
       certificates: [
         { id: 'ct1', title: '結業證書', level: '結業', courseName: '競技啦啦隊 進階班', issuedOn: '2026-06-20', note: null, createdAt: '2026-06-20T00:00:00Z' }
-      ]
+      ],
+      stats: STATS_UI
     });
   });
 
@@ -152,7 +169,8 @@ describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）
         ],
         'GET /certificates/me': [
           { id: 'ct2', course_id: null, course_name: null, title: '市賽 團體第三名', level: null, issued_on: '2026-05-01', note: null, created_at: '2026-05-01T00:00:00Z' }
-        ]
+        ],
+        'GET /reports/me': STATS_API
       })
     );
 
@@ -164,14 +182,50 @@ describe('getReports — GET /report-cards/me + GET /certificates/me（§3.22）
     expect(d.certificates[0].level).toBeNull();
   });
 
-  it('沒有任何成績單/證書時回傳空陣列(頁面顯示空狀態)', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /report-cards/me': [], 'GET /certificates/me': [] }));
+  it('attendance_rate 為 null(無出勤資料，裁決 3)時原樣穿透為 null，不竄改成 0', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /report-cards/me': [],
+        'GET /certificates/me': [],
+        'GET /reports/me': { ...STATS_API, attendance_rate: null }
+      })
+    );
     const d = await getReports();
-    expect(d).toEqual({ reportCards: [], certificates: [] });
+    expect(d.stats.attendanceRate).toBeNull();
+  });
+
+  it('沒有任何成績單/證書/出勤資料時回傳空陣列 + 全零 stats(空庫慣例，不是 500)', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /report-cards/me': [],
+        'GET /certificates/me': [],
+        'GET /reports/me': {
+          attended_total: 0,
+          attendance_rate: null,
+          points_balance: 0,
+          active_enrolments: 0,
+          upcoming_sessions_7d: 0
+        }
+      })
+    );
+    const d = await getReports();
+    expect(d).toEqual({
+      reportCards: [],
+      certificates: [],
+      stats: {
+        attendedTotal: 0,
+        attendanceRate: null,
+        pointsBalance: 0,
+        activeEnrolments: 0,
+        upcomingSessions7d: 0
+      }
+    });
   });
 
   it('是 async 接縫(回 Promise)', () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /report-cards/me': [], 'GET /certificates/me': [] }));
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /report-cards/me': [], 'GET /certificates/me': [], 'GET /reports/me': STATS_API })
+    );
     expect(getReports()).toBeInstanceOf(Promise);
   });
 });
