@@ -3,9 +3,9 @@
    * ScreenHeader（右側「重新整理」+「全部已讀」，未讀>0 才顯示）、NOTIF_CATS 類別
    * chip（本地 cat）、notifs store 清單、點擊 → notifs.markRead(id)、全部已讀 →
    * notifs.markAllRead + toast、MEmpty fallback。
-   * Legacy Svelte（無 runes）、繁體中文文案、mock-only。
+   * Legacy Svelte（無 runes）、繁體中文文案。
    *
-   * 資料改由 getNotifications()(mock-API 接縫)非同步水合共享 notifs store
+   * 資料改由 getNotifications()(API 接縫)非同步水合共享 notifs store
    * (member notifications 範本同款):createLoadGate($lib/load-gate)取代手寫
    * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、notifsHydrated
    * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試

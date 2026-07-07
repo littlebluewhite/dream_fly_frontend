@@ -84,8 +84,9 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
 - **Course vs Pass**: checkout syncs the cart and `POST /orders`s it (`placeOrder()` in member stores); the
   backend creates both artifacts atomically in one transaction. A `type: 'course'` line becomes a real 報名
-  (enrolment row) and still does **not** write to the member's weekly schedule (a separate, still-mock
-  concept, see `docs/adr/0006`); a `type: 'pass'` line becomes a real 訂閱 (entitlement), re-hydrated from
+  (enrolment row); the member's weekly schedule is real too, hydrated from `GET /schedule/me`
+  (`member/api.ts`'s `getSchedule()`, derived from the member's active enrolments, see `docs/adr/0006`);
+  a `type: 'pass'` line becomes a real 訂閱 (entitlement), re-hydrated from
   `GET /subscriptions/me` after checkout rather than persisted verbatim — the old `dreamfly_subscriptions`
   `localStorage` key is gone. Per ADR 0001 the two remain independent products.
 - **Waitlist guard:** a full course (`spots: 0`) is blocked from the paid cart and routed to 候補
@@ -104,9 +105,10 @@ Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobi
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
 real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
 `api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for the P2-commented gaps that
-have no backend equivalent yet (coach attendance/messages/students, member weekly-schedule — full
-inventory in `docs/adr/0006`; member rewards/reports and admin reports/analytics are already real,
-`docs/adr/0006` §5). `mobile`'s getters are a thin wrapper delegating
+have no backend equivalent yet (coach attendance/messages/students — full
+inventory in `docs/adr/0006`); member rewards/reports, the member weekly schedule (`GET /schedule/me`),
+and admin reports/analytics are already real,
+`docs/adr/0006` §5. `mobile`'s getters are a thin wrapper delegating
 straight to `member/api.ts`'s already-real seam instead of calling `reply()` themselves (see
 `docs/adr/0006`); `mobile-admin` is the one surface still calling `reply()` throughout — it hasn't been
 wired to the real API yet (P2). Backend wire shapes shared across ≥2 surfaces — order-status badges,

@@ -299,6 +299,29 @@ describe('createPagedLoadGate', () => {
 		gate.destroy();
 	});
 
+	it('silentRefresh() 與 in-flight load() 交錯:phase 非 ready 時 no-op,不作廢 in-flight load 的回應', async () => {
+		const d = createDeferred<RowsPage>();
+		const fetch = vi.fn().mockReturnValueOnce(d.promise);
+		const onData = vi.fn();
+		const gate = createPagedLoadGate({ fetch, onData });
+
+		const loadPromise = gate.load(2); // phase → loading,generation 已遞增
+		expect(get(gate).phase).toBe('loading');
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		await gate.silentRefresh(); // phase 非 ready → no-op,不得再次呼叫 fetch、不得遞增 generation
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		d.resolve(page({ total: 20, page: 2, perPage: 10, rows: ['a'] }));
+		await loadPromise;
+
+		expect(get(gate)).toMatchObject({ phase: 'ready', page: 2, total: 20 }); // 未被誤判為過期而 strand 在 loading
+		expect(onData).toHaveBeenCalledTimes(1);
+		expect(onData).toHaveBeenCalledWith(page({ total: 20, page: 2, perPage: 10, rows: ['a'] }));
+
+		gate.destroy();
+	});
+
 	it('事件參數安全:MouseEvent 傳入 load()/refresh() 不會被誤判為頁碼', async () => {
 		const fetch = vi.fn().mockResolvedValue(page({ total: 50, page: 2, perPage: 10 }));
 		const gate = createPagedLoadGate({ fetch, perPage: 10 });
