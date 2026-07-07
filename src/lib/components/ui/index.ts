@@ -19,6 +19,7 @@ export { default as Stepper } from './Stepper.svelte';
 export { default as Dialog } from './Dialog.svelte';
 export { default as Tabs } from './Tabs.svelte';
 export { default as FilterChip } from './FilterChip.svelte';
+export { default as PaginationBar } from './PaginationBar.svelte';
 
 // ── 非同步三態(loading / error / empty)狀態元件 — 自 member pilot hoist ──
 export { default as ErrorState } from './ErrorState.svelte';

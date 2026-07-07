@@ -10,7 +10,7 @@ vi.mock('$lib/admin/api', () => ({ getTickets: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getTickets).mockReset();
-	vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS });
+	vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: TICKETS.length, page: 1, perPage: 20 });
 });
 
 /* 票券管理 (reports.jsx TicketsView): PageHead + 3 KPI StatCards + a card grid
@@ -109,5 +109,40 @@ describe('票券管理 — 三態', () => {
 		vi.mocked(getTickets).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(TicketsPage);
 		expect(getByTestId('tickets-skeleton')).toBeTruthy();
+	});
+});
+
+describe('票券管理 — 分頁（Task 17：PaginationBar 接上 getTickets() 的 total/page/perPage）', () => {
+	it('依 getTickets() 回應渲染「第 x 頁，共 M 筆」，邊界頁按鈕 disabled', async () => {
+		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+
+		expect(getByText('第 1 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it('點擊下一頁 → 呼叫 getTickets(2)，並依新回應重新渲染頁碼', async () => {
+		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+
+		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('下一頁'));
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getTickets).toHaveBeenCalledWith(2);
+	});
+
+	it('最末頁時下一頁 disabled', async () => {
+		// ceil(45/20) = 3 頁
+		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 3, perPage: 20 });
+		const { findByText, getByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+
+		expect(getByText('第 3 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });

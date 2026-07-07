@@ -32,7 +32,7 @@
   import MemberFilterPanel from '$lib/admin/components/MemberFilterPanel.svelte';
   import MemberCreateDialog from '$lib/admin/components/MemberCreateDialog.svelte';
   import MemberEditDialog from '$lib/admin/components/MemberEditDialog.svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
   import type { MemberAccount } from '$lib/admin/data';
   import {
@@ -48,14 +48,29 @@
 
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let members: MemberAccount[] = [];
+  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getMembers() 回應；
+  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
+  let page = 1;
+  let total = 0;
+  let perPage = 20;
 
-  function load() {
+  function load(p = page) {
     phase = 'loading';
-    getMembers()
-      .then((d) => { members = d.members; phase = 'ready'; })
+    getMembers(p)
+      .then((d) => {
+        members = d.members;
+        total = d.total;
+        page = d.page;
+        perPage = d.perPage;
+        phase = 'ready';
+      })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  function changePage(p: number) {
+    load(p);
+  }
 
   let createOpen = false;
   let editTarget: MemberAccount | null = null;
@@ -78,8 +93,11 @@
 
   async function refresh() {
     try {
-      const d = await getMembers();
+      const d = await getMembers(page);
       members = d.members;
+      total = d.total;
+      page = d.page;
+      perPage = d.perPage;
     } catch {
       // 最佳努力：新增/編輯已成功，只有刷新列表失敗——不覆蓋剛才的成功 toast。
     }
@@ -126,6 +144,7 @@
     <MemberFilterPanel open={showFilter} />
 
     <MembersTable {members} onNew={() => (createOpen = true)} onEdit={openEdit} />
+    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
   </div>
 
   <MemberCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />

@@ -90,11 +90,11 @@ describe('getVenues — GET /venues（公開端點）', () => {
 	});
 });
 
-describe('getTickets — GET /products（公開端點）', () => {
+describe('getTickets — GET /products（admin 自帶分頁抓取，不假道 public listProducts()，Task 17）', () => {
 	it('ntd 轉換價格；sold/quota 直接來自後端；merchandise 濾除；product_type 對照 pass/event', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /products?per_page=100': {
+				'GET /products?page=1': {
 					products: [
 						{
 							id: 'p1', name: '月票', slug: 'month', product_type: 'membership', description: '不限堂數',
@@ -123,19 +123,38 @@ describe('getTickets — GET /products（公開端點）', () => {
 					],
 					total: 4,
 					page: 1,
-					per_page: 100
+					per_page: 20
 				}
 			})
 		);
 
 		const d = await getTickets();
 
-		expect(api).toHaveBeenCalledWith('/products?per_page=100', { auth: false });
+		expect(api).toHaveBeenCalledWith('/products?page=1');
 		expect(d.tickets).toHaveLength(3); // merchandise 濾除
 		expect(d.tickets.find((t) => t.id === 'p1')).toMatchObject({ type: 'pass', price: 2800, sold: 45, quota: null });
 		expect(d.tickets.find((t) => t.id === 'p2')).toMatchObject({ type: 'pass', price: 5400, sold: 12, quota: 100 });
 		expect(d.tickets.find((t) => t.id === 'p3')).toMatchObject({ type: 'event', price: 350, sold: 200, quota: null });
 		expect(d.tickets.find((t) => t.id === 'p4')).toBeUndefined();
+		expect(d.total).toBe(4);
+		expect(d.page).toBe(1);
+		expect(d.perPage).toBe(20);
+	});
+
+	it('page 參數帶入 query string（預設第 1 頁）；total/page/per_page 穿透為 total/page/perPage', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /products?page=2': { products: [], total: 37, page: 2, per_page: 20 }
+			})
+		);
+
+		const d = await getTickets(2);
+
+		expect(api).toHaveBeenCalledWith('/products?page=2');
+		expect(d.tickets).toEqual([]);
+		expect(d.total).toBe(37);
+		expect(d.page).toBe(2);
+		expect(d.perPage).toBe(20);
 	});
 });
 
@@ -148,7 +167,7 @@ describe('getOrders — GET /orders（admin）', () => {
 	it('映射 id/member/initial/amount/method/date/discount，涵蓋全部 6 種 status', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /orders?per_page=100': {
+				'GET /orders?page=1': {
 					orders: [
 						{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'pending', total_cents: 480000, ...base },
 						{ id: '2', order_number: 'DF-2', user_name: '陳小華', status: 'paid', total_cents: 480000, ...base },
@@ -166,7 +185,7 @@ describe('getOrders — GET /orders（admin）', () => {
 
 		const d = await getOrders();
 
-		expect(api).toHaveBeenCalledWith('/orders?per_page=100');
+		expect(api).toHaveBeenCalledWith('/orders?page=1');
 		expect(d.orders).toHaveLength(6);
 		expect(d.orders.map((o) => o.status)).toEqual(['pending', 'paid', 'processing', 'completed', 'cancelled', 'refunded']);
 
@@ -183,12 +202,31 @@ describe('getOrders — GET /orders（admin）', () => {
 
 		expect(d.orders[1].paidAt).toBe('2026-06-08'); // paid → real date
 		expect(d.orders[5].discount).toBe('SPRING10');
+		expect(d.total).toBe(6);
+		expect(d.page).toBe(1);
+		expect(d.perPage).toBe(100);
+	});
+
+	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /orders?page=2': { orders: [], total: 53, page: 2, per_page: 20 }
+			})
+		);
+
+		const d = await getOrders(2);
+
+		expect(api).toHaveBeenCalledWith('/orders?page=2');
+		expect(d.orders).toEqual([]);
+		expect(d.total).toBe(53);
+		expect(d.page).toBe(2);
+		expect(d.perPage).toBe(20);
 	});
 
 	it('由 amount 反推 5% 內含稅：net + tax === amount', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /orders?per_page=100': {
+				'GET /orders?page=1': {
 					orders: [{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 480000, ...base }],
 					total: 1,
 					page: 1,
@@ -206,7 +244,7 @@ describe('getOrders — GET /orders（admin）', () => {
 	it('item 摘要依 items 數量組成：0 項 fallback 訂單編號、1 項用該項名稱、N>1 項用「第一項 外 N-1 項」', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /orders?per_page=100': {
+				'GET /orders?page=1': {
 					orders: [
 						{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [] },
 						{ id: '2', order_number: 'DF-2', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [{ name: '體操基礎班', quantity: 1 }] },
@@ -267,11 +305,11 @@ describe('ORDER_STATUS — 中文對照涵蓋全部 6 態', () => {
 	});
 });
 
-describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）', () => {
+describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 public listCourses()，Task 17）+ GET /coaches 供教練對照/picker', () => {
 	it('enrolled/cap/wait 直接來自 enrolled_count/max_students/waitlist_count；price 經 ntd；schedule_text 拆分 day/time；coach_id 對照出教練姓名', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /courses?per_page=100': {
+				'GET /courses?page=1': {
 					courses: [
 						{
 							id: 'c1', name: '競技體操 選手班', slug: 'x', level: 'advanced', description: null,
@@ -309,13 +347,17 @@ describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）
 
 		const d = await getClasses();
 
-		// listCourses/listCoaches(Task 14 public seam)內部都呼叫同一支 api()，兩者皆 auth:false(公開端點)
-		expect(api).toHaveBeenCalledWith('/courses?per_page=100', { auth: false });
+		// courses 現改為 admin 專用分頁抓取(不帶 auth:false)；coaches 仍借道 Task 14 public
+		// listCoaches() 公開端點(auth:false)。
+		expect(api).toHaveBeenCalledWith('/courses?page=1');
 		expect(api).toHaveBeenCalledWith('/coaches', { auth: false });
 		expect(d.classes).toHaveLength(3);
 		expect(d.coaches).toEqual([
 			expect.objectContaining({ id: 'co1', name: '林教練' })
 		]);
+		expect(d.total).toBe(3);
+		expect(d.page).toBe(1);
+		expect(d.perPage).toBe(100);
 
 		const c1 = d.classes.find((c) => c.id === 'c1')!;
 		expect(c1.enrolled).toBe(12);
@@ -340,6 +382,23 @@ describe('getClasses — GET /courses（+ GET /coaches 供教練對照/picker）
 		expect(c3.status).toBe('候補'); // 8 < 10 但 wait=2 > 0
 		expect(c3.level).toBe('基礎'); // intermediate → 基礎
 		expect(c3.age).toBe('12 歲以上'); // 只有 min_age
+	});
+
+	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /courses?page=2': { courses: [], total: 29, page: 2, per_page: 20 },
+				'GET /coaches': []
+			})
+		);
+
+		const d = await getClasses(2);
+
+		expect(api).toHaveBeenCalledWith('/courses?page=2');
+		expect(d.classes).toEqual([]);
+		expect(d.total).toBe(29);
+		expect(d.page).toBe(2);
+		expect(d.perPage).toBe(20);
 	});
 });
 
@@ -431,7 +490,7 @@ describe('getCoupons — GET /coupons（admin，Task 8 piece 3）', () => {
 	it('映射 discount_cents→NT$(ntd)、is_active→active、expires_at 取日期前 10 碼', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /coupons?per_page=100': {
+				'GET /coupons?page=1': {
 					coupons: [
 						{ id: 'cp1', code: 'SPRING10', discount_cents: 30000, is_active: true, expires_at: '2026-12-31T23:59:59Z', created_at: '2026-01-01T00:00:00Z' },
 						{ id: 'cp2', code: 'WELCOME50', discount_cents: 5000, is_active: false, expires_at: null, created_at: '2026-01-01T00:00:00Z' }
@@ -445,11 +504,30 @@ describe('getCoupons — GET /coupons（admin，Task 8 piece 3）', () => {
 
 		const d = await getCoupons();
 
-		expect(api).toHaveBeenCalledWith('/coupons?per_page=100');
+		expect(api).toHaveBeenCalledWith('/coupons?page=1');
 		expect(d.coupons).toEqual([
 			{ id: 'cp1', code: 'SPRING10', discount: 300, active: true, expiresAt: '2026-12-31' },
 			{ id: 'cp2', code: 'WELCOME50', discount: 50, active: false, expiresAt: '—' }
 		]);
+		expect(d.total).toBe(2);
+		expect(d.page).toBe(1);
+		expect(d.perPage).toBe(100);
+	});
+
+	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /coupons?page=2': { coupons: [], total: 22, page: 2, per_page: 20 }
+			})
+		);
+
+		const d = await getCoupons(2);
+
+		expect(api).toHaveBeenCalledWith('/coupons?page=2');
+		expect(d.coupons).toEqual([]);
+		expect(d.total).toBe(22);
+		expect(d.page).toBe(2);
+		expect(d.perPage).toBe(20);
 	});
 });
 
@@ -479,7 +557,7 @@ describe('getMembers — GET /users（admin）', () => {
 	it('映射 id/name/initial/phone/joined/status/points（binding 欄位規格）', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /users?per_page=100': {
+				'GET /users?page=1': {
 					users: [
 						{ id: 'u1', name: '王小明', phone: '0912345678', created_at: '2026-01-15T00:00:00Z', is_active: true, points_balance: 1250 },
 						{ id: 'u2', name: '陳小華', phone: null, created_at: '2026-02-01T00:00:00Z', is_active: false, points_balance: 0 }
@@ -493,11 +571,30 @@ describe('getMembers — GET /users（admin）', () => {
 
 		const d = await getMembers();
 
-		expect(api).toHaveBeenCalledWith('/users?per_page=100');
+		expect(api).toHaveBeenCalledWith('/users?page=1');
 		expect(d.members).toEqual([
 			{ id: 'u1', name: '王小明', initial: '王', phone: '0912345678', joined: '2026-01-15', status: 'active', points: 1250 },
 			{ id: 'u2', name: '陳小華', initial: '陳', phone: '', joined: '2026-02-01', status: 'inactive', points: 0 }
 		]);
+		expect(d.total).toBe(2);
+		expect(d.page).toBe(1);
+		expect(d.perPage).toBe(100);
+	});
+
+	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users?page=2': { users: [], total: 61, page: 2, per_page: 20 }
+			})
+		);
+
+		const d = await getMembers(2);
+
+		expect(api).toHaveBeenCalledWith('/users?page=2');
+		expect(d.members).toEqual([]);
+		expect(d.total).toBe(61);
+		expect(d.page).toBe(2);
+		expect(d.perPage).toBe(20);
 	});
 });
 

@@ -23,7 +23,7 @@
   import ClassCard from '$lib/admin/components/ClassCard.svelte';
   import ClassDialog from '$lib/admin/components/ClassDialog.svelte';
   import ClassEditDialog from '$lib/admin/components/ClassEditDialog.svelte';
-  import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { buildCourseBody } from '$lib/admin/components/course-request';
   import { search, toasts } from '$lib/admin/stores';
@@ -67,14 +67,30 @@
   let edit: ClassRow | null = null;
   let editOpen = false;
   let addNew = false;
+  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getClasses() 回應；
+  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
+  let page = 1;
+  let total = 0;
+  let perPage = 20;
 
-  function load() {
+  function load(p = page) {
     phase = 'loading';
-    getClasses()
-      .then((d) => { classes = d.classes; coaches = d.coaches; phase = 'ready'; })
+    getClasses(p)
+      .then((d) => {
+        classes = d.classes;
+        coaches = d.coaches;
+        total = d.total;
+        page = d.page;
+        perPage = d.perPage;
+        phase = 'ready';
+      })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  function changePage(p: number) {
+    load(p);
+  }
 
   $: list = filterClasses(classes, { cat, query: $search });
 
@@ -132,7 +148,7 @@
 
 {#if phase === 'ready'}
   <div class="view">
-    <PageHead title="課程管理" sub={classes.length + ' 個開課班級 · 本季招生中'}>
+    <PageHead title="課程管理" sub={total + ' 個開課班級 · 本季招生中'}>
       <svelte:fragment slot="actions">
         <Button variant="primary" size="sm" on:click={openNew}>
           <Icon name="plus" size={15} />新增課程
@@ -155,6 +171,8 @@
     {#if list.length === 0}
       <div class="empty">找不到符合的班級</div>
     {/if}
+
+    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
 
     <ClassDialog klass={detail} onClose={() => (detail = null)} onEdit={openEdit} />
     <ClassEditDialog {coaches} klass={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />

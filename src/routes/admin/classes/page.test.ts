@@ -22,7 +22,13 @@ const FIXTURE_COACHES: Coach[] = [
 
 beforeEach(() => {
 	vi.mocked(getClasses).mockReset();
-	vi.mocked(getClasses).mockResolvedValue({ classes: CLASSES, coaches: FIXTURE_COACHES });
+	vi.mocked(getClasses).mockResolvedValue({
+		classes: CLASSES,
+		coaches: FIXTURE_COACHES,
+		total: CLASSES.length,
+		page: 1,
+		perPage: 20
+	});
 });
 
 /* 課程管理 (admin.jsx ClassesView): PageHead + category chips + a card grid over
@@ -172,5 +178,65 @@ describe('課程管理 — 三態', () => {
 		vi.mocked(getClasses).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(ClassesPage);
 		expect(getByTestId('classes-skeleton')).toBeTruthy();
+	});
+});
+
+describe('課程管理 — 分頁（Task 17：PaginationBar 接上 getClasses() 的 total/page/perPage）', () => {
+	it('依 getClasses() 回應渲染「第 x 頁，共 M 筆」（含 sub 標題），邊界頁按鈕 disabled', async () => {
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 1,
+			perPage: 20
+		});
+		const { container, findByText, getByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+
+		expect(getByText('第 1 頁，共 45 筆')).toBeInTheDocument();
+		expect(container.textContent).toContain('45 個開課班級'); // sub 標題改用 total，不是 classes.length
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it('點擊下一頁 → 呼叫 getClasses(2)，並依新回應重新渲染清單與頁碼', async () => {
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 1,
+			perPage: 20
+		});
+		const { findByText, getByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: [CLASSES[0]],
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 2,
+			perPage: 20
+		});
+		await fireEvent.click(getByText('下一頁'));
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getClasses).toHaveBeenCalledWith(2);
+	});
+
+	it('最末頁時下一頁 disabled', async () => {
+		// ceil(45/20) = 3 頁
+		vi.mocked(getClasses).mockResolvedValue({
+			classes: CLASSES,
+			coaches: FIXTURE_COACHES,
+			total: 45,
+			page: 3,
+			perPage: 20
+		});
+		const { findByText, getByText } = render(ClassesPage);
+		await findByText(CLASSES[0].name);
+
+		expect(getByText('第 3 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });

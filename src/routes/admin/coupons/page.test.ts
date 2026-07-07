@@ -18,7 +18,7 @@ const FIXTURE: Coupon[] = [
 
 beforeEach(() => {
 	vi.mocked(getCoupons).mockReset();
-	vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE });
+	vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: FIXTURE.length, page: 1, perPage: 20 });
 	vi.mocked(createCoupon).mockReset();
 });
 
@@ -53,7 +53,7 @@ describe('優惠碼管理 (+page)', () => {
 	});
 
 	it('shows an empty message when there are no coupons', async () => {
-		vi.mocked(getCoupons).mockResolvedValue({ coupons: [] });
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: [], total: 0, page: 1, perPage: 20 });
 		const { findByText } = render(CouponsPage);
 		await findByText('尚無優惠碼');
 	});
@@ -90,7 +90,7 @@ describe('優惠碼管理 — 新增優惠碼（POST /coupons）', () => {
 		await fireEvent.input(getByLabelText('優惠碼代碼'), { target: { value: 'NEWCODE' } });
 		await fireEvent.input(getByLabelText('折扣金額 (NT$)'), { target: { value: '200' } });
 
-		vi.mocked(getCoupons).mockResolvedValue({ coupons: refreshed }); // 下一次 GET（刷新）回傳含新碼的清單
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: refreshed, total: refreshed.length, page: 1, perPage: 20 }); // 下一次 GET（刷新）回傳含新碼的清單
 		await fireEvent.click(getByText('建立優惠碼'));
 
 		await vi.waitFor(() => expect(createCoupon).toHaveBeenCalledTimes(1));
@@ -119,5 +119,41 @@ describe('優惠碼管理 — 新增優惠碼（POST /coupons）', () => {
 		expect(getCoupons).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
 		expect(getByText('建立優惠碼')).toBeInTheDocument(); // 對話框仍開著
 		expect(queryByText('NEWCODE')).toBeNull();
+	});
+});
+
+describe('優惠碼管理 — 分頁（Task 17：PaginationBar 接上 getCoupons() 的 total/page/perPage）', () => {
+	it('依 getCoupons() 回應渲染「第 x 頁，共 M 筆」（含 sub 標題），邊界頁按鈕 disabled', async () => {
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { container, findByText, getByText } = render(CouponsPage);
+		await findByText('SPRING10');
+
+		expect(getByText('第 1 頁，共 45 筆')).toBeInTheDocument();
+		expect(container.textContent).toContain('45 組優惠碼'); // sub 標題改用 total，不是 coupons.length
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it('點擊下一頁 → 呼叫 getCoupons(2)，並依新回應重新渲染頁碼', async () => {
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(CouponsPage);
+		await findByText('SPRING10');
+
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('下一頁'));
+
+		await findByText('第 2 頁，共 45 筆');
+		expect(getCoupons).toHaveBeenCalledWith(2);
+	});
+
+	it('最末頁時下一頁 disabled', async () => {
+		// ceil(45/20) = 3 頁
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 3, perPage: 20 });
+		const { findByText, getByText } = render(CouponsPage);
+		await findByText('SPRING10');
+
+		expect(getByText('第 3 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });

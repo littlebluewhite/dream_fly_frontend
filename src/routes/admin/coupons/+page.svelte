@@ -9,7 +9,7 @@
    * 只有建立本身失敗才顯示錯誤 toast 且不刷新——若建立成功但刷新這一步失敗，
    * 視為最佳努力（不覆蓋剛才的成功提示，也不算整體失敗）。 */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
@@ -21,14 +21,29 @@
   let phase: 'loading' | 'error' | 'ready' = 'loading';
   let coupons: Coupon[] = [];
   let createOpen = false;
+  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getCoupons() 回應；
+  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
+  let page = 1;
+  let total = 0;
+  let perPage = 20;
 
-  function load() {
+  function load(p = page) {
     phase = 'loading';
-    getCoupons()
-      .then((d) => { coupons = d.coupons; phase = 'ready'; })
+    getCoupons(p)
+      .then((d) => {
+        coupons = d.coupons;
+        total = d.total;
+        page = d.page;
+        perPage = d.perPage;
+        phase = 'ready';
+      })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  function changePage(p: number) {
+    load(p);
+  }
 
   // 409（代碼重複）/ 422 驗證 / 403 權限 → 對應的繁中錯誤提示；其餘給通用訊息，
   // 同 classes/orders 頁的 ApiError 判斷慣例。
@@ -51,8 +66,11 @@
     createOpen = false;
     toasts.notify('success', '已新增優惠碼', `「${body.code}」已建立。`);
     try {
-      const refreshed = await getCoupons();
+      const refreshed = await getCoupons(page);
       coupons = refreshed.coupons;
+      total = refreshed.total;
+      page = refreshed.page;
+      perPage = refreshed.perPage;
     } catch {
       // 最佳努力：新增已成功，只有刷新列表失敗——不覆蓋剛才的成功 toast。
     }
@@ -61,7 +79,7 @@
 
 {#if phase === 'ready'}
   <div class="view">
-    <PageHead title="優惠碼管理" sub={coupons.length + ' 組優惠碼'}>
+    <PageHead title="優惠碼管理" sub={total + ' 組優惠碼'}>
       <svelte:fragment slot="actions">
         <Button variant="primary" size="sm" on:click={() => (createOpen = true)}>
           <Icon name="plus" size={15} />新增優惠碼
@@ -98,6 +116,8 @@
         </tbody>
       </table>
     </Card>
+
+    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
   </div>
 
   <CouponCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />

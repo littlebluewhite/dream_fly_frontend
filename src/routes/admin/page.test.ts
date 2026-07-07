@@ -24,7 +24,7 @@ beforeEach(() => {
 	vi.mocked(getReports).mockReset();
 	vi.mocked(getReports).mockResolvedValue(REPORTS);
 	vi.mocked(getMembers).mockReset();
-	vi.mocked(getMembers).mockResolvedValue({ members: MEMBERS });
+	vi.mocked(getMembers).mockResolvedValue({ members: MEMBERS, total: MEMBERS.length, page: 1, perPage: 20 });
 });
 
 describe('admin dashboard (+page)', () => {

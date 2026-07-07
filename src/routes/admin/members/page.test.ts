@@ -31,7 +31,7 @@ vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn(), createMember: vi.fn(), u
 
 beforeEach(() => {
 	vi.mocked(getMembers).mockReset();
-	vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE });
+	vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: FIXTURE.length, page: 1, perPage: 20 });
 	vi.mocked(createMember).mockReset();
 	vi.mocked(updateMember).mockReset();
 });
@@ -126,7 +126,7 @@ describe('學員管理 — 新增學員（POST /users，Task 16）', () => {
 		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
 		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
 
-		vi.mocked(getMembers).mockResolvedValue({ members: refreshed }); // 下一次 GET（刷新）回傳含新學員的清單
+		vi.mocked(getMembers).mockResolvedValue({ members: refreshed, total: refreshed.length, page: 1, perPage: 20 }); // 下一次 GET（刷新）回傳含新學員的清單
 		await fireEvent.click(getByText('建立學員'));
 
 		await vi.waitFor(() => expect(createMember).toHaveBeenCalledTimes(1));
@@ -174,7 +174,7 @@ describe('學員管理 — 編輯學員（PATCH /users/{id}，Task 16）', () =>
 		await fireEvent.click(getAllByLabelText('編輯')[0]); // 第一列（王小明）
 		await fireEvent.input(getByDisplayValue(FIXTURE[0].name), { target: { value: '王大明' } });
 
-		vi.mocked(getMembers).mockResolvedValue({ members: refreshed });
+		vi.mocked(getMembers).mockResolvedValue({ members: refreshed, total: refreshed.length, page: 1, perPage: 20 });
 		await fireEvent.click(getByText('儲存'));
 
 		await vi.waitFor(() => expect(updateMember).toHaveBeenCalledTimes(1));
@@ -204,5 +204,44 @@ describe('學員管理 — 編輯學員（PATCH /users/{id}，Task 16）', () =>
 		expect(get(toasts).at(-1)?.body).toBe('至少提供一個欄位');
 		expect(getMembers).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
 		expect(getByText(FIXTURE[0].name)).toBeInTheDocument(); // 列表維持原值
+	});
+});
+
+describe('學員管理 — 分頁（Task 17：PaginationBar 接上 getMembers() 的 total/page/perPage）', () => {
+	it('依 getMembers() 回應渲染「第 x 頁，共 M 筆」，邊界頁按鈕 disabled', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		expect(getByText('第 1 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(true); // 第一頁
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it('點擊下一頁 → 呼叫 getMembers(2)，並依新回應重新渲染清單與頁碼', async () => {
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		const page2: MemberAccount[] = [
+			{ id: 'u3', name: '林大同', initial: '林', phone: '', joined: '2026-03-01', status: 'active', points: 10 }
+		];
+		vi.mocked(getMembers).mockResolvedValue({ members: page2, total: 45, page: 2, perPage: 20 });
+		await fireEvent.click(getByText('下一頁'));
+
+		await findByText('林大同');
+		expect(getMembers).toHaveBeenCalledWith(2);
+		expect(getByText('第 2 頁，共 45 筆')).toBeInTheDocument();
+	});
+
+	it('最末頁時下一頁 disabled', async () => {
+		// ceil(45/20) = 3 頁
+		vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE, total: 45, page: 3, perPage: 20 });
+		const { findByText, getByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		expect(getByText('第 3 頁，共 45 筆')).toBeInTheDocument();
+		expect((getByText('上一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
+		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(true);
 	});
 });

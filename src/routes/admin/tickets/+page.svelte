@@ -11,7 +11,7 @@
    * into a three-state gate (loading/error/ready); `tickets` is the local
    * mutable working copy the 新增/編輯 flow edits in place. */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ProgressBar, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Card, Icon, ProgressBar, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
@@ -42,14 +42,29 @@
   let edit: Ticket | null = null;
   let editOpen = false;
   let addNew = false;
+  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getTickets() 回應；
+  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
+  let page = 1;
+  let total = 0;
+  let perPage = 20;
 
-  function load() {
+  function load(p = page) {
     phase = 'loading';
-    getTickets()
-      .then((d) => { tickets = d.tickets; phase = 'ready'; })
+    getTickets(p)
+      .then((d) => {
+        tickets = d.tickets;
+        total = d.total;
+        page = d.page;
+        perPage = d.perPage;
+        phase = 'ready';
+      })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  function changePage(p: number) {
+    load(p);
+  }
 
   $: totalSold = tickets.reduce((s, t) => s + t.sold, 0);
   $: revenue = tickets.reduce((s, t) => s + t.sold * t.price, 0);
@@ -170,6 +185,8 @@
         </Card>
       {/each}
     </div>
+
+    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
   </div>
 
   <TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />

@@ -4,7 +4,7 @@
  * ClassRow/Coach/Venue/Ticket 型別維持原樣，後端沒有對應的欄位一律給誠實預設值
  * （見各函式註解），呼叫端不用改。 */
 import { api } from '$lib/api/client';
-import { listCourses, listCoaches, listVenues, listProducts } from '$lib/public/api';
+import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
@@ -80,12 +80,34 @@ function mapProduct(p: ApiProduct, i: number): Ticket {
 	};
 }
 
+interface ApiProductListResponse {
+	products: ApiProduct[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+/** admin 專用分頁抓取（Task 17）——不假道 public listProducts()：那支固定
+ *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
+ *  admin 自己的真實分頁請求，per_page 省略即吃後端預設 20。 */
+const listProductsPaged = (page: number): Promise<ApiProductListResponse> =>
+	api<ApiProductListResponse>(`/products?page=${page}`);
+
 export interface TicketsData {
 	tickets: Ticket[];
+	/** GET /products 分頁 meta 穿透（Task 17）——total/perPage 是「全部商品」總數/
+	 *  單頁筆數（含 merchandise），不是濾除 merchandise 後的票券數；PaginationBar
+	 *  據此換頁，票券清單本身仍由本頁 products 濾除 merchandise 後產生。 */
+	total: number;
+	page: number;
+	perPage: number;
 }
-export const getTickets = (): Promise<TicketsData> =>
-	listProducts().then((products) => ({
-		tickets: products.filter((p) => p.product_type !== 'merchandise').map(mapProduct)
+export const getTickets = (page = 1): Promise<TicketsData> =>
+	listProductsPaged(page).then((r) => ({
+		tickets: r.products.filter((p) => p.product_type !== 'merchandise').map(mapProduct),
+		total: r.total,
+		page: r.page,
+		perPage: r.per_page
 	}));
 
 /* ═════════════════════════ 訂單（GET /orders，admin-only） ═════════════════════════ */
@@ -145,10 +167,17 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 
 export interface OrdersData {
 	orders: Order[];
+	/** GET /orders 分頁 meta 穿透（Task 17）——PaginationBar 據此換頁。 */
+	total: number;
+	page: number;
+	perPage: number;
 }
-export const getOrders = (): Promise<OrdersData> =>
-	api<ApiAdminOrderListResponse>('/orders?per_page=100').then((r) => ({
-		orders: r.orders.map(mapAdminOrder)
+export const getOrders = (page = 1): Promise<OrdersData> =>
+	api<ApiAdminOrderListResponse>(`/orders?page=${page}`).then((r) => ({
+		orders: r.orders.map(mapAdminOrder),
+		total: r.total,
+		page: r.page,
+		perPage: r.per_page
 	}));
 
 /* ── 訂單狀態變更（PATCH /orders/{id}/status，admin-only，Task 8 piece 2） ──
@@ -333,17 +362,37 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 	};
 }
 
+interface ApiCourseListResponse {
+	courses: ApiCourse[];
+	total: number;
+	page: number;
+	per_page: number;
+}
+
+/** admin 專用分頁抓取（Task 17）——不假道 public listCourses()：那支固定
+ *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
+ *  admin 自己的真實分頁請求，per_page 省略即吃後端預設 20。 */
+const listCoursesPaged = (page: number): Promise<ApiCourseListResponse> =>
+	api<ApiCourseListResponse>(`/courses?page=${page}`);
+
 export interface ClassesData {
 	classes: ClassRow[];
 	coaches: Coach[];
+	/** GET /courses 分頁 meta 穿透（Task 17）——PaginationBar 據此換頁。 */
+	total: number;
+	page: number;
+	perPage: number;
 }
-export const getClasses = async (): Promise<ClassesData> => {
-	const [apiCourses, apiCoaches] = await Promise.all([listCourses(), listCoaches()]);
+export const getClasses = async (page = 1): Promise<ClassesData> => {
+	const [coursesRes, apiCoaches] = await Promise.all([listCoursesPaged(page), listCoaches()]);
 	const coaches = apiCoaches.map(mapCoach);
 	const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
 	return {
-		classes: apiCourses.map((c) => mapCourse(c, coachNameById)),
-		coaches
+		classes: coursesRes.courses.map((c) => mapCourse(c, coachNameById)),
+		coaches,
+		total: coursesRes.total,
+		page: coursesRes.page,
+		perPage: coursesRes.per_page
 	};
 };
 
@@ -420,10 +469,17 @@ interface ApiUserListResponse {
 
 export interface MembersData {
 	members: MemberAccount[];
+	/** GET /users 分頁 meta 穿透（Task 17）——PaginationBar 據此換頁。 */
+	total: number;
+	page: number;
+	perPage: number;
 }
-export const getMembers = (): Promise<MembersData> =>
-	api<ApiUserListResponse>('/users?per_page=100').then((r) => ({
-		members: r.users.map(mapMemberAccount)
+export const getMembers = (page = 1): Promise<MembersData> =>
+	api<ApiUserListResponse>(`/users?page=${page}`).then((r) => ({
+		members: r.users.map(mapMemberAccount),
+		total: r.total,
+		page: r.page,
+		perPage: r.per_page
 	}));
 
 /* ── 學員新增/編輯（POST /users、PATCH /users/{id}，admin-only，Task 16） ──
@@ -494,10 +550,17 @@ function mapCoupon(c: ApiCoupon): Coupon {
 
 export interface CouponsData {
 	coupons: Coupon[];
+	/** GET /coupons 分頁 meta 穿透（Task 17）——PaginationBar 據此換頁。 */
+	total: number;
+	page: number;
+	perPage: number;
 }
-export const getCoupons = (): Promise<CouponsData> =>
-	api<ApiCouponListResponse>('/coupons?per_page=100').then((r) => ({
-		coupons: r.coupons.map(mapCoupon)
+export const getCoupons = (page = 1): Promise<CouponsData> =>
+	api<ApiCouponListResponse>(`/coupons?page=${page}`).then((r) => ({
+		coupons: r.coupons.map(mapCoupon),
+		total: r.total,
+		page: r.page,
+		perPage: r.per_page
 	}));
 
 export interface CreateCouponBody {

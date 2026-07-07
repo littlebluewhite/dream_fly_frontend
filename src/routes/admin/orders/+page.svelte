@@ -16,7 +16,7 @@
    * applyStatusChange() folds the response's new status into the working copy,
    * so the KPIs + table stay consistent with the persisted truth. */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
@@ -36,13 +36,29 @@
   $: counts = countByStatus(orders);
   $: revenue = paidRevenue(orders);
 
-  function load() {
+  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getOrders() 回應；
+  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
+  let page = 1;
+  let total = 0;
+  let perPage = 20;
+
+  function load(p = page) {
     phase = 'loading';
-    getOrders()
-      .then((d) => { orders = d.orders.map((o) => ({ ...o })); phase = 'ready'; })
+    getOrders(p)
+      .then((d) => {
+        orders = d.orders.map((o) => ({ ...o }));
+        total = d.total;
+        page = d.page;
+        perPage = d.perPage;
+        phase = 'ready';
+      })
       .catch(() => { phase = 'error'; });
   }
   onMount(load);
+
+  function changePage(p: number) {
+    load(p);
+  }
 
   // 400（非法轉換，理論上不會發生——OrderDialog 只提供合法選項）/ 403 權限 →
   // 對應繁中提示；其餘（連線問題等）給通用訊息，同 classes 頁的 ApiError 判斷慣例。
@@ -113,6 +129,7 @@
   </div>
 
   <OrdersTable rows={orders} onChangeStatus={changeStatus} onRemind={remind} />
+  <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
 {:else if phase === 'error'}
   <Card padding={0}><ErrorState onRetry={load} /></Card>
 {:else}
