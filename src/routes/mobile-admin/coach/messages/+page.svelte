@@ -5,7 +5,8 @@
    * 資料改由 hydrateMessages()(mock-API 接縫)非同步水合共享 messages store,三態
    * 閘門(loading/error/ready);messagesHydrated 守衛防止第二次進頁的 fetch 覆寫
    * markMessageRead 的已讀狀態,refreshMessages() 供 ErrorState 重試(不受守衛短路)。
-   * alive 旗標防止 unmount 後解析的 in-flight fetch 影響本頁狀態。markMessageRead
+   * unmount 後解析的 in-flight fetch 由 createLoadGate($lib/load-gate)內建的
+   * generation/destroy 機制擋下,不再需要頁面自帶的 alive 旗標。markMessageRead
    * 既有 mutation 不動。 */
   import { onMount } from 'svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';

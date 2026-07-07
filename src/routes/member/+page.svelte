@@ -1,7 +1,7 @@
 <script lang="ts">
   /* Dream Fly — 會員中心 · 總覽 Dashboard. Visual output unchanged from the
    * prototype; the bare consts now load through the async api.ts seam
-   * (getDashboard) behind a loading / error / ready phase machine, so the
+   * (getDashboard) behind the $lib/load-gate three-state gate, so the
    * loading + error UI is ready for when fetch replaces the mock. */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';

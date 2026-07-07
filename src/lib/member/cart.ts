@@ -16,10 +16,11 @@ interface PersistedCart {
 }
 
 /** Task 3 (round 2): waitlist truth moved to the server (see the `waitlist`
- *  store + refreshWaitlist()/joinWaitlist()/cancelWaitlist() below) — an old
- *  `dreamfly_cart_v3` payload may still carry a `waitlist` array from before
- *  this change, but it's ignored on load: never rehydrated, and (since
- *  `PersistedCart` no longer has the field) never written back either. */
+ *  store + refreshWaitlist()/joinWaitlist()/cancelWaitlist() in the sibling
+ *  `waitlist.ts` module) — an old `dreamfly_cart_v3` payload may still carry a
+ *  `waitlist` array from before this change, but it's ignored on load: never
+ *  rehydrated, and (since `PersistedCart` no longer has the field) never
+ *  written back either. */
 function loadCart(): PersistedCart {
   if (typeof window === 'undefined') return { items: [] };
   try {

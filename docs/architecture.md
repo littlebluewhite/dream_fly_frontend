@@ -26,9 +26,13 @@ everywhere regardless of surface.
 
 Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mobile/`, `mobile-admin/`,
 `staff/`) typically containing: `data.ts` (mock seed), `stores.ts` (Svelte stores), `nav.ts`, `format.ts`,
-`api.ts` (API seam — see below), and a `components/` (or `overlays/`) subfolder. Cross-surface shared
-code lives in: `lib/components/` (marketing/shared UI, plus the `ui/` and `mobile/` shelves below),
-`lib/data/` (marketing seed + nav config), `lib/domain/` (single-source seed feeding several facades —
+`api.ts` (API seam — see below), and a `components/` (or `overlays/`) subfolder. `member/stores.ts` is the
+one exception to the single-file pattern: it's a pure barrel re-exporting 8 concern modules that live
+alongside it (`cart.ts`, `waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `checkout-sync.ts`,
+`notifications.ts`, `ui.ts`) — new store/function additions go in the owning module, never in the barrel
+file itself. Cross-surface shared code lives in: `lib/components/` (marketing/shared UI, plus the `ui/`
+and `mobile/` shelves below), `lib/data/` (marketing seed + nav config), `lib/domain/` (single-source
+seed feeding several facades —
 see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `toasts.ts` /
 `marketingToasts.ts` is cross-cutting too, via three adapters in `lib/components/toast/` per ADR 0005 —
 `notificationsStore` alone stays public/marketing-only), `lib/styles/` (`global.css` + design tokens),
@@ -100,27 +104,34 @@ Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobi
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
 real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
 `api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for the P2-commented gaps that
-have no backend equivalent yet (reports/analytics, coach attendance/messages/students, member
-rewards/weekly-schedule — full inventory in `docs/adr/0006`). `mobile` and `mobile-admin` still call
-`reply()` throughout — neither mobile surface has been wired to the real API yet (also P2).
-Pages that used to import seed constants directly now do a legacy `onMount` + plain `let` three-phase gate
-(`phase: 'loading' | 'error' | 'ready'`, no runes — deliberate, see the spec), rendering
+have no backend equivalent yet (coach attendance/messages/students, member weekly-schedule — full
+inventory in `docs/adr/0006`; member rewards/reports and admin reports/analytics are already real,
+`docs/adr/0006` §5). `mobile`'s getters are a thin wrapper delegating
+straight to `member/api.ts`'s already-real seam instead of calling `reply()` themselves (see
+`docs/adr/0006`); `mobile-admin` is the one surface still calling `reply()` throughout — it hasn't been
+wired to the real API yet (P2). Backend wire shapes shared across ≥2 surfaces — order-status badges,
+list-page envelopes, member/coach paired DTOs, display atoms like `ageRange`/`initialOf` — live in the
+single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy (`docs/adr/0007`).
+Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
+variable, now call `gate.load()` on a `createLoadGate`/`createPagedLoadGate` gate from the single source
+`src/lib/load-gate.ts` (`docs/adr/0008`) and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store
 (mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
-`*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) with a page-level `load()` /
-`refresh()` split so `ErrorState`'s retry always refetches — but the guard's ownership differs by surface.
-Member/mobile notifications are page-owned: the store write lives in the page's `load()`/`refresh()`, so
-the page's own `alive` flag directly guards it and a response resolving after unmount can't overwrite the
-shared store. Mobile-admin's ops collections and messages are store-owned: the write lives in `stores.ts`,
-so a page's `alive` flag only protects that page's local `phase`, never the store — protection there comes
-from the guard itself, which mutators (`saveMember`/`saveClass`/`saveCoach`/`markOrderPaid`/
-`markMessageRead`) also flip true (a mutation *is* the session's source of truth) and which is rechecked
-right before the hydrate write lands, so a mutation racing an in-flight fetch always wins. Layout shells
-stay outside the seam
+`*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) passed to the gate as `skip`, with
+`gate.refresh()` always re-fetching for `ErrorState`'s retry regardless of the guard — but the guard's
+ownership differs by surface. Member/mobile notifications are page-owned: the store write happens in the
+gate's `onData`, and the gate's own `generation`/`destroyed` bookkeeping (no page-local flag needed any
+more) discards a response that resolves after the page unmounts. Mobile-admin's ops collections and
+messages are store-owned: the write lives in `stores.ts`'s `hydrateOps`/`hydrateMessages`, which the gate
+calls directly as `fetch`/`refresh` — the gate's own bookkeeping protects only the page's local phase,
+never the shared store; store-write protection instead comes from the `*Hydrated` guard itself, which
+mutators (`saveMember`/`saveClass`/`saveCoach`/`markOrderPaid`/`markMessageRead`) also flip true (a
+mutation *is* the session's source of truth) and which is rechecked right before the hydrate write lands,
+so a mutation racing an in-flight fetch always wins. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
-synchronously, never through `api.ts` or the phase gate. `staff` remains excluded because it's pre-auth
+synchronously, never through `api.ts` or the load gate. `staff` remains excluded because it's pre-auth
 login/role-switch UI with no `data.ts` to seam. `public` gained its own seam later (`src/lib/public/api.ts`
 + `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id shapes into the existing
 marketing types, including the single cents→NT$ conversion point `ntd()`, see `docs/adr/0006`) once its

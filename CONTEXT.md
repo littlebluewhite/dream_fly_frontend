@@ -51,3 +51,10 @@ _Avoid_: 用「結帳」稱呼此路徑
 **候補 (Waitlist)**:
 當課程已額滿(無名額)時,會員登記的候補意願;不等於完成報名。
 _Avoid_: 報名, 預約
+
+### 前端技術用語 (Frontend Technical Terms)
+
+**載入閘門 (Load Gate)**:
+頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
+`createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。
+_Avoid_: 手抄 phase 機制

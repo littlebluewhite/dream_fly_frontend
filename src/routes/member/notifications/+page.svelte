@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 通知中心 (Notifications) — category-filtered notification feed with a
-   * loading / error / ready phase machine. Ported from the prototype's
+   * $lib/load-gate three-state gate. Ported from the prototype's
    * Notifications + NotifSkeleton (client/views2.jsx). The list now lives in the
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */

@@ -4,8 +4,9 @@
    *
    * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $classes store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
-   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。alive 旗標防止 unmount
-   * 後解析的 in-flight fetch 影響本頁狀態。 */
+   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。unmount 後解析的
+   * in-flight fetch 由 createLoadGate($lib/load-gate)內建的 generation/destroy
+   * 機制擋下,不再需要頁面自帶的 alive 旗標。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';

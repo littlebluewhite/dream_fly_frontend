@@ -6,10 +6,10 @@
    * Legacy Svelte（無 runes）、繁體中文文案、mock-only。
    *
    * 資料改由 getNotifications()(mock-API 接縫)非同步水合共享 notifs store
-   * (member notifications 範本同款):alive 旗標防 unmount 後 resolve 覆寫、
-   * notifsHydrated 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與
-   * ErrorState 重試共用(不會被 load() 的守衛短路)。markRead/markAllRead 既有
-   * mutation 不動。 */
+   * (member notifications 範本同款):createLoadGate($lib/load-gate)取代手寫
+   * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、notifsHydrated
+   * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試
+   * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 既有 mutation 不動。 */
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '$lib/components/ui/Icon.svelte';

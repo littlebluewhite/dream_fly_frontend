@@ -33,7 +33,7 @@ export interface ApiSubscription {
  *  欄位跟 Task 17 新接的訂單 date 欄位(也是 ISO 切法)，兩者維持同一種格式互相一致
  *  比較重要，帳戶頁本身沒有依賴任何特定分隔符的字串比對邏輯，兩種格式對它來說都
  *  一樣能正常顯示。（points 頁的 pointsLedger 則是反過來選 YYYY/MM/DD——因為那裡
- *  有一段既有邏輯依賴這個格式，見 refreshPoints 的註解。） */
+ *  有一段既有邏輯依賴這個格式，見 refreshPoints 的註解(points.ts)。） */
 export async function refreshSubscriptions(): Promise<void> {
   const list = await api<ApiSubscription[]>('/subscriptions/me');
   subscriptions.set(
