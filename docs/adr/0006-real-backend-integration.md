@@ -101,11 +101,11 @@ surface（member/staff）共用同一套 API：
 | `mobile` 試上預約 | `src/lib/mobile/overlays/TrialScreen.svelte` | 送出後只顯示成功 toast，無實際 API（後端無「試上預約」端點） |
 | `mobile` 設定頁儲存 | `src/lib/mobile/overlays/SettingsScreen.svelte` | 「已儲存」toast，偏好設定僅存在本地、無持久化端點 |
 | `mobile` 課程詳情出勤紀錄 | `src/lib/mobile/overlays/MyCourseDetail.svelte`（`ATT_HISTORY`） | 逐堂出勤列仍是 mock 陣列——後端 `GET /enrolments/me` 只給 `attended`/`total` 聚合數字，無逐堂明細端點；鏡射 desktop 會員儀表板同一缺口 |
-| `mobile`/desktop 會員儀表板統計 | `src/lib/mobile/api.ts`（`getMine()`）／`src/lib/member/api.ts`（`getDashboard()`） | `attendanceRate`/`streak`/`skillsMastered` 仍是硬編字面值（如 `'95%'`/`'14'`/`'8'`），非真數字；`getReports()` 其實已有可用的真實出勤率，儀表板尚未改接（P2） |
+| `mobile`/desktop 會員儀表板統計 | `src/lib/mobile/api.ts`（`getMine()`）／`src/lib/member/api.ts`（`getDashboard()`） | `mobile` 的 `getMine()` 硬編 `attendanceRate`/`streak`/`skillsMastered` 三欄位（`'95%'`/`'14'`/`'8'`）；desktop 的 `getDashboard()` 是另一組獨立的 `STATS` 陣列（`src/lib/domain/member-app.ts`：報名課程數/本月出席率/會員點數），並無 `streak`/`skillsMastered` 概念，僅「本月出席率」一項是同性質的硬編字面值（`'95%'`）——兩側皆仍是 mock，欄位形狀不同、非共用同一組欄位；`getReports()` 其實已有可用的真實出勤率，兩側儀表板都尚未改接（P2） |
 | `mobile-admin` 身分小卡 | `src/lib/mobile-admin/data.ts`（`PROFILES`） | 僅 admin 首頁 hero 仍顯示硬編姓名（陳怡君）；coach 首頁已於 Round 3 改接真實身分，不再共用這份 mock |
 | `mobile-admin` 列表僅第 1 頁 | `src/lib/mobile-admin/api.ts`（`getOpsCollections()`） | 學員/班級/訂單皆只抓分頁第 1 頁，因行動版無分頁 UI；誠實不完整，非假資料 |
 | `mobile-admin`/admin 教練寫入 | `src/lib/mobile-admin/overlays/CoachForm.svelte`／`src/lib/admin/components/CoachEditDialog.svelte` | 兩邊都只寫本地 state + 假成功 toast——後端無 admin 教練建立/編輯端點，兩 surface 對稱地誠實留白 |
-| `mobile-admin`/admin 場館與票券寫入 | `mobile-admin/overlays/VenuesScreen.svelte`／`TicketsScreen.svelte`、`routes/admin/venues/+page.svelte`／`routes/admin/tickets/+page.svelte` | 建立/編輯皆只改本地陣列或顯示「示範」字樣 toast，無 `POST`/`PATCH` 呼叫；後端場館僅有 `POST /venues`（新建、無編輯端點），票券則完全沒有寫入端點 |
+| `mobile-admin`/admin 場館與票券寫入 | `mobile-admin/overlays/VenuesScreen.svelte`／`TicketsScreen.svelte`、`routes/admin/venues/+page.svelte`／`routes/admin/tickets/+page.svelte` | 建立/編輯皆只改本地陣列或顯示「示範」字樣 toast，無 `POST`/`PATCH` 呼叫；後端場館僅有 `POST /venues`（新建、無編輯端點），票券寫入其實是前端未接線（`admin/api.ts` 無 `createProduct`/`updateProduct`）——後端 `POST /products`／`PATCH /products/{id}` 已存在且涵蓋 `product_type=ticket`，並非後端缺口 |
 | `mobile-admin`/admin 系統設定 | `mobile-admin/overlays/AdminSettingsScreen.svelte`／`routes/admin/settings/+page.svelte` | 切換開關僅改本地變數，「已儲存」toast 無後端呼叫（無對應端點） |
 
 以上殘餘跟 desktop 既有的殘餘同一等級（例如 admin 優惠碼頁仍只有建立/列表、無編輯/刪除；admin 學員
