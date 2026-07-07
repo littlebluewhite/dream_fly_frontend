@@ -55,6 +55,10 @@
     lastOpen = open;
   }
 
+  /** 證書名稱必填——未填前送出鈕停用（比照 ReportCardDialog 的 valid 慣例）；
+   *  issued_on 由 <input type=date> 保證格式且預設今天，不另檢。 */
+  $: valid = title.trim() !== '';
+
   /** 後端(dream_fly_backend/src/modules/certificates)的錯誤字串本身就是繁中(403「僅
    *  能發給自己課程的學員」、422 欄位長度)，直接透傳即可，同 leave-requests 頁的
    *  decisionErrorMessage 慣例。 */
@@ -64,7 +68,7 @@
   }
 
   async function submit() {
-    if (!student || submitting) return;
+    if (!student || !valid || submitting) return;
     submitting = true;
     const body: CreateCertificateBody = {
       user_id: student.user_id,
@@ -89,7 +93,7 @@
   open={open && !!student}
   title="發證書"
   onClose={onClose}
-  primaryAction={{ label: submitting ? '發放中…' : '發放證書', onClick: submit, variant: 'primary' }}
+  primaryAction={{ label: submitting ? '發放中…' : '發放證書', onClick: submit, variant: 'primary', disabled: !valid || submitting }}
   secondaryAction={{ label: '取消', onClick: onClose, variant: 'secondary' }}
 >
   {#if student}

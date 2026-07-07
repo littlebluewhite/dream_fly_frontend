@@ -78,6 +78,23 @@ describe('CertificateDialog — 開啟狀態與欄位', () => {
   });
 });
 
+describe('CertificateDialog — 必填檢核（證書名稱）', () => {
+  const submitButton = () => screen.getByText('發放證書').closest('button') as HTMLButtonElement;
+
+  it('證書名稱未填前送出鈕停用；填妥後啟用', async () => {
+    render(CertificateDialog, { open: true, student: STUDENT });
+    expect(submitButton()).toBeDisabled();
+    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '結業證書' } });
+    expect(submitButton()).not.toBeDisabled();
+  });
+
+  it('證書名稱只有空白字元時仍停用（trim 後為空）', async () => {
+    render(CertificateDialog, { open: true, student: STUDENT });
+    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '   ' } });
+    expect(submitButton()).toBeDisabled();
+  });
+});
+
 describe('CertificateDialog — 送出（POST /certificates）', () => {
   it('送出 { user_id, title, issued_on }，level/note 留白時省略欄位', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': CREATED }));
