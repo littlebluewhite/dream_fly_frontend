@@ -2,24 +2,21 @@
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { listVenues, type ApiVenue } from '$lib/public/api';
   // Venues Page - 場館介紹（僅列表接真 API；12 個詳頁保留在地文案，不在本任務範圍）
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let venues: ApiVenue[] = [];
 
-  function load() {
-    phase = 'loading';
-    listVenues()
-      .then((v) => {
-        venues = v;
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: listVenues,
+    onData: (v) => {
+      venues = v;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 </script>
 
 <svelte:head>
@@ -44,7 +41,7 @@
         </p>
       </div>
 
-      {#if phase === 'ready'}
+      {#if $gate === 'ready'}
         <div class="facilities-grid">
           {#each venues as v (v.id)}
             <div class="facility-card card">
@@ -63,9 +60,9 @@
             </div>
           {/each}
         </div>
-      {:else if phase === 'error'}
+      {:else if $gate === 'error'}
         <div class="card" style="padding:0; margin-bottom: var(--spacing-lg)">
-          <ErrorState onRetry={load} />
+          <ErrorState onRetry={gate.refresh} />
         </div>
       {:else}
         <div class="facilities-grid" data-testid="venues-skeleton">

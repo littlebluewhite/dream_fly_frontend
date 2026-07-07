@@ -4,6 +4,7 @@
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { listCourses, listCoaches } from '$lib/public/api';
   import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
   import { cart, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
@@ -13,24 +14,20 @@
 
   // Courses Page - 課程介紹（seam 接真 API：課程 + 教練列表解出授課教練名稱）
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let courses: CatalogCourse[] = [];
 
-  function load() {
-    phase = 'loading';
-    Promise.all([listCourses(), listCoaches()])
-      .then(([apiCourses, apiCoaches]) => {
-        const coachNameById = new Map(apiCoaches.map((co) => [co.id, co.name]));
-        courses = apiCourses.map((c) =>
-          toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
-        );
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: () => Promise.all([listCourses(), listCoaches()]),
+    onData: ([apiCourses, apiCoaches]) => {
+      const coachNameById = new Map(apiCoaches.map((co) => [co.id, co.name]));
+      courses = apiCourses.map((c) =>
+        toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
+      );
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   // cart v3：加入購物車入口重新啟用（uuid string id + (type,id) 去重，見 Task 15）。
   // FE#14：額滿課程的候補動作改為真實 API（比照 member/courses/+page.svelte 的
@@ -83,14 +80,14 @@
 
   <section class="courses-list">
     <div class="container">
-      {#if phase === 'ready'}
+      {#if $gate === 'ready'}
         <div class="courses-grid">
           {#each courses as course (course.id)}
             <CourseCard {course} showCartButton={true} onAdd={addToCart} />
           {/each}
         </div>
-      {:else if phase === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else if $gate === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
       {:else}
         <div class="courses-grid" data-testid="courses-skeleton">
           {#each [0, 1, 2, 3] as i (i)}

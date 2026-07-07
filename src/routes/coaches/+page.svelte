@@ -3,27 +3,24 @@
   import CoachCard from '$lib/components/CoachCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { listCoaches } from '$lib/public/api';
   import { toMarketingCoach } from '$lib/public/adapters';
   import type { Coach } from '$lib/data/coaches';
 
   // Coaches Page - 教練介紹（seam 接真 API）
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let coaches: Coach[] = [];
 
-  function load() {
-    phase = 'loading';
-    listCoaches()
-      .then((apiCoaches) => {
-        coaches = apiCoaches.map(toMarketingCoach);
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: listCoaches,
+    onData: (apiCoaches) => {
+      coaches = apiCoaches.map(toMarketingCoach);
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 </script>
 
 <svelte:head>
@@ -53,14 +50,14 @@
 
   <section class="coaches-list">
     <div class="container">
-      {#if phase === 'ready'}
+      {#if $gate === 'ready'}
         <div class="coaches-grid">
           {#each coaches as coach (coach.id)}
             <CoachCard {coach} />
           {/each}
         </div>
-      {:else if phase === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else if $gate === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
       {:else}
         <div class="coaches-grid" data-testid="coaches-skeleton">
           {#each [0, 1, 2, 3] as i (i)}

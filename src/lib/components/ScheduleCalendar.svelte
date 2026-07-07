@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
+  import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ApiDaySchedule, type ApiTimeSlot } from '$lib/public/api';
 
   let currentDate = new Date();
@@ -11,23 +12,17 @@
   let selectedTimeSlot: string | null = null;
 
   // seam 接真 API：一次拉當月排課（每日一筆 slots），取代先前的 Math.random() 假資料。
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let days: ApiDaySchedule[] = [];
 
-  function load() {
-    phase = 'loading';
-    selectedDate = null;
-    selectedTimeSlot = null;
-    getSchedule(currentDate.getFullYear(), currentDate.getMonth() + 1)
-      .then((d) => {
-        days = d;
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: () => getSchedule(currentDate.getFullYear(), currentDate.getMonth() + 1),
+    onData: (d) => {
+      days = d;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   const STATUS_LABEL: Record<string, string> = {
     available: '充足',
@@ -63,14 +58,19 @@
     return new Date(year, month, 1).getDay();
   }
 
+  function loadMonth(date: Date) {
+    currentDate = date;
+    selectedDate = null;
+    selectedTimeSlot = null;
+    gate.refresh();
+  }
+
   function previousMonth() {
-    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-    load();
+    loadMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   }
 
   function nextMonth() {
-    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    load();
+    loadMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   }
 
   function selectDate(day: number) {
@@ -138,16 +138,16 @@
 </script>
 
 <div class="schedule-calendar card">
-  {#if phase === 'error'}
-    <ErrorState onRetry={load} />
+  {#if $gate === 'error'}
+    <ErrorState onRetry={gate.refresh} />
   {:else}
     <div class="calendar-header">
-      <button class="nav-btn" on:click={previousMonth} disabled={phase === 'loading'}>&lt;</button>
+      <button class="nav-btn" on:click={previousMonth} disabled={$gate === 'loading'}>&lt;</button>
       <h2>{monthName}</h2>
-      <button class="nav-btn" on:click={nextMonth} disabled={phase === 'loading'}>&gt;</button>
+      <button class="nav-btn" on:click={nextMonth} disabled={$gate === 'loading'}>&gt;</button>
     </div>
 
-    {#if phase === 'loading'}
+    {#if $gate === 'loading'}
       <div data-testid="schedule-skeleton">
         <Skeleton w="100%" h={320} r={12} />
       </div>

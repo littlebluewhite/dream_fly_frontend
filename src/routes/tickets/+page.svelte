@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { cart, subscriptions } from '$lib/member/stores';
   import { passToCartItem } from '$lib/member/data';
   import { toasts } from '$lib/stores/marketingToasts';
@@ -10,21 +11,17 @@
   // Tickets Page - 購票資訊（cart v3：接真 API，uuid string id；mock ticketTypes 的
   // string 價格 / number id 形狀與後端 Ticket 不相容，改走 public seam 取得真資料）。
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let tickets: Ticket[] = [];
 
-  function load() {
-    phase = 'loading';
-    listProducts()
-      .then((products) => {
-        tickets = products.map(toPass);
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: listProducts,
+    onData: (products) => {
+      tickets = products.map(toPass);
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   function addTicketToCart(ticket: Ticket) {
     // Already an active entitlement? Block it — checkout skips owned passes
@@ -73,7 +70,7 @@
 
   <section class="tickets-list">
     <div class="container">
-      {#if phase === 'ready'}
+      {#if $gate === 'ready'}
         <div class="tickets-grid">
           {#each tickets as ticket (ticket.id)}
             <div class="ticket-card card" class:highlighted={ticket.highlighted}>
@@ -116,8 +113,8 @@
             </div>
           {/each}
         </div>
-      {:else if phase === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={load} /></div>
+      {:else if $gate === 'error'}
+        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
       {:else}
         <div class="tickets-grid" data-testid="tickets-skeleton">
           {#each [0, 1, 2] as i (i)}
