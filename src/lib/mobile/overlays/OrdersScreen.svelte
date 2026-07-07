@@ -14,6 +14,7 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { fmtNT } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
   import type { ComponentProps } from 'svelte';
 
@@ -21,23 +22,21 @@
 
   type BadgeTone = ComponentProps<Badge>['tone'];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MobileAccountData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getAccount()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getAccount,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: orders = data?.orders ?? [];
 </script>
 
 <PushScreen>
-  <ScreenHeader {onBack} title="我的訂單" sub={phase === 'ready' ? orders.length + ' 筆報名紀錄' : ''} />
-  {#if phase === 'ready'}
+  <ScreenHeader {onBack} title="我的訂單" sub={$gate === 'ready' ? orders.length + ' 筆報名紀錄' : ''} />
+  {#if $gate === 'ready'}
     <div class="df-scroll">
       <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
         {#if orders.length === 0}
@@ -60,9 +59,9 @@
         <div style="height:8px;"></div>
       </div>
     </div>
-  {:else if phase === 'error'}
+  {:else if $gate === 'error'}
     <div class="df-scroll" style="padding:16px;">
-      <Card padding={0}><ErrorState onRetry={load} /></Card>
+      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
     </div>
   {:else}
     <div class="df-scroll" data-testid="orders-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">

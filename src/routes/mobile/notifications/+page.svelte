@@ -10,7 +10,7 @@
    * notifsHydrated 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與
    * ErrorState 重試共用(不會被 load() 的守衛短路)。markRead/markAllRead 既有
    * mutation 不動。 */
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -18,28 +18,22 @@
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getNotifications } from '$lib/mobile/api';
   import { notifs, notifsHydrated, unread, toasts } from '$lib/mobile/stores';
 
-  let alive = true;
-  onDestroy(() => { alive = false; });
-
   let cat = 'all';
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
 
   // 首次 client mount 透過接縫水合一次 feed;重訪時守衛已為 true 就跳過 fetch
   // (不覆寫已讀狀態 / 未讀徽章)。
-  function load() {
-    phase = 'loading';
-    if (get(notifsHydrated)) {
-      phase = 'ready';
-      return;
-    }
-    getNotifications()
-      .then((d) => { if (!alive) return; notifs.set(d); notifsHydrated.set(true); phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getNotifications,
+    skip: () => get(notifsHydrated),
+    onData: (d) => { notifs.set(d); notifsHydrated.set(true); }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: list = $notifs.filter((n) => cat === 'all' || n.cat === cat);
 
@@ -47,18 +41,9 @@
     notifs.markAllRead();
     toasts.notify('success', '已全部標示為已讀');
   }
-
-  // 使用者主動要求最新資料 → 一律重新 fetch(不受 hydration 守衛短路),
-  // 供「重新整理」按鈕與 ErrorState 的重試共用。
-  function refresh() {
-    phase = 'loading';
-    getNotifications()
-      .then((d) => { if (!alive) return; notifs.set(d); notifsHydrated.set(true); phase = 'ready'; })
-      .catch(() => { if (alive) phase = 'error'; });
-  }
 </script>
 
-{#if phase === 'loading'}
+{#if $gate === 'loading'}
   <div class="m-top-inset df-scroll df-view" data-testid="notifications-skeleton" style="padding:14px; display:flex; flex-direction:column; gap:10px;">
     <div style="display:flex; gap:8px; margin-bottom:8px;">
       {#each [50, 50, 50, 50, 50] as w, i (i)}
@@ -81,16 +66,16 @@
       {/each}
     </SkelCard>
   </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="m-top-inset df-scroll df-view" style="padding:14px;">
-    <Card padding={0}><ErrorState onRetry={refresh} /></Card>
+    <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 {:else}
 <ScreenHeader title="通知中心" sub={$unread > 0 ? $unread + ' 則未讀' : '全部已讀'}>
   <svelte:fragment slot="right">
     <div style="display:flex; gap:8px;">
       <button
-        on:click={refresh}
+        on:click={gate.refresh}
         class="df-tapscale"
         style="border:none; background:var(--df-bg-light); color:var(--df-text-dark); font-size:12.5px;
           font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;

@@ -19,28 +19,27 @@
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { overlay } from '$lib/mobile/stores';
   import { WEEK, type MyCourse } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getMine, type MineData } from '$lib/mobile/api';
 
   const today = new Date().getDay() === 0 ? 7 : new Date().getDay();
 
   const openCourse = (course: MyCourse) => overlay.push('courseDetail', { course });
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MineData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getMine()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getMine,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: courses = data?.courses ?? [];
   $: schedule = data?.schedule ?? [];
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 <div class="df-scroll df-view">
   <ScreenHeader title="我的課程" sub={`本季報名 ${courses.length} 門${courses[0] ? ' · ' + courses[0].term : ''}`} />
 
@@ -138,9 +137,9 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="m-top-inset df-scroll df-view" style="padding:16px;">
-    <Card padding={0}><ErrorState onRetry={load} /></Card>
+    <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 {:else}
   <div class="m-top-inset df-scroll df-view" data-testid="mine-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">

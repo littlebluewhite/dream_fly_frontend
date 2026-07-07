@@ -21,20 +21,19 @@
   import { overlay, profile } from '$lib/mobile/stores';
   import { points } from '$lib/member/stores';
   import { authStore } from '$lib/stores/authStore';
+  import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
 
   type Item = { id: string; icon: string; label: string; sub: string; tone: string; tint: string };
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MobileAccountData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getAccount()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getAccount,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: items = [
     { id: 'points', icon: 'star', label: '會員點數', sub: $points.toLocaleString() + ' 點可用', tone: 'var(--df-accent-dark)', tint: '#FFF8DB' },
@@ -49,7 +48,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <div class="m-top-inset" style="flex:none; background:linear-gradient(125deg, var(--df-primary), var(--df-primary-dark)); color:#fff;">
   <div style="padding:4px 18px 22px; display:flex; align-items:center; gap:14px;">
     <Avatar name={$profile.initial} size="lg" color="rgba(255,255,255,0.22)" />
@@ -137,9 +136,9 @@
     <div style="text-align:center; font-size:11.5px; color:var(--df-text-muted); padding:4px 0 8px;">Dream Fly 夢飛體操 · App v2.4.0</div>
   </div>
 </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="m-top-inset df-scroll df-view" style="padding:16px;">
-    <Card padding={0}><ErrorState onRetry={load} /></Card>
+    <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 {:else}
   <div class="m-top-inset df-scroll df-view" data-testid="account-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:16px;">

@@ -16,21 +16,20 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/mobile/api';
 
   export let onBack: () => void;
 
   let tab: 'report' | 'certs' = 'report';
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ReportsData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getReports()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getReports,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   const STARS = [1, 2, 3, 4, 5];
 </script>
@@ -52,7 +51,7 @@
     {/each}
   </div>
 
-  {#if phase === 'ready' && data}
+  {#if $gate === 'ready' && data}
   <div class="df-scroll">
     <div style="padding:16px; display:flex; flex-direction:column; gap:14px;">
       {#if tab === 'report'}
@@ -109,9 +108,9 @@
       <div style="height:8px;"></div>
     </div>
   </div>
-  {:else if phase === 'error'}
+  {:else if $gate === 'error'}
     <div class="df-scroll" style="padding:16px;">
-      <Card padding={0}><ErrorState onRetry={load} /></Card>
+      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
     </div>
   {:else}
     <div class="df-scroll" data-testid="report-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;">

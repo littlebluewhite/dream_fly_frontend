@@ -12,20 +12,19 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { WEEK } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ScheduleData } from '$lib/mobile/api';
 
   export let onBack: () => void;
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ScheduleData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getSchedule()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getSchedule,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: schedule = data?.schedule ?? [];
   $: byDay = schedule.reduce<Record<number, typeof schedule>>((acc, s) => {
@@ -37,7 +36,7 @@
 
 <PushScreen>
   <ScreenHeader {onBack} title="日程表" sub="每週固定課表" />
-  {#if phase === 'ready'}
+  {#if $gate === 'ready'}
     <div class="df-scroll">
       <div style="padding:16px; display:flex; flex-direction:column; gap:14px;">
         {#each days as d}
@@ -74,9 +73,9 @@
         <div style="height:8px;"></div>
       </div>
     </div>
-  {:else if phase === 'error'}
+  {:else if $gate === 'error'}
     <div class="df-scroll" style="padding:16px;">
-      <Card padding={0}><ErrorState onRetry={load} /></Card>
+      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
     </div>
   {:else}
     <div class="df-scroll" data-testid="schedule-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;">

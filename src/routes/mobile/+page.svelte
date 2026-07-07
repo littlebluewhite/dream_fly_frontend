@@ -21,6 +21,7 @@
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import type { Course } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getHome, type MobileHomeData } from '$lib/mobile/api';
   import { overlay, cart, toasts, unread } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
@@ -35,16 +36,14 @@
     { key: '跑酷', label: '跑酷', icon: 'flame' }
   ];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MobileHomeData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getHome()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getHome,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: profile = $profileStore;
   $: catalog = data?.catalog ?? [];
@@ -71,7 +70,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <div style="flex:none; background:linear-gradient(125deg, var(--df-primary), var(--df-primary-dark)); color:#fff;">
   <div class="m-top-inset"></div>
   <div style="padding:2px 18px 18px;">
@@ -201,9 +200,9 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="m-top-inset df-scroll df-view" style="padding:16px;">
-    <Card padding={0}><ErrorState onRetry={load} /></Card>
+    <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 {:else}
   <div class="m-top-inset df-scroll df-view" data-testid="mobile-home-skeleton" style="padding:18px; display:flex; flex-direction:column; gap:18px;">

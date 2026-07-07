@@ -19,6 +19,7 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { toasts } from '$lib/mobile/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getPoints, type PointsData, type Reward } from '$lib/mobile/api';
   import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
 
@@ -30,17 +31,15 @@
     ['ledger', '點數明細']
   ];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: PointsData | null = null;
   let redeemingId: string | null = null;
-
-  function load() {
-    phase = 'loading';
-    getPoints()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getPoints,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   async function redeem(rw: Reward) {
     if (redeemingId || rw.stock === 0) return;
@@ -93,7 +92,7 @@
     {/each}
   </div>
 
-  {#if phase === 'ready' && data}
+  {#if $gate === 'ready' && data}
   <div class="df-scroll">
     <div style="padding:16px;">
       {#if tab === 'rewards'}
@@ -147,9 +146,9 @@
       <div style="height:8px;"></div>
     </div>
   </div>
-  {:else if phase === 'error'}
+  {:else if $gate === 'error'}
     <div class="df-scroll" style="padding:16px;">
-      <Card padding={0}><ErrorState onRetry={load} /></Card>
+      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
     </div>
   {:else}
     <div class="df-scroll" data-testid="points-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">

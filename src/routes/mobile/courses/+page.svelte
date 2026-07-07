@@ -15,6 +15,7 @@
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import CourseCard from '$lib/mobile/components/CourseCard.svelte';
   import type { Course } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type MobileCoursesData } from '$lib/mobile/api';
   import { overlay, cart, toasts } from '$lib/mobile/stores';
 
@@ -29,16 +30,14 @@
   ];
   const CHIPS = [{ key: 'all', label: '全部' }, ...CATS];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: MobileCoursesData | null = null;
-
-  function load() {
-    phase = 'loading';
-    getCourses()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getCourses,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   let cat = 'all';
   let q = '';
@@ -60,7 +59,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <ScreenHeader title="課程介紹" sub="先試一堂，再決定孩子的體操路線">
   <HeaderIcon slot="right" icon="shopping-cart" badge={$cart.reduce((s, c) => s + c.qty, 0)} label="購物車" onClick={() => overlay.sheet('cart')} />
 </ScreenHeader>
@@ -110,9 +109,9 @@
     <div style="height:8px;"></div>
   </div>
 </div>
-{:else if phase === 'error'}
+{:else if $gate === 'error'}
   <div class="m-top-inset df-scroll df-view" style="padding:16px;">
-    <Card padding={0}><ErrorState onRetry={load} /></Card>
+    <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 {:else}
   <div class="m-top-inset df-scroll df-view" data-testid="courses-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
