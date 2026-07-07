@@ -8,6 +8,7 @@
 
 import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 import type { Coach } from '$lib/data/coaches';
+import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 
 /** 全前端唯一 cents→NT$ 轉換點。 */
 export const ntd = (cents: number): number => Math.round(cents / 100);
@@ -31,14 +32,6 @@ export function orderItemsSummary(
 	if (items.length === 1) return items[0].name;
 	return `${items[0].name} 外 ${items.length - 1} 項`;
 }
-
-/** 後端 level enum（beginner/intermediate/advanced）→ 繁中 label；
- *  未知值 fallback 回原字串，不會讓頁面因為後端新增 enum 值而炸掉。 */
-const LEVEL_LABEL: Record<string, string> = {
-	beginner: '初級',
-	intermediate: '中級',
-	advanced: '高級'
-};
 
 /** 課程介紹頁（/courses）用的課程卡形狀。 */
 export interface CatalogCourse {
@@ -69,7 +62,7 @@ export function toCatalogCourse(c: ApiCourse, coachName?: string): CatalogCourse
 	return {
 		id: c.id,
 		name: c.name,
-		level: LEVEL_LABEL[c.level] ?? c.level,
+		level: COURSE_LEVEL_LABEL[c.level] ?? c.level,
 		cat: c.category ?? '',
 		age: ageRange(c.min_age, c.max_age),
 		days: c.schedule_text ?? '',

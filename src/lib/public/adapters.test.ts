@@ -66,7 +66,7 @@ describe('toCatalogCourse', () => {
 		expect(toCatalogCourse(c, '黃教練')).toEqual({
 			id: 'course-uuid-1',
 			name: '幼兒體操 啟蒙班',
-			level: '初級',
+			level: '入門',
 			cat: '幼兒體操',
 			age: '3–6 歲',
 			days: '週六 10:00',
@@ -81,6 +81,14 @@ describe('toCatalogCourse', () => {
 	it('falls back to the raw level string for an unknown enum value', () => {
 		const c = makeApiCourse({ level: 'expert' });
 		expect(toCatalogCourse(c).level).toBe('expert');
+	});
+
+	it('maps all 5 canonical course_level enum values to their 繁中 label via the shared $lib/domain/course-level constant (FE#17 補完公開路徑 — foundation/elite no longer fall back to the raw enum string)', () => {
+		expect(toCatalogCourse(makeApiCourse({ level: 'foundation' })).level).toBe('啟蒙');
+		expect(toCatalogCourse(makeApiCourse({ level: 'beginner' })).level).toBe('入門');
+		expect(toCatalogCourse(makeApiCourse({ level: 'intermediate' })).level).toBe('基礎');
+		expect(toCatalogCourse(makeApiCourse({ level: 'advanced' })).level).toBe('進階');
+		expect(toCatalogCourse(makeApiCourse({ level: 'elite' })).level).toBe('選手');
 	});
 
 	it('defaults coach to an empty string when no coachName is passed', () => {

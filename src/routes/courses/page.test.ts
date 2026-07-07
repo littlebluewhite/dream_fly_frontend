@@ -101,7 +101,7 @@ describe('課程介紹 (marketing) — 接真 API', () => {
 		const { container, findByText } = render(Page);
 
 		await findByText('幼兒體操 啟蒙班');
-		expect(container.textContent).toContain('初級'); // LEVEL_LABEL[beginner]
+		expect(container.textContent).toContain('入門'); // COURSE_LEVEL_LABEL[beginner]（FE#17 補完：改走 $lib/domain/course-level 共用常數）
 		expect(container.textContent).toContain('NT$ 3,200'); // ntd(320000)
 		expect(container.textContent).toContain('黃詩涵'); // CoachResponse.name（真實姓名）
 		expect(container.textContent).not.toContain('資深體操教練'); // 不是職稱 title — 回歸 .title 會踩到這條

@@ -18,6 +18,12 @@
     '幼兒': 'success',
     '競技': 'error',
     '成人': 'primary',
+    // FE#17 補完：5 級課程分級（$lib/domain/course-level 共用常數）色階對齊
+    // admin/member/mobile 既有的 LEVEL_TONE，避免 foundation/elite 落回預設 primary。
+    '啟蒙': 'info',
+    '入門': 'info',
+    '基礎': 'primary',
+    '選手': 'accent',
     '進階': 'neutral'
   };
 

@@ -502,7 +502,7 @@ describe('getCourses', () => {
     expect(d).toEqual({
       catalog: [
         {
-          id: 'course-uuid-1', name: '競技啦啦隊 進階班', level: '高級', cat: '競技啦啦隊',
+          id: 'course-uuid-1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊',
           age: '10–16 歲', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷',
           desc: '描述', spots: 2
         }
