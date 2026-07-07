@@ -20,6 +20,7 @@
    * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
    * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。 */
   import { onMount } from 'svelte';
+  import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
@@ -32,7 +33,6 @@
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let classes: AttClassFull[] = [];
 
   // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
@@ -49,29 +49,28 @@
   let savedAt: string | null = null;
   let dirtyCount = 0;
 
-  function load() {
-    phase = 'loading';
-    getAttendance()
-      .then((d) => {
-        classes = d.classes;
-        const first = classes[0];
-        curClassId = first?.id ?? '';
-        marks = first ? buildMarks(first.roster) : {};
-        dirtyCount = first ? first.roster.filter((r) => r.def !== 'present').length : 0;
-        phase = 'ready';
-        // 部分名冊載入失敗(seam 已做 allSettled 隔離)：成功班級照常可點名，
-        // 失敗班級以 toast 提示，不整頁打成 error。
-        if (d.failedClasses.length > 0) {
-          toasts.notify(
-            'warning',
-            '部分名冊載入失敗',
-            d.failedClasses.join('、') + ' 的名冊暫時無法載入，其他班級可正常點名，請稍後重新整理再試。'
-          );
-        }
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getAttendance,
+    onData: (d) => {
+      classes = d.classes;
+      const first = classes[0];
+      curClassId = first?.id ?? '';
+      marks = first ? buildMarks(first.roster) : {};
+      dirtyCount = first ? first.roster.filter((r) => r.def !== 'present').length : 0;
+      // 部分名冊載入失敗(seam 已做 allSettled 隔離)：成功班級照常可點名，
+      // 失敗班級以 toast 提示，不整頁打成 error。
+      if (d.failedClasses.length > 0) {
+        toasts.notify(
+          'warning',
+          '部分名冊載入失敗',
+          d.failedClasses.join('、') + ' 的名冊暫時無法載入，其他班級可正常點名，請稍後重新整理再試。'
+        );
+      }
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   // ── 復原快照 ───────────────────────────────────────────────────────────
   // The save bar is driven by state/savedAt/dirtyCount, not just marks — so a
@@ -236,7 +235,7 @@
   }[state];
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 {#if classes.length === 0}
   <!-- ── 今日無場次：空狀態(同 coach/today 頁「今日尚無場次」用詞慣例) ──────── -->
   <Card padding={0}><EmptyState icon="calendar-x" title="今日尚無場次" body="今天沒有排定課程，無需點名。" pad="56px 24px" /></Card>
@@ -418,8 +417,8 @@
   {/if}
 </Dialog>
 {/if}
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;" data-testid="attendance-skeleton">
     <SkelCard><Skeleton w="100%" h={64} r={12} /></SkelCard>

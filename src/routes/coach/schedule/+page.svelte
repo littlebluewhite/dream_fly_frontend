@@ -13,6 +13,7 @@
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { CAT_COLOR } from '$lib/coach/data';
   import type { SchedCat, SchedVenue, SchedCourse } from '$lib/coach/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getSchedule } from '$lib/coach/api';
   import ScheduleGrid from '$lib/coach/components/ScheduleGrid.svelte';
   import ScheduleMonth from '$lib/coach/components/ScheduleMonth.svelte';
@@ -26,29 +27,28 @@
     fmtDayTitle
   } from '$lib/coach/schedule-dates';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let courses: SchedCourse[] = [];
   let errorTitle = '載入失敗';
   let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
-  function load() {
-    phase = 'loading';
-    getSchedule()
-      .then((d) => { courses = d.courses; phase = 'ready'; })
-      .catch((e) => {
-        // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
-        // 整支模組換成只有 getSchedule 的假模組，import 進來的 class 會是 undefined。
-        if (e?.name === 'CoachNotFoundError') {
-          errorTitle = '此帳號未綁定教練檔案';
-          errorBody = '請聯繫系統管理員協助設定教練檔案。';
-        } else {
-          errorTitle = '載入失敗';
-          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-        }
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getSchedule,
+    onData: (d) => { courses = d.courses; },
+    onError: (e) => {
+      // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
+      // 整支模組換成只有 getSchedule 的假模組，import 進來的 class 會是 undefined。
+      if (e instanceof Error && e.name === 'CoachNotFoundError') {
+        errorTitle = '此帳號未綁定教練檔案';
+        errorBody = '請聯繫系統管理員協助設定教練檔案。';
+      } else {
+        errorTitle = '載入失敗';
+        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+      }
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   type View = '日' | '週' | '月';
   const viewOptions: View[] = ['日', '週', '月'];
@@ -74,7 +74,7 @@
     'display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--df-border);border-radius:8px;background:#fff;padding:7px 10px;cursor:pointer';
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <div style="display:flex;flex-direction:column;gap:16px">
   <!-- filter bar -->
   <Card>
@@ -179,8 +179,8 @@
     </span>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px" data-testid="schedule-skeleton">
     <SkelCard><Skeleton w="100%" h={54} r={10} /></SkelCard>

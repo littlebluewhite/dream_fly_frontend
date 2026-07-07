@@ -9,6 +9,7 @@
   import { onMount } from 'svelte';
   import { LEVEL_TINT } from '$lib/coach/data';
   import type { Student } from '$lib/coach/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getStudents } from '$lib/coach/api';
   import { search } from '$lib/coach/stores';
   import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
@@ -20,16 +21,15 @@
   import ReportCardDialog from '$lib/coach/components/ReportCardDialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let students: Student[] = [];
 
-  function load() {
-    phase = 'loading';
-    getStudents()
-      .then((d) => { students = d.students; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getStudents,
+    onData: (d) => { students = d.students; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   /* 發證書 dialog（Task 13；POST /certificates，見 integration-contract.md §3.22）。 */
   let certOpen = false;
@@ -78,7 +78,7 @@
   $: lowAttCount = students.filter((s) => s.att < 75).length;
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <!-- root: flex col gap 16 — no df-view (layout already provides it) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -136,8 +136,8 @@
 </div>
 <CertificateDialog open={certOpen} student={certStudent} onClose={closeCertificate} />
 <ReportCardDialog open={rcOpen} student={rcStudent} onClose={closeReportCard} />
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px" data-testid="students-skeleton">
     <div><Skeleton w={140} h={26} r={6} /></div>

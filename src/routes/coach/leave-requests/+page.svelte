@@ -6,6 +6,7 @@
    * 接縫慣例。核准/婉拒後從清單移除（同 member/mine 頁「取消候補」後從候補清單
    * 移除的慣例——決定完成的假單不再屬於「待審核」）。 */
   import { onMount } from 'svelte';
+  import { createLoadGate } from '$lib/load-gate';
   import { getPendingLeaveRequests, decideLeaveRequest } from '$lib/coach/api';
   import type { CoachLeaveRequest } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
@@ -14,7 +15,6 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let requests: CoachLeaveRequest[] = [];
   // 伺服器端 pending 總數（單頁上限 100，可能大於 requests.length）——計數與空狀態
   // 一律以 total 為準：以截斷後陣列長度計數會低報、審完可見清單後的「目前沒有待
@@ -22,19 +22,16 @@
   let total = 0;
   let decidingId: string | null = null;
 
-  function load() {
-    phase = 'loading';
-    getPendingLeaveRequests()
-      .then((d) => {
-        requests = d.requests;
-        total = d.total;
-        phase = 'ready';
-      })
-      .catch(() => {
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getPendingLeaveRequests,
+    onData: (d) => {
+      requests = d.requests;
+      total = d.total;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   /** PATCH /leave-requests/{id} 的錯誤分支(§3.20：404/403/409/422)——這個後端模組
    *  (dream_fly_backend/src/modules/leave/service.rs)的錯誤字串本身就是繁中，
@@ -65,7 +62,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <!-- root: flex col gap 16 — no df-view (layout already provides it) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -124,8 +121,8 @@
   {/if}
 
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px" data-testid="leave-requests-skeleton">
     <div><Skeleton w={140} h={26} r={6} /></div>

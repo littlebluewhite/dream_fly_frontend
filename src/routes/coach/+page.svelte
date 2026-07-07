@@ -10,6 +10,7 @@
    * 一併移入 getDashboard() payload(換後端只改 api.ts 這一層)。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
   import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
   import { toasts } from '$lib/coach/stores';
@@ -23,34 +24,32 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Checkbox from '$lib/components/ui/Checkbox.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: CoachDashboardData | null = null;
   let errorTitle = '載入失敗';
   let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
-  function load() {
-    phase = 'loading';
-    getDashboard()
-      .then((d) => {
-        data = d;
-        phase = 'ready';
-        void hydrateClockState(d.coach.id);
-      })
-      .catch((e) => {
-        // 用 e.name 而非 instanceof CoachNotFoundError —— 頁面測試把 $lib/coach/api
-        // 整支模組換成只有 getDashboard 的假模組，import 進來的 class 會是
-        // undefined，instanceof undefined 會直接拋錯。
-        if (e?.name === 'CoachNotFoundError') {
-          errorTitle = '此帳號未綁定教練檔案';
-          errorBody = '請聯繫系統管理員協助設定教練檔案。';
-        } else {
-          errorTitle = '載入失敗';
-          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-        }
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getDashboard,
+    onData: (d) => {
+      data = d;
+      void hydrateClockState(d.coach.id);
+    },
+    onError: (e) => {
+      // 用 e.name 而非 instanceof CoachNotFoundError —— 頁面測試把 $lib/coach/api
+      // 整支模組換成只有 getDashboard 的假模組，import 進來的 class 會是
+      // undefined，instanceof undefined 會直接拋錯。
+      if (e instanceof Error && e.name === 'CoachNotFoundError') {
+        errorTitle = '此帳號未綁定教練檔案';
+        errorBody = '請聯繫系統管理員協助設定教練檔案。';
+      } else {
+        errorTitle = '載入失敗';
+        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+      }
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   /* ── 上班/下班打卡 —— 進頁面時以 isClockedIn()(最新一筆 clock-record)做開機狀態
    * 查詢，之後為本地樂觀狀態；clockIn 409(已在上班中)/clockOut 404(尚未上班)時，
@@ -177,7 +176,7 @@
   $: messages = conversations.slice(0, 3);
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 <div style="display:flex;flex-direction:column;gap:18px">
 
   <!-- ① Gradient welcome hero -->
@@ -365,8 +364,8 @@
   </div>
 
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:18px" data-testid="coach-home-skeleton">
     <SkelCard><Skeleton w="100%" h={110} r={14} /></SkelCard>

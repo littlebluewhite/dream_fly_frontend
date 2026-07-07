@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { CLASS_STATUS } from '$lib/coach/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getToday, type TodayData } from '$lib/coach/api';
   import { coachPath } from '$lib/coach/nav';
   import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
@@ -17,29 +18,28 @@
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
   import TodayClassCard from '$lib/coach/components/TodayClassCard.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: TodayData | null = null;
   let errorTitle = '載入失敗';
   let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
 
-  function load() {
-    phase = 'loading';
-    getToday()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch((e) => {
-        // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
-        // 整支模組換成只有 getToday 的假模組，import 進來的 class 會是 undefined。
-        if (e?.name === 'CoachNotFoundError') {
-          errorTitle = '此帳號未綁定教練檔案';
-          errorBody = '請聯繫系統管理員協助設定教練檔案。';
-        } else {
-          errorTitle = '載入失敗';
-          errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-        }
-        phase = 'error';
-      });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getToday,
+    onData: (d) => { data = d; },
+    onError: (e) => {
+      // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
+      // 整支模組換成只有 getToday 的假模組，import 進來的 class 會是 undefined。
+      if (e instanceof Error && e.name === 'CoachNotFoundError') {
+        errorTitle = '此帳號未綁定教練檔案';
+        errorBody = '請聯繫系統管理員協助設定教練檔案。';
+      } else {
+        errorTitle = '載入失敗';
+        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+      }
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   /* ── 課堂提醒 reminders (reconstructed per spec) ── */
   const reminders: { icon: string; text: string }[] = [
@@ -62,7 +62,7 @@
   $: attendancePct = todayClasses.length ? Math.round((attendedCount / todayClasses.length) * 100) : 0;
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
 <!-- root: flex col gap 16 (no df-view per convention) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -171,8 +171,8 @@
     </div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex;flex-direction:column;gap:16px" data-testid="today-skeleton">
     <Skeleton w={220} h={30} r={8} />

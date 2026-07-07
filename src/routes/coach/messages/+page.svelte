@@ -31,11 +31,10 @@
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
   import type { Conversation, Student, ThreadMsg } from '$lib/coach/data';
+  import { createLoadGate } from '$lib/load-gate';
   import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { ApiError } from '$lib/api/client';
   import { toasts, search } from '$lib/coach/stores';
-
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
 
   /* ── state (legacy, no runes) ── */
   let convos: Conversation[] = [];
@@ -45,17 +44,16 @@
   // null = 該對話串載入中；[] = 已載入但尚無訊息。
   let thread: ThreadMsg[] | null = null;
 
-  function load() {
-    phase = 'loading';
-    getConversations()
-      .then((d) => {
-        convos = [...d.conversations];
-        sel = d.conversations[0]?.id ?? null;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getConversations,
+    onData: (d) => {
+      convos = [...d.conversations];
+      sel = d.conversations[0]?.id ?? null;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   /** 選定對話變動時載入其對話串並標記已讀。
    *
@@ -181,7 +179,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
 <div style="height:calc(100vh - 68px - 52px);min-height:560px;padding:0">
   <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;box-shadow:var(--df-shadow-card)">
 
@@ -366,8 +364,8 @@
     </div>
   {/if}
 </Dialog>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="height:calc(100vh - 68px - 52px);min-height:560px;" data-testid="messages-skeleton">
     <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;">
