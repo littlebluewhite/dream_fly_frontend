@@ -17,9 +17,11 @@ import {
 	updateCourse,
 	updateOrderStatus,
 	getCoupons,
-	createCoupon
+	createCoupon,
+	createMember,
+	updateMember
 } from './api';
-import { api } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
 import { mapMemberAccount } from './data';
 import { ORDER_STATUS } from './data';
 
@@ -504,6 +506,77 @@ describe('mapMemberAccount（純函式）', () => {
 		expect(
 			mapMemberAccount({ id: 'x', name: '測試員', phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: 10 })
 		).toEqual({ id: 'x', name: '測試員', initial: '測', phone: '', joined: '2026-01-01', status: 'active', points: 10 });
+	});
+});
+
+describe('createMember — POST /users（admin，Task 16）', () => {
+	it('POSTs the given body as-is and returns the response mapped through mapMemberAccount (same shape as getMembers)', async () => {
+		const created = {
+			id: 'u-new', name: '新學員', phone: '0911222333', created_at: '2026-07-01T00:00:00Z',
+			is_active: true, points_balance: 0
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /users': created }));
+
+		const body = { email: 'new@example.com', name: '新學員', phone: '0911222333', password: 'abcd1234' };
+		const result = await createMember(body);
+
+		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual({
+			id: 'u-new', name: '新學員', initial: '新', phone: '0911222333', joined: '2026-07-01',
+			status: 'active', points: 0
+		});
+	});
+
+	it('propagates a rejected request (409 email 重複) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /users': new ApiError(409, 'Email 已被使用') })
+		);
+		await expect(
+			createMember({ email: 'dup@example.com', name: '重複', password: 'abcd1234' })
+		).rejects.toThrow('Email 已被使用');
+	});
+
+	it('propagates a rejected request (422 password < 8) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /users': new ApiError(422, 'password too short') })
+		);
+		await expect(
+			createMember({ email: 'x@example.com', name: 'X', password: 'short' })
+		).rejects.toThrow('password too short');
+	});
+});
+
+describe('updateMember — PATCH /users/{id}（admin，Task 16）', () => {
+	it('PATCHes /users/{id} with the given (partial) body and returns the response mapped through mapMemberAccount', async () => {
+		const updated = {
+			id: 'u1', name: '改名學員', phone: '0922333444', created_at: '2026-01-15T00:00:00Z',
+			is_active: false, points_balance: 1250
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /users/u1': updated }));
+
+		const body = { name: '改名學員', phone: '0922333444', is_active: false };
+		const result = await updateMember('u1', body);
+
+		expect(api).toHaveBeenCalledWith('/users/u1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual({
+			id: 'u1', name: '改名學員', initial: '改', phone: '0922333444', joined: '2026-01-15',
+			status: 'inactive', points: 1250
+		});
+	});
+
+	it('sends whatever (possibly empty) body it is given — 全 None 交由後端 422 判斷，seam 不自行攔截', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /users/u1': new ApiError(422, '至少提供一個欄位') })
+		);
+		await expect(updateMember('u1', {})).rejects.toThrow('至少提供一個欄位');
+		expect(api).toHaveBeenCalledWith('/users/u1', { method: 'PATCH', body: JSON.stringify({}) });
+	});
+
+	it('propagates a rejected request (404 查無此使用者) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /users/missing': new ApiError(404, 'user not found') })
+		);
+		await expect(updateMember('missing', { name: 'X' })).rejects.toThrow('user not found');
 	});
 });
 

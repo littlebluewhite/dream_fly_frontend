@@ -1,26 +1,39 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
 import type { MemberAccount } from '$lib/admin/data';
-import { getMembers } from '$lib/admin/api';
+import { getMembers, createMember, updateMember } from '$lib/admin/api';
+import { toasts } from '$lib/admin/stores';
+import { ApiError } from '$lib/api/client';
 
 /* 學員管理 (+page): Task 5 — wires the real getMembers() seam (GET /users, admin).
  * PageHead (進階篩選 toggle) over MembersTable's honest, slimmed table (name/phone/
  * joined/status/points — the only 7 fields GET /users returns). Data now arrives
  * async via getMembers(): onMount loads it into a three-state gate
  * (loading/error/ready), matching the orders/tickets/classes/coaches admin pages
- * wired in Task 18. */
+ * wired in Task 18.
+ *
+ * Task 16: 新增/編輯 wired for real — contract §3.2 gained POST /users and PATCH
+ * /users/{id}. This page owns MemberCreateDialog/MemberEditDialog + the actual
+ * createMember/updateMember calls (same ownership split as classes/venues/
+ * coupons +page.svelte); MembersTable itself only fires onNew/onEdit callback
+ * props. 409/422 errors surface e.message directly (backend's own 繁中 text is
+ * already user-facing — no custom status→copy mapping table like courses/
+ * coupons use). */
 
 const FIXTURE: MemberAccount[] = [
 	{ id: 'u1', name: '王小明', initial: '王', phone: '0912345678', joined: '2026-01-15', status: 'active', points: 1250 },
 	{ id: 'u2', name: '陳小華', initial: '陳', phone: '', joined: '2026-02-01', status: 'inactive', points: 0 }
 ];
 
-vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn() }));
+vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn(), createMember: vi.fn(), updateMember: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getMembers).mockReset();
 	vi.mocked(getMembers).mockResolvedValue({ members: FIXTURE });
+	vi.mocked(createMember).mockReset();
+	vi.mocked(updateMember).mockReset();
 });
 
 describe('學員管理 (+page)', () => {
@@ -57,15 +70,15 @@ describe('學員管理 (+page)', () => {
 		expect(txt).toContain(FIXTURE[1].name);
 	});
 
-	it('does not render columns/filters with no backend data source, and hides the 新增學員 affordance', async () => {
-		const { findByText, container, queryByText } = render(MembersPage);
+	it('does not render columns/filters with no backend data source (新增學員 now shows — Task 16)', async () => {
+		const { findByText, container, getByText } = render(MembersPage);
 		await findByText(FIXTURE[0].name);
 		const txt = container.textContent ?? '';
 		for (const label of ['課程', '分校', '授課教練', '出席率', '繳費', '剩餘堂數', '近況']) {
 			expect(txt).not.toContain(label);
 		}
 		expect(container.querySelectorAll('.att-dot')).toHaveLength(0);
-		expect(queryByText('新增學員')).toBeNull();
+		expect(getByText('新增學員')).toBeInTheDocument();
 	});
 
 	it('進階篩選 panel only offers 最低點數 (course/pay/attendance filters removed — no backend data)', async () => {
@@ -92,5 +105,104 @@ describe('學員管理 (+page) — 三態', () => {
 		vi.mocked(getMembers).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(MembersPage);
 		expect(getByTestId('members-skeleton')).toBeTruthy();
+	});
+});
+
+describe('學員管理 — 新增學員（POST /users，Task 16）', () => {
+	it('填寫必填欄位並建立 → 呼叫 createMember(payload)，成功後重新整包刷新列表', async () => {
+		vi.mocked(createMember).mockResolvedValue({
+			id: 'u-new', name: '新學員', initial: '新', phone: '', joined: '2026-07-06', status: 'active', points: 0
+		});
+		const refreshed: MemberAccount[] = [
+			...FIXTURE,
+			{ id: 'u-new', name: '新學員', initial: '新', phone: '', joined: '2026-07-06', status: 'active', points: 0 }
+		];
+
+		const { getByText, getByLabelText, findByText, queryByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		await fireEvent.click(getByText('新增學員'));
+		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
+		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
+		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
+
+		vi.mocked(getMembers).mockResolvedValue({ members: refreshed }); // 下一次 GET（刷新）回傳含新學員的清單
+		await fireEvent.click(getByText('建立學員'));
+
+		await vi.waitFor(() => expect(createMember).toHaveBeenCalledTimes(1));
+		expect(createMember).toHaveBeenCalledWith({ email: 'new@example.com', name: '新學員', password: 'abcd1234' });
+
+		await findByText('新學員'); // 刷新後的列表包含新學員
+		expect(getMembers).toHaveBeenCalledTimes(2); // 初次載入 + 建立成功後刷新
+		expect(queryByText('建立學員')).toBeNull(); // 對話框已關閉
+	});
+
+	it('新增失敗（409 email 重複）→ 顯示 ApiError.message 原文 toast，對話框維持開啟，列表不變', async () => {
+		vi.mocked(createMember).mockRejectedValue(new ApiError(409, 'Email 已被使用'));
+		const before = get(toasts).length;
+
+		const { getByText, getByLabelText, findByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		await fireEvent.click(getByText('新增學員'));
+		await fireEvent.input(getByLabelText('Email'), { target: { value: 'dup@example.com' } });
+		await fireEvent.input(getByLabelText('姓名'), { target: { value: '重複學員' } });
+		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
+		await fireEvent.click(getByText('建立學員'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toBe('Email 已被使用'); // ApiError.message 直通，無二次改寫
+		expect(getMembers).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+		expect(getByText('建立學員')).toBeInTheDocument(); // 對話框仍開著
+	});
+});
+
+describe('學員管理 — 編輯學員（PATCH /users/{id}，Task 16）', () => {
+	it('點擊列上的 編輯 圖示、修改後儲存 → 呼叫 updateMember(真實 id, body)，成功後重新整包刷新列表', async () => {
+		vi.mocked(updateMember).mockResolvedValue({
+			id: 'u1', name: '王大明', initial: '王', phone: '0912345678', joined: '2026-01-15', status: 'active', points: 1250
+		});
+		const refreshed: MemberAccount[] = [
+			{ ...FIXTURE[0], name: '王大明' },
+			FIXTURE[1]
+		];
+
+		const { getByText, getAllByLabelText, getByDisplayValue, findByText, queryByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		await fireEvent.click(getAllByLabelText('編輯')[0]); // 第一列（王小明）
+		await fireEvent.input(getByDisplayValue(FIXTURE[0].name), { target: { value: '王大明' } });
+
+		vi.mocked(getMembers).mockResolvedValue({ members: refreshed });
+		await fireEvent.click(getByText('儲存'));
+
+		await vi.waitFor(() => expect(updateMember).toHaveBeenCalledTimes(1));
+		expect(updateMember).toHaveBeenCalledWith('u1', {
+			name: '王大明',
+			phone: FIXTURE[0].phone,
+			is_active: true
+		});
+
+		await findByText('王大明'); // 刷新後的列表反映改名
+		expect(getMembers).toHaveBeenCalledTimes(2); // 初次載入 + 編輯成功後刷新
+		expect(queryByText('編輯學員')).toBeNull(); // 對話框已關閉
+	});
+
+	it('編輯失敗（422）→ 顯示 ApiError.message 原文 toast，列表維持原值', async () => {
+		vi.mocked(updateMember).mockRejectedValue(new ApiError(422, '至少提供一個欄位'));
+		const before = get(toasts).length;
+
+		const { getByText, getAllByLabelText, findByText } = render(MembersPage);
+		await findByText(FIXTURE[0].name);
+
+		await fireEvent.click(getAllByLabelText('編輯')[0]);
+		await fireEvent.click(getByText('儲存'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toBe('至少提供一個欄位');
+		expect(getMembers).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+		expect(getByText(FIXTURE[0].name)).toBeInTheDocument(); // 列表維持原值
 	});
 });

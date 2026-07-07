@@ -2,26 +2,31 @@
   /* 學員名單 — the shared learner table (admin.jsx MembersTable), used both
    * embedded in the dashboard (compact) and on the 學員管理 page (full).
    *
-   * compact (dashboard preview) — Task 15: now shares the SAME real GET /users
-   * data as the full page (`members` prop, MemberAccount[]), just capped at 6 rows
-   * and without the status tabs. No more mock MEMBERS import and no mock-only
-   * 新增/編輯 flow — those were never backend-wired anyway (no admin create-or-
-   * edit-another-user endpoint, see the P2 note below), so the preview now follows
-   * the exact same honest rule as the full table instead of carrying its own
-   * separate mock-mutation code path.
+   * compact (dashboard preview) — Task 15: shares the SAME real GET /users data
+   * as the full page (`members` prop, MemberAccount[]), just capped at 6 rows and
+   * without the status tabs. Still no 新增/編輯 here (Task 16) — this is a preview
+   * surface (dashboard glance), not the management page; those actions live only
+   * in the full variant below.
    *
    * full (學員管理 page, `members` prop) — Task 5: 誠實精簡表格. Real GET /users data
    * (MemberAccount: id/name/initial/phone/joined/status/points — the only fields
    * the backend actually returns for a generic account; see admin/api.ts's
-   * getMembers()). Every column/action that depended on a no-backend-source field
-   * (代表色, 課程, 分校, 授課教練, 出席率/近況, 繳費, 剩餘堂數, 續費, 生日, 會員分級, 緊急聯絡人…)
-   * is hidden — not fake-filled — marked P2 below (issue #8). 新增/編輯 are hidden
-   * too: integration-contract.md §3.2 has no admin create-or-edit-another-user
-   * endpoint (only GET /users, GET /users/{id}, PATCH /users/me), so a working
-   * add/edit form here would silently fail to persist. A read-only detail view
-   * (MemberDialog's `account` branch) is offered instead of a fake-working edit
-   * form. */
-  import { Avatar, Card, IconButton, Icon, Tabs } from '$lib/components/ui';
+   * getMembers()). Every column that depends on a no-backend-source field (代表色,
+   * 課程, 分校, 授課教練, 出席率/近況, 繳費, 剩餘堂數, 續費, 生日, 會員分級, 緊急聯絡人…) is still
+   * hidden — not fake-filled — marked P2 below (issue #8, unchanged).
+   *
+   * 新增/編輯 (Task 16): now wired for real — integration-contract.md §3.2 gained
+   * POST /users (admin) and PATCH /users/{id} (admin) since Round 2 Task 5 hid
+   * these buttons. `onNew`/`onEdit` are plain callback props fired on click; this
+   * component owns no dialog or API-call state of its own — members/+page.svelte
+   * owns MemberCreateDialog/MemberEditDialog, the createMember/updateMember
+   * calls, the success/error toasts, and the post-save getMembers() refresh
+   * (same ownership split as classes/venues/coupons +page.svelte use for their
+   * own 新增/編輯 flows). The read-only MemberDialog (`account` branch) is
+   * unchanged — row click still opens it for a detail glance; the new 編輯 icon
+   * button opens the edit form directly, without routing through that read-only
+   * step. */
+  import { Avatar, Button, Card, IconButton, Icon, Tabs } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
   import StatusBadge from './StatusBadge.svelte';
   import MemberDialog from './MemberDialog.svelte';
@@ -34,6 +39,10 @@
   export let compact = false;
   // 兩種模式共用同一份真實資料（GET /users，見 admin/api.ts 的 getMembers()）。
   export let members: MemberAccount[] = [];
+  // !compact-only（Task 16）：新增/編輯的實際 dialog + API 呼叫由 members/+page.svelte
+  // 負責，這裡只是單純的按鈕/圖示觸發。
+  export let onNew: () => void = () => {};
+  export let onEdit: (m: MemberAccount) => void = () => {};
 
   /* ───────────────────────── compact（dashboard 預覽，Task 15：改吃真實 members） ───────────────────────── */
 
@@ -65,9 +74,9 @@
 {#if compact}
   <Card padding={0} style="overflow:hidden">
     <PanelHead title="學員名單" sub={`最近活躍 ${COMPACT_PREVIEW_LIMIT} 位`} />
-    <!-- P2 (issue #8): 新增學員按鈕已隱藏 —— integration-contract.md §3.2 沒有 admin
-         新增使用者端點（只有 GET /users、GET /users/{id}、PATCH /users/me），假的新增
-         表單無法真正持久化（同下方 !compact 分支）。 -->
+    <!-- Task 16: 新增學員按鈕刻意不在這裡渲染——雖然 POST /users 端點現已存在（見下方
+         !compact 分支的 PanelHead），但這是 dashboard 預覽（compact），不是學員管理頁，
+         新增/編輯操作只在完整頁面提供。 -->
 
     <table style="width:100%;border-collapse:collapse">
       <thead>
@@ -121,10 +130,11 @@
   <MemberDialog account={activePreview} onClose={() => (activePreview = null)} />
 {:else}
   <Card padding={0} style="overflow:hidden">
-    <PanelHead title="學員名單" sub={accCounts.all + ' 位學員'} />
-    <!-- P2 (issue #8): 新增學員按鈕已隱藏 —— integration-contract.md §3.2 沒有 admin
-         新增使用者端點（只有 GET /users、GET /users/{id}、PATCH /users/me），假的新增
-         表單無法真正持久化。 -->
+    <PanelHead title="學員名單" sub={accCounts.all + ' 位學員'}>
+      <Button slot="right" size="sm" variant="primary" on:click={onNew}>
+        <Icon name="plus" size={15} />新增學員
+      </Button>
+    </PanelHead>
 
     <div style="padding:4px 22px 0">
       <Tabs tabs={accTabs} bind:value={accStatus} />
@@ -165,9 +175,14 @@
             <td class="td td-dark">{m.points}</td>
             <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <td class="td td-right" on:click|stopPropagation>
-              <IconButton aria-label="檢視" variant="ghost" on:click={() => (activeAccount = m)}>
-                <Icon name="chevron-right" size={18} color="var(--df-text-light)" />
-              </IconButton>
+              <div style="display:flex;gap:4px;justify-content:flex-end">
+                <IconButton aria-label="編輯" variant="ghost" on:click={() => onEdit(m)}>
+                  <Icon name="pencil-line" size={17} color="var(--df-text-light)" />
+                </IconButton>
+                <IconButton aria-label="檢視" variant="ghost" on:click={() => (activeAccount = m)}>
+                  <Icon name="chevron-right" size={18} color="var(--df-text-light)" />
+                </IconButton>
+              </div>
             </td>
           </tr>
         {/each}
@@ -181,8 +196,10 @@
   </Card>
 
   <MemberDialog account={activeAccount} onClose={() => (activeAccount = null)} />
-  <!-- P2 (issue #8): 編輯 affordance 已隱藏（不掛 MemberEditDialog、不傳 onEdit）——沒有
-       admin 編輯他人 users 的端點，唯讀檢視即可，不留一個實際上存不進去的假編輯表單。 -->
+  <!-- Task 16: 編輯 affordance 是上面每列的獨立 pencil-line 圖示（onEdit(m)），不是這顆
+       唯讀 MemberDialog 的按鈕——契約 §3.2 的 PATCH /users/{id} 只能改 name/phone/
+       is_active 三欄，跟這顆 dialog 顯示的欄位組合不同，直接開獨立編輯表單更誠實，不必
+       先繞進唯讀檢視再找編輯入口。 -->
 {/if}
 
 <style>

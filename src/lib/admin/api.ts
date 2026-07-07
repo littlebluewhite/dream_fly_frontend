@@ -426,6 +426,31 @@ export const getMembers = (): Promise<MembersData> =>
 		members: r.users.map(mapMemberAccount)
 	}));
 
+/* ── 學員新增/編輯（POST /users、PATCH /users/{id}，admin-only，Task 16） ──
+ * 契約 §3.2：POST /users 不可自訂 roles（後端一律指派 member）；PATCH /users/{id}
+ * 不可改 email/roles/password（v1 範圍外，body 帶了也會被忽略）——所以這兩支的 body
+ * 型別分別只含各自端點真正接受的欄位。兩者回應皆為 UserResponse，一律經
+ * mapMemberAccount() 映射回 MemberAccount，與 getMembers() 的形狀一致，呼叫端
+ * （members/+page.svelte）不用另外處理兩種形狀。全欄位皆選填的 PATCH body（呼叫端
+ * 傳 {}）就原樣送出，不在此層攔截——「至少提供一個欄位」422 由後端判斷，seam 只負責
+ * 忠實傳遞與回傳/拋出。 */
+export interface CreateMemberBody {
+	email: string;
+	name: string;
+	phone?: string;
+	password: string;
+}
+export const createMember = (body: CreateMemberBody): Promise<MemberAccount> =>
+	api<ApiUserAccount>('/users', { method: 'POST', body: JSON.stringify(body) }).then(mapMemberAccount);
+
+export interface UpdateMemberBody {
+	name?: string;
+	phone?: string;
+	is_active?: boolean;
+}
+export const updateMember = (id: string, body: UpdateMemberBody): Promise<MemberAccount> =>
+	api<ApiUserAccount>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then(mapMemberAccount);
+
 /* ═════════════════════════ 優惠碼（GET /coupons、POST /coupons，admin-only，Task 8 piece 3） ═════════════════════════
  * 後端只有「建立 + 列表」，沒有 update/delete 端點（issue #4 已註記，本輪刻意不開新
  * 端點）——對應頁面（routes/admin/coupons）只做列表 + 建立，不渲染編輯/刪除（同
