@@ -40,7 +40,11 @@ import {
  * 的同參照」守衛範圍;domain 本身的字面不變量/row-count 仍在下方第 2、3 節涵蓋。
  * REWARDS 同理——Task 14 把 member 的兌換品項目錄換成真 GET /rewards(§3.23)後，
  * member facade 也不再重新匯出這個 mock 常數(僅 mobile 的 PointsScreen 仍消費，
- * 留給 Task 19)。 */
+ * 留給 Task 19)。
+ * CATALOG/ORDERS 同理——Task 11 P2 清理後，member facade(`$lib/member/data`)不再
+ * 重新匯出這兩個值(課程介紹走真 GET /courses、帳戶訂單走真 GET /orders/me)，故它們
+ * 也退出這份「member facade 同參照」守衛範圍；domain 本身的字面不變量/row-count
+ * 仍在下方第 2、3 節涵蓋(mobile 另有自己一份 facade，不在本檔案範圍)。 */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
 		expect(MemberData.ME).toBe(ME);
@@ -49,9 +53,7 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.UPCOMING).toBe(UPCOMING);
 		expect(MemberData.MY_COURSES).toBe(MY_COURSES);
 		expect(MemberData.ATT_HISTORY).toBe(ATT_HISTORY);
-		expect(MemberData.CATALOG).toBe(CATALOG);
 		expect(MemberData.SCHEDULE).toBe(SCHEDULE);
-		expect(MemberData.ORDERS).toBe(ORDERS);
 		expect(MemberData.MAKEUP_SLOTS).toBe(MAKEUP_SLOTS);
 		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);

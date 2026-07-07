@@ -14,17 +14,16 @@
    * durationMinutes；一律隨 onSave 的第二個參數送出。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { LEVELS, CATS, CLASS_STATUS, COACHES, type ClassRow, type Coach } from '$lib/admin/data';
+  import { LEVELS, CATS, CLASS_STATUS, type ClassRow, type Coach } from '$lib/admin/data';
 
   export let klass: ClassRow | null = null;
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
   export let onSave: (updated: ClassRow, durationMinutes: number) => void = () => {};
-  // Caller (classes/+page.svelte) passes the getClasses() seam's coaches; the
-  // COACHES import stays only as this prop's default (mirrors OrdersTable's
-  // `export let rows: Order[] = ORDERS;`), so a standalone render still works.
-  export let coaches: Coach[] = COACHES;
+  // Caller (classes/+page.svelte) passes the getClasses() seam's coaches — required,
+  // no mock fallback (Task 11 P2 cleanup); standalone renders (tests) must supply it.
+  export let coaches: Coach[];
 
   const coachOptions = coaches.map((c) => c.name);
 

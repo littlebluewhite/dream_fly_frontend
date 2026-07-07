@@ -5,12 +5,15 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
-  import { ME } from '$lib/member/data';
   import { search, unreadCount, cartCount, checkoutOpen } from '$lib/member/stores';
-  import { isLoggedIn } from '$lib/stores/authStore';
+  import { authStore, isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
 
   export let title = '';
+
+  // Real identity (Task 11 P2 cleanup — was the mock `ME` constant). A guest
+  // render (no SSR route guard on /member) falls back to '?' / brand primary.
+  $: member = $authStore.member;
 
   // Opening the checkout dialog is itself a checkout action, so gate it like the
   // marketing cart surfaces: a guest who reached /member directly (there's no SSR
@@ -40,7 +43,7 @@
       </IconButton>
       {#if $cartCount > 0}<span class="dot">{$cartCount}</span>{/if}
     </div>
-    <Avatar name={ME.initial} size="md" color={ME.color} />
+    <Avatar name={member?.initial ?? '?'} size="md" color={member?.color ?? 'var(--df-primary)'} />
   </div>
 </div>
 

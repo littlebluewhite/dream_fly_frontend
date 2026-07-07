@@ -3,7 +3,10 @@
    * Card: PanelHead (activity icon on the right) over the ACTIVITY items. Each item
    * is an icon chip (background = item.bg, icon colour = item.tone — both are raw
    * CSS colour strings, NOT Tones) beside the text + relative time. Reads the
-   * shared ACTIVITY directly. */
+   * shared ACTIVITY directly.
+   *
+   * P2: ACTIVITY is still a live mock seed (admin/data.ts) — no backend activity-feed
+   * endpoint exists yet, see docs/adr/0006. */
   import { Card, Icon } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
   import { ACTIVITY } from '$lib/admin/data';

@@ -6,9 +6,12 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
-  import { ME } from '$lib/member/data';
   import { unreadCount, toasts } from '$lib/member/stores';
   import { authStore } from '$lib/stores/authStore';
+
+  // Real identity (Task 11 P2 cleanup — was the mock `ME` constant). A guest
+  // render (no SSR route guard on /member) falls back to '?' / brand primary / 會員.
+  $: member = $authStore.member;
 
   const NAV = [
     { href: '/member', label: '總覽', icon: 'layout-dashboard' },
@@ -59,9 +62,10 @@
       <Icon name="arrow-up-right" size={13} color="var(--df-text-muted)" />
     </a>
     <div class="me">
-      <Avatar name={ME.initial} size="sm" color={ME.color} />
+      <Avatar name={member?.initial ?? '?'} size="sm" color={member?.color ?? 'var(--df-primary)'} />
       <div class="me-text">
-        <div class="me-name">{ME.name}</div>
+        <div class="me-name">{member?.name ?? '會員'}</div>
+        <!-- P2: 「進階班學員」是硬編文字，非身分資料——後端無班級/等級欄位可回填，見 docs/adr/0006。 -->
         <div class="me-role">進階班學員</div>
       </div>
       <IconButton aria-label="登出" variant="ghost" on:click={logout}>

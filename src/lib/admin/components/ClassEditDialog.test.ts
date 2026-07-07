@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { render, fireEvent } from '@testing-library/svelte';
 import ClassEditDialog from './ClassEditDialog.svelte';
 import { CLASSES, type ClassRow } from '$lib/admin/data';
+import { COACHES } from '$lib/domain/coaches';
 import { toasts } from '$lib/admin/stores';
 
 /* ClassEditDialog — edit form in an EditModal (admin.jsx ClassEditDialog). It
@@ -14,14 +15,15 @@ describe('ClassEditDialog', () => {
 	it('renders open with the class name field and the 儲存課程 primary', () => {
 		const { getByDisplayValue, getByText } = render(ClassEditDialog, {
 			open: true,
-			klass: base
+			klass: base,
+			coaches: COACHES
 		});
 		expect(getByDisplayValue(base.name)).toBeInTheDocument();
 		expect(getByText('儲存課程')).toBeInTheDocument();
 	});
 
 	it('renders the editable field labels', () => {
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base });
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES });
 		for (const lbl of ['班級名稱', '分級', '課程類別', '授課教練', '教室 / 場地', '招生狀態']) {
 			expect(getByText(lbl)).toBeInTheDocument();
 		}
@@ -32,7 +34,7 @@ describe('ClassEditDialog', () => {
 	 * the age restriction. The 適合年齡 Input must show those exact formats as a
 	 * placeholder so unparseable input is visible before it's submitted. */
 	it('shows the accepted 適合年齡 formats as a placeholder (incl. the EN-DASH range form)', () => {
-		const { getByLabelText } = render(ClassEditDialog, { open: true, klass: base });
+		const { getByLabelText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES });
 		const ageInput = getByLabelText('適合年齡') as HTMLInputElement;
 		expect(ageInput.placeholder).toContain('8–14 歲'); // EN DASH U+2013 — matches AGE_RANGE_RE
 		expect(ageInput.placeholder).toContain('12 歲以上');
@@ -40,7 +42,7 @@ describe('ClassEditDialog', () => {
 	});
 
 	it('renders nothing actionable when closed', () => {
-		const { queryByText } = render(ClassEditDialog, { open: false, klass: base });
+		const { queryByText } = render(ClassEditDialog, { open: false, klass: base, coaches: COACHES });
 		expect(queryByText('儲存課程')).toBeNull();
 	});
 
@@ -49,6 +51,7 @@ describe('ClassEditDialog', () => {
 		const { getByDisplayValue, getByText } = render(ClassEditDialog, {
 			open: true,
 			klass: base,
+			coaches: COACHES,
 			onSave
 		});
 
@@ -67,6 +70,7 @@ describe('ClassEditDialog', () => {
 		const { getByDisplayValue, getByText } = render(ClassEditDialog, {
 			open: true,
 			klass: base,
+			coaches: COACHES,
 			onSave
 		});
 		await fireEvent.input(getByDisplayValue(String(base.cap)), { target: { value: '20' } });
@@ -78,13 +82,13 @@ describe('ClassEditDialog', () => {
 	});
 
 	it('uses the 建立班級 primary and label in new mode', () => {
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base, isNew: true });
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES, isNew: true });
 		expect(getByText('建立班級')).toBeInTheDocument();
 	});
 
 	it('calls onClose from the 取消 button', async () => {
 		const onClose = vi.fn();
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base, onClose });
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES, onClose });
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
 	});
@@ -93,7 +97,7 @@ describe('ClassEditDialog', () => {
 	 * 這裡不再樂觀丟成功 toast——成功/失敗一律由 page 在 API 呼叫結束後決定。 */
 	it('does not show its own toast on save (the page shows one after the API call resolves)', async () => {
 		const before = get(toasts).length;
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base });
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES });
 		await fireEvent.click(getByText('儲存課程'));
 		expect(get(toasts).length).toBe(before);
 	});
@@ -105,6 +109,7 @@ describe('ClassEditDialog', () => {
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
 			klass: base,
+			coaches: COACHES,
 			isNew: true,
 			onSave
 		});
@@ -118,7 +123,7 @@ describe('ClassEditDialog', () => {
 	 * durationMinutes（不是新增模式的寫死 90）。 */
 	it('shows 單堂時長（分鐘） in edit mode too, defaulting to the class’s own duration', () => {
 		const klass = { ...base, durationMinutes: 45 };
-		const { getByDisplayValue } = render(ClassEditDialog, { open: true, klass, isNew: false });
+		const { getByDisplayValue } = render(ClassEditDialog, { open: true, klass, coaches: COACHES, isNew: false });
 		expect(getByDisplayValue('45')).toBeInTheDocument();
 	});
 
@@ -127,6 +132,7 @@ describe('ClassEditDialog', () => {
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
 			klass: base,
+			coaches: COACHES,
 			isNew: true,
 			onSave
 		});
@@ -141,6 +147,7 @@ describe('ClassEditDialog', () => {
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
 			klass,
+			coaches: COACHES,
 			isNew: false,
 			onSave
 		});

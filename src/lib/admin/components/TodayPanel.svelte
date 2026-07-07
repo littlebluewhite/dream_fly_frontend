@@ -3,7 +3,10 @@
    * Card: PanelHead (calendar icon on the right) over the TODAY rows. Each row is
    * time (mono) · name + coach·room·count meta · a status Badge carrying the row's
    * own tone+label. Reads the shared TODAY directly; `sub` is overridable (the
-   * dashboard passes "全館 5 堂課"). */
+   * dashboard passes "全館 5 堂課").
+   *
+   * P2: TODAY is still a live mock seed (admin/data.ts) — no backend today-schedule
+   * endpoint exists yet, see docs/adr/0006. */
   import { Card, Badge, Icon } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
   import { TODAY } from '$lib/admin/data';

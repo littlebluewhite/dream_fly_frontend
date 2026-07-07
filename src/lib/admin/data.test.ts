@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
 	tierOf,
-	MEMBERS,
 	ORDERS,
 	CLASSES,
 	COACHES,
@@ -30,44 +29,6 @@ describe('tierOf', () => {
 	it('returns 一般會員 below 150', () => {
 		expect(tierOf(149)).toEqual(['一般會員', '#64748B']);
 		expect(tierOf(0)).toEqual(['一般會員', '#64748B']);
-	});
-});
-
-describe('member enrichment', () => {
-	it('derives campus/source/birthday/tier/renewDue/lineId for a paid 金卡 member (index 0)', () => {
-		const m = MEMBERS[0];
-		expect(m.id).toBe('GY2024001');
-		expect(m.campus).toBe('美村本館');
-		expect(m.source).toBe('Facebook 廣告');
-		expect(m.birthday).toBe('2013/01/01');
-		expect(m.tier).toBe('金卡會員');
-		expect(m.tierColor).toBe('#F59E0B');
-		expect(m.renewDue).toBe('2026/09/15');
-		expect(m.lineId).toBe('@df4001'); // "GY2024001".slice(-4)
-
-	});
-	it('derives an overdue renewDue for a 待續費 銅卡 member (index 2)', () => {
-		const m = MEMBERS[2];
-		expect(m.campus).toBe('北屯分館');
-		expect(m.source).toBe('LINE 官方帳號');
-		expect(m.birthday).toBe('2017/11/15');
-		expect(m.tier).toBe('銅卡會員');
-		expect(m.renewDue).toBe('已逾期 · 06/03');
-		expect(m.lineId).toBe('@df4003'); // "GY2024003".slice(-4)
-	});
-	it('derives a trial renewDue for a 體驗 一般 member (index 7)', () => {
-		const m = MEMBERS[7];
-		expect(m.tier).toBe('一般會員');
-		expect(m.renewDue).toBe('體驗 06/30 到期');
-	});
-	it('enriches every member with a known tier and a @df line id', () => {
-		const tiers = new Set(['金卡會員', '銀卡會員', '銅卡會員', '一般會員']);
-		for (const m of MEMBERS) {
-			expect(tiers.has(m.tier)).toBe(true);
-			expect(m.lineId.startsWith('@df')).toBe(true);
-			expect(m.campus).toBeTruthy();
-			expect(m.birthday).toMatch(/^\d{4}\/\d{2}\/\d{2}$/);
-		}
 	});
 });
 
@@ -118,7 +79,6 @@ describe('class enrichment', () => {
 
 describe('dataset counts (guard against transcription truncation)', () => {
 	it('has the expected record counts', () => {
-		expect(MEMBERS).toHaveLength(48);
 		expect(CLASSES).toHaveLength(22);
 		expect(COACHES).toHaveLength(9);
 		expect(ORDERS).toHaveLength(36);

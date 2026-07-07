@@ -10,14 +10,15 @@
   import { Avatar, Card, Tabs } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
   import OrderDialog from './OrderDialog.svelte';
-  import { ORDERS, ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
+  import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { search } from '$lib/admin/stores';
   import { fmtNT } from '$lib/admin/format';
   import { filterOrders, countByStatus, type OrderStatusFilter } from './orders-filter';
 
   // The orders page owns the mutable order state (so the summary KPIs and this
   // table stay in sync); we render straight from `rows` and report actions up.
-  export let rows: Order[] = ORDERS;
+  // Required, no mock fallback (Task 11 P2 cleanup) — the page already passes real rows.
+  export let rows: Order[];
   export let onChangeStatus: (o: Order, next: OrderStatus) => void = () => {};
   export let onRemind: (o: Order) => void = () => {};
 

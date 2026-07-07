@@ -19,7 +19,9 @@ export { STATS, type Stat } from '$lib/domain/member-app';
 export { SKILLS, type Skill } from '$lib/domain/member-app';
 export { MY_COURSES, type EnrolledCourse } from '$lib/domain/member-app';
 export { ATT_HISTORY, type AttRecord } from '$lib/domain/member-app';
-export { CATALOG, type CatalogCourse } from '$lib/domain/member-app';
+// CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
+// getCourses()，回傳 $lib/public/adapters 的 CatalogCourse，非這份 domain mock），這份
+// facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體不變。
 export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
 export { CONTACT_THREAD, type ChatMessage } from '$lib/domain/member-app';
 // REWARDS/Reward 不在此列——Task 14 把 member 的兌換品項目錄換成真 GET /rewards
@@ -35,7 +37,6 @@ export type { LedgerType };
 import {
   UPCOMING as UPCOMING_BASE,
   SCHEDULE as SCHEDULE_BASE,
-  ORDERS as ORDERS_BASE,
   NOTIFS_SEED as NOTIFS_SEED_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
@@ -115,9 +116,10 @@ export interface CartItem {
 export type CartItemInput = Omit<CartItem, 'qty'>;
 
 /* ---- Adapters: public/marketing API-shaped objects → unified cart item ----
- * Consume Task 14's public-surface types (uuid string ids) directly — aliased
- * on import since this file also re-exports a same-named, unrelated
- * member-domain `CatalogCourse` (numeric id) above. */
+ * Consume Task 14's public-surface types (uuid string ids) directly — the
+ * `PublicCatalogCourse` alias predates Task 11's P2 cleanup (this file used to
+ * also re-export a same-named, unrelated member-domain `CatalogCourse`,
+ * numeric id); kept as-is here to avoid an unrelated rename. */
 import type { CatalogCourse as PublicCatalogCourse, Ticket } from '$lib/public/adapters';
 
 /** type:'course', qty always 1 — a course is an enrolment, not a quantity;
@@ -215,9 +217,9 @@ export const ANNOUNCE: Announcement[] = [
   { icon: 'award', tone: 'var(--df-accent-dark)', bg: 'var(--df-accent-bg)', title: '市賽報名開始', body: '台中市體操錦標賽選手班報名開放中。', time: '1 週前' }
 ];
 
-/* Order history (帳戶) — status is Tone-typed here; domain stores the loose
- * shape, so assert back to this file's stricter type. */
-export const ORDERS: Order[] = ORDERS_BASE as Order[];
+// ORDERS（帳戶訂單清單）不在此列——帳戶頁現走真實 GET /orders/me（member/api.ts 的
+// getAccount()，經 mapOrder 映射回上方的 Order interface；interface 本身保留供該映射
+// 使用），這份 mock 值已無 runtime 消費者(Task 11 P2 清理)。
 
 /* Canned coach replies for the contact thread (聯絡教練 / 訊息 — 罐頭回覆;
  * CONTACT_THREAD 本體在 $lib/domain/member-app) */

@@ -25,9 +25,13 @@ export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
  * is exactly one copy of every value. Admin's public API is unchanged. */
 
 // Pure pass-throughs (no local use) — re-export domain's value + type verbatim.
+// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { COACHES, type Coach } from '$lib/domain/coaches';
+// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { VENUES, type Venue } from '$lib/domain/venues';
+// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { TICKETS, type Ticket } from '$lib/domain/tickets';
+// P2: ActivityPanel 仍消費的 live-mock——最新動態無對應後端端點,見 docs/adr/0006。
 export { ACTIVITY, type Activity } from '$lib/domain/activity';
 // Task 15: admin's report analytics (getReports()) now maps GET /reports/admin
 // (integration-contract.md §3.24) instead of this mock seed — the re-export of
@@ -37,11 +41,11 @@ export { ACTIVITY, type Activity } from '$lib/domain/activity';
 
 // Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).
 import { CLASSES_BASE, type ClassBase } from '$lib/domain/classes';
-import { MEMBERS_BASE, type MemberBase } from '$lib/domain/members';
+import type { MemberBase } from '$lib/domain/members';
 import { ORDERS_BASE, type OrderBase } from '$lib/domain/orders';
-import { CAMPUSES, ENROLL_SOURCES, tierOf } from '$lib/domain/shared';
+import { CAMPUSES, tierOf } from '$lib/domain/shared';
 import { initialOf } from '$lib/api/wire';
-// `tierOf` is a local binding (used in the MEMBERS derivation) AND part of admin's public API.
+// `tierOf` is re-exported as part of admin's public API (data.test.ts covers it directly).
 export { tierOf };
 
 /* ───────────────────────── classes ───────────────────────── */
@@ -54,6 +58,7 @@ export interface ClassRow extends ClassBase {
 	durationMinutes: number;
 }
 
+// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
 	...k,
 	startDate: '2026/03/' + String((i % 27) + 1).padStart(2, '0'),
@@ -73,32 +78,10 @@ export interface Member extends MemberBase {
 	lineId: string;
 }
 
-export const MEMBERS: Member[] = MEMBERS_BASE.map((m, i) => {
-	const [tier, tierColor] = tierOf(m.points);
-	const by = 2026 - m.age;
-	const birthday =
-		by + '/' + String(((i * 5) % 12) + 1).padStart(2, '0') + '/' + String(((i * 7) % 27) + 1).padStart(2, '0');
-	const renewDue =
-		m.pay === 'trial'
-			? '體驗 06/30 到期'
-			: m.pay === 'due'
-				? '已逾期 · ' + ['05/28', '06/01', '06/03', '06/05'][i % 4]
-				: '2026/' + ['09', '10', '11', '12'][i % 4] + '/15';
-	return {
-		...m,
-		campus: CAMPUSES[i % CAMPUSES.length],
-		source: ENROLL_SOURCES[(i * 2 + 1) % ENROLL_SOURCES.length],
-		birthday,
-		tier,
-		tierColor,
-		renewDue,
-		lineId: '@df' + m.id.slice(-4)
-	};
-});
-
 /* ───────────────────────── members：GET /users 映射（Task 18） ─────────────────────────
- * MEMBERS／MEMBERS_BASE 上面維持既有 mock 不變（學員管理頁 MembersTable 目前仍吃這份
- * seed，不在本次任務變動範圍）。這裡另外新增一組「從真實 GET /users 回應映射」的型別
+ * MEMBERS／MEMBERS_BASE 已於 Task 11 P2 清理移除——唯一消費者是 data.test.ts，學員管理頁
+ * MembersTable 走的是下面這組真實 GET /users 映射，早就不吃那份 mock seed；Member
+ * interface 保留在上面供 MemberDialog 使用。這裡另外的「從真實 GET /users 回應映射」型別
  * ＋函式，供 api.ts 的 getMembers() 使用 —— GET /users 是通用帳號端點，只有 id/name/
  * phone/is_active/points_balance/created_at 這類帳號欄位，沒有課程/教練/出席/繳費/
  * 緊急聯絡人等健身房專屬資料，因此輸出型別是 Member 的一個小子集（MemberAccount），
@@ -154,6 +137,7 @@ export interface Order extends OrderBase {
 	orderId: string;
 }
 
+// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export const ORDERS: Order[] = ORDERS_BASE.map((o, i) => {
 	const tax = Math.round(o.amount - o.amount / 1.05);
 	return {
@@ -237,6 +221,7 @@ export interface TodayClass {
 	tone: Tone;
 	label: string;
 }
+// P2: TodayPanel 仍消費的 live-mock——今日課表無對應後端端點,見 docs/adr/0006。
 export const TODAY: TodayClass[] = [
 	{ time: '10:00', name: '幼兒體操 啟蒙班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'done', tone: 'neutral', label: '已結束' },
 	{ time: '16:00', name: '親子體操 同樂班', coach: '黃詩涵', room: 'C 軟墊區', count: 5, state: 'prep', tone: 'info', label: '備課中' },

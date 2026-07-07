@@ -4,12 +4,19 @@ import Page from './+page.svelte';
 import { subscriptions } from '$lib/member/stores';
 import { getAccount } from '$lib/member/api';
 import type { AccountData } from '$lib/member/api';
-import { ME, ORDERS } from '$lib/member/data';
+import { ME, type Order } from '$lib/member/data';
+// domain 的 Order.status 是寬鬆的 [string, string]；member/data.ts 的 Order 是嚴格的
+// [Tone, string]（此檔案原本經 member/data 再匯出取得時，那份 facade 就是這樣斷言的，
+// 見 Task 11 P2 清理前的 member/data.ts）——這裡改直接匯入 domain 值後比照斷言回同一個
+// 嚴格型別，維持與 AccountData.orders: Order[] 的相容。
+import { ORDERS as ORDERS_BASE } from '$lib/domain/member-app';
 
 vi.mock('$lib/member/api', () => ({ getAccount: vi.fn() }));
 
 // The 帳戶 page must surface the member's 訂閱/使用權 (subscriptions created at pass
 // checkout) in a card after the points card.
+
+const ORDERS = ORDERS_BASE as Order[];
 
 const SEED: AccountData = {
 	orders: ORDERS,
