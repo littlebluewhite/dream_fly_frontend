@@ -6,6 +6,14 @@
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ApiDaySchedule, type ApiTimeSlot } from '$lib/public/api';
+  import {
+    isoDate,
+    sundayGridDays,
+    isToday as isTodayGrid,
+    isPastDate as isPastDateGrid,
+    formatDate,
+    slotsForDay
+  } from '$lib/public/calendar-grid';
 
   let currentDate = new Date();
   let selectedDate: Date | null = null;
@@ -31,31 +39,12 @@
     closed: '不開放'
   };
 
-  function isoDate(year: number, month: number, day: number): string {
-    const mm = String(month + 1).padStart(2, '0');
-    const dd = String(day).padStart(2, '0');
-    return `${year}-${mm}-${dd}`;
-  }
-
-  function slotsForDay(day: number): ApiTimeSlot[] {
-    const dateStr = isoDate(currentDate.getFullYear(), currentDate.getMonth(), day);
-    return days.find((d) => d.date === dateStr)?.slots ?? [];
-  }
-
   function slotLabel(slot: ApiTimeSlot): string {
     return `${slot.start_time.slice(0, 5)}-${slot.end_time.slice(0, 5)}`;
   }
 
   function isSlotDisabled(slot: ApiTimeSlot): boolean {
     return slot.status === 'full' || slot.status === 'closed';
-  }
-
-  function getDaysInMonth(year: number, month: number): number {
-    return new Date(year, month + 1, 0).getDate();
-  }
-
-  function getFirstDayOfMonth(year: number, month: number): number {
-    return new Date(year, month, 1).getDay();
   }
 
   function loadMonth(date: Date) {
@@ -83,29 +72,13 @@
     selectedTimeSlot = slotLabel(slot);
   }
 
+  // wrapper：模板呼叫維持單參數，anchor 固定帶 currentDate（呼叫點零改動）。
   function isToday(day: number): boolean {
-    const today = new Date();
-    return (
-      day === today.getDate() &&
-      currentDate.getMonth() === today.getMonth() &&
-      currentDate.getFullYear() === today.getFullYear()
-    );
+    return isTodayGrid(day, currentDate);
   }
 
   function isPastDate(day: number): boolean {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const checkDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    return checkDate < today;
-  }
-
-  function formatDate(date: Date): string {
-    return date.toLocaleDateString('zh-TW', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long'
-    });
+    return isPastDateGrid(day, currentDate);
   }
 
   function handleBooking() {
@@ -116,25 +89,14 @@
   }
 
   $: year = currentDate.getFullYear();
-  $: month = currentDate.getMonth();
-  $: daysInMonth = getDaysInMonth(year, month);
-  $: firstDay = getFirstDayOfMonth(year, month);
+  $: month0 = currentDate.getMonth();
   $: monthName = currentDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
 
-  $: calendarDays = (() => {
-    const days = [];
-    // Add empty cells for days before month starts
-    for (let i = 0; i < firstDay; i++) {
-      days.push(null);
-    }
-    // Add days of month
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
-    return days;
-  })();
+  $: calendarDays = sundayGridDays(year, month0);
 
-  $: selectedSlots = selectedDate ? slotsForDay(selectedDate.getDate()) : [];
+  $: selectedSlots = selectedDate
+    ? slotsForDay(days, isoDate(year, month0, selectedDate.getDate()))
+    : [];
 </script>
 
 <div class="schedule-calendar card">
