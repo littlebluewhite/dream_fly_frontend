@@ -26,3 +26,4 @@ export { default as ErrorState } from './ErrorState.svelte';
 export { default as Skeleton } from './Skeleton.svelte';
 export { default as SkelCard } from './SkelCard.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
+export { default as LoadGate } from './LoadGate.svelte';
