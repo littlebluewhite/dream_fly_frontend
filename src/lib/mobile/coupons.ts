@@ -2,7 +2,9 @@
  *
  * P2：這是純前端硬編查表，僅供 mobile CartSheet 這個展示殼使用；member 結帳走真實
  * API GET /coupons/{code}/validate（見 member/checkout.ts 的 validateCoupon）。mobile
- * 尚未接上真後端（docs/adr/0006），故保留這份 mock 查表。 */
+ * 已接上真實登入與全部 screens（docs/adr/0006，2026-07-07 更新），但 CartSheet 的購物車/
+ * 結帳流程本身仍未接真後端訂單 API（見 mobile/stores.ts 的 checkout()），故保留這份
+ * mock 查表。 */
 
 /* Coupon codes（結帳優惠碼）— code → NT$ off。內聯自原 data.ts（mobile/member 兩份值相同）。 */
 const COUPONS: Record<string, number> = { DREAMFLY100: 100, NEWYEAR500: 500, WELCOME50: 50 };
