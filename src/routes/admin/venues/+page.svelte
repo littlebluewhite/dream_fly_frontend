@@ -10,7 +10,7 @@
    * a three-state gate (loading/error/ready); `venues` is the local mutable
    * working copy the 新增/編輯 flow edits in place. */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, Tag, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Card, Icon, Tag, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import VenueEditDialog from '$lib/admin/components/VenueEditDialog.svelte';
@@ -78,7 +78,16 @@
   }
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="venues-skeleton" slot="loading">
+    <Skeleton w={160} h={32} r={8} />
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="場館管理" sub="教室、訓練場地與器材配置">
       <svelte:fragment slot="actions">
@@ -168,15 +177,4 @@
   </div>
 
   <VenueEditDialog venue={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="venues-skeleton">
-    <Skeleton w={160} h={32} r={8} />
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px;">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
-      {/each}
-    </div>
-  </div>
-{/if}
+</LoadGate>
