@@ -10,14 +10,19 @@
  * Task 19：登入守門與 auth 狀態改用真實 `$lib/stores/authStore`(見
  * routes/mobile/+layout.svelte + guard.ts)——這個檔案不再有本地的 demo
  * `session` gate 旗標。`notifs`/`notifsHydrated` 由 `$lib/mobile/api.ts` 的
- * getNotifications() 水合真資料(同 member notifications 前例)；`points`/
- * `cart`/`checkout`/`redeemReward` 仍是本地端 —— 目前只有 CartSheet(購物車/
- * 結帳)在用，該流程尚未接真後端訂單 API(P2，見 task-19-report.md 的顧慮：
- * 範圍與 member 的 placeOrder/cart 尚未合併)。帳戶頁/點數頁的即時點數餘額改
- * 讀 `$lib/member/stores` 的真 `points`/`pointsLedger`，不是這裡的 `points`。 */
+ * getNotifications() 水合真資料(同 member notifications 前例)。`cart` 仍是
+ * 本地端購物車 —— 一個與 member 平行的 store，尚未合併(P2，見
+ * task-19-report.md 的顧慮)；但 CartSheet 的結帳流程本身已改真下單，復用
+ * member 的 syncCartToServer/api()/refreshPoints(見下方 placeOrder())，不再
+ * 是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律改讀
+ * `$lib/member/stores` 的真 `points`/`pointsLedger`。這裡的本地 `points` 只留
+ * 給 redeemReward()(目前無呼叫端，見該函式個別註解)。 */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
+import { api } from '$lib/api/client';
+import { syncCartToServer, refreshPoints, type ApiOrder } from '$lib/member/stores';
+import type { CartItem } from '$lib/member/data';
 import { ME, NOTIFS_SEED, type NotifItem } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
@@ -72,9 +77,13 @@ export interface CartLine extends CartInput {
 	qty: number;
 }
 /** add() records a full course (spots 0) on the waitlist instead of adding it to
- *  the paid cart; otherwise it increments an existing line or appends qty 1.
- *  updateQty() clamps to a minimum of 1 (ui.jsx checkout never allows 0). */
-export type AddResult = 'added' | 'waitlisted';
+ *  the paid cart. A repeat add of a course already in the cart is a no-op that
+ *  reports 'bumped' — a course is an enrolment, not a quantity, so it never
+ *  accumulates qty (mirrors member cart's addItem; see CONTEXT.md 報名). There
+ *  is no updateQty(): with courses as the only line type, an increment/decrement
+ *  control would have nothing legitimate to do (matches member cart's course
+ *  qty lock — see its updateQty doc). */
+export type AddResult = 'added' | 'bumped' | 'waitlisted';
 export function createCart() {
 	const { subscribe, update, set } = writable<CartLine[]>([]);
 	// 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
@@ -87,19 +96,20 @@ export function createCart() {
 				waitlist.update((ids) => (ids.includes(course.id) ? ids : [...ids, course.id]));
 				return 'waitlisted';
 			}
+			let result: AddResult = 'added';
 			update((items) => {
 				const ex = items.find((c) => c.id === course.id);
-				if (ex) return items.map((c) => (c.id === course.id ? { ...c, qty: c.qty + 1 } : c));
+				if (ex) {
+					result = 'bumped';
+					return items; // qty 鎖 1 —— 課程是報名不是數量
+				}
 				const line: CartLine = { ...course, qty: 1 };
 				return [...items, line];
 			});
-			return 'added';
+			return result;
 		},
 		remove(id: string | number) {
 			update((items) => items.filter((c) => c.id !== id));
-		},
-		updateQty(id: string | number, delta: number) {
-			update((items) => items.map((c) => (c.id === id ? { ...c, qty: Math.max(1, c.qty + delta) } : c)));
 		},
 		clear() {
 			set([]);
@@ -114,17 +124,10 @@ export function cartCount(items: { qty: number }[]): number {
 }
 export const cartTotal = derived(cart, ($c) => cartCount($c));
 
-/* ---------- Member points (點數) ---------- */
+/* ---------- Member points (點數) ----------
+ * 本地殘值只留給 redeemReward()（目前沒有任何畫面呼叫它——見該函式個別註解）；
+ * 帳戶頁/點數頁/CartSheet 的即時餘額一律讀 `$lib/member/stores` 的真 points。 */
 export const points = writable(ME.points);
-/** Checkout maths (app.jsx checkoutDone): spend redeemed, earn completion points. */
-export function applyCheckout(pts: number, redeem: number, earned: number): number {
-	return pts - redeem + earned;
-}
-/** Apply a finished checkout to the live stores: adjust points, empty the cart. */
-export function checkout(redeem: number, earned: number) {
-	points.update((p) => applyCheckout(p, redeem, earned));
-	cart.clear();
-}
 /** Redeem a reward by spending its point cost. PointsScreen disables the 兌換
  *  button unless the balance covers the cost (`can`), so this simply debits the
  *  points — mirroring checkout's points-only model (the mobile surface keeps no
@@ -132,6 +135,49 @@ export function checkout(redeem: number, earned: number) {
  *  redeemed indefinitely. */
 export function redeemReward(cost: number) {
 	points.update((p) => p - cost);
+}
+
+/* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
+ * 取代原本的本地假 checkout()：復用桌面 member 的結帳網路層（syncCartToServer /
+ * api() / refreshPoints，見 $lib/member/stores.ts），不重新實作一次 HTTP。不能
+ * 直接呼叫桌面的 placeOrder()——它內部讀桌面自己的 cart store(get(cart))，跟
+ * 這裡的行動版本地購物車是兩個平行的 store(P2，尚未合併，見本檔案開頭註解)。
+ * 改成顯式把「行動版購物車行 → 伺服器 CartItem」對映後傳入，其餘（同步、送
+ * 單、Idempotency-Key、下單後水合真點數、清空購物車）與桌面 placeOrder 同一套
+ * 邏輯，只是 clear() 的對象是這個檔案自己的 cart——桌面 cart store 完全不受影
+ * 響。行動版購物車只有課程(沒有方案購買動線)，對映一律 type:'course'、qty 鎖
+ * 1；不需要桌面 chargeableLines 的「已持有 pass 跳過」過濾——那個過濾對
+ * type:'course' 恆是 no-op(只濾 type:'pass')。 */
+function toOrderItem(line: CartLine): CartItem {
+	return {
+		id: String(line.id),
+		type: 'course',
+		name: line.name,
+		price: line.price,
+		qty: 1,
+		icon: typeof line.icon === 'string' ? line.icon : 'graduation-cap'
+	};
+}
+
+/** 送出訂單：同步(對映後的)購物車到伺服器 → POST /orders(帶呼叫端提供的
+ *  Idempotency-Key) → 下單後重新水合真點數餘額 → 清空(僅)行動版本地購物車。
+ *  任何失敗(400 購物車為空/優惠碼無效、409 滿班/已報名/點數不足等)原樣拋出、
+ *  不清空購物車——呼叫端(CartSheet)catch 後用 member/checkout 的
+ *  orderErrorMessage() 轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。 */
+export async function placeOrder(
+	coupon: string,
+	usePoints: boolean,
+	idempotencyKey: string = crypto.randomUUID()
+): Promise<ApiOrder> {
+	await syncCartToServer(get(cart).map(toOrderItem));
+	const order = await api<ApiOrder>('/orders', {
+		method: 'POST',
+		body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints }),
+		headers: { 'Idempotency-Key': idempotencyKey }
+	});
+	await refreshPoints().catch((err) => console.error('Failed to refresh points after checkout:', err));
+	cart.clear();
+	return order;
 }
 
 /* ---------- Notification centre ---------- */

@@ -5,7 +5,6 @@ import {
 	createCart,
 	createNotifs,
 	cartCount,
-	applyCheckout,
 	unreadCount,
 	points,
 	redeemReward,
@@ -47,24 +46,12 @@ describe('cart', () => {
 		c.add(course);
 		expect(get(c)).toEqual([{ ...course, qty: 1 }]);
 	});
-	it('increments qty when the same course is added again', () => {
+	it('bumps (not increments) qty when the same course is added again — a course is an enrolment, not a quantity', () => {
 		const c = createCart();
-		c.add(course);
-		c.add(course);
+		expect(c.add(course)).toBe('added');
+		expect(c.add(course)).toBe('bumped');
 		expect(get(c)).toHaveLength(1);
-		expect(get(c)[0].qty).toBe(2);
-	});
-	it('updateQty clamps the minimum to 1', () => {
-		const c = createCart();
-		c.add(course);
-		c.updateQty('k1', -5);
 		expect(get(c)[0].qty).toBe(1);
-	});
-	it('updateQty raises the quantity', () => {
-		const c = createCart();
-		c.add(course);
-		c.updateQty('k1', 2);
-		expect(get(c)[0].qty).toBe(3);
 	});
 	it('removes a line and clears the whole cart', () => {
 		const c = createCart();
@@ -81,15 +68,6 @@ describe('cartCount', () => {
 	it('sums the quantities across lines', () => {
 		expect(cartCount([{ qty: 2 }, { qty: 3 }])).toBe(5);
 		expect(cartCount([])).toBe(0);
-	});
-});
-
-describe('applyCheckout', () => {
-	it('subtracts redeemed points then adds earned points (1250 - 300 + 120)', () => {
-		expect(applyCheckout(1250, 300, 120)).toBe(1070);
-	});
-	it('handles a zero-redeem checkout', () => {
-		expect(applyCheckout(1000, 0, 50)).toBe(1050);
 	});
 });
 

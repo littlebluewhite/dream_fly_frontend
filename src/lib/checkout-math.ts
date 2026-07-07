@@ -1,22 +1,15 @@
 /* Dream Fly — 結帳金額計算，跨 surface 共用的純函式。
  *
  * CartSheet / CheckoutDialog 的 subtotal / couponOff / ptRedeem / total / earned 計算邏輯，
- * 抽成可單測的純函式。優惠碼查表→折抵、點數折抵夾擠、最終金額、回饋點數。
- * Mock-only。 */
-
-/* Coupon codes（結帳優惠碼）— code → NT$ off。內聯自原 data.ts（mobile/member 兩份值相同）。 */
-const COUPONS: Record<string, number> = { DREAMFLY100: 100, NEWYEAR500: 500, WELCOME50: 50 };
+ * 抽成可單測的純函式。點數折抵夾擠、最終金額、回饋點數——都是本地預覽用的算法，
+ * 實際送單金額一律由後端 API 回應為準。優惠碼折抵改由 member/checkout.ts 的
+ * validateCoupon()（真實 GET /coupons/{code}/validate）查詢，這裡不再保留本地
+ * 查表版的 lookupCoupon()（CartSheet 是它最後一個呼叫端，已隨 Task 19 收尾改真
+ * API，見該檔案）。 */
 
 export interface CartMathLine {
   price: number;
   qty: number;
-}
-
-/** 套用優惠碼：查 COUPONS 表，回傳折抵金額（NT$）；查無回 null。code 比對前去空白並轉大寫。 */
-export function lookupCoupon(code: string): { code: string; off: number } | null {
-  const key = code.trim().toUpperCase();
-  if (!key) return null;
-  return COUPONS[key] != null ? { code: key, off: COUPONS[key] } : null;
 }
 
 /** 購物車小計：Σ price × qty。 */

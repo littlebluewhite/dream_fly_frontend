@@ -1,7 +1,14 @@
 <script lang="ts">
   /* 購物車 / 結帳 sheet（3 步驟）。mobile/home.jsx CartSheet (245-337)。
-   * (1) 課程明細 + 數量 stepper + 優惠碼 + 點數折抵；(2) 付款方式；(3) SuccessBody。
-   * 確認付款 → checkout(ptRedeem, earned) + toast。金額計算抽到 cart-math.ts。 */
+   * (1) 課程明細 + 優惠碼 + 點數折抵；(2) 付款(卡片欄位是裝飾性、鏡射桌面
+   * CheckoutDialog 的既有決定——後端本身就是 mock payment：下單成功即代表付款
+   * 完成，見 integration-contract.md §1.8，desktop 的卡號等欄位同樣從未接上
+   * 任何 state)；(3) SuccessBody。課程是報名不是數量，購物車行不再有增減數量
+   * 的控制項（qty 鎖 1，見 stores.ts 的 cart.add()）。
+   *
+   * 確認付款 → 復用桌面 member 的結帳 seam 真下單（見 $lib/mobile/stores.ts 的
+   * placeOrder()：syncCartToServer + POST /orders + refreshPoints），成功/失敗
+   * 都以真實 API 回應為準——不再有本地假 checkout()、假成功 toast、假點數。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
@@ -11,9 +18,13 @@
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
-  import { cart, points, checkout, toasts } from '$lib/mobile/stores';
+  import { onMount } from 'svelte';
+  import { cart, toasts, placeOrder } from '$lib/mobile/stores';
   import { fmtNT, ME } from '$lib/mobile/data';
-  import { lookupCoupon, checkoutMath } from '$lib/checkout-math';
+  import { checkoutMath } from '$lib/checkout-math';
+  import { points, refreshPoints } from '$lib/member/stores';
+  import { validateCoupon, orderErrorMessage } from '$lib/member/checkout';
+  import { ntd } from '$lib/public/adapters';
 
   export let onClose: () => void;
 
@@ -22,14 +33,34 @@
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
-  let earnedFinal = 0;
+  let paying = false;
+  // 這次結帳流程唯一的一把 key。CartSheet 隨 sheet 開關掛載/卸載（見
+  // OverlayHost：`{#if $overlay.sheet}<svelte:component .../>`），每次重新開
+  // 啟本來就是全新的元件實例、全新的一次結帳嘗試——不需要桌面 CheckoutDialog
+  // 那種「關閉重開沿用同一把 key」的額外狀態（那是因為桌面 dialog 整個結帳期
+  // 間都不卸載，見該檔案註解）。
+  const idempotencyKey = crypto.randomUUID();
+  let paid = { total: 0, earned: 0, ptRedeem: 0, orderNumber: '' };
+
+  // 開啟即水合真點數餘額——本地 mock 殘值只是 fail-safe，折抵預覽必須用真餘額
+  // （同桌面 CheckoutDialog 開啟時呼叫 refreshPoints() 的既有慣例）。
+  // best-effort：失敗就沿用目前的 store 值，送單時後端仍是最終防線。
+  onMount(() => {
+    void refreshPoints().catch(() => {});
+  });
 
   $: m = checkoutMath($cart, coupon, $points, usePoints);
 
-  function applyCode() {
-    const found = lookupCoupon(code);
-    if (found) {
-      coupon = found;
+  async function applyCode() {
+    if (!code.trim()) return; // 空輸入按「套用」不顯示錯誤（同桌面 CheckoutDialog 的決策）
+    let hit: { code: string; off: number } | null;
+    try {
+      hit = await validateCoupon(code);
+    } catch {
+      hit = null; // 網路/未預期錯誤與「查無優惠碼」一視同仁，不另開技術性錯誤文案
+    }
+    if (hit) {
+      coupon = hit;
       codeErr = '';
     } else {
       coupon = null;
@@ -37,14 +68,29 @@
     }
   }
 
-  /* Commit the checkout at 確認付款 (capturing `earned` first — `checkout` clears
-   * the cart, which zeroes the reactive `m.earned`). The success screen then just
-   * closes, so abandoning it via X / scrim / Escape never loses a paid checkout. */
-  function confirmPayment() {
-    earnedFinal = m.earned;
-    checkout(m.ptRedeem, m.earned);
-    toasts.notify('success', '報名完成', `本次獲得 ${earnedFinal} 點會員點數`);
-    step = 2;
+  /* 確認付款 → 真下單（placeOrder：同步購物車 → POST /orders → 水合真點數 →
+   * 清空購物車）。成功才進 step 2，顯示的金額/點數/訂單編號一律來自真實 API
+   * 回應（paid.*），不是本地預覽（m.*）。失敗顯示後端錯誤訊息轉繁中，購物車
+   * 不清空，讓使用者可以直接重試（沿用同一把 idempotencyKey，不會重複扣款）。 */
+  async function confirmPayment() {
+    if (paying) return;
+    paying = true;
+    try {
+      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
+      paid = {
+        total: ntd(order.total_cents),
+        earned: order.points_earned,
+        ptRedeem: order.points_used,
+        orderNumber: order.order_number
+      };
+      const redeemNote = paid.ptRedeem > 0 ? `，使用 ${paid.ptRedeem} 點折抵` : '';
+      toasts.notify('success', '報名完成', `課程已加入你的日程${redeemNote}，獲得 ${paid.earned} 點回饋。`);
+      step = 2;
+    } catch (err) {
+      toasts.notify('error', '結帳失敗', orderErrorMessage(err));
+    } finally {
+      paying = false;
+    }
   }
   function done() {
     onClose();
@@ -80,24 +126,6 @@
               <div style="flex:1; min-width:0;">
                 <div style="font-size:14px; font-weight:700; color:var(--df-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{c.name}</div>
                 <div style="font-size:12.5px; font-weight:700; color:var(--df-primary); margin-top:2px; font-family:var(--df-font-mono);">{fmtNT(c.price * c.qty)}</div>
-              </div>
-              <div style="display:flex; align-items:center; border:1px solid var(--df-border); border-radius:9px; overflow:hidden; background:#fff;">
-                <button
-                  aria-label="減"
-                  on:click={() => cart.updateQty(c.id, -1)}
-                  disabled={c.qty <= 1}
-                  style="width:28px; height:30px; border:none; background:transparent; cursor:{c.qty <= 1 ? 'not-allowed' : 'pointer'}; opacity:{c.qty <= 1 ? 0.4 : 1}; display:flex; align-items:center; justify-content:center;"
-                >
-                  <Icon name="minus" size={13} />
-                </button>
-                <span style="width:26px; text-align:center; font-size:13px; font-weight:700; font-family:var(--df-font-mono);">{c.qty}</span>
-                <button
-                  aria-label="加"
-                  on:click={() => cart.updateQty(c.id, 1)}
-                  style="width:28px; height:30px; border:none; background:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center;"
-                >
-                  <Icon name="plus" size={13} />
-                </button>
               </div>
               <button
                 aria-label="移除"
@@ -157,7 +185,7 @@
     {/if}
 
     {#if step === 2}
-      <SuccessBody title="報名完成！" body={`課程已加入你的日程，上課提醒將於課前一日發送。本次獲得 ${earnedFinal} 點會員點數。`} />
+      <SuccessBody title="報名完成！" body={`課程已加入你的日程，上課提醒將於課前一日發送。本次獲得 ${paid.earned} 點會員點數（訂單編號 ${paid.orderNumber}）。`} />
     {/if}
   </div>
 
@@ -169,8 +197,8 @@
       </div>
     {:else if step === 1}
       <div style="display:flex; gap:10px; width:100%;">
-        <Button variant="secondary" on:click={() => (step = 0)}>返回</Button>
-        <Button variant="primary" on:click={confirmPayment} style="flex:1;">確認付款 {fmtNT(m.total)}</Button>
+        <Button variant="secondary" disabled={paying} on:click={() => (step = 0)}>返回</Button>
+        <Button variant="primary" disabled={paying} on:click={confirmPayment} style="flex:1;">{paying ? '處理中…' : `確認付款 ${fmtNT(m.total)}`}</Button>
       </div>
     {:else}
       <Button variant="primary" fullWidth on:click={done}>完成</Button>
