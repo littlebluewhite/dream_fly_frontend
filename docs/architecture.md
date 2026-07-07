@@ -99,10 +99,12 @@ Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobi
 `reply = <T>(value: T) => Promise.resolve(value)` (full design:
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
 real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
-`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for the P2-commented gaps that
-have no backend equivalent yet (reports/analytics, coach attendance/messages/students, member
-rewards/weekly-schedule — full inventory in `docs/adr/0006`). `mobile` and `mobile-admin` still call
-`reply()` throughout — neither mobile surface has been wired to the real API yet (also P2).
+`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for a handful of P2-commented gaps
+that have no backend equivalent (or are purely cosmetic) — full inventory in `docs/adr/0006`. `mobile` and
+`mobile-admin` (Round 3, Task 19/20) no longer call `reply()` throughout either: both now hold a thin
+`api.ts` that re-delegates to the real getters already built for their desktop counterpart (`mobile` →
+`$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), falling back to `reply()` only for
+their own small residual mock spots (same ADR 0006 inventory).
 Pages that used to import seed constants directly now do a legacy `onMount` + plain `let` three-phase gate
 (`phase: 'loading' | 'error' | 'ready'`, no runes — deliberate, see the spec), rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store

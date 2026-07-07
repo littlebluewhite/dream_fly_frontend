@@ -190,14 +190,11 @@ export const LEVEL_TONE: Record<string, Tone> = {
   入門: 'info',
   基礎: 'primary',
   進階: 'warning',
-  選手: 'accent',
-  // 後端課程等級（beginner/intermediate/advanced）經 adapters.ts 私有 LEVEL_LABEL
-  // 轉繁中後的三個值 —— 課程介紹／我的課程頁的 getCourses()（toCatalogCourse，公開
-  // catalog 路徑）仍會產生這三個值，故保留(FE#17 起 api.ts 的 getMine() 已改走
-  // $lib/domain/course-level 的共用 5 級對照，不再產生這三個值，見該函式)。
-  初級: 'info',
-  中級: 'primary',
-  高級: 'warning'
+  選手: 'accent'
+  // 舊 3 級（初級/中級/高級）鍵已移除（Task 21 doc-sync）：getCourses()（toCatalogCourse，
+  // 公開 catalog 路徑）與 getMine() 現在都經 $lib/domain/course-level 的共用 5 級對照
+  // （COURSE_LEVEL_LABEL）產生 level，不會再吐出這三個舊值——先前這裡的註解聲稱
+  // getCourses() 仍會產生這三值，方向與現況相反，一併移除。
 };
 
 /* Weekly schedule grid — member's classes */

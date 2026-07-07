@@ -9,9 +9,6 @@
 
   // Map level to Badge tone
   const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {
-    '初級': 'success',
-    '中級': 'primary',
-    '高級': 'info',
     '青少年': 'warning',
     '客製化': 'accent',
     '體驗': 'info',

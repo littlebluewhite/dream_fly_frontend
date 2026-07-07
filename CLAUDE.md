@@ -13,10 +13,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Dream Fly (夢飛) — the frontend for a **gymnastics & competitive-cheer academy** (體操與競技啦啦學苑).
 SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. The backend is
 the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
-`/api/v1`. Auth, cart, checkout, and the member/admin/coach seams all call it for real now. Mock data
-remains only in explicitly **P2-commented** spots where no backend endpoint exists yet (reports/analytics,
-coach attendance/messages/student roster, member rewards redemption, member weekly schedule, the two
-mobile surfaces, Google OAuth login) — see `docs/adr/0006` for the full inventory.
+`/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, and (since Round 3)
+both `mobile` and `mobile-admin` — call it for real now. Mock data remains only in a handful of explicitly
+**P2-commented** spots where no backend endpoint exists (or the gap is purely cosmetic): mobile's
+trial-booking and settings-save toasts, mobile's per-course attendance history, member/mobile dashboard
+stats (`attendanceRate`/`streak`/`skillsMastered`), the mobile-admin identity chip and its page-1-only list
+fetches, admin/mobile-admin coach and venue/ticket write forms, and the admin/mobile-admin system-settings
+toggle. Google OAuth login is wired for the `member` surface only (`staff`/`mobile`/`mobile-admin` have no
+Google option). See `docs/adr/0006` for the full inventory.
 
 > `README.md` is a quick-start summary; `CONTEXT.md`, `docs/adr/`, and `docs/architecture.md` remain the
 > authoritative deep references.
