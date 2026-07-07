@@ -7,7 +7,7 @@
 /* ───────────────────────── unions ───────────────────────── */
 import type { Tone } from '$lib/api/wire';
 export type { Tone, OrderStatus } from '$lib/api/wire';
-// compat shim:目前無下游消費者;保留本 facade 的 Tone 匯出路徑(見 ADR 0007)
+// 活 facade:StatusBadge/OrdersTable/orders-filter 等經本檔取得 Tone/OrderStatus/ORDER_STATUS(來源=$lib/api/wire,見 ADR 0007)
 
 export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
