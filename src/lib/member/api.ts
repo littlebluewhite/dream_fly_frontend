@@ -8,9 +8,11 @@ import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
+import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, mapNotification } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, Tone, ApiNotification } from './data';
+import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, ApiNotification } from './data';
 
 /** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
 const me = (): Member => ME;
@@ -63,28 +65,6 @@ export const getDashboard = async (): Promise<DashboardData> => {
     track: ''
   };
 };
-
-interface ApiReportCard {
-  id: string;
-  course_id: string;
-  course_name: string;
-  term_label: string;
-  comment: string | null;
-  rating: number | null;
-  created_by_name: string;
-  created_at: string;
-}
-
-interface ApiCertificate {
-  id: string;
-  course_id: string | null;
-  course_name: string | null;
-  title: string;
-  level: string | null;
-  issued_on: string; // "YYYY-MM-DD"
-  note: string | null;
-  created_at: string;
-}
 
 export interface ReportCard {
   id: string;
@@ -211,7 +191,7 @@ function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
     name: e.course_name,
     room: e.venue ?? '', // P2: 無場地資料
     coach: e.coach_name ?? '', // 尚未指定教練
-    color: '#0066CC', // P2: 後端無區塊顏色欄位
+    color: BRAND_PRIMARY_HEX, // P2: 後端無區塊顏色欄位
     tone: 'primary' // P2: 同上
   };
 }
@@ -251,7 +231,7 @@ export const getMine = async (): Promise<MineData> => {
     level: COURSE_LEVEL_LABEL[e.course_level] ?? e.course_level,
     coach: '',
     icon: 'sparkles',
-    color: '#0066CC',
+    color: BRAND_PRIMARY_HEX,
     schedule: e.schedule_text ?? '',
     room: '',
     att: e.total > 0 ? Math.round((e.attended / e.total) * 100) : 0,
@@ -295,21 +275,7 @@ interface ApiOrderSummary {
   items: { name: string; quantity: number }[];
 }
 
-interface ApiOrderListResponse {
-  orders: ApiOrderSummary[];
-  total: number;
-  page: number;
-  per_page: number;
-}
-
-const ORDER_STATUS: Record<string, [Tone, string]> = {
-  pending: ['warning', '待付款'],
-  paid: ['success', '已付款'],
-  processing: ['info', '處理中'],
-  completed: ['neutral', '已完成'],
-  cancelled: ['error', '已取消'],
-  refunded: ['neutral', '已退款']
-};
+type ApiOrderListResponse = ApiPage<'orders', ApiOrderSummary>;
 
 /** OrderSummary 現含 items 摘要(見 integration-contract.md §3.10：`{ name, quantity }[]`，
  *  name 是下單當時的快照)；item 欄由 orderItemsSummary 組成(與 admin/api.ts
@@ -319,7 +285,7 @@ function mapOrder(o: ApiOrderSummary): Order {
     id: o.order_number,
     item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
     amount: ntd(o.total_cents),
-    status: ORDER_STATUS[o.status] ?? ['neutral', o.status],
+    status: orderStatusBadge(o.status),
     date: o.created_at.slice(0, 10)
   };
 }
@@ -333,8 +299,8 @@ function mapOrder(o: ApiOrderSummary): Order {
 function mapProfile(u: ApiUser): AccountProfile {
   return {
     name: u.name,
-    initial: u.name.charAt(0) || '?',
-    color: '#0066CC',
+    initial: initialOf(u.name),
+    color: BRAND_PRIMARY_HEX,
     id: u.id,
     since: u.created_at.slice(0, 7).replace('-', '/'),
     points: get(points),

@@ -1,5 +1,7 @@
 /* src/lib/domain/orders.ts — 訂單 seed data (base only; Order derivation stays in admin) */
 
+import type { OrderStatus } from '$lib/api/wire';
+
 export interface OrderBase {
 	id: string;
 	member: string;
@@ -7,10 +9,7 @@ export interface OrderBase {
 	color: string;
 	item: string;
 	amount: number;
-	// Task 18: widened from 'paid'|'pending'|'refunded' to the real backend's full
-	// 6-value order status (GET /orders admin) — see admin/data.ts's OrderStatus/
-	// ORDER_STATUS (same 6 values, kept in sync) for the 中文 label table.
-	status: 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+	status: OrderStatus;
 	method: string;
 	date: string;
 	invoice: string;

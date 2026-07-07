@@ -5,7 +5,8 @@
  * data with no persistence — it resets on reload, exactly like the prototype. */
 
 /** Semantic tone shared with the Badge / ProgressBar primitives. */
-export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
+import type { Tone } from '$lib/api/wire';
+export type { Tone } from '$lib/api/wire';
 
 /* ---- single-source domain seed ----
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
@@ -37,6 +38,7 @@ import {
   ORDERS as ORDERS_BASE,
   NOTIFS_SEED as NOTIFS_SEED_BASE
 } from '$lib/domain/member-app';
+import { isoDateTime } from '$lib/api/wire';
 
 export interface UpcomingClass {
   name: string;
@@ -287,7 +289,7 @@ export function mapNotification(n: ApiNotification): Notification {
     body: n.message,
     // 後端只給絕對時間戳；mock 原本的「N 小時前」相對時間需要「現在」當基準，會讓
     // 映射變成非決定性、難以穩定測試 —— 改採簡單、可測試的絕對時間切片。
-    time: n.created_at.slice(0, 16).replace('T', ' '),
+    time: isoDateTime(n.created_at),
     read: n.is_read
   };
 }

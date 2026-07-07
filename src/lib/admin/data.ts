@@ -5,21 +5,11 @@
  * materialised and strictly typed (a missing derivation is a compile error). */
 
 /* ───────────────────────── unions ───────────────────────── */
-export type Tone =
-	| 'primary'
-	| 'accent'
-	| 'success'
-	| 'warning'
-	| 'error'
-	| 'info'
-	| 'neutral';
+import type { Tone } from '$lib/api/wire';
+export type { Tone, OrderStatus } from '$lib/api/wire';
 
 export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
-// Task 18: widened to the real backend's full 6-value order status (GET /orders
-// admin) so getOrders() (api.ts) can carry the real status through untranslated;
-// ORDER_STATUS below supplies the 中文 label for all 6 (see admin/api.ts's mapAdminOrder).
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
 export type TicketType = 'pass' | 'trial' | 'event';
 export type VenueStatus = 'available' | 'maintenance';
@@ -50,6 +40,7 @@ import { CLASSES_BASE, type ClassBase } from '$lib/domain/classes';
 import { MEMBERS_BASE, type MemberBase } from '$lib/domain/members';
 import { ORDERS_BASE, type OrderBase } from '$lib/domain/orders';
 import { CAMPUSES, ENROLL_SOURCES, tierOf } from '$lib/domain/shared';
+import { initialOf } from '$lib/api/wire';
 // `tierOf` is a local binding (used in the MEMBERS derivation) AND part of admin's public API.
 export { tierOf };
 
@@ -142,7 +133,7 @@ export function mapMemberAccount(u: ApiUserAccount): MemberAccount {
 	return {
 		id: u.id,
 		name: u.name,
-		initial: u.name.charAt(0) || '?',
+		initial: initialOf(u.name),
 		phone: u.phone ?? '',
 		joined: u.created_at.slice(0, 10),
 		status: u.is_active ? 'active' : 'inactive',
@@ -194,14 +185,7 @@ export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
 	due: ['warning', '待續費'],
 	trial: ['info', '體驗中']
 };
-export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
-	pending: ['warning', '待付款'],
-	paid: ['success', '已付款'],
-	processing: ['info', '處理中'],
-	completed: ['neutral', '已完成'],
-	cancelled: ['error', '已取消'],
-	refunded: ['neutral', '已退款']
-};
+export { ORDER_STATUS } from '$lib/api/wire';
 export const VENUE_STATUS: Record<VenueStatus, [Tone, string]> = {
 	available: ['success', '可預約'],
 	maintenance: ['warning', '維護中']

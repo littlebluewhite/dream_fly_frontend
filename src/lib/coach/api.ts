@@ -13,6 +13,8 @@
 import { api } from '$lib/api/client';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
+import { initialOf, BRAND_PRIMARY_HEX, isoDateTime } from '$lib/api/wire';
+import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
 import { TODAY_LABEL, CONVERSATIONS } from './data';
 import type {
 	Coach,
@@ -69,7 +71,7 @@ async function requireMyCoach(): Promise<{ user: ApiUser; coach: ApiCoach }> {
  *  格式後端無對應欄位，P2）；en/gender/birth/emergency 後端無對應欄位，誠實給空字串
  *  （P2）；registered 用 coach.created_at；lastLogin 用 user.last_login。 */
 function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
-	const surname = user.name.charAt(0) || '?';
+	const surname = initialOf(user.name);
 	return {
 		name: user.name,
 		display: `${surname}教練`,
@@ -221,8 +223,8 @@ function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
 	return {
 		n: String(i + 1).padStart(2, '0'),
 		name: r.user_name,
-		initial: r.user_name.charAt(0) || '?',
-		color: '#0066CC', // P2: 後端無代表色欄位
+		initial: initialOf(r.user_name),
+		color: BRAND_PRIMARY_HEX, // P2: 後端無代表色欄位
 		mid: r.enrolment_id,
 		def: r.attendance_status ?? 'present'
 	};
@@ -357,15 +359,10 @@ interface ApiMessage {
 	read_at: string | null;
 }
 
-interface ApiMessageListResponse {
-	messages: ApiMessage[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiMessageListResponse = ApiPage<'messages', ApiMessage>;
 
 /** ISO8601 → "YYYY-MM-DD HH:MM"，同 mapCoach 的 lastLogin 轉換慣例。 */
-const toDisplayTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
+const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
 /** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
  *  member（§3.21 角色規則），且 CONTEXT.md 明定「會員」帳號即學員本人、不分家長/學員
@@ -379,8 +376,8 @@ function mapConversation(r: ApiConversationSummary): Conversation {
 	return {
 		id: r.id,
 		name: r.peer_name,
-		initial: r.peer_name.charAt(0) || '?',
-		color: '#0066CC', // P2: 後端無代表色欄位
+		initial: initialOf(r.peer_name),
+		color: BRAND_PRIMARY_HEX, // P2: 後端無代表色欄位
 		kind: '會員', // P2: 無家長/學員/群組之分，見上方函式註解
 		time: r.last_message_at ? toDisplayTime(r.last_message_at) : '',
 		badge: r.unread_count,
@@ -498,8 +495,8 @@ function mapStudent(s: ApiMyStudent): Student {
 	return {
 		user_id: s.user_id,
 		name: s.name,
-		initial: s.name.charAt(0) || '?',
-		color: '#0066CC', // P2: 後端無代表色欄位
+		initial: initialOf(s.name),
+		color: BRAND_PRIMARY_HEX, // P2: 後端無代表色欄位
 		cls: s.courses.map((c) => c.course_name).join('、'),
 		courses: s.courses,
 		level: '初階', // P2: MyStudentResponse 無學員程度欄位
@@ -549,12 +546,7 @@ interface ApiCoachLeaveRequest {
 	created_at: string;
 }
 
-interface ApiLeaveRequestListResponse {
-	leave_requests: ApiCoachLeaveRequest[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiLeaveRequestListResponse = ApiPage<'leave_requests', ApiCoachLeaveRequest>;
 
 /** LeaveRequestResponse(教練/admin 清單版) → 待審核清單只需要的窄化形狀——course_id/
  *  user_id/session_id/status/makeup_* 對這個頁面(只列 pending、決定後就從清單消失)
@@ -627,17 +619,6 @@ export interface CreateCertificateBody {
 	note?: string;
 }
 
-interface ApiCertificate {
-	id: string;
-	course_id: string | null;
-	course_name: string | null;
-	title: string;
-	level: string | null;
-	issued_on: string;
-	note: string | null;
-	created_at: string;
-}
-
 /** POST /certificates — coach 限「曾是或現是自己課程學員」的使用者（§3.22，與 body
  *  是否帶 course_id 無關）；v1 純 metadata，無 PDF/檔案上傳。回應直接透傳——students
  *  頁的發證書 dialog 只需要知道成功與否，不需要顯示欄位（同 admin/api.ts 的
@@ -652,17 +633,6 @@ export interface CreateReportCardBody {
 	term_label: string;
 	comment?: string;
 	rating?: number; // 1–5
-}
-
-interface ApiReportCard {
-	id: string;
-	course_id: string;
-	course_name: string;
-	term_label: string;
-	comment: string | null;
-	rating: number | null;
-	created_by_name: string;
-	created_at: string;
 }
 
 /** POST /report-cards — coach 限自己課程的 enrolment（§3.22）。同一 enrolment 同一

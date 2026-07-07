@@ -8,6 +8,8 @@ import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { ageRange, initialOf, pageMeta } from '$lib/api/wire';
+import type { ApiPage } from '$lib/api/wire';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 import type {
 	Ticket,
@@ -80,12 +82,7 @@ function mapProduct(p: ApiProduct, i: number): Ticket {
 	};
 }
 
-interface ApiProductListResponse {
-	products: ApiProduct[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiProductListResponse = ApiPage<'products', ApiProduct>;
 
 /** admin 專用分頁抓取（Task 17）——不假道 public listProducts()：那支固定
  *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
@@ -105,9 +102,7 @@ export interface TicketsData {
 export const getTickets = (page = 1): Promise<TicketsData> =>
 	listProductsPaged(page).then((r) => ({
 		tickets: r.products.filter((p) => p.product_type !== 'merchandise').map(mapProduct),
-		total: r.total,
-		page: r.page,
-		perPage: r.per_page
+		...pageMeta(r)
 	}));
 
 /* ═════════════════════════ 訂單（GET /orders，admin-only） ═════════════════════════ */
@@ -124,12 +119,7 @@ interface ApiAdminOrder {
 	created_at: string;
 	items: { name: string; quantity: number }[];
 }
-interface ApiAdminOrderListResponse {
-	orders: ApiAdminOrder[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
 
 /** `AdminOrderSummary` → 既有 Order 形狀，讓 OrdersTable/OrderDialog 樣板不用改。
  *  AdminOrderSummary 沒有發票/經手人/分校欄位 —— 誠實給預設值(P2，各欄位見
@@ -147,7 +137,7 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		id: o.order_number,
 		orderId: o.id,
 		member: o.user_name,
-		initial: o.user_name.charAt(0) || '?',
+		initial: initialOf(o.user_name),
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
 		item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
 		amount,
@@ -175,9 +165,7 @@ export interface OrdersData {
 export const getOrders = (page = 1): Promise<OrdersData> =>
 	api<ApiAdminOrderListResponse>(`/orders?page=${page}`).then((r) => ({
 		orders: r.orders.map(mapAdminOrder),
-		total: r.total,
-		page: r.page,
-		perPage: r.per_page
+		...pageMeta(r)
 	}));
 
 /* ── 訂單狀態變更（PATCH /orders/{id}/status，admin-only，Task 8 piece 2） ──
@@ -306,16 +294,6 @@ function splitSchedule(text: string | null): { day: string; time: string } {
 	return sp === -1 ? { day: text, time: '' } : { day: text.slice(0, sp), time: text.slice(sp + 1) };
 }
 
-/** `[min_age, max_age]` 組成顯示用字串。同 public/adapters.ts 的私有 ageRange
- *  (該檔未 export)，這裡另存一份小對照，避免為了共用 3 行邏輯去改動 Task 14
- *  own 的檔案。 */
-function ageRange(min: number | null, max: number | null): string {
-	if (min != null && max != null) return `${min}–${max} 歲`;
-	if (min != null) return `${min} 歲以上`;
-	if (max != null) return `${max} 歲以下`;
-	return '';
-}
-
 /** 開課狀態 —— 後端沒有對應的三態欄位，依真實人數推導：額滿(已達上限) > 候補
  *  (有候補人數但未額滿) > 招生中。 */
 function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus {
@@ -356,12 +334,7 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 	};
 }
 
-interface ApiCourseListResponse {
-	courses: ApiCourse[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiCourseListResponse = ApiPage<'courses', ApiCourse>;
 
 /** admin 專用分頁抓取（Task 17）——不假道 public listCourses()：那支固定
  *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
@@ -384,9 +357,7 @@ export const getClasses = async (page = 1): Promise<ClassesData> => {
 	return {
 		classes: coursesRes.courses.map((c) => mapCourse(c, coachNameById)),
 		coaches,
-		total: coursesRes.total,
-		page: coursesRes.page,
-		perPage: coursesRes.per_page
+		...pageMeta(coursesRes)
 	};
 };
 
@@ -428,7 +399,7 @@ function mapCoach(c: ApiCoach, i: number): Coach {
 	return {
 		id: c.id,
 		name: c.name,
-		initial: c.name.charAt(0) || '?',
+		initial: initialOf(c.name),
 		title: c.title,
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
 		tags: c.specialties,
@@ -454,12 +425,7 @@ export const getCoaches = (): Promise<CoachesData> =>
  * 接上這支 getter(MembersTable 仍吃既有 mock，未在本次任務變動範圍)，此 seam
  * 供後續任務或頁面改版時直接使用。 */
 
-interface ApiUserListResponse {
-	users: ApiUserAccount[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiUserListResponse = ApiPage<'users', ApiUserAccount>;
 
 export interface MembersData {
 	members: MemberAccount[];
@@ -471,9 +437,7 @@ export interface MembersData {
 export const getMembers = (page = 1): Promise<MembersData> =>
 	api<ApiUserListResponse>(`/users?page=${page}`).then((r) => ({
 		members: r.users.map(mapMemberAccount),
-		total: r.total,
-		page: r.page,
-		perPage: r.per_page
+		...pageMeta(r)
 	}));
 
 /* ── 學員新增/編輯（POST /users、PATCH /users/{id}，admin-only，Task 16） ──
@@ -515,12 +479,7 @@ export interface ApiCoupon {
 	created_at: string;
 }
 
-interface ApiCouponListResponse {
-	coupons: ApiCoupon[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ApiCouponListResponse = ApiPage<'coupons', ApiCoupon>;
 
 /** discount 經 ntd() 換成 NT$；expiresAt 取日期前 10 碼（同其餘日期欄位慣例），
  *  null（永久有效）顯示 '—'。 */
@@ -552,9 +511,7 @@ export interface CouponsData {
 export const getCoupons = (page = 1): Promise<CouponsData> =>
 	api<ApiCouponListResponse>(`/coupons?page=${page}`).then((r) => ({
 		coupons: r.coupons.map(mapCoupon),
-		total: r.total,
-		page: r.page,
-		perPage: r.per_page
+		...pageMeta(r)
 	}));
 
 export interface CreateCouponBody {

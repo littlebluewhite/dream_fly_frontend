@@ -8,6 +8,7 @@
  * 不必要的 401→refresh 流程（這些端點本來就不需要登入）。 */
 
 import { api } from '$lib/api/client';
+import type { ApiPage } from '$lib/api/wire';
 
 /* ---- Courses（GET /courses — 分頁，一次拉 per_page 上限 100 後前端篩選） ---- */
 
@@ -34,12 +35,7 @@ export interface ApiCourse {
 	waitlist_count: number;
 }
 
-interface CourseListResponse {
-	courses: ApiCourse[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type CourseListResponse = ApiPage<'courses', ApiCourse>;
 
 export const listCourses = (): Promise<ApiCourse[]> =>
 	api<CourseListResponse>('/courses?per_page=100', { auth: false }).then((r) => r.courses);
@@ -147,12 +143,7 @@ export interface ApiPost {
 	created_at: string;
 }
 
-interface PostListResponse {
-	posts: ApiPost[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type PostListResponse = ApiPage<'posts', ApiPost>;
 
 export const listPosts = (): Promise<ApiPost[]> =>
 	api<PostListResponse>('/posts?per_page=100', { auth: false }).then((r) => r.posts);
@@ -180,12 +171,7 @@ export interface ApiProduct {
 	updated_at: string;
 }
 
-interface ProductListResponse {
-	products: ApiProduct[];
-	total: number;
-	page: number;
-	per_page: number;
-}
+type ProductListResponse = ApiPage<'products', ApiProduct>;
 
 export const listProducts = (): Promise<ApiProduct[]> =>
 	api<ProductListResponse>('/products?per_page=100', { auth: false }).then((r) => r.products);

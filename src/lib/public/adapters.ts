@@ -9,6 +9,7 @@
 import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 import type { Coach } from '$lib/data/coaches';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { ageRange } from '$lib/api/wire';
 
 /** 全前端唯一 cents→NT$ 轉換點。 */
 export const ntd = (cents: number): number => Math.round(cents / 100);
@@ -46,14 +47,6 @@ export interface CatalogCourse {
 	coach: string;
 	desc: string;
 	spots: number;
-}
-
-/** `[min_age, max_age]` 組成顯示用字串；兩者皆缺時回傳空字串。 */
-function ageRange(min: number | null, max: number | null): string {
-	if (min != null && max != null) return `${min}–${max} 歲`;
-	if (min != null) return `${min} 歲以上`;
-	if (max != null) return `${max} 歲以下`;
-	return '';
 }
 
 /** `coachName` 由呼叫端解出（`CourseResponse` 本身沒有教練姓名欄位，需靠
