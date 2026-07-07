@@ -22,12 +22,11 @@
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
   import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
+  import { createPagedLoadGate } from '$lib/load-gate';
   import { fmtNT } from '$lib/admin/format';
   import { countByStatus, paidRevenue, applyStatusChange } from '$lib/admin/components/orders-filter';
   import { getOrders, updateOrderStatus } from '$lib/admin/api';
   import { ApiError } from '$lib/api/client';
-
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
 
   // Single source of truth for the orders surface: both the summary KPIs and the
   // table derive from this mutable copy, so 變更狀態 keeps the StatCards in sync
@@ -36,33 +35,13 @@
   $: counts = countByStatus(orders);
   $: revenue = paidRevenue(orders);
 
-  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getOrders() 回應；
-  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
-  let page = 1;
-  let total = 0;
-  let perPage = 20;
-
-  // 複審修復（Finding 3）：page 樂觀更新，寫在 getOrders() 之前——即使這次換頁失敗，
-  // page 也已經是使用者實際要求的目標頁，讓下面 <ErrorState onRetry> 的重試能對到正確
-  // 頁碼（而非停留在換頁前的舊頁碼）。
-  function load(p = page) {
-    page = p;
-    phase = 'loading';
-    getOrders(p)
-      .then((d) => {
-        orders = d.orders.map((o) => ({ ...o }));
-        total = d.total;
-        page = d.page;
-        perPage = d.perPage;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
-
-  function changePage(p: number) {
-    load(p);
-  }
+  const gate = createPagedLoadGate({
+    fetch: (page) => getOrders(page),
+    onData: (d) => { orders = d.orders.map((o) => ({ ...o })); }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   // 400（非法轉換，理論上不會發生——OrderDialog 只提供合法選項）/ 403 權限 →
   // 對應繁中提示；其餘（連線問題等）給通用訊息，同 classes 頁的 ApiError 判斷慣例。
@@ -89,7 +68,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate.phase === 'ready'}
   <PageHead title="訂單與金流" sub="報名繳費紀錄">
     <Button
       slot="actions"
@@ -135,17 +114,14 @@
   <!-- 複審修復（Finding 1）：OrdersTable 內部狀態分頁籤 + topbar 搜尋皆為純前端記憶體
        篩選（filterOrders），只作用在目前已載入的這一頁（見上 Task 17 分頁）。只在還有
        下一頁時才提示，避免全部資料剛好一頁裝得下時的多餘雜訊。 -->
-  {#if total > perPage}
+  {#if $gate.total > $gate.perPage}
     <p class="scope-hint">搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。</p>
   {/if}
 
   <OrdersTable rows={orders} onChangeStatus={changeStatus} onRemind={remind} />
-  <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
-{:else if phase === 'error'}
-  <!-- 複審修復（Finding 3）：onRetry 包一層無參數箭頭函式——ErrorState 內部的 Button 會把
-       原生 click 事件轉發給 onRetry，若直接傳 load，p 收到的會是 MouseEvent 而非
-       page，讓上面的樂觀賦值失真；包成 () => load() 才能讓 p 正確地退回預設值 page。 -->
-  <Card padding={0}><ErrorState onRetry={() => load()} /></Card>
+  <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
+{:else if $gate.phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div data-testid="orders-skeleton">
     <div class="stats">

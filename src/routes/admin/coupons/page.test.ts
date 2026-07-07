@@ -158,6 +158,24 @@ describe('優惠碼管理 — 分頁（Task 17：PaginationBar 接上 getCoupons
 	});
 });
 
+describe('優惠碼管理 — 分頁範圍提示（G6：五頁統一 range hint）', () => {
+	const HINT = '搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。';
+
+	it('total > perPage（還有下一頁）時顯示提示', async () => {
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 1, perPage: 20 });
+		const { findByText, getByText } = render(CouponsPage);
+		await findByText('SPRING10');
+		expect(getByText(HINT)).toBeInTheDocument();
+	});
+
+	it('total <= perPage（只有一頁）時不顯示提示，避免全部資料一頁裝得下時的多餘雜訊', async () => {
+		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: FIXTURE.length, page: 1, perPage: 20 });
+		const { findByText, queryByText } = render(CouponsPage);
+		await findByText('SPRING10');
+		expect(queryByText(HINT)).toBeNull();
+	});
+});
+
 describe('優惠碼管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
 	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getCoupons', async () => {
 		vi.mocked(getCoupons).mockResolvedValue({ coupons: FIXTURE, total: 45, page: 1, perPage: 20 });

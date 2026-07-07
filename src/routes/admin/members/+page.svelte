@@ -34,6 +34,7 @@
   import MemberEditDialog from '$lib/admin/components/MemberEditDialog.svelte';
   import { Button, Icon, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
+  import { createPagedLoadGate } from '$lib/load-gate';
   import type { MemberAccount } from '$lib/admin/data';
   import {
     getMembers,
@@ -46,35 +47,14 @@
 
   let showFilter = false;
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let members: MemberAccount[] = [];
-  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getMembers() 回應；
-  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
-  let page = 1;
-  let total = 0;
-  let perPage = 20;
-
-  // 複審修復（Finding 3）：page 樂觀更新，寫在 getMembers() 之前——即使這次換頁失敗，
-  // page 也已經是使用者實際要求的目標頁，讓下面 <ErrorState onRetry> 的重試能對到正確
-  // 頁碼（而非停留在換頁前的舊頁碼）。
-  function load(p = page) {
-    page = p;
-    phase = 'loading';
-    getMembers(p)
-      .then((d) => {
-        members = d.members;
-        total = d.total;
-        page = d.page;
-        perPage = d.perPage;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
-
-  function changePage(p: number) {
-    load(p);
-  }
+  const gate = createPagedLoadGate({
+    fetch: (page) => getMembers(page),
+    onData: (d) => { members = d.members; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   let createOpen = false;
   let editTarget: MemberAccount | null = null;
@@ -95,18 +75,6 @@
     return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
   }
 
-  async function refresh() {
-    try {
-      const d = await getMembers(page);
-      members = d.members;
-      total = d.total;
-      page = d.page;
-      perPage = d.perPage;
-    } catch {
-      // 最佳努力：新增/編輯已成功，只有刷新列表失敗——不覆蓋剛才的成功 toast。
-    }
-  }
-
   async function create(body: CreateMemberBody) {
     try {
       await createMember(body);
@@ -116,7 +84,7 @@
     }
     createOpen = false;
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
-    await refresh();
+    await gate.silentRefresh();
   }
 
   async function saveEdit(id: string, body: UpdateMemberBody) {
@@ -128,11 +96,11 @@
     }
     closeEdit();
     toasts.notify('success', '已儲存', `${body.name ?? ''} 學員資料已更新。`);
-    await refresh();
+    await gate.silentRefresh();
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate.phase === 'ready'}
   <div class="df-view" style="display:flex;flex-direction:column;gap:20px">
     <PageHead title="學員管理" sub="管理報名、出席與會員資料">
       <Button
@@ -149,7 +117,7 @@
          純前端記憶體篩選，只作用在目前已載入的這一頁（見上 Task 17 分頁）。per_page=100
          時幾乎無感，改成 20 後若使用者搜尋的學員落在第 2 頁以後，會靜默顯示「找不到」——
          只在還有下一頁時才提示，避免全部資料剛好一頁裝得下時的多餘雜訊。 -->
-    {#if total > perPage}
+    {#if $gate.total > $gate.perPage}
       <p style="margin:0; font-size:13px; color:var(--df-text-light);">
         搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。
       </p>
@@ -157,17 +125,14 @@
 
     <MemberFilterPanel open={showFilter} />
 
-    <MembersTable {members} {total} onNew={() => (createOpen = true)} onEdit={openEdit} />
-    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
+    <MembersTable {members} total={$gate.total} onNew={() => (createOpen = true)} onEdit={openEdit} />
+    <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
   </div>
 
   <MemberCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />
   <MemberEditDialog member={editTarget} open={editOpen} onClose={closeEdit} onSave={saveEdit} />
-{:else if phase === 'error'}
-  <!-- 複審修復（Finding 3）：onRetry 包一層無參數箭頭函式——ErrorState 內部的 Button 會把
-       原生 click 事件轉發給 onRetry，若直接傳 load，p 收到的會是 MouseEvent 而非
-       page，讓上面的樂觀賦值失真；包成 () => load() 才能讓 p 正確地退回預設值 page。 -->
-  <Card padding={0}><ErrorState onRetry={() => load()} /></Card>
+{:else if $gate.phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="members-skeleton">
     <Skeleton w={180} h={32} r={8} />

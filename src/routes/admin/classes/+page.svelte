@@ -24,6 +24,7 @@
   import ClassDialog from '$lib/admin/components/ClassDialog.svelte';
   import ClassEditDialog from '$lib/admin/components/ClassEditDialog.svelte';
   import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { createPagedLoadGate } from '$lib/load-gate';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { buildCourseBody } from '$lib/admin/components/course-request';
   import { search, toasts } from '$lib/admin/stores';
@@ -60,7 +61,6 @@
 
   const cats = ['全部', ...CATS];
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let classes: ClassRow[] = [];
   let coaches: Coach[] = [];
   let cat = '全部';
@@ -68,34 +68,17 @@
   let edit: ClassRow | null = null;
   let editOpen = false;
   let addNew = false;
-  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getClasses() 回應；
-  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
-  let page = 1;
-  let total = 0;
-  let perPage = 20;
 
-  // 複審修復（Finding 3）：page 樂觀更新，寫在 getClasses() 之前——即使這次換頁失敗，
-  // page 也已經是使用者實際要求的目標頁，讓下面 <ErrorState onRetry> 的重試能對到正確
-  // 頁碼（而非停留在換頁前的舊頁碼）。
-  function load(p = page) {
-    page = p;
-    phase = 'loading';
-    getClasses(p)
-      .then((d) => {
-        classes = d.classes;
-        coaches = d.coaches;
-        total = d.total;
-        page = d.page;
-        perPage = d.perPage;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
-
-  function changePage(p: number) {
-    load(p);
-  }
+  const gate = createPagedLoadGate({
+    fetch: (page) => getClasses(page),
+    onData: (d) => {
+      classes = d.classes;
+      coaches = d.coaches;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: list = filterClasses(classes, { cat, query: $search });
 
@@ -151,9 +134,9 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate.phase === 'ready'}
   <div class="view">
-    <PageHead title="課程管理" sub={total + ' 個開課班級 · 本季招生中'}>
+    <PageHead title="課程管理" sub={$gate.total + ' 個開課班級 · 本季招生中'}>
       <svelte:fragment slot="actions">
         <Button variant="primary" size="sm" on:click={openNew}>
           <Icon name="plus" size={15} />新增課程
@@ -170,7 +153,7 @@
     <!-- 複審修復（Finding 1）：cat chips + topbar 搜尋皆為純前端記憶體篩選（filterClasses），
          只作用在目前已載入的這一頁（見上 Task 17 分頁）。只在還有下一頁時才提示，避免全部
          資料剛好一頁裝得下時的多餘雜訊。 -->
-    {#if total > perPage}
+    {#if $gate.total > $gate.perPage}
       <p class="scope-hint">搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。</p>
     {/if}
 
@@ -184,16 +167,13 @@
       <div class="empty">找不到符合的班級</div>
     {/if}
 
-    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
+    <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
 
     <ClassDialog klass={detail} onClose={() => (detail = null)} onEdit={openEdit} />
     <ClassEditDialog {coaches} klass={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
   </div>
-{:else if phase === 'error'}
-  <!-- 複審修復（Finding 3）：onRetry 包一層無參數箭頭函式——ErrorState 內部的 Button 會把
-       原生 click 事件轉發給 onRetry，若直接傳 load，p 收到的會是 MouseEvent 而非
-       page，讓上面的樂觀賦值失真；包成 () => load() 才能讓 p 正確地退回預設值 page。 -->
-  <Card padding={0}><ErrorState onRetry={() => load()} /></Card>
+{:else if $gate.phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="view" data-testid="classes-skeleton">
     <Skeleton w={180} h={32} r={8} />

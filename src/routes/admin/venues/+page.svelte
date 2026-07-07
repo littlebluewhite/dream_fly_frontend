@@ -16,6 +16,7 @@
   import VenueEditDialog from '$lib/admin/components/VenueEditDialog.svelte';
   import { uniqueVenueId } from '$lib/admin/components/venue-id';
   import { toasts } from '$lib/admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import type { Venue } from '$lib/admin/data';
   import { getVenues } from '$lib/admin/api';
 
@@ -33,19 +34,18 @@
     today: 0
   });
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let venues: Venue[] = [];
   let edit: Venue | null = null;
   let editOpen = false;
   let addNew = false;
 
-  function load() {
-    phase = 'loading';
-    getVenues()
-      .then((d) => { venues = d.venues; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getVenues,
+    onData: (d) => { venues = d.venues; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   function openEdit(v: Venue) {
     addNew = false;
@@ -78,7 +78,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="場館管理" sub="教室、訓練場地與器材配置">
       <svelte:fragment slot="actions">
@@ -168,8 +168,8 @@
   </div>
 
   <VenueEditDialog venue={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex; flex-direction:column; gap:20px;" data-testid="venues-skeleton">
     <Skeleton w={160} h={32} r={8} />

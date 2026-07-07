@@ -20,32 +20,31 @@
   import MembersTable from '$lib/admin/components/MembersTable.svelte';
   import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getReports, getMembers, type ReportsData } from '$lib/admin/api';
   import type { MemberAccount } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let reports: ReportsData | null = null;
   let members: MemberAccount[] = [];
 
-  function load() {
-    phase = 'loading';
-    Promise.all([getReports(), getMembers()])
-      .then(([r, m]) => {
-        reports = r;
-        members = m.members;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: () => Promise.all([getReports(), getMembers()]),
+    onData: ([r, m]) => {
+      reports = r;
+      members = m.members;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   function exportReport() {
     toasts.notify('info', '報表匯出中', '本月營運報表將於背景產生並寄送至您的信箱。');
   }
 </script>
 
-{#if phase === 'ready' && reports}
+{#if $gate === 'ready' && reports}
 <div class="df-view" style="display:flex;flex-direction:column;gap:20px">
   <PageHead title="營運總覽" sub="全館即時概況">
     <svelte:fragment slot="actions">
@@ -83,8 +82,8 @@
     </div>
   </div>
 </div>
-{:else if phase === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={load} /></Card></div>
+{:else if $gate === 'error'}
+  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 {:else}
   <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="admin-home-skeleton">
     <SkelCard padding={30}><Skeleton w="40%" h={26} /></SkelCard>

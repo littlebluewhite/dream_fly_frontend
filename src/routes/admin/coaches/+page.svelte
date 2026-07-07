@@ -13,6 +13,7 @@
   import CoachCard from '$lib/admin/components/CoachCard.svelte';
   import CoachEditDialog from '$lib/admin/components/CoachEditDialog.svelte';
   import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/admin/data';
   import { search } from '$lib/admin/stores';
   import { getCoaches } from '$lib/admin/api';
@@ -32,7 +33,6 @@
     phone: ''
   });
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   // Local working copy so saves reflect immediately (mirrors the source useState).
   let coaches: Coach[] = [];
 
@@ -40,13 +40,13 @@
   let editOpen = false;
   let addNew = false;
 
-  function load() {
-    phase = 'loading';
-    getCoaches()
-      .then((d) => { coaches = d.coaches; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getCoaches,
+    onData: (d) => { coaches = d.coaches; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   // Filter by 姓名 / 職稱 / 專長標籤, case-insensitive (source matches name/title/tags).
   $: q = $search.trim().toLowerCase();
@@ -87,7 +87,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate === 'ready'}
   <PageHead title="教練團隊" sub={coaches.length + ' 位專任教練'}>
     <svelte:fragment slot="actions">
       <Button variant="primary" size="sm" on:click={openNew}>
@@ -106,8 +106,8 @@
   </div>
 
   <CoachEditDialog coach={editing} open={editOpen} isNew={addNew} {onClose} onSave={onSaved} />
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div class="grid" data-testid="coaches-skeleton">
     {#each [0, 1, 2] as i (i)}

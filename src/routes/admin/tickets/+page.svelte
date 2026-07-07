@@ -17,6 +17,7 @@
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import TicketEditDialog from '$lib/admin/components/TicketEditDialog.svelte';
   import { toasts } from '$lib/admin/stores';
+  import { createPagedLoadGate } from '$lib/load-gate';
   import { TICKET_TYPES, type Ticket } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
@@ -37,38 +38,18 @@
     desc: ''
   });
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let tickets: Ticket[] = [];
   let edit: Ticket | null = null;
   let editOpen = false;
   let addNew = false;
-  // Task 17：admin 列表分頁——page/total/perPage 皆來自 getTickets() 回應；
-  // PaginationBar 換頁時呼叫 changePage(newPage) 重新 load() 重抓。
-  let page = 1;
-  let total = 0;
-  let perPage = 20;
 
-  // 複審修復（Finding 3）：page 樂觀更新，寫在 getTickets() 之前——即使這次換頁失敗，
-  // page 也已經是使用者實際要求的目標頁，讓下面 <ErrorState onRetry> 的重試能對到正確
-  // 頁碼(而非停留在換頁前的舊頁碼)。
-  function load(p = page) {
-    page = p;
-    phase = 'loading';
-    getTickets(p)
-      .then((d) => {
-        tickets = d.tickets;
-        total = d.total;
-        page = d.page;
-        perPage = d.perPage;
-        phase = 'ready';
-      })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
-
-  function changePage(p: number) {
-    load(p);
-  }
+  const gate = createPagedLoadGate({
+    fetch: (page) => getTickets(page),
+    onData: (d) => { tickets = d.tickets; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 
   $: totalSold = tickets.reduce((s, t) => s + t.sold, 0);
   $: revenue = tickets.reduce((s, t) => s + t.sold * t.price, 0);
@@ -99,7 +80,7 @@
   }
 </script>
 
-{#if phase === 'ready'}
+{#if $gate.phase === 'ready'}
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="票券管理" sub="月票、體驗券與活動票券">
       <svelte:fragment slot="actions">
@@ -126,6 +107,14 @@
         color="var(--df-primary)"
       />
     </div>
+
+    <!-- G6：五個分頁頁統一範圍提示（原本 tickets 沒有這個提示，見任務簡報「刻意行為
+         變更」）——只在還有下一頁時才提示，避免全部資料剛好一頁裝得下時的多餘雜訊。 -->
+    {#if $gate.total > $gate.perPage}
+      <p style="margin:0; font-size:13px; color:var(--df-text-light);">
+        搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。
+      </p>
+    {/if}
 
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
       {#each tickets as t (t.id)}
@@ -190,15 +179,12 @@
       {/each}
     </div>
 
-    <PaginationBar {page} {total} {perPage} onPageChange={changePage} />
+    <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
   </div>
 
   <TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
-{:else if phase === 'error'}
-  <!-- 複審修復（Finding 3）：onRetry 包一層無參數箭頭函式——ErrorState 內部的 Button 會把
-       原生 click 事件轉發給 onRetry，若直接傳 load，p 收到的會是 MouseEvent 而非
-       page，讓上面的樂觀賦值失真；包成 () => load() 才能讓 p 正確地退回預設值 page。 -->
-  <Card padding={0}><ErrorState onRetry={() => load()} /></Card>
+{:else if $gate.phase === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex; flex-direction:column; gap:20px;" data-testid="tickets-skeleton">
     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">

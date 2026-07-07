@@ -18,23 +18,23 @@
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import { toasts } from '$lib/admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/admin/api';
   import { fmtNT, fmtPct } from '$lib/admin/format';
   import RevenueTrend from '$lib/admin/components/reports/RevenueTrend.svelte';
 
-  let phase: 'loading' | 'error' | 'ready' = 'loading';
   let data: ReportsData | null = null;
 
-  function load() {
-    phase = 'loading';
-    getReports()
-      .then((d) => { data = d; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
-  }
-  onMount(load);
+  const gate = createLoadGate({
+    fetch: getReports,
+    onData: (d) => { data = d; }
+  });
+  onMount(() => {
+    gate.load();
+  });
 </script>
 
-{#if phase === 'ready' && data}
+{#if $gate === 'ready' && data}
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
       <svelte:fragment slot="actions">
@@ -116,8 +116,8 @@
       </table>
     </Card>
   </div>
-{:else if phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={load} /></Card>
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
   <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
     <Skeleton w={220} h={32} r={8} />
