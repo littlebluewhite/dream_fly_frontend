@@ -52,8 +52,9 @@ export function coachIdOf(coachName: string, coaches: Coach[]): string | undefin
 }
 
 /** ClassRow 目前的編輯內容 → POST/PATCH /courses 共用欄位。不含 duration_minutes——
- *  ClassRow 沒有這個欄位（唯讀映射時就是 P2 誠實預設），只有「新增」流程才需要它，
- *  由呼叫端（classes/+page.svelte）另外提供，見該檔的 save()。 */
+ *  ClassRow 的 durationMinutes 走 ClassEditDialog 自己的文字欄位（人數上限/季費/
+ *  本期堂數同一種「文字緩衝」模式），新增/編輯兩種流程都由呼叫端（classes/+page.svelte）
+ *  另外併入 body，見該檔的 save()（FE#18 起編輯流程也會送出）。 */
 export function buildCourseBody(k: ClassRow, coaches: Coach[]): CourseWriteBody {
 	return {
 		name: k.name,

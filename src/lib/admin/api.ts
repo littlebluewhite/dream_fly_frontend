@@ -7,12 +7,12 @@ import { api } from '$lib/api/client';
 import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
+import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 import type {
 	Ticket,
 	TicketType,
 	ClassRow,
-	Level,
 	ClassStatus,
 	Coach,
 	Venue,
@@ -306,15 +306,6 @@ function splitSchedule(text: string | null): { day: string; time: string } {
 	return sp === -1 ? { day: text, time: '' } : { day: text.slice(0, sp), time: text.slice(sp + 1) };
 }
 
-/** 後端 level 只有 3 級（beginner/intermediate/advanced），對照到既有 5 級（啟蒙/
- *  入門/基礎/進階/選手，見 LEVELS）—— 啟蒙、選手是本地更細的分級，後端資料無法
- *  還原，一律不會出現。 */
-const COURSE_LEVEL_TO_CLASS_LEVEL: Record<string, Level> = {
-	beginner: '入門',
-	intermediate: '基礎',
-	advanced: '進階'
-};
-
 /** `[min_age, max_age]` 組成顯示用字串。同 public/adapters.ts 的私有 ageRange
  *  (該檔未 export)，這裡另存一份小對照，避免為了共用 3 行邏輯去改動 Task 14
  *  own 的檔案。 */
@@ -335,14 +326,16 @@ function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus
 
 /** `CourseResponse` → 既有 ClassRow 形狀。coach 姓名需靠 coach_id 對照教練列表
  *  (CourseResponse 本身沒有教練姓名欄位，需靠 getClasses() 內的 coachNameById 對照
- *  ——該表現在存的是 mapCoach() 輸出的真實 name)；room/term/sessions/startDate/
- *  checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
+ *  ——該表現在存的是 mapCoach() 輸出的真實 name)；level 經 $lib/domain/course-level
+ *  的共用 5 級對照常數轉繁中(FE#17：後端 course_level 現為 5 值，這裡不再是舊
+ *  3→5 折疊)；duration_minutes 直接映射為 durationMinutes(FE#18)；room/term/
+ *  sessions/startDate/checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
 export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
 	const { day, time } = splitSchedule(c.schedule_text);
 	return {
 		id: c.id,
 		name: c.name,
-		level: COURSE_LEVEL_TO_CLASS_LEVEL[c.level] ?? '基礎',
+		level: COURSE_LEVEL_LABEL[c.level] ?? '基礎',
 		cat: c.category ?? '',
 		coach: c.coach_id ? (coachNameById.get(c.coach_id) ?? '') : '',
 		room: '', // P2: 課程無場地欄位(無 course↔venue 關聯)
@@ -358,7 +351,8 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 		sessions: 0, // P2: 課程無本期堂數欄位(duration_minutes 是單堂時長，語意不同)
 		startDate: '', // P2: 課程無開課日期欄位
 		checkinRate: 0, // P2: 課程無到課率彙總欄位
-		makeup: 0 // P2: 課程無補課名額欄位
+		makeup: 0, // P2: 課程無補課名額欄位
+		durationMinutes: c.duration_minutes
 	};
 }
 

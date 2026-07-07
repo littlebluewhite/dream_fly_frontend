@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { LEVELS } from '$lib/domain/course-level';
 import {
 	TODAY_CLASSES,
 	STUDENTS,
@@ -41,6 +42,14 @@ describe('coach data — shape', () => {
 describe('coach data — referential integrity', () => {
 	it('every TODAY_CLASSES.status resolves in CLASS_STATUS', () => {
 		for (const c of TODAY_CLASSES) expect(CLASS_STATUS[c.status]).toBeDefined();
+	});
+
+	// FE#17: TodayClass.level now shares the same 5-level vocabulary as admin/
+	// member (啟蒙/入門/基礎/進階/選手, $lib/domain/course-level) instead of the
+	// old divergent TodayLevel type (初級/中級/啟蒙/高級/基礎).
+	it('every TODAY_CLASSES.level is one of the shared 5 levels', () => {
+		const valid = new Set(LEVELS);
+		for (const c of TODAY_CLASSES) expect(valid.has(c.level)).toBe(true);
 	});
 
 	it('every STUDENTS.level resolves in LEVEL_TINT', () => {

@@ -54,7 +54,8 @@
     sessions: 16,
     startDate: '',
     checkinRate: 0,
-    makeup: 0
+    makeup: 0,
+    durationMinutes: 90
   });
 
   const cats = ['全部', ...CATS];
@@ -139,7 +140,7 @@
         classes = [mapCourse(created, coachNameById), ...classes];
         toasts.notify('success', '已新增班級', '「' + updated.name + '」已建立。');
       } else {
-        const saved = await updateCourse(updated.id, body);
+        const saved = await updateCourse(updated.id, { ...body, duration_minutes: durationMinutes });
         classes = classes.map((c) => (c.id === updated.id ? mapCourse(saved, coachNameById) : c));
         toasts.notify('success', '已儲存課程', '「' + updated.name + '」已更新。');
       }

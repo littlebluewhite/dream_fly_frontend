@@ -191,8 +191,10 @@ export const LEVEL_TONE: Record<string, Tone> = {
   基礎: 'primary',
   進階: 'warning',
   選手: 'accent',
-  // 後端課程等級（beginner/intermediate/advanced）經 adapters.ts 的 LEVEL_LABEL／
-  // api.ts 的同義對照表轉繁中後的三個值 —— 課程介紹、我的課程頁改吃真 API 後會用到。
+  // 後端課程等級（beginner/intermediate/advanced）經 adapters.ts 私有 LEVEL_LABEL
+  // 轉繁中後的三個值 —— 課程介紹／我的課程頁的 getCourses()（toCatalogCourse，公開
+  // catalog 路徑）仍會產生這三個值，故保留(FE#17 起 api.ts 的 getMine() 已改走
+  // $lib/domain/course-level 的共用 5 級對照，不再產生這三個值，見該函式)。
   初級: 'info',
   中級: 'primary',
   高級: 'warning'

@@ -27,19 +27,6 @@ describe('ClassEditDialog', () => {
 		}
 	});
 
-	/* Task 8 review fix A (concern #1): the 5→3 level fold must not be silent.
-	 * A 分級 helper must spell out that the backend persists 3 tiers and how the 5
-	 * local levels map, so an admin who picks 啟蒙/選手 understands it reloads as
-	 * 入門/進階 rather than being surprised. */
-	it('shows a 分級 helper explaining the 5→3 tier fold (non-silent persistence)', () => {
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base });
-		const hint = getByText(/系統目前僅分三級/);
-		expect(hint).toBeInTheDocument();
-		// mentions the two lossy grades so their fold target is explicit
-		expect(hint.textContent).toContain('啟蒙');
-		expect(hint.textContent).toContain('選手');
-	});
-
 	/* Task 8 review fix B (concern #2): parseAgeRange accepts only 3 exact formats
 	 * (range uses an EN DASH U+2013, not a hyphen); anything else silently clears
 	 * the age restriction. The 適合年齡 Input must show those exact formats as a
@@ -111,9 +98,9 @@ describe('ClassEditDialog', () => {
 		expect(get(toasts).length).toBe(before);
 	});
 
-	/* 單堂時長（duration_minutes）是 ClassRow 沒有的欄位，只有新增流程需要它
-	 * （POST /courses 必填）——只在 isNew 顯示，並隨 onSave 的第二個參數送出。 */
-	it('shows 單堂時長（分鐘） only in new mode, defaulting to 90, and passes it as onSave’s 2nd arg', async () => {
+	/* 單堂時長（duration_minutes）— FE#18：ClassRow 現有 durationMinutes 欄位，
+	 * 時長欄位新增/編輯兩種模式皆顯示可改，並隨 onSave 的第二個參數送出。 */
+	it('shows 單堂時長（分鐘） in new mode, defaulting to 90, and passes it as onSave’s 2nd arg', async () => {
 		const onSave = vi.fn();
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
@@ -126,12 +113,16 @@ describe('ClassEditDialog', () => {
 		expect(onSave.mock.calls[0][1]).toBe(90);
 	});
 
-	it('does not show 單堂時長（分鐘） in edit mode', () => {
-		const { queryByText } = render(ClassEditDialog, { open: true, klass: base, isNew: false });
-		expect(queryByText('單堂時長（分鐘）')).toBeNull();
+	/* FE#18: 時長欄位過去只在 isNew 顯示（{#if isNew}），編輯模式看不到也改不到
+	 * 既有課程的單堂時長。現在編輯模式也要顯示，且預設值來自該課程自己的
+	 * durationMinutes（不是新增模式的寫死 90）。 */
+	it('shows 單堂時長（分鐘） in edit mode too, defaulting to the class’s own duration', () => {
+		const klass = { ...base, durationMinutes: 45 };
+		const { getByDisplayValue } = render(ClassEditDialog, { open: true, klass, isNew: false });
+		expect(getByDisplayValue('45')).toBeInTheDocument();
 	});
 
-	it('parses an edited 單堂時長 value back to a number on save', async () => {
+	it('parses an edited 單堂時長 value back to a number on save (new mode)', async () => {
 		const onSave = vi.fn();
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
@@ -142,5 +133,19 @@ describe('ClassEditDialog', () => {
 		await fireEvent.input(getByDisplayValue('90'), { target: { value: '60' } });
 		await fireEvent.click(getByText('建立班級'));
 		expect(onSave.mock.calls[0][1]).toBe(60);
+	});
+
+	it('parses an edited 單堂時長 value back to a number on save (edit mode)', async () => {
+		const onSave = vi.fn();
+		const klass = { ...base, durationMinutes: 45 };
+		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
+			open: true,
+			klass,
+			isNew: false,
+			onSave
+		});
+		await fireEvent.input(getByDisplayValue('45'), { target: { value: '75' } });
+		await fireEvent.click(getByText('儲存課程'));
+		expect(onSave.mock.calls[0][1]).toBe(75);
 	});
 });

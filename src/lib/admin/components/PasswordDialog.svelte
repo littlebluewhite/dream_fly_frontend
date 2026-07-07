@@ -20,14 +20,23 @@
   let error = '';
 
   // Reset the form + error whenever the dialog transitions to open.
-  let wasOpen = false;
-  $: if (open && !wasOpen) {
-    current = '';
-    next = '';
-    confirm = '';
-    error = '';
+  // Check-and-update must live in ONE reactive statement (mirrors
+  // CouponCreateDialog's lastOpen idiom) — splitting the write into its own
+  // trailing `$:` statement (as this used to) is unreliable: Svelte
+  // topologically orders reactive statements by dependency, so the writer runs
+  // BEFORE this reader in the same flush, making the transition undetectable
+  // (FE#19 — the reset silently never fired, so a dirty draft could survive a
+  // close → reopen on the same mounted instance).
+  let lastOpen = false;
+  $: {
+    if (open && !lastOpen) {
+      current = '';
+      next = '';
+      confirm = '';
+      error = '';
+    }
+    lastOpen = open;
   }
-  $: wasOpen = open;
 
   function save() {
     const r = validatePassword({ current, next, confirm });

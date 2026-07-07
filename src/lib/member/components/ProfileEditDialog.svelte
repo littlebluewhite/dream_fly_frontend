@@ -11,10 +11,19 @@
   export let onSave: (f: any) => void = () => {};
 
   // Local editable copy, reset each time the dialog transitions to open.
+  // Check-and-update must live in ONE reactive statement (mirrors
+  // CouponCreateDialog's lastOpen idiom) — splitting the write into its own
+  // trailing `$:` statement (as this used to) is unreliable: Svelte
+  // topologically orders reactive statements by dependency, so the writer runs
+  // BEFORE this reader in the same flush, making the transition undetectable
+  // (FE#19 — an unsaved edit could survive a close → reopen on the same
+  // mounted instance instead of reverting to the real profile).
   let f: any = { ...profile };
-  let wasOpen = false;
-  $: if (open && !wasOpen) f = { ...profile };
-  $: wasOpen = open;
+  let lastOpen = false;
+  $: {
+    if (open && !lastOpen) f = { ...profile };
+    lastOpen = open;
+  }
 
   function onName(e: Event) {
     const v = (e.target as HTMLInputElement).value;

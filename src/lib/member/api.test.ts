@@ -277,7 +277,8 @@ describe('getMine', () => {
     expect(d).toEqual({
       courses: [
         {
-          id: 'enrol-1', course_id: 'course-1', name: '競技啦啦隊 進階班', cat: '', level: '高級', coach: '',
+          // FE#17：level 走共用 5 級對照(advanced → 進階)，不再是舊的三態 初/中/高級。
+          id: 'enrol-1', course_id: 'course-1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '',
           icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: '',
           att: 75, attended: 18, total: 24, next: '', term: '', remain: 0
         }
@@ -301,20 +302,25 @@ describe('getMine', () => {
     expect(d.courses[0].total).toBe(0);
   });
 
-  it('course_level 對照表涵蓋 beginner/intermediate/advanced，未知值 fallback 為原字串', async () => {
+  // FE#17：course_level 對照表現收斂為 $lib/domain/course-level 的共用 5 級常數
+  // （後端 Task 7 起 course_level 補齊 foundation/elite）——過去這裡只覆蓋舊 3 值，
+  // foundation/elite 永遠對不出繁中標籤；未知值仍 fallback 為原字串。
+  it('course_level 對照表涵蓋共用 5 級（foundation/beginner/intermediate/advanced/elite），未知值 fallback 為原字串', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
+          { id: 'e0', course_id: 'c0', course_name: 'Z', course_level: 'foundation', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e1', course_id: 'c1', course_name: 'A', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e2', course_id: 'c2', course_name: 'B', course_level: 'intermediate', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e3', course_id: 'c3', course_name: 'C', course_level: 'advanced', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
+          { id: 'e5', course_id: 'c5', course_name: 'E', course_level: 'elite', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e4', course_id: 'c4', course_name: 'D', course_level: 'brand_new_level', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
         ]
       })
     );
 
     const d = await getMine();
-    expect(d.courses.map((c) => c.level)).toEqual(['初級', '中級', '高級', 'brand_new_level']);
+    expect(d.courses.map((c) => c.level)).toEqual(['啟蒙', '入門', '基礎', '進階', '選手', 'brand_new_level']);
   });
 
   it('schedule_text 為 null 時 schedule 映射為空字串', async () => {

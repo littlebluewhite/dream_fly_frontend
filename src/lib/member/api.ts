@@ -7,6 +7,7 @@ import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
+import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, Tone, ApiNotification } from './data';
@@ -225,11 +226,6 @@ export interface MineData {
   courses: EnrolledCourse[];
   attendance: AttRecord[];
 }
-
-// 後端 course_level 是 beginner/intermediate/advanced 三值；跟 adapters.ts 的
-// LEVEL_LABEL 同義但那份是私有的(不對外匯出)，這裡另存一份小對照表，避免為了共用
-// 3 行常數而去改動 Task 14 own 的檔案。
-const COURSE_LEVEL_LABEL: Record<string, string> = { beginner: '初級', intermediate: '中級', advanced: '高級' };
 
 /** GET /enrolments/me → EnrolledCourse。cat/coach/room 後端沒有對應欄位(enrolment
  *  不含課程分類/教練/教室)，icon/color 也沒有，一律給合理預設值(icon 沿用 Task 14

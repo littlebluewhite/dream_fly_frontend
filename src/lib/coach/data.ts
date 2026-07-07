@@ -4,15 +4,19 @@
  * source). The prototype data is pre-materialised literals (no derivation by
  * mutation, unlike admin), so these are exported as typed `const`s directly.
  *
- * ⚠ Two DISTINCT level vocabularies — do NOT merge them:
- *   - `TodayLevel`  : TODAY_CLASSES.level  (初級/中級/啟蒙/高級/基礎)
- *   - `StudentLevel`: STUDENTS.level + LEVEL_TINT keys (啟蒙/初階/中階/選手)
+ * ⚠ `StudentLevel` (STUDENTS.level + LEVEL_TINT keys: 啟蒙/初階/中階/選手) is a
+ *   DISTINCT vocabulary from the shared `Level` (TODAY_CLASSES.level, from
+ *   $lib/domain/course-level — 啟蒙/入門/基礎/進階/選手, FE#17) — do NOT merge
+ *   them. TodayClass.level used to have its own divergent `TodayLevel` type
+ *   (初級/中級/啟蒙/高級/基礎，mixing two vocabularies); that's gone now that
+ *   the backend's course_level enum is 5 values and all three surfaces
+ *   (admin/coach/member) share one label set.
  *
  * Mock-only, no backend. */
+import type { Level } from '$lib/domain/course-level';
 
 /* ──────────────── unions ──────────────── */
 export type TodayStatus = 'done' | 'live' | 'soon' | 'wait';
-export type TodayLevel = '初級' | '中級' | '啟蒙' | '高級' | '基礎';
 export type StudentLevel = '啟蒙' | '初階' | '中階' | '選手';
 export type SchedCat = '體操' | '啦啦隊' | '跑酷';
 export type SchedVenue = '主場館' | '競技訓練館' | '副館';
@@ -46,7 +50,7 @@ export interface TodayClass {
 	name: string;
 	room: string;
 	count: number;
-	level: TodayLevel;
+	level: Level;
 	cat: SchedCat;
 	status: TodayStatus;
 }
@@ -171,11 +175,14 @@ export const COACH: Coach = {
 export const TODAY_LABEL = '2026年5月30日 星期六';
 
 /* ──────────────── today's classes (5 堂) ──────────────── */
+// FE#17: level 值改走共用 5 級（啟蒙/入門/基礎/進階/選手）——tc1/tc2/tc4 原本的
+// 初級/中級/高級 分別對到 入門/基礎/選手（tc4 課名本就叫「…選手班」，選手比進階
+// 更貼近字面）；tc3/tc5 原本就是合法值(啟蒙/基礎)，維持不變。
 export const TODAY_CLASSES: TodayClass[] = [
-	{ id: 'tc1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '主場館 A 教室', count: 12, level: '初級', cat: '體操', status: 'done' },
-	{ id: 'tc2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '主場館 B 教室', count: 8, level: '中級', cat: '體操', status: 'live' },
+	{ id: 'tc1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '主場館 A 教室', count: 12, level: '入門', cat: '體操', status: 'done' },
+	{ id: 'tc2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '主場館 B 教室', count: 8, level: '基礎', cat: '體操', status: 'live' },
 	{ id: 'tc3', start: '11:45', end: '12:45', name: '幼兒體操啟蒙班', room: '主場館 A 教室', count: 10, level: '啟蒙', cat: '體操', status: 'soon' },
-	{ id: 'tc4', start: '14:00', end: '15:30', name: '競技體操選手班', room: '競技訓練館', count: 6, level: '高級', cat: '體操', status: 'wait' },
+	{ id: 'tc4', start: '14:00', end: '15:30', name: '競技體操選手班', room: '競技訓練館', count: 6, level: '選手', cat: '體操', status: 'wait' },
 	{ id: 'tc5', start: '17:00', end: '18:00', name: '成人體適能班', room: '副館 C 教室', count: 15, level: '基礎', cat: '體操', status: 'wait' }
 ];
 

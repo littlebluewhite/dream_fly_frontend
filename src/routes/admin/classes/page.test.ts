@@ -107,11 +107,11 @@ describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH
 		expect(queryByText('建立班級')).toBeNull();
 	});
 
-	it('編輯課程：點擊儲存課程，呼叫 updateCourse(真實 id, body) 並把回應映射回該列', async () => {
+	it('編輯課程：點擊儲存課程，呼叫 updateCourse(真實 id, body) 並把回應映射回該列；FE#18 編輯模式時長欄位可改且會送出新值', async () => {
 		const target = CLASSES[0];
 		const updated = {
 			id: target.id, name: '改名後的班級', slug: 'x', level: 'advanced', description: null,
-			duration_minutes: 90, price_cents: 500000, max_students: target.cap, min_age: null, max_age: null,
+			duration_minutes: 75, price_cents: 500000, max_students: target.cap, min_age: null, max_age: null,
 			features: [], is_active: true, coach_id: null, category: target.cat, schedule_text: null,
 			is_highlighted: false, created_at: '', updated_at: '', enrolled_count: target.enrolled, waitlist_count: 0
 		};
@@ -120,7 +120,12 @@ describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH
 		const { getByText, getAllByText, getByLabelText, findByText } = render(ClassesPage);
 		await findByText(target.name);
 		await fireEvent.click(getAllByText('編輯')[0]);
+		// FE#18：時長欄位過去只在新增模式顯示，編輯模式現在也要看得到、改得到，且
+		// 預設值來自這堂課自己的 durationMinutes（不是新增模式的寫死 90）。
+		const durationInput = getByLabelText('單堂時長（分鐘）') as HTMLInputElement;
+		expect(durationInput).toHaveValue(String(target.durationMinutes));
 		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '改名後的班級' } });
+		await fireEvent.input(durationInput, { target: { value: '75' } });
 		await fireEvent.click(getByText('儲存課程'));
 
 		await findByText('改名後的班級');
@@ -129,7 +134,8 @@ describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH
 		expect(vi.mocked(updateCourse).mock.calls[0][0]).toBe(target.id); // 真實 id，非 order_number 那種替代鍵
 		const body = vi.mocked(updateCourse).mock.calls[0][1];
 		expect(body.name).toBe('改名後的班級');
-		expect(body.duration_minutes).toBeUndefined(); // 編輯流程不收集，PATCH 省略＝維持原值
+		// FE#18：編輯流程現在也收集單堂時長，並隨 PATCH body 送出（改過的新值）。
+		expect(body.duration_minutes).toBe(75);
 	});
 
 	it('新增課程失敗（409 課程已存在）→ 顯示繁中錯誤 toast，對話框維持開啟，列表不變', async () => {

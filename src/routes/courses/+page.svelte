@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
   import { listCourses, listCoaches } from '$lib/public/api';
   import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
-  import { cart } from '$lib/member/stores';
+  import { cart, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
   import { courseToCartItem } from '$lib/member/data';
   import { toasts } from '$lib/stores/marketingToasts';
+  import { isLoggedIn } from '$lib/stores/authStore';
 
   // Courses Page - 課程介紹（seam 接真 API：課程 + 教練列表解出授課教練名稱）
 
@@ -31,10 +33,25 @@
   onMount(load);
 
   // cart v3：加入購物車入口重新啟用（uuid string id + (type,id) 去重，見 Task 15）。
-  function addToCart(course: CatalogCourse) {
+  // FE#14：額滿課程的候補動作改為真實 API（比照 member/courses/+page.svelte 的
+  // 先例）——已登入才呼叫 joinWaitlist()，成功才顯示「已加入候補」；409（已候補）
+  // 顯示對應的繁中提示，不是通用錯誤訊息。未登入導向 /member/login（裁決 10：
+  // 不自動導回，單純導向登入頁），不嘗試呼叫 API。
+  async function addToCart(course: CatalogCourse) {
     const r = cart.addItem(courseToCartItem(course));
-    if (r === 'waitlisted') toasts.notify('info', '已加入候補', `${course.name} — 有名額時將通知您。`);
-    else if (r === 'bumped') toasts.notify('info', `${course.name} 已在購物車中`);
+    if (r === 'waitlisted') {
+      if (!$isLoggedIn) {
+        toasts.notify('warning', '請先登入會員');
+        goto('/member/login');
+        return;
+      }
+      try {
+        await joinWaitlist(course.id);
+        toasts.notify('info', '已加入候補', `${course.name} — 有名額時將通知您。`);
+      } catch (err) {
+        toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
+      }
+    } else if (r === 'bumped') toasts.notify('info', `${course.name} 已在購物車中`);
     else toasts.notify('success', '已加入購物車', `${course.name} 已加入購物車。`);
   }
 </script>

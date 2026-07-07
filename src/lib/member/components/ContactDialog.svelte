@@ -16,14 +16,22 @@
   let typing = false;
   let bodyEl: HTMLDivElement | null = null;
 
-  // Reset the thread each time the dialog transitions to open.
-  let wasOpen = false;
-  $: if (open && !wasOpen) {
-    thread = [...CONTACT_THREAD];
-    text = '';
-    typing = false;
+  // Reset the thread each time the dialog transitions to open. Check-and-update
+  // must live in ONE reactive statement (mirrors CouponCreateDialog's lastOpen
+  // idiom) — splitting the write into its own trailing `$:` statement (as this
+  // used to) is unreliable: Svelte topologically orders reactive statements by
+  // dependency, so the writer runs BEFORE this reader in the same flush, making
+  // the transition undetectable (FE#19 — an unsent draft or sent message could
+  // survive a close → reopen on the same mounted instance).
+  let lastOpen = false;
+  $: {
+    if (open && !lastOpen) {
+      thread = [...CONTACT_THREAD];
+      text = '';
+      typing = false;
+    }
+    lastOpen = open;
   }
-  $: wasOpen = open;
 
   // Auto-scroll to the latest message whenever the thread or typing state changes.
   $: scrollToBottom(thread, typing);

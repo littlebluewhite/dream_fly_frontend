@@ -57,4 +57,27 @@ describe('PasswordDialog', () => {
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	// Regression (FE#19): the dialog is mounted once and toggles `open` on the
+	// same instance (EditModal stays in the tree; only `open` flips). A
+	// two-stage `wasOpen` reactive pair (`$: if (open && !wasOpen) {…}` then a
+	// SEPARATE trailing `$: wasOpen = open;`) never resets: Svelte topologically
+	// orders reactive statements by dependency, so the `wasOpen` writer runs
+	// BEFORE the reader in the same flush, making `!wasOpen` always false — the
+	// reset block never fires, so a dirty draft survives close → reopen.
+	it('re-opening after 取消 discards an abandoned dirty draft (not a fresh mount)', async () => {
+		const { rerender, getByLabelText, queryByDisplayValue } = render(PasswordDialog, {
+			open: false
+		});
+
+		await rerender({ open: true });
+		await fireEvent.input(getByLabelText('新密碼'), { target: { value: '髒草稿' } });
+		expect(getByLabelText('新密碼')).toHaveValue('髒草稿');
+
+		await rerender({ open: false }); // 取消／關閉
+		await rerender({ open: true }); // 重新開啟同一個 instance
+
+		expect(getByLabelText('新密碼')).toHaveValue('');
+		expect(queryByDisplayValue('髒草稿')).toBeNull();
+	});
 });

@@ -111,6 +111,9 @@ describe('class enrichment', () => {
 		expect(k.checkinRate).toBe(89);
 		expect(k.makeup).toBe(0); // 3 % 3
 	});
+	it('derives durationMinutes for every row (FE#18)', () => {
+		for (const k of CLASSES) expect(k.durationMinutes).toBe(90);
+	});
 });
 
 describe('dataset counts (guard against transcription truncation)', () => {

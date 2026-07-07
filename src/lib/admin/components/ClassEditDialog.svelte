@@ -8,9 +8,10 @@
    *
    * Task 8 piece 1: 儲存改為呼叫真實 POST/PATCH /courses（classes/+page.svelte 的
    * save() 是非同步的，可能失敗），這裡不再樂觀地立刻丟成功 toast——成功/失敗 toast
-   * 一律由 page 在 API 呼叫結束後決定並顯示。單堂時長（duration_minutes）是 ClassRow
-   * 沒有的欄位（唯讀映射本就無對應資料），只有「新增」流程需要它（POST 必填），故
-   * 只在 isNew 時額外收集，並隨 onSave 的第二個參數一起送出。 */
+   * 一律由 page 在 API 呼叫結束後決定並顯示。單堂時長（duration_minutes，FE#18 起
+   * ClassRow 的 durationMinutes 欄位）新增/編輯兩種模式皆收集：新增預設 90 分鐘
+   * （沿用既有 fixture 常見值，無來源課程可讀），編輯模式預設帶入該課程自己的
+   * durationMinutes；一律隨 onSave 的第二個參數送出。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
   import { LEVELS, CATS, CLASS_STATUS, COACHES, type ClassRow, type Coach } from '$lib/admin/data';
@@ -34,9 +35,9 @@
   let capText = klass ? String(klass.cap) : '';
   let priceText = klass ? String(klass.price) : '';
   let sessionsText = klass ? String(klass.sessions) : '';
-  // 單堂時長（分鐘）—— ClassRow 無此欄位，僅新增流程收集；預設 90 分鐘（沿用既有
-  // fixture 常見值），可在送出前調整。
-  let durationText = '90';
+  // 單堂時長（分鐘）—— 編輯模式帶入該課程自己的 durationMinutes；新增模式沒有來源
+  // 課程可讀，預設 90 分鐘（沿用既有 fixture 常見值）。兩者皆可在送出前調整。
+  let durationText = klass ? String(klass.durationMinutes) : '90';
   let lastKlass: ClassRow | null = klass;
   $: if (klass !== lastKlass) {
     lastKlass = klass;
@@ -44,7 +45,7 @@
     capText = klass ? String(klass.cap) : '';
     priceText = klass ? String(klass.price) : '';
     sessionsText = klass ? String(klass.sessions) : '';
-    durationText = '90';
+    durationText = klass ? String(klass.durationMinutes) : '90';
   }
 
   function save() {
@@ -71,12 +72,7 @@
   >
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <Input label="班級名稱" bind:value={f.name} style="grid-column:span 2" />
-      <Select
-        label="分級"
-        bind:value={f.level}
-        options={LEVELS}
-        helper="系統目前僅分三級儲存：啟蒙・入門→入門、基礎→基礎、進階・選手→進階"
-      />
+      <Select label="分級" bind:value={f.level} options={LEVELS} />
       <Select label="課程類別" bind:value={f.cat} options={CATS} />
       <Select label="授課教練" bind:value={f.coach} options={coachOptions} />
       <Input label="教室 / 場地" bind:value={f.room} />
@@ -88,9 +84,7 @@
       <Input label="本期堂數" bind:value={sessionsText} />
       <Input label="季費 (NT$)" bind:value={priceText} />
       <Select label="招生狀態" bind:value={f.status} options={CLASS_STATUS} />
-      {#if isNew}
-        <Input label="單堂時長（分鐘）" bind:value={durationText} />
-      {/if}
+      <Input label="單堂時長（分鐘）" bind:value={durationText} />
     </div>
   </EditModal>
 {/if}

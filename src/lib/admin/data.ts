@@ -58,13 +58,17 @@ export interface ClassRow extends ClassBase {
 	startDate: string;
 	checkinRate: number;
 	makeup: number;
+	/** 單堂時長（分鐘，FE#18）——後端 duration_minutes 的直接映射；新增流程必填，
+	 *  編輯流程也可調整（見 ClassEditDialog）。 */
+	durationMinutes: number;
 }
 
 export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
 	...k,
 	startDate: '2026/03/' + String((i % 27) + 1).padStart(2, '0'),
 	checkinRate: 86 + (i % 12),
-	makeup: i % 3
+	makeup: i % 3,
+	durationMinutes: 90
 }));
 
 /* ───────────────────────── members ───────────────────────── */

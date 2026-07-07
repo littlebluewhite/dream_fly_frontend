@@ -306,7 +306,7 @@ describe('ORDER_STATUS — 中文對照涵蓋全部 6 態', () => {
 });
 
 describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 public listCourses()，Task 17）+ GET /coaches 供教練對照/picker', () => {
-	it('enrolled/cap/wait 直接來自 enrolled_count/max_students/waitlist_count；price 經 ntd；schedule_text 拆分 day/time；coach_id 對照出教練姓名', async () => {
+	it('enrolled/cap/wait 直接來自 enrolled_count/max_students/waitlist_count；price 經 ntd；schedule_text 拆分 day/time；coach_id 對照出教練姓名；duration_minutes 映射為 durationMinutes', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /courses?page=1': {
@@ -329,9 +329,24 @@ describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 pub
 							duration_minutes: 90, price_cents: 340000, max_students: 10, min_age: 12, max_age: null,
 							features: [], is_active: true, coach_id: null, category: '跑酷', schedule_text: '週日 15:00-16:30',
 							is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 8, waitlist_count: 2
+						},
+						{
+							// FE#17：後端 Task 7 起 course_level 補齊 5 值(foundation/elite) ——
+							// 這兩筆課程過去用舊的 3→5 折疊 helper永遠對不出繁中標籤，現在必須
+							// 直接對到 啟蒙/選手，證明折疊 helper 移除後 5 級真的直通。
+							id: 'c4', name: '幼兒體操 啟蒙班', slug: 'w', level: 'foundation', description: null,
+							duration_minutes: 45, price_cents: 260000, max_students: 8, min_age: 2, max_age: 4,
+							features: [], is_active: true, coach_id: null, category: '幼兒體操', schedule_text: null,
+							is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 3, waitlist_count: 0
+						},
+						{
+							id: 'c5', name: '競技體操 菁英選手班', slug: 'v', level: 'elite', description: null,
+							duration_minutes: 120, price_cents: 680000, max_students: 12, min_age: 9, max_age: 15,
+							features: [], is_active: true, coach_id: null, category: '競技體操', schedule_text: null,
+							is_highlighted: false, created_at: '', updated_at: '', enrolled_count: 11, waitlist_count: 3
 						}
 					],
-					total: 3,
+					total: 5,
 					page: 1,
 					per_page: 100
 				},
@@ -351,11 +366,11 @@ describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 pub
 		// listCoaches() 公開端點(auth:false)。
 		expect(api).toHaveBeenCalledWith('/courses?page=1');
 		expect(api).toHaveBeenCalledWith('/coaches', { auth: false });
-		expect(d.classes).toHaveLength(3);
+		expect(d.classes).toHaveLength(5);
 		expect(d.coaches).toEqual([
 			expect.objectContaining({ id: 'co1', name: '林教練' })
 		]);
-		expect(d.total).toBe(3);
+		expect(d.total).toBe(5);
 		expect(d.page).toBe(1);
 		expect(d.perPage).toBe(100);
 
@@ -370,6 +385,7 @@ describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 pub
 		expect(c1.coach).toBe('林教練'); // 經 coach_id 對照
 		expect(c1.level).toBe('進階'); // advanced → 進階
 		expect(c1.age).toBe('8–14 歲');
+		expect(c1.durationMinutes).toBe(90);
 
 		const c2 = d.classes.find((c) => c.id === 'c2')!;
 		expect(c2.day).toBe(''); // schedule_text: null 的 fallback
@@ -377,11 +393,21 @@ describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 pub
 		expect(c2.status).toBe('招生中'); // 7 < 10, wait=0
 		expect(c2.coach).toBe(''); // 無 coach_id
 		expect(c2.level).toBe('入門'); // beginner → 入門
+		expect(c2.durationMinutes).toBe(60);
 
 		const c3 = d.classes.find((c) => c.id === 'c3')!;
 		expect(c3.status).toBe('候補'); // 8 < 10 但 wait=2 > 0
 		expect(c3.level).toBe('基礎'); // intermediate → 基礎
 		expect(c3.age).toBe('12 歲以上'); // 只有 min_age
+		expect(c3.durationMinutes).toBe(90);
+
+		const c4 = d.classes.find((c) => c.id === 'c4')!;
+		expect(c4.level).toBe('啟蒙'); // foundation → 啟蒙 (FE#17：折疊 helper 移除前永遠對不出來)
+		expect(c4.durationMinutes).toBe(45);
+
+		const c5 = d.classes.find((c) => c.id === 'c5')!;
+		expect(c5.level).toBe('選手'); // elite → 選手 (FE#17：折疊 helper 移除前永遠對不出來)
+		expect(c5.durationMinutes).toBe(120);
 	});
 
 	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
