@@ -15,8 +15,8 @@
  * task-19-report.md 的顧慮)；但 CartSheet 的結帳流程本身已改真下單，復用
  * member 的 syncCartToServer/api()/refreshPoints(見下方 placeOrder())，不再
  * 是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律改讀
- * `$lib/member/stores` 的真 `points`/`pointsLedger`。這裡的本地 `points` 只留
- * 給 redeemReward()(目前無呼叫端，見該函式個別註解)。 */
+ * `$lib/member/stores` 的真 `points`/`pointsLedger`。這裡的本地 `points` 已無
+ * 任何呼叫端(其唯一呼叫端 redeemReward() 隨 Round 3 接線清理一併移除)。 */
 
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
@@ -125,17 +125,9 @@ export function cartCount(items: { qty: number }[]): number {
 export const cartTotal = derived(cart, ($c) => cartCount($c));
 
 /* ---------- Member points (點數) ----------
- * 本地殘值只留給 redeemReward()（目前沒有任何畫面呼叫它——見該函式個別註解）；
- * 帳戶頁/點數頁/CartSheet 的即時餘額一律讀 `$lib/member/stores` 的真 points。 */
+ * 本地殘值已無任何呼叫端——帳戶頁/點數頁/CartSheet 的即時餘額一律讀
+ * `$lib/member/stores` 的真 points。 */
 export const points = writable(ME.points);
-/** Redeem a reward by spending its point cost. PointsScreen disables the 兌換
- *  button unless the balance covers the cost (`can`), so this simply debits the
- *  points — mirroring checkout's points-only model (the mobile surface keeps no
- *  live ledger). Without it the balance never moves and a reward could be
- *  redeemed indefinitely. */
-export function redeemReward(cost: number) {
-	points.update((p) => p - cost);
-}
 
 /* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
  * 取代原本的本地假 checkout()：復用桌面 member 的結帳網路層（syncCartToServer /

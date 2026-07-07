@@ -6,8 +6,6 @@ import {
 	createNotifs,
 	cartCount,
 	unreadCount,
-	points,
-	redeemReward,
 	notifs,
 	notifsHydrated
 } from './stores';
@@ -68,22 +66,6 @@ describe('cartCount', () => {
 	it('sums the quantities across lines', () => {
 		expect(cartCount([{ qty: 2 }, { qty: 3 }])).toBe(5);
 		expect(cartCount([])).toBe(0);
-	});
-});
-
-describe('redeemReward', () => {
-	// Regression: the 兌換 button used to only toast, leaving the balance
-	// unchanged so the same reward could be redeemed indefinitely.
-	it('debits the reward cost from the points balance', () => {
-		points.set(1000);
-		redeemReward(300);
-		expect(get(points)).toBe(700);
-	});
-	it('keeps debiting on repeat redemptions (balance is never left unchanged)', () => {
-		points.set(1000);
-		redeemReward(300);
-		redeemReward(300);
-		expect(get(points)).toBe(400);
 	});
 });
 

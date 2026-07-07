@@ -21,14 +21,12 @@ import {
 	opsHydrated,
 	hydrateOps,
 	refreshOps,
-	saveMember,
-	saveClass,
 	messagesHydrated,
 	hydrateMessages,
 	refreshMessages
 } from './stores';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES } from './data';
-import { getOpsCollections, getMessages, markRead, type OpsCollections } from './api';
+import { getOpsCollections, getMessages, markRead } from './api';
 
 // Task 20：getOpsCollections()/getMessages() 現委派桌面 admin/coach seams 真呼叫
 // 後端——這裡的測試關心的是 store 自己的水合守衛/樂觀更新機制(與資料來源無關)，
@@ -221,62 +219,6 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		opsHydrated.set(false);
 	});
 
-	it('mutation 存活:hydrate 後的 overlay 新增/編輯,第二次進頁(guard 已 true)不被清掉', async () => {
-		await hydrateOps();
-		const before = get(classes).length;
-		saveClass({ ...CLASSES[0], id: '', name: '新班級(使用者剛新增)' }, true);
-		expect(get(classes).length).toBe(before + 1);
-		// 模擬「第二次進頁」再次觸發 hydrateOps(guard 已是 true)。
-		await hydrateOps();
-		expect(get(classes).some((c) => c.name === '新班級(使用者剛新增)')).toBe(true);
-		// restore for other tests
-		classes.set(CLASSES);
-		opsHydrated.set(false);
-	});
-
-	// Regression(C1):admin 首頁快速操作「新增學員」在使用者第一次造訪 classes/
-	// members/orders 任一頁之前就寫入 members store。反轉 :186 既有測試的順序 ——
-	// mutation 先發生、hydrateOps() 才第一次觸發 —— 修法前 refreshOps() 會用 seed
-	// clone 無條件覆寫四個 store,讓新學員無聲消失。
-	it('mutate-before-first-hydrate:首次 hydrateOps() 前的 saveMember 不被覆寫', async () => {
-		opsHydrated.set(false);
-		members.set(MEMBERS);
-		saveMember({ ...MEMBERS[0], id: '', name: '水合前新增的學員(regression)' }, true);
-		expect(get(members).length).toBe(MEMBERS.length + 1);
-		await hydrateOps();
-		expect(get(members).length).toBe(MEMBERS.length + 1);
-		expect(get(members).some((m) => m.name === '水合前新增的學員(regression)')).toBe(true);
-		// restore for other tests
-		members.set(MEMBERS);
-		opsHydrated.set(false);
-	});
-
-	// Regression(C1 in-flight 邊窗):hydrateOps() 的 fetch 尚未 resolve 時發生的
-	// mutation,resolve 後不該被覆寫。用可控 deferred promise 模擬「fetch 掛著、
-	// mutation 先到」的race。
-	it('in-flight:hydrateOps() fetch 尚未 resolve 時發生的 saveClass,resolve 後不被覆寫', async () => {
-		opsHydrated.set(false);
-		classes.set(CLASSES);
-		let resolveFetch!: (v: OpsCollections) => void;
-		vi.mocked(getOpsCollections).mockReturnValueOnce(
-			new Promise((resolve) => {
-				resolveFetch = resolve;
-			})
-		);
-		const pending = hydrateOps();
-		saveClass({ ...CLASSES[0], id: '', name: '水合進行中新增的班級(in-flight)' }, true);
-		resolveFetch({
-			members: MEMBERS.map((m) => ({ ...m })),
-			classes: CLASSES.map((c) => ({ ...c })),
-			coaches: COACHES.map((c) => ({ ...c })),
-			orders: ORDERS.map((o) => ({ ...o }))
-		});
-		await pending;
-		expect(get(classes).some((c) => c.name === '水合進行中新增的班級(in-flight)')).toBe(true);
-		// restore for other tests
-		classes.set(CLASSES);
-		opsHydrated.set(false);
-	});
 });
 
 describe('hydrateMessages / refreshMessages / messagesHydrated', () => {

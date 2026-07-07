@@ -7,8 +7,9 @@
    * `$lib/member/stores` 的 points/pointsLedger(getPoints() 內部已呼叫
    * refreshPoints() 側效水合這兩顆 store，見 member/api.ts 的既有慣例)；兌換動作
    * 改真 `$lib/member/stores` 的 redeemReward()(POST /rewards/{id}/redeem)。
-   * mobile 本地(mobile/stores.ts)的 points/redeemReward 不再用於這個畫面 —— 那組
-   * 只留給 CartSheet 既有的本地端假結帳流程(P2，見 task-19-report.md 的顧慮)。
+   * mobile 本地(mobile/stores.ts)的 points 不再用於這個畫面 —— CartSheet 的結帳
+   * 流程本身也已改真下單(復用 member 的 syncCartToServer/api()/refreshPoints)，
+   * 不是本地端假 checkout()(見 mobile/stores.ts 附註)。
    * 一鍵兌換不做桌面版的確認對話框(比照本畫面既有的單點互動慣例)，但補上真正
    * 的 in-flight guard + 錯誤 toast(桌面 /member/points 頁的既有裁決同款：
    * stock===0 顯示「已兌換完畢」，與點數不足分開判斷)。 */

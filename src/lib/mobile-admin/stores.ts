@@ -83,18 +83,13 @@ export const members = writable<MemberRow[]>(MEMBERS);
 export const classes = writable<ClassRow[]>(CLASSES);
 export const coaches = writable<Coach[]>(COACHES);
 
-/** Create (id assigned) or update a member / class / coach record in place.
- *  Also flips `opsHydrated` true: a mutation IS the session's source of truth, so
- *  it must not be silently wiped by a first-time hydrate that races it (見下方
- *  opsHydrated 守衛註解 — C1 regression fix)。 */
-export function saveMember(rec: MemberRow, isNew: boolean) {
-	members.update((ms) => (isNew ? [{ ...rec, id: nextId('GY2026', ms, 3) }, ...ms] : upsertById(ms, rec)));
-	opsHydrated.set(true);
-}
-export function saveClass(rec: ClassRow, isNew: boolean) {
-	classes.update((cs) => (isNew ? [{ ...rec, id: nextId('k', cs) }, ...cs] : upsertById(cs, rec)));
-	opsHydrated.set(true);
-}
+/** Create (id assigned) or update a coach record in place. Also flips
+ *  `opsHydrated` true: a mutation IS the session's source of truth, so it must
+ *  not be silently wiped by a first-time hydrate that races it (見下方
+ *  opsHydrated 守衛註解 — C1 regression fix)。(saveMember/saveClass 的本地寫入版本
+ *  已隨 Task 20 新增/編輯改接真 POST/PATCH /courses·/users 移除——真寫入成功後改
+ *  呼叫 refreshOps() 整包重抓，不再局部樂觀更新這兩個 store；saveCoach 尚無對應
+ *  的真後端寫入端點，繼續保留本地版本。) */
 export function saveCoach(rec: Coach, isNew: boolean) {
 	coaches.update((cs) => (isNew ? [{ ...rec, id: nextId('c', cs) }, ...cs] : upsertById(cs, rec)));
 	opsHydrated.set(true);
@@ -107,8 +102,7 @@ export const orders = writable<OrderRow[]>(ORDERS);
 /** Flip a pending order to paid and stamp the receipt time, so revenue / counts /
  *  filter chips recompute. Without this the action only toasts and the row stays
  *  pending. The detail sheet closes on action, so only the list needs to react.
- *  Also flips `opsHydrated` true(同 saveMember/saveClass/saveCoach — mutation 即
- *  宣告水合真相)。 */
+ *  Also flips `opsHydrated` true(同 saveCoach — mutation 即宣告水合真相)。 */
 export function markOrderPaid(id: string) {
 	orders.update((os) => os.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: '剛剛' } : o)));
 	opsHydrated.set(true);

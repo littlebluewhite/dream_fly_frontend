@@ -286,15 +286,6 @@ export const MEMBER_STATUS: Record<MemberAccountStatus, Tone> = {
 export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
 export const STATUS_TONE: Record<string, string> = { 招生中: 'success', 候補: 'warning', 額滿: 'neutral' };
 
-/* ---- Skill assessments (keyed by member id) ---- */
-export const SKILLS: Record<string, Skill[]> = {
-	GY2024001: [['前滾翻', 95], ['後手翻', 88], ['側翻', 92]],
-	GY2024006: [['前滾翻', 90], ['後手翻', 84], ['倒立', 78]],
-	GY2024010: [['前滾翻', 97], ['後手翻', 91], ['側翻', 95]],
-	GY2024007: [['前滾翻', 82], ['後手翻', 70], ['倒立', 65]]
-};
-export type Skill = [string, number];
-
 /* ===== 報表分析 data ===== */
 export interface Kpi {
 	icon: string;

@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
 import { getOpsCollections, createCourse, updateCourse } from '$lib/mobile-admin/api';
-import { classes, members, coaches, orders, overlay, opsHydrated, saveClass, toasts } from '$lib/mobile-admin/stores';
+import { classes, members, coaches, orders, overlay, opsHydrated, toasts } from '$lib/mobile-admin/stores';
 import { CLASSES, MEMBERS, COACHES, ORDERS } from '$lib/mobile-admin/data';
 import type { ClassRow } from '$lib/mobile-admin/data';
 
@@ -73,19 +73,6 @@ describe('mobile-admin/admin/classes 頁', () => {
 		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: [], coaches: COACHES, orders: ORDERS });
 		const { findByText } = render(ClassesPage);
 		expect(await findByText('找不到符合的課程')).toBeInTheDocument();
-	});
-
-	it('水合後的 overlay 新增(saveClass)在「第二次進頁」不被清掉(guard 保護)', async () => {
-		const { findByText, unmount } = render(ClassesPage);
-		await findByText('測試班級甲');
-		expect(get(opsHydrated)).toBe(true);
-
-		saveClass({ ...FIXTURE_CLASSES[0], id: '', name: '使用者剛新增的班級' }, true);
-		unmount();
-
-		// 模擬重新進頁:onMount 再次呼叫 hydrateOps(),guard 已 true 應短路。
-		const { findByText: findByText2 } = render(ClassesPage);
-		expect(await findByText2('使用者剛新增的班級')).toBeInTheDocument();
 	});
 
 	/* Task 20 — 新增/編輯班級改接真 POST/PATCH /courses，不再是 saveClass 本地假寫入。
