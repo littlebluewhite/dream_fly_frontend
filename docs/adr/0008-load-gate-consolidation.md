@@ -27,9 +27,9 @@ member 8 頁、coach 8 頁、mobile 5 頁 + 4 overlay、mobile-admin 10 頁、ad
   fetch——這是釘死既有 bug 的關鍵契約：舊手抄版常見的錯誤是「守衛短路後，使用者按 retry
   仍然被同一個守衛擋住、實際沒有重新發出請求」，`refresh()` 與 `load()` 分開語意即是為了讓
   `ErrorState` 的 retry 永遠有效。
-- **`generation` 計數器丟棄過期回應**：每次呼叫 `load`/`refresh`/`silentRefresh` 前遞增一個
-  closure 內的計數器並捕捉序號；回應到達時序號對不上（或已 `destroy`）一律丟棄，不寫入
-  phase、不呼叫 `onData`/`onError`。三個方法共用同一個計數器，因此彼此都能讓對方的舊回應
+- **`generation` 計數器丟棄過期回應**：每次呼叫 `load`/`refresh`（以及通過 ready 守衛的
+  `silentRefresh`）前遞增一個 closure 內的計數器並捕捉序號；回應到達時序號對不上（或已
+  `destroy`）一律丟棄，不寫入 phase、不呼叫 `onData`/`onError`。三個方法共用同一個計數器，因此彼此都能讓對方的舊回應
   過期——例如 `ScheduleCalendar` 快速切換月份時，上一個月份的回應即使比較晚回來也不會蓋掉
   使用者已經看到的新月份。
 - **`onDestroy` 自動掛載，元件外建構不丟錯**：兩個 factory 都在建構時呼叫
@@ -40,9 +40,10 @@ member 8 頁、coach 8 頁、mobile 5 頁 + 4 overlay、mobile-admin 10 頁、ad
 - **`silentRefresh` 不動 `phase`，phase 非 `ready` 時 no-op**：分頁版另有 `silentRefresh()`——
   突變（新增/編輯/建立）後重新整包拉取最新分頁 meta，成功或失敗都不改變 `phase` 欄位（連
   `onError` 都不呼叫，失敗整個吞掉）。守衛在遞增 `generation` 之前檢查目前 `phase`，非
-  `ready`（代表有 in-flight 的 `load()` 尚未 settle）時直接 no-op 返回，不遞增 `generation`、
-  不呼叫 fetch（2026-07-07 對抗審後強化：防止與 in-flight load 的 generation 交錯把分頁頁
-  strand 在 loading）。
+  `ready` 時直接 no-op 返回，不遞增 `generation`、不呼叫 fetch——`loading` 代表有 in-flight
+  的 `load()`（遞增 generation 會把它的回應誤判為過期、phase 卡死）；`error` 雖已 settle，
+  但列表未渲染、無「靜默重同步」的意義，重試一律走 `refresh()`（2026-07-07 對抗審後強化：
+  防止與 in-flight load 的 generation 交錯把分頁頁 strand 在 loading）。
 
 ### 四個變體
 

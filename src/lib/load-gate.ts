@@ -180,9 +180,10 @@ export function createPagedLoadGate<T extends PagedResponse>(
 
 	async function silentRefresh(): Promise<void> {
 		// 突變後靜默重同步:任何路徑都不動 phase、失敗也不呼叫 onError。
-		// 守衛必須在 generation 遞增之前:若目前 phase 非 ready(代表有 in-flight 的 load()
-		// 尚未 settle),直接 no-op——否則遞增 generation 會讓該 load() 的回應被誤判為過期而
-		// 丟棄,phase 永遠卡在 loading(2026-07-07 對抗審後強化)。
+		// 守衛必須在 generation 遞增之前:phase 非 ready 直接 no-op——loading 代表有
+		// in-flight 的 load(),遞增 generation 會讓它的回應被誤判為過期而丟棄、phase 永遠
+		// 卡在 loading;error 雖已 settle 但列表未渲染,靜默重同步無意義(重試走 refresh())。
+		// (2026-07-07 對抗審後強化)
 		if (state.phase !== 'ready') return;
 		const gen = ++generation;
 		try {
