@@ -1,21 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody } from './course-request';
 import { CLASSES, type ClassRow, type Coach } from '$lib/admin/data';
+import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 
 /* course-request.ts — 純函式，組出 POST/PATCH /courses body（Task 8 piece 1）。
  * 反向對照 admin/api.ts 唯讀映射用到的三個小函式（COURSE_LEVEL_TO_CLASS_LEVEL /
  * splitSchedule / ageRange）。全部無需渲染，直接測純函式輸出。 */
 
-describe('levelToApi — 5 態本地分級 → 3 態後端 enum', () => {
-	it('maps the 3 exact-match levels', () => {
+describe('levelToApi — 5 態本地分級 → 後端 5 態 course_level enum', () => {
+	it('maps all 5 levels to their own backend enum value (no 5→3 fold)', () => {
+		expect(levelToApi('啟蒙')).toBe('foundation');
 		expect(levelToApi('入門')).toBe('beginner');
 		expect(levelToApi('基礎')).toBe('intermediate');
 		expect(levelToApi('進階')).toBe('advanced');
+		expect(levelToApi('選手')).toBe('elite');
 	});
 
-	it('maps the 2 lossy extra levels to the nearest backend enum', () => {
-		expect(levelToApi('啟蒙')).toBe('beginner');
-		expect(levelToApi('選手')).toBe('advanced');
+	// Round-3 merge-blocker regression：LEVEL_TO_API 曾手刻成 5→3（啟蒙/選手各自就近
+	// 併入 beginner/advanced），造成建立/編輯 foundation、elite 課程時靜默降級。改為
+	// 從 COURSE_LEVEL_LABEL（讀側 SSOT）反向推導後，round-trip 對每一級都必須成立，
+	// 兩份表才不會再度分歧。
+	it('round-trips every level through COURSE_LEVEL_LABEL: levelToApi(label) === code', () => {
+		for (const [code, label] of Object.entries(COURSE_LEVEL_LABEL)) {
+			expect(levelToApi(label)).toBe(code);
+		}
 	});
 });
 

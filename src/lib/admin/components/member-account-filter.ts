@@ -1,10 +1,11 @@
 /* Dream Fly — 管理後台 · 學員管理頁（真實 GET /users 帳號）filter/count derivation.
  *
- * Pure, framework-free — sibling to members-filter.ts, but keyed off MemberAccount
- * (the honest getMembers() shape: id/name/initial/phone/joined/status/points) rather
- * than the mock Member type (which has course/campus/att/pay/tier… — no backend
- * source, see issue #8). Kept as a separate module so members-filter.ts (still used
- * by MembersTable's mock-backed compact dashboard preview) stays untouched. */
+ * Pure, framework-free — keyed off MemberAccount (the honest getMembers() shape:
+ * id/name/initial/phone/joined/status/points) rather than the mock Member type
+ * (which has course/campus/att/pay/tier… — no backend source, see issue #8).
+ * MembersTable's compact (dashboard preview) and full table both consume this
+ * module now — the mock-backed members-filter.ts this once stayed separate from
+ * is gone (the dashboard preview moved to real MemberAccount data too). */
 
 import type { MemberAccount, MemberAccountStatus } from '$lib/admin/data';
 

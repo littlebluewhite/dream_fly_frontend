@@ -1,12 +1,12 @@
 <script lang="ts">
   /* 管理員 · 更多(延伸模組 hub)。admin2.jsx MoreScreen (6)。
-   * 列表項 → overlay.push(screen);profile/role chip → sheet('role');logout 清 session。
+   * 列表項 → overlay.push(screen);profile/role chip → sheet('role')；logout 真登出
+   * (Task 20：authStore.logout()，取代示範性的 localStorage 旗標清除)。
    *
    * 資料改由 getMore()(mock-API 接縫)非同步載入,三態閘門(loading/error/ready);
-   * `data` 是本頁本地一次性快照(非共享 store),profiles/coaches/venues/tickets 皆
-   * 讀自 payload。 */
+   * `data` 是本頁本地一次性快照(非共享 store)；coaches/venues/tickets 現讀真桌面
+   * admin seam(Task 20)，profiles(身分卡)維持 mock，見 mobile-admin/api.ts 附註。 */
   import { onMount } from 'svelte';
-  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
@@ -14,10 +14,11 @@
   import Card from '$lib/components/ui/Card.svelte';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
-  import { overlay, role, switchRole, session } from '$lib/mobile-admin/stores';
+  import { overlay, role, switchRole } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getMore, type MoreData } from '$lib/mobile-admin/api';
+  import { authStore } from '$lib/stores/authStore';
 
   let data: MoreData | null = null;
   const gate = createLoadGate({
@@ -43,14 +44,10 @@
     : [];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
-  function logout() {
-    if (browser) {
-      try {
-        localStorage.removeItem('df_madmin_session');
-        localStorage.removeItem('df_madmin_role');
-      } catch (_) {}
-    }
-    session.set(false);
+  // Task 20：真登出（POST /auth/logout best-effort revoke + 清 token），取代示範性的
+  // localStorage 旗標清除。
+  async function logout() {
+    await authStore.logout();
     goto('/mobile-admin/login');
   }
 </script>

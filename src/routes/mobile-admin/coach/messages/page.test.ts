@@ -7,7 +7,9 @@ import { messages, messagesHydrated, coachMsgUnread, markMessageRead } from '$li
 import { MESSAGES } from '$lib/mobile-admin/data';
 import type { MessageRow } from '$lib/mobile-admin/data';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getMessages: vi.fn() }));
+// Task 20：markMessageRead(stores.ts)現也 best-effort 呼叫真 markRead(id)——一併
+// mock，否則呼叫到未定義的匯出會拋錯(見該函式的 fire-and-forget 附註)。
+vi.mock('$lib/mobile-admin/api', () => ({ getMessages: vi.fn(), markRead: vi.fn().mockResolvedValue({ updated: 0 }) }));
 
 // 與 seed 相異的 fixture(家長姓名、預覽內容皆改過),證明頁面讀 hydrateMessages()
 // 水合後的 $messages store,而非殘留的同步 seed 巧合通過。

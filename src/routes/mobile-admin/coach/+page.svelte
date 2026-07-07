@@ -3,9 +3,13 @@
    * 原型的 setTab(id) → goto(adminPath('coach',id))；onBell/onRole → overlay.sheet。
    *
    * 資料改由 getCoachHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
-   * ready)。「今日課堂/今日學員」統計原為頁面硬編字串(2 / 23),與同頁 coachToday
-   * 課表描述同一件事實,改為由 coachToday 動態算出(單一來源);「我的學員」(86)
-   * 本頁資料無對應欄位,維持原樣硬編。 */
+   * ready)。Task 20：改讀真 getDashboard()——hero 身分卡(姓名/職稱)改用真實教練
+   * 資料(取代 PROFILES.coach 的固定假人名)；「今日課堂/今日學員」統計仍由
+   * coachToday 動態算出(單一來源)；待辦事項的「待點名」「待回覆」改讀真
+   * GET /reports/coach 的 pending_attendance/unread_messages 計數。原「我的學員
+   * (86)」「技能評量待更新」提醒皆為頁面硬編、且後者指向已整個移除的假技能評量
+   * 功能(coach/students 頁改為真的發證書/寫評語，見該頁註解)，一併移除，不留一個
+   * 指向已移除功能的假提醒；找不到教練檔案(CoachNotFoundError)時顯示對應錯誤。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -17,12 +21,24 @@
   import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getCoachHome, type MCoachHomeData } from '$lib/mobile-admin/api';
+  import { getCoachHome, CoachNotFoundError, type MCoachHomeData } from '$lib/mobile-admin/api';
 
   let data: MCoachHomeData | null = null;
+  let errorTitle = '載入失敗';
+  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+
   const gate = createLoadGate({
     fetch: getCoachHome,
-    onData: (d) => { data = d; }
+    onData: (d) => { data = d; },
+    onError: (e) => {
+      if (e instanceof CoachNotFoundError || (e instanceof Error && e.name === 'CoachNotFoundError')) {
+        errorTitle = '此帳號未綁定教練檔案';
+        errorBody = '請聯繫系統管理員協助設定教練檔案。';
+      } else {
+        errorTitle = '載入失敗';
+        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+      }
+    }
   });
   onMount(() => {
     gate.load();
@@ -33,14 +49,14 @@
   $: studentCount = coachToday.reduce((s, t) => s + t.count, 0);
   $: stats = [
     [String(classCount), '今日課堂', 'calendar-days', 'var(--df-primary)'],
-    [String(studentCount), '今日學員', 'users', 'var(--df-success)'],
-    ['86', '我的學員', 'graduation-cap', 'var(--df-accent-dark)']
+    [String(studentCount), '今日學員', 'users', 'var(--df-success)']
   ] as [string, string, string, string][];
-  const tasks = [
-    { icon: 'calendar-check', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '19:00 競技啦啦隊 進階班 尚未點名', action: '去點名', to: 'attendance' },
-    { icon: 'message-circle', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', text: '2 則家長訊息待回覆', action: '查看', to: 'messages' },
-    { icon: 'award', tone: 'var(--df-success)', bg: 'var(--df-success-bg)', text: '選手班 3 位學員技能評量待更新', action: '更新', to: 'students' }
-  ];
+  $: tasks = data
+    ? [
+        { icon: 'calendar-check', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: data.pendingClasses + ' 待點名', action: '去點名', to: 'attendance' },
+        { icon: 'message-circle', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', text: data.pendingReplies + ' 訊息待回覆', action: '查看', to: 'messages' }
+      ]
+    : [];
 
   const setTab = (id: string) => goto(adminPath('coach', id));
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
@@ -48,21 +64,21 @@
 </script>
 
 {#if $gate === 'ready' && data}
-{@const p = data.profiles.coach}
+{@const p = { name: data.coach.name, initial: data.coach.initial, role: data.coach.role, desc: '', color: 'var(--df-primary)', id: data.coach.id }}
 <HeroHeader
   role="coach"
   {p}
   unread={$coachUnreadCount}
   {onBell}
   {onRole}
-  greeting={p.name + ' 教練，午安 👋'}
+  greeting={data.coach.display + '，午安 👋'}
   sub={'今天有 ' + classCount + ' 堂課、' + studentCount + ' 位學員，記得課後完成點名。'}
 />
 
 <div class="df-scroll df-view">
   <div style="padding:16px; display:flex; flex-direction:column; gap:18px; margin-top:-2px;">
-    <!-- stat trio -->
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:11px;">
+    <!-- stat pair -->
+    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:11px;">
       {#each stats as [v, l, ic, c] (l)}
         <div style="background:#fff; border:1px solid var(--df-border); border-radius:14px; padding:13px 8px; box-shadow:var(--df-shadow-card); text-align:center;">
           <Icon name={ic} size={19} color={c} />
@@ -96,7 +112,7 @@
 
     <!-- tasks -->
     <Panel title="待辦事項">
-      <span slot="right" style="background:var(--df-accent); color:var(--df-ink); font-size:12px; font-weight:800; padding:2px 9px; border-radius:999px;">3</span>
+      <span slot="right" style="background:var(--df-accent); color:var(--df-ink); font-size:12px; font-weight:800; padding:2px 9px; border-radius:999px;">{tasks.length}</span>
       {#each tasks as t, i (i)}
         <button
           on:click={() => setTab(t.to)}
@@ -113,12 +129,12 @@
   </div>
 </div>
 {:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
+  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
 {:else}
   <div class="df-scroll df-view" data-testid="mcoach-home-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
     <SkelCard><Skeleton w="100%" h={90} r={16} /></SkelCard>
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:11px;">
-      {#each [0, 1, 2] as i (i)}
+    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:11px;">
+      {#each [0, 1] as i (i)}
         <SkelCard><Skeleton w="100%" h={80} r={14} /></SkelCard>
       {/each}
     </div>

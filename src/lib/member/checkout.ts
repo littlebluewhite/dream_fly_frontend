@@ -29,7 +29,8 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): CartI
   return cart.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id)));
 }
 
-/* ─── validateCoupon — 真實 API 驗證（取代 mobile/coupons 的 lookupCoupon 查表）── */
+/* ─── validateCoupon — 真實 API 驗證（本地查表版 lookupCoupon 已退役；CartSheet 是最後
+ * 一個呼叫端，已隨 Task 19 收尾改真 API，查表不再保留）── */
 
 export interface CouponValidateResponse {
   code: string;

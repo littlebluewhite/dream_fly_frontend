@@ -1,20 +1,24 @@
 <script lang="ts">
   /* 課程 編輯 / 新增 sheet。forms.jsx ClassForm (75)。
    * 透過 OverlayHost 掛載：每次 overlay.sheet('classForm',{k}) 都是新實例。
-   * 儲存 → onSave(rec,isNew)（未提供時退回 store saveClass），再 onClose()。 */
+   * 儲存 → onSave(rec, durationMinutes, isNew)。Task 20：課程建立/編輯已接真
+   * POST/PATCH /courses（見 admin/classes/+page.svelte 的 save()），呼叫端一律
+   * 提供 onSave——不再有本地 store 假寫入 fallback（沒有 onSave 時單純不儲存，
+   * 比起假裝成功更誠實）。單堂時長欄位比照桌面 ClassEditDialog：新增預設 90
+   * 分鐘，編輯帶入該課程既有的 durationMinutes。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Select from '$lib/components/ui/Select.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { get } from 'svelte/store';
-  import { saveClass, coaches as coachesStore } from '$lib/mobile-admin/stores';
+  import { coaches as coachesStore } from '$lib/mobile-admin/stores';
   import { F_LEVELS, F_CATS, F_CLASS_STATUS } from '$lib/mobile-admin/form-options';
   import type { ClassRow, Coach } from '$lib/mobile-admin/data';
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
-  export let onSave: ((rec: ClassRow, isNew: boolean) => void) | undefined = undefined;
+  export let onSave: ((rec: ClassRow, durationMinutes: number, isNew: boolean) => void) | undefined = undefined;
   export let coaches: Coach[] = [];
 
   const isNew = !k;
@@ -45,11 +49,13 @@
         sessions: 16,
         startDate: '2026/03/01',
         checkinRate: 90,
-        makeup: 0
+        makeup: 0,
+        durationMinutes: 90
       };
 
   let capStr = String(f.cap ?? '');
   let priceStr = String(f.price ?? '');
+  let durationStr = String(f.durationMinutes ?? '90');
 
   $: valid = !!(f.name || '').trim() && !!f.coach;
   $: coachOpts = coaches.length ? coaches : $coachesStore;
@@ -61,8 +67,7 @@
       price: parseInt(priceStr, 10) || 0,
       enrolled: f.enrolled || 0
     };
-    if (onSave) onSave(rec, isNew);
-    else saveClass(rec, isNew);
+    if (onSave) onSave(rec, parseInt(durationStr, 10) || 0, isNew);
     onClose();
   }
 </script>
@@ -96,6 +101,7 @@
       <Input label="季費 (NT$)" bind:value={priceStr} />
       <Select label="招生狀態" bind:value={f.status} options={F_CLASS_STATUS} />
     </div>
+    <Input label="單堂時長（分鐘）" bind:value={durationStr} />
   </div>
 
   <svelte:fragment slot="footer">

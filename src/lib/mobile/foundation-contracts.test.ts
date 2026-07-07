@@ -60,7 +60,7 @@ describe('overlay-map completeness', () => {
 		[
 			'mobile-admin',
 			'src/lib/mobile-admin/OverlayHost.svelte',
-			['coaches', 'venues', 'tickets', 'reports', 'settings', 'messageThread', 'member', 'class', 'order', 'memberForm', 'classForm', 'coachForm', 'notif', 'role', 'studentSkills']
+			['coaches', 'venues', 'tickets', 'reports', 'settings', 'messageThread', 'member', 'class', 'order', 'memberForm', 'classForm', 'coachForm', 'notif', 'role', 'studentAction']
 		]
 	];
 	for (const [surface, file, ids] of cases) {

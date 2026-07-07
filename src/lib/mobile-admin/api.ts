@@ -1,33 +1,72 @@
-/* 行動管理端 mock API 接縫。今天回傳 seed;未來把函式體換成 fetch 即可,呼叫端不變。 */
+/* Dream Fly — 行動管理端 API 接縫。Task 20：從整包 reply() mock 改為 desktop
+ * admin/coach seams 的薄層——直接 import `$lib/admin/api.ts`/`$lib/coach/api.ts`，
+ * 形狀相同的欄位零映射直接沿用（多數集合型別在 data.ts 已刻意對齊桌面真實型別，
+ * 例如 ClassRow/MemberRow/OrderRow/Coach，見該檔各型別附註），只在行動版 UI 真的
+ * 需要不同形狀處做薄映射（例如今日課表的 tone/label、訊息列表的 MessageRow）。
+ * 凡是桌面 seam 本身仍是 mock（無後端來源）的欄位，這裡原樣沿用同一份 mock/預設值
+ * ——不發明桌面沒有的假來源，也不重新實作桌面已經做過的映射邏輯。逐函式來源見
+ * task-20-report.md 的盤點表。 */
+import {
+	getVenues as adminGetVenues,
+	getTickets as adminGetTickets,
+	getCoaches as adminGetCoaches,
+	getClasses as adminGetClasses,
+	createCourse,
+	updateCourse,
+	mapCourse,
+	getMembers as adminGetMembers,
+	createMember,
+	updateMember,
+	getOrders as adminGetOrders,
+	updateOrderStatus,
+	getReports as adminGetReports,
+	type CourseWriteBody,
+	type CreateMemberBody,
+	type UpdateMemberBody
+} from '$lib/admin/api';
+import {
+	getDashboard as coachGetDashboard,
+	getAttendance as coachGetAttendance,
+	saveAttendance as coachSaveAttendance,
+	getStudents as coachGetStudents,
+	getSettings as coachGetSettings,
+	saveSettings,
+	getConversations as coachGetConversations,
+	getThread,
+	sendMessage,
+	markRead,
+	createCertificate,
+	createReportCard,
+	CoachNotFoundError,
+	type CreateCertificateBody,
+	type CreateReportCardBody
+} from '$lib/coach/api';
+import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
 import {
 	PROFILES,
-	COACHES,
-	VENUES,
-	TICKETS,
-	COACH_TODAY,
-	ROSTER,
-	MEMBERS,
-	SKILLS,
 	TODAY,
 	ACTIVITY,
-	CLASSES,
-	ORDERS,
-	MESSAGES,
+	fmtNT,
 	type Profile,
 	type Coach,
 	type Venue,
 	type Ticket,
 	type TodayRow,
-	type RosterEntry,
-	type MemberRow,
-	type Skill,
 	type ActivityRow,
 	type ClassRow,
+	type MemberRow,
 	type OrderRow,
-	type MessageRow
+	type MessageRow,
+	type RosterEntry
 } from './data';
 
-const reply = <T>(value: T): Promise<T> => Promise.resolve(value);
+export { CoachNotFoundError };
+export type { CourseWriteBody, CreateMemberBody, UpdateMemberBody, CreateCertificateBody, CreateReportCardBody };
+export { createCourse, updateCourse, mapCourse, createMember, updateMember, updateOrderStatus };
+// createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
+// 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
+// 假裝有接這個功能。
+export { saveSettings, getThread, sendMessage, markRead, createCertificate, createReportCard };
 
 export interface MoreData {
 	profiles: Record<'admin' | 'coach', Profile>;
@@ -35,77 +74,194 @@ export interface MoreData {
 	venues: Venue[];
 	tickets: Ticket[];
 }
-export const getMore = (): Promise<MoreData> =>
-	reply({ profiles: PROFILES, coaches: COACHES, venues: VENUES, tickets: TICKETS });
+/** 更多(hub)— coaches/venues/tickets 復用桌面 admin seam(GET /coaches、/venues、
+ *  /products，皆公開端點)真資料，三者互不相依，平行拉取(型別與 data.ts 的 Coach/
+ *  Venue/Ticket 逐欄位相同，零映射)。
+ *  // P2: profiles(身分卡姓名/大頭貼/職稱)維持 mock——純顯示用 cosmetic 資料、非
+ *  寫入路徑：admin 側沒有對應的「我的管理員檔案」seam，coach 側的真身分
+ *  (coachGetSettings())在只有 admin 角色的帳號上可能查無教練資料(CoachNotFoundError)。
+ *  真正「誰能進入 admin/coach 分區」已 100% 由 +layout.svelte 的真 authStore 角色
+ *  守門把關，這裡只是身分卡上顯示的姓名/頭像仍是示範用假資料。 */
+export const getMore = async (): Promise<MoreData> => {
+	const [{ coaches }, { venues }, { tickets }] = await Promise.all([
+		adminGetCoaches(),
+		adminGetVenues(),
+		adminGetTickets()
+	]);
+	return { profiles: PROFILES, coaches, venues, tickets };
+};
+
+/** TodaySessionResponse 的 4 態狀態 → 行動版今日課表卡的 tone/label。同桌面
+ *  coach/data.ts 的 CLASS_STATUS 標籤（done→已結束、live→上課中、soon→即將開始、
+ *  wait→尚未開始）。既有的 taken(是否已點名)欄位無對應真實訊號可推導——
+ *  TodaySessionResponse 不含「本場次是否已完成點名」旗標，一律不設(undefined)，
+ *  讓畫面固定顯示「點名」動作按鈕，不假裝知道点名是否已完成。 */
+const TODAY_STATUS_LABEL: Record<string, [string, string]> = {
+	done: ['neutral', '已結束'],
+	live: ['success', '上課中'],
+	soon: ['warning', '即將開始'],
+	wait: ['neutral', '尚未開始']
+};
+function mapTodayClassToRow(t: { start: string; name: string; room: string; count: number; status: string }): TodayRow {
+	const [tone, label] = TODAY_STATUS_LABEL[t.status] ?? ['neutral', ''];
+	return { time: t.start, name: t.name, room: t.room, count: t.count, tone, label };
+}
 
 export interface MCoachHomeData {
+	coach: CoachProfile;
 	coachToday: TodayRow[];
-	profiles: Record<'admin' | 'coach', Profile>;
+	/** 待點名班級數（GET /reports/coach 的 pending_attendance，見 §3.24）。 */
+	pendingClasses: string;
+	/** 待回覆訊息數（同上，unread_messages）。 */
+	pendingReplies: string;
 }
-export const getCoachHome = (): Promise<MCoachHomeData> => reply({ coachToday: COACH_TODAY, profiles: PROFILES });
+/** 教練 · 工作台首頁 — 復用桌面 getDashboard()(Task 19：GET /users/me + /coaches
+ *  組出教練檔案、GET /sessions/today 今日課表、GET /reports/coach 待點名/待回覆
+ *  KPI)，一次拿到 hero 用的真實教練身分 + 今日課表 + 兩個真實 KPI 數字。conversations
+ *  (訊息預覽)桌面自己也仍是 mock(見 coach/api.ts getDashboard() 註解)，本頁不需要
+ *  它，直接丟棄。找不到教練檔案時拋出 CoachNotFoundError，呼叫端(coach/+page.svelte)
+ *  依 e.name 判斷改顯示「此帳號未綁定教練檔案」。 */
+export const getCoachHome = async (): Promise<MCoachHomeData> => {
+	const d = await coachGetDashboard();
+	return {
+		coach: d.coach,
+		coachToday: d.todayClasses.map(mapTodayClassToRow),
+		pendingClasses: d.pendingClasses,
+		pendingReplies: d.pendingReplies
+	};
+};
 
-export interface RosterData {
+/** AttRow(教練/admin 名冊列)→ 行動版 RosterEntry：mid 兼作 id(enrolment_id 本身就是
+ *  穩定的列鍵)，def→default 只是欄位改名，形狀同源零損失。 */
+function mapAttRow(r: AttRow): RosterEntry {
+	return { id: r.mid, name: r.name, initial: r.initial, color: r.color, mid: r.mid, default: r.def };
+}
+
+export interface MAttendanceClass {
+	id: string;
+	/** 切換班級 FilterChips 的顯示字串（時間 + 課名），從 AttClassFull.time
+	 *  ("今日 HH:MM–HH:MM") 取起始時間組成，同既有「19:00 競技啦啦隊 進階班」格式。 */
+	label: string;
 	roster: RosterEntry[];
 }
-export const getRoster = (): Promise<RosterData> => reply({ roster: ROSTER });
+export interface MAttendanceData {
+	classes: MAttendanceClass[];
+	/** 名冊載入失敗而被排除的場次課名(部分失敗隔離)；頁面以 toast 提示。 */
+	failedClasses: string[];
+}
+/** 課堂點名 — 復用桌面 coach/api.ts 的 getAttendance()(Task 2：GET /sessions/today
+ *  × 各場次 GET /sessions/{id}/roster)。桌面版本已支援「今日所有場次」而非單一
+ *  硬編班級——行動版舊 mock 只有一個 ROSTER，先前的切換班級 FilterChips 因此只能
+ *  提供一個選項(見舊版註解「The mock only carries ROSTER for this one class」)；
+ *  接上真資料後改為如實列出「今日全部場次」，切換班級恢復原本設計的多選功能。 */
+export const getAttendance = async (): Promise<MAttendanceData> => {
+	const { classes, failedClasses } = await coachGetAttendance();
+	return {
+		classes: classes.map((c) => ({
+			id: c.id,
+			label: `${c.time.replace('今日 ', '').split('–')[0]} ${c.name}`,
+			roster: c.roster.map(mapAttRow)
+		})),
+		failedClasses
+	};
+};
+
+/** PUT /sessions/{id}/attendance —— 復用桌面 saveAttendance()，回應重新映射回
+ *  RosterEntry[]，讓頁面以伺服器為準同步 marks(同桌面「以伺服器為準，而非樂觀本地
+ *  值」的理由)。 */
+export const saveAttendance = (sessionId: string, marks: Record<string, AttDefault>): Promise<RosterEntry[]> =>
+	coachSaveAttendance(sessionId, marks).then((rows) => rows.map(mapAttRow));
 
 export interface MStudentsData {
-	members: MemberRow[];
-	skills: Record<string, Skill[]>;
+	students: Student[];
 }
-export const getStudents = (): Promise<MStudentsData> => reply({ members: MEMBERS, skills: SKILLS });
+/** 我的學員 — 復用桌面 coach/api.ts 的 getStudents()(Task 19：GET /coaches/me/
+ *  students，只回這位教練名下的學員)，取代舊 mock 對「全體 MEMBERS 用姓名字串比對
+ *  coach 欄位」的克難篩選方式。回傳型別直接是真實 Student[]（無技能評量 skill/pct
+ *  多筆表——後端只有單一 skill/pct 欄位，且皆為 P2 佔位值，見 coach/data.ts 附註），
+ *  故拿掉舊有的獨立 SKILLS 對照表，改用 Student 本身的欄位。 */
+export const getStudents = (): Promise<MStudentsData> => coachGetStudents();
 
+export type { CoachProfile };
 export interface CsettingsData {
-	profiles: Record<'admin' | 'coach', Profile>;
-	coaches: Coach[];
+	coach: CoachProfile;
 }
-export const getCsettings = (): Promise<CsettingsData> => reply({ profiles: PROFILES, coaches: COACHES });
+/** 個人設定 — 復用桌面 coach/api.ts 的 getSettings()(GET /users/me + GET /coaches
+ *  組出真實教練檔案)，取代舊 mock 對 PROFILES.coach + COACHES.find(name==='林雅婷')
+ *  的拼湊方式。真實 Coach 型別沒有 years/students/classes/awards 統計欄位(這些是
+ *  舊 $lib/domain/coaches 型別的行動版專屬豐富化欄位，後端從未提供)——桌面自己的
+ *  coach/settings 頁在這個位置也是「Stats — sensible values derived from data /
+ *  mock」的固定假數字(授課時數/學員數/年資，見 ProfileTab 上層 +page.svelte 註解)，
+ *  行動版鏡射同一份桌面固定假值，不新發明第 4 個假統計(桌面只給 3 個)。 */
+export const getCsettings = (): Promise<CsettingsData> => coachGetSettings();
 
-/** Hero 日期與「在學學員/本週課堂/本月營收」KPI 帶原為頁面硬編字串,一併移入
- *  payload(換後端只改這一層;「出席偏低」KPI 維持由 members 動態算出,不在此列)。 */
 export interface MAdminHomeData {
 	profiles: Record<'admin' | 'coach', Profile>;
-	members: MemberRow[];
 	today: TodayRow[];
 	activity: ActivityRow[];
-	dateLabel: string;
+	/** 在學學員（真：GET /reports/admin 的 members.active）。 */
 	enrolledValue: string;
-	enrolledDelta: string;
-	classesWeekValue: string;
-	classesWeekDelta: string;
+	/** 本月營收（真：revenue.this_month_cents，ntd() 後 fmtNT()）。 */
 	revenueMonthValue: string;
-	revenueMonthDelta: string;
 }
-export const getAdminHome = (): Promise<MAdminHomeData> =>
-	reply({
+/** 管理員 · 總覽首頁 — 復用桌面 admin/api.ts 的 getReports()(Task 15：GET
+ *  /reports/admin)，只取有真實資料源的兩項 KPI（在學學員／本月營收）——同桌面
+ *  admin/+page.svelte 的裁決 9：原「本週課堂」「出席偏低」兩張 KPI 卡在
+ *  /reports/admin 沒有對應資料源，已隨桌面版一併移除，不留假數字；hero 硬編日期
+ *  字串(dateLabel)同理移除(桌面 sub 也只剩「全館即時概況」，無日期)。today(今日
+ *  課表)/activity(最新動態)桌面本身也仍讀 TODAY/ACTIVITY 這兩份 mock（見
+ *  TodayPanel.svelte/ActivityPanel.svelte 皆未接真資料），行動版鏡射同一決定原樣
+ *  沿用；profiles 維持 mock，理由同 getMore()。 */
+export const getAdminHome = async (): Promise<MAdminHomeData> => {
+	const reports = await adminGetReports();
+	return {
 		profiles: PROFILES,
-		members: MEMBERS,
 		today: TODAY,
 		activity: ACTIVITY,
-		dateLabel: '2026 年 6 月 10 日',
-		enrolledValue: '248',
-		enrolledDelta: '+12',
-		classesWeekValue: '64',
-		classesWeekDelta: '+4',
-		revenueMonthValue: 'NT$182K',
-		revenueMonthDelta: '+8%'
-	});
+		enrolledValue: String(reports.members.active),
+		revenueMonthValue: fmtNT(reports.revenue.thisMonth)
+	};
+};
 
-/** 集合 store 水合(clone,防共享參照被 mutation 污染)。 */
+/** 集合水合(members/classes/coaches/orders 一次到位)。四者皆復用桌面 admin seam
+ *  的真資料，平行拉取——members/classes/orders 皆為分頁端點(Task 17)，這裡固定抓
+ *  第一頁(後端預設 per_page=20)。
+ *  // P2: 行動版目前沒有 PaginationBar 可切頁，資料超過一頁時清單如實只顯示第一頁
+ *  （不假裝資料齊全），也不在本次任務新蓋一套行動版分頁 UI——桌面對應頁面皆已有
+ *  PaginationBar，行動版尚未跟進，記錄為後續 polish(見 task-20-report.md)。四個
+ *  型別與桌面對應型別逐欄位相同(見 data.ts 各型別附註)，故零映射、直接沿用。 */
 export interface OpsCollections {
 	members: MemberRow[];
 	classes: ClassRow[];
 	coaches: Coach[];
 	orders: OrderRow[];
 }
-export const getOpsCollections = (): Promise<OpsCollections> =>
-	reply({
-		members: MEMBERS.map((m) => ({ ...m })),
-		classes: CLASSES.map((c) => ({ ...c })),
-		coaches: COACHES.map((c) => ({ ...c })),
-		orders: ORDERS.map((o) => ({ ...o }))
-	});
+export const getOpsCollections = async (): Promise<OpsCollections> => {
+	const [membersRes, classesRes, coachesRes, ordersRes] = await Promise.all([
+		adminGetMembers(1),
+		adminGetClasses(1),
+		adminGetCoaches(),
+		adminGetOrders(1)
+	]);
+	return {
+		members: membersRes.members,
+		classes: classesRes.classes,
+		coaches: coachesRes.coaches,
+		orders: ordersRes.orders
+	};
+};
 
-/** 教練 · 訊息串列(獨立於 ops 集合水合 — 與 orders/classes/members/coaches 屬不同
- *  領域,coach/messages 專用;clone 防共享參照被 mutation 污染)。 */
-export const getMessages = (): Promise<MessageRow[]> => reply(MESSAGES.map((m) => ({ ...m })));
+/** Conversation(教練/admin 對話摘要)→ 既有 MessageRow 形狀。unread 由 badge(未讀則數)
+ *  是否 >0 推導；kind(會員/家長/群組)、sla 等桌面訊息中心專屬欄位行動版列表本就不
+ *  顯示，不映射。 */
+function mapConversationToRow(c: Conversation): MessageRow {
+	return { id: c.id, from: c.name, initial: c.initial, color: c.color, preview: c.preview, time: c.time, unread: (c.badge ?? 0) > 0 };
+}
+/** 教練 · 訊息列表 — 復用桌面 coach/api.ts 的 getConversations()(Task 12：GET
+ *  /conversations/me)，取代舊 mock 固定 12 筆訊息清單。 */
+export const getMessages = async (): Promise<MessageRow[]> => {
+	const { conversations } = await coachGetConversations();
+	return conversations.map(mapConversationToRow);
+};
+
+export type { ThreadMsg };

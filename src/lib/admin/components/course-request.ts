@@ -2,18 +2,18 @@
  * 純函式，供 classes/+page.svelte 儲存課程時使用；反向對照 admin/api.ts 唯讀映射用到
  * 的三個小函式（COURSE_LEVEL_TO_CLASS_LEVEL / splitSchedule / ageRange）。 */
 import type { ClassRow, Level, Coach } from '$lib/admin/data';
+import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { toCents } from '$lib/public/adapters';
 import type { CourseWriteBody } from '$lib/admin/api';
 
-/** 5 態本地分級 → 3 態後端 enum。啟蒙/選手是本地才有的兩個更細分級，後端沒有對應
- *  enum，各自就近併入 beginner/advanced（有損，僅影響這兩個分級的課程建立/編輯）。 */
-const LEVEL_TO_API: Record<Level, string> = {
-	啟蒙: 'beginner',
-	入門: 'beginner',
-	基礎: 'intermediate',
-	進階: 'advanced',
-	選手: 'advanced'
-};
+/** 5 態本地分級 → 後端 5 態 course_level enum。由讀側單一 source of truth
+ *  `COURSE_LEVEL_LABEL`（$lib/domain/course-level，後端 enum → 繁中標籤）反向推導，
+ *  不再手動維護第二份對照表——這裡先前手刻的版本是失真的 5→3 摺疊（啟蒙/選手各自
+ *  就近併入 beginner/advanced），會讓建立/編輯 foundation、elite 課程時靜默降級。
+ *  反向推導後兩份表恆等，新增/調整分級只需改 COURSE_LEVEL_LABEL 一處。 */
+const LEVEL_TO_API: Record<Level, string> = Object.fromEntries(
+	Object.entries(COURSE_LEVEL_LABEL).map(([code, label]) => [label, code] as const)
+) as Record<Level, string>;
 export const levelToApi = (level: Level): string => LEVEL_TO_API[level];
 
 /** day/time 組回 schedule_text（api.ts splitSchedule 的反向）；兩者皆空回 undefined

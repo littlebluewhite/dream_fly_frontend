@@ -1,15 +1,20 @@
 <script lang="ts">
-  /* 學員詳情 sheet。admin.jsx MemberSheet (162)。
+  /* 學員詳情 sheet。admin.jsx MemberSheet (162) 的行動版接線改版。
    * onEdit 由 host 傳入時用之;OverlayHost 未傳 onEdit,故 fallback 直接
-   * overlay.sheet('memberForm',{m})(與 app.jsx onEdit 等價)。 */
+   * overlay.sheet('memberForm',{m})(與 app.jsx onEdit 等價)。
+   *
+   * Task 20：改讀真 GET /users 形狀（MemberRow 已瘦身為 id/name/initial/phone/
+   * joined/status/points）——同桌面 admin/data.ts 的 MemberAccount，MembersTable
+   * 早已是「誠實、精簡」呈現，這裡鏡射同一決定，拿掉舊 mock 才有的 course/coach/
+   * att/pay/remain/campus/birthday/parent/emergency/lineId/近六堂出席等欄位
+   * （真後端從未提供過，繼續顯示只會是假資料）。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
-  import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { overlay, toasts } from '$lib/mobile-admin/stores';
-  import { PAY_STATUS, ATT_MARK, type MemberRow } from '$lib/mobile-admin/data';
+  import type { MemberRow } from '$lib/mobile-admin/data';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
@@ -24,21 +29,7 @@
   $: rows = m
     ? ([
         ['會員編號', m.id, 'var(--df-font-mono)'],
-        ['年齡', m.age + ' 歲'],
-        ['所屬分校', m.campus],
-        ['會員分級', m.tier],
-        ['報名課程', m.course],
-        ['授課教練', m.coach + ' 教練'],
-        ['繳費狀態', (PAY_STATUS[m.pay] || ['', '-'])[1]],
-        ['剩餘堂數', m.remain + ' 堂'],
-        ['續費到期', m.renewDue],
-        ['最近出席', m.lastSeen, 'var(--df-font-mono)'],
-        ['報名來源', m.source],
-        ['生日', m.birthday],
-        ['家長', m.parent],
-        ['聯絡電話', m.phone, 'var(--df-font-mono)'],
-        ['LINE', m.lineId, 'var(--df-font-mono)'],
-        ['緊急聯絡人', m.emName + ' · ' + m.emPhone],
+        ['聯絡電話', m.phone || '—', 'var(--df-font-mono)'],
         ['入會時間', m.joined],
         ['會員點數', m.points + ' 點']
       ] as [string, string, string?][])
@@ -49,35 +40,10 @@
   {#if m}
     <div style="display:flex; flex-direction:column; gap:18px;">
       <div style="display:flex; align-items:center; gap:14px;">
-        <Avatar name={m.initial} size="lg" color={m.color} />
+        <Avatar name={m.initial} size="lg" color="var(--df-primary)" />
         <div>
           <div style="font-size:21px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{m.name}</div>
           <div style="margin-top:5px;"><StatusBadgeM s={m.status} /></div>
-        </div>
-      </div>
-
-      <div style="background:var(--df-bg-light); border-radius:13px; padding:13px 15px;">
-        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:7px;">
-          <span style="color:var(--df-text-light);">本月出席率</span>
-          <span style="font-weight:700; color:var(--df-text-dark);">{m.att}%</span>
-        </div>
-        <MiniBar value={m.att} tone={m.att >= 80 ? 'success' : 'warning'} height={7} />
-      </div>
-
-      <div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <span style="font-size:12.5px; color:var(--df-text-light);">近六堂出席</span>
-          <span style="font-size:11px; color:var(--df-text-muted);">出 · 缺 · 遲 · 假</span>
-        </div>
-        <div style="display:flex; gap:6px; align-items:center;">
-          {#each m.recent as mk, i (i)}
-            {@const mark = ATT_MARK[mk] || ATT_MARK.p}
-            <span
-              title={mark[1]}
-              style="width:22px; height:22px; border-radius:7px; background:{mark[0]}1F; color:{mark[0]};
-                font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:none;"
-            >{mark[1]}</span>
-          {/each}
         </div>
       </div>
 
@@ -94,11 +60,11 @@
 
   <svelte:fragment slot="footer">
     <button
-      on:click={() => m && toasts.notify('info', '聯絡家長', m.parent + ' · ' + m.phone)}
+      on:click={() => m && toasts.notify('info', '聯絡學員', m.phone || '—')}
       class="df-tapscale"
       style="flex:none; width:54px; height:48px; border-radius:12px; border:1.5px solid var(--df-border);
         background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;"
-      aria-label="聯絡家長"
+      aria-label="聯絡學員"
     >
       <Icon name="phone" size={19} color="var(--df-primary)" />
     </button>

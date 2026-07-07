@@ -9,9 +9,6 @@
 
   // Map level to Badge tone
   const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {
-    '初級': 'success',
-    '中級': 'primary',
-    '高級': 'info',
     '青少年': 'warning',
     '客製化': 'accent',
     '體驗': 'info',
@@ -19,12 +16,13 @@
     '競技': 'error',
     '成人': 'primary',
     // FE#17 補完：5 級課程分級（$lib/domain/course-level 共用常數）色階對齊
-    // admin/member/mobile 既有的 LEVEL_TONE，避免 foundation/elite 落回預設 primary。
+    // admin/member/mobile/mobile-admin 既有的 LEVEL_TONE（啟蒙/入門 info、基礎
+    // primary、進階 warning、選手 accent），避免 foundation/elite 落回預設 primary。
     '啟蒙': 'info',
     '入門': 'info',
     '基礎': 'primary',
     '選手': 'accent',
-    '進階': 'neutral'
+    '進階': 'warning'
   };
 
   $: levelTone = levelTones[course.level] || 'primary';

@@ -104,19 +104,19 @@ Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobi
 `reply = <T>(value: T) => Promise.resolve(value)` (full design:
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
 real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
-`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for the P2-commented gaps that
-have no backend equivalent yet (coach attendance/messages/students — full
-inventory in `docs/adr/0006`); member rewards/reports, the member weekly schedule (`GET /schedule/me`),
-and admin reports/analytics are already real,
-`docs/adr/0006` §5. `mobile`'s getters are a thin wrapper delegating
-straight to `member/api.ts`'s already-real seam instead of calling `reply()` themselves (see
-`docs/adr/0006`); `mobile-admin` is the one surface still calling `reply()` throughout — it hasn't been
-wired to the real API yet (P2). Backend wire shapes shared across ≥2 surfaces — order-status badges,
-list-page envelopes, member/coach paired DTOs, display atoms like `ageRange`/`initialOf` — live in the
-single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy (`docs/adr/0007`).
+`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for a handful of P2-commented gaps
+that have no backend equivalent (or are purely cosmetic) — full inventory in `docs/adr/0006`. `mobile` and
+`mobile-admin` (Round 3, Task 19/20) no longer call `reply()` throughout either: both now hold a thin
+`api.ts` that re-delegates to the real getters already built for their desktop counterpart (`mobile` →
+`$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), falling back to `reply()` only for
+their own small residual mock spots (same ADR 0006 inventory). Backend wire shapes shared across ≥2
+surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, display atoms like
+`ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
+redeclaring its own copy (`docs/adr/0007`).
 Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
-variable, now call `gate.load()` on a `createLoadGate`/`createPagedLoadGate` gate from the single source
-`src/lib/load-gate.ts` (`docs/adr/0008`) and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
+variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
+`createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
+and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store
 (mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
 `*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) passed to the gate as `skip`, with

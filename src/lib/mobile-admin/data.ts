@@ -46,10 +46,7 @@ export type { PctSlice as Split } from '$lib/domain/reports';
 import { CLASSES_BASE } from '$lib/domain/classes';
 import { MEMBERS_BASE } from '$lib/domain/members';
 import { ORDERS_BASE } from '$lib/domain/orders';
-import { tierOf, CAMPUSES, ENROLL_SOURCES } from '$lib/domain/shared';
-// Local bindings used by the MEMBERS derivation AND part of mobile's public API
-// (imported from `$lib/mobile-admin/data` by overlays/MemberForm.svelte).
-export { tierOf, CAMPUSES, ENROLL_SOURCES };
+import { CAMPUSES } from '$lib/domain/shared';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -66,10 +63,13 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 };
 
 /* ---- Classes / 班級 ---- */
+// level/status 窄化為 CLASSES_BASE(`$lib/domain/classes`)本身的字面聯集型別（同
+// 桌面 admin/data.ts 的 ClassRow）——course-request.ts 的 buildCourseBody() 要求
+// 這兩個窄型別，鬆散的 string 無法安全傳入。
 export interface ClassRow {
 	id: string;
 	name: string;
-	level: string;
+	level: '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 	cat: string;
 	coach: string;
 	room: string;
@@ -79,71 +79,62 @@ export interface ClassRow {
 	cap: number;
 	age: string;
 	price: number;
-	status: string;
+	status: '招生中' | '候補' | '額滿';
 	wait: number;
 	term: string;
 	sessions: number;
 	startDate: string;
 	checkinRate: number;
 	makeup: number;
+	/** 單堂時長（分鐘，FE#18）——同桌面 admin/data.ts ClassRow.durationMinutes，
+	 *  POST/PATCH /courses 的 duration_minutes 直接映射；新增/編輯流程皆收集
+	 *  （見 ClassForm.svelte），Task 20 起隨真接線一併加入。 */
+	durationMinutes: number;
 }
 export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
 	...k,
 	startDate: '2026/03/' + String((i % 27) + 1).padStart(2, '0'),
 	checkinRate: 86 + (i % 12),
-	makeup: i % 3
+	makeup: i % 3,
+	durationMinutes: 90
 }));
 
 /* ---- Members / 學員 ----
-   pay: paid 已繳清 / due 待續費 / trial 體驗中 · remain 剩餘堂數 · recent 近六堂 p出席 a缺席 l遲到 v請假 */
+ * Task 20：改為 GET /users 的帳號形狀（id/name/initial/phone/joined/status/
+ * points）——同桌面 admin/data.ts 的 MemberAccount。桌面 admin/members 頁自己
+ * 早在 Task 16 就已改吃這個「誠實、精簡」形狀（見該檔註解：MembersTable 是
+ * "honest, slimmed table — no course/campus/coach/attendance/pay/tier columns
+ * (P2: no backend data source)"）；行動版學員頁 / MemberSheet / MemberForm 接
+ * 真 API 時一併鏡射同一個決定——舊版 course/coach/att/parent/age/pay/remain/
+ * lastSeen/recent/emName/emPhone/campus/source/birthday/tier/tierColor/
+ * renewDue/lineId 這些欄位在真後端從未存在過，繼續留著只會讓假資料看起來更豐富，
+ * 不會讓它變真。status 由 3 態（active/warning/paused，出席率導向）改為 GET
+ * /users 的 is_active 二元旗標語意（active/inactive）。 */
+export type MemberAccountStatus = 'active' | 'inactive';
 export interface MemberRow {
 	id: string;
 	name: string;
 	initial: string;
-	color: string;
-	course: string;
-	coach: string;
-	att: number;
-	status: 'active' | 'warning' | 'paused';
-	age: number;
-	parent: string;
 	phone: string;
 	joined: string;
+	status: MemberAccountStatus;
 	points: number;
-	pay: 'paid' | 'due' | 'trial';
-	remain: number;
-	lastSeen: string;
-	recent: string[];
-	emName: string;
-	emPhone: string;
-	campus: string;
-	source: string;
-	birthday: string;
-	tier: string;
-	tierColor: string;
-	renewDue: string;
-	lineId: string;
 }
-export const MEMBERS: MemberRow[] = MEMBERS_BASE.map((m, i) => {
-	const by = 2026 - m.age;
-	const [tier, tierColor] = tierOf(m.points);
-	const renewDue = m.pay === 'trial' ? '體驗 06/30 到期' : m.pay === 'due' ? '已逾期 · ' + ['05/28', '06/01', '06/03', '06/05'][i % 4] : '2026/' + ['09', '10', '11', '12'][i % 4] + '/15';
-	return {
-		...(m as Omit<MemberRow, 'campus' | 'source' | 'birthday' | 'tier' | 'tierColor' | 'renewDue' | 'lineId'>),
-		campus: CAMPUSES[i % CAMPUSES.length],
-		source: ENROLL_SOURCES[(i * 2 + 1) % ENROLL_SOURCES.length],
-		birthday: by + '/' + String((i * 5) % 12 + 1).padStart(2, '0') + '/' + String((i * 7) % 27 + 1).padStart(2, '0'),
-		tier,
-		tierColor,
-		renewDue,
-		lineId: '@df' + m.id.slice(-4)
-	};
-});
-
-export const PAY_STATUS: Record<string, Tone> = { paid: ['success', '已繳清'], due: ['warning', '待續費'], trial: ['info', '體驗中'] };
-export const ATT_MARK: Record<string, [string, string]> = { p: ['#10B981', '出'], a: ['#EF4444', '缺'], l: ['#F59E0B', '遲'], v: ['#94A3B8', '假'] };
+export const MEMBERS: MemberRow[] = MEMBERS_BASE.map((m) => ({
+	id: m.id,
+	name: m.name,
+	initial: m.initial,
+	phone: m.phone,
+	joined: m.joined,
+	status: m.status === 'paused' ? 'inactive' : 'active',
+	points: m.points
+}));
 
 /* ---- Orders / 訂單 ---- */
+// Task 20：同桌面 admin/data.ts 的 OrderStatus（FE#18 起widened 為真後端 GET /orders
+// admin 的完整 6 態），OrderRow.status 不再窄化成 3 態——ORDERS_BASE(`$lib/domain/
+// orders`)本身已是 6 態型別，這裡直接沿用同一型別，不用不安全的 cast 硬塞。
+export type OrderStatus = 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
 export interface OrderRow {
 	id: string;
 	member: string;
@@ -151,7 +142,7 @@ export interface OrderRow {
 	color: string;
 	item: string;
 	amount: number;
-	status: 'paid' | 'pending' | 'refunded';
+	status: OrderStatus;
 	method: string;
 	date: string;
 	invoice: string;
@@ -163,17 +154,29 @@ export interface OrderRow {
 	net: number;
 	paidAt: string;
 	taxId: string;
+	// Task 20：真實後端訂單 UUID（PATCH /orders/{id}/status 要用這個，不是上面顯示用
+	// 的 `id`——後者其實是 order_number，同桌面 admin/data.ts Order.orderId 的附註）。
+	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
+	orderId: string;
 }
 export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => ({
-	...(o as Omit<OrderRow, 'campus' | 'tax' | 'net' | 'paidAt' | 'taxId'>),
+	...o,
 	campus: CAMPUSES[i % CAMPUSES.length],
 	tax: Math.round(o.amount - o.amount / 1.05),
 	net: o.amount - Math.round(o.amount - o.amount / 1.05),
 	paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
-	taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—'
+	taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
+	orderId: o.id
 }));
 
-export const ORDER_STATUS: Record<string, Tone> = { paid: ['success', '已付款'], pending: ['warning', '待付款'], refunded: ['neutral', '已退款'] };
+export const ORDER_STATUS: Record<OrderStatus, Tone> = {
+	pending: ['warning', '待付款'],
+	paid: ['success', '已付款'],
+	processing: ['info', '處理中'],
+	completed: ['neutral', '已完成'],
+	cancelled: ['error', '已取消'],
+	refunded: ['neutral', '已退款']
+};
 
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {
@@ -274,18 +277,14 @@ export const COACH_NOTIFS: AdminNotif[] = [
 	{ icon: 'award', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', title: '評核待更新', body: '選手班 3 位學員技能評量待更新', time: '昨天 16:05', unread: false }
 ];
 
-export const MEMBER_STATUS: Record<string, Tone> = { active: ['success', '在學中'], warning: ['warning', '出席偏低'], paused: ['neutral', '暫停中'] };
+// Task 20：MemberAccountStatus 專用（GET /users 的 is_active 布林值）——語意跟舊 3 態
+// （出席率導向）不同，同桌面 admin/data.ts 的 MEMBER_ACCOUNT_STATUS 標籤。
+export const MEMBER_STATUS: Record<MemberAccountStatus, Tone> = {
+	active: ['success', '啟用中'],
+	inactive: ['neutral', '已停用']
+};
 export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
 export const STATUS_TONE: Record<string, string> = { 招生中: 'success', 候補: 'warning', 額滿: 'neutral' };
-
-/* ---- Skill assessments (keyed by member id) ---- */
-export const SKILLS: Record<string, Skill[]> = {
-	GY2024001: [['前滾翻', 95], ['後手翻', 88], ['側翻', 92]],
-	GY2024006: [['前滾翻', 90], ['後手翻', 84], ['倒立', 78]],
-	GY2024010: [['前滾翻', 97], ['後手翻', 91], ['側翻', 95]],
-	GY2024007: [['前滾翻', 82], ['後手翻', 70], ['倒立', 65]]
-};
-export type Skill = [string, number];
 
 /* ===== 報表分析 data ===== */
 export interface Kpi {

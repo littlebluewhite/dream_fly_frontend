@@ -1,6 +1,7 @@
 <script lang="ts">
   /* Generic ~560px form-modal shell for the admin back-office edit dialogs
-   * (ClassEditDialog / CoachEditDialog / OrderDialog / MemberEditDialog / 變更密碼).
+   * (ClassEditDialog / CoachEditDialog / MemberEditDialog / 變更密碼 — OrderDialog
+   * has since moved to the generic Dialog shell instead).
    * Centered overlay card with a header (optional icon tile + title + subtitle +
    * close X), a scrolling body (default slot) and a footer (取消 secondary +
    * primary primaryLabel). Ported from admin.jsx's EditModal; mirrors the
