@@ -16,7 +16,8 @@ import {
 	getAccount as memberGetAccount,
 	getNotifications as memberGetNotifications,
 	getPoints as memberGetPoints,
-	getReports as memberGetReports
+	getReports as memberGetReports,
+	getReportStats as memberGetReportStats
 } from '$lib/member/api';
 import { ANNOUNCE } from './data';
 
@@ -31,7 +32,8 @@ vi.mock('$lib/member/api', () => ({
 	getAccount: vi.fn(),
 	getNotifications: vi.fn(),
 	getPoints: vi.fn(),
-	getReports: vi.fn()
+	getReports: vi.fn(),
+	getReportStats: vi.fn()
 }));
 
 const CATALOG_FIXTURE = [
@@ -61,6 +63,7 @@ beforeEach(() => {
 	vi.mocked(memberGetNotifications).mockReset().mockResolvedValue([]);
 	vi.mocked(memberGetPoints).mockReset().mockResolvedValue({ rewards: [], expiring: '360 點', expiryDate: '2026/12/31' });
 	vi.mocked(memberGetReports).mockReset().mockResolvedValue({ reportCards: [], certificates: [], stats: { attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 } });
+	vi.mocked(memberGetReportStats).mockReset().mockResolvedValue({ attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 });
 });
 
 describe('getHome — 復用桌面 getCourses()/getMine()，薄映射 icon', () => {
@@ -91,17 +94,35 @@ describe('getCourses — 復用桌面 getCourses()，同 icon 薄映射', () => 
 	});
 });
 
-describe('getMine — courses 復用桌面 getMine()，schedule 復用桌面 getSchedule()', () => {
-	it('平行拉取兩支桌面 seam，courses/schedule 皆透傳', async () => {
+describe('getMine — courses 復用桌面 getMine()，schedule 復用桌面 getSchedule()，stats 復用桌面 getReportStats()', () => {
+	it('平行拉取三支桌面 seam，courses/schedule 皆透傳', async () => {
 		const d = await getMine();
 		expect(d.courses).toBe(MY_COURSES_FIXTURE);
 		expect(d.schedule).toBe(SCHEDULE_FIXTURE);
 	});
-	it('attendanceRate/streak/skillsMastered 後端無來源，沿用 mock 字串(P2)', async () => {
+	it('attendanceRate/upcomingSessions7d/attendedTotal 原樣透傳桌面 getReportStats()(不在 api.ts 層格式化)', async () => {
+		vi.mocked(memberGetReportStats).mockResolvedValue({
+			attendedTotal: 24,
+			attendanceRate: 0.88,
+			pointsBalance: 999,
+			activeEnrolments: 3,
+			upcomingSessions7d: 5
+		});
 		const d = await getMine();
-		expect(d.attendanceRate).toBe('95%');
-		expect(d.streak).toBe('14');
-		expect(d.skillsMastered).toBe('8');
+		expect(d.attendanceRate).toBe(0.88);
+		expect(d.upcomingSessions7d).toBe(5);
+		expect(d.attendedTotal).toBe(24);
+	});
+	it('attendanceRate 為 null(無出勤資料，裁決 3)時原樣穿透為 null，不竄改成字串或 0', async () => {
+		vi.mocked(memberGetReportStats).mockResolvedValue({
+			attendedTotal: 0,
+			attendanceRate: null,
+			pointsBalance: 0,
+			activeEnrolments: 0,
+			upcomingSessions7d: 0
+		});
+		const d = await getMine();
+		expect(d.attendanceRate).toBeNull();
 	});
 });
 

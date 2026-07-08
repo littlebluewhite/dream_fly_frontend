@@ -3,10 +3,12 @@
    * 摘要統計 + 本週日程 + 報名課程卡（出席進度 / 下次上課）。
    *
    * 資料改由 getMine()(mock-API 接縫)非同步取得:onMount 進三態閘門
-   * (loading/error/ready);摘要統計(出席率/連續到課/已掌握技巧)原為頁面硬編
-   * 字串,一併移入接縫。「本季報名 N 門 · 季別」的季別原重複硬編 '2026 春季',
-   * 改由 courses[0].term 衍生(與課程卡本身同一欄位同源,不留雙來源)。
-   * 報名課程為空陣列時走 MEmpty,不留白。 */
+   * (loading/error/ready)。摘要統計三卡改接真後端(GET /reports/me,§3.24):
+   * 出席率為 null(無出勤資料,裁決 3)時顯示「—」,不是 0%——由本頁(顯示層)判斷,
+   * api.ts 只原樣透傳 attendanceRate。原「連續到課」/「已掌握技巧」兩卡後端無
+   * 對應概念,換成後端真有的「7 日內場次」/「累計出席」。「本季報名 N 門 · 季別」
+   * 的季別原重複硬編 '2026 春季',改由 courses[0].term 衍生(與課程卡本身同一
+   * 欄位同源,不留雙來源)。報名課程為空陣列時走 MEmpty,不留白。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
@@ -37,6 +39,9 @@
 
   $: courses = data?.courses ?? [];
   $: schedule = data?.schedule ?? [];
+  // 出席率 null(無出勤資料,裁決 3)顯示「—」,不是 0%(0% 會誤導成「有資料、
+  // 出席率為零」)——api.ts 只原樣透傳 attendanceRate,null 語意在此顯示層判斷。
+  $: attendanceRateLabel = !data || data.attendanceRate == null ? '—' : `${Math.round(data.attendanceRate * 100)}%`;
 </script>
 
 {#if $gate === 'ready' && data}
@@ -47,11 +52,11 @@
     <!-- summary -->
     <Card padding={16}>
       <div style="display:flex; align-items:center;">
-        <StatTile value={data.attendanceRate} label="本月出席率" />
+        <StatTile value={attendanceRateLabel} label="本月出席率" />
         <Divider />
-        <StatTile value={data.streak} label="連續到課" color="var(--df-accent-dark)" />
+        <StatTile value={data.upcomingSessions7d} label="7 日內場次" color="var(--df-accent-dark)" />
         <Divider />
-        <StatTile value={data.skillsMastered} label="已掌握技巧" color="var(--df-success)" />
+        <StatTile value={data.attendedTotal} label="累計出席" color="var(--df-success)" />
       </div>
     </Card>
 

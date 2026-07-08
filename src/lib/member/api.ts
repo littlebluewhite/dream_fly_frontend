@@ -47,20 +47,29 @@ async function activeEnrolments(): Promise<ApiEnrolment[]> {
 }
 
 /** 儀表板 — nextClass 來自最新一筆有效報名的 schedule_text（沒有報名則空字串）；
- *  track 後端無對應資料，一律空字串。me/stats/skills/upcoming/announce 不在本次
- *  映射範圍內（無後端資料源、頁面也不直接讀 store），沿用 mock。
+ *  track 後端無對應資料，一律空字串。stats 三卡(報名課程數/本月出席率/會員點數)
+ *  改接 GET /reports/me(經 getReportStats() 映射,§3.24)——只換 value,icon/tint/
+ *  color/label 沿用既有 STATS 版型；attendanceRate 為 null(無點名資料,裁決 3)
+ *  顯示「—」,不是 0%(0% 會誤導成「有資料、出席率為零」)。skills/upcoming/announce
+ *  不在本次映射範圍內(無後端資料源、頁面也不直接讀 store),沿用 mock。
  *  順手 refresh points/notifications store —— 這是會員登入後第一個會進的頁面，
  *  讓 Topbar/Sidebar 的未讀角標、CheckoutDialog 的 $points 一開始就是真資料，不用
  *  等使用者先逛過點數頁/通知頁才 hydrate。這兩支只是「順便」，失敗不影響 dashboard
  *  本身能否顯示，所以用 allSettled、只記錄錯誤（同 stores.ts 的 placeOrder() 對
  *  post-checkout hydrate 失敗的處理方式）。 */
 export const getDashboard = async (): Promise<DashboardData> => {
-  const active = await activeEnrolments();
+  const [active, stats] = await Promise.all([activeEnrolments(), getReportStats()]);
   const [pointsResult, notifResult] = await Promise.allSettled([refreshPoints(), refreshNotifications()]);
   if (pointsResult.status === 'rejected') console.error('getDashboard: 點數 hydrate 失敗', pointsResult.reason);
   if (notifResult.status === 'rejected') console.error('getDashboard: 通知 hydrate 失敗', notifResult.reason);
   return {
-    me: me(), stats: STATS, skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
+    me: me(),
+    stats: [
+      { ...STATS[0], value: String(stats.activeEnrolments) },
+      { ...STATS[1], value: stats.attendanceRate == null ? '—' : `${Math.round(stats.attendanceRate * 100)}%` },
+      { ...STATS[2], value: stats.pointsBalance.toLocaleString('en-US') }
+    ],
+    skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
     nextClass: active[0]?.schedule_text ?? '',
     track: ''
   };
@@ -137,6 +146,14 @@ function mapReportStats(s: ApiMemberReportStats): MemberReportStats {
   };
 }
 
+/** GET /reports/me 統計欄位(§3.24)——member 桌面 getDashboard() 與 mobile
+ *  getMine() 共用同一支端點，不透過下面的 getReports()(那支順帶抓 report-cards/
+ *  certificates，兩處都用不到)。 */
+export const getReportStats = async (): Promise<MemberReportStats> => {
+  const stats = await api<ApiMemberReportStats>('/reports/me');
+  return mapReportStats(stats);
+};
+
 export interface ReportsData {
   reportCards: ReportCard[];
   certificates: Certificate[];
@@ -151,12 +168,12 @@ export const getReports = async (): Promise<ReportsData> => {
   const [reportCards, certificates, stats] = await Promise.all([
     api<ApiReportCard[]>('/report-cards/me'),
     api<ApiCertificate[]>('/certificates/me'),
-    api<ApiMemberReportStats>('/reports/me')
+    getReportStats()
   ]);
   return {
     reportCards: reportCards.map(mapReportCard),
     certificates: certificates.map(mapCertificate),
-    stats: mapReportStats(stats)
+    stats
   };
 };
 

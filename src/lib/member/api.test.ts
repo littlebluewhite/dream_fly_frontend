@@ -49,13 +49,29 @@ beforeEach(() => {
 });
 
 describe('getDashboard', () => {
-  it('nextClass 來自最新一筆有效報名的 schedule_text；track 空字串；me/stats/skills/upcoming/announce 仍是 mock', async () => {
+  const STATS_API = {
+    attended_total: 18,
+    attendance_rate: 0.9,
+    points_balance: 1250,
+    active_enrolments: 2,
+    upcoming_sessions_7d: 3
+  };
+  const EMPTY_STATS_API = {
+    attended_total: 0,
+    attendance_rate: null,
+    points_balance: 0,
+    active_enrolments: 0,
+    upcoming_sessions_7d: 0
+  };
+
+  it('nextClass 來自最新一筆有效報名的 schedule_text；track 空字串；skills/upcoming/announce 仍是 mock；stats 三卡改接 GET /reports/me(只換 value,icon/tint/color/label 沿用 STATS 版型)', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
           { id: 'e1', course_id: 'c1', course_name: '競技啦啦隊 進階班', course_level: 'advanced', schedule_text: '週二 / 週四 19:00–20:30', status: 'active', enrolled_at: '2026-06-01T00:00:00Z' },
           { id: 'e2', course_id: 'c2', course_name: '已取消課程', course_level: 'beginner', schedule_text: '週三 10:00', status: 'cancelled', enrolled_at: '2026-01-01T00:00:00Z' }
         ],
+        'GET /reports/me': STATS_API,
         'GET /points/me': { balance: 500, ledger: [] },
         'GET /notifications': []
       })
@@ -64,15 +80,40 @@ describe('getDashboard', () => {
     const d = await getDashboard();
 
     expect(d).toEqual({
-      me: ME, stats: STATS, skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
+      me: ME,
+      stats: [
+        { ...STATS[0], value: '2' },
+        { ...STATS[1], value: '90%' },
+        { ...STATS[2], value: '1,250' }
+      ],
+      skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
       nextClass: '週二 / 週四 19:00–20:30',
       track: ''
     });
   });
 
+  it('attendanceRate 為 null(無點名資料，裁決 3)時 stats[1].value 顯示「—」，不是 0%', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /notifications': []
+      })
+    );
+
+    const d = await getDashboard();
+    expect(d.stats[1].value).toBe('—');
+  });
+
   it('沒有任何有效報名時 nextClass 為空字串', async () => {
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'GET /enrolments/me': [], 'GET /points/me': { balance: 0, ledger: [] }, 'GET /notifications': [] })
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /notifications': []
+      })
     );
 
     const d = await getDashboard();
@@ -83,6 +124,7 @@ describe('getDashboard', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
         'GET /points/me': { balance: 777, ledger: [] },
         'GET /notifications': [
           { id: 'n1', type: 'order_placed', title: '付款成功', message: '訂單已完成', is_read: false, metadata: null, created_at: '2026-07-04T06:00:00Z' }
@@ -102,6 +144,7 @@ describe('getDashboard', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
         'GET /points/me': new Error('network down'),
         'GET /notifications': []
       })
@@ -113,7 +156,12 @@ describe('getDashboard', () => {
 
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'GET /enrolments/me': [], 'GET /points/me': { balance: 0, ledger: [] }, 'GET /notifications': [] })
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /notifications': []
+      })
     );
     expect(getDashboard()).toBeInstanceOf(Promise);
   });

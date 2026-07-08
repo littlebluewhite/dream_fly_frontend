@@ -20,6 +20,7 @@ import {
 	getNotifications as memberGetNotifications,
 	getPoints as memberGetPoints,
 	getReports as memberGetReports,
+	getReportStats as memberGetReportStats,
 	type PointsData,
 	type Reward,
 	type ReportsData
@@ -74,22 +75,31 @@ export const getCourses = async (): Promise<MobileCoursesData> => {
 export interface MineData {
 	courses: MyCourse[];
 	schedule: ScheduleBlock[];
-	attendanceRate: string;
-	streak: string;
-	skillsMastered: string;
+	attendanceRate: number | null; // GET /reports/me attendance_rate 原樣透傳；null(無出勤資料，
+	                                // 裁決 3)時顯示層(mine/+page.svelte)渲染「—」，不是 0%
+	upcomingSessions7d: number; // 7 日內場次
+	attendedTotal: number; // 累計出席
 }
 
 /** 我的課程 — courses 復用桌面 getMine().courses；schedule 復用桌面
- *  getSchedule().schedule(Task 9 週課表 seam)。兩者互不相依，平行拉取。
- *  // P2: attendanceRate(本月出席率)/streak(連續到課)/skillsMastered(已掌握
- *  技巧)三個摘要統計後端皆無對應資料源，沿用 mock 字串——streak/skillsMastered
- *  後端完全沒有對應概念(無「連續到課天數」「技巧掌握度」欄位)；attendanceRate
- *  雖然 getReports().stats.attendanceRate 已有真值，但桌面自己的 dashboard 摘要
- *  卡(STATS)至今也還沒接上這個真值、仍是同一份 mock —— 此處鏡射桌面尚未做的
- *  決定，不搶先在行動版單獨接線製造兩側不一致。 */
+ *  getSchedule().schedule(Task 9 週課表 seam);stats 復用桌面 getReportStats()
+ *  (GET /reports/me,§3.24)。三者互不相依，平行拉取。
+ *  原 streak(連續到課)/skillsMastered(已掌握技巧)後端無對應概念(無「連續到課
+ *  天數」「技巧掌握度」欄位)，換成後端真有的 upcomingSessions7d/attendedTotal
+ *  兩個欄位(UI 卡片標籤同步改為「7 日內場次」/「累計出席」，見 mine/+page.svelte)。 */
 export const getMine = async (): Promise<MineData> => {
-	const [{ courses }, { schedule }] = await Promise.all([memberGetMine(), memberGetSchedule()]);
-	return { courses, schedule, attendanceRate: '95%', streak: '14', skillsMastered: '8' };
+	const [{ courses }, { schedule }, stats] = await Promise.all([
+		memberGetMine(),
+		memberGetSchedule(),
+		memberGetReportStats()
+	]);
+	return {
+		courses,
+		schedule,
+		attendanceRate: stats.attendanceRate,
+		upcomingSessions7d: stats.upcomingSessions7d,
+		attendedTotal: stats.attendedTotal
+	};
 };
 
 export interface MobileAccountData {
