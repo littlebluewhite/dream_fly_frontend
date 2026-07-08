@@ -24,6 +24,8 @@ import {
 	updateOrderStatus,
 	getCoupons,
 	createCoupon,
+	updateCoupon,
+	deleteCoupon,
 	createMember,
 	updateMember
 } from './api';
@@ -734,6 +736,40 @@ describe('createCoupon — POST /coupons（admin，Task 8 piece 3）', () => {
 		await expect(createCoupon({ code: 'DUP', discount_cents: 100 })).rejects.toThrow(
 			'coupon code already exists'
 		);
+	});
+});
+
+describe('updateCoupon — PATCH /coupons/{id}（admin，Task F6：優惠碼編輯/停用接線）', () => {
+	it('PATCHes /coupons/{id} with the given (partial) body and returns the CouponResponse', async () => {
+		const updated = {
+			id: 'cp1', code: 'SPRING10', discount_cents: 45000, is_active: false, expires_at: null, created_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /coupons/cp1': updated }));
+
+		const body = { discount_cents: 45000, is_active: false, expires_at: null };
+		const result = await updateCoupon('cp1', body);
+
+		expect(api).toHaveBeenCalledWith('/coupons/cp1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual(updated);
+	});
+
+	it('propagates a rejected request (e.g. 404 查無此 coupon) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /coupons/missing': new Error('not found') }));
+		await expect(updateCoupon('missing', { is_active: false })).rejects.toThrow('not found');
+	});
+});
+
+describe('deleteCoupon — DELETE /coupons/{id}（admin，Task F6：優惠碼刪除接線）', () => {
+	it('DELETEs /coupons/{id} and resolves with no value (204 No Content)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /coupons/cp1': undefined }));
+
+		await expect(deleteCoupon('cp1')).resolves.toBeUndefined();
+		expect(api).toHaveBeenCalledWith('/coupons/cp1', { method: 'DELETE' });
+	});
+
+	it('propagates a rejected request (e.g. 404 查無此 coupon) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /coupons/missing': new Error('not found') }));
+		await expect(deleteCoupon('missing')).rejects.toThrow('not found');
 	});
 });
 

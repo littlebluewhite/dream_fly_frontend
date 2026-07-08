@@ -537,10 +537,14 @@ export interface UpdateMemberBody {
 export const updateMember = (id: string, body: UpdateMemberBody): Promise<MemberAccount> =>
 	api<ApiUserAccount>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then(mapMemberAccount);
 
-/* ═════════════════════════ 優惠碼（GET /coupons、POST /coupons，admin-only，Task 8 piece 3） ═════════════════════════
- * 後端只有「建立 + 列表」，沒有 update/delete 端點（issue #4 已註記，本輪刻意不開新
- * 端點）——對應頁面（routes/admin/coupons）只做列表 + 建立，不渲染編輯/刪除（同
- * MembersTable 對缺端點欄位的處理原則：沒有端點就誠實不做，不留假按鈕）。 */
+/* ═════════════════════════ 優惠碼（GET/POST/PATCH/DELETE /coupons，admin-only；
+ * Task 8 piece 3 建立+列表，Task F6 補上編輯/停用/刪除） ═════════════════════════
+ * 契約 §3.9：PATCH 不可改 code（對外發放的識別，不在 body 中）；DELETE 為硬刪除，
+ * 語意上「停用」（is_active:false）才是主要路徑，DELETE 留給誤建且尚未被使用的
+ * code（orders 只存 code 字串快照、無 FK，刪除不影響歷史訂單）——UI 對應把刪除放在
+ * CouponCreateDialog 編輯模式最下方的危險區，需先經確認對話框（見
+ * routes/admin/coupons/+page.svelte）才會真的送出；列表列的「編輯」「停用/啟用」
+ * 則是一鍵直達的主要路徑，不需要確認。 */
 
 export interface ApiCoupon {
 	id: string;
@@ -594,3 +598,24 @@ export interface CreateCouponBody {
 
 export const createCoupon = (body: CreateCouponBody): Promise<ApiCoupon> =>
 	api<ApiCoupon>('/coupons', { method: 'POST', body: JSON.stringify(body) });
+
+export interface UpdateCouponBody {
+	discount_cents?: number;
+	is_active?: boolean;
+	expires_at?: string | null;
+}
+
+/** PATCH /coupons/{id}：discount_cents/is_active/expires_at 皆選填（省略＝維持原
+ *  值），expires_at 明確傳 null 可把到期日清成永久有效。呼叫端（CouponCreateDialog
+ *  編輯模式 + coupons/+page.svelte 的 buildUpdateCouponBody）一律全量送出這三欄，
+ *  不利用「省略」語意——表單本來就持有完整的目前值，沒有「部分欄位」的中介狀態需要
+ *  表達（同 MemberEditDialog/CoachEditDialog 的全量 resend 慣例）。 */
+export const updateCoupon = (id: string, body: UpdateCouponBody): Promise<ApiCoupon> =>
+	api<ApiCoupon>(`/coupons/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+/** DELETE /coupons/{id} → 204 No Content（同 member/waitlist.ts cancelWaitlist 的
+ *  DELETE 慣例，api() 對 204 回傳 undefined，見 client.ts）。硬刪除，語意見本節開頭
+ *  註解——呼叫端必須先經過確認步驟才能呼叫這支。 */
+export async function deleteCoupon(id: string): Promise<void> {
+	await api(`/coupons/${id}`, { method: 'DELETE' });
+}

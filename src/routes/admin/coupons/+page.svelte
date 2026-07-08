@@ -1,26 +1,46 @@
 <script lang="ts">
-  /* 優惠碼管理 — Task 8 piece 3：新頁面。後端只有 GET /coupons（列表）與 POST
-   * /coupons（建立），沒有 update/delete 端點（issue #4 已註記，本輪刻意不開新
-   * 端點），所以這裡沒有編輯/刪除欄或按鈕——同 MembersTable 對缺端點欄位的處理
-   * 原則：沒有端點就誠實不做，不留假控制項。
+  /* 優惠碼管理 — Task 8 piece 3：新頁面（列表 + 建立）。Task F6：後端已補上
+   * PATCH/DELETE /coupons/{id}（契約 §3.9），這裡接上編輯／停用啟用／刪除。
    *
-   * 三態載入（loading/error/ready）同其餘 admin 頁慣例。建立成功後重新整包呼叫
-   * GET /coupons 刷新列表（優惠碼清單量小，重新拉取比手動映射插入更簡單可靠）；
-   * 只有建立本身失敗才顯示錯誤 toast 且不刷新——若建立成功但刷新這一步失敗，
-   * 視為最佳努力（不覆蓋剛才的成功提示，也不算整體失敗）。 */
+   * 停用（PATCH is_active:false）是主要路徑——列表列的「停用/啟用」按鈕一鍵直接呼叫
+   * updateCoupon，不開對話框、也不需要確認步驟（可逆、低風險）。DELETE 是次要、危險
+   * 的路徑，只留給誤建且尚未被使用的 code（orders 只存 code 字串快照、無 FK，刪除
+   * 不影響歷史訂單，但已被使用過的代碼還是該用停用）——所以刪除藏在編輯對話框
+   * （CouponCreateDialog，現已擴為建立/編輯兩用）最下方的危險區，且必須先經過一個
+   * 獨立的確認 Dialog（confirmDelete）才會真的送出 DELETE。
+   *
+   * 三態載入（loading/error/ready）同其餘 admin 頁慣例。建立/編輯/停用啟用成功後一律
+   * gate.silentRefresh() 重新整包刷新列表；失敗顯示繁中錯誤 toast——建立/編輯對話框
+   * 維持開啟以便修正重試（同 tickets/venues 頁慣例），刪除確認對話框則無論成敗都
+   * 關閉（沒有「欄位」可修正重試，失敗只能之後從列表重新觸發一次）。 */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Card, Icon, Dialog, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
   import { fmtNT } from '$lib/admin/format';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
-  import { getCoupons, createCoupon, type Coupon, type CreateCouponBody } from '$lib/admin/api';
+  import {
+    getCoupons,
+    createCoupon,
+    updateCoupon,
+    deleteCoupon,
+    type Coupon,
+    type CreateCouponBody,
+    type UpdateCouponBody
+  } from '$lib/admin/api';
+  import { toCents } from '$lib/public/adapters';
   import { ApiError } from '$lib/api/client';
 
+  // Blank 優惠碼 for the 新增 flow (mirrors tickets/venues 頁 blankTicket/blankVenue)。
+  const blankCoupon = (): Coupon => ({ id: '', code: '', discount: 0, active: true, expiresAt: '—' });
+
   let coupons: Coupon[] = [];
-  let createOpen = false;
+  let edit: Coupon | null = null;
+  let editOpen = false;
+  let addNew = false;
+  let deleteTarget: Coupon | null = null;
 
   const gate = createPagedLoadGate({
     fetch: (page) => getCoupons(page),
@@ -30,26 +50,104 @@
     gate.load();
   });
 
-  // 409（代碼重複）/ 422 驗證 / 403 權限 → 對應的繁中錯誤提示；其餘給通用訊息，
-  // 同 classes/orders 頁的 ApiError 判斷慣例。
+  function openEdit(c: Coupon) {
+    addNew = false;
+    edit = c;
+    editOpen = true;
+  }
+  function openNew() {
+    addNew = true;
+    edit = blankCoupon();
+    editOpen = true;
+  }
+  function closeEdit() {
+    editOpen = false;
+    edit = null;
+    addNew = false;
+  }
+
+  // 409（代碼重複）/ 422 驗證 / 403 權限 / 404（操作當下代碼已被別處刪除）→ 對應的
+  // 繁中錯誤提示；其餘給通用訊息，同 tickets/venues 頁的 ApiError 判斷慣例。
   function couponErrorMessage(e: unknown): string {
     if (e instanceof ApiError) {
       if (e.status === 409) return '此優惠碼代碼已存在，請換一組代碼。';
       if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
       if (e.status === 403) return '沒有權限執行此操作。';
+      if (e.status === 404) return '此優惠碼已不存在，請重新整理列表。';
     }
     return '連線發生問題，請稍後再試。';
   }
 
-  async function create(body: CreateCouponBody) {
+  // Coupon（表單形狀）→ POST /coupons：code 不可省略；expires_at 留白（'—'）就整個
+  // 欄位省略（JSON.stringify 略過 undefined），對應「永不過期」。
+  function buildCreateCouponBody(c: Coupon): CreateCouponBody {
+    const body: CreateCouponBody = { code: c.code.trim(), discount_cents: toCents(c.discount) };
+    if (c.expiresAt !== '—') body.expires_at = `${c.expiresAt}T23:59:59Z`;
+    return body;
+  }
+
+  // Coupon（表單形狀）→ PATCH /coupons/{id}：全量送出 discount_cents/is_active/
+  // expires_at 三欄（同全量 resend 慣例，見 admin/api.ts updateCoupon 註解）；
+  // expiresAt 為 '—'（清空）明確送 null，讓後端把到期日清成永久有效。
+  function buildUpdateCouponBody(c: Coupon): UpdateCouponBody {
+    return {
+      discount_cents: toCents(c.discount),
+      is_active: c.active,
+      expires_at: c.expiresAt === '—' ? null : `${c.expiresAt}T23:59:59Z`
+    };
+  }
+
+  async function save(updated: Coupon) {
+    const wasNew = addNew;
     try {
-      await createCoupon(body);
+      if (wasNew) {
+        await createCoupon(buildCreateCouponBody(updated));
+      } else {
+        await updateCoupon(updated.id, buildUpdateCouponBody(updated));
+      }
     } catch (e) {
-      toasts.notify('error', '新增失敗', couponErrorMessage(e));
+      toasts.notify('error', wasNew ? '新增失敗' : '儲存失敗', couponErrorMessage(e));
       return;
     }
-    createOpen = false;
-    toasts.notify('success', '已新增優惠碼', `「${body.code}」已建立。`);
+    closeEdit();
+    toasts.notify(
+      'success',
+      wasNew ? '已新增優惠碼' : '已儲存優惠碼',
+      `「${updated.code}」已${wasNew ? '建立' : '更新'}。`
+    );
+    await gate.silentRefresh();
+  }
+
+  // 列表列「停用/啟用」——一鍵直達，不開對話框、不需確認（可逆、低風險，見檔頭註解）。
+  async function toggleActive(c: Coupon) {
+    try {
+      await updateCoupon(c.id, { is_active: !c.active });
+    } catch (e) {
+      toasts.notify('error', '操作失敗', couponErrorMessage(e));
+      return;
+    }
+    toasts.notify('success', c.active ? '已停用' : '已啟用', `「${c.code}」已${c.active ? '停用' : '啟用'}。`);
+    await gate.silentRefresh();
+  }
+
+  // 刪除——危險區按鈕先關掉編輯對話框、開確認 Dialog；真正的 DELETE 呼叫在
+  // confirmDelete()，使用者按下確認後才會送出。
+  function requestDelete(c: Coupon) {
+    closeEdit();
+    deleteTarget = c;
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    deleteTarget = null;
+    try {
+      await deleteCoupon(target.id);
+    } catch (e) {
+      toasts.notify('error', '刪除失敗', couponErrorMessage(e));
+      return;
+    }
+    toasts.notify('success', '已刪除優惠碼', `「${target.code}」已刪除。`);
     await gate.silentRefresh();
   }
 </script>
@@ -58,7 +156,7 @@
   <div class="view">
     <PageHead title="優惠碼管理" sub={$gate.total + ' 組優惠碼'}>
       <svelte:fragment slot="actions">
-        <Button variant="primary" size="sm" on:click={() => (createOpen = true)}>
+        <Button variant="primary" size="sm" on:click={openNew}>
           <Icon name="plus" size={15} />新增優惠碼
         </Button>
       </svelte:fragment>
@@ -80,6 +178,7 @@
             <th class="th">折扣金額</th>
             <th class="th">狀態</th>
             <th class="th">到期日</th>
+            <th class="th">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -91,11 +190,22 @@
                 <StatusBadge kind="memberAccount" value={c.active ? 'active' : 'inactive'} />
               </td>
               <td class="td td-muted">{c.expiresAt}</td>
+              <td class="td">
+                <div style="display:flex; gap:8px;">
+                  <Button variant="secondary" size="sm" on:click={() => openEdit(c)}>
+                    <Icon name="pencil-line" size={14} style="margin-right:6px;" />編輯
+                  </Button>
+                  <Button variant="secondary" size="sm" on:click={() => toggleActive(c)}>
+                    <Icon name={c.active ? 'circle-x' : 'circle-check'} size={14} style="margin-right:6px;" />
+                    {c.active ? '停用' : '啟用'}
+                  </Button>
+                </div>
+              </td>
             </tr>
           {/each}
           {#if coupons.length === 0}
             <tr>
-              <td colspan="4" class="empty">尚無優惠碼</td>
+              <td colspan="5" class="empty">尚無優惠碼</td>
             </tr>
           {/if}
         </tbody>
@@ -105,7 +215,28 @@
     <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
   </div>
 
-  <CouponCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />
+  <CouponCreateDialog
+    coupon={edit}
+    open={editOpen}
+    isNew={addNew}
+    onClose={closeEdit}
+    onSave={save}
+    onDelete={() => edit && requestDelete(edit)}
+  />
+
+  <Dialog
+    open={deleteTarget !== null}
+    title="刪除優惠碼"
+    onClose={() => (deleteTarget = null)}
+    primaryAction={{ label: '確認刪除', onClick: confirmDelete, variant: 'danger' }}
+    secondaryAction={{ label: '取消', onClick: () => (deleteTarget = null) }}
+  >
+    {#if deleteTarget}
+      <p>
+        確定要刪除優惠碼「{deleteTarget.code}」嗎？此動作僅適用於誤建且尚未被使用的代碼，刪除後無法復原。若此代碼已經有人使用過，請改用「停用」，以免影響歷史訂單的顯示。
+      </p>
+    {/if}
+  </Dialog>
 {:else if $gate.phase === 'error'}
   <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}
