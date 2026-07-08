@@ -39,6 +39,16 @@ describe('sundayGridDays', () => {
 		expect(grid[0]).toBe(1);
 		expect(grid).toHaveLength(28);
 	});
+
+	it('2026-12（年末邊界、週二開始）：31 天、2 前置 null、接 1..31、總長 33、無尾 null', () => {
+		expect(getDaysInMonth(2026, 11)).toBe(31);
+		expect(getFirstDayOfMonth(2026, 11)).toBe(2); // 前提：確為週二開始
+		const grid = sundayGridDays(2026, 11);
+		expect(grid.slice(0, 2)).toEqual([null, null]);
+		expect(grid.slice(2)).toEqual(Array.from({ length: 31 }, (_, i) => i + 1));
+		expect(grid).toHaveLength(33);
+		expect(grid[grid.length - 1]).toBe(31);
+	});
 });
 
 describe('isToday / isPastDate（todayRef 注入，不吃真實時鐘）', () => {

@@ -56,6 +56,7 @@
     </div>
   </div>
 
+  <!-- 僅為 TS 縮小 reports | null:onData 先於 ready,執行期必有值 -->
   {#if reports}
     <div class="df-view" style="display:flex;flex-direction:column;gap:20px">
       <PageHead title="營運總覽" sub="全館即時概況">

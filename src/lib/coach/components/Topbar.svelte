@@ -32,7 +32,6 @@
   let notif = false;
   $: isSchedule = $page.url.pathname === '/coach/schedule';
   $: unread = unreadCount($notifState);
-  $: allRead = unread === 0; // codex r1 (P3): 全部標為已讀 actually clears the unread state
 
   function addClass() {
     toasts.notify('info', '新增課程', '建立新的課程時段（示範）。');
@@ -113,7 +112,7 @@
           </div>
           <div style="max-height:380px;overflow-y:auto">
             {#each $notifState as n, i (i)}
-              {@const rowUnread = !n.read && !allRead}
+              {@const rowUnread = !n.read}
               <button
                 class="df-rowhover"
                 on:click={() => openNotif(n.to)}

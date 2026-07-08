@@ -8,7 +8,7 @@
  * api()，ApiError 用回真實類別。syncCartToServer 是原樣搬入的既有邏輯，這裡只
  * 透過 submitOrder 的呼叫序列間接驗證它被正確串接，不重覆該檔案已有的逐項單測。 */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api, ApiError } from '$lib/api/client';
 import { submitOrder } from './checkout-order';
 import type { ApiOrder } from './checkout-order';
@@ -153,6 +153,10 @@ describe('submitOrder — 失敗路徑', () => {
 });
 
 describe('submitOrder — afterOrder 部分失敗', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('afterOrder 其中一個 promise reject：仍回傳確認、clearCart 仍被呼叫、console.error 被呼叫', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
@@ -165,8 +169,6 @@ describe('submitOrder — afterOrder 部分失敗', () => {
     expect(clearCart).toHaveBeenCalledTimes(1);
     expect(errSpy).toHaveBeenCalledTimes(1);
     expect(errSpy).toHaveBeenCalledWith('Failed to refresh after checkout:', expect.any(Error));
-
-    errSpy.mockRestore();
   });
 });
 

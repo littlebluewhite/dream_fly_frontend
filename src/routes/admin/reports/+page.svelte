@@ -45,6 +45,7 @@
     <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
   </div>
 
+  <!-- 僅為 TS 縮小 data | null:onData 先於 ready,執行期必有值 -->
   {#if data}
     <div style="display:flex; flex-direction:column; gap:20px;">
       <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
