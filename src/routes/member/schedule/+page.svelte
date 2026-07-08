@@ -42,6 +42,7 @@
     </SkelCard>
   </div>
 
+  {#if data}
   {#if data.schedule.length === 0}
     <div class="df-view">
       <EmptyState icon="calendar-x" title="尚未報名任何課程" body="完成報名後，你的每週課表將會在這裡顯示。" />
@@ -92,6 +93,7 @@
       </div>
     </Card>
   </div>
+  {/if}
   {/if}
 
   <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>

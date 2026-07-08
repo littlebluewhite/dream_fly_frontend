@@ -40,6 +40,7 @@
     <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
   </div>
 
+  {#if data && profile}
   <div class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">
       <Card padding={24} style="text-align:center">
@@ -127,6 +128,7 @@
       }}
     />
   </div>
+  {/if}
 
   <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 </LoadGate>

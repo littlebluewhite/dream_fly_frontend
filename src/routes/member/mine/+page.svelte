@@ -98,6 +98,7 @@
     <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
   </div>
 
+  {#if data}
   {#if data.courses.length === 0}
     <div class="df-view">
       <EmptyState
@@ -297,6 +298,7 @@
       {/if}
     </Card>
   </div>
+  {/if}
 
   <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 </LoadGate>

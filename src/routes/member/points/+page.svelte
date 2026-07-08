@@ -91,6 +91,7 @@
     </SkelCard>
   </div>
 
+  {#if data}
   <div class="df-view" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <!-- Left: balance hero + ledger -->
     <div style="display:flex;flex-direction:column;gap:18px">
@@ -172,6 +173,7 @@
       </div>
     </Card>
   </div>
+  {/if}
 
   <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 </LoadGate>

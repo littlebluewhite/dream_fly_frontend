@@ -31,6 +31,7 @@
     </div>
   </div>
 
+  {#if data}
   <div class="df-view" style="display:flex;flex-direction:column;gap:22px">
     <!-- Welcome banner -->
     <div
@@ -124,6 +125,7 @@
       </div>
     </Card>
   </div>
+  {/if}
 
   <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
 </LoadGate>
