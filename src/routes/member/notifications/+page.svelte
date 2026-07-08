@@ -6,7 +6,7 @@
    * it), so all mutations go through the store rather than a local copy. */
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState } from '$lib/components/ui';
+  import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState, LoadGate } from '$lib/components/ui';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getNotifications } from '$lib/member/api';
@@ -59,8 +59,8 @@
   };
 </script>
 
-{#if $gate === 'loading'}
-  <div class="df-view" data-testid="notifs-skeleton">
+<LoadGate {gate}>
+  <div class="df-view" data-testid="notifs-skeleton" slot="loading">
     <div style="display:flex;gap:8px;margin-bottom:18px">
       {#each [60, 50, 50, 50, 50] as w, i (i)}
         <Skeleton {w} h={30} r={999} />
@@ -83,13 +83,7 @@
       {/each}
     </SkelCard>
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view">
-    <Card padding={0}>
-      <ErrorState onRetry={gate.refresh} />
-    </Card>
-  </div>
-{:else}
+
   <div class="df-view">
     <div
       style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px"
@@ -158,7 +152,13 @@
       {/if}
     </Card>
   </div>
-{/if}
+
+  <div class="df-view" slot="error">
+    <Card padding={0}>
+      <ErrorState onRetry={gate.refresh} />
+    </Card>
+  </div>
+</LoadGate>
 
 <style>
   /* Clickable notification row rendered as a real <button> (keyboard-/SR-

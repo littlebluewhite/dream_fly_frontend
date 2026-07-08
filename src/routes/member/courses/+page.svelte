@@ -3,7 +3,7 @@
    * add-to-cart / waitlist, and a course-detail dialog. Ported from the
    * prototype's Courses + CourseDetail (client/views.jsx). */
   import { onMount } from 'svelte';
-  import { Tabs, FilterChip, Card, Badge, Button, Icon, EmptyState, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Tabs, FilterChip, Card, Badge, Button, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
   import { LEVEL_TONE } from '$lib/member/data';
   import type { CatalogCourse } from '$lib/public/adapters';
@@ -64,7 +64,21 @@
   }
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate}>
+  <div class="df-view" data-testid="courses-skeleton" slot="loading">
+    <Skeleton w={320} h={36} r={9} style="margin-bottom:18px" />
+    <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
+      {#each [0, 1, 2, 3] as i (i)}
+        <Skeleton w={72} h={32} r={16} />
+      {/each}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+
   <div class="df-view">
     <Tabs {tabs} bind:value={tab} style="margin-bottom:18px" />
     <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
@@ -142,23 +156,9 @@
 
     <CourseDetailDialog course={detail} onClose={() => (detail = null)} onAdd={addToCart} />
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div class="df-view" data-testid="courses-skeleton">
-    <Skeleton w={320} h={36} r={9} style="margin-bottom:18px" />
-    <div style="display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap">
-      {#each [0, 1, 2, 3] as i (i)}
-        <Skeleton w={72} h={32} r={16} />
-      {/each}
-    </div>
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:18px">
-      {#each [0, 1, 2, 3] as i (i)}
-        <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
-      {/each}
-    </div>
-  </div>
-{/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <style>
   .course-head {
