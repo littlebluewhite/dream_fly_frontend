@@ -12,8 +12,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getStudents } from '$lib/coach/api';
   import { search } from '$lib/coach/stores';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import StudentCard from '$lib/coach/components/StudentCard.svelte';
@@ -78,7 +77,25 @@
   $: lowAttCount = students.filter((s) => s.att < 75).length;
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="students-skeleton" slot="loading">
+    <div><Skeleton w={140} h={26} r={6} /></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <Skeleton w={160} h={38} r={8} />
+      <Skeleton w={160} h={38} r={8} />
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+
 <!-- root: flex col gap 16 — no df-view (layout already provides it) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -136,24 +153,4 @@
 </div>
 <CertificateDialog open={certOpen} student={certStudent} onClose={closeCertificate} />
 <ReportCardDialog open={rcOpen} student={rcStudent} onClose={closeReportCard} />
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px" data-testid="students-skeleton">
-    <div><Skeleton w={140} h={26} r={6} /></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <Skeleton w={160} h={38} r={8} />
-      <Skeleton w={160} h={38} r={8} />
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
-      {/each}
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>
-      {/each}
-    </div>
-  </div>
-{/if}
+</LoadGate>

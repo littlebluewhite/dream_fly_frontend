@@ -11,8 +11,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getToday, type TodayData } from '$lib/coach/api';
   import { coachPath } from '$lib/coach/nav';
-  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Icon from '$lib/components/ui/Icon.svelte';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
@@ -62,7 +61,21 @@
   $: attendancePct = todayClasses.length ? Math.round((attendedCount / todayClasses.length) * 100) : 0;
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="today-skeleton" slot="loading">
+    <Skeleton w={220} h={30} r={8} />
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:18px">
+      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+    </div>
+  </div>
+
+{#if data}
 <!-- root: flex col gap 16 (no df-view per convention) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -171,19 +184,5 @@
     </div>
   </div>
 </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px" data-testid="today-skeleton">
-    <Skeleton w={220} h={30} r={8} />
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
-      {/each}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:18px">
-      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-      <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-    </div>
-  </div>
 {/if}
+</LoadGate>

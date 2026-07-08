@@ -15,8 +15,7 @@
   import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
   import { toasts } from '$lib/coach/stores';
   import { ApiError } from '$lib/api/client';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
   import ClassRow from '$lib/coach/components/ClassRow.svelte';
@@ -176,7 +175,21 @@
   $: messages = conversations.slice(0, 3);
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
+  <div style="display:flex;flex-direction:column;gap:18px" data-testid="coach-home-skeleton" slot="loading">
+    <SkelCard><Skeleton w="100%" h={110} r={14} /></SkelCard>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={90} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 360px;gap:18px">
+      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
+      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
+    </div>
+  </div>
+
+{#if data}
 <div style="display:flex;flex-direction:column;gap:18px">
 
   <!-- ① Gradient welcome hero -->
@@ -364,19 +377,5 @@
   </div>
 
 </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:18px" data-testid="coach-home-skeleton">
-    <SkelCard><Skeleton w="100%" h={110} r={14} /></SkelCard>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-      {#each [0, 1, 2, 3] as i (i)}
-        <SkelCard><Skeleton w="100%" h={90} r={12} /></SkelCard>
-      {/each}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 360px;gap:18px">
-      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
-      <SkelCard><Skeleton w="100%" h={320} r={14} /></SkelCard>
-    </div>
-  </div>
 {/if}
+</LoadGate>

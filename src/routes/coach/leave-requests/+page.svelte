@@ -11,7 +11,7 @@
   import type { CoachLeaveRequest } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
   import { ApiError } from '$lib/api/client';
-  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -62,7 +62,12 @@
   }
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="leave-requests-skeleton" slot="loading">
+    <div><Skeleton w={140} h={26} r={6} /></div>
+    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
+  </div>
+
 <!-- root: flex col gap 16 — no df-view (layout already provides it) -->
 <div style="display:flex;flex-direction:column;gap:16px">
 
@@ -121,11 +126,4 @@
   {/if}
 
 </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px" data-testid="leave-requests-skeleton">
-    <div><Skeleton w={140} h={26} r={6} /></div>
-    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>
