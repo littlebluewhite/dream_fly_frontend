@@ -16,8 +16,8 @@ vi.mock('$lib/admin/api', async (importOriginal) => {
  * coaches prop 預設值是真 COACHES,若頁面漏綁 `{coaches}`,對話框會靜默退回
  * 預設值;用同參照的 COACHES 當 mock payload 就永遠測不出這個漏綁。 */
 const FIXTURE_COACHES: Coach[] = [
-	{ id: 'cx1', name: '測試教練甲', initial: '測', title: '單元測試專用', color: '#0066CC', tags: [], years: 1, students: 0, awards: 0, classes: 0, status: 'online', phone: '0900-000-000' },
-	{ id: 'cx2', name: '測試教練乙', initial: '試', title: '單元測試專用', color: '#10B981', tags: [], years: 2, students: 0, awards: 0, classes: 0, status: 'offline', phone: '0900-000-001' }
+	{ id: 'cx1', userId: 'ux1', name: '測試教練甲', initial: '測', title: '單元測試專用', color: '#0066CC', tags: [], isActive: true },
+	{ id: 'cx2', userId: 'ux2', name: '測試教練乙', initial: '試', title: '單元測試專用', color: '#10B981', tags: [], isActive: false }
 ];
 
 beforeEach(() => {

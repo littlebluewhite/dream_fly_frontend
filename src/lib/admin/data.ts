@@ -16,7 +16,6 @@ export type TicketType = 'ticket' | 'membership' | 'course_package';
 export type VenueStatus = 'available' | 'maintenance';
 export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 export type ClassStatus = '招生中' | '候補' | '額滿';
-export type CoachStatus = 'online' | 'busy' | 'offline';
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
@@ -28,6 +27,21 @@ export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 // Pure pass-throughs (no local use) — re-export domain's value + type verbatim.
 // TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { COACHES, type Coach } from '$lib/domain/coaches';
+
+/** CoachEditDialog（新增/編輯共用一個對話框，Task F5）的 onSave 輸出形狀——UI 端草稿,
+ *  不是 wire body。呼叫端(routes/admin/coaches/+page.svelte)依新增/編輯模式，各自把
+ *  這份草稿拆成 createMember/createCoach 或 updateMember/updateCoach 的實際 body：
+ *  email/password 只在新增模式(isNew)有意義(POST /users)，編輯模式下維持空字串、
+ *  呼叫端不會讀取。name 編輯模式若有變動才觸發 PATCH /users/{user_id}；
+ *  title/tags(=specialties)/isActive(=coaches.is_active)兩種模式皆會送出。 */
+export interface CoachFormValues {
+	email: string;
+	password: string;
+	name: string;
+	title: string;
+	tags: string[];
+	isActive: boolean;
+}
 // TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { VENUES, type Venue } from '$lib/domain/venues';
 // TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import

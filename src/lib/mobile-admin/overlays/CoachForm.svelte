@@ -1,74 +1,72 @@
 <script lang="ts">
-  /* 教練 新增 / 編輯 sheet。forms.jsx CoachForm (121)。
+  /* 教練 新增 / 編輯 sheet。forms.jsx CoachForm (121) 的行動版接線改版。
    * 透過 OverlayHost 掛載：每次 overlay.sheet('coachForm',{c}) 都是新實例。
-   * 儲存 → onSave(rec,isNew)（未提供時退回 store saveCoach），再 onClose()。
    *
-   * Task 20 檢視：教練建立/編輯故意維持本地 store 寫入，未接真後端——admin/api.ts
-   * 沒有 createCoach/updateCoach（GET /coaches 只有讀端點），且這不是行動版獨有
-   * 的缺口：桌面 admin/components/CoachEditDialog.svelte 現在也是同樣的本地
-   * onSave(updated) + 固定成功 toast，同一個 P2（見 issue #4 一類的「後端無此
-   * 端點」清單）。這裡鏡射桌面既有決定，不單獨在行動版發明「誠實降級」文案，避免
-   * 兩個 surface 對同一個缺口顯示不一致的訊息。 */
+   * Task F5：教練新增/編輯改接真 POST /coaches、PATCH /coaches/{id}（桌面
+   * admin/api.ts 新增的 createCoach/updateCoach）——同桌面 CoachEditDialog 的兩步
+   * 流程：新增＝先 POST /users（createMember，Task 16 既有）拿 user_id 再 POST
+   * /coaches；編輯＝姓名有變才 PATCH /users/{user_id}，教練欄位一律 PATCH
+   * /coaches/{id}。契約 §3.2/§3.4 兩組端點接受的欄位完全不同，故本表單依 isNew
+   * 顯示不同欄位組合，同 MemberForm 的分工慣例——保留單一元件、內部切換（不拆兩個
+   * 檔案）。儲存 → onSave(values, isNew)；沒有 onSave 時單純不送出，不再有本地
+   * saveCoach() 假寫入 fallback（同 MemberForm/ClassForm 的決定：沒有後端呼叫者
+   * 就不假裝成功）——兩步 API 呼叫、失敗訊息、成功後刷新皆由呼叫端
+   * （CoachesScreen.svelte）決定。
+   *
+   * 欄位收斂同桌面 CoachEditDialog（Task F5）：移除 years/awards/classes/status(獨立
+   * 線上/忙碌/離線版)/phone/color 等無後端來源欄位；isActive(coaches.is_active)
+   * 取代 status 的開關語意——這個旗標實際控制公開教練頁/課程頁看不看得到這位教練，
+   * 故用誠實的「公開顯示」開關取代，不是假的線上/忙碌裝飾（完整理由見桌面
+   * CoachEditDialog 註解）。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
-  import Select from '$lib/components/ui/Select.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
+  import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { saveCoach } from '$lib/mobile-admin/stores';
-  import { F_COLORS, F_COACH_STATUS } from '$lib/mobile-admin/form-options';
   import type { Coach } from '$lib/mobile-admin/data';
+  import type { CoachFormValues } from '$lib/mobile-admin/api';
 
   export let onClose: () => void;
   export let c: Coach | null = null;
-  export let onSave: ((rec: Coach, isNew: boolean) => void) | undefined = undefined;
+  export let onSave: ((values: CoachFormValues, isNew: boolean) => void) | undefined = undefined;
 
   const isNew = !c;
-  let f: Coach = c
-    ? { ...c }
-    : {
-        id: '',
-        name: '',
-        initial: '',
-        title: '',
-        color: F_COLORS[0],
-        tags: [],
-        years: 0,
-        students: 0,
-        awards: 0,
-        classes: 0,
-        status: 'online',
-        phone: ''
-      };
 
-  let tagsText = (f.tags || []).join('、');
-  let yearsStr = String(f.years ?? '');
-  let studentsStr = String(f.students ?? '');
-  let classesStr = String(f.classes ?? '');
-  let awardsStr = String(f.awards ?? '');
+  let email = '';
+  let name = c?.name ?? '';
+  let password = '';
+  let passwordError = '';
+  let title = c?.title ?? '';
+  let titleError = '';
+  let tagsText = (c?.tags ?? []).join('、');
+  let isActive = c ? c.isActive : true;
 
-  $: stLabel = (F_COACH_STATUS.find(([v]) => v === f.status) || ['', '線上'])[1];
-  $: valid = !!(f.name || '').trim() && !!(f.title || '').trim();
-  $: initial = f.name.trim().charAt(0) || '教';
+  $: initial = name.trim().charAt(0) || '教';
+  $: valid = isNew
+    ? !!email.trim() && !!name.trim() && !!title.trim() && password.length >= 8
+    : !!name.trim() && !!title.trim();
 
-  function setStatus(label: string) {
-    f.status = (F_COACH_STATUS.find(([, l]) => l === label) || ['online'])[0] as Coach['status'];
-  }
   function save() {
-    const rec: Coach = {
-      ...f,
-      initial: f.name.trim().charAt(0) || f.initial || '教',
-      tags: tagsText
-        .split(/[、,，]/)
-        .map((t) => t.trim())
-        .filter(Boolean),
-      years: parseInt(yearsStr, 10) || 0,
-      students: parseInt(studentsStr, 10) || 0,
-      classes: parseInt(classesStr, 10) || 0,
-      awards: parseInt(awardsStr, 10) || 0
-    };
-    if (onSave) onSave(rec, isNew);
-    else saveCoach(rec, isNew);
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      titleError = '請輸入職稱';
+      return;
+    }
+    titleError = '';
+    if (isNew && password.length < 8) {
+      passwordError = '密碼至少需要 8 碼';
+      return;
+    }
+    passwordError = '';
+    const tags = tagsText
+      .split(/[、,，]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    onSave?.(
+      { email: email.trim(), password, name: name.trim(), title: trimmedTitle, tags, isActive },
+      isNew
+    );
     onClose();
   }
 </script>
@@ -78,50 +76,37 @@
   {onClose}
   maxHeight="93%"
   title={isNew ? '新增教練' : '編輯教練'}
-  sub={isNew ? '建立教練檔案' : f.name + ' 教練'}
+  sub={isNew ? '建立教練帳號與檔案' : (c?.name ?? '') + ' 教練'}
 >
   <div style="display:flex; flex-direction:column; gap:16px;">
     <div style="display:flex; align-items:center; gap:13px;">
-      <Avatar name={initial} size="lg" color={f.color} />
+      <Avatar name={initial} size="lg" color="var(--df-primary)" />
       <div style="font-size:12.5px; color:var(--df-text-light); line-height:1.5;">頭像以姓氏首字顯示</div>
     </div>
 
-    <div>
-      <div style="font-size:13px; font-weight:600; color:var(--df-text-dark); margin-bottom:8px;">代表色 / 頭像底色</div>
-      <div style="display:flex; gap:11px;">
-        {#each F_COLORS as col (col)}
-          <button
-            type="button"
-            on:click={() => (f.color = col)}
-            aria-label={'選擇 ' + col}
-            class="df-tapscale"
-            style="width:32px; height:32px; border-radius:999px; background:{col};
-              border:{f.color === col ? '3px solid var(--df-ink)' : '2px solid #fff'};
-              box-shadow:0 0 0 1px var(--df-border); cursor:pointer; flex:none;"
-          ></button>
-        {/each}
-      </div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
-      <Input label="教練姓名" bind:value={f.name} />
-      <Select
-        label="目前狀態"
-        value={stLabel}
-        on:change={(e) => setStatus((e.target as HTMLSelectElement).value)}
-        options={F_COACH_STATUS.map(([, l]) => l)}
-      />
-    </div>
-    <Input label="職稱 / 專業" bind:value={f.title} />
+    {#if isNew}
+      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" />
+    {/if}
+    <Input label="教練姓名" bind:value={name} />
+    <Input label="職稱 / 專業" required error={titleError} bind:value={title} />
     <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
-      <Input label="年資（年）" bind:value={yearsStr} />
-      <Input label="聯絡電話" bind:value={f.phone} />
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px;">
-      <Input label="學員數" bind:value={studentsStr} />
-      <Input label="班級數" bind:value={classesStr} />
-      <Input label="獲獎數" bind:value={awardsStr} />
+    {#if isNew}
+      <Input
+        label="初始密碼"
+        type="password"
+        bind:value={password}
+        placeholder="至少 8 碼"
+        error={passwordError}
+      />
+    {/if}
+    <div style="display:flex; flex-direction:column; gap:4px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:600; color:var(--df-text-dark);">公開顯示</span>
+        <Switch bind:checked={isActive} />
+      </div>
+      <span style="font-size:12px; color:var(--df-text-light);">
+        關閉後，教練不會出現在公開的教練介紹頁與課程頁面中。
+      </span>
     </div>
   </div>
 

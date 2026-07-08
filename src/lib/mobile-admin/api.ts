@@ -17,13 +17,17 @@ import {
 	getMembers as adminGetMembers,
 	createMember,
 	updateMember,
+	createCoach,
+	updateCoach,
 	getOrders as adminGetOrders,
 	updateOrderStatus,
 	getReports as adminGetReports,
 	type CourseWriteBody,
 	type CreateMemberBody,
-	type UpdateMemberBody
+	type UpdateMemberBody,
+	type CoachWriteBody
 } from '$lib/admin/api';
+import type { CoachFormValues } from '$lib/admin/data';
 import {
 	getDashboard as coachGetDashboard,
 	getAttendance as coachGetAttendance,
@@ -61,8 +65,16 @@ import {
 } from './data';
 
 export { CoachNotFoundError };
-export type { CourseWriteBody, CreateMemberBody, UpdateMemberBody, CreateCertificateBody, CreateReportCardBody };
-export { createCourse, updateCourse, mapCourse, createMember, updateMember, updateOrderStatus };
+export type {
+	CourseWriteBody,
+	CreateMemberBody,
+	UpdateMemberBody,
+	CreateCertificateBody,
+	CreateReportCardBody,
+	CoachWriteBody,
+	CoachFormValues
+};
+export { createCourse, updateCourse, mapCourse, createMember, updateMember, createCoach, updateCoach, updateOrderStatus };
 // createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
 // 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
 // 假裝有接這個功能。

@@ -14,6 +14,8 @@ import {
 	getReports,
 	getClasses,
 	getCoaches,
+	createCoach,
+	updateCoach,
 	getMembers,
 	createCourse,
 	updateCourse,
@@ -566,7 +568,7 @@ describe('updateProduct — PATCH /products/{id}（admin，Task F1：票券寫�
 });
 
 describe('getCoaches — GET /coaches（公開端點）', () => {
-	it('name/initial 改用真 name 欄位（不再借用 title）；title 為職稱且不同字；phone/years/students/awards/classes/status 無對應欄位給誠實預設值', async () => {
+	it('name/initial 改用真 name 欄位（不再借用 title）；title 為職稱且不同字；userId 帶 user_id；isActive 直接映射 is_active；phone/years/students/awards/classes/status 已隨欄位收斂移除(Task F5)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /coaches': [
@@ -585,19 +587,86 @@ describe('getCoaches — GET /coaches（公開端點）', () => {
 		expect(d.coaches).toEqual([
 			{
 				id: 'co1',
+				userId: 'u1',
 				name: '林雅婷',
 				initial: '林',
 				title: '資深競技體操教練',
 				color: expect.any(String),
 				tags: ['競技體操', '競技啦啦隊'],
-				years: 0,
-				students: 0,
-				awards: 0,
-				classes: 0,
-				status: 'offline',
-				phone: ''
+				isActive: true
 			}
 		]);
+	});
+
+	it('isActive 為 false 時原樣映射（例：教練檔案已停用/未公開顯示）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /coaches': [
+					{
+						id: 'co2', user_id: 'u2', name: '陳教練', title: '兼任教練', bio: null, experience: null,
+						specialties: [], certifications: [], is_active: false,
+						display_order: 0, slug: null, photo_url: null, created_at: ''
+					}
+				]
+			})
+		);
+		const d = await getCoaches();
+		expect(d.coaches[0].isActive).toBe(false);
+	});
+});
+
+describe('createCoach — POST /coaches（admin，Task F5：教練建立/編輯接線）', () => {
+	it('POSTs the given body as-is and returns the CoachResponse', async () => {
+		const created = {
+			id: 'co-new', user_id: 'u-new', name: '新教練', title: '兼任教練', bio: null, experience: null,
+			specialties: ['跑酷'], certifications: [], is_active: true, display_order: 0, slug: null,
+			photo_url: null, created_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /coaches': created }));
+
+		const body = { user_id: 'u-new', title: '兼任教練', specialties: ['跑酷'], is_active: true };
+		const result = await createCoach(body);
+
+		expect(api).toHaveBeenCalledWith('/coaches', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 404 user_id 查無此使用者) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /coaches': new ApiError(404, 'user not found') })
+		);
+		await expect(createCoach({ user_id: 'missing', title: 'x' })).rejects.toThrow('user not found');
+	});
+
+	it('propagates a rejected request (e.g. 409 該 user 已是教練) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'POST /coaches': new ApiError(409, 'user is already a coach') })
+		);
+		await expect(createCoach({ user_id: 'u1', title: 'x' })).rejects.toThrow('user is already a coach');
+	});
+});
+
+describe('updateCoach — PATCH /coaches/{id}（admin，Task F5：教練建立/編輯接線）', () => {
+	it('PATCHes /coaches/{id} with the given (partial) body and returns the CoachResponse', async () => {
+		const updated = {
+			id: 'co1', user_id: 'u1', name: '林雅婷', title: '改職稱', bio: null, experience: '12年資深教練',
+			specialties: ['競技體操'], certifications: ['國家級'], is_active: false, display_order: 1,
+			slug: null, photo_url: null, created_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /coaches/co1': updated }));
+
+		const body = { title: '改職稱', specialties: ['競技體操'], is_active: false };
+		const result = await updateCoach('co1', body);
+
+		expect(api).toHaveBeenCalledWith('/coaches/co1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual(updated);
+	});
+
+	it('propagates a rejected request (404 查無此教練) to the caller', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /coaches/missing': new ApiError(404, 'coach not found') })
+		);
+		await expect(updateCoach('missing', { title: 'x' })).rejects.toThrow('coach not found');
 	});
 });
 

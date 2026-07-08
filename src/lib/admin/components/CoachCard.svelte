@@ -1,33 +1,23 @@
 <script lang="ts">
   /* 教練卡片 — faithful port of the card rendered inside admin.jsx CoachesView.
-   * Header: Avatar (代表色 + online/busy/offline status dot) + 姓名 (＋教練 suffix
-   * and a small status label from coach-status) + 職稱 (primary colour) + 專長
-   * tag chips, with an edit pencil IconButton. Middle: a 4-up stat grid
-   * (年資 / 學員 / 班級 / 獲獎 — source order). Footer: 聯絡 + 課表 buttons.
+   * Header: Avatar (代表色，純視覺裝飾) + 姓名(＋教練 suffix)＋公開顯示狀態 + 職稱
+   * (primary colour) + 專長 tag chips，with an edit pencil IconButton。Footer: 課表。
    *
-   * The pencil fires onEdit(coach); 聯絡 / 課表 emit the same info toasts the
-   * source does. The status label/colour come from the pure coach-status helper
-   * so the inline dot matches the Avatar status dot. */
+   * Task F5：欄位收斂——年資/學員/班級/獲獎 4-up 統計格與線上/忙碌/離線狀態點皆無
+   * 後端來源，已移除(同 CoachEditDialog 欄位收斂理由，見 admin/api.ts mapCoach()
+   * 註解：classes/students 統計已有真實來源 getReports()，不是這張卡片的職責)；
+   * 聯絡按鈕(原顯示 coach.phone)一併移除——phone 無對應後端欄位。狀態改顯示
+   * isActive(coaches.is_active)：這個旗標實際控制公開教練頁/課程頁看不看得到這位
+   * 教練，故標籤誠實寫「公開顯示中／未公開顯示」，不是假的線上/忙碌裝飾。
+   *
+   * The pencil fires onEdit(coach); 課表 emits the same info toast the source does. */
   import { Avatar, Card, Button, IconButton, Icon, Tag } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
   import type { Coach } from '$lib/admin/data';
-  import { coachStatus } from './coach-status';
 
   export let coach: Coach;
   export let onEdit: (coach: Coach) => void = () => {};
 
-  $: [statusLabel, statusColor] = coachStatus(coach.status);
-  // 年資 / 學員 / 班級 / 獲獎 — matches the source stat-grid order.
-  $: stats = [
-    [coach.years, '年資'],
-    [coach.students, '學員'],
-    [coach.classes, '班級'],
-    [coach.awards, '獲獎']
-  ] as const;
-
-  function contact() {
-    toasts.notify('info', coach.name + ' 教練', coach.phone);
-  }
   function schedule() {
     toasts.notify('info', '課表', '顯示 ' + coach.name + ' 教練的授課時段。');
   }
@@ -35,12 +25,15 @@
 
 <Card padding={0} hoverable style="overflow:hidden">
   <div class="head">
-    <Avatar name={coach.initial} size="lg" color={coach.color} status={coach.status} />
+    <Avatar name={coach.initial} size="lg" color={coach.color} />
     <div class="meta">
       <div class="name">
         {coach.name} <span class="suffix">教練</span>
         <span class="status">
-          <span class="dot" style="background:{statusColor}"></span>{statusLabel}
+          <span
+            class="dot"
+            style="background:{coach.isActive ? 'var(--df-success)' : 'var(--df-text-muted)'}"
+          ></span>{coach.isActive ? '公開顯示中' : '未公開顯示'}
         </span>
       </div>
       <div class="title">{coach.title}</div>
@@ -55,19 +48,7 @@
     </IconButton>
   </div>
 
-  <div class="stats">
-    {#each stats as [value, label], i}
-      <div class="stat" class:divider={i > 0}>
-        <div class="stat-value">{value}</div>
-        <div class="stat-label">{label}</div>
-      </div>
-    {/each}
-  </div>
-
   <div class="foot">
-    <Button variant="secondary" size="sm" fullWidth on:click={contact}>
-      <Icon name="phone" size={14} />聯絡
-    </Button>
     <Button variant="secondary" size="sm" fullWidth on:click={schedule}>
       <Icon name="calendar-days" size={14} />課表
     </Button>
@@ -124,29 +105,6 @@
     gap: 6px;
     margin-top: 9px;
     flex-wrap: wrap;
-  }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    border-top: 1px solid var(--df-border);
-  }
-  .stat {
-    padding: 14px 0;
-    text-align: center;
-  }
-  .stat.divider {
-    border-left: 1px solid var(--df-border);
-  }
-  .stat-value {
-    font-size: 20px;
-    font-weight: 800;
-    color: var(--df-ink);
-    font-family: var(--df-font-heading);
-  }
-  .stat-label {
-    font-size: 11.5px;
-    color: var(--df-text-light);
-    margin-top: 1px;
   }
   .foot {
     display: flex;

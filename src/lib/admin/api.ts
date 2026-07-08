@@ -437,22 +437,24 @@ export const updateCourse = (id: string, body: CourseWriteBody): Promise<ApiCour
 
 /** `CoachResponse` 現帶 `name`(教練真實姓名)與 `title`(職稱)，兩者分開映射(同
  *  public/adapters.ts 的 toMarketingCoach，見 integration-contract.md §3.4)。
- *  phone/status/年資/學員/班級/獲獎統計欄位仍無對應，一律誠實給預設值(P2：待
- *  後端補對應欄位或 join 出真實統計)。 */
+ *  Task F5 欄位收斂：`userId` 帶 `user_id`（CoachEditDialog 編輯姓名時要用這個呼叫
+ *  PATCH /users/{user_id}，coaches 表本身沒有 name 欄位）；`isActive` 直接映射
+ *  `is_active`——這個旗標實際控制 GET /coaches 的 `WHERE is_active = true` 過濾（見
+ *  後端 coaches/repository.rs find_all_active()），也就是公開教練頁 /coaches 與課程頁
+ *  的教練列表看不看得到這位教練，不是什麼線上/忙碌/離線的即時狀態裝飾。
+ *  phone/年資/學員/班級/獲獎統計欄位已隨欄位收斂移除(P2：無後端來源；
+ *  classes/students 有真實來源——見 getReports() 的 AdminReportCoachRow，屬於
+ *  唯讀彙總，不是這裡或表單該手填的數字)。 */
 function mapCoach(c: ApiCoach, i: number): Coach {
 	return {
 		id: c.id,
+		userId: c.user_id,
 		name: c.name,
 		initial: initialOf(c.name),
 		title: c.title,
-		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
+		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位，純視覺裝飾
 		tags: c.specialties,
-		years: 0, // P2: 後端無年資數字欄位(experience 是自由文字，不硬猜解析)
-		students: 0, // P2: 後端無學員數統計欄位
-		awards: 0, // P2: 後端無獲獎數統計欄位
-		classes: 0, // P2: 後端無授課班級數統計欄位
-		status: 'offline', // P2: 後端無即時線上狀態欄位，一律預設離線
-		phone: '' // P2: 後端無教練聯絡電話欄位
+		isActive: c.is_active
 	};
 }
 
@@ -461,6 +463,33 @@ export interface CoachesData {
 }
 export const getCoaches = (): Promise<CoachesData> =>
 	listCoaches().then((coaches) => ({ coaches: coaches.map(mapCoach) }));
+
+/* ── 教練建立與編輯(POST /coaches、PATCH /coaches/{id}，admin-only，Task F5) ──
+ * Body 形狀對齊 integration-contract.md §3.4。姓名不在這裡——coaches 表本身沒有
+ * name 欄位，改名一律走 createMember/updateMember 對應的 PATCH /users/{user_id}
+ * （見 CoachFormValues 註解）。新增教練的產品流程是「先建 user 帳號、再綁 coach」
+ * 兩步：後端沒有複合端點，呼叫端(routes/admin/coaches/+page.svelte)先呼叫
+ * createMember() 拿 user_id，成功後才呼叫這裡的 createCoach()。PATCH 全欄位皆選填
+ * (省略＝維持原值，同 VenueWriteBody/ProductWriteBody 的寬鬆單一型別給兩支函式共用
+ * 慣例)。 */
+export interface CoachWriteBody {
+	user_id?: string;
+	title?: string;
+	bio?: string | null;
+	experience?: string | null;
+	specialties?: string[];
+	certifications?: string[];
+	display_order?: number;
+	slug?: string | null;
+	photo_url?: string | null;
+	is_active?: boolean;
+}
+
+export const createCoach = (body: CoachWriteBody): Promise<ApiCoach> =>
+	api<ApiCoach>('/coaches', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateCoach = (id: string, body: CoachWriteBody): Promise<ApiCoach> =>
+	api<ApiCoach>(`/coaches/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 學員（GET /users，admin-only） ═════════════════════════
  * GET /users 是通用帳號端點，跟 MembersTable 完整 Member 型別(課程/教練/出席/繳費/

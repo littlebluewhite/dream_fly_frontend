@@ -70,8 +70,8 @@ describe('parseAgeRange — age 顯示字串反向解析為 min_age/max_age（ag
 
 describe('coachIdOf — coach 姓名比對 coaches 清單取得 id', () => {
 	const coaches: Coach[] = [
-		{ id: 'co1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], years: 0, students: 0, awards: 0, classes: 0, status: 'offline', phone: '' },
-		{ id: 'co2', name: '陳冠宇', initial: '陳', title: '教練', color: '#000', tags: [], years: 0, students: 0, awards: 0, classes: 0, status: 'offline', phone: '' }
+		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true },
+		{ id: 'co2', userId: 'u2', name: '陳冠宇', initial: '陳', title: '教練', color: '#000', tags: [], isActive: true }
 	];
 
 	it('finds the matching coach id by exact name', () => {
@@ -86,7 +86,7 @@ describe('coachIdOf — coach 姓名比對 coaches 清單取得 id', () => {
 
 describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_minutes）', () => {
 	const coaches: Coach[] = [
-		{ id: 'co1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], years: 0, students: 0, awards: 0, classes: 0, status: 'offline', phone: '' }
+		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true }
 	];
 
 	it('assembles name/level/category/coach_id/schedule_text/age/price_cents/max_students', () => {

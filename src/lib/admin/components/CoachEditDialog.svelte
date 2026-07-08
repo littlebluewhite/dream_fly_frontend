@@ -1,150 +1,119 @@
 <script lang="ts">
-  /* 教練檔案編輯 — edit form inside the shared EditModal. Faithful port of
-   * admin.jsx CoachEditDialog: avatar preview (姓氏首字) + 代表色 swatch row, then a
-   * 2-col field grid — 教練姓名 / 目前狀態(Select 線上·忙碌·離線) / 職稱(span 2) /
-   * 專長標籤(span 2, 、-separated text) / 年資 / 聯絡電話 / 學員數 / 班級數 / 競賽獲獎數.
+  /* 教練檔案編輯 / 新增 — edit form inside the shared EditModal (Task F5).
    *
-   * Holds a local `let f` copy of the coach prop, reset on each open transition.
-   * `tagsText` is the comma/、-separated editing buffer for the tags[] array;
-   * numeric fields edit as text and are parsed on save. On 儲存 it normalises
-   * (derive initial, split tags, parse numbers), fires onSave(updated) AND a
-   * success toast — mirroring MemberEditDialog. */
-  import { Avatar, Input, Select } from '$lib/components/ui';
+   * 欄位收斂到後端真實形狀（POST/PATCH /coaches + PATCH /users/{user_id}，契約
+   * §3.2/§3.4）——移除 years/awards/classes/status(獨立線上/忙碌/離線版)/phone/color
+   * 等無後端來源欄位：classes/students 統計已有真實來源(admin/api.ts getReports() 的
+   * AdminReportCoachRow，屬於唯讀彙總，不是這張表單該手填的數字)；color 原本只是
+   * 頭像底色 swatch 選色器，無後端欄位可存，移除後同 MemberEditDialog/
+   * MemberCreateDialog 一樣不再顯示大頭貼預覽。
+   *
+   * 保留：name(編輯時對應 PATCH /users/{user_id}；新增時進 POST /users)、
+   * title(必填，coaches.title 為 NOT NULL)、tags(=specialties)、isActive(取代原本
+   * 「目前狀態」線上/忙碌/離線三態 Select——那組狀態從未有後端來源，一律固定顯示
+   * 離線。isActive 對應 coaches.is_active，是唯一真實存在的狀態欄位，語意是「是否
+   * 於公開教練頁 /coaches 與課程頁的教練列表顯示」，故用誠實的公開顯示開關取代，
+   * 而非偽裝成同一種「忙碌中」的展示裝飾——見下方 helper 文案)。
+   *
+   * 新增模式(isNew)多收 email/密碼——後端沒有「建 user + 綁 coach」的複合端點，
+   * 兩步分別是 POST /users、POST /coaches；本元件不知道兩步怎麼打，只負責收欄位、
+   * 組出 CoachFormValues 交給 onSave，實際的兩步 API 呼叫、失敗訊息、成功後刷新皆由
+   * 呼叫端（routes/admin/coaches/+page.svelte）決定——同 Task F1/F4 的「dialog 不打
+   * API、不丟 toast」慣例。 */
+  import { Input, Switch } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { toasts } from '$lib/admin/stores';
-  import { MEMBER_COLORS, type Coach, type CoachStatus } from '$lib/admin/data';
-  import { COACH_STATUS } from './coach-status';
+  import type { Coach, CoachFormValues } from '$lib/admin/data';
 
   export let coach: Coach | null = null;
   export let open = false;
-  /** New-coach mode flips the title/subtitle/primary label + toast copy. */
+  /** New-coach mode 多收 email/密碼(POST /users 用)，其餘欄位同編輯模式。 */
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: Coach) => void = () => {};
+  export let onSave: (values: CoachFormValues) => void = () => {};
 
-  const statusOptions = (Object.keys(COACH_STATUS) as CoachStatus[]).map((v) => ({
-    value: v,
-    label: COACH_STATUS[v][0]
-  }));
-
-  // Local editable copy + text buffers, reset on every coach-prop change —
-  // INCLUDING coach → null on close — or when the dialog transitions to open
-  // (single-stage pattern — mirrors ClassEditDialog/VenueEditDialog/
-  // TicketEditDialog's unconditional `x !== lastX`). Two earlier shapes both
-  // failed here:
-  // - the two-stage `$: if (open && !wasOpen && coach) {…}` + `$: wasOpen =
-  //   open;` pair never re-fired on a mounted instance (Svelte schedules the
-  //   `wasOpen` assignment before the guard that reads it, so `!wasOpen` was
-  //   always false);
-  // - a `coach && (…)` short-circuit skipped the CLOSE transition (the parent
-  //   clears open+coach together on 取消), freezing `wasOpen`/`lastCoach`/`f`
-  //   at their open-time values, so re-opening the SAME coach showed the
-  //   abandoned dirty draft. The guard must also run on coach → null; the
-  //   body is null-safe instead.
-  let f: Coach | null = coach;
+  // Local editable fields, reset whenever the coach prop changes — INCLUDING
+  // coach → null on close — or when the dialog transitions to open (single-stage
+  // pattern，同 MemberEditDialog / 原版 CoachEditDialog 的 `lastCoach`/`wasOpen`
+  // guard；沿用同一個寫法是因為兩段式 `wasOpen` 或 `coach &&` 短路寫法都曾在這個
+  // guard 上出過 regression——見下方三個對應測試）。coach 為 null 時（新增模式或
+  // 對話框關閉）欄位一律回到空白/預設值。
+  let name = coach?.name ?? '';
+  let title = coach?.title ?? '';
   let tagsText = coach ? coach.tags.join('、') : '';
-  let yearsText = coach ? String(coach.years) : '';
-  let studentsText = coach ? String(coach.students) : '';
-  let classesText = coach ? String(coach.classes) : '';
-  let awardsText = coach ? String(coach.awards) : '';
+  let isActive = coach ? coach.isActive : true;
+  let email = '';
+  let password = '';
+  let titleError = '';
+  let passwordError = '';
+
   let lastCoach: Coach | null = coach;
   let wasOpen = open;
   $: if (coach !== lastCoach || (open && !wasOpen)) {
     wasOpen = open;
     lastCoach = coach;
-    f = coach ? { ...coach } : null;
+    name = coach?.name ?? '';
+    title = coach?.title ?? '';
     tagsText = coach ? coach.tags.join('、') : '';
-    yearsText = coach ? String(coach.years) : '';
-    studentsText = coach ? String(coach.students) : '';
-    classesText = coach ? String(coach.classes) : '';
-    awardsText = coach ? String(coach.awards) : '';
-  }
-
-  function onName(e: Event) {
-    const v = (e.target as HTMLInputElement).value;
-    if (f) f = { ...f, name: v, initial: v.trim().charAt(0) || f.initial };
-  }
-
-  function pickColor(c: string) {
-    if (f) f = { ...f, color: c };
-  }
-
-  function num(s: string): number {
-    const n = parseInt(s, 10);
-    return Number.isNaN(n) ? 0 : n;
+    isActive = coach ? coach.isActive : true;
+    email = '';
+    password = '';
+    titleError = '';
+    passwordError = '';
   }
 
   function save() {
-    if (!f) return;
-    const updated: Coach = {
-      ...f,
-      initial: f.name.trim().charAt(0) || f.initial || '教',
-      tags: tagsText
-        .split(/[、,，]/)
-        .map((t) => t.trim())
-        .filter(Boolean),
-      years: num(yearsText),
-      students: num(studentsText),
-      classes: num(classesText),
-      awards: num(awardsText)
-    };
-    onSave(updated);
-    toasts.notify('success', isNew ? '已新增教練' : '已儲存', updated.name + ' 教練資料已更新。');
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      titleError = '請輸入職稱';
+      return;
+    }
+    titleError = '';
+    if (isNew && password.length < 8) {
+      passwordError = '密碼至少需要 8 碼';
+      return;
+    }
+    passwordError = '';
+    const tags = tagsText
+      .split(/[、,，]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    onSave({ email: email.trim(), password, name: name.trim(), title: trimmedTitle, tags, isActive });
   }
 </script>
 
-{#if f}
-  <EditModal
-    {open}
-    title={isNew ? '新增教練' : '編輯教練'}
-    sub={isNew ? '建立教練檔案' : f.name + ' 教練'}
-    icon="user-check"
-    primaryLabel={isNew ? '建立教練' : '儲存'}
-    {onClose}
-    onSave={save}
-  >
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <Avatar name={f.name.trim().charAt(0) || f.initial || '教'} size="lg" color={f.color} />
-      <div style="display:flex;gap:9px">
-        {#each MEMBER_COLORS as c}
-          <button
-            type="button"
-            aria-label={'選擇 ' + c}
-            on:click={() => pickColor(c)}
-            class="swatch"
-            class:active={f.color === c}
-            style="background:{c}"
-          ></button>
-        {/each}
+<EditModal
+  {open}
+  title={isNew ? '新增教練' : '編輯教練'}
+  sub={isNew ? '建立教練帳號與檔案' : (coach?.name ?? '') + ' 教練'}
+  icon="user-check"
+  primaryLabel={isNew ? '建立教練' : '儲存'}
+  {onClose}
+  onSave={save}
+>
+  <div style="display:flex;flex-direction:column;gap:14px">
+    {#if isNew}
+      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" />
+    {/if}
+    <Input label="教練姓名" bind:value={name} />
+    <Input label="職稱 / 專業" required error={titleError} bind:value={title} />
+    <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
+    {#if isNew}
+      <Input
+        label="初始密碼"
+        type="password"
+        bind:value={password}
+        placeholder="至少 8 碼"
+        error={passwordError}
+      />
+    {/if}
+    <div style="display:flex;flex-direction:column;gap:4px;padding-top:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:600;color:var(--df-text-dark)">公開顯示</span>
+        <Switch bind:checked={isActive} />
       </div>
+      <span style="font-size:var(--df-text-xs);color:var(--df-text-light)">
+        關閉後，教練不會出現在公開的教練介紹頁與課程頁面的教練列表中。
+      </span>
     </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <Input label="教練姓名" bind:value={f.name} on:input={onName} />
-      <Select label="目前狀態" bind:value={f.status} options={statusOptions} />
-      <Input label="職稱 / 專業" bind:value={f.title} style="grid-column:span 2" />
-      <Input label="專長標籤（以、分隔）" bind:value={tagsText} style="grid-column:span 2" />
-      <Input label="年資（年）" bind:value={yearsText} />
-      <Input label="聯絡電話" bind:value={f.phone} />
-      <Input label="學員數" bind:value={studentsText} />
-      <Input label="班級數" bind:value={classesText} />
-      <Input label="競賽獲獎數" bind:value={awardsText} />
-    </div>
-  </EditModal>
-{/if}
-
-<style>
-  .swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 999px;
-    border: 2px solid #fff;
-    box-shadow: 0 0 0 1px var(--df-border);
-    cursor: pointer;
-    flex: none;
-    padding: 0;
-  }
-  .swatch.active {
-    border: 3px solid var(--df-ink);
-  }
-</style>
+  </div>
+</EditModal>

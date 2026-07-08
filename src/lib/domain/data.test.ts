@@ -44,7 +44,6 @@ describe('id uniqueness', () => {
 
 /* ── enum membership ── */
 describe('enum membership', () => {
-	const coachStatuses = new Set(['online', 'busy', 'offline']);
 	const levels = new Set(['啟蒙', '入門', '基礎', '進階', '選手']);
 	const classStatuses = new Set(['招生中', '候補', '額滿']);
 	const memberStatuses = new Set(['active', 'warning', 'paused']);
@@ -52,8 +51,8 @@ describe('enum membership', () => {
 	const attMarks = new Set(['p', 'a', 'l', 'v']);
 	const orderStatuses = new Set(['paid', 'pending', 'refunded']);
 
-	it('every COACHES[i].status is a valid CoachStatus', () => {
-		COACHES.forEach((c) => expect(coachStatuses.has(c.status)).toBe(true));
+	it('every COACHES[i].isActive is a boolean', () => {
+		COACHES.forEach((c) => expect(typeof c.isActive).toBe('boolean'));
 	});
 	it('every CLASSES_BASE[i].level is a valid Level', () => {
 		CLASSES_BASE.forEach((k) => expect(levels.has(k.level)).toBe(true));
