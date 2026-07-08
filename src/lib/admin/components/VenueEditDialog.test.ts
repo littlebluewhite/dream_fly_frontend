@@ -9,7 +9,11 @@ import { VENUES, type Venue } from '$lib/admin/data';
  * POST/PATCH /venues round trip — Task F4, same pattern as TicketEditDialog).
  * We assert the fields render, the onSave wiring carries the edit, equip
  * text → string[] round trips, and the 場地代號 field always shows the
- * read-only slug (Task F4：欄位收斂，移除 area/cap/今日排課 裝飾欄位). */
+ * read-only slug (Task F4：欄位收斂，移除 area/cap/今日排課 裝飾欄位).
+ *
+ * Task F4 review 修正：欄位標籤由「場地類型」改為「場地簡介」+ helper 提示，對齊
+ * buildVenueBody() 把這個值送進後端 description、公開場地頁把 description 渲染成
+ * 場館介紹的實際去向(內部欄位名 f.type 未變)。 */
 const base: Venue = VENUES[0]; // A 訓練館
 
 describe('VenueEditDialog', () => {
@@ -24,12 +28,17 @@ describe('VenueEditDialog', () => {
 
 	it('renders the editable field labels (area/cap/今日排課 已收斂移除，Task F4)', () => {
 		const { getByText, queryByText } = render(VenueEditDialog, { open: true, venue: base });
-		for (const lbl of ['場地代號', '場地名稱', '場地類型', '狀態', '器材配置（以、分隔）']) {
+		for (const lbl of ['場地代號', '場地名稱', '場地簡介', '狀態', '器材配置（以、分隔）']) {
 			expect(getByText(lbl)).toBeInTheDocument();
 		}
 		for (const removed of ['面積', '容納人數', '今日排課']) {
 			expect(queryByText(removed)).toBeNull();
 		}
+	});
+
+	it('場地簡介欄位附一行提示，說明內容會外顯到公開場地頁（Task F4 review 修正）', () => {
+		const { getByText } = render(VenueEditDialog, { open: true, venue: base });
+		expect(getByText('此內容會顯示在公開的「場館介紹」頁面。')).toBeInTheDocument();
 	});
 
 	it('joins equip[] into the 器材配置 text buffer with 、', () => {

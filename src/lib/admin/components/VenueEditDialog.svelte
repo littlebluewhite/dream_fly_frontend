@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 編輯場地 / 新增場地 — edit form inside the shared EditModal. Clone of
    * ClassEditDialog for the 場館管理 page: a 2-col field grid (場地代號 / 場地名稱 /
-   * 場地類型 spanning both cols / 狀態 spanning both cols / 器材配置 spanning both
+   * 場地簡介 spanning both cols / 狀態 spanning both cols / 器材配置 spanning both
    * cols, 、-separated text). Holds a local `let f` copy of the venue prop, reset
    * whenever the dialog transitions to open. 器材配置 is the 、/, -separated buffer
    * for the equip[] array.
@@ -13,7 +13,13 @@
    *
    * Task F4：儲存改為呼叫真實 POST/PATCH /venues（venues/+page.svelte 的 save() 是
    * 非同步的，可能失敗）——同 Task F1 的 TicketEditDialog，這裡不再樂觀地立刻丟成功
-   * toast，成功/失敗 toast 一律由 page 在 API 呼叫結束後決定並顯示。 */
+   * toast，成功/失敗 toast 一律由 page 在 API 呼叫結束後決定並顯示。
+   *
+   * Task F4 review 修正：本欄位標籤原為「場地類型」，但 buildVenueBody()
+   * (routes/admin/venues/+page.svelte) 把它送進後端的 description，公開場地頁
+   * (routes/venues/+page.svelte) 會把 description 渲染成客戶看到的場館介紹段落
+   * ——標籤語意與實際去向不一致。改標籤為「場地簡介」並加一行 helper 提示；內部
+   * 欄位名 f.type 不動(改名會漣漪到 Venue 型別與既有測試，不在本次範圍)。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
   import { VENUE_STATUSES, VENUE_STATUS, type Venue } from '$lib/admin/data';
@@ -64,7 +70,12 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <Input label="場地代號" value={f.slug} disabled />
       <Input label="場地名稱" bind:value={f.name} />
-      <Input label="場地類型" bind:value={f.type} style="grid-column:span 2" />
+      <Input
+        label="場地簡介"
+        bind:value={f.type}
+        helper="此內容會顯示在公開的「場館介紹」頁面。"
+        style="grid-column:span 2"
+      />
       <Select label="狀態" bind:value={f.status} options={statusOptions} style="grid-column:span 2" />
       <Input label="器材配置（以、分隔）" bind:value={equipText} style="grid-column:span 2" />
     </div>
