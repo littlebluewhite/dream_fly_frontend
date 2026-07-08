@@ -9,7 +9,7 @@
    * 只有建立本身失敗才顯示錯誤 toast 且不刷新——若建立成功但刷新這一步失敗，
    * 視為最佳努力（不覆蓋剛才的成功提示，也不算整體失敗）。 */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Card, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
@@ -54,7 +54,12 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div class="view" data-testid="coupons-skeleton" slot="loading">
+    <Skeleton w={180} h={32} r={8} />
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
   <div class="view">
     <PageHead title="優惠碼管理" sub={$gate.total + ' 組優惠碼'}>
       <svelte:fragment slot="actions">
@@ -106,14 +111,7 @@
   </div>
 
   <CouponCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="view" data-testid="coupons-skeleton">
-    <Skeleton w={180} h={32} r={8} />
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>
 
 <style>
   .view {

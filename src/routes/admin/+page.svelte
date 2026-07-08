@@ -18,7 +18,7 @@
   import TodayPanel from '$lib/admin/components/TodayPanel.svelte';
   import ActivityPanel from '$lib/admin/components/ActivityPanel.svelte';
   import MembersTable from '$lib/admin/components/MembersTable.svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, Card, ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, getMembers, type ReportsData } from '$lib/admin/api';
@@ -44,48 +44,8 @@
   }
 </script>
 
-{#if $gate === 'ready' && reports}
-<div class="df-view" style="display:flex;flex-direction:column;gap:20px">
-  <PageHead title="營運總覽" sub="全館即時概況">
-    <svelte:fragment slot="actions">
-      <Button variant="secondary" size="sm" on:click={exportReport}>
-        <Icon name="download" size={15} />匯出報表
-      </Button>
-      <Button variant="primary" size="sm" href="/admin/classes">
-        <Icon name="plus" size={15} />新增課程
-      </Button>
-    </svelte:fragment>
-  </PageHead>
-
-  <div class="kpis">
-    <StatCard
-      icon="users"
-      label="在學學員"
-      value={reports.members.active}
-      tint="var(--df-primary-bg)"
-      color="var(--df-primary)"
-    />
-    <StatCard
-      icon="receipt"
-      label="本月營收"
-      value={fmtNT(reports.revenue.thisMonth)}
-      tint="#FFF8DB"
-      color="var(--df-accent-dark)"
-    />
-  </div>
-
-  <div class="split">
-    <MembersTable compact {members} />
-    <div style="display:flex;flex-direction:column;gap:18px">
-      <TodayPanel sub="全館 5 堂課" />
-      <ActivityPanel />
-    </div>
-  </div>
-</div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="admin-home-skeleton">
+<LoadGate {gate}>
+  <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="admin-home-skeleton" slot="loading">
     <SkelCard padding={30}><Skeleton w="40%" h={26} /></SkelCard>
     <div class="kpis">
       {#each [0, 1] as i (i)}<SkelCard><Skeleton w="100%" h={90} r={12} /></SkelCard>{/each}
@@ -95,7 +55,49 @@
       <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
     </div>
   </div>
-{/if}
+
+  {#if reports}
+    <div class="df-view" style="display:flex;flex-direction:column;gap:20px">
+      <PageHead title="營運總覽" sub="全館即時概況">
+        <svelte:fragment slot="actions">
+          <Button variant="secondary" size="sm" on:click={exportReport}>
+            <Icon name="download" size={15} />匯出報表
+          </Button>
+          <Button variant="primary" size="sm" href="/admin/classes">
+            <Icon name="plus" size={15} />新增課程
+          </Button>
+        </svelte:fragment>
+      </PageHead>
+
+      <div class="kpis">
+        <StatCard
+          icon="users"
+          label="在學學員"
+          value={reports.members.active}
+          tint="var(--df-primary-bg)"
+          color="var(--df-primary)"
+        />
+        <StatCard
+          icon="receipt"
+          label="本月營收"
+          value={fmtNT(reports.revenue.thisMonth)}
+          tint="#FFF8DB"
+          color="var(--df-accent-dark)"
+        />
+      </div>
+
+      <div class="split">
+        <MembersTable compact {members} />
+        <div style="display:flex;flex-direction:column;gap:18px">
+          <TodayPanel sub="全館 5 堂課" />
+          <ActivityPanel />
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <style>
   .kpis {

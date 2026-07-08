@@ -11,7 +11,7 @@
    * into a three-state gate (loading/error/ready); `tickets` is the local
    * mutable working copy the 新增/編輯 flow edits in place. */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ProgressBar, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Card, Icon, ProgressBar, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
@@ -80,7 +80,20 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="tickets-skeleton" slot="loading">
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={70} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={180} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+
   <div style="display:flex; flex-direction:column; gap:20px;">
     <PageHead title="票券管理" sub="月票、體驗券與活動票券">
       <svelte:fragment slot="actions">
@@ -183,19 +196,4 @@
   </div>
 
   <TicketEditDialog ticket={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="tickets-skeleton">
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={70} r={10} /></SkelCard>
-      {/each}
-    </div>
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:16px;">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={180} r={12} /></SkelCard>
-      {/each}
-    </div>
-  </div>
-{/if}
+</LoadGate>

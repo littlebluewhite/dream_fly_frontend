@@ -14,7 +14,7 @@
    * Data arrives async via getReports(): onMount loads it into a three-state gate
    * (loading/error/ready). */
   import { onMount } from 'svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, Card, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import { toasts } from '$lib/admin/stores';
@@ -34,92 +34,8 @@
   });
 </script>
 
-{#if $gate === 'ready' && data}
-  <div style="display:flex; flex-direction:column; gap:20px;">
-    <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
-      <svelte:fragment slot="actions">
-        <Button
-          variant="primary"
-          size="sm"
-          on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
-        >
-          <span style="display:inline-flex; align-items:center; gap:8px;">
-            <Icon name="download" size={15} />匯出報表
-          </span>
-        </Button>
-      </svelte:fragment>
-    </PageHead>
-
-    <div class="kpi-grid">
-      <StatCard icon="dollar-sign" label="本月營收" value={fmtNT(data.revenue.thisMonth)} tint="var(--df-primary-bg)" color="var(--df-primary)" />
-      <StatCard icon="circle-dollar-sign" label="上月營收" value={fmtNT(data.revenue.lastMonth)} tint="var(--df-bg-light)" color="var(--df-text-light)" />
-      <StatCard icon="users" label="會員總數" value={data.members.total} tint="var(--df-success-bg)" color="var(--df-success)" />
-      <StatCard icon="user-plus" label="本月新增會員" value={data.members.newThisMonth} tint="#F59E0B14" color="#F59E0B" />
-      <StatCard icon="user-check" label="在學會員" value={data.members.active} tint="#8B5CF614" color="#8B5CF6" />
-    </div>
-
-    <RevenueTrend rows={data.revenue.trend} />
-
-    <Card padding={0} style="overflow:hidden">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
-        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">課程報名狀況</h3>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:var(--df-bg-light)">
-            <th class="th">課程</th>
-            <th class="th">已報名 / 名額</th>
-            <th class="th">滿班率</th>
-            <th class="th">候補人數</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.courses as c (c.id)}
-            <tr class="row">
-              <td class="td">{c.name}</td>
-              <td class="td td-muted">{c.enrolled} / {c.maxStudents}</td>
-              <td class="td">{fmtPct(c.fillRate)}</td>
-              <td class="td td-muted">{c.waitlistCount}</td>
-            </tr>
-          {/each}
-          {#if data.courses.length === 0}
-            <tr><td colspan="4" class="empty">尚無課程資料</td></tr>
-          {/if}
-        </tbody>
-      </table>
-    </Card>
-
-    <Card padding={0} style="overflow:hidden">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
-        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">教練授課概況</h3>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:var(--df-bg-light)">
-            <th class="th">教練</th>
-            <th class="th">授課班級數</th>
-            <th class="th">學員人數</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.coaches as c (c.id)}
-            <tr class="row">
-              <td class="td">{c.name}</td>
-              <td class="td td-muted">{c.courseCount}</td>
-              <td class="td td-muted">{c.studentCount}</td>
-            </tr>
-          {/each}
-          {#if data.coaches.length === 0}
-            <tr><td colspan="3" class="empty">尚無教練資料</td></tr>
-          {/if}
-        </tbody>
-      </table>
-    </Card>
-  </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
+<LoadGate {gate}>
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton" slot="loading">
     <Skeleton w={220} h={32} r={8} />
     <div class="kpi-grid">
       {#each [0, 1, 2, 3, 4] as i (i)}
@@ -128,7 +44,91 @@
     </div>
     <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
   </div>
-{/if}
+
+  {#if data}
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
+        <svelte:fragment slot="actions">
+          <Button
+            variant="primary"
+            size="sm"
+            on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
+          >
+            <span style="display:inline-flex; align-items:center; gap:8px;">
+              <Icon name="download" size={15} />匯出報表
+            </span>
+          </Button>
+        </svelte:fragment>
+      </PageHead>
+
+      <div class="kpi-grid">
+        <StatCard icon="dollar-sign" label="本月營收" value={fmtNT(data.revenue.thisMonth)} tint="var(--df-primary-bg)" color="var(--df-primary)" />
+        <StatCard icon="circle-dollar-sign" label="上月營收" value={fmtNT(data.revenue.lastMonth)} tint="var(--df-bg-light)" color="var(--df-text-light)" />
+        <StatCard icon="users" label="會員總數" value={data.members.total} tint="var(--df-success-bg)" color="var(--df-success)" />
+        <StatCard icon="user-plus" label="本月新增會員" value={data.members.newThisMonth} tint="#F59E0B14" color="#F59E0B" />
+        <StatCard icon="user-check" label="在學會員" value={data.members.active} tint="#8B5CF614" color="#8B5CF6" />
+      </div>
+
+      <RevenueTrend rows={data.revenue.trend} />
+
+      <Card padding={0} style="overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">課程報名狀況</h3>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--df-bg-light)">
+              <th class="th">課程</th>
+              <th class="th">已報名 / 名額</th>
+              <th class="th">滿班率</th>
+              <th class="th">候補人數</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each data.courses as c (c.id)}
+              <tr class="row">
+                <td class="td">{c.name}</td>
+                <td class="td td-muted">{c.enrolled} / {c.maxStudents}</td>
+                <td class="td">{fmtPct(c.fillRate)}</td>
+                <td class="td td-muted">{c.waitlistCount}</td>
+              </tr>
+            {/each}
+            {#if data.courses.length === 0}
+              <tr><td colspan="4" class="empty">尚無課程資料</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </Card>
+
+      <Card padding={0} style="overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">教練授課概況</h3>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--df-bg-light)">
+              <th class="th">教練</th>
+              <th class="th">授課班級數</th>
+              <th class="th">學員人數</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each data.coaches as c (c.id)}
+              <tr class="row">
+                <td class="td">{c.name}</td>
+                <td class="td td-muted">{c.courseCount}</td>
+                <td class="td td-muted">{c.studentCount}</td>
+              </tr>
+            {/each}
+            {#if data.coaches.length === 0}
+              <tr><td colspan="3" class="empty">尚無教練資料</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  {/if}
+</LoadGate>
 
 <style>
   .kpi-grid {

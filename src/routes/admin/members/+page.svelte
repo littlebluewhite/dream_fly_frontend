@@ -32,7 +32,7 @@
   import MemberFilterPanel from '$lib/admin/components/MemberFilterPanel.svelte';
   import MemberCreateDialog from '$lib/admin/components/MemberCreateDialog.svelte';
   import MemberEditDialog from '$lib/admin/components/MemberEditDialog.svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
   import type { MemberAccount } from '$lib/admin/data';
@@ -100,7 +100,12 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="members-skeleton" slot="loading">
+    <Skeleton w={180} h={32} r={8} />
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
   <div class="df-view" style="display:flex;flex-direction:column;gap:20px">
     <PageHead title="學員管理" sub="管理報名、出席與會員資料">
       <Button
@@ -131,11 +136,4 @@
 
   <MemberCreateDialog open={createOpen} onClose={() => (createOpen = false)} onSave={create} />
   <MemberEditDialog member={editTarget} open={editOpen} onClose={closeEdit} onSave={saveEdit} />
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="df-view" style="display:flex;flex-direction:column;gap:20px" data-testid="members-skeleton">
-    <Skeleton w={180} h={32} r={8} />
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>

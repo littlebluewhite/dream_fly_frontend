@@ -23,7 +23,7 @@
   import ClassCard from '$lib/admin/components/ClassCard.svelte';
   import ClassDialog from '$lib/admin/components/ClassDialog.svelte';
   import ClassEditDialog from '$lib/admin/components/ClassEditDialog.svelte';
-  import { Button, Icon, FilterChip, Card, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Icon, FilterChip, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { buildCourseBody } from '$lib/admin/components/course-request';
@@ -134,7 +134,21 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div class="view" data-testid="classes-skeleton" slot="loading">
+    <Skeleton w={180} h={32} r={8} />
+    <div class="chips">
+      {#each [0, 1, 2, 3] as i (i)}
+        <Skeleton w={72} h={32} r={16} />
+      {/each}
+    </div>
+    <div class="grid">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={260} r={12} /></SkelCard>
+      {/each}
+    </div>
+  </div>
+
   <div class="view">
     <PageHead title="課程管理" sub={$gate.total + ' 個開課班級 · 本季招生中'}>
       <svelte:fragment slot="actions">
@@ -172,23 +186,7 @@
     <ClassDialog klass={detail} onClose={() => (detail = null)} onEdit={openEdit} />
     <ClassEditDialog {coaches} klass={edit} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
   </div>
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="view" data-testid="classes-skeleton">
-    <Skeleton w={180} h={32} r={8} />
-    <div class="chips">
-      {#each [0, 1, 2, 3] as i (i)}
-        <Skeleton w={72} h={32} r={16} />
-      {/each}
-    </div>
-    <div class="grid">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={260} r={12} /></SkelCard>
-      {/each}
-    </div>
-  </div>
-{/if}
+</LoadGate>
 
 <style>
   .view {

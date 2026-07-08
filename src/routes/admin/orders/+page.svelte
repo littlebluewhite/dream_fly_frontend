@@ -16,7 +16,7 @@
    * applyStatusChange() folds the response's new status into the working copy,
    * so the KPIs + table stay consistent with the persisted truth. */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
@@ -68,7 +68,16 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div data-testid="orders-skeleton" slot="loading">
+    <div class="stats">
+      {#each [0, 1, 2, 3] as i (i)}
+        <SkelCard><Skeleton w="100%" h={70} r={10} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
   <PageHead title="訂單與金流" sub="報名繳費紀錄">
     <Button
       slot="actions"
@@ -120,18 +129,7 @@
 
   <OrdersTable rows={orders} onChangeStatus={changeStatus} onRemind={remind} />
   <PaginationBar page={$gate.page} total={$gate.total} perPage={$gate.perPage} onPageChange={gate.changePage} />
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div data-testid="orders-skeleton">
-    <div class="stats">
-      {#each [0, 1, 2, 3] as i (i)}
-        <SkelCard><Skeleton w="100%" h={70} r={10} /></SkelCard>
-      {/each}
-    </div>
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>
 
 <style>
   .stats {
