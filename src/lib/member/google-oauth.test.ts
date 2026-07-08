@@ -36,6 +36,12 @@ describe('googleRedirectUri', () => {
       'http://localhost:5173/member/login/google'
     );
   });
+
+  it('appends a caller-provided callbackPath instead (mobile surface, Round 4 F2)', () => {
+    expect(googleRedirectUri('http://localhost:5173', '/mobile/login/google')).toBe(
+      'http://localhost:5173/mobile/login/google'
+    );
+  });
 });
 
 describe('buildGoogleAuthUrl', () => {
@@ -49,6 +55,17 @@ describe('buildGoogleAuthUrl', () => {
     expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173/member/login/google');
     expect(url.searchParams.get('response_type')).toBe('code');
     expect(url.searchParams.get('scope')).toBe('openid email profile');
+    expect(url.searchParams.get('state')).toBe('state-xyz');
+  });
+
+  it('uses a caller-provided callbackPath for redirect_uri (mobile surface, Round 4 F2)', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'abc.apps.googleusercontent.com');
+
+    const url = new URL(
+      buildGoogleAuthUrl('http://localhost:5173', 'state-xyz', '/mobile/login/google')
+    );
+
+    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173/mobile/login/google');
     expect(url.searchParams.get('state')).toBe('state-xyz');
   });
 });
@@ -77,6 +94,26 @@ describe('startGoogleLogin — kicks off the redirect', () => {
     const second = sessionStorage.getItem(STATE_KEY);
 
     expect(first).not.toBe(second);
+  });
+
+  it('defaults to the member callback path when called with no argument', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'abc.apps.googleusercontent.com');
+    vi.stubGlobal('location', { href: '', origin: 'http://localhost:5173' });
+
+    startGoogleLogin();
+
+    const url = new URL(window.location.href);
+    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173/member/login/google');
+  });
+
+  it('uses the given callbackPath for redirect_uri (mobile surface, Round 4 F2)', () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'abc.apps.googleusercontent.com');
+    vi.stubGlobal('location', { href: '', origin: 'http://localhost:5173' });
+
+    startGoogleLogin('/mobile/login/google');
+
+    const url = new URL(window.location.href);
+    expect(url.searchParams.get('redirect_uri')).toBe('http://localhost:5173/mobile/login/google');
   });
 });
 

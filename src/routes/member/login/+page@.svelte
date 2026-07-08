@@ -224,7 +224,7 @@
             type="button"
             class="social-btn"
             aria-label="使用 Google 登入"
-            on:click={startGoogleLogin}
+            on:click={() => startGoogleLogin()}
             style="height:48px; display:inline-flex; align-items:center;
               justify-content:center; gap:8px; border-radius:var(--df-radius-md); cursor:pointer;
               font-size:14px; font-weight:600; font-family:var(--df-font-body);

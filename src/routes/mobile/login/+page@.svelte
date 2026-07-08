@@ -6,14 +6,23 @@
    * 即視為登入，未驗證任何憑證）——改真 email/密碼表單打 POST /auth/login
    * （authStore.login，同 member 登入頁的既有 token 路徑：$lib/stores/
    * authStore.ts 的 setTokens/refresh 機制不變，這裡只是換一張表單）。沒有
-   * 「訪客瀏覽」：mobile 是會員專屬 app，後端沒有訪客身分,不再假裝有。也沒有
-   * Google 登入(mobile 尚未接,非本任務範圍)、沒有忘記密碼連結(mobile 無對應
-   * 路由,不硬連去 /member/forgot-password 混淆兩個 surface)。 */
+   * 「訪客瀏覽」：mobile 是會員專屬 app，後端沒有訪客身分,不再假裝有。沒有
+   * 忘記密碼連結(mobile 無對應路由,不硬連去 /member/forgot-password 混淆兩個
+   * surface)。
+   *
+   * Round 4 F2:Google 登入接線,復用 member 登入頁同一套 authorization-code
+   * redirect(見 $lib/member/google-oauth——callbackPath 已參數化,這裡明確傳
+   * '/mobile/login/google')與 googleEnabled 漸進增強(沒有
+   * VITE_GOOGLE_CLIENT_ID 時不顯示按鈕,密碼流程不受影響)。callback 頁見
+   * ./google/+page@.svelte。 */
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { authStore } from '$lib/stores/authStore';
+  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
   import '$lib/styles/mobile-frame.css';
+
+  const googleEnabled = isGoogleLoginEnabled();
 
   let email = '';
   let password = '';
@@ -144,6 +153,29 @@
             <Button variant="primary" size="lg" fullWidth disabled={busy} on:click={submit}>
               {busy ? '登入中…' : '登入'}
             </Button>
+
+            {#if googleEnabled}
+              <!-- divider -->
+              <div style="display:flex; align-items:center; gap:16px;">
+                <div style="flex:1; height:1px; background:var(--df-border);"></div>
+                <span style="font-size:13px; color:var(--df-text-light);">或</span>
+                <div style="flex:1; height:1px; background:var(--df-border);"></div>
+              </div>
+
+              <!-- Google（authorization-code redirect — 見 $lib/member/google-oauth） -->
+              <button
+                type="button"
+                aria-label="使用 Google 登入"
+                on:click={() => startGoogleLogin('/mobile/login/google')}
+                style="height:50px; display:inline-flex; align-items:center;
+                  justify-content:center; gap:8px; border-radius:12px; cursor:pointer;
+                  font-size:14px; font-weight:600; font-family:var(--df-font-body);
+                  background:#fff; color:var(--df-text-dark); border:1.5px solid var(--df-border-strong);"
+              >
+                <span style="font-family:var(--df-font-heading); font-weight:700; font-size:15px;">G</span>
+                使用 Google 登入
+              </button>
+            {/if}
 
             <!-- 信任列 -->
             <div style="display:flex; flex-direction:column; gap:12px; margin-top:4px; padding:16px 0 4px; border-top:1px solid var(--df-border);">
