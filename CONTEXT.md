@@ -58,3 +58,8 @@ _Avoid_: 報名, 預約
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
 `createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。
 _Avoid_: 手抄 phase 機制
+
+**水合閘門 (Hydration Gate)**:
+共享 store 的水合協定(guard 短路、post-await 重查「mutation 勝出」、mutator 翻旗);單一來源
+`src/lib/hydration-gate.ts` 的 `createHydrationGate`(見 `docs/adr/0008` 註記)。
+_Avoid_: 手抄 *Hydrated 旗標協定
