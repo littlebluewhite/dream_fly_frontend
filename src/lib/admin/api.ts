@@ -419,11 +419,10 @@ export const getCoaches = (): Promise<CoachesData> =>
 	listCoaches().then((coaches) => ({ coaches: coaches.map(mapCoach) }));
 
 /* ═════════════════════════ 學員（GET /users，admin-only） ═════════════════════════
- * GET /users 是通用帳號端點，跟 MembersTable 目前吃的完整 Member 型別(課程/教練/
- * 出席/繳費/緊急聯絡人…)落差很大 —— 這裡先提供「後端真實形狀進、7 個對應欄位出」
- * 的映射與 getter(見 data.ts 的 MemberAccount/mapMemberAccount)。學員管理頁尚未
- * 接上這支 getter(MembersTable 仍吃既有 mock，未在本次任務變動範圍)，此 seam
- * 供後續任務或頁面改版時直接使用。 */
+ * GET /users 是通用帳號端點，跟 MembersTable 完整 Member 型別(課程/教練/出席/繳費/
+ * 緊急聯絡人…)落差很大 —— 這裡提供「後端真實形狀進、7 個對應欄位出」的映射與 getter
+ * (見 data.ts 的 MemberAccount/mapMemberAccount)。學員管理頁(routes/admin/members/
+ * +page.svelte)與首頁概覽卡(routes/admin/+page.svelte)皆已接上這支 getter(Task 5)。 */
 
 type ApiUserListResponse = ApiPage<'users', ApiUserAccount>;
 
