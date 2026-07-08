@@ -12,7 +12,7 @@ export type { Tone, OrderStatus } from '$lib/api/wire';
 export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
-export type TicketType = 'pass' | 'trial' | 'event';
+export type TicketType = 'ticket' | 'membership' | 'course_package';
 export type VenueStatus = 'available' | 'maintenance';
 export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 export type ClassStatus = '招生中' | '候補' | '額滿';
@@ -176,9 +176,9 @@ export const VENUE_STATUS: Record<VenueStatus, [Tone, string]> = {
 	maintenance: ['warning', '維護中']
 };
 export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {
-	pass: ['primary', '通行票'],
-	trial: ['success', '體驗票'],
-	event: ['accent', '活動票']
+	ticket: ['accent', '單次票券'],
+	membership: ['primary', '月票方案'],
+	course_package: ['success', '課程套裝']
 };
 /** ⚠ raw hex colour + label (NOT a Tone) — used for the 6-dot attendance strip. */
 export const ATT_MARK: Record<AttMark, [string, string]> = {
@@ -206,7 +206,7 @@ export const LEVELS: Level[] = ['啟蒙', '入門', '基礎', '進階', '選手'
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];
 export const CLASS_STATUS: ClassStatus[] = ['招生中', '候補', '額滿'];
 /** Ticket type union as a 新增/編輯票券 Select source (keys of TICKET_TYPE). */
-export const TICKET_TYPES: TicketType[] = ['pass', 'trial', 'event'];
+export const TICKET_TYPES: TicketType[] = ['ticket', 'membership', 'course_package'];
 /** Venue status union as a 新增/編輯場地 Select source (keys of VENUE_STATUS). */
 export const VENUE_STATUSES: VenueStatus[] = ['available', 'maintenance'];
 export const MEMBER_COLORS: string[] = ['#0066CC', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444'];

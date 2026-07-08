@@ -150,7 +150,7 @@ describe('new dataset id uniqueness', () => {
 /* ── new dataset enum membership ── */
 describe('new dataset enum membership', () => {
 	const venueStatuses = new Set(['available', 'maintenance']);
-	const ticketTypes = new Set(['pass', 'trial', 'event']);
+	const ticketTypes = new Set(['ticket', 'membership', 'course_package']);
 
 	it('every VENUES[i].status is valid', () => {
 		VENUES.forEach((v) => expect(venueStatuses.has(v.status)).toBe(true));

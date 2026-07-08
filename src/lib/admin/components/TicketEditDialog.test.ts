@@ -50,7 +50,7 @@ describe('TicketEditDialog', () => {
 		expect(updated.id).toBe(base.id); // identity preserved
 	});
 
-	it('coerces edited numeric fields (price/quota/sold) back to numbers on save', async () => {
+	it('coerces edited numeric fields (price/quota) back to numbers on save', async () => {
 		const onSave = vi.fn();
 		const { getByDisplayValue, getByText } = render(TicketEditDialog, {
 			open: true,
@@ -59,12 +59,37 @@ describe('TicketEditDialog', () => {
 		});
 		await fireEvent.input(getByDisplayValue(String(base.price)), { target: { value: '3000' } });
 		await fireEvent.input(getByDisplayValue(String(base.quota)), { target: { value: '250' } });
-		await fireEvent.input(getByDisplayValue(String(base.sold)), { target: { value: '90' } });
 		await fireEvent.click(getByText('儲存票券'));
 		const updated = onSave.mock.calls[0][0] as Ticket;
 		expect(updated.price).toBe(3000);
 		expect(updated.quota).toBe(250);
-		expect(updated.sold).toBe(90);
+	});
+
+	/* F1：已售張數是後端聚合衍生欄位（GET /products 的 sold，訂單成立時才會變動，見
+	 * admin/api.ts getTickets() 註解）——前端不可能改動它，欄位收斂為唯讀顯示，儲存
+	 * 時原樣帶出，不再從文字欄位解析回填。 */
+	it('renders 已售張數 as a disabled read-only field and always saves the original value unchanged', async () => {
+		const onSave = vi.fn();
+		const { getByLabelText, getByText } = render(TicketEditDialog, {
+			open: true,
+			ticket: base,
+			onSave
+		});
+		const soldInput = getByLabelText('已售張數') as HTMLInputElement;
+		expect(soldInput.disabled).toBe(true);
+		expect(soldInput.value).toBe(String(base.sold));
+		await fireEvent.click(getByText('儲存票券'));
+		expect(onSave.mock.calls[0][0].sold).toBe(base.sold);
+	});
+
+	/* F1：票券類型收斂為後端真實 product_type 三值（ticket/membership/course_package，
+	 * 中文標籤：單次票券/月票方案/課程套裝）——移除無後端來源的 trial（體驗票）選項。 */
+	it('offers the real product_type options (單次票券/月票方案/課程套裝) and drops the old 體驗票 (trial) option', () => {
+		const { getByLabelText, queryByText } = render(TicketEditDialog, { open: true, ticket: base });
+		const typeSelect = getByLabelText('票券類型') as HTMLSelectElement;
+		const optionLabels = [...typeSelect.options].map((o) => o.textContent);
+		expect(optionLabels).toEqual(['單次票券', '月票方案', '課程套裝']);
+		expect(queryByText('體驗票')).toBeNull();
 	});
 
 	/* 空白 配額 = 不限（null，見 ProductResponse.quota null=無限）。ProductResponse.quota

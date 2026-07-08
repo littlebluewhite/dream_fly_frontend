@@ -51,16 +51,11 @@ export const getVenues = (): Promise<VenuesData> =>
 
 /* ═════════════════════════ 票券（GET /products，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
-/** 後端 product_type（ticket|course_package|membership|merchandise）沒有跟前端三態
- *  （pass/trial/event）一一對應 —— 依語意最接近對照：membership/course_package
- *  （重複性方案／堂數包）→ pass、ticket（單次入場)→ event；沒有任何值會對到 trial
- *  （後端沒有「體驗」這個 product_type，P2）。merchandise（護具/隊服等實體商品）
- *  不是票券，直接濾除，不進 getTickets() 的結果。 */
-const PRODUCT_TYPE_TO_TICKET_TYPE: Record<string, TicketType> = {
-	membership: 'pass',
-	course_package: 'pass',
-	ticket: 'event'
-};
+/** 後端 product_type 三值（ticket|membership|course_package，merchandise 已被
+ *  getTickets() 濾除，不會流到這裡）現與前端 TicketType 一一對應（Task F1 收斂）——
+ *  不再折疊成 pass/trial/event 這組無後端來源的虛構分組。讀寫共用同一份真值：
+ *  createProduct/updateProduct 的 body 把 Ticket.type 原樣送回 product_type，不需要
+ *  中介對照表。 */
 
 /** sold/quota 現直接來自 ProductResponse（見 integration-contract.md §3.7）：
  *  `sold` 是已付款訂單的 quantity 加總；`quota` 是 `stock` 的直接映射，`null` = 不限
@@ -72,7 +67,7 @@ function mapProduct(p: ApiProduct, i: number): Ticket {
 	return {
 		id: p.id,
 		name: p.name,
-		type: PRODUCT_TYPE_TO_TICKET_TYPE[p.product_type] ?? 'pass',
+		type: p.product_type as TicketType,
 		price: ntd(p.price_cents),
 		sold: p.sold,
 		quota: p.quota,
@@ -104,6 +99,34 @@ export const getTickets = (page = 1): Promise<TicketsData> =>
 		tickets: r.products.filter((p) => p.product_type !== 'merchandise').map(mapProduct),
 		...pageMeta(r)
 	}));
+
+/* ── 票券/方案建立與編輯(POST /products、PATCH /products/{id}，admin-only，Task F1) ──
+ * Body 形狀對齊 CreateProductRequest/UpdateProductRequest(integration-contract.md
+ * §3.7)；PATCH 全欄位選填(省略＝維持原值)。`stock` 是唯一可寫的庫存/配額欄位——
+ * ProductResponse 的 `quota` 只是 `stock` 的唯讀鏡射(見上 mapProduct() 註解)，write
+ * body 沒有獨立的 quota 欄位；呼叫端(tickets/+page.svelte)把表單的 quota 原值放進
+ * stock 送出即可(null = 不限，同讀側語意)。product_type 讀寫共用同一組真實三值
+ * (見上 mapProduct())，呼叫端直接把 Ticket.type 放進這裡，不需要另外轉換。 */
+export interface ProductWriteBody {
+	name?: string;
+	slug?: string;
+	product_type?: string;
+	description?: string;
+	price_cents?: number;
+	original_price_cents?: number;
+	features?: string[];
+	is_highlighted?: boolean;
+	badge?: string;
+	stock?: number | null;
+	valid_days?: number;
+	session_count?: number;
+}
+
+export const createProduct = (body: ProductWriteBody): Promise<ApiProduct> =>
+	api<ApiProduct>('/products', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateProduct = (id: string, body: ProductWriteBody): Promise<ApiProduct> =>
+	api<ApiProduct>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 訂單（GET /orders，admin-only） ═════════════════════════ */
 

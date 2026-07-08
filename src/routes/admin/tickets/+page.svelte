@@ -3,13 +3,21 @@
    * row (已售票券 / 票券營收 / 販售方案), then a card grid over the tickets: an icon
    * chip (tinted with the ticket colour) + name + desc + price + type
    * StatusBadge, the 已售/配額 line with a ProgressBar (warning once ≥80% sold),
-   * and the 銷售明細/編輯 actions. The row set is held locally so 新增 / 儲存 reflect
-   * immediately; 編輯 / 新增票券 open the TicketEditDialog (the prototype is
-   * front-end only). 銷售明細 still fires a toast.
+   * and the 銷售明細/編輯 actions. 編輯 / 新增票券 open the TicketEditDialog. 銷售明細
+   * still fires a toast.
    *
-   * Data now arrives async via getTickets() (mock-API seam): onMount loads it
-   * into a three-state gate (loading/error/ready); `tickets` is the local
-   * mutable working copy the 新增/編輯 flow edits in place. */
+   * Data arrives async via getTickets() (admin seam): onMount loads it into a
+   * paged three-state gate (loading/error/ready); `tickets` is the local mutable
+   * working copy the card grid renders from.
+   *
+   * Task F1: 新增/編輯 now submit to the real POST /products / PATCH /products/{id}
+   * (createProduct/updateProduct, admin/api.ts) instead of only mutating `tickets`
+   * locally. buildProductBody() maps the edited Ticket back to the wire body
+   * (price→cents via toCents；quota→stock 直接反向映射，同讀側 getTickets() 的鏡射
+   * 語意；type 直接對應 product_type，讀寫共用同一組真實三值)。成功後用
+   * gate.silentRefresh() 靜默重新整包刷新列表（同 members/coupons 頁的既有慣例，
+   * 比手動映射插入更簡單可靠）；失敗則列表不變，顯示繁中錯誤 toast，對話框維持
+   * 開啟以便修正重試。 */
   import { onMount } from 'svelte';
   import { Button, Card, Icon, ProgressBar, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
@@ -21,7 +29,9 @@
   import { TICKET_TYPES, type Ticket } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
-  import { getTickets } from '$lib/admin/api';
+  import { getTickets, createProduct, updateProduct, type ProductWriteBody } from '$lib/admin/api';
+  import { toCents } from '$lib/public/adapters';
+  import { ApiError } from '$lib/api/client';
 
   const notify = toasts.notify;
 
@@ -69,14 +79,51 @@
     edit = null;
     addNew = false;
   }
-  function save(updated: Ticket) {
-    if (addNew) {
-      const id = 'T-NEW' + (tickets.length + 1);
-      tickets = [{ ...updated, id }, ...tickets];
-    } else {
-      tickets = tickets.map((t) => (t.id === updated.id ? updated : t));
+
+  // Ticket（表單/卡片形狀）→ POST/PATCH /products 共用欄位。quota 是 stock 的鏡射
+  // （見 admin/api.ts getTickets() 註解），寫入端把表單 quota 原值放進 stock 送出，
+  // null（不限）與數字語意跟讀側一致；product_type 讀寫共用同一組真實三值，直接透傳。
+  function buildProductBody(t: Ticket): ProductWriteBody {
+    return {
+      name: t.name,
+      description: t.desc,
+      product_type: t.type,
+      price_cents: toCents(t.price),
+      stock: t.quota
+    };
+  }
+
+  // 422 驗證 / 403 權限 / 409 衝突（如同名方案 slug 撞號）→ 對應的繁中錯誤提示；
+  // 其餘（連線問題等）給通用訊息，同 classes/coupons 頁的 ApiError 判斷慣例。
+  function productErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+      if (e.status === 409) return '票券名稱或代碼已存在，請調整後再試。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function save(updated: Ticket) {
+    const wasNew = addNew;
+    const body = buildProductBody(updated);
+    try {
+      if (wasNew) {
+        await createProduct(body);
+      } else {
+        await updateProduct(updated.id, body);
+      }
+    } catch (e) {
+      toasts.notify('error', wasNew ? '新增失敗' : '儲存失敗', productErrorMessage(e));
+      return;
     }
     closeEdit();
+    toasts.notify(
+      'success',
+      wasNew ? '已新增票券' : '已儲存票券',
+      '「' + updated.name + '」已' + (wasNew ? '建立' : '更新') + '。'
+    );
+    await gate.silentRefresh();
   }
 </script>
 

@@ -1,16 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import TicketsPage from './+page.svelte';
 import { TICKETS, TICKET_TYPE } from '$lib/admin/data';
 import { fmtNT } from '$lib/admin/format';
 import { soldPct } from '$lib/admin/tickets-util';
-import { getTickets } from '$lib/admin/api';
+import { getTickets, createProduct, updateProduct } from '$lib/admin/api';
+import { toasts } from '$lib/admin/stores';
+import { ApiError } from '$lib/api/client';
 
-vi.mock('$lib/admin/api', () => ({ getTickets: vi.fn() }));
+vi.mock('$lib/admin/api', () => ({ getTickets: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn() }));
 
 beforeEach(() => {
 	vi.mocked(getTickets).mockReset();
 	vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: TICKETS.length, page: 1, perPage: 20 });
+	vi.mocked(createProduct).mockReset();
+	vi.mocked(updateProduct).mockReset();
 });
 
 /* 票券管理 (reports.jsx TicketsView): PageHead + 3 KPI StatCards + a card grid
@@ -49,13 +54,13 @@ describe('票券管理 (+page)', () => {
 		}
 	});
 
-	it('renders the ticket type badge labels (通行票 / 體驗票 / 活動票)', async () => {
+	it('renders the ticket type badge labels (單次票券 / 月票方案 / 課程套裝)', async () => {
 		const { container, findByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		const badges = [...container.querySelectorAll('.badge')].map((b) => b.textContent?.trim());
-		expect(badges).toContain(TICKET_TYPE.pass[1]); // 通行票
-		expect(badges).toContain(TICKET_TYPE.trial[1]); // 體驗票
-		expect(badges).toContain(TICKET_TYPE.event[1]); // 活動票
+		expect(badges).toContain(TICKET_TYPE.ticket[1]); // 單次票券
+		expect(badges).toContain(TICKET_TYPE.membership[1]); // 月票方案
+		expect(badges).toContain(TICKET_TYPE.course_package[1]); // 課程套裝
 	});
 
 	it("renders each ticket's price and 已售/配額 figures", async () => {
@@ -93,6 +98,100 @@ describe('票券管理 (+page)', () => {
 		expect(queryByText('建立票券')).toBeNull();
 		await fireEvent.click(getByText('新增票券'));
 		expect(getByText('建立票券')).toBeInTheDocument();
+	});
+});
+
+describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /products）', () => {
+	it('新增票券：填寫名稱後點擊建立票券，呼叫 createProduct 並在成功後重新整包刷新列表', async () => {
+		vi.mocked(createProduct).mockResolvedValue({
+			id: 'p-new', name: '新票券', slug: 'new', product_type: 'ticket', description: '',
+			price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false,
+			badge: null, stock: 100, quota: 100, sold: 0, valid_days: null, session_count: null,
+			is_active: true, created_at: '', updated_at: ''
+		});
+		const refreshed = [...TICKETS, { ...TICKETS[0], id: 'p-new', name: '新票券' }];
+
+		const { getByText, getByLabelText, findByText, queryByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+		await fireEvent.click(getByText('新增票券'));
+		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '新票券' } });
+
+		vi.mocked(getTickets).mockResolvedValue({ tickets: refreshed, total: refreshed.length, page: 1, perPage: 20 }); // 下一次 GET（刷新）回傳含新票券的清單
+		await fireEvent.click(getByText('建立票券'));
+
+		await vi.waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
+		const body = vi.mocked(createProduct).mock.calls[0][0];
+		expect(body.name).toBe('新票券');
+		expect(body.product_type).toBe('ticket'); // blankTicket 預設類型（TICKET_TYPES[0]）
+		expect(body.price_cents).toBe(100000); // toCents(1000)，blankTicket 預設票價
+		expect(body.stock).toBe(100); // quota → stock 反向映射，blankTicket 預設配額
+
+		await findByText('新票券'); // 刷新後的列表包含新票券
+		expect(getTickets).toHaveBeenCalledTimes(2); // 初次載入 + 建立成功後刷新
+		expect(queryByText('建立票券')).toBeNull(); // 對話框已關閉
+	});
+
+	it('編輯票券：修改後點擊儲存票券，呼叫 updateProduct(真實 id, body) 並在成功後重新整包刷新列表', async () => {
+		const target = TICKETS[0];
+		vi.mocked(updateProduct).mockResolvedValue({
+			id: target.id, name: '改名票券', slug: 'x', product_type: target.type, description: target.desc,
+			price_cents: target.price * 100, original_price_cents: null, features: [], is_highlighted: false,
+			badge: null, stock: target.quota, quota: target.quota, sold: target.sold, valid_days: null,
+			session_count: null, is_active: true, created_at: '', updated_at: ''
+		});
+		const refreshed = TICKETS.map((t) => (t.id === target.id ? { ...t, name: '改名票券' } : t));
+
+		const { getByText, getAllByText, getByDisplayValue, findByText } = render(TicketsPage);
+		await findByText(target.name);
+		await fireEvent.click(getAllByText('編輯')[0]);
+		await fireEvent.input(getByDisplayValue(target.name), { target: { value: '改名票券' } });
+
+		vi.mocked(getTickets).mockResolvedValue({ tickets: refreshed, total: refreshed.length, page: 1, perPage: 20 });
+		await fireEvent.click(getByText('儲存票券'));
+
+		await vi.waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(1));
+		expect(vi.mocked(updateProduct).mock.calls[0][0]).toBe(target.id); // 真實 id
+		const body = vi.mocked(updateProduct).mock.calls[0][1];
+		expect(body.name).toBe('改名票券');
+		expect(body.product_type).toBe(target.type); // 讀寫共用同一組真實值，直接透傳
+		expect(body.stock).toBe(target.quota); // quota → stock 反向映射，未改動的配額原樣送出
+
+		await findByText('改名票券'); // 刷新後的列表反映改名
+		expect(getTickets).toHaveBeenCalledTimes(2); // 初次載入 + 編輯成功後刷新
+	});
+
+	it('新增票券失敗（409 名稱已存在）→ 顯示繁中錯誤 toast，對話框維持開啟，列表不變', async () => {
+		vi.mocked(createProduct).mockRejectedValue(new ApiError(409, 'product slug already exists'));
+		const before = get(toasts).length;
+
+		const { getByText, getByLabelText, findByText, queryByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+		await fireEvent.click(getByText('新增票券'));
+		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '重複票券' } });
+		await fireEvent.click(getByText('建立票券'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toContain('已存在');
+		expect(queryByText('重複票券')).toBeNull(); // 未進入列表
+		expect(getByText('建立票券')).toBeInTheDocument(); // 對話框仍開著，可修正重試
+		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+	});
+
+	it('編輯票券失敗（422 驗證）→ 顯示繁中錯誤 toast，列表維持原值', async () => {
+		vi.mocked(updateProduct).mockRejectedValue(new ApiError(422, 'invalid product_type'));
+		const before = get(toasts).length;
+
+		const { getByText, getAllByText, findByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+		await fireEvent.click(getAllByText('編輯')[0]);
+		await fireEvent.click(getByText('儲存票券'));
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toContain('不符規則');
+		expect(await findByText(TICKETS[0].name)).toBeInTheDocument(); // 原名稱仍在
+		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
 	});
 });
 

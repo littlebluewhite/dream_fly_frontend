@@ -67,9 +67,9 @@ describe('StatusBadge', () => {
 		expect(getByText('已停用')).toBeInTheDocument();
 	});
 
-	it('ticket/pass → 通行票, plain', () => {
-		const { container, getByText } = render(StatusBadge, { kind: 'ticket', value: 'pass' });
-		expect(getByText('通行票')).toBeInTheDocument();
+	it('ticket/membership → 月票方案, plain', () => {
+		const { container, getByText } = render(StatusBadge, { kind: 'ticket', value: 'membership' });
+		expect(getByText('月票方案')).toBeInTheDocument();
 		expect(dot(container)).toBeNull();
 		expect(isSolid(container)).toBe(false);
 	});

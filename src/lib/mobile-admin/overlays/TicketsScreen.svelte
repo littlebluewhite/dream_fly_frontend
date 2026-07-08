@@ -25,7 +25,7 @@
       slot="right"
       icon="plus"
       label="新增方案"
-      onClick={() => toasts.notify('success', '新增票券', '已開啟票券方案建立表單。')}
+      onClick={() => toasts.notify('info', '新增票券', '請至電腦版管理後台建立新票券方案。')}
     />
   </ScreenHeader>
   <div class="df-scroll">

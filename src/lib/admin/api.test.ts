@@ -15,6 +15,8 @@ import {
 	getMembers,
 	createCourse,
 	updateCourse,
+	createProduct,
+	updateProduct,
 	updateOrderStatus,
 	getCoupons,
 	createCoupon,
@@ -91,7 +93,7 @@ describe('getVenues — GET /venues（公開端點）', () => {
 });
 
 describe('getTickets — GET /products（admin 自帶分頁抓取，不假道 public listProducts()，Task 17）', () => {
-	it('ntd 轉換價格；sold/quota 直接來自後端；merchandise 濾除；product_type 對照 pass/event', async () => {
+	it('ntd 轉換價格；sold/quota 直接來自後端；merchandise 濾除；product_type 直接映射為 TicketType（Task F1 收斂，不再折疊成 pass/trial/event）', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /products?page=1': {
@@ -132,9 +134,9 @@ describe('getTickets — GET /products（admin 自帶分頁抓取，不假道 pu
 
 		expect(api).toHaveBeenCalledWith('/products?page=1');
 		expect(d.tickets).toHaveLength(3); // merchandise 濾除
-		expect(d.tickets.find((t) => t.id === 'p1')).toMatchObject({ type: 'pass', price: 2800, sold: 45, quota: null });
-		expect(d.tickets.find((t) => t.id === 'p2')).toMatchObject({ type: 'pass', price: 5400, sold: 12, quota: 100 });
-		expect(d.tickets.find((t) => t.id === 'p3')).toMatchObject({ type: 'event', price: 350, sold: 200, quota: null });
+		expect(d.tickets.find((t) => t.id === 'p1')).toMatchObject({ type: 'membership', price: 2800, sold: 45, quota: null });
+		expect(d.tickets.find((t) => t.id === 'p2')).toMatchObject({ type: 'course_package', price: 5400, sold: 12, quota: 100 });
+		expect(d.tickets.find((t) => t.id === 'p3')).toMatchObject({ type: 'ticket', price: 350, sold: 200, quota: null });
 		expect(d.tickets.find((t) => t.id === 'p4')).toBeUndefined();
 		expect(d.total).toBe(4);
 		expect(d.page).toBe(1);
@@ -472,6 +474,49 @@ describe('updateCourse — PATCH /courses/{id}（admin，Task 8 piece 1）', () 
 		const result = await updateCourse('c1', body);
 
 		expect(api).toHaveBeenCalledWith('/courses/c1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual(updated);
+	});
+});
+
+describe('createProduct — POST /products（admin，Task F1：票券寫入接線）', () => {
+	it('POSTs the given body as-is and returns the ProductResponse', async () => {
+		const created = {
+			id: 'p-new', name: '新票券', slug: 'new-ticket', product_type: 'ticket', description: null,
+			price_cents: 60000, original_price_cents: null, features: [], is_highlighted: false,
+			badge: null, stock: null, quota: null, sold: 0, valid_days: null, session_count: null,
+			is_active: true, created_at: '', updated_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /products': created }));
+
+		const body = { name: '新票券', product_type: 'ticket', price_cents: 60000, stock: null };
+		const result = await createProduct(body);
+
+		expect(api).toHaveBeenCalledWith('/products', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 422/409) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /products': new Error('conflict') }));
+		await expect(createProduct({ name: 'x', product_type: 'ticket', price_cents: 100 })).rejects.toThrow(
+			'conflict'
+		);
+	});
+});
+
+describe('updateProduct — PATCH /products/{id}（admin，Task F1：票券寫入接線）', () => {
+	it('PATCHes /products/{id} with the given (partial) body and returns the ProductResponse', async () => {
+		const updated = {
+			id: 'p1', name: '改名票券', slug: 'x', product_type: 'membership', description: null,
+			price_cents: 320000, original_price_cents: null, features: [], is_highlighted: false,
+			badge: null, stock: null, quota: null, sold: 45, valid_days: 30, session_count: null,
+			is_active: true, created_at: '', updated_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /products/p1': updated }));
+
+		const body = { name: '改名票券', price_cents: 320000, stock: null };
+		const result = await updateProduct('p1', body);
+
+		expect(api).toHaveBeenCalledWith('/products/p1', { method: 'PATCH', body: JSON.stringify(body) });
 		expect(result).toEqual(updated);
 	});
 });
