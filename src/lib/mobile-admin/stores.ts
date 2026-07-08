@@ -11,62 +11,30 @@
  * seams)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
  * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
 
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
+import { createHydrationGate } from '$lib/hydration-gate';
+import { createOverlay } from '$lib/components/mobile/overlay';
+import { createReadState, unreadCount } from '$lib/stores/read-state';
 import type { Role } from './nav';
 import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
 import { getOpsCollections, getMessages, markRead } from './api';
 
-/* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
-export interface OverlayEntry {
-	id: string;
-	props: Record<string, unknown>;
-}
-export interface OverlayState {
-	stack: OverlayEntry[];
-	sheet: OverlayEntry | null;
-}
-/** Mirror of the member-app overlay machine (kept per-surface, not shared). */
-export function createOverlay() {
-	const { subscribe, update, set } = writable<OverlayState>({ stack: [], sheet: null });
-	return {
-		subscribe,
-		push(id: string, props: Record<string, unknown> = {}) {
-			update((o) => ({ ...o, stack: [...o.stack, { id, props }] }));
-		},
-		pop() {
-			update((o) => ({ ...o, stack: o.stack.slice(0, -1) }));
-		},
-		sheet(id: string, props: Record<string, unknown> = {}) {
-			update((o) => ({ ...o, sheet: { id, props } }));
-		},
-		closeSheet() {
-			update((o) => ({ ...o, sheet: null }));
-		},
-		closeAll() {
-			set({ stack: [], sheet: null });
-		}
-	};
-}
+/* ---------- Overlay (push-screen stack + one bottom sheet) ----------
+ * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
+ * 同一份 factory,見該檔頂端註解)——overlay 單例仍由本 surface 自建(per-surface
+ * 狀態)。 */
+export { createOverlay };
+export type { OverlayEntry, OverlayState } from '$lib/components/mobile/overlay';
 export const overlay = createOverlay();
 
-/* ---------- Notifications (mobile bell — `unread` flag) ---------- */
-/** Admin / coach bell notifications mark all-read in one action (ui.jsx NotifSheet
- *  onReadAll). Immutable update keeps the seed array intact. */
-export function createAdminNotifs<T extends { id?: string; unread: boolean }>(seed: T[]) {
-	const { subscribe, update } = writable<T[]>(seed.map((n) => ({ ...n })));
-	return {
-		subscribe,
-		markAllRead() {
-			update((ns) => ns.map((n) => ({ ...n, unread: false })));
-		}
-	};
-}
-export function adminUnread(items: { unread: boolean }[]): number {
-	return items.filter((n) => n.unread).length;
-}
-export const adminNotifs = createAdminNotifs<AdminNotif>(ADMIN_NOTIFS);
-export const coachNotifs = createAdminNotifs<AdminNotif>(COACH_NOTIFS);
+/* ---------- Notifications (mobile bell — `read` flag) ----------
+ * 單源於 `$lib/stores/read-state` 的 createReadState(Admin / coach 通知鈴鐺全部
+ * 標為已讀共用同一個 factory,見該檔頂端註解——不可變更新,保留 seed 陣列不被
+ * 動到)。adminUnread 保留舊名(呼叫端零變動),內部直接委派 unreadCount。 */
+export const adminUnread = unreadCount;
+export const adminNotifs = createReadState<AdminNotif>(ADMIN_NOTIFS);
+export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 
 /* ---------- Live collections (新增 / 編輯 表單寫回) ---------- */
 /** Replace a record by id, or prepend it when the id is new (app.jsx save*). */
@@ -92,7 +60,7 @@ export const coaches = writable<Coach[]>(COACHES);
  *  的真後端寫入端點，繼續保留本地版本。) */
 export function saveCoach(rec: Coach, isNew: boolean) {
 	coaches.update((cs) => (isNew ? [{ ...rec, id: nextId('c', cs) }, ...cs] : upsertById(cs, rec)));
-	opsHydrated.set(true);
+	opsGate.markMutated();
 }
 
 /** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本月已收
@@ -105,40 +73,34 @@ export const orders = writable<OrderRow[]>(ORDERS);
  *  Also flips `opsHydrated` true(同 saveCoach — mutation 即宣告水合真相)。 */
 export function markOrderPaid(id: string) {
 	orders.update((os) => os.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: '剛剛' } : o)));
-	opsHydrated.set(true);
+	opsGate.markMutated();
 }
 
 /** 集合水合守衛(members/classes/coaches/orders 一次到位)。四個 store 都保留同步
  *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸)。hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發:guard 為 true 就短路;
- *  save* / markOrderPaid 等 mutation 也會把 guard 設 true(mutation 即宣告水合真相),
- *  防止「水合前的新增/編輯」被首次水合的 seed clone 無聲清除(C1 regression:admin
- *  首頁快速操作新增學員/教練 → 首次進 classes/members/orders 任一頁 → 舊碼會用
- *  seed 覆寫剛新增的資料)。resolve 時重查一次 guard,若等待 fetch 期間發生
- *  mutation 就放棄本次寫入(封 in-flight 邊窗)。refreshOps() 保持無條件寫入,供
- *  「重新整理」/ErrorState 重試共用(使用者明確要求最新資料,不受 guard 短路或
- *  保護)。 */
-export const opsHydrated = writable(false);
-export function hydrateOps(): Promise<void> {
-	if (get(opsHydrated)) return Promise.resolve();
-	return getOpsCollections().then((d) => {
-		if (get(opsHydrated)) return; // mutation 發生於 in-flight 期間 — mutation 勝出,放棄覆寫
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發;save* / markOrderPaid 等
+ *  mutation 呼叫 opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的
+ *  新增/編輯」被首次水合的 seed clone 無聲清除(C1 regression:admin 首頁快速操作
+ *  新增學員/教練 → 首次進 classes/members/orders 任一頁 → 舊碼會用 seed 覆寫剛
+ *  新增的資料)。refreshOps() 保持無條件寫入,供「重新整理」/ErrorState 重試共用
+ *  (使用者明確要求最新資料,不受 guard 短路保護)。guard 短路 + post-await
+ *  re-check(mutation 勝出)的機制本身由 `createHydrationGate` 提供,見
+ *  `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭函式(不直接傳函式參照)——
+ *  維持原本「只有實際呼叫 hydrateOps()/refreshOps() 時才讀取 getOpsCollections
+ *  這個 binding」的惰性時機,而非在本模組載入當下就讀取;純 import stores.ts 而
+ *  不曾呼叫 hydrateOps() 的頁面測試,其 api mock 因此不必連帶提供 getOpsCollections。 */
+const opsGate = createHydrationGate({
+	fetch: () => getOpsCollections(),
+	apply: (d) => {
 		members.set(d.members);
 		classes.set(d.classes);
 		coaches.set(d.coaches);
 		orders.set(d.orders);
-		opsHydrated.set(true);
-	});
-}
-export function refreshOps(): Promise<void> {
-	return getOpsCollections().then((d) => {
-		members.set(d.members);
-		classes.set(d.classes);
-		coaches.set(d.coaches);
-		orders.set(d.orders);
-		opsHydrated.set(true);
-	});
-}
+	}
+});
+export const opsHydrated = opsGate.hydrated;
+export const hydrateOps = opsGate.hydrate;
+export const refreshOps = opsGate.refresh;
 
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from
  *  this store, so reading a thread updates both — the static seed only ever showed
@@ -152,32 +114,27 @@ export const messages = writable<MessageRow[]>(MESSAGES.map((m) => ({ ...m })));
  *  and-forget、不 await、吞掉錯誤(id 即 getMessages() 映射出的 conversation id)。 */
 export function markMessageRead(id: string) {
 	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
-	messagesHydrated.set(true);
+	messagesGate.markMutated();
 	void markRead(id).catch(() => {});
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
- *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 hydrateOps()。同步 seed
- *  保留(對齊 mobile notifs 前例);guard 為 true 就短路,markMessageRead 也會把
- *  guard 設 true(mutation 即宣告水合真相);resolve 時重查一次 guard,若等待 fetch
- *  期間發生 mutation 就放棄本次寫入(同 hydrateOps 的封 in-flight 邊窗機制)。
- *  refreshMessages() 保持無條件寫入,供重試使用。 */
-export const messagesHydrated = writable(false);
-export function hydrateMessages(): Promise<void> {
-	if (get(messagesHydrated)) return Promise.resolve();
-	return getMessages().then((d) => {
-		if (get(messagesHydrated)) return; // mutation 發生於 in-flight 期間 — mutation 勝出
+ *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。同步 seed 保留
+ *  (對齊 mobile notifs 前例);markMessageRead 呼叫 messagesGate.markMutated()
+ *  (mutation 即宣告水合真相)。refreshMessages() 保持無條件寫入,供重試使用。
+ *  guard 短路 + post-await re-check(mutation 勝出)的機制本身由
+ *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層
+ *  箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */
+const messagesGate = createHydrationGate({
+	fetch: () => getMessages(),
+	apply: (d) => {
 		messages.set(d);
-		messagesHydrated.set(true);
-	});
-}
-export function refreshMessages(): Promise<void> {
-	return getMessages().then((d) => {
-		messages.set(d);
-		messagesHydrated.set(true);
-	});
-}
+	}
+});
+export const messagesHydrated = messagesGate.hydrated;
+export const hydrateMessages = messagesGate.hydrate;
+export const refreshMessages = messagesGate.refresh;
 
 /* ---------- Role (current section, synced from the URL by +layout.svelte) ----------
  * Task 20: the demo `session` writable is gone (real login state lives in

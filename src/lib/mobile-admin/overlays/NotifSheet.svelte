@@ -8,7 +8,7 @@
   export let notifs: AdminNotif[] = [];
   export let onReadAll: (() => void) | undefined = undefined;
 
-  $: unread = notifs.filter((n) => n.unread).length;
+  $: unread = notifs.filter((n) => !n.read).length;
 </script>
 
 <Sheet open {onClose} maxHeight="80%" footer={unread > 0} title="通知中心" sub={unread > 0 ? unread + ' 則未讀' : '全部已讀'}>
@@ -16,7 +16,7 @@
     {#each notifs as n, i (i)}
       <div
         style="display:flex; gap:12px; padding:13px; border-radius:13px;
-          background:{n.unread ? 'var(--df-primary-bg)' : 'var(--df-bg-light)'};"
+          background:{!n.read ? 'var(--df-primary-bg)' : 'var(--df-bg-light)'};"
       >
         <div
           style="width:38px; height:38px; border-radius:10px; background:{n.bg};
@@ -30,7 +30,7 @@
               style="font-size:14px; font-weight:700; color:var(--df-text-dark); flex:1; min-width:0;
                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
             >{n.title}</span>
-            {#if n.unread}
+            {#if !n.read}
               <span style="width:8px; height:8px; border-radius:999px; background:var(--df-primary); flex:none;"></span>
             {/if}
           </div>

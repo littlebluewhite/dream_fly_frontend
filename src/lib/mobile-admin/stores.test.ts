@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { createReadState } from '$lib/stores/read-state';
 import {
 	createOverlay,
-	createAdminNotifs,
 	upsertById,
 	nextId,
 	adminUnread,
@@ -56,21 +56,21 @@ describe('createOverlay (admin)', () => {
 	});
 });
 
-describe('createAdminNotifs', () => {
+describe('createReadState (adminNotifs/coachNotifs 的底層 factory)', () => {
 	const seed = [
-		{ id: 'a', unread: true },
-		{ id: 'b', unread: true },
-		{ id: 'c', unread: false }
+		{ id: 'a', read: false },
+		{ id: 'b', read: false },
+		{ id: 'c', read: true }
 	];
-	it('counts unread on the `unread` flag', () => {
-		const n = createAdminNotifs(seed);
+	it('adminUnread 依 `read` 旗標計數(內部委派 unreadCount)', () => {
+		const n = createReadState(seed);
 		expect(adminUnread(get(n))).toBe(2);
 	});
 	it('markAllRead clears unread without mutating the seed', () => {
-		const n = createAdminNotifs(seed);
+		const n = createReadState(seed);
 		n.markAllRead();
 		expect(adminUnread(get(n))).toBe(0);
-		expect(seed.filter((x) => x.unread)).toHaveLength(2);
+		expect(seed.filter((x) => !x.read)).toHaveLength(2);
 	});
 });
 
