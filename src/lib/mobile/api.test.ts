@@ -7,7 +7,8 @@ import {
 	getNotifications,
 	getSchedule,
 	getPoints,
-	getReports
+	getReports,
+	submitTrialInquiry
 } from './api';
 import {
 	getCourses as memberGetCourses,
@@ -19,12 +20,15 @@ import {
 	getReports as memberGetReports,
 	getReportStats as memberGetReportStats
 } from '$lib/member/api';
+import { sendContactInquiry } from '$lib/public/api';
 import { ANNOUNCE } from './data';
 
 /* Task 19：mobile/api.ts 從整包 reply() mock 改為 desktop member seams 的薄層。
  * 這裡只 mock `$lib/member/api`(已在 member/api.test.ts 端對端測過真後端
  * 映射)——驗證 mobile 的每支函式「call 對桌面 seam + 正確薄映射/passthrough」，
- * 不重新測一次桌面早就測過的 HTTP 映射邏輯。 */
+ * 不重新測一次桌面早就測過的 HTTP 映射邏輯。Task F8：submitTrialInquiry() 同理
+ * 只 mock `$lib/public/api` 的 sendContactInquiry(已在 public/api.test.ts 端對端
+ * 測過 POST /contact 映射)。 */
 vi.mock('$lib/member/api', () => ({
 	getCourses: vi.fn(),
 	getMine: vi.fn(),
@@ -35,6 +39,7 @@ vi.mock('$lib/member/api', () => ({
 	getReports: vi.fn(),
 	getReportStats: vi.fn()
 }));
+vi.mock('$lib/public/api', () => ({ sendContactInquiry: vi.fn() }));
 
 const CATALOG_FIXTURE = [
 	{ id: 'c1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', days: '週二 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '示範課程', spots: 1 },
@@ -64,6 +69,7 @@ beforeEach(() => {
 	vi.mocked(memberGetPoints).mockReset().mockResolvedValue({ rewards: [], expiring: '360 點', expiryDate: '2026/12/31' });
 	vi.mocked(memberGetReports).mockReset().mockResolvedValue({ reportCards: [], certificates: [], stats: { attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 } });
 	vi.mocked(memberGetReportStats).mockReset().mockResolvedValue({ attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 });
+	vi.mocked(sendContactInquiry).mockReset().mockResolvedValue({} as never);
 });
 
 describe('getHome — 復用桌面 getCourses()/getMine()，薄映射 icon', () => {
@@ -165,5 +171,56 @@ describe('getReports — 復用桌面 getReports()，零映射(Task 13 seam)', (
 		};
 		vi.mocked(memberGetReports).mockResolvedValue(fixture);
 		expect(await getReports()).toBe(fixture);
+	});
+});
+
+describe('submitTrialInquiry — 復用桌面 sendContactInquiry()(POST /contact, inquiry_type=trial，Task F8)', () => {
+	const INPUT = {
+		category: '幼兒體操',
+		studentAge: '3–5 歲',
+		preferredDay: '2026/06/14 (六)',
+		preferredSlot: '10:00–11:15',
+		parentName: '王先生',
+		parentPhone: '0912-345-678',
+		studentName: '小恩',
+		note: '曾學過舞蹈'
+	};
+
+	it('組出 ContactPayload：頂層 name/phone 取家長姓名/電話，email 為可辨識預設值，subject/message 為人讀摘要，metadata 帶滿 8 個 trial 慣例欄位', async () => {
+		await submitTrialInquiry(INPUT);
+
+		expect(sendContactInquiry).toHaveBeenCalledWith({
+			name: '王先生',
+			email: 'trial-inquiry@no-email.dreamfly.local',
+			phone: '0912-345-678',
+			subject: '試上預約:幼兒體操',
+			message:
+				'課程類別：幼兒體操\n學員年齡：3–5 歲\n預約時段：2026/06/14 (六) 10:00–11:15\n家長姓名：王先生\n聯絡手機：0912-345-678\n學員姓名：小恩\n備註：曾學過舞蹈',
+			inquiry_type: 'trial',
+			metadata: {
+				category: '幼兒體操',
+				student_age: '3–5 歲',
+				preferred_day: '2026/06/14 (六)',
+				preferred_slot: '10:00–11:15',
+				parent_name: '王先生',
+				parent_phone: '0912-345-678',
+				student_name: '小恩',
+				note: '曾學過舞蹈'
+			}
+		});
+	});
+
+	it('備註為空字串時 message 顯示「無」，但 metadata.note 保留原始空字串(後端原樣存取，不逐欄驗證)', async () => {
+		await submitTrialInquiry({ ...INPUT, note: '' });
+
+		const body = vi.mocked(sendContactInquiry).mock.calls[0][0];
+		expect(body.message).toContain('備註：無');
+		expect(body.metadata).toMatchObject({ note: '' });
+	});
+
+	it('回傳值直接透傳 sendContactInquiry() 的解析結果', async () => {
+		const fixture = { id: 'inq1' };
+		vi.mocked(sendContactInquiry).mockResolvedValue(fixture as never);
+		expect(await submitTrialInquiry(INPUT)).toBe(fixture);
 	});
 });

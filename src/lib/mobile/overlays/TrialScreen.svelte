@@ -1,7 +1,11 @@
 <script lang="ts">
   /* 預約免費試上 push screen。trial.jsx TrialScreen (29)。
    * 4 步 stepper：0 課程+年齡 → 1 日期+時段 → 2 聯絡資料 → 3 完成（SuccessBody + 預約單）。
-   * 送出時 toasts.notify('accent', …)。逐步驗證委派給 trialValidation.stepValid（已測試）。
+   * 逐步驗證委派給 trialValidation.stepValid（已測試）。
+   * Task F8：送出改打真 $lib/mobile/api submitTrialInquiry()（POST /contact,
+   * inquiry_type='trial'，§3.17）——成功才前進 step 3 + toasts.notify('accent', …)，
+   * 失敗停留本步驟並 toasts.notify('error', …)，按鈕於 finally 解除 submitting
+   * 鎖定以便重試。
    * Legacy Svelte（無 runes）。 */
   import { tick } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -12,6 +16,8 @@
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import { toasts, profile } from '$lib/mobile/stores';
+  import { submitTrialInquiry } from '$lib/mobile/api';
+  import { ApiError } from '$lib/api/client';
   import { stepValid } from './trialValidation';
 
   export let onBack: () => void;
@@ -51,6 +57,7 @@
   let phone = $profile.phone || '';
   let student = '';
   let note = '';
+  let submitting = false;
   let bodyEl: HTMLDivElement;
   const ticket = 'TR-26' + Math.floor(Math.random() * 900 + 100);
 
@@ -70,9 +77,27 @@
   function next() {
     if (step < 3) goStep(step + 1);
   }
-  function submit() {
-    goStep(3);
-    toasts.notify('accent', '試上預約已送出', (chosenDay?.full || '') + ' ' + (chosenSlot?.time || ''));
+  async function submit() {
+    if (!stepValid(2, state) || submitting) return;
+    submitting = true;
+    try {
+      await submitTrialInquiry({
+        category: cat,
+        studentAge: age,
+        preferredDay: chosenDay?.full ?? day,
+        preferredSlot: chosenSlot?.time ?? slot,
+        parentName: parent,
+        parentPhone: phone,
+        studentName: student,
+        note
+      });
+      goStep(3);
+      toasts.notify('accent', '試上預約已送出', (chosenDay?.full || '') + ' ' + (chosenSlot?.time || ''));
+    } catch (err) {
+      toasts.notify('error', '送出失敗', err instanceof ApiError ? err.message : '請稍後再試');
+    } finally {
+      submitting = false;
+    }
   }
 </script>
 
@@ -279,8 +304,10 @@
         </Button>
       {/if}
       {#if step === 2}
-        <Button variant="primary" style="flex:1;" disabled={!stepValid(2, state)} on:click={submit}>
-          <span style="display:inline-flex; align-items:center; gap:6px;"><Icon name="calendar-check" size={17} color="currentColor" />送出預約</span>
+        <Button variant="primary" style="flex:1;" disabled={!stepValid(2, state) || submitting} on:click={submit}>
+          <span style="display:inline-flex; align-items:center; gap:6px;">
+            <Icon name="calendar-check" size={17} color="currentColor" />{submitting ? '送出中…' : '送出預約'}
+          </span>
         </Button>
       {/if}
     {/if}

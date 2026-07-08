@@ -7,6 +7,7 @@
  * 的欄位，這裡原樣沿用同一份 mock/預設值——不發明桌面沒有的假來源，也不重新
  * 實作桌面已經做過的映射邏輯。逐函式來源見 task-19-report.md 的盤點表。 */
 import type { CatalogCourse } from '$lib/public/adapters';
+import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
 // 刻意從 $lib/domain/member-app 取寬鬆版型別(tone/status 為 string，非窄化
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
 // 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
@@ -148,3 +149,52 @@ export type { ReportsData };
  *  呈現每一筆成績單(同桌面 /member/reports 頁的呈現方式)，不再顯示這些後端
  *  沒有的欄位。 */
 export const getReports = (): Promise<ReportsData> => memberGetReports();
+
+/* ---- 試上預約(TrialScreen)送出 — Task F8：POST /contact, inquiry_type='trial' ----
+ * 復用桌面 sendContactInquiry()(§3.17),不重新實作一次 HTTP。設計=洽詢特化:
+ * 不佔名額、不建 booking,admin 後續以簡訊/電話人工聯繫(見 TrialScreen 既有
+ * NoteBox 文案),故頂層 phone 才是真正會被使用的聯絡管道。契約頂層 email 為
+ * 必填欄位,但試上表單本身未收集 email——用可辨識的預設值佔位,不為此新增
+ * 表單欄位(對照組決策與映射表見 task-F8-report.md)。subject/message 組成人類
+ * 可讀摘要,讓 admin 列表不必展開 metadata 就看得懂;metadata 帶齊契約 §3.17
+ * 文件性列舉的 8 個 trial 慣例欄位,供之後需要結構化讀取時使用。 */
+const TRIAL_INQUIRY_EMAIL_PLACEHOLDER = 'trial-inquiry@no-email.dreamfly.local';
+
+export interface TrialInquiryInput {
+	category: string;
+	studentAge: string;
+	preferredDay: string;
+	preferredSlot: string;
+	parentName: string;
+	parentPhone: string;
+	studentName: string;
+	note: string;
+}
+
+export const submitTrialInquiry = (input: TrialInquiryInput): Promise<ApiInquiry> =>
+	sendContactInquiry({
+		name: input.parentName,
+		email: TRIAL_INQUIRY_EMAIL_PLACEHOLDER,
+		phone: input.parentPhone,
+		subject: `試上預約:${input.category}`,
+		message: [
+			`課程類別：${input.category}`,
+			`學員年齡：${input.studentAge}`,
+			`預約時段：${input.preferredDay} ${input.preferredSlot}`,
+			`家長姓名：${input.parentName}`,
+			`聯絡手機：${input.parentPhone}`,
+			`學員姓名：${input.studentName}`,
+			`備註：${input.note || '無'}`
+		].join('\n'),
+		inquiry_type: 'trial',
+		metadata: {
+			category: input.category,
+			student_age: input.studentAge,
+			preferred_day: input.preferredDay,
+			preferred_slot: input.preferredSlot,
+			parent_name: input.parentName,
+			parent_phone: input.parentPhone,
+			student_name: input.studentName,
+			note: input.note
+		}
+	});

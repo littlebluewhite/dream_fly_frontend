@@ -106,6 +106,11 @@ export interface ContactPayload {
 	phone?: string;
 	subject: string;
 	message: string;
+	// Round 4 Task B5/F8：試上預約(mobile TrialScreen)借用本端點,'trial' + 自由
+	// metadata JSONB(後端原樣存取,不逐欄驗證)。既有呼叫端(桌面 ContactForm)不帶
+	// 這兩欄時行為不變——契約 §3.17。
+	inquiry_type?: 'general' | 'trial';
+	metadata?: Record<string, unknown>;
 }
 
 export interface ApiInquiry {
