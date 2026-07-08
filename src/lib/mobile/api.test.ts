@@ -51,7 +51,7 @@ const SCHEDULE_FIXTURE = [
 
 beforeEach(() => {
 	vi.mocked(memberGetCourses).mockReset().mockResolvedValue({ catalog: CATALOG_FIXTURE });
-	vi.mocked(memberGetMine).mockReset().mockResolvedValue({ courses: MY_COURSES_FIXTURE, attendance: [] });
+	vi.mocked(memberGetMine).mockReset().mockResolvedValue({ courses: MY_COURSES_FIXTURE });
 	vi.mocked(memberGetSchedule).mockReset().mockResolvedValue({ schedule: SCHEDULE_FIXTURE });
 	vi.mocked(memberGetAccount).mockReset().mockResolvedValue({
 		orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],

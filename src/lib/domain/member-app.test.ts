@@ -19,7 +19,6 @@ import {
 	SKILLS,
 	UPCOMING,
 	MY_COURSES,
-	ATT_HISTORY,
 	CATALOG,
 	SCHEDULE,
 	ORDERS,
@@ -44,7 +43,11 @@ import {
  * CATALOG/ORDERS 同理——Task 11 P2 清理後，member facade(`$lib/member/data`)不再
  * 重新匯出這兩個值(課程介紹走真 GET /courses、帳戶訂單走真 GET /orders/me)，故它們
  * 也退出這份「member facade 同參照」守衛範圍；domain 本身的字面不變量/row-count
- * 仍在下方第 2、3 節涵蓋(mobile 另有自己一份 facade，不在本檔案範圍)。 */
+ * 仍在下方第 2、3 節涵蓋(mobile 另有自己一份 facade，不在本檔案範圍)。
+ * ATT_HISTORY 同理——Task F7 把 member/mobile 的逐堂出勤明細換成真 GET
+ * /enrolments/{id}/attendance(§3.12)後，這個 mock 常數已從 domain/member-app.ts
+ * 本體移除(非僅 facade 不再轉出)，故不再有值可供這裡的同參照/字面不變量/row-count
+ * 測試涵蓋。 */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
 		expect(MemberData.ME).toBe(ME);
@@ -52,7 +55,6 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.SKILLS).toBe(SKILLS);
 		expect(MemberData.UPCOMING).toBe(UPCOMING);
 		expect(MemberData.MY_COURSES).toBe(MY_COURSES);
-		expect(MemberData.ATT_HISTORY).toBe(ATT_HISTORY);
 		expect(MemberData.SCHEDULE).toBe(SCHEDULE);
 		expect(MemberData.MAKEUP_SLOTS).toBe(MAKEUP_SLOTS);
 		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
@@ -84,9 +86,6 @@ describe('literal seed invariants (independent of the facades)', () => {
 	it('MY_COURSES ids are k1/k6/k8 with coaches 林雅婷/林雅婷/陳冠宇', () => {
 		expect(MY_COURSES.map((c) => c.id)).toEqual(['k1', 'k6', 'k8']);
 		expect(MY_COURSES.map((c) => c.coach)).toEqual(['林雅婷', '林雅婷', '陳冠宇']);
-	});
-	it('ATT_HISTORY[0] is 06/06 present', () => {
-		expect(ATT_HISTORY[0]).toEqual({ date: '06/06', state: 'present' });
 	});
 	it('CATALOG id 3 is 競技啦啦隊 進階班 at NT$4,800 (hot, 1 spot)', () => {
 		const c = CATALOG[2];
@@ -147,7 +146,6 @@ describe('row counts', () => {
 	it('SKILLS has 4 rows', () => expect(SKILLS).toHaveLength(4));
 	it('UPCOMING has 3 rows', () => expect(UPCOMING).toHaveLength(3));
 	it('MY_COURSES has 3 rows', () => expect(MY_COURSES).toHaveLength(3));
-	it('ATT_HISTORY has 8 rows', () => expect(ATT_HISTORY).toHaveLength(8));
 	it('CATALOG has 6 rows', () => expect(CATALOG).toHaveLength(6));
 	it('SCHEDULE has 4 rows', () => expect(SCHEDULE).toHaveLength(4));
 	it('ORDERS has 4 rows', () => expect(ORDERS).toHaveLength(4));

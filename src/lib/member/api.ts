@@ -11,7 +11,7 @@ import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY, mapNotification } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, ApiNotification } from './data';
 
 /** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
@@ -221,7 +221,6 @@ export const getSchedule = async (): Promise<ScheduleData> => {
 
 export interface MineData {
   courses: EnrolledCourse[];
-  attendance: AttRecord[];
 }
 
 /** GET /enrolments/me → EnrolledCourse。cat/coach/room 後端沒有對應欄位(enrolment
@@ -258,7 +257,34 @@ export const getMine = async (): Promise<MineData> => {
     term: '',
     remain: 0
   }));
-  return { courses, attendance: ATT_HISTORY }; // P2: 出席紀錄後端未提供對應資料，沿用 mock
+  return { courses };
+};
+
+/** GET /enrolments/{id}/attendance 回應（integration-contract.md §3.12）。status 直接
+ *  宣告為窄化 union（非後端原始 string）——與 AttRecord.state 同一組字面值，映射時
+ *  可以直接指派、不需要 cast 或查表。 */
+interface ApiAttendanceEntry {
+  session_date: string; // "YYYY-MM-DD"
+  start_time: string;
+  end_time: string;
+  status: 'present' | 'absent' | 'leave';
+  marked_at: string;
+}
+
+/** session_date("YYYY-MM-DD") → AttRecord.date("MM/DD")，對齊既有 AttRecord 形狀
+ *  (原 ATT_HISTORY mock 同一種日期格式)。 */
+function mapAttendanceEntry(e: ApiAttendanceEntry): AttRecord {
+  return { date: e.session_date.slice(5).replace('-', '/'), state: e.status };
+}
+
+/** GET /enrolments/{id}/attendance（Task F7；integration-contract.md §3.12）——這筆
+ *  報名的逐堂出勤紀錄，只回已點名場次、依 session_date(次要鍵 start_time)舊到新
+ *  排序(後端保證，這裡不重新排序)。無點名紀錄回空陣列(不是 404)。Ownership gate：
+ *  非本人呼叫一律 404(刻意遮蔽存在性，與 cancel 的 403 不同)——呼叫端(desktop mine
+ *  頁、mobile MyCourseDetail)只會傳自己 active enrolments 的 id，不會踩到這個情況。 */
+export const getEnrolmentAttendance = async (id: string): Promise<AttRecord[]> => {
+  const entries = await api<ApiAttendanceEntry[]>(`/enrolments/${id}/attendance`);
+  return entries.map(mapAttendanceEntry);
 };
 
 export interface AccountProfile extends Member {

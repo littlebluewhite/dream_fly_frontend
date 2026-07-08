@@ -14,6 +14,7 @@
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
   import { ATT_STATE, LEVEL_TONE, LEAVE_STATUS } from '$lib/member/data';
+  import type { AttRecord } from '$lib/member/data';
   import { formatSessionDateTime } from '$lib/member/session-format';
   import {
     toasts,
@@ -28,7 +29,7 @@
     type LeaveRequest
   } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getMine, type MineData } from '$lib/member/api';
+  import { getMine, getEnrolmentAttendance, type MineData } from '$lib/member/api';
 
   let active: string | null = null;
   let dialog: 'leave' | 'contact' | null = null;
@@ -47,11 +48,34 @@
         refreshWaitlist().catch((err) => console.error('mine: 候補清單 hydrate 失敗', err)),
         refreshLeaveRequests().catch((err) => console.error('mine: 我的請假 hydrate 失敗', err))
       ]),
-    onData: ([d]) => { data = d; active = d.courses[0]?.id ?? null; }
+    onData: ([d]) => {
+      data = d;
+      const first = d.courses[0]?.id ?? null;
+      active = first;
+      if (first) loadAttendance(first);
+    }
   });
   onMount(() => {
     gate.load();
   });
+
+  // 出席明細(Task F7：GET /enrolments/{id}/attendance，§3.12)——獨立於課程清單本身
+  // 的載入閘門，選取的報名切換時才重抓(進頁不會替全部報名各打一次端點)。attGate.fetch
+  // 讀取 `active`，呼叫前一律先寫入新值再觸發(見 loadAttendance())，讀寫都在同一個
+  // 同步呼叫序列內完成，不會有競態。
+  let attendance: AttRecord[] | null = null;
+  const attGate = createLoadGate({
+    fetch: () => getEnrolmentAttendance(active as string),
+    onData: (d) => { attendance = d; }
+  });
+  function loadAttendance(id: string): void {
+    active = id;
+    attGate.load();
+  }
+  function selectCourse(id: string): void {
+    if (id === active) return;
+    loadAttendance(id);
+  }
 
   async function doCancelWaitlist(w: WaitlistEntry) {
     if (cancellingId) return;
@@ -103,7 +127,7 @@
     <div style="display:flex;flex-direction:column;gap:14px">
       {#each data.courses as c (c.id)}
         {@const on = active === c.id}
-        <button type="button" class="course-btn" on:click={() => (active = c.id)}>
+        <button type="button" class="course-btn" on:click={() => selectCourse(c.id)}>
           <Card padding={18} hoverable style={on ? 'border:2px solid var(--df-primary)' : ''}>
             <div style="display:flex;gap:13px;align-items:center">
               <div
@@ -160,18 +184,26 @@
             {/each}
           </div>
 
-          <!-- Attendance history -->
+          <!-- Attendance history(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12) -->
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--df-ink);margin-bottom:12px">出席紀錄</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">
-              {#each data.attendance as h, i (i)}
-                {@const [tone, label] = ATT_STATE[h.state]}
-                <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
-                  <Badge {tone} dot>{label}</Badge>
-                  <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
-                </div>
-              {/each}
-            </div>
+            {#if $attGate === 'loading'}
+              <Skeleton w="100%" h={56} r={8} />
+            {:else if $attGate === 'error'}
+              <ErrorState onRetry={attGate.refresh} />
+            {:else if attendance && attendance.length === 0}
+              <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
+            {:else if attendance}
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {#each attendance as h, i (i)}
+                  {@const [tone, label] = ATT_STATE[h.state]}
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+                    <Badge {tone} dot>{label}</Badge>
+                    <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
 
           <!-- Actions -->

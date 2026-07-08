@@ -114,23 +114,15 @@ export const MY_COURSES: EnrolledCourse[] = [
 	{ id: 'k8', name: '兒童翻滾 技巧班', cat: '兒童基礎', level: '進階', coach: '陳冠宇', icon: 'flame', color: '#10B981', schedule: '週五 18:00–19:00', room: 'B 教室', att: 92, attended: 11, total: 12, next: '週五 18:00', term: '2026 春季', remain: 6 }
 ];
 
-/* ---- 出席紀錄(兩側同名同形) ---- */
+/* ---- 出席紀錄(兩側同名同形) ----
+ * Task F7：ATT_HISTORY mock 已退役——member/mobile 逐堂出勤明細改走真後端
+ * GET /enrolments/{id}/attendance(integration-contract.md §3.12，見
+ * member/api.ts 的 getEnrolmentAttendance())。state 隨後端 attendance_status
+ * enum 收斂移除 'late'(後端只有 present/absent/leave 三值)。 */
 export interface AttRecord {
 	date: string;
-	state: 'present' | 'late' | 'leave' | 'absent';
+	state: 'present' | 'leave' | 'absent';
 }
-
-/* Attendance history for the active course */
-export const ATT_HISTORY: AttRecord[] = [
-	{ date: '06/06', state: 'present' },
-	{ date: '06/04', state: 'present' },
-	{ date: '05/30', state: 'late' },
-	{ date: '05/28', state: 'present' },
-	{ date: '05/23', state: 'present' },
-	{ date: '05/21', state: 'leave' },
-	{ date: '05/16', state: 'present' },
-	{ date: '05/14', state: 'present' }
-];
 
 /* ---- 課程介紹 ----
  * mobile 的 Course 多一個 `[k: string]: unknown` index signature(供購物車

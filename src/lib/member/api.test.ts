@@ -6,11 +6,11 @@
  * 的端對端斷言，而不是把邏輯也一起 mock 掉。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { getDashboard, getReports, getSchedule, getMine, getAccount, getCourses, getPoints, getNotifications } from './api';
+import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints, getNotifications } from './api';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, ATT_HISTORY } from './data';
+import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -330,8 +330,7 @@ describe('getMine', () => {
           icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: '',
           att: 75, attended: 18, total: 24, next: '', term: '', remain: 0
         }
-      ],
-      attendance: ATT_HISTORY
+      ]
     });
   });
 
@@ -386,6 +385,39 @@ describe('getMine', () => {
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /enrolments/me': [] }));
     expect(getMine()).toBeInstanceOf(Promise);
+  });
+});
+
+describe('getEnrolmentAttendance — GET /enrolments/{id}/attendance（Task F7；逐堂出勤明細，§3.12）', () => {
+  it('session_date(YYYY-MM-DD) → date(MM/DD)；status 原樣映射為 state；依端點回應順序輸出(後端已保證舊到新)', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/enrol-1/attendance': [
+          { session_date: '2026-05-14', start_time: '19:00:00', end_time: '20:30:00', status: 'present', marked_at: '2026-05-14T19:05:00Z' },
+          { session_date: '2026-05-21', start_time: '19:00:00', end_time: '20:30:00', status: 'leave', marked_at: '2026-05-21T19:05:00Z' },
+          { session_date: '2026-05-28', start_time: '19:00:00', end_time: '20:30:00', status: 'absent', marked_at: '2026-05-28T19:05:00Z' }
+        ]
+      })
+    );
+
+    const d = await getEnrolmentAttendance('enrol-1');
+
+    expect(d).toEqual([
+      { date: '05/14', state: 'present' },
+      { date: '05/21', state: 'leave' },
+      { date: '05/28', state: 'absent' }
+    ]);
+  });
+
+  it('無點名紀錄時回空陣列(不是 404)', async () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /enrolments/enrol-2/attendance': [] }));
+    const d = await getEnrolmentAttendance('enrol-2');
+    expect(d).toEqual([]);
+  });
+
+  it('是 async 接縫(回 Promise)', () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /enrolments/enrol-3/attendance': [] }));
+    expect(getEnrolmentAttendance('enrol-3')).toBeInstanceOf(Promise);
   });
 });
 

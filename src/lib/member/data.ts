@@ -19,7 +19,9 @@ export { ME, type Member } from '$lib/domain/member-app';
 export { STATS, type Stat } from '$lib/domain/member-app';
 export { SKILLS, type Skill } from '$lib/domain/member-app';
 export { MY_COURSES, type EnrolledCourse } from '$lib/domain/member-app';
-export { ATT_HISTORY, type AttRecord } from '$lib/domain/member-app';
+// ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
+// (member/api.ts 的 getEnrolmentAttendance())，這份 mock 已無 runtime 消費者。
+export type { AttRecord } from '$lib/domain/member-app';
 // CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
 // getCourses()，回傳 $lib/public/adapters 的 CatalogCourse，非這份 domain mock），這份
 // facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體不變。
@@ -50,7 +52,7 @@ export interface UpcomingClass {
   status: [Tone, string];
 }
 
-export type AttState = 'present' | 'late' | 'leave' | 'absent';
+export type AttState = 'present' | 'leave' | 'absent';
 
 export interface ScheduleBlock {
   day: number; // 1=Mon … 7=Sun
@@ -175,9 +177,12 @@ export const UPCOMING: UpcomingClass[] = UPCOMING_BASE as UpcomingClass[];
 /* Attendance history for the active course */
 export const ATT_STATE: Record<AttState, [Tone, string]> = {
   present: ['success', '出席'],
-  late: ['warning', '遲到'],
   leave: ['info', '請假'],
   absent: ['error', '缺席']
+  // 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
+  // present/absent/leave 三值，逐堂出勤明細改走真 GET /enrolments/{id}/attendance
+  // 後不會再吐出 'late'。教練點名頁的 'late' 是完全獨立的本地 UI 草稿狀態（送出時
+  // 併入 'present'，見 coach/api.ts saveAttendance()），與這裡的顯示對照表無關。
 };
 
 /* 「我的請假」清單狀態 badge（Task 11；integration-contract.md §3.20 的四值

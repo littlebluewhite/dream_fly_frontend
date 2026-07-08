@@ -21,7 +21,10 @@ export type Tone = [string, string];
 export { ME, type Member } from '$lib/domain/member-app';
 export { STATS, type Stat } from '$lib/domain/member-app';
 export { SKILLS, type Skill } from '$lib/domain/member-app';
-export { ATT_HISTORY, type AttRecord } from '$lib/domain/member-app';
+// ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
+// (MyCourseDetail.svelte 直接復用桌面 member/api.ts 的 getEnrolmentAttendance())，
+// 這份 mock 已無 runtime 消費者。
+export type { AttRecord } from '$lib/domain/member-app';
 export { SCHEDULE, type ScheduleBlock } from '$lib/domain/member-app';
 export { ORDERS, type Order } from '$lib/domain/member-app';
 export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
@@ -42,8 +45,10 @@ export { CERTS } from '$lib/domain/member-app';
 export type { Certificate as Cert } from '$lib/domain/member-app';
 import type { CatalogCourse } from '$lib/public/adapters';
 
-/* ---- Attendance history (active course) ---- */
-export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'], late: ['warning', '遲到'], leave: ['info', '請假'], absent: ['error', '缺席'] };
+/* ---- Attendance history (active course) ----
+ * 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
+ * present/absent/leave 三值。 */
+export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'], leave: ['info', '請假'], absent: ['error', '缺席'] };
 
 /* ---- Course catalog (課程介紹) ----
  * Task 19：getCourses()/getHome() 改接真後端(見 api.ts，復用 member/api.ts 的

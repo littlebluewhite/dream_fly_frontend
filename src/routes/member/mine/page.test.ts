@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import { getMine } from '$lib/member/api';
-import { MY_COURSES, ATT_HISTORY } from '$lib/member/data';
+import { getMine, getEnrolmentAttendance } from '$lib/member/api';
+import { MY_COURSES } from '$lib/member/data';
 import type { AttRecord } from '$lib/member/data';
 import { get } from 'svelte/store';
 import { waitlist, leaveRequests, toasts } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 
-vi.mock('$lib/member/api', () => ({ getMine: vi.fn() }));
+vi.mock('$lib/member/api', () => ({ getMine: vi.fn(), getEnrolmentAttendance: vi.fn() }));
 // 只替換 api()，ApiError 用回真實類別。候補清單卡片打真實 GET /waitlist/me
 // （水合）與 DELETE /waitlist/{id}（取消）；「我的請假」卡片（Task 11）打真實
 // GET /leave-requests/me 等端點——不關心候補/請假的既有測試不配置這個 mock
@@ -36,10 +36,12 @@ function fakeRouter(overrides: Record<string, unknown>) {
   });
 }
 
-const SEED = { courses: MY_COURSES, attendance: ATT_HISTORY };
+const SEED = { courses: MY_COURSES };
 
 beforeEach(() => {
   vi.mocked(getMine).mockReset();
+  // 預設空出勤明細——不關心出席明細內容的既有測試(候補/請假相關)不用逐一配置。
+  vi.mocked(getEnrolmentAttendance).mockReset().mockResolvedValue([]);
   vi.mocked(api).mockReset();
   waitlist.set([]);
   leaveRequests.set([]);
@@ -65,7 +67,8 @@ describe('member/mine 頁', () => {
   // 改用 index key 後即使有同日同狀態項目也不崩潰。
   it('出席紀錄含同日同狀態項目時仍正常渲染(index-key 迴歸)', async () => {
     const dupRec: AttRecord = { date: '06/06', state: 'present' };
-    vi.mocked(getMine).mockResolvedValue({ courses: MY_COURSES, attendance: [dupRec, dupRec] });
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(getEnrolmentAttendance).mockResolvedValue([dupRec, dupRec]);
     render(Page);
     // 出席紀錄標題出現即代表清單正常渲染,未因重複 key 崩潰
     expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
@@ -81,12 +84,69 @@ describe('member/mine 頁', () => {
   // 迴歸:新會員 courses:[] 時,成功 resolve 不應落入 catch → error state。
   // 修正前:d.courses[0].id 擲 TypeError → .catch → 顯示「載入失敗」
   it('courses 為空陣列時成功載入並顯示空狀態(不進 error state)', async () => {
-    vi.mocked(getMine).mockResolvedValue({ courses: [], attendance: [] });
+    vi.mocked(getMine).mockResolvedValue({ courses: [] });
     render(Page);
     // 空狀態訊息出現代表頁面到達 ready
     expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
     // 不得顯示錯誤狀態
     expect(screen.queryByText('載入失敗')).toBeNull();
+  });
+});
+
+describe('member/mine 頁 — 出席明細(Task F7：GET /enrolments/{id}/attendance，§3.12)', () => {
+  it('進頁以第一筆報名 id 呼叫 getEnrolmentAttendance，渲染回傳的出席紀錄', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(getEnrolmentAttendance).mockResolvedValue([
+      { date: '06/06', state: 'present' },
+      { date: '05/21', state: 'leave' }
+    ]);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
+
+    render(Page);
+
+    expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
+    expect(getEnrolmentAttendance).toHaveBeenCalledWith(MY_COURSES[0].id);
+    expect(screen.getByText('06/06')).toBeInTheDocument();
+  });
+
+  it('切換選取的課程時，以該課程 id 重新呼叫 getEnrolmentAttendance', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(getEnrolmentAttendance).mockResolvedValue([]);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
+
+    render(Page);
+    await screen.findByText('出席紀錄');
+    expect(getEnrolmentAttendance).toHaveBeenCalledWith(MY_COURSES[0].id);
+
+    await fireEvent.click(screen.getByText(MY_COURSES[1].name));
+
+    await vi.waitFor(() => expect(getEnrolmentAttendance).toHaveBeenCalledWith(MY_COURSES[1].id));
+  });
+
+  it('無出勤紀錄時顯示「尚無出勤紀錄」空狀態', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(getEnrolmentAttendance).mockResolvedValue([]);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
+
+    render(Page);
+
+    expect(await screen.findByText('尚無出勤紀錄')).toBeInTheDocument();
+  });
+
+  it('出席明細載入失敗顯示錯誤狀態，點「重新載入」可重試', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    vi.mocked(getEnrolmentAttendance)
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([{ date: '06/06', state: 'present' }]);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
+
+    render(Page);
+    await screen.findByText('出席紀錄');
+    expect(await screen.findByText('載入失敗')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByText('重新載入'));
+
+    await vi.waitFor(() => expect(screen.getByText('06/06')).toBeInTheDocument());
   });
 });
 

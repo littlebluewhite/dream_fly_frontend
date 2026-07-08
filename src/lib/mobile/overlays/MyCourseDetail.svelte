@@ -23,6 +23,9 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import Skeleton from '$lib/components/ui/Skeleton.svelte';
+  import ErrorState from '$lib/components/ui/ErrorState.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import { overlay, toasts } from '$lib/mobile/stores';
   import {
     leaveRequests,
@@ -32,8 +35,10 @@
     type LeaveRequest
   } from '$lib/member/stores';
   import { LEAVE_STATUS } from '$lib/member/data';
+  import { getEnrolmentAttendance } from '$lib/member/api';
   import { formatSessionDateTime } from '$lib/member/session-format';
-  import { ATT_HISTORY, ATT_STATE, LEVEL_TONE, type MyCourse } from '$lib/mobile/data';
+  import { createLoadGate } from '$lib/load-gate';
+  import { ATT_STATE, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -61,8 +66,20 @@
   // (course_id 比對；mock 時代 MyCourse.course_id 為 optional，真 getMine() 已
   // 填入真值，比對不到時 courseLeaves 安全落空，不拋錯)。best-effort 水合，
   // 失敗不擋課程詳情本身的顯示(同 mine 頁 load() 對候補/請假清單的處理慣例)。
+  //
+  // 出席紀錄(Task F7：GET /enrolments/{id}/attendance，§3.12)—— 直接復用桌面
+  // member/api.ts 的 getEnrolmentAttendance()(零映射差異，同本檔案對 LEAVE_STATUS/
+  // refreshLeaveRequests 的既有直接引用慣例，不透過 mobile/api.ts 轉一手)。c.id 是
+  // 這筆報名(enrolment)的 uuid(見 EnrolledCourse.id 的既有註解)。overlay push 一律
+  // 帶入非 null 的 course(見 OverlayHost.svelte)，僅在有值時才載入。
+  let attendance: AttRecord[] | null = null;
+  const attGate = createLoadGate({
+    fetch: () => getEnrolmentAttendance(c.id),
+    onData: (d) => { attendance = d; }
+  });
   onMount(() => {
     refreshLeaveRequests().catch((err) => console.error('courseDetail: 我的請假 hydrate 失敗', err));
+    if (c) attGate.load();
   });
   $: courseLeaves = c ? $leaveRequests.filter((lr) => lr.course_id === c.course_id) : [];
 
@@ -241,22 +258,30 @@
           <Icon name="chevron-right" size={18} color="var(--df-text-muted)" />
         </button>
 
-        <!-- attendance history -->
+        <!-- attendance history(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12) -->
         <Card padding={16}>
           <h3 style="margin:0 0 12px; font-size:15.5px; font-weight:700; color:var(--df-ink);">出席紀錄</h3>
-          <div style="display:flex; flex-direction:column;">
-            {#each ATT_HISTORY as a, i}
-              {@const [tone, label] = ATT_STATE[a.state]}
-              <div
-                style="display:flex; align-items:center; gap:12px; padding:10px 0;
-                  border-top:{i ? '1px solid var(--df-border)' : 'none'};"
-              >
-                <Icon name="calendar" size={16} color="var(--df-text-muted)" />
-                <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">2026 / {a.date}</span>
-                <Badge tone={tone as Tone} dot>{label}</Badge>
-              </div>
-            {/each}
-          </div>
+          {#if $attGate === 'loading'}
+            <Skeleton w="100%" h={60} r={8} />
+          {:else if $attGate === 'error'}
+            <ErrorState onRetry={attGate.refresh} />
+          {:else if attendance && attendance.length === 0}
+            <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
+          {:else if attendance}
+            <div style="display:flex; flex-direction:column;">
+              {#each attendance as a, i (i)}
+                {@const [tone, label] = ATT_STATE[a.state]}
+                <div
+                  style="display:flex; align-items:center; gap:12px; padding:10px 0;
+                    border-top:{i ? '1px solid var(--df-border)' : 'none'};"
+                >
+                  <Icon name="calendar" size={16} color="var(--df-text-muted)" />
+                  <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">2026 / {a.date}</span>
+                  <Badge tone={tone as Tone} dot>{label}</Badge>
+                </div>
+              {/each}
+            </div>
+          {/if}
         </Card>
         <div style="height:8px;"></div>
       </div>

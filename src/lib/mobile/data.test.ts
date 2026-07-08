@@ -15,7 +15,12 @@ import { describe, it, expect } from 'vitest';
  * 後端(見 api.ts)，Course 也跟著改為擴充 `$lib/public/adapters` 的真實
  * CatalogCourse(uuid string id)，不再是 domain/member-app 的 mock 形狀(number
  * id)。CATALOG 常數本身仍在 mobile/data.ts 保留(僅供既有測試當 fixture)，但
- * 不再是 domain 那份的同一參照，故移出下面兩個 facade 一致性測試。 */
+ * 不再是 domain 那份的同一參照，故移出下面兩個 facade 一致性測試。
+ *
+ * Task F7：ATT_HISTORY 同理移出「同參照」測試——逐堂出勤明細已改真 GET
+ * /enrolments/{id}/attendance(§3.12)，這個 mock 常數本身已從 domain/member-app.ts
+ * 移除。AttRecord 型別仍在(真資料的映射目標形狀不變)，型別守衛區塊改用字面值
+ * 驗證可用性，不再借用已退役的 ATT_HISTORY[0]。 */
 
 import {
 	ME,
@@ -23,7 +28,6 @@ import {
 	SKILLS,
 	UPCOMING,
 	MY_COURSES,
-	ATT_HISTORY,
 	SCHEDULE,
 	ORDERS,
 	MAKEUP_SLOTS,
@@ -55,7 +59,6 @@ import {
 	SKILLS as D_SKILLS,
 	UPCOMING as D_UPCOMING,
 	MY_COURSES as D_MY_COURSES,
-	ATT_HISTORY as D_ATT_HISTORY,
 	SCHEDULE as D_SCHEDULE,
 	ORDERS as D_ORDERS,
 	MAKEUP_SLOTS as D_MAKEUP_SLOTS,
@@ -74,7 +77,6 @@ describe('mobile facade re-exports domain/member-app by reference (single source
 		expect(SKILLS).toBe(D_SKILLS);
 		expect(UPCOMING).toBe(D_UPCOMING);
 		expect(MY_COURSES).toBe(D_MY_COURSES);
-		expect(ATT_HISTORY).toBe(D_ATT_HISTORY);
 		expect(SCHEDULE).toBe(D_SCHEDULE);
 		expect(ORDERS).toBe(D_ORDERS);
 		expect(MAKEUP_SLOTS).toBe(D_MAKEUP_SLOTS);
@@ -94,7 +96,9 @@ describe('mobile facade preserves every TYPE export (zero-API-change guard)', ()
 		const c: Skill = SKILLS[0];
 		const d: Upcoming = UPCOMING[0];
 		const e: MyCourse = MY_COURSES[0];
-		const f: AttRecord = ATT_HISTORY[0];
+		// ATT_HISTORY 已退役(Task F7)——用字面值證明 AttRecord 型別匯出仍可用，
+		// 不再借用退役的 mock 陣列。
+		const f: AttRecord = { date: '06/06', state: 'present' };
 		const h: ScheduleBlock = SCHEDULE[0];
 		const i: Order = ORDERS[0];
 		const j: MakeupSlot = MAKEUP_SLOTS[0];

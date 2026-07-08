@@ -4,15 +4,25 @@ import { get } from 'svelte/store';
 import MyCourseDetail from './MyCourseDetail.svelte';
 import { overlay } from '$lib/mobile/stores';
 import { leaveRequests, refreshLeaveRequests, cancelLeaveRequest, type LeaveRequest } from '$lib/member/stores';
-import type { MyCourse } from '$lib/mobile/data';
+import { getEnrolmentAttendance } from '$lib/member/api';
+import type { MyCourse, AttRecord } from '$lib/mobile/data';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
  * (真後端的補課預約是針對一張已核准請假申請的動作，見 MakeupSheet)，改為
  * 「我的請假」卡片復用 $lib/member/stores 的 leaveRequests store，範圍收斂到
- * 這門課程(course_id 比對)。 */
+ * 這門課程(course_id 比對)。
+ *
+ * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock $lib/member/api
+ * 的 getEnrolmentAttendance()。預設值刻意保留一筆 'leave' 紀錄(對齊已退役的
+ * ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/聯絡教練兩個
+ * 動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。 */
 vi.mock('$lib/member/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/member/stores')>();
 	return { ...actual, refreshLeaveRequests: vi.fn(), cancelLeaveRequest: vi.fn() };
+});
+vi.mock('$lib/member/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/member/api')>();
+	return { ...actual, getEnrolmentAttendance: vi.fn() };
 });
 
 const COURSE: MyCourse = {
@@ -20,6 +30,11 @@ const COURSE: MyCourse = {
 	icon: 'sparkles', color: '#0066CC', schedule: '', room: '', att: 90, attended: 9, total: 10,
 	next: '', term: '', remain: 0
 };
+
+const DEFAULT_ATTENDANCE: AttRecord[] = [
+	{ date: '06/06', state: 'present' },
+	{ date: '05/21', state: 'leave' }
+];
 
 const PENDING: LeaveRequest = {
 	id: 'lr1', course_id: 'c1', course_name: COURSE.name, session_id: 's1', session_date: '2026-07-10',
@@ -32,6 +47,7 @@ const OTHER_COURSE: LeaveRequest = { ...PENDING, id: 'lr3', course_id: 'c-other'
 beforeEach(() => {
 	vi.mocked(refreshLeaveRequests).mockReset().mockResolvedValue(undefined);
 	vi.mocked(cancelLeaveRequest).mockReset().mockResolvedValue(undefined);
+	vi.mocked(getEnrolmentAttendance).mockReset().mockResolvedValue(DEFAULT_ATTENDANCE);
 	overlay.closeAll();
 });
 
@@ -94,5 +110,45 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 		expect(await screen.findByText('已預約補課：', { exact: false })).toBeInTheDocument();
 		expect(screen.queryByText('預約補課')).toBeNull();
 		expect(screen.queryByText('取消')).toBeNull();
+	});
+});
+
+describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12)', () => {
+	it('onMount 呼叫 getEnrolmentAttendance(course.id)', async () => {
+		leaveRequests.set([]);
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+		expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
+		expect(getEnrolmentAttendance).toHaveBeenCalledWith('e1');
+	});
+
+	it('沒有出勤紀錄時顯示「尚無出勤紀錄」空狀態', async () => {
+		leaveRequests.set([]);
+		vi.mocked(getEnrolmentAttendance).mockResolvedValue([]);
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+		expect(await screen.findByText('尚無出勤紀錄')).toBeInTheDocument();
+	});
+
+	it('依 present/absent/leave 三態渲染出席徽章(late 態已隨後端 enum 收斂移除)', async () => {
+		leaveRequests.set([]);
+		vi.mocked(getEnrolmentAttendance).mockResolvedValue([
+			{ date: '06/06', state: 'present' },
+			{ date: '05/21', state: 'leave' },
+			{ date: '05/14', state: 'absent' }
+		]);
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+
+		expect(await screen.findByText('出席')).toBeInTheDocument();
+		expect(screen.getByText('缺席')).toBeInTheDocument();
+		// 「請假」同時是動作列按鈕文字與 leave 狀態徽章文字(同本檔案開頭「只剩請假/
+		// 聯絡教練兩個動作」測試的既有慣例)——用計數斷言避免撞到兩個相符元素。
+		expect(screen.getAllByText('請假')).toHaveLength(2);
+		expect(screen.queryByText('遲到')).toBeNull();
+	});
+
+	it('載入失敗顯示 ErrorState', async () => {
+		leaveRequests.set([]);
+		vi.mocked(getEnrolmentAttendance).mockRejectedValue(new Error('boom'));
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
 	});
 });
