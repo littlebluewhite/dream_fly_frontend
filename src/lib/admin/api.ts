@@ -27,19 +27,18 @@ import type {
 
 /* ═════════════════════════ 場館（GET /venues，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
-/** VenueResponse 沒有 type/area/cap/今日排課數欄位 —— features 語意上對應器材配置
- *  (equip)、is_active 對應可預約狀態(status，下線視為維護中)；其餘無對應欄位的
- *  一律誠實給預設值(P2：待後端補對應欄位)。 */
+/** VenueResponse 沒有 type 欄位 —— features 語意上對應器材配置(equip)、is_active
+ *  對應可預約狀態(status，下線視為維護中)；type 借用 description(後端沒有專門的
+ *  「場地類型」欄位)。area/cap/今日排課(today) 是無後端來源的裝飾欄位，Task F4 已
+ *  隨 VenueEditDialog/venues 頁欄位收斂一併移除(不留假數字)。 */
 function mapVenue(v: ApiVenue): Venue {
 	return {
 		id: v.id,
+		slug: v.slug,
 		name: v.name,
 		type: v.description ?? '', // 後端沒有專門的「場地類型」欄位，借用 description
-		area: '', // P2: 後端無面積欄位
-		cap: 0, // P2: 後端無容納人數欄位
 		equip: v.features,
-		status: v.is_active ? 'available' : 'maintenance',
-		today: 0 // P2: 後端無「今日排課數」彙總欄位
+		status: v.is_active ? 'available' : 'maintenance'
 	};
 }
 
@@ -48,6 +47,28 @@ export interface VenuesData {
 }
 export const getVenues = (): Promise<VenuesData> =>
 	listVenues().then((venues) => ({ venues: venues.map(mapVenue) }));
+
+/* ── 場館建立與編輯(POST /venues、PATCH /venues/{id}，admin-only，Task F4) ──
+ * Body 形狀對齊 integration-contract.md §3.5；PATCH 全欄位選填(省略＝維持原值，
+ * category_id/description/image_url 可明確傳 null 清空)。呼叫端(venues/+page.svelte)
+ * 目前只開放編輯 name/description/features/is_active 這四個欄位(見 VenueEditDialog
+ * 欄位收斂)，category_id/image_url/slug 沒有對應 UI，寫入時一律不帶(省略＝維持原值)
+ * ——slug 由後端依名稱自動產生，前端固定唯讀顯示(見 VenueEditDialog 註解)。 */
+export interface VenueWriteBody {
+	name?: string;
+	slug?: string;
+	category_id?: string | null;
+	description?: string | null;
+	features?: string[];
+	image_url?: string | null;
+	is_active?: boolean;
+}
+
+export const createVenue = (body: VenueWriteBody): Promise<ApiVenue> =>
+	api<ApiVenue>('/venues', { method: 'POST', body: JSON.stringify(body) });
+
+export const updateVenue = (id: string, body: VenueWriteBody): Promise<ApiVenue> =>
+	api<ApiVenue>(`/venues/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 票券（GET /products，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 

@@ -1,37 +1,48 @@
 <script lang="ts">
   /* 場館管理 — faithful port of reports.jsx VenuesView. PageHead + a card grid
-   * over the venues: an id chip + name + venue StatusBadge + type header, a
-   * 面積/容納/今日排課 stats strip, the 器材配置 Tag chips, and the 排課表/編輯
-   * actions. The row set is held locally so 新增 / 儲存 reflect immediately; 編輯 /
-   * 新增場地 open the VenueEditDialog (the prototype is front-end only). 排課表 still
-   * fires a toast.
+   * over the venues: an id chip (Task F4：改顯示 slug，見下) + name + venue
+   * StatusBadge + type header, the 器材配置 Tag chips, and the 排課表/編輯 actions.
+   * 編輯 / 新增場地 open the VenueEditDialog. 排課表 still fires a toast.
    *
-   * Data now arrives async via getVenues() (mock-API seam): onMount loads it into
-   * a three-state gate (loading/error/ready); `venues` is the local mutable
-   * working copy the 新增/編輯 flow edits in place. */
+   * Data arrives async via getVenues() (admin seam): onMount loads it into a
+   * three-state gate (loading/error/ready); `venues` is the local mutable
+   * working copy the card grid renders from.
+   *
+   * Task F4：新增/編輯 now submit to the real POST /venues / PATCH /venues/{id}
+   * (createVenue/updateVenue, admin/api.ts) instead of only mutating `venues`
+   * locally (same wiring pattern as Task F1's tickets/+page.svelte). Success
+   * refreshes via gate.silentRefresh(); failure shows a 繁中 error toast and
+   * keeps the dialog open so the admin can fix and retry. The former local-
+   * array 新增 path needed uniqueVenueId() to dodge keyed-id collisions on a
+   * user-typed 場地代號 — real venues now come back from the backend with a
+   * real id/slug, so that helper (and its import here) is gone (dead by this
+   * change, removed together with venue-id.ts/.test.ts).
+   *
+   * Task F4：id chip 改顯示 v.slug，不是 v.id——真實後端 id 是 UUID，塞進這個原本
+   * 設計給短代號用的方塊會整個溢出；slug 是後端提供的人類可讀短字串，同
+   * VenueEditDialog 的「場地代號」欄位改顯示 slug 是同一個決定(報告已註明)。 */
   import { onMount } from 'svelte';
   import { Button, Card, Icon, Tag, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import VenueEditDialog from '$lib/admin/components/VenueEditDialog.svelte';
-  import { uniqueVenueId } from '$lib/admin/components/venue-id';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { Venue } from '$lib/admin/data';
-  import { getVenues } from '$lib/admin/api';
+  import { getVenues, createVenue, updateVenue, type VenueWriteBody } from '$lib/admin/api';
+  import { ApiError } from '$lib/api/client';
 
   const notify = toasts.notify;
 
-  // Blank場地 for the 新增 flow (mirrors classes/+page.svelte blankClass).
+  // Blank場地 for the 新增 flow (mirrors classes/+page.svelte blankClass). slug 留空
+  // ——由後端依名稱自動產生，這裡的欄位收斂到 VenueResponse 真實形狀(Task F4)。
   const blankVenue = (): Venue => ({
     id: '',
+    slug: '',
     name: '',
     type: '',
-    area: '',
-    cap: 12,
     equip: [],
-    status: 'available',
-    today: 0
+    status: 'available'
   });
 
   let venues: Venue[] = [];
@@ -62,19 +73,51 @@
     edit = null;
     addNew = false;
   }
-  function save(updated: Venue) {
-    if (addNew) {
-      // Guarantee a unique keyed id — a user-entered 場地代號 may collide with an
-      // existing one, which would throw Svelte's duplicate-key error on the grid.
-      const id = uniqueVenueId(venues, updated.id);
-      if (updated.id.trim() && id !== updated.id.trim()) {
-        notify('info', '場地代號已調整', `代號「${updated.id.trim()}」已存在，已改用「${id}」。`);
+
+  // Venue（表單/卡片形狀）→ POST/PATCH /venues 共用欄位。只有 VenueEditDialog 開放
+  // 編輯的四個欄位會送出；category_id/image_url/slug 沒有對應 UI，一律不帶(省略＝
+  // 維持原值，見 admin/api.ts VenueWriteBody 註解)。
+  function buildVenueBody(v: Venue): VenueWriteBody {
+    return {
+      name: v.name,
+      description: v.type,
+      features: v.equip,
+      is_active: v.status === 'available'
+    };
+  }
+
+  // 422 驗證 / 403 權限 / 409 slug 撞號 → 對應的繁中錯誤提示；其餘（連線問題等）給
+  // 通用訊息，同 tickets/+page.svelte 的 ApiError 判斷慣例。slug 由名稱自動產生且
+  // 表單不可編輯，409 文案明講「改名稱」而非「改代號」，才是使用者能實際採取的動作。
+  function venueErrorMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
+      if (e.status === 403) return '沒有權限執行此操作。';
+      if (e.status === 409) return '場地代號（slug）重複，請修改場地名稱後再試。';
+    }
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function save(updated: Venue) {
+    const wasNew = addNew;
+    const body = buildVenueBody(updated);
+    try {
+      if (wasNew) {
+        await createVenue(body);
+      } else {
+        await updateVenue(updated.id, body);
       }
-      venues = [{ ...updated, id }, ...venues];
-    } else {
-      venues = venues.map((v) => (v.id === updated.id ? updated : v));
+    } catch (e) {
+      toasts.notify('error', wasNew ? '新增失敗' : '儲存失敗', venueErrorMessage(e));
+      return;
     }
     closeEdit();
+    toasts.notify(
+      'success',
+      wasNew ? '已新增場地' : '已儲存場地',
+      '「' + updated.name + '」已' + (wasNew ? '建立' : '更新') + '。'
+    );
+    await gate.silentRefresh();
   }
 </script>
 
@@ -90,19 +133,14 @@
 
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px;">
       {#each venues as v (v.id)}
-        {@const stats = [
-          [v.area, '面積'],
-          [v.cap + ' 人', '容納'],
-          [v.today + ' 堂', '今日排課']
-        ] as [string, string][]}
         <Card padding={0} hoverable style="overflow:hidden;">
           <div
             style="display:flex; align-items:center; gap:14px; padding:18px 20px 14px; border-bottom:1px solid var(--df-border);"
           >
             <div
-              style="width:48px; height:48px; border-radius:12px; background:var(--df-primary-bg); display:flex; align-items:center; justify-content:center; flex:none; font-family:var(--df-font-heading); font-size:20px; font-weight:800; color:var(--df-primary);"
+              style="width:48px; height:48px; border-radius:12px; background:var(--df-primary-bg); display:flex; align-items:center; justify-content:center; flex:none; overflow:hidden; padding:0 4px; font-family:var(--df-font-heading); font-size:13px; font-weight:800; color:var(--df-primary); text-align:center; white-space:nowrap; text-overflow:ellipsis;"
             >
-              {v.id}
+              {v.slug}
             </div>
             <div style="flex:1; min-width:0;">
               <div style="display:flex; align-items:center; gap:8px;">
@@ -115,25 +153,6 @@
               </div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-top:3px;">{v.type}</div>
             </div>
-          </div>
-
-          <div
-            style="display:grid; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--df-border);"
-          >
-            {#each stats as [val, lbl], i (lbl)}
-              <div
-                style="padding:12px 0; text-align:center; border-left:{i
-                  ? '1px solid var(--df-border)'
-                  : 'none'};"
-              >
-                <div
-                  style="font-size:16px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);"
-                >
-                  {val}
-                </div>
-                <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{lbl}</div>
-              </div>
-            {/each}
           </div>
 
           <div style="padding:14px 20px; display:flex; flex-direction:column; gap:10px;">

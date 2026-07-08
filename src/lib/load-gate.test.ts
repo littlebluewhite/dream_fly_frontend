@@ -184,6 +184,71 @@ describe('createLoadGate', () => {
 
 		expect(onData).not.toHaveBeenCalled();
 	});
+
+	/* Task F4：非分頁頁面(如 venues/+page.svelte)寫入成功後也需要「突變後靜默重同步、
+	 * 不動 phase」——先前只有 PagedLoadGate 有 silentRefresh()，這裡補上對稱實作，
+	 * 語意與行為完全比照 PagedLoadGate.silentRefresh()(見下方 describe 區塊)。 */
+	it('silentRefresh() 成功時呼叫 onData 更新資料,但全程不觸發任何 phase 變動', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 });
+		const onData = vi.fn();
+		const gate = createLoadGate({ fetch, onData });
+		await gate.load();
+		expect(get(gate)).toBe('ready');
+
+		const seenPhases: LoadPhase[] = [];
+		const unsub = gate.subscribe((p) => seenPhases.push(p));
+
+		fetch.mockResolvedValueOnce({ v: 2 });
+		await gate.silentRefresh();
+		unsub();
+
+		expect(seenPhases.every((p) => p === 'ready')).toBe(true);
+		expect(onData).toHaveBeenCalledTimes(2); // load() 一次 + silentRefresh 一次
+		expect(onData).toHaveBeenLastCalledWith({ v: 2 });
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	it('silentRefresh() 失敗時吞掉錯誤:phase 仍是 ready、不呼叫 onError、不呼叫 onData', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 });
+		const onData = vi.fn();
+		const onError = vi.fn();
+		const gate = createLoadGate({ fetch, onData, onError });
+		await gate.load();
+
+		fetch.mockRejectedValueOnce(new Error('network'));
+		await gate.silentRefresh();
+
+		expect(get(gate)).toBe('ready');
+		expect(onError).not.toHaveBeenCalled();
+		expect(onData).toHaveBeenCalledTimes(1); // 只有 load() 那次
+
+		gate.destroy();
+	});
+
+	it('silentRefresh() 與 in-flight load() 交錯:phase 非 ready 時 no-op,不作廢 in-flight load 的回應', async () => {
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d.promise);
+		const onData = vi.fn();
+		const gate = createLoadGate({ fetch, onData });
+
+		const loadPromise = gate.load(); // phase → loading,generation 已遞增
+		expect(get(gate)).toBe('loading');
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		await gate.silentRefresh(); // phase 非 ready → no-op,不得再次呼叫 fetch、不得遞增 generation
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		d.resolve({ v: 1 });
+		await loadPromise;
+
+		expect(get(gate)).toBe('ready'); // 未被誤判為過期而 strand 在 loading
+		expect(onData).toHaveBeenCalledTimes(1);
+		expect(onData).toHaveBeenCalledWith({ v: 1 });
+
+		gate.destroy();
+	});
 });
 
 describe('createPagedLoadGate', () => {

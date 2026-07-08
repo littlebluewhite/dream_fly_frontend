@@ -5,9 +5,11 @@ import { VENUES, type Venue } from '$lib/admin/data';
 
 /* VenueEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog / CoachEditDialog). Holds a local copy of the venue; 儲存 fires
- * onSave(updated) + a success toast. We assert the fields render, the onSave
- * wiring carries the edit, numeric fields coerce, equip text → string[] round
- * trips, and the id field is disabled when editing (protects the keyed id). */
+ * onSave(updated) (page decides the success/failure toast after the real
+ * POST/PATCH /venues round trip — Task F4, same pattern as TicketEditDialog).
+ * We assert the fields render, the onSave wiring carries the edit, equip
+ * text → string[] round trips, and the 場地代號 field always shows the
+ * read-only slug (Task F4：欄位收斂，移除 area/cap/今日排課 裝飾欄位). */
 const base: Venue = VENUES[0]; // A 訓練館
 
 describe('VenueEditDialog', () => {
@@ -20,10 +22,13 @@ describe('VenueEditDialog', () => {
 		expect(getByText('儲存場地')).toBeInTheDocument();
 	});
 
-	it('renders the editable field labels', () => {
-		const { getByText } = render(VenueEditDialog, { open: true, venue: base });
-		for (const lbl of ['場地代號', '場地名稱', '場地類型', '面積', '容納人數', '今日排課', '狀態']) {
+	it('renders the editable field labels (area/cap/今日排課 已收斂移除，Task F4)', () => {
+		const { getByText, queryByText } = render(VenueEditDialog, { open: true, venue: base });
+		for (const lbl of ['場地代號', '場地名稱', '場地類型', '狀態', '器材配置（以、分隔）']) {
 			expect(getByText(lbl)).toBeInTheDocument();
+		}
+		for (const removed of ['面積', '容納人數', '今日排課']) {
+			expect(queryByText(removed)).toBeNull();
 		}
 	});
 
@@ -37,16 +42,17 @@ describe('VenueEditDialog', () => {
 		expect(queryByText('儲存場地')).toBeNull();
 	});
 
-	it('disables the 場地代號 (id) field when editing (protects the keyed id)', () => {
+	it('顯示唯讀 slug 於場地代號欄位（不是內部 id）', () => {
 		const { getByLabelText } = render(VenueEditDialog, { open: true, venue: base });
-		const idInput = getByLabelText('場地代號') as HTMLInputElement;
-		expect(idInput.disabled).toBe(true);
+		const slugInput = getByLabelText('場地代號') as HTMLInputElement;
+		expect(slugInput.value).toBe(base.slug);
+		expect(slugInput.disabled).toBe(true);
 	});
 
-	it('leaves the 場地代號 field editable in new mode', () => {
+	it('場地代號 (slug) 欄位在新增模式下仍維持唯讀（降低誤操作，Task F4 選擇）', () => {
 		const { getByLabelText } = render(VenueEditDialog, { open: true, venue: base, isNew: true });
-		const idInput = getByLabelText('場地代號') as HTMLInputElement;
-		expect(idInput.disabled).toBe(false);
+		const slugInput = getByLabelText('場地代號') as HTMLInputElement;
+		expect(slugInput.disabled).toBe(true);
 	});
 
 	it('fires onSave with the edited name when 儲存場地 is clicked', async () => {
@@ -64,22 +70,7 @@ describe('VenueEditDialog', () => {
 		expect(onSave).toHaveBeenCalledTimes(1);
 		const updated = onSave.mock.calls[0][0] as Venue;
 		expect(updated.name).toBe('A 主訓練館');
-		expect(updated.id).toBe(base.id); // identity preserved (id locked when editing)
-	});
-
-	it('coerces edited numeric fields (cap/today) back to numbers on save', async () => {
-		const onSave = vi.fn();
-		const { getByDisplayValue, getByText } = render(VenueEditDialog, {
-			open: true,
-			venue: base,
-			onSave
-		});
-		await fireEvent.input(getByDisplayValue(String(base.cap)), { target: { value: '20' } });
-		await fireEvent.input(getByDisplayValue(String(base.today)), { target: { value: '5' } });
-		await fireEvent.click(getByText('儲存場地'));
-		const updated = onSave.mock.calls[0][0] as Venue;
-		expect(updated.cap).toBe(20);
-		expect(updated.today).toBe(5);
+		expect(updated.id).toBe(base.id); // identity preserved (id untouched by any input)
 	});
 
 	it('splits the 器材配置 text buffer back into a string[] on save (round-trips)', async () => {

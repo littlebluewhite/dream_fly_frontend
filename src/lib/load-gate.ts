@@ -43,6 +43,9 @@ export interface LoadGate {
 	subscribe: (run: (phase: LoadPhase) => void) => () => void;
 	load(): Promise<void>;
 	refresh(): Promise<void>;
+	/** 突變後靜默重同步、不動 phase（同 PagedLoadGate.silentRefresh() 語意，Task F4
+	 *  補上對稱實作——非分頁頁面寫入成功後也需要不閃爍骨架的靜默刷新）。 */
+	silentRefresh(): Promise<void>;
 	destroy(): void;
 }
 
@@ -57,28 +60,34 @@ function autoDestroyOnUnmount(destroy: () => void): void {
 }
 
 export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
-	const { subscribe, set } = writable<LoadPhase>('loading');
+	let phase: LoadPhase = 'loading';
+	const { subscribe, set } = writable<LoadPhase>(phase);
 	let generation = 0;
 	let destroyed = false;
 
+	function setPhase(p: LoadPhase): void {
+		phase = p;
+		set(p);
+	}
+
 	async function run(fetcher: () => Promise<T>): Promise<void> {
 		const gen = ++generation;
-		set('loading');
+		setPhase('loading');
 		try {
 			const data = await fetcher();
 			if (destroyed || gen !== generation) return; // 過期或已卸載,忽略
 			options.onData?.(data);
-			set('ready');
+			setPhase('ready');
 		} catch (e) {
 			if (destroyed || gen !== generation) return;
 			options.onError?.(e);
-			set('error');
+			setPhase('error');
 		}
 	}
 
 	async function load(): Promise<void> {
 		if (options.skip?.()) {
-			set('ready');
+			setPhase('ready');
 			return;
 		}
 		await run(options.fetch);
@@ -89,13 +98,28 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		await run(options.refresh ?? options.fetch);
 	}
 
+	async function silentRefresh(): Promise<void> {
+		// 突變後靜默重同步:任何路徑都不動 phase、失敗也不呼叫 onError(同
+		// PagedLoadGate.silentRefresh()——見該函式註解的完整理由)。守衛必須在
+		// generation 遞增之前:phase 非 ready 直接 no-op。
+		if (phase !== 'ready') return;
+		const gen = ++generation;
+		try {
+			const data = await (options.refresh ?? options.fetch)();
+			if (destroyed || gen !== generation) return;
+			options.onData?.(data);
+		} catch {
+			/* 靜默吞掉 */
+		}
+	}
+
 	function destroy(): void {
 		destroyed = true;
 	}
 
 	autoDestroyOnUnmount(destroy);
 
-	return { subscribe, load, refresh, destroy };
+	return { subscribe, load, refresh, silentRefresh, destroy };
 }
 
 export interface PagedResponse {

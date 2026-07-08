@@ -7,6 +7,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
 	getVenues,
+	createVenue,
+	updateVenue,
 	getTickets,
 	getOrders,
 	getReports,
@@ -52,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('getVenues — GET /venues（公開端點）', () => {
-	it('映射 features→equip、is_active→status；type/area/cap/today 無對應欄位給誠實預設值', async () => {
+	it('映射 slug 直接透傳、features→equip、is_active→status、description→type(借用)；area/cap/today 裝飾欄位已收斂移除(Task F4)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /venues': [
@@ -86,9 +88,51 @@ describe('getVenues — GET /venues（公開端點）', () => {
 
 		expect(api).toHaveBeenCalledWith('/venues', { auth: false });
 		expect(d.venues).toEqual([
-			{ id: 'v1', name: 'A 訓練館', type: '競技主訓練場', area: '', cap: 0, equip: ['彈翻床', '平衡木'], status: 'available', today: 0 },
-			{ id: 'v2', name: '戶外場', type: '', area: '', cap: 0, equip: [], status: 'maintenance', today: 0 }
+			{ id: 'v1', slug: 'a', name: 'A 訓練館', type: '競技主訓練場', equip: ['彈翻床', '平衡木'], status: 'available' },
+			{ id: 'v2', slug: 'outdoor', name: '戶外場', type: '', equip: [], status: 'maintenance' }
 		]);
+	});
+});
+
+describe('createVenue — POST /venues（admin，Task F4：場館寫入接線）', () => {
+	it('POSTs the given body as-is and returns the VenueResponse', async () => {
+		const created = {
+			id: 'v-new', category_id: null, name: '新場地', slug: 'new-venue', description: '新場地說明',
+			features: [], image_url: null, is_active: true, created_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /venues': created }));
+
+		const body = { name: '新場地', description: '新場地說明', features: [], is_active: true };
+		const result = await createVenue(body);
+
+		expect(api).toHaveBeenCalledWith('/venues', { method: 'POST', body: JSON.stringify(body) });
+		expect(result).toEqual(created);
+	});
+
+	it('propagates a rejected request (e.g. 409 slug 撞號) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /venues': new Error('slug conflict') }));
+		await expect(createVenue({ name: 'x' })).rejects.toThrow('slug conflict');
+	});
+});
+
+describe('updateVenue — PATCH /venues/{id}（admin，Task F4：場館寫入接線）', () => {
+	it('PATCHes /venues/{id} with the given (partial) body and returns the VenueResponse', async () => {
+		const updated = {
+			id: 'v1', category_id: null, name: '改名場地', slug: 'a', description: '競技主訓練場',
+			features: ['彈翻床'], image_url: null, is_active: true, created_at: ''
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /venues/v1': updated }));
+
+		const body = { name: '改名場地', is_active: true };
+		const result = await updateVenue('v1', body);
+
+		expect(api).toHaveBeenCalledWith('/venues/v1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(result).toEqual(updated);
+	});
+
+	it('propagates a rejected request (e.g. 404 查無此場館) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /venues/missing': new Error('not found') }));
+		await expect(updateVenue('missing', { name: 'x' })).rejects.toThrow('not found');
 	});
 });
 

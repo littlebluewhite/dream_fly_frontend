@@ -1,7 +1,11 @@
 <script lang="ts">
   /* 場館管理 push screen。admin2.jsx VenuesScreen (113)。
-   * VENUES 卡片：編號方塊 + 名稱/型態/面積/上限 + 狀態 Badge + 器材 Tag +
-   * 今日使用列與時段表動作。 */
+   * VENUES 卡片：編號方塊 + 名稱/型態 + 狀態 Badge + 器材 Tag + 使用狀態列與時段表動作。
+   *
+   * Task F4：桌面 admin 場館編輯已接上真實 PATCH /venues，VENUES(`$lib/domain/venues`)
+   * 的共用型別隨之收斂到 VenueResponse 真實欄位——面積/容納上限/今日排課堂數是無後端
+   * 來源的裝飾欄位，已移除；這裡是唯讀展示(維持 mock，不接真 API，同任務簡報)，僅
+   * 跟著移除對應顯示，不發明替代數字。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -38,7 +42,7 @@
             <div style="flex:1; min-width:0;">
               <div style="font-size:16px; font-weight:700; color:var(--df-ink);">{v.name}</div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-top:1px;">
-                {v.type} · {v.area} · 上限 {v.cap} 人
+                {v.type}
               </div>
             </div>
             <Badge {tone} dot>{label}</Badge>
@@ -54,7 +58,7 @@
           >
             <span style="font-size:12.5px; color:var(--df-text-light); display:flex; align-items:center; gap:6px;">
               <Icon name="calendar-days" size={14} color="var(--df-text-muted)" />
-              {maint ? '今日暫停使用' : '今日 ' + v.today + ' 堂課'}
+              {maint ? '今日暫停使用' : '開放預約中'}
             </span>
             <button
               on:click={() =>
