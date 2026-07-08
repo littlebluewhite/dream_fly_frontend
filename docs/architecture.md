@@ -141,9 +141,11 @@ more) discards a response that resolves after the page unmounts. Mobile-admin's 
 messages are store-owned: the write lives in `stores.ts`'s `hydrateOps`/`hydrateMessages`, which the gate
 calls directly as `fetch`/`refresh` — the gate's own bookkeeping protects only the page's local phase,
 never the shared store; store-write protection instead comes from the `*Hydrated` guard itself, which
-mutators (`saveMember`/`saveClass`/`saveCoach`/`markOrderPaid`/`markMessageRead`) also flip true (a
-mutation *is* the session's source of truth) and which is rechecked right before the hydrate write lands,
-so a mutation racing an in-flight fetch always wins. That store-owned guard + post-await re-check
+mutators (`saveCoach`/`markOrderPaid`/`markMessageRead`) also flip true (a mutation *is* the session's
+source of truth) and which is rechecked right before the hydrate write lands, so a mutation racing an
+in-flight fetch always wins (`saveMember`/`saveClass` no longer exist as local mutators — Task 20 moved
+class/member writes to the real `/courses`/`/users` API followed by an unconditional `refreshOps()`
+refetch, bypassing `markMutated()` entirely). That store-owned guard + post-await re-check
 protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate.ts`'s
 `createHydrationGate` (`hydrate`/`refresh`/`markMutated`), which `mobile-admin/stores.ts`'s
 `hydrateOps`/`hydrateMessages` build on; `member/notifications.ts`'s `refreshNotifications()` isn't wired
