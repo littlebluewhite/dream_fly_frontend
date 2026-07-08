@@ -18,6 +18,7 @@ import {
 	members,
 	classes,
 	coaches,
+	saveCoach,
 	opsHydrated,
 	hydrateOps,
 	refreshOps,
@@ -255,6 +256,80 @@ describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
 		messages.set([{ ...MESSAGES[0], from: '水合前的假資料' }]);
 		await refreshMessages();
 		expect(get(messages)).toEqual(MESSAGES);
+		// restore for other tests
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messagesHydrated.set(false);
+	});
+});
+
+/** 手動控時序的 deferred promise（抄 hydration-gate.test.ts 開頭寫法，測 in-flight
+ *  水合競態不用 fake timers）。 */
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((res) => {
+		resolve = res;
+	});
+	return { promise, resolve };
+}
+
+describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某支 .markMutated() 呼叫仍測試全綠)', () => {
+	// hydration-gate.test.ts 已經泛用地測過 factory 本身的競態語意(in-flight 期間
+	// markMutated() → apply 不被呼叫);這裡改成從 stores.ts 實際匯出的三支 mutator
+	// 出發,直接斷言「接線」本身還在——如果之後有人手滑拿掉 saveCoach／markOrderPaid／
+	// markMessageRead 裡任一個 .markMutated() 呼叫,上面既有的 describe 都不會發現
+	// (因為都在水合已完成後才呼叫 mutator),只有這裡的 in-flight 情境會炸。
+	it('saveCoach() 在 hydrateOps() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後不覆寫剛存的教練資料,opsHydrated 為 true', async () => {
+		opsHydrated.set(false);
+		const d = createDeferred<{ members: typeof MEMBERS; classes: typeof CLASSES; coaches: typeof COACHES; orders: typeof ORDERS }>();
+		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise);
+
+		const hydrating = hydrateOps();
+		expect(get(opsHydrated)).toBe(false); // in-flight,尚未水合
+
+		const updated = { ...COACHES[0], name: '水合競態中更新的教練' };
+		saveCoach(updated, false);
+		expect(get(opsHydrated)).toBe(true); // saveCoach 已呼叫 opsGate.markMutated()
+
+		d.resolve({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: ORDERS }); // 模擬水合帶回「不含剛才更新」的舊資料
+		await hydrating;
+
+		expect(get(coaches).find((c) => c.id === COACHES[0].id)?.name).toBe('水合競態中更新的教練'); // mutation 保留,沒被水合覆寫
+		expect(get(opsHydrated)).toBe(true);
+
+		// restore for other tests
+		coaches.set(COACHES);
+		opsHydrated.set(false);
+	});
+
+	it('markOrderPaid() 與 saveCoach 共用同一個 opsGate:呼叫後 opsHydrated 也翻 true', () => {
+		opsHydrated.set(false);
+		markOrderPaid(ORDERS[0].id);
+
+		expect(get(opsHydrated)).toBe(true);
+
+		// restore for other tests
+		orders.set(ORDERS);
+		opsHydrated.set(false);
+	});
+
+	it('markMessageRead() 在 hydrateMessages() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後訊息維持已讀,messagesHydrated 為 true', async () => {
+		messagesHydrated.set(false);
+		const d = createDeferred<typeof MESSAGES>();
+		vi.mocked(getMessages).mockReturnValueOnce(d.promise);
+
+		const hydrating = hydrateMessages();
+		expect(get(messagesHydrated)).toBe(false); // in-flight,尚未水合
+
+		const firstUnread = get(messages).find((m) => m.unread)!;
+		markMessageRead(firstUnread.id);
+		expect(get(messagesHydrated)).toBe(true); // markMessageRead 已呼叫 messagesGate.markMutated()
+
+		d.resolve(MESSAGES.map((m) => ({ ...m }))); // 模擬水合帶回「該則仍未讀」的舊資料
+		await hydrating;
+
+		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false); // mutation 保留,沒被水合覆寫
+		expect(get(messagesHydrated)).toBe(true);
+
 		// restore for other tests
 		messages.set(MESSAGES.map((m) => ({ ...m })));
 		messagesHydrated.set(false);

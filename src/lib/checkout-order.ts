@@ -109,7 +109,7 @@ export async function submitOrder(
   const hasCourse = order.items.some((i) => i.item_type === 'course');
   const hasPass = order.items.some((i) => i.item_type === 'product');
   return {
-    total: ntd(order.total_cents), // ntd 的唯一呼叫端在本模組
+    total: ntd(order.total_cents), // 本模組只在 submit 結果邊界把 total_cents 以共用的 `ntd()` 換算為 NT$ 整數（`ntd` 單一定義見 public/adapters，ADR 0007）
     earned: order.points_earned,
     ptRedeem: order.points_used,
     orderNumber: order.order_number,

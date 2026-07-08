@@ -156,7 +156,8 @@ static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dr
 synchronously, never through `api.ts` or the load gate. `staff` remains excluded because it's pre-auth
 login/role-switch UI with no `data.ts` to seam. `public` gained its own seam later (`src/lib/public/api.ts`
 + `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id shapes into the existing
-marketing types, including the single cents→NT$ conversion point `ntd()`, see `docs/adr/0006`) once its
+marketing types, including cents→NT$ conversion via the shared `ntd()` helper — single *definition*
+here, not its only caller, see `docs/adr/0006`) once its
 pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venues`, `/schedule`, `/posts`,
 `/contact` endpoints. `src/lib/public/calendar-grid.ts` (2026-07-08) is the same shape applied to
 `ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions pulled out of the component,
