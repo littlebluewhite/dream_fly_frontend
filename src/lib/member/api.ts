@@ -307,6 +307,7 @@ interface ApiUser {
   name: string;
   phone: string | null;
   created_at: string;
+  birth_date: string | null;
 }
 
 interface ApiOrderSummary {
@@ -333,12 +334,14 @@ function mapOrder(o: ApiOrderSummary): Order {
   };
 }
 
-/** UserResponse 沒有「會員編號 / 大頭貼色 / 生日 / 年齡 / 監護人 / 通知偏好」這些
- *  欄位 —— initial 由姓名首字推導，其餘(color/age/birth/guardian/remind/promo)沿用
- *  合理預設值(ProfileEditDialog 本來就只做本地端編輯、不寫回後端，非本次範圍)。
- *  id 直接採用後端真實 uuid(沒有 mock 那種「GY2024001」會員編號可用)。points 借用
- *  剛 refresh 過的 points store 當下值(帳戶頁本身讀 $points，不讀這個欄位，純粹
- *  求型別完整、內容誠實)。 */
+/** UserResponse 沒有「會員編號 / 大頭貼色 / 年齡 / 監護人 / 通知偏好」這些欄位 ——
+ *  initial 由姓名首字推導，其餘(color/age/guardian/remind/promo)沿用合理預設值
+ *  (ProfileEditDialog 這幾欄仍只做本地端編輯、不寫回後端，非本次範圍)。
+ *  birth(Round 4 Task P4-F4)改接真 birth_date —— null(未設定)映射空字串，
+ *  ISO YYYY-MM-DD 字串直接沿用(與 <input type="date"> 的 value 格式一致，不需
+ *  再轉換)。id 直接採用後端真實 uuid(沒有 mock 那種「GY2024001」會員編號可用)。
+ *  points 借用剛 refresh 過的 points store 當下值(帳戶頁本身讀 $points，不讀
+ *  這個欄位，純粹求型別完整、內容誠實)。 */
 function mapProfile(u: ApiUser): AccountProfile {
   return {
     name: u.name,
@@ -348,7 +351,7 @@ function mapProfile(u: ApiUser): AccountProfile {
     since: u.created_at.slice(0, 7).replace('-', '/'),
     points: get(points),
     age: 0,
-    birth: '',
+    birth: u.birth_date ?? '',
     phone: u.phone ?? '',
     email: u.email,
     guardian: '',
@@ -375,6 +378,18 @@ export const getAccount = async (): Promise<AccountData> => {
     profile: mapProfile(user)
   };
 };
+
+/** PATCH /users/me { birth_date }（Round 4 Task P4-F4；integration-contract.md
+ *  §3.2）—— 帳戶頁 ProfileEditDialog 的「生日」欄位存檔路徑。只送這一個欄位，
+ *  不動 name/phone/preferences：preferences 是 mobile SettingsScreen 的獨立
+ *  存檔路徑(mobile/api.ts savePreferences)，兩者互不干擾。空字串(清空欄位)
+ *  轉成顯式 JSON null——後端 deserialize_some 語意：帶 null 清空，不帶此欄則
+ *  維持原值不動；這裡永遠帶入 birth_date 這個欄位，所以空字串 = 顯式清空。 */
+export const saveBirthDate = (birthDate: string): Promise<AccountProfile> =>
+  api<ApiUser>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ birth_date: birthDate || null })
+  }).then(mapProfile);
 
 export interface CoursesData { catalog: CatalogCourse[]; }
 

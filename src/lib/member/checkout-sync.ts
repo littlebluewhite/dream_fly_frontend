@@ -12,6 +12,11 @@ import { refreshPoints } from './points';
  * （chargeableLines）同步過去、送出訂單、再把 subscriptions/points 從後端
  * hydrate 回 store。 */
 
+/** 付款方式（Round 4 Task P4-B1；integration-contract.md §1.8/§3.10）值域——純應用層
+ *  值域，非 DB enum。不帶時後端預設 credit_card；帶入值域外字串回 422。目前仍是
+ *  模擬金流（見 §1.8），這裡只是把使用者的選擇如實送出，不影響下單流程本身。 */
+export type PaymentMethod = 'credit_card' | 'line_pay' | 'atm' | 'jkopay' | 'cash';
+
 export interface ApiOrderItem {
   id: string;
   item_type: 'product' | 'course';
@@ -64,7 +69,8 @@ export async function syncCartToServer(items: CartItem[]): Promise<void> {
 export async function placeOrder(
   coupon: string,
   usePoints: boolean,
-  idempotencyKey: string = crypto.randomUUID()
+  idempotencyKey: string = crypto.randomUUID(),
+  paymentMethod: PaymentMethod = 'credit_card'
 ): Promise<ApiOrder> {
   // 只同步「可計費項目」— 與 CheckoutDialog 預覽用同一個 chargeableLines 過濾
   // （已持有的 pass 不進 server 購物車）。預覽合計跳過的項目絕不能被請款：
@@ -72,7 +78,7 @@ export async function placeOrder(
   await syncCartToServer(chargeableLines(get(cart), get(subscriptions)));
   const order = await api<ApiOrder>('/orders', {
     method: 'POST',
-    body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints }),
+    body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints, payment_method: paymentMethod }),
     headers: { 'Idempotency-Key': idempotencyKey }
   });
   // 訂單此時已成立（伺服器已扣款、報名/訂閱已建立、server 端購物車已清空）—

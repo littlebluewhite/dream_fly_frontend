@@ -624,6 +624,10 @@ export interface CreateMemberBody {
 	name: string;
 	phone?: string;
 	password: string;
+	/** 生日(Round 4 Task P4-F4；integration-contract.md §3.2)——選填，YYYY-MM-DD，
+	 *  範圍 1900-01-01 至今天。留白省略(undefined)，不是清空語意——POST /users
+	 *  沒有既有值可清，只有「填或不填」。 */
+	birth_date?: string;
 }
 export const createMember = (body: CreateMemberBody): Promise<MemberAccount> =>
 	api<ApiUserAccount>('/users', { method: 'POST', body: JSON.stringify(body) }).then(mapMemberAccount);

@@ -21,7 +21,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { api } from '$lib/api/client';
-import { syncCartToServer, refreshPoints, type ApiOrder } from '$lib/member/stores';
+import { syncCartToServer, refreshPoints, type ApiOrder, type PaymentMethod } from '$lib/member/stores';
 import type { CartItem } from '$lib/member/data';
 import { ME, NOTIFS_SEED, type NotifItem } from './data';
 
@@ -155,16 +155,19 @@ function toOrderItem(line: CartLine): CartItem {
  *  Idempotency-Key) → 下單後重新水合真點數餘額 → 清空(僅)行動版本地購物車。
  *  任何失敗(400 購物車為空/優惠碼無效、409 滿班/已報名/點數不足等)原樣拋出、
  *  不清空購物車——呼叫端(CartSheet)catch 後用 member/checkout 的
- *  orderErrorMessage() 轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。 */
+ *  orderErrorMessage() 轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。
+ *  paymentMethod(Round 4 Task P4-F4):mobile 不做付款方式選擇 UI(計畫裁決)，
+ *  呼叫端一律沿用預設 credit_card。 */
 export async function placeOrder(
 	coupon: string,
 	usePoints: boolean,
-	idempotencyKey: string = crypto.randomUUID()
+	idempotencyKey: string = crypto.randomUUID(),
+	paymentMethod: PaymentMethod = 'credit_card'
 ): Promise<ApiOrder> {
 	await syncCartToServer(get(cart).map(toOrderItem));
 	const order = await api<ApiOrder>('/orders', {
 		method: 'POST',
-		body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints }),
+		body: JSON.stringify({ coupon_code: coupon || undefined, use_points: usePoints, payment_method: paymentMethod }),
 		headers: { 'Idempotency-Key': idempotencyKey }
 	});
 	await refreshPoints().catch((err) => console.error('Failed to refresh points after checkout:', err));

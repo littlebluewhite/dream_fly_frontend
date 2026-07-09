@@ -9,7 +9,7 @@
   import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAccount, type AccountData, type AccountProfile } from '$lib/member/api';
+  import { getAccount, saveBirthDate, type AccountData, type AccountProfile } from '$lib/member/api';
 
   let data: AccountData | null = null;
   let profile: AccountProfile | null = null;
@@ -28,6 +28,22 @@
     ['mail', profile.email],
     ['users', profile.guardian]
   ] as [string, string][] : [];
+
+  // 儲存個人資料（Round 4 Task P4-F4）——目前只有「生日」真的寫回後端（PATCH
+  // /users/me），其餘欄位（姓名/電話/家長聯絡人/通知偏好）維持既有的本地端編輯、
+  // 不寫回後端行為（非本次範圍），所以送出成功後仍以 dialog 的完整本地編輯副本
+  // `f` 覆蓋 profile，只是額外多打這一支 API、失敗時擋下並顯示錯誤 toast。
+  async function saveProfile(f: AccountProfile) {
+    try {
+      await saveBirthDate(f.birth);
+    } catch {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+      return;
+    }
+    profile = f;
+    editing = false;
+    toasts.notify('success', '已儲存', '個人資料已更新。');
+  }
 </script>
 
 {#if $gate === 'ready' && data && profile}
@@ -111,11 +127,7 @@
       open={editing}
       {profile}
       onClose={() => (editing = false)}
-      onSave={(fn) => {
-        profile = fn;
-        editing = false;
-        toasts.notify('success', '已儲存', '個人資料已更新。');
-      }}
+      onSave={saveProfile}
     />
   </div>
 {:else if $gate === 'error'}

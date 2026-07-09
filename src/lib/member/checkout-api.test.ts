@@ -147,7 +147,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
     });
     expect(api).toHaveBeenNthCalledWith(4, '/orders', {
       method: 'POST',
-      body: JSON.stringify({ coupon_code: 'DREAMFLY100', use_points: false }),
+      body: JSON.stringify({ coupon_code: 'DREAMFLY100', use_points: false, payment_method: 'credit_card' }),
       headers: { 'Idempotency-Key': 'key-abc' }
     });
     expect(api).toHaveBeenNthCalledWith(5, '/subscriptions/me');
@@ -190,9 +190,33 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
 
     expect(api).toHaveBeenCalledWith('/orders', {
       method: 'POST',
-      body: JSON.stringify({ use_points: true }),
+      body: JSON.stringify({ use_points: true, payment_method: 'credit_card' }),
       headers: { 'Idempotency-Key': 'key-xyz' }
     });
+  });
+
+  it('payment_method 預設 credit_card——呼叫端未指定第 4 個參數時', async () => {
+    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+    );
+
+    await placeOrder('', false, 'key-default-pm');
+
+    const ordersCall = vi.mocked(api).mock.calls.find(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
+    expect(JSON.parse((ordersCall?.[1] as RequestInit).body as string)).toMatchObject({ payment_method: 'credit_card' });
+  });
+
+  it('選了 line_pay → payment_method 送 line_pay', async () => {
+    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+    );
+
+    await placeOrder('', false, 'key-line-pay', 'line_pay');
+
+    const ordersCall = vi.mocked(api).mock.calls.find(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
+    expect(JSON.parse((ordersCall?.[1] as RequestInit).body as string)).toMatchObject({ payment_method: 'line_pay' });
   });
 
   it('未指定 idempotencyKey → 自動產生 uuid 格式的 key', async () => {

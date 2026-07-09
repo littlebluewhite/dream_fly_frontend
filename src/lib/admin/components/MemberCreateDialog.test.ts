@@ -8,11 +8,12 @@ import MemberCreateDialog from './MemberCreateDialog.svelte';
  * 驗證——交由後端 422 判斷。不打 API、不丟 toast（同 CouponCreateDialog），成功/失敗
  * 一律由呼叫端（members/+page.svelte）依 API 結果處理。 */
 describe('MemberCreateDialog', () => {
-	it('renders open with the 4 field labels and the 建立學員 primary', () => {
+	it('renders open with the 5 field labels and the 建立學員 primary', () => {
 		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true });
 		expect(getByLabelText('Email')).toBeInTheDocument();
 		expect(getByLabelText('姓名')).toBeInTheDocument();
 		expect(getByLabelText('聯絡電話（選填）')).toBeInTheDocument();
+		expect(getByLabelText('生日（選填）')).toBeInTheDocument();
 		expect(getByLabelText('初始密碼')).toBeInTheDocument();
 		expect(getByText('建立學員')).toBeInTheDocument();
 	});
@@ -56,6 +57,36 @@ describe('MemberCreateDialog', () => {
 			password: 'abcd1234'
 		});
 		expect(onSave.mock.calls[0][0].phone).toBeUndefined();
+	});
+
+	it('fires onSave with birth_date when filled in（Round 4 Task P4-F4）', async () => {
+		const onSave = vi.fn();
+		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
+
+		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
+		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
+		await fireEvent.input(getByLabelText('生日（選填）'), { target: { value: '2015-06-12' } });
+		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
+		await fireEvent.click(getByText('建立學員'));
+
+		expect(onSave.mock.calls[0][0]).toEqual({
+			email: 'new@example.com',
+			name: '新學員',
+			password: 'abcd1234',
+			birth_date: '2015-06-12'
+		});
+	});
+
+	it('omits birth_date from the payload when left blank (optional field)', async () => {
+		const onSave = vi.fn();
+		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
+
+		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
+		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
+		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
+		await fireEvent.click(getByText('建立學員'));
+
+		expect(onSave.mock.calls[0][0].birth_date).toBeUndefined();
 	});
 
 	it('trims email/name/phone before sending', async () => {
@@ -112,6 +143,7 @@ describe('MemberCreateDialog', () => {
 		const { getByLabelText, getByText, rerender, container } = render(MemberCreateDialog, { open: true });
 
 		await fireEvent.input(getByLabelText('Email'), { target: { value: 'stale@example.com' } });
+		await fireEvent.input(getByLabelText('生日（選填）'), { target: { value: '2015-06-12' } });
 		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'short' } });
 		await fireEvent.click(getByText('建立學員')); // triggers the inline password error
 		expect(container.querySelector('.hint.err')?.textContent).toBeTruthy();
@@ -120,6 +152,7 @@ describe('MemberCreateDialog', () => {
 		await rerender({ open: true });
 
 		expect((getByLabelText('Email') as HTMLInputElement).value).toBe('');
+		expect((getByLabelText('生日（選填）') as HTMLInputElement).value).toBe('');
 		expect((getByLabelText('初始密碼') as HTMLInputElement).value).toBe('');
 		expect(container.querySelector('.hint.err')).toBeNull();
 	});

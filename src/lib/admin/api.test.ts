@@ -848,6 +848,19 @@ describe('createMember — POST /users（admin，Task 16）', () => {
 		});
 	});
 
+	it('POSTs birth_date through as-is when provided（Round 4 Task P4-F4）', async () => {
+		const created = {
+			id: 'u-new2', name: '新學員二', phone: null, created_at: '2026-07-01T00:00:00Z',
+			is_active: true, points_balance: 0
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /users': created }));
+
+		const body = { email: 'new2@example.com', name: '新學員二', password: 'abcd1234', birth_date: '2015-06-12' };
+		await createMember(body);
+
+		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
+	});
+
 	it('propagates a rejected request (409 email 重複) to the caller', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'POST /users': new ApiError(409, 'Email 已被使用') })

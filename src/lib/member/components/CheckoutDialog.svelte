@@ -8,20 +8,33 @@
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
+  import Radio from '$lib/components/ui/Radio.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints } from '$lib/member/stores';
+  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints, type PaymentMethod } from '$lib/member/stores';
   import { fmtNT } from '$lib/member/format';
   import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
   import { ntd } from '$lib/public/adapters';
+
+  // 付款方式(Round 4 Task P4-F4;integration-contract.md §1.8/§3.10)——單選、
+  // 純資料欄位。目前仍是模擬金流,選擇不影響任何真金流 UI 或下單流程,只決定
+  // 送進 POST /orders body 的 payment_method 值。
+  const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+    { value: 'credit_card', label: '信用卡' },
+    { value: 'line_pay', label: 'LINE Pay' },
+    { value: 'atm', label: 'ATM 轉帳' },
+    { value: 'jkopay', label: '街口支付' },
+    { value: 'cash', label: '現場付款' }
+  ];
 
   let step = 0;
   let code = '';
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
+  let paymentMethod: PaymentMethod = 'credit_card';
   let paying = false;
   // 每次結帳流程（dialog 開啟）產生一次、重試沿用同一把，讓後端能辨識重放而不
   // 重複扣款/建立報名訂閱（integration-contract.md §1.7）。
@@ -48,6 +61,7 @@
       coupon = null;
       codeErr = '';
       usePoints = false;
+      paymentMethod = 'credit_card';
       idempotencyKey = crypto.randomUUID();
       paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
       // 開啟即水合「已持有訂閱」與「點數餘額」：chargeableLines 的持有判斷與
@@ -101,7 +115,7 @@
     if (paying || chargeable.length === 0) return;
     paying = true;
     try {
-      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
+      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod);
       const hasCourse = order.items.some((i) => i.item_type === 'course');
       const hasPass = order.items.some((i) => i.item_type === 'product');
       paid = {
@@ -191,6 +205,14 @@
           {/if}
         {:else if step === 1}
           <div class="pay">
+            <div>
+              <div class="extras-label">付款方式</div>
+              <div class="pm-group">
+                {#each PAYMENT_METHODS as pm (pm.value)}
+                  <Radio label={pm.label} value={pm.value} bind:group={paymentMethod} name="checkout-payment-method" />
+                {/each}
+              </div>
+            </div>
             <Input label="持卡人姓名" value="王小明" />
             <Input label="卡號" placeholder="0000 0000 0000 0000" />
             <div class="pay-row">
@@ -375,6 +397,11 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+  }
+  .pm-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
   }
   .pay-row {
     display: flex;

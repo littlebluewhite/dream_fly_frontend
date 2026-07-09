@@ -43,7 +43,7 @@ export { subscriptions, refreshSubscriptions } from './subscriptions';
 export type { ApiSubscription } from './subscriptions';
 
 export { syncCartToServer, placeOrder } from './checkout-sync';
-export type { ApiOrderItem, ApiOrder } from './checkout-sync';
+export type { ApiOrderItem, ApiOrder, PaymentMethod } from './checkout-sync';
 
 export { notifications, unreadCount, notificationsHydrated, refreshNotifications } from './notifications';
 

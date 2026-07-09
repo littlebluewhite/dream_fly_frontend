@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { subscriptions } from '$lib/member/stores';
-import { getAccount } from '$lib/member/api';
+import { subscriptions, toasts } from '$lib/member/stores';
+import { getAccount, saveBirthDate } from '$lib/member/api';
 import type { AccountData } from '$lib/member/api';
 import { ME, type Order } from '$lib/member/data';
 // domain 的 Order.status 是寬鬆的 [string, string]；member/data.ts 的 Order 是嚴格的
@@ -11,7 +12,7 @@ import { ME, type Order } from '$lib/member/data';
 // 嚴格型別，維持與 AccountData.orders: Order[] 的相容。
 import { ORDERS as ORDERS_BASE } from '$lib/domain/member-app';
 
-vi.mock('$lib/member/api', () => ({ getAccount: vi.fn() }));
+vi.mock('$lib/member/api', () => ({ getAccount: vi.fn(), saveBirthDate: vi.fn() }));
 
 // The 帳戶 page must surface the member's 訂閱/使用權 (subscriptions created at pass
 // checkout) in a card after the points card.
@@ -22,7 +23,7 @@ const SEED: AccountData = {
 	orders: ORDERS,
 	profile: {
 		...ME,
-		birth: '2013/05/18',
+		birth: '2013-05-18',
 		phone: '0911-222-333',
 		email: 'wang.family@example.com',
 		guardian: '王先生 · 0911-222-333',
@@ -33,6 +34,7 @@ const SEED: AccountData = {
 
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();
+	vi.mocked(saveBirthDate).mockReset();
 	localStorage.clear();
 	subscriptions.set([]);
 });
@@ -87,5 +89,57 @@ describe('帳戶 — 三態', () => {
 		render(Page);
 
 		await screen.findByText('王承恩');
+	});
+});
+
+describe('帳戶 — 編輯個人資料 · 生日（Round 4 Task P4-F4）', () => {
+	async function openEditDialog() {
+		vi.mocked(getAccount).mockResolvedValue(SEED);
+		render(Page);
+		await screen.findByText('王承恩');
+		await fireEvent.click(screen.getByText('編輯個人資料')); // dialog 尚未開啟，此時唯一一個符合的元素
+		return screen.getByLabelText('生日') as HTMLInputElement;
+	}
+
+	it('顯示既有生日（YYYY-MM-DD，與 <input type="date"> 格式一致）', async () => {
+		const birthInput = await openEditDialog();
+		expect(birthInput.value).toBe('2013-05-18');
+	});
+
+	it('修改生日並儲存 → 呼叫 saveBirthDate(新日期)，成功後顯示成功 toast 並關閉對話框', async () => {
+		vi.mocked(saveBirthDate).mockResolvedValue({ ...SEED.profile, birth: '2013-06-01' });
+		const birthInput = await openEditDialog();
+
+		await fireEvent.input(birthInput, { target: { value: '2013-06-01' } });
+		await fireEvent.click(screen.getByText('儲存資料'));
+
+		await vi.waitFor(() => expect(saveBirthDate).toHaveBeenCalledWith('2013-06-01'));
+		await vi.waitFor(() => {
+			expect(get(toasts).some((t) => t.tone === 'success' && t.body.includes('個人資料已更新'))).toBe(true);
+		});
+		expect(screen.queryByText('儲存資料')).toBeNull(); // 對話框已關閉
+	});
+
+	it('清空生日並儲存 → saveBirthDate 收到空字串（由 api 層負責轉成顯式 null 清除）', async () => {
+		vi.mocked(saveBirthDate).mockResolvedValue({ ...SEED.profile, birth: '' });
+		const birthInput = await openEditDialog();
+
+		await fireEvent.input(birthInput, { target: { value: '' } });
+		await fireEvent.click(screen.getByText('儲存資料'));
+
+		await vi.waitFor(() => expect(saveBirthDate).toHaveBeenCalledWith(''));
+	});
+
+	it('儲存失敗（saveBirthDate rejects）→ 顯示錯誤 toast，對話框不關閉', async () => {
+		vi.mocked(saveBirthDate).mockRejectedValue(new Error('network'));
+		const birthInput = await openEditDialog();
+
+		await fireEvent.input(birthInput, { target: { value: '2013-06-01' } });
+		await fireEvent.click(screen.getByText('儲存資料'));
+
+		await vi.waitFor(() => {
+			expect(get(toasts).some((t) => t.tone === 'error' && t.body.includes('連線發生問題'))).toBe(true);
+		});
+		expect(screen.getByText('儲存資料')).toBeInTheDocument(); // 對話框仍開啟，可重試
 	});
 });

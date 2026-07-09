@@ -6,8 +6,8 @@
  * 的端對端斷言，而不是把邏輯也一起 mock 掉。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints, getNotifications } from './api';
-import { api } from '$lib/api/client';
+import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, saveBirthDate, getCourses, getPoints, getNotifications } from './api';
+import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
@@ -548,6 +548,32 @@ describe('getAccount', () => {
     expect(d.profile.phone).toBe('');
   });
 
+  it('birth_date（Round 4 Task P4-F4）：ISO 字串直接沿用；null 映射為空字串', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'u4', email: 'a@b.com', name: '測試四', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: '2013-05-18' },
+        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /subscriptions/me': []
+      })
+    );
+    const d = await getAccount();
+    expect(d.profile.birth).toBe('2013-05-18');
+  });
+
+  it('birth_date 為 null 時映射為空字串', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'u5', email: 'a@b.com', name: '測試五', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: null },
+        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /subscriptions/me': []
+      })
+    );
+    const d = await getAccount();
+    expect(d.profile.birth).toBe('');
+  });
+
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
@@ -558,6 +584,48 @@ describe('getAccount', () => {
       })
     );
     expect(getAccount()).toBeInstanceOf(Promise);
+  });
+});
+
+describe('saveBirthDate — PATCH /users/me { birth_date }（Round 4 Task P4-F4）', () => {
+  it('送出 YYYY-MM-DD 字串；回應經 mapProfile 映射回 AccountProfile', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'PATCH /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: '2015-06-12' }
+      })
+    );
+
+    const profile = await saveBirthDate('2015-06-12');
+
+    expect(api).toHaveBeenCalledWith('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ birth_date: '2015-06-12' })
+    });
+    expect(profile.birth).toBe('2015-06-12');
+  });
+
+  it('空字串 → 送出顯式 JSON null（清空），不是省略欄位', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'PATCH /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: null }
+      })
+    );
+
+    const profile = await saveBirthDate('');
+
+    expect(api).toHaveBeenCalledWith('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ birth_date: null })
+    });
+    expect(profile.birth).toBe('');
+  });
+
+  it('422（範圍外日期）原樣拋出', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'PATCH /users/me': new ApiError(422, 'birth_date out of range') })
+    );
+
+    await expect(saveBirthDate('1899-12-31')).rejects.toMatchObject({ status: 422 });
   });
 });
 

@@ -340,3 +340,64 @@ describe('CheckoutDialog — 全數已持有（chargeable 為空）不可送單'
 		expect(orderCalls).toHaveLength(0);
 	});
 });
+
+describe('CheckoutDialog — 付款方式（payment_method）單選（Round 4 Task P4-F4）', () => {
+	it('不動單選（預設 credit_card）→ POST /orders body 帶 payment_method: credit_card', async () => {
+		cart.addItem(COURSE);
+		checkoutOpen.set(true);
+		mockOrdersApi({
+			id: 'order-pm-1', order_number: 'DF-PM1', status: 'paid',
+			total_cents: 480000, discount_cents: 0, coupon_code: null,
+			points_used: 0, points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+			items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
+		});
+		const { getByText } = render(CheckoutDialog);
+
+		await payThrough(getByText);
+
+		const orderCall = vi.mocked(api).mock.calls.find(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+		const body = JSON.parse((orderCall?.[1] as RequestInit).body as string);
+		expect(body).toMatchObject({ payment_method: 'credit_card' });
+	});
+
+	it('選 LINE Pay → POST /orders body 帶 payment_method: line_pay', async () => {
+		cart.addItem(COURSE);
+		checkoutOpen.set(true);
+		mockOrdersApi({
+			id: 'order-pm-2', order_number: 'DF-PM2', status: 'paid',
+			total_cents: 480000, discount_cents: 0, coupon_code: null,
+			points_used: 0, points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+			items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
+		});
+		const { getByText, getByLabelText } = render(CheckoutDialog);
+
+		await fireEvent.click(getByText('前往付款'));
+		await fireEvent.click(getByLabelText('LINE Pay'));
+		await fireEvent.click(getByText('確認付款'));
+
+		await vi.waitFor(() => {
+			const calls = vi.mocked(api).mock.calls.filter(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+			expect(calls).toHaveLength(1);
+		});
+		const orderCall = vi.mocked(api).mock.calls.find(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+		const body = JSON.parse((orderCall?.[1] as RequestInit).body as string);
+		expect(body).toMatchObject({ payment_method: 'line_pay' });
+	});
+
+	it('重新開啟 dialog（關閉重開）→ 單選重置回預設 credit_card', async () => {
+		cart.addItem(COURSE);
+		checkoutOpen.set(true);
+		const { getByText, getByLabelText } = render(CheckoutDialog);
+
+		await fireEvent.click(getByText('前往付款'));
+		await fireEvent.click(getByLabelText('現場付款'));
+		checkoutOpen.set(false);
+		await tick();
+		checkoutOpen.set(true);
+		await tick();
+		await fireEvent.click(getByText('前往付款'));
+
+		expect((getByLabelText('信用卡') as HTMLInputElement).checked).toBe(true);
+		expect((getByLabelText('現場付款') as HTMLInputElement).checked).toBe(false);
+	});
+});

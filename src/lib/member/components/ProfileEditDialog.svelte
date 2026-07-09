@@ -61,7 +61,7 @@
       <div style="padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <Input label="學員姓名" bind:value={f.name} on:input={onName} />
-          <Input label="生日" bind:value={f.birth} />
+          <Input label="生日" type="date" bind:value={f.birth} />
           <Input label="聯絡電話" bind:value={f.phone} />
           <Input label="Email" bind:value={f.email} />
           <Input label="家長 / 緊急聯絡人" bind:value={f.guardian} style="grid-column:span 2" />
