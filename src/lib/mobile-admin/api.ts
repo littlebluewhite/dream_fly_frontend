@@ -22,6 +22,8 @@ import {
 	getOrders as adminGetOrders,
 	updateOrderStatus,
 	getReports as adminGetReports,
+	getTodaySessions as adminGetTodaySessions,
+	getRecentActivity as adminGetRecentActivity,
 	getSettings,
 	putSettings,
 	type CourseWriteBody,
@@ -31,7 +33,7 @@ import {
 	type SettingsData,
 	type SettingsWriteBody
 } from '$lib/admin/api';
-import type { CoachFormValues } from '$lib/admin/data';
+import type { CoachFormValues, TodayClass } from '$lib/admin/data';
 import {
 	getDashboard as coachGetDashboard,
 	getAttendance as coachGetAttendance,
@@ -52,8 +54,6 @@ import {
 import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
 import {
 	PROFILES,
-	TODAY,
-	ACTIVITY,
 	fmtNT,
 	type Profile,
 	type Coach,
@@ -217,6 +217,14 @@ export interface CsettingsData {
  *  行動版鏡射同一份桌面固定假值，不新發明第 4 個假統計(桌面只給 3 個)。 */
 export const getCsettings = (): Promise<CsettingsData> => coachGetSettings();
 
+/** 桌面 TodayClass(見 admin/api.ts getTodaySessions()，GET /sessions/today admin
+ *  分支)→ 行動版 TodayRow。coach/room 的 null→「—」代換已在桌面 mapTodaySession()
+ *  做過，這裡原樣沿用；tone/label 桌面也已查表算好(給 Badge 用途一致)，不重新推導；
+ *  state(桌面內部推導用欄位)行動版不需要，不帶入。 */
+function mapAdminTodayRow(t: TodayClass): TodayRow {
+	return { time: t.time, name: t.name, coach: t.coach, room: t.room, count: t.count, tone: t.tone, label: t.label };
+}
+
 export interface MAdminHomeData {
 	profiles: Record<'admin' | 'coach', Profile>;
 	today: TodayRow[];
@@ -230,16 +238,23 @@ export interface MAdminHomeData {
  *  /reports/admin)，只取有真實資料源的兩項 KPI（在學學員／本月營收）——同桌面
  *  admin/+page.svelte 的裁決 9：原「本週課堂」「出席偏低」兩張 KPI 卡在
  *  /reports/admin 沒有對應資料源，已隨桌面版一併移除，不留假數字；hero 硬編日期
- *  字串(dateLabel)同理移除(桌面 sub 也只剩「全館即時概況」，無日期)。today(今日
- *  課表)/activity(最新動態)桌面本身也仍讀 TODAY/ACTIVITY 這兩份 mock（見
- *  TodayPanel.svelte/ActivityPanel.svelte 皆未接真資料），行動版鏡射同一決定原樣
- *  沿用；profiles 維持 mock，理由同 getMore()。 */
+ *  字串(dateLabel)同理移除(桌面 sub 也只剩「全館即時概況」，無日期)。
+ *
+ *  Task F11：today(今日課表)/activity(最新動態)改讀 GET /sessions/today(admin 分支，
+ *  getTodaySessions())與 GET /reports/admin/activity(getRecentActivity())，同桌面
+ *  admin/+page.svelte 接真的同一組端點；三支呼叫互不相依，平行拉取。activity 形狀
+ *  與桌面 Activity 完全相同(零映射，直接沿用)；today 經 mapAdminTodayRow() 轉成行動版
+ *  TodayRow 形狀。profiles 維持 mock，理由同 getMore()。 */
 export const getAdminHome = async (): Promise<MAdminHomeData> => {
-	const reports = await adminGetReports();
+	const [reports, todaySessions, recentActivity] = await Promise.all([
+		adminGetReports(),
+		adminGetTodaySessions(),
+		adminGetRecentActivity()
+	]);
 	return {
 		profiles: PROFILES,
-		today: TODAY,
-		activity: ACTIVITY,
+		today: todaySessions.sessions.map(mapAdminTodayRow),
+		activity: recentActivity.activity,
 		enrolledValue: String(reports.members.active),
 		revenueMonthValue: fmtNT(reports.revenue.thisMonth)
 	};

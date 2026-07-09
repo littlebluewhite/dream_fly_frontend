@@ -1,17 +1,18 @@
 <script lang="ts">
   /* 今日課表 — today's schedule panel (admin.jsx TodayPanel). Sits in a padding-0
-   * Card: PanelHead (calendar icon on the right) over the TODAY rows. Each row is
-   * time (mono) · name + coach·room·count meta · a status Badge carrying the row's
-   * own tone+label. Reads the shared TODAY directly; `sub` is overridable (the
-   * dashboard passes "全館 5 堂課").
+   * Card: PanelHead (calendar icon on the right) over the today session rows. Each
+   * row is time (mono) · name + coach·room·count meta · a status Badge carrying the
+   * row's own tone+label. `sub` is overridable (the dashboard passes "全館 N 堂課").
    *
-   * P2: TODAY is still a live mock seed (admin/data.ts) — no backend today-schedule
-   * endpoint exists yet, see docs/adr/0006. */
+   * Task F11: data now arrives via props — the page fetches admin/api.ts's
+   * getTodaySessions() (GET /sessions/today admin 分支, integration-contract.md
+   * §3.18) and passes the mapped TodayClass[] in as `sessions`; this component no
+   * longer imports the (now-retired) admin/data.ts TODAY mock. */
   import { Card, Badge, Icon } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
-  import { TODAY } from '$lib/admin/data';
+  import type { TodayClass } from '$lib/admin/data';
 
-  export let sub = '全館 5 堂課';
+  let { sub = '全館 5 堂課', sessions }: { sub?: string; sessions: TodayClass[] } = $props();
 </script>
 
 <Card padding={0} style="overflow:hidden">
@@ -19,8 +20,8 @@
     <Icon slot="right" name="calendar-days" size={18} color="var(--df-text-muted)" />
   </PanelHead>
   <div style="padding:6px 22px 14px">
-    {#each TODAY as t, i}
-      <div class="df-rowhover row" class:last={i === TODAY.length - 1}>
+    {#each sessions as t, i}
+      <div class="df-rowhover row" class:last={i === sessions.length - 1}>
         <div class="time">{t.time}</div>
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{t.name}</div>

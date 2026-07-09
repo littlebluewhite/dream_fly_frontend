@@ -1,15 +1,18 @@
 <script lang="ts">
   /* 最新動態 — activity feed panel (admin.jsx ActivityPanel). Sits in a padding-0
-   * Card: PanelHead (activity icon on the right) over the ACTIVITY items. Each item
+   * Card: PanelHead (activity icon on the right) over the activity items. Each item
    * is an icon chip (background = item.bg, icon colour = item.tone — both are raw
-   * CSS colour strings, NOT Tones) beside the text + relative time. Reads the
-   * shared ACTIVITY directly.
+   * CSS colour strings, NOT Tones) beside the text + time.
    *
-   * P2: ACTIVITY is still a live mock seed (admin/data.ts) — no backend activity-feed
-   * endpoint exists yet, see docs/adr/0006. */
+   * Task F11: data now arrives via props — the page fetches admin/api.ts's
+   * getRecentActivity() (GET /reports/admin/activity, integration-contract.md
+   * §3.24) and passes the mapped Activity[] in as `activity`; this component no
+   * longer imports the (now-retired) admin/data.ts ACTIVITY mock. */
   import { Card, Icon } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
-  import { ACTIVITY } from '$lib/admin/data';
+  import type { Activity } from '$lib/admin/data';
+
+  let { activity }: { activity: Activity[] } = $props();
 </script>
 
 <Card padding={0} style="overflow:hidden">
@@ -17,8 +20,8 @@
     <Icon slot="right" name="activity" size={18} color="var(--df-text-muted)" />
   </PanelHead>
   <div style="padding:8px 22px 16px">
-    {#each ACTIVITY as a, i}
-      <div class="row" class:last={i === ACTIVITY.length - 1}>
+    {#each activity as a, i}
+      <div class="row" class:last={i === activity.length - 1}>
         <div class="chip" style="background:{a.bg}">
           <Icon name={a.icon} size={16} color={a.tone} />
         </div>

@@ -20,6 +20,8 @@ vi.mock('$lib/admin/api', () => ({
 	getOrders: vi.fn(),
 	updateOrderStatus: vi.fn(),
 	getReports: vi.fn(),
+	getTodaySessions: vi.fn(),
+	getRecentActivity: vi.fn(),
 	getSettings: vi.fn(),
 	putSettings: vi.fn()
 }));
@@ -54,7 +56,7 @@ import {
 	getSettings,
 	putSettings
 } from './api';
-import { PROFILES, TODAY, ACTIVITY } from './data';
+import { PROFILES } from './data';
 
 describe('getMore', () => {
 	it('resolves coaches/venues/tickets from the real admin seam (parallel), profiles stays mock', async () => {
@@ -164,23 +166,52 @@ describe('getCsettings', () => {
 });
 
 describe('getAdminHome', () => {
-	it('resolves the two real KPIs from getReports(), keeps today/activity mock, drops the removed KPIs', async () => {
+	it('resolves the two real KPIs from getReports(), and real today/activity from getTodaySessions()/getRecentActivity() (Task F11), drops the removed KPIs', async () => {
 		vi.mocked(adminApi.getReports).mockResolvedValue({
 			revenue: { thisMonth: 182000, lastMonth: 0, trend: [] },
 			members: { total: 300, newThisMonth: 5, active: 248 },
 			courses: [],
 			coaches: []
 		} as never);
+		vi.mocked(adminApi.getTodaySessions).mockResolvedValue({
+			sessions: [
+				{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, state: 'live', tone: 'success', label: '進行中' },
+				{ time: '20:00', name: '成人體操 基礎班', coach: '—', room: '—', count: 9, state: 'wait', tone: 'neutral', label: '尚未開始' }
+			]
+		} as never);
+		vi.mocked(adminApi.getRecentActivity).mockResolvedValue({
+			activity: [{ icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新會員註冊:謝佩珊', time: '2026-07-10 09:12' }]
+		} as never);
 
 		const d = await getAdminHome();
 
 		expect(d).toEqual({
 			profiles: PROFILES,
-			today: TODAY,
-			activity: ACTIVITY,
+			today: [
+				{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, tone: 'success', label: '進行中' },
+				{ time: '20:00', name: '成人體操 基礎班', coach: '—', room: '—', count: 9, tone: 'neutral', label: '尚未開始' }
+			],
+			activity: [{ icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新會員註冊:謝佩珊', time: '2026-07-10 09:12' }],
 			enrolledValue: '248',
 			revenueMonthValue: 'NT$182,000'
 		});
+	});
+
+	it('propagates a null-mapped(「—」) coach/venue straight through from getTodaySessions() (already substituted upstream)', async () => {
+		vi.mocked(adminApi.getReports).mockResolvedValue({
+			revenue: { thisMonth: 0, lastMonth: 0, trend: [] },
+			members: { total: 0, newThisMonth: 0, active: 0 },
+			courses: [],
+			coaches: []
+		} as never);
+		vi.mocked(adminApi.getTodaySessions).mockResolvedValue({
+			sessions: [{ time: '08:00', name: '跑酷體驗班', coach: '—', room: '—', count: 3, state: 'wait', tone: 'neutral', label: '尚未開始' }]
+		} as never);
+		vi.mocked(adminApi.getRecentActivity).mockResolvedValue({ activity: [] } as never);
+
+		const d = await getAdminHome();
+
+		expect(d.today).toEqual([{ time: '08:00', name: '跑酷體驗班', coach: '—', room: '—', count: 3, tone: 'neutral', label: '尚未開始' }]);
 	});
 });
 

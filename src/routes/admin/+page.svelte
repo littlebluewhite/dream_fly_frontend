@@ -11,7 +11,12 @@
    * active)與「本月營收」(revenue.thisMonth，ntd() 後由 fmtNT() 顯示)。硬編日期
    * （原 sub="2026 年 6 月 10 日 · 全館即時概況"）一併移除。匯出報表 fires an info
    * toast (the React onClick); 新增課程 links to /admin/classes (the React
-   * setView)。 */
+   * setView)。
+   *
+   * Task F11：今日課表／最新動態改吃真資料——分別讀 GET /sessions/today(admin 分支，
+   * admin/api.ts 的 getTodaySessions())與 GET /reports/admin/activity(getRecentActivity())，
+   * 併入既有 Promise.all 平行拉取；TodayPanel/ActivityPanel 改為 props 注入，
+   * TodayPanel 的 sub 文案也隨真實場次數動態產生(不再硬編「全館 5 堂課」)。 */
   import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
@@ -21,18 +26,22 @@
   import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getReports, getMembers, type ReportsData } from '$lib/admin/api';
-  import type { MemberAccount } from '$lib/admin/data';
+  import { getReports, getMembers, getTodaySessions, getRecentActivity, type ReportsData } from '$lib/admin/api';
+  import type { MemberAccount, TodayClass, Activity } from '$lib/admin/data';
   import { fmtNT } from '$lib/admin/format';
 
   let reports: ReportsData | null = null;
   let members: MemberAccount[] = [];
+  let todaySessions: TodayClass[] = [];
+  let activity: Activity[] = [];
 
   const gate = createLoadGate({
-    fetch: () => Promise.all([getReports(), getMembers()]),
-    onData: ([r, m]) => {
+    fetch: () => Promise.all([getReports(), getMembers(), getTodaySessions(), getRecentActivity()]),
+    onData: ([r, m, ts, act]) => {
       reports = r;
       members = m.members;
+      todaySessions = ts.sessions;
+      activity = act.activity;
     }
   });
   onMount(() => {
@@ -77,8 +86,8 @@
   <div class="split">
     <MembersTable compact {members} />
     <div style="display:flex;flex-direction:column;gap:18px">
-      <TodayPanel sub="全館 5 堂課" />
-      <ActivityPanel />
+      <TodayPanel sub={'全館 ' + todaySessions.length + ' 堂課'} sessions={todaySessions} />
+      <ActivityPanel {activity} />
     </div>
   </div>
 </div>

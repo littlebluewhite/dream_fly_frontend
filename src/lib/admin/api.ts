@@ -8,8 +8,9 @@ import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, pageMeta } from '$lib/api/wire';
-import type { ApiPage } from '$lib/api/wire';
+import { ageRange, initialOf, isoDateTime, pageMeta } from '$lib/api/wire';
+import type { ApiPage, Tone } from '$lib/api/wire';
+import { deriveSessionStatus } from '$lib/coach/api';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 import type {
 	Ticket,
@@ -22,7 +23,9 @@ import type {
 	OrderStatus,
 	TrendBar,
 	MemberAccount,
-	ApiUserAccount
+	ApiUserAccount,
+	TodayClass,
+	Activity
 } from './data';
 
 /* ═════════════════════════ 場館（GET /venues，公開端點，復用 Task 14 public seam） ═════════════════════════ */
@@ -325,6 +328,102 @@ export const getReports = (): Promise<ReportsData> =>
 		members: { total: r.members.total, newThisMonth: r.members.new_this_month, active: r.members.active },
 		courses: r.courses.map(mapAdminReportCourse),
 		coaches: r.coaches.map(mapAdminReportCoach)
+	}));
+
+/* ═════════════════════════ 今日課表（GET /sessions/today，admin 分支，見 integration-
+ * contract.md §3.18，Task F11：admin 儀表板今日課表接真） ═════════════════════════ */
+
+interface ApiAdminTodaySession {
+	id: string;
+	course_id: string;
+	course_name: string;
+	coach_name: string | null;
+	start_time: string; // "HH:MM:SS"
+	end_time: string;
+	enrolled_count: number;
+	venue: string | null;
+}
+
+/** 狀態 → [tone, label]（沿用桌面既有 TODAY mock 對這 3 態的既有配色/文案慣例）。
+ *  deriveSessionStatus(下方復用 coach/api.ts 既有實作，不重寫時間比較邏輯)依目前時間
+ *  只會推導 wait/live/done 3 態——TodayState(見 data.ts)因應舊 mock 多出的 prep(備課中)/
+ *  soon(即將開始)兩個緩衝態，真資料無法推導，這裡不會產生。 */
+const TODAY_TONE_LABEL: Record<'wait' | 'live' | 'done', [Tone, string]> = {
+	wait: ['neutral', '尚未開始'],
+	live: ['success', '進行中'],
+	done: ['neutral', '已結束']
+};
+
+/** TodaySessionResponse(admin 分支)→ 既有 TodayClass 形狀。coach_name(Round 4 Task B8
+ *  新增)為 null 表示課程尚未指定教練；venue(同批新增)為 null 表示場次反推不到對應
+ *  slot——兩者皆顯示「—」。state 由 deriveSessionStatus 依目前時間推導，tone/label
+ *  查上表。 */
+function mapTodaySession(s: ApiAdminTodaySession, now: Date): TodayClass {
+	const state = deriveSessionStatus(s.start_time, s.end_time, now) as 'wait' | 'live' | 'done';
+	const [tone, label] = TODAY_TONE_LABEL[state];
+	return {
+		time: s.start_time.slice(0, 5),
+		name: s.course_name,
+		coach: s.coach_name ?? '—',
+		room: s.venue ?? '—',
+		count: s.enrolled_count,
+		state,
+		tone,
+		label
+	};
+}
+
+export interface TodaySessionsData {
+	sessions: TodayClass[];
+}
+
+/** GET /sessions/today——admin 分支回全站當日場次，後端已依 start_time 排序。 */
+export const getTodaySessions = async (): Promise<TodaySessionsData> => {
+	const sessions = await api<ApiAdminTodaySession[]>('/sessions/today');
+	const now = new Date();
+	return { sessions: sessions.map((s) => mapTodaySession(s, now)) };
+};
+
+/* ═════════════════════════ 最新動態（GET /reports/admin/activity，見 integration-
+ * contract.md §3.24，Task F11：admin 儀表板最新動態接真） ═════════════════════════ */
+
+interface ApiAdminActivityItem {
+	kind: 'user' | 'order' | 'enrolment' | 'inquiry';
+	label: string;
+	occurred_at: string;
+}
+interface ApiAdminActivityResponse {
+	items: ApiAdminActivityItem[];
+}
+
+/** kind → icon/tone/bg 對照(前端配置——後端只給 kind，不含圖示資訊，見契約裁決「kind
+ *  供前端配對應圖示，不做其他語意保證」)。沿用既有 Icon 註冊集與 Activity 既有
+ *  tone(CSS 變數字串，非 Badge Tone)/bg 慣例。 */
+const ACTIVITY_KIND_ICON: Record<ApiAdminActivityItem['kind'], { icon: string; tone: string; bg: string }> = {
+	user: { icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
+	order: { icon: 'credit-card', tone: 'var(--df-success)', bg: 'var(--df-success-bg)' },
+	enrolment: { icon: 'book-open', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
+	inquiry: { icon: 'message-circle', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)' }
+};
+
+/** ActivityItem → 既有 Activity 形狀。label 已是後端組好的繁中人讀字串(含 NT$ 金額)，
+ *  原樣穿透為 text；occurred_at(ISO8601)轉為顯示用 "YYYY-MM-DD HH:MM"(同 mapCoach.
+ *  lastLogin 的 isoDateTime 慣例，這裡沒有既有的相對時間("N 分鐘前")格式化工具，不
+ *  另外發明一套)。 */
+function mapActivityItem(item: ApiAdminActivityItem): Activity {
+	const { icon, tone, bg } = ACTIVITY_KIND_ICON[item.kind];
+	return { icon, tone, bg, text: item.label, time: isoDateTime(item.occurred_at) };
+}
+
+export interface RecentActivityData {
+	activity: Activity[];
+}
+
+/** GET /reports/admin/activity——UNION 四來源(新會員/新付款訂單/新報名/新洽詢)最近
+ *  20 筆倒序，`{ items: [...] }` 陣列包裝(裁決 6，本端點不是單一物件回應)。 */
+export const getRecentActivity = (): Promise<RecentActivityData> =>
+	api<ApiAdminActivityResponse>('/reports/admin/activity').then((r) => ({
+		activity: r.items.map(mapActivityItem)
 	}));
 
 /* ═════════════════════════ 課程（GET /courses，公開端點，復用 Task 14 public seam） ═════════════════════════ */

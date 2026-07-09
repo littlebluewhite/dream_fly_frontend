@@ -28,6 +28,8 @@ import {
 	deleteCoupon,
 	createMember,
 	updateMember,
+	getTodaySessions,
+	getRecentActivity,
 	getSettings,
 	putSettings
 } from './api';
@@ -985,6 +987,129 @@ describe('getReports — GET /reports/admin（admin，§3.24）', () => {
 		expect(d.members).toEqual({ total: 0, newThisMonth: 0, active: 0 });
 		expect(d.courses).toEqual([]);
 		expect(d.coaches).toEqual([]);
+	});
+});
+
+describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Task F11：儀表板今日課表接真）', () => {
+	it('映射 time(HH:MM)/name/count；coach_name/venue 皆有值時直接映射；state 依目前時間推導(09:30 落在 09:00–10:00 場次中 → live)', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 10, 9, 30, 0));
+		try {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({
+					'GET /sessions/today': [
+						{
+							id: 's1', course_id: 'c1', course_name: '兒童體操 初階班', coach_name: '黃詩涵',
+							start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 6, venue: 'C 軟墊區'
+						}
+					]
+				})
+			);
+
+			const d = await getTodaySessions();
+
+			expect(api).toHaveBeenCalledWith('/sessions/today');
+			expect(d.sessions).toEqual([
+				{ time: '09:00', name: '兒童體操 初階班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live', tone: 'success', label: '進行中' }
+			]);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('coach_name 為 null(尚未指定教練)、venue 為 null(反推不到對應 slot)時皆映射為「—」', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /sessions/today': [
+					{
+						id: 's2', course_id: 'c2', course_name: '跑酷體驗班', coach_name: null,
+						start_time: '08:00:00', end_time: '09:00:00', enrolled_count: 3, venue: null
+					}
+				]
+			})
+		);
+
+		const d = await getTodaySessions();
+
+		expect(d.sessions[0].coach).toBe('—');
+		expect(d.sessions[0].room).toBe('—');
+	});
+
+	it('state 推導(復用 coach/api.ts deriveSessionStatus)：now < start_time → wait/尚未開始', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 10, 7, 0, 0));
+		try {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({
+					'GET /sessions/today': [
+						{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
+					]
+				})
+			);
+
+			const d = await getTodaySessions();
+			expect(d.sessions[0]).toMatchObject({ state: 'wait', tone: 'neutral', label: '尚未開始' });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('state 推導：now >= end_time → done/已結束', async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(2026, 6, 10, 11, 0, 0));
+		try {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({
+					'GET /sessions/today': [
+						{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
+					]
+				})
+			);
+
+			const d = await getTodaySessions();
+			expect(d.sessions[0]).toMatchObject({ state: 'done', tone: 'neutral', label: '已結束' });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('今日無場次時回傳空陣列，不是 500', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /sessions/today': [] }));
+		const d = await getTodaySessions();
+		expect(d.sessions).toEqual([]);
+	});
+});
+
+describe('getRecentActivity — GET /reports/admin/activity（§3.24，Task F11：儀表板最新動態接真）', () => {
+	it('kind→icon/tone/bg 對照涵蓋 user/order/enrolment/inquiry 4 種 kind；label(已含中文/金額)原樣映射為 text；occurred_at 轉為顯示時間', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin/activity': {
+					items: [
+						{ kind: 'user', label: '新會員註冊:謝佩珊', occurred_at: '2026-07-10T09:12:00Z' },
+						{ kind: 'order', label: '訂單 DF-24061 已付款:NT$4,800', occurred_at: '2026-07-10T08:40:00Z' },
+						{ kind: 'enrolment', label: '新報名:兒童基礎 B 班', occurred_at: '2026-07-10T08:00:00Z' },
+						{ kind: 'inquiry', label: '新洽詢(trial):王小明', occurred_at: '2026-07-10T07:30:00Z' }
+					]
+				}
+			})
+		);
+
+		const d = await getRecentActivity();
+
+		expect(api).toHaveBeenCalledWith('/reports/admin/activity');
+		expect(d.activity).toEqual([
+			{ icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新會員註冊:謝佩珊', time: '2026-07-10 09:12' },
+			{ icon: 'credit-card', tone: 'var(--df-success)', bg: 'var(--df-success-bg)', text: '訂單 DF-24061 已付款:NT$4,800', time: '2026-07-10 08:40' },
+			{ icon: 'book-open', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新報名:兒童基礎 B 班', time: '2026-07-10 08:00' },
+			{ icon: 'message-circle', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', text: '新洽詢(trial):王小明', time: '2026-07-10 07:30' }
+		]);
+	});
+
+	it('空庫：items 為 [] 時回傳空陣列，不是 500', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin/activity': { items: [] } }));
+		const d = await getRecentActivity();
+		expect(d.activity).toEqual([]);
 	});
 });
 

@@ -46,8 +46,10 @@ export interface CoachFormValues {
 export { VENUES, type Venue } from '$lib/domain/venues';
 // TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
 export { TICKETS, type Ticket } from '$lib/domain/tickets';
-// P2: ActivityPanel 仍消費的 live-mock——最新動態無對應後端端點,見 docs/adr/0006。
-export { ACTIVITY, type Activity } from '$lib/domain/activity';
+// Task F11：ACTIVITY live-mock 退役(唯一消費者 ActivityPanel 改吃 props；真資料見
+// admin/api.ts 的 getRecentActivity()，對應 GET /reports/admin/activity，integration-
+// contract.md §3.24)。型別仍為 ActivityPanel props 的形狀來源，保留 re-export。
+export type { Activity } from '$lib/domain/activity';
 // Task 15: admin's report analytics (getReports()) now maps GET /reports/admin
 // (integration-contract.md §3.24) instead of this mock seed — the re-export of
 // domain/reports.ts's 13 arrays/types was dropped here (nothing in admin/ imports
@@ -236,17 +238,15 @@ export interface TodayClass {
 	tone: Tone;
 	label: string;
 }
-// P2: TodayPanel 仍消費的 live-mock——今日課表無對應後端端點,見 docs/adr/0006。
-export const TODAY: TodayClass[] = [
-	{ time: '10:00', name: '幼兒體操 啟蒙班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'done', tone: 'neutral', label: '已結束' },
-	{ time: '16:00', name: '親子體操 同樂班', coach: '黃詩涵', room: 'C 軟墊區', count: 5, state: 'prep', tone: 'info', label: '備課中' },
-	{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, state: 'live', tone: 'success', label: '進行中' },
-	{ time: '19:00', name: '競技啦啦隊 進階班', coach: '林雅婷', room: 'A 訓練館', count: 11, state: 'soon', tone: 'warning', label: '即將開始' },
-	{ time: '20:00', name: '成人體操 基礎班', coach: '王思齊', room: 'A 訓練館', count: 9, state: 'wait', tone: 'neutral', label: '尚未開始' }
-];
+// Task F11：TODAY live-mock 退役(唯一消費者 TodayPanel 改吃 props；真資料見 admin/api.ts
+// 的 getTodaySessions()，對應 GET /sessions/today admin 分支，integration-contract.md
+// §3.18)。TodayState 5 態聯集維持不窄化——真資料的 deriveSessionStatus()(coach/api.ts
+// 復用)只會推導 wait/live/done 3 態，'prep'/'soon' 兩個緩衝態不會再被產生，但保留超集
+// 型別可讓真資料的 3 態直接指派、不需額外 cast。
 
 /* ───────────────────────── activity / venues / tickets ─────────────────────────
- * `COACHES`, `ACTIVITY`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top. */
+ * `COACHES`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top
+ * (`Activity` type only — see Task F11 note above). */
 
 /* ═════════════════════════ 報表分析 ═════════════════════════
  * Task 15: getReports() now maps real GET /reports/admin data (revenue/members/
