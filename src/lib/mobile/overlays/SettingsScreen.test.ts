@@ -82,54 +82,88 @@ describe('SettingsScreen — 切換開關即時 PATCH /users/me(savePreferences 
 	});
 });
 
-describe('SettingsScreen — 寫入失敗回滾 + 錯誤提示', () => {
-	it('savePreferences 失敗:開關回滾為切換前的值，顯示錯誤 toast', async () => {
+describe('SettingsScreen — 寫入失敗改整包 resync + 錯誤提示', () => {
+	it('savePreferences 失敗:改呼叫 getPreferences() 整包 resync 覆蓋 store(不是單鍵回滾)，顯示錯誤 toast', async () => {
 		vi.mocked(savePreferences).mockRejectedValue(new Error('network'));
+		// resync 回傳的伺服器真值刻意讓 4 個 key 都跟「切換前」的本地值不同，
+		// 證明整包蓋掉的是 getPreferences() 的回應，不是巧合對到單鍵回滾的舊值。
+		const serverTruthAfterFailure = { classReminder: false, coachMsg: false, promo: true, dark: true };
+		vi.mocked(getPreferences)
+			.mockResolvedValueOnce({ ...DEFAULT_PREFS }) // onMount 背景水合
+			.mockResolvedValueOnce(serverTruthAfterFailure); // 失敗後的整包 resync
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(SettingsScreen, { props: { onBack: () => {} } });
-		await waitFor(() => expect(getPreferences).toHaveBeenCalled());
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(1));
 
 		const switches = screen.getAllByRole('switch');
-		// fireEvent.click 內部會 await tick()，已讓 mockRejectedValue 的（已 reject）
-		// promise 走完 catch 回滾——不斷言「樂觀更新後、回滾前」這個必然競態的中間態，
-		// 只斷言最終落地的行為契約:失敗後開關回到切換前的值 + 顯示錯誤 toast。
-		await fireEvent.click(switches[1]); // 教練訊息 coachMsg true→false，隨即因送出失敗回滾
+		await fireEvent.click(switches[1]); // 教練訊息 coachMsg true→false，送出失敗
 
-		await waitFor(() => expect(get(prefs).coachMsg).toBe(true)); // 回滾回原值
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(2)); // 失敗後觸發 resync
+		await waitFor(() => expect(get(prefs)).toEqual(serverTruthAfterFailure)); // 整包換成伺服器真值
 		expect(notifySpy).toHaveBeenCalledWith('error', '儲存失敗', expect.any(String));
 		notifySpy.mockRestore();
 	});
 
-	it('回滾只還原「這一顆」開關，不會波及仍在飛行中的其他開關樂觀更新', async () => {
-		// 情境:課程提醒切換送出中尚未回應時，使用者又切換了活動公告(也送出中)；
-		// 課程提醒那次送出稍後失敗——回滾不應該把活動公告的樂觀值也一併蓋掉。
+	it('savePreferences 與 resync 都失敗:退回單鍵回滾(讀切換前的舊值) + 錯誤 toast', async () => {
+		vi.mocked(savePreferences).mockRejectedValue(new Error('network'));
+		vi.mocked(getPreferences)
+			.mockResolvedValueOnce({ ...DEFAULT_PREFS }) // onMount 背景水合(成功)
+			.mockRejectedValueOnce(new Error('offline')); // 失敗後的 resync 也失敗(雙重離線)
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		render(SettingsScreen, { props: { onBack: () => {} } });
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(1));
+
+		const switches = screen.getAllByRole('switch');
+		await fireEvent.click(switches[1]); // 教練訊息 coachMsg true→false，送出失敗
+
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(2)); // 嘗試過 resync
+		await waitFor(() => expect(get(prefs)).toEqual(DEFAULT_PREFS)); // resync 也失敗，退回單鍵回滾(只還原 coachMsg，其餘不受影響)
+		expect(notifySpy).toHaveBeenCalledWith('error', '儲存失敗', expect.any(String));
+		notifySpy.mockRestore();
+	});
+
+	it('交錯情境(review finding):切 A 送出中又切 B → 序列化下 call2 不會搶在 call1 結算前送出；A 失敗 resync 後，call2 才輪到送出，其 body 已反映 resync 後的狀態，不會再把「已被更正的 A 舊值」寫回後端', async () => {
+		// 對照原本的 bug:切 A(call1 帶 A=新值)→ 未回應時切 B(call2 若在排隊當下就
+		// 固定快照，仍會帶著 A=新值)→ call1 失敗回滾 A → call2 成功，把「已回滾的
+		// A=新值」寫回後端，本地顯示跟伺服器真值悄悄分歧。序列化 + 整包 resync 後:
+		// call2 要等 call1(含它的 resync)完全結算，才會從 store 重新取快照送出。
 		let rejectClassReminderSave!: (e: unknown) => void;
-		let resolvePromoSave!: () => void;
 		const classReminderSave = new Promise<void>((_, reject) => {
 			rejectClassReminderSave = reject;
 		});
-		const promoSave = new Promise<void>((resolve) => {
-			resolvePromoSave = resolve;
-		});
 		vi.mocked(savePreferences)
-			.mockImplementationOnce(() => classReminderSave) // 第一次呼叫:課程提醒切換
-			.mockImplementationOnce(() => promoSave); // 第二次呼叫:活動公告切換
+			.mockImplementationOnce(() => classReminderSave) // call1:課程提醒切換，稍後失敗
+			.mockImplementationOnce(() => Promise.resolve()); // call2:活動公告切換，成功
 
+		vi.mocked(getPreferences)
+			.mockResolvedValueOnce({ ...DEFAULT_PREFS }) // onMount 背景水合
+			.mockResolvedValueOnce({ ...DEFAULT_PREFS }); // call1 失敗後的整包 resync(伺服器從未收到 call1 的變更，仍是預設值)
+
+		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(SettingsScreen, { props: { onBack: () => {} } });
-		await waitFor(() => expect(getPreferences).toHaveBeenCalled());
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(1));
 
 		const switches = screen.getAllByRole('switch');
-		await fireEvent.click(switches[0]); // 課程提醒 true→false(送出中)
-		await fireEvent.click(switches[2]); // 活動公告 false→true(送出中，課程提醒尚未 resolve)
+		await fireEvent.click(switches[0]); // 課程提醒 true→false(call1 送出中，尚未回應)
+		await fireEvent.click(switches[2]); // 活動公告 false→true(本地樂觀更新立即生效，call2 排隊等候)
 
-		expect(get(prefs)).toEqual({ classReminder: false, coachMsg: true, promo: true, dark: false });
+		expect(get(prefs)).toEqual({ classReminder: false, coachMsg: true, promo: true, dark: false }); // 兩個樂觀更新都已即時反映在畫面上
+		await waitFor(() => expect(savePreferences).toHaveBeenCalledTimes(1)); // 序列化:call2 尚未送出，不是排隊當下就跟 call1 同時飛行
 
-		rejectClassReminderSave(new Error('network')); // 課程提醒送出失敗
-		await waitFor(() => expect(get(prefs).classReminder).toBe(true)); // 只回滾這一顆
+		rejectClassReminderSave(new Error('network')); // call1 失敗
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(2)); // 觸發整包 resync
+		await waitFor(() => expect(savePreferences).toHaveBeenCalledTimes(2)); // resync 結束、call2 才輪到送出
 
-		expect(get(prefs).promo).toBe(true); // 活動公告的樂觀值不受牽連
+		// call2 的 body:classReminder 已是 resync 後的正確值(true)，不是原本交錯情境
+		// 下「已回滾卻被 call2 用舊快照寫回 false」的競態；promo 因為整包 resync 覆寫
+		// (伺服器當時還沒收到 call2 的變更)一併回到伺服器真值 false——這是刻意的
+		// 設計取捨(見 SettingsScreen.svelte 的 sendPref 實作註解):寧可讓尚未送出的
+		// 樂觀值被伺服器真值蓋過、需要使用者重新切一次，也不讓本地顯示跟伺服器真值
+		// 悄悄分歧。
+		expect(savePreferences).toHaveBeenLastCalledWith({ classReminder: true, coachMsg: true, promo: false, dark: false });
+		await waitFor(() => expect(get(prefs)).toEqual({ classReminder: true, coachMsg: true, promo: false, dark: false }));
 
-		resolvePromoSave(); // 收尾，避免懸置的 pending promise
-		await waitFor(() => expect(savePreferences).toHaveBeenCalledTimes(2));
+		expect(notifySpy).toHaveBeenCalledWith('error', '儲存失敗', expect.any(String));
+		notifySpy.mockRestore();
 	});
 });
