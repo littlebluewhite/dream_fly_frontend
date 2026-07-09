@@ -115,7 +115,7 @@ describe('帳戶 — 編輯個人資料 · 生日（Round 4 Task P4-F4）', () =
 
 		await vi.waitFor(() => expect(saveBirthDate).toHaveBeenCalledWith('2013-06-01'));
 		await vi.waitFor(() => {
-			expect(get(toasts).some((t) => t.tone === 'success' && t.body.includes('個人資料已更新'))).toBe(true);
+			expect(get(toasts).some((t) => t.tone === 'success' && t.body.includes('僅本機預覽'))).toBe(true);
 		});
 		expect(screen.queryByText('儲存資料')).toBeNull(); // 對話框已關閉
 	});

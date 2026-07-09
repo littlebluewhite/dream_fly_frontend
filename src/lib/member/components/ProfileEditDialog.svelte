@@ -59,6 +59,7 @@
         <IconButton aria-label="關閉" variant="ghost" on:click={onClose}><Icon name="x" size={20} /></IconButton>
       </div>
       <div style="padding:24px;overflow-y:auto;display:flex;flex-direction:column;gap:16px">
+        <div style="font-size:12.5px;color:var(--df-text-light)">生日以外的欄位僅本機預覽，尚未串接後端。</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <Input label="學員姓名" bind:value={f.name} on:input={onName} />
           <Input label="生日" type="date" bind:value={f.birth} />

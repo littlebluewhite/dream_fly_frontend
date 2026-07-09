@@ -42,7 +42,7 @@
     }
     profile = f;
     editing = false;
-    toasts.notify('success', '已儲存', '個人資料已更新。');
+    toasts.notify('success', '已儲存', '生日已更新，其他欄位目前僅本機預覽，尚未送出。');
   }
 </script>
 

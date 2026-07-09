@@ -30,6 +30,14 @@ describe('ProfileEditDialog', () => {
 		expect(getByDisplayValue(PROFILE.name)).toBeInTheDocument();
 	});
 
+	// Review fix (P4-F4 finding): 姓名/電話/家長聯絡人/通知偏好 are local-only edits
+	// that `saveProfile` (在 +page.svelte) never sends to the backend — the dialog
+	// must disclose that scope so users don't assume everything persisted.
+	it('揭露生日以外欄位僅本機預覽的提示文字', () => {
+		const { getByText } = render(ProfileEditDialog, { open: true, profile: PROFILE });
+		expect(getByText('生日以外的欄位僅本機預覽，尚未串接後端。')).toBeInTheDocument();
+	});
+
 	// 生日（Round 4 Task P4-F4）——date input，顯示既有值；清空後 onSave 收到的
 	// 副本帶空字串（api 層負責轉成顯式 null 清除，見 member/api.ts saveBirthDate）。
 	it('生日欄位是 <input type="date">，顯示既有值', () => {
