@@ -1,63 +1,156 @@
 <script lang="ts">
   /* 系統設定 push screen。admin2.jsx AdminSettingsScreen (487) + SettingRow (472)。
-   * 場館資訊輸入 + 通知/自動化開關（本地狀態）+ 帳號與安全列 + 儲存變更。 */
+   * 場館資訊輸入 + 通知/自動化開關 + 帳號與安全列 + 儲存變更。
+   *
+   * Task F9：GET/PUT /settings 接真(integration-contract.md §3.25)——復用桌面
+   * admin/api.ts 的 getSettings/putSettings(見 $lib/mobile-admin/api 零映射
+   * re-export，兩個 surface 消費完全相同的欄位形狀)。載入採 createLoadGate 三態
+   * (同 coach/settings/+page.svelte 慣例——本畫面是單筆表單、只有這一個畫面消費，
+   * 不需要 $lib/mobile-admin/stores.ts 那套給 members/classes/coaches/orders 用的
+   * 跨畫面集合水合機制)。單一「儲存變更」全量送出三組 key，理由同桌面版
+   * +page.svelte(admin/api.ts SettingsWriteBody 附註)。「登入裝置清單」不在本任務
+   * 範圍——桌面版才有這個區塊，行動版原本就沒有，維持現狀。 */
+  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
+  import { getSettings, putSettings, type SettingsWriteBody } from '$lib/mobile-admin/api';
+  import { ApiError } from '$lib/api/client';
 
   export let onBack: () => void;
 
+  let name = '';
+  let phone = '';
+  let address = '';
+  let defaultRatio = '1:6';
+  let maxClassSizeLabel = '12 人'; // Select 顯示字串；save() 時轉回數字
   let email = true;
   let sms = false;
   let lowAtt = true;
   let autoWait = true;
+  let twoFA = true;
+  let saving = false;
 
-  const fields: [string, string][] = [
-    ['場館名稱', 'Dream Fly 夢飛體操館'],
-    ['聯絡電話', '04-2376-1688'],
-    ['地址', '台中市西區美村路一段 168 號']
-  ];
-  const selects: [string, string[], string][] = [
-    ['預設師生比', ['1:4', '1:6', '1:8'], '1:6'],
-    ['每班人數上限', ['8 人', '10 人', '12 人'], '12 人']
-  ];
+  const RATIO_OPTIONS = ['1:4', '1:6', '1:8'];
+  const MAX_CLASS_SIZE_OPTIONS = ['8 人', '10 人', '12 人'];
+  const DEFAULT_MAX_CLASS_SIZE = 12;
+  const maxClassSizeToLabel = (n: number) => `${n} 人`;
+  const labelToMaxClassSize = (label: string) => parseInt(label, 10) || DEFAULT_MAX_CLASS_SIZE;
+
+  const gate = createLoadGate({
+    fetch: getSettings,
+    onData: (d) => {
+      name = d.studioProfile.name;
+      phone = d.studioProfile.phone;
+      address = d.studioProfile.address;
+      defaultRatio = d.studioProfile.defaultRatio;
+      maxClassSizeLabel = maxClassSizeToLabel(d.studioProfile.maxClassSize);
+      email = d.notificationFlags.email;
+      sms = d.notificationFlags.sms;
+      lowAtt = d.notificationFlags.lowAtt;
+      autoWait = d.notificationFlags.autoWait;
+      twoFA = d.security.twoFA;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
+
+  function settingsErrorMessage(e: unknown): string {
+    if (e instanceof ApiError && e.status === 403) return '沒有權限執行此操作。';
+    return '連線發生問題，請稍後再試。';
+  }
+
+  async function save() {
+    if (saving) return;
+    saving = true;
+    const body: SettingsWriteBody = {
+      studio_profile: {
+        name,
+        phone,
+        address,
+        default_ratio: defaultRatio,
+        max_class_size: labelToMaxClassSize(maxClassSizeLabel)
+      },
+      notification_flags: { email, sms, lowAtt, autoWait },
+      security: { twoFA }
+    };
+    try {
+      await putSettings(body);
+    } catch (e) {
+      toasts.notify('error', '儲存失敗', settingsErrorMessage(e));
+      saving = false;
+      return;
+    }
+    toasts.notify('success', '已儲存', '系統設定已更新。');
+    await gate.silentRefresh();
+    saving = false;
+  }
 </script>
 
 <PushScreen>
   <ScreenHeader {onBack} title="系統設定" sub="場館資訊、通知與權限" />
+  {#if $gate === 'ready'}
   <div class="df-scroll">
     <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
       <Panel title="場館資訊" sub="顯示於官網與報名通知" pad={16}>
         <div style="display:flex; flex-direction:column; gap:13px;">
-          {#each fields as [l, v] (l)}
-            <div>
-              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">{l}</div>
-              <input
-                value={v}
-                style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
-                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                  outline:none; box-sizing:border-box;"
-              />
-            </div>
-          {/each}
+          <div>
+            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">場館名稱</div>
+            <input
+              bind:value={name}
+              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                outline:none; box-sizing:border-box;"
+            />
+          </div>
+          <div>
+            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
+            <input
+              bind:value={phone}
+              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                outline:none; box-sizing:border-box;"
+            />
+          </div>
+          <div>
+            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">地址</div>
+            <input
+              bind:value={address}
+              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                outline:none; box-sizing:border-box;"
+            />
+          </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-            {#each selects as [l, opts, def] (l)}
-              <div>
-                <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">{l}</div>
-                <select
-                  value={def}
-                  style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
-                    border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                    outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
-                >
-                  {#each opts as o (o)}<option value={o}>{o}</option>{/each}
-                </select>
-              </div>
-            {/each}
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">預設師生比</div>
+              <select
+                bind:value={defaultRatio}
+                style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
+                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                  outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
+              >
+                {#each RATIO_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
+              </select>
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">每班人數上限</div>
+              <select
+                bind:value={maxClassSizeLabel}
+                style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
+                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                  outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
+              >
+                {#each MAX_CLASS_SIZE_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
+              </select>
+            </div>
           </div>
         </div>
       </Panel>
@@ -136,14 +229,25 @@
               <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">登入時需動態驗證碼</div>
             </div>
           </div>
-          <div style="flex:none;"><Switch checked /></div>
+          <div style="flex:none;"><Switch bind:checked={twoFA} /></div>
         </div>
       </Panel>
 
-      <Button variant="primary" fullWidth on:click={() => toasts.notify('success', '已儲存', '系統設定已更新。')}>
+      <Button variant="primary" fullWidth disabled={saving} on:click={save}>
         <Icon name="check" size={16} style="margin-right:6px;" />儲存變更
       </Button>
       <div style="height:8px;"></div>
     </div>
   </div>
+  {:else if $gate === 'error'}
+    <div class="df-scroll" style="padding:16px;">
+      <ErrorState onRetry={gate.refresh} />
+    </div>
+  {:else}
+    <div class="df-scroll" data-testid="settings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard padding={16}><Skeleton w="100%" h={i === 0 ? 220 : 140} r={12} /></SkelCard>
+      {/each}
+    </div>
+  {/if}
 </PushScreen>

@@ -619,3 +619,138 @@ export const updateCoupon = (id: string, body: UpdateCouponBody): Promise<ApiCou
 export async function deleteCoupon(id: string): Promise<void> {
 	await api(`/coupons/${id}`, { method: 'DELETE' });
 }
+
+/* ═════════════════════════ 系統設定（GET/PUT /settings，admin-only，見 integration-
+ * contract.md §3.25，Task F9：系統設定頁接真） ═════════════════════════
+ * 後端是最簡 key-value 全域表：key 自由字串、value 任意合法 JSON，完全不逐欄驗證
+ * （見遷移檔 migrations/20260708000002_settings.sql 註解）。本輪前端只消費三個
+ * 契約記錄的慣例 key —— studio_profile（場館名稱/電話/地址/預設師生比/每班人數
+ * 上限）、notification_flags（email/sms/lowAtt/autoWait 四個布林）、security
+ * （twoFA 布林）。「登入裝置清單」不在範圍（契約 §3.25 開頭：需 session 管理，
+ * 另案處理，routes/admin/settings/+page.svelte 該區塊維持現狀）。
+ *
+ * value 內欄位大小寫逐字對齊契約 §3.25 裁決 4 的範例與後端 tests/http_settings.rs
+ * 的既有事實——studio_profile 用 snake_case（default_ratio/max_class_size），
+ * notification_flags/security 用 camelCase（lowAtt/autoWait/twoFA）；這不是本層
+ * 自選風格，改成別的大小寫會跟後端測試資料對不上。
+ *
+ * 新裝機 GET /settings 回 `{ settings: {} }`（migration 不灌任何預設列）——三個
+ * 慣例 key 皆可能整個缺席，也可能只有部分子欄位；mapXxx() 逐欄位以 DEFAULT_*
+ * 常數補值，讓呼叫端永遠拿到填滿的表單初值，不必自己判斷「這欄後端到底有沒有
+ * 給」。 */
+
+interface ApiStudioProfile {
+	name?: string;
+	phone?: string;
+	address?: string;
+	default_ratio?: string;
+	max_class_size?: number;
+}
+interface ApiNotificationFlags {
+	email?: boolean;
+	sms?: boolean;
+	lowAtt?: boolean;
+	autoWait?: boolean;
+}
+interface ApiSecuritySettings {
+	twoFA?: boolean;
+}
+interface ApiSettingsResponse {
+	settings: {
+		studio_profile?: ApiStudioProfile;
+		notification_flags?: ApiNotificationFlags;
+		security?: ApiSecuritySettings;
+	};
+}
+
+export interface StudioProfile {
+	name: string;
+	phone: string;
+	address: string;
+	defaultRatio: string;
+	maxClassSize: number;
+}
+export interface NotificationFlags {
+	email: boolean;
+	sms: boolean;
+	lowAtt: boolean;
+	autoWait: boolean;
+}
+export interface SecuritySettings {
+	twoFA: boolean;
+}
+
+const DEFAULT_STUDIO_PROFILE: StudioProfile = {
+	name: 'Dream Fly 夢飛體操館',
+	phone: '04-2376-1688',
+	address: '台中市西區美村路一段 168 號',
+	defaultRatio: '1:6',
+	maxClassSize: 12
+};
+const DEFAULT_NOTIFICATION_FLAGS: NotificationFlags = {
+	email: true,
+	sms: false,
+	lowAtt: true,
+	autoWait: true
+};
+const DEFAULT_SECURITY_SETTINGS: SecuritySettings = { twoFA: true };
+
+function mapStudioProfile(raw?: ApiStudioProfile): StudioProfile {
+	return {
+		name: raw?.name ?? DEFAULT_STUDIO_PROFILE.name,
+		phone: raw?.phone ?? DEFAULT_STUDIO_PROFILE.phone,
+		address: raw?.address ?? DEFAULT_STUDIO_PROFILE.address,
+		defaultRatio: raw?.default_ratio ?? DEFAULT_STUDIO_PROFILE.defaultRatio,
+		maxClassSize: raw?.max_class_size ?? DEFAULT_STUDIO_PROFILE.maxClassSize
+	};
+}
+function mapNotificationFlags(raw?: ApiNotificationFlags): NotificationFlags {
+	return {
+		email: raw?.email ?? DEFAULT_NOTIFICATION_FLAGS.email,
+		sms: raw?.sms ?? DEFAULT_NOTIFICATION_FLAGS.sms,
+		lowAtt: raw?.lowAtt ?? DEFAULT_NOTIFICATION_FLAGS.lowAtt,
+		autoWait: raw?.autoWait ?? DEFAULT_NOTIFICATION_FLAGS.autoWait
+	};
+}
+function mapSecuritySettings(raw?: ApiSecuritySettings): SecuritySettings {
+	return { twoFA: raw?.twoFA ?? DEFAULT_SECURITY_SETTINGS.twoFA };
+}
+
+export interface SettingsData {
+	studioProfile: StudioProfile;
+	notificationFlags: NotificationFlags;
+	security: SecuritySettings;
+}
+function mapSettings(r: ApiSettingsResponse): SettingsData {
+	const s = r.settings ?? {};
+	return {
+		studioProfile: mapStudioProfile(s.studio_profile),
+		notificationFlags: mapNotificationFlags(s.notification_flags),
+		security: mapSecuritySettings(s.security)
+	};
+}
+
+export const getSettings = (): Promise<SettingsData> =>
+	api<ApiSettingsResponse>('/settings').then(mapSettings);
+
+/** PUT /settings body —— 三組皆選填（省略＝該 key 不 upsert，維持後端原值，契約
+ *  §3.25 裁決 1；空物件整包送出視為 no-op，裁決 2）。呼叫端（routes/admin/settings/
+ *  +page.svelte、mobile-admin AdminSettingsScreen.svelte）目前只有一個「儲存變更」
+ *  動作、沒有逐卡片分開儲存的 UI，故一律全送三組（不追蹤「這次改了哪個 key」的
+ *  dirty 狀態，報告已註明）。回應同 GET，經同一支 mapSettings() 映射回傳。 */
+export interface SettingsWriteBody {
+	studio_profile?: Partial<{
+		name: string;
+		phone: string;
+		address: string;
+		default_ratio: string;
+		max_class_size: number;
+	}>;
+	notification_flags?: Partial<NotificationFlags>;
+	security?: Partial<SecuritySettings>;
+}
+export const putSettings = (body: SettingsWriteBody): Promise<SettingsData> =>
+	api<ApiSettingsResponse>('/settings', {
+		method: 'PUT',
+		body: JSON.stringify({ settings: body })
+	}).then(mapSettings);

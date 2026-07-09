@@ -22,10 +22,14 @@ import {
 	getOrders as adminGetOrders,
 	updateOrderStatus,
 	getReports as adminGetReports,
+	getSettings,
+	putSettings,
 	type CourseWriteBody,
 	type CreateMemberBody,
 	type UpdateMemberBody,
-	type CoachWriteBody
+	type CoachWriteBody,
+	type SettingsData,
+	type SettingsWriteBody
 } from '$lib/admin/api';
 import type { CoachFormValues } from '$lib/admin/data';
 import {
@@ -72,9 +76,15 @@ export type {
 	CreateCertificateBody,
 	CreateReportCardBody,
 	CoachWriteBody,
-	CoachFormValues
+	CoachFormValues,
+	SettingsData,
+	SettingsWriteBody
 };
 export { createCourse, updateCourse, mapCourse, createMember, updateMember, createCoach, updateCoach, updateOrderStatus };
+// getSettings/putSettings(GET/PUT /settings，Task F9)——桌面與行動版系統設定畫面
+// 消費完全相同的欄位形狀(場館資訊/通知與自動化/帳號與安全)，零映射，直接重新匯出
+// 桌面 admin/api.ts 的實作(同 createCourse 等零映射寫入端點的既有慣例)。
+export { getSettings, putSettings };
 // createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
 // 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
 // 假裝有接這個功能。

@@ -1,36 +1,96 @@
 <script lang="ts">
   /* 系統設定 — faithful port of admin.jsx SettingsView. Three cards:
-   *  · 場館資訊 — venue info field grid (read-only-feeling mock inputs/selects).
-   *  · 通知與自動化 — four Switch rows; toggling any fires a toast. 儲存變更 → toast.
-   *  · 帳號與安全 — 變更密碼 (opens PasswordDialog), 雙重驗證 Switch (toast), and the
+   *  · 場館資訊 — venue info field grid.
+   *  · 通知與自動化 — four Switch rows. 儲存變更 → putSettings().
+   *  · 帳號與安全 — 變更密碼 (opens PasswordDialog), 雙重驗證 Switch, and the
    *    登入裝置 list (monitor / smartphone / tablet icons) with 登出其他裝置.
-   * Local `let` state only; the toast singleton is the cross-route channel. */
-  import { Card, Input, Select, Switch, Button, Badge, Icon } from '$lib/components/ui';
+   *
+   * Task F9：GET/PUT /settings 接真(integration-contract.md §3.25)。三態載入閘門
+   * (createLoadGate)取代原本的純本地假資料；欄位改為 bind:value/bind:checked 的
+   * 可編輯草稿，單一「儲存變更」動作打 putSettings() 全量送出三組 key(只有一個
+   * Save 動作、沒有逐卡片獨立儲存 UI，全送最簡單，不需要另外追蹤 dirty 狀態，見
+   * admin/api.ts SettingsWriteBody 附註)。切換 Switch 只更新本地草稿、不再各自
+   * 即時 toast(接真前每次切換就跳「已開啟/已關閉」暗示已即時持久化；接真後這句話
+   * 會變成謊言——真正持久化只發生在按下「儲存變更」的那一刻)。
+   *
+   * 「登入裝置清單」不在本任務範圍(契約 §3.25 開頭：需 session 管理，另案處理)，
+   * 維持現狀——LOGINS 仍是純本地 mock，最小 diff。 */
+  import { onMount } from 'svelte';
+  import { Card, Input, Select, Switch, Button, Badge, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import SettingsRow from '$lib/admin/components/SettingsRow.svelte';
   import PasswordDialog from '$lib/admin/components/PasswordDialog.svelte';
   import { toasts } from '$lib/admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
+  import { getSettings, putSettings, type SettingsWriteBody } from '$lib/admin/api';
+  import { ApiError } from '$lib/api/client';
 
-  // 通知與自動化 toggles — each change pushes a toast (mock; no persistence).
+  let name = '';
+  let phone = '';
+  let address = '';
+  let defaultRatio = '1:6';
+  let maxClassSizeLabel = '12 人'; // Select 顯示字串；save() 時轉回數字，見 labelToMaxClassSize
   let email = true;
   let sms = false;
   let lowAtt = true;
   let autoWait = true;
-
   let twoFA = true;
   let pwOpen = false;
+  let saving = false;
 
-  function toggled(label: string, on: boolean) {
-    toasts.notify('success', on ? label + '已開啟' : label + '已關閉', '系統設定已更新。');
+  const MAX_CLASS_SIZE_OPTIONS = ['8 人', '10 人', '12 人'];
+  const DEFAULT_MAX_CLASS_SIZE = 12;
+  const maxClassSizeToLabel = (n: number) => `${n} 人`;
+  const labelToMaxClassSize = (label: string) => parseInt(label, 10) || DEFAULT_MAX_CLASS_SIZE;
+
+  const gate = createLoadGate({
+    fetch: getSettings,
+    onData: (d) => {
+      name = d.studioProfile.name;
+      phone = d.studioProfile.phone;
+      address = d.studioProfile.address;
+      defaultRatio = d.studioProfile.defaultRatio;
+      maxClassSizeLabel = maxClassSizeToLabel(d.studioProfile.maxClassSize);
+      email = d.notificationFlags.email;
+      sms = d.notificationFlags.sms;
+      lowAtt = d.notificationFlags.lowAtt;
+      autoWait = d.notificationFlags.autoWait;
+      twoFA = d.security.twoFA;
+    }
+  });
+  onMount(() => {
+    gate.load();
+  });
+
+  function settingsErrorMessage(e: unknown): string {
+    if (e instanceof ApiError && e.status === 403) return '沒有權限執行此操作。';
+    return '連線發生問題，請稍後再試。';
   }
 
-  function onTwoFA(on: boolean) {
-    twoFA = on;
-    toasts.notify(
-      on ? 'success' : 'warning',
-      on ? '已啟用雙重驗證' : '已關閉雙重驗證',
-      on ? '下次登入將需要動態驗證碼。' : '您的帳號安全性已降低。'
-    );
+  async function save() {
+    if (saving) return;
+    saving = true;
+    const body: SettingsWriteBody = {
+      studio_profile: {
+        name,
+        phone,
+        address,
+        default_ratio: defaultRatio,
+        max_class_size: labelToMaxClassSize(maxClassSizeLabel)
+      },
+      notification_flags: { email, sms, lowAtt, autoWait },
+      security: { twoFA }
+    };
+    try {
+      await putSettings(body);
+    } catch (e) {
+      toasts.notify('error', '儲存失敗', settingsErrorMessage(e));
+      saving = false;
+      return;
+    }
+    toasts.notify('success', '已儲存', '系統設定已更新。');
+    await gate.silentRefresh();
+    saving = false;
   }
 
   const LOGINS = [
@@ -46,6 +106,7 @@
   ];
 </script>
 
+{#if $gate === 'ready'}
 <div class="df-view" style="display:flex;flex-direction:column;gap:20px;max-width:760px">
   <PageHead title="系統設定" sub="場館資訊、通知與權限" />
 
@@ -54,11 +115,11 @@
     <h3 class="sec-title">場館資訊</h3>
     <p class="sec-sub">顯示於官網與報名通知</p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <Input label="場館名稱" value="Dream Fly 夢飛體操館" />
-      <Input label="聯絡電話" value="04-2376-1688" />
-      <Input label="地址" value="台中市西區美村路一段 168 號" style="grid-column:span 2" />
-      <Select label="預設師生比" value="1:6" options={['1:4', '1:6', '1:8']} />
-      <Select label="每班人數上限" value="12 人" options={['8 人', '10 人', '12 人']} />
+      <Input label="場館名稱" bind:value={name} />
+      <Input label="聯絡電話" bind:value={phone} />
+      <Input label="地址" bind:value={address} style="grid-column:span 2" />
+      <Select label="預設師生比" bind:value={defaultRatio} options={['1:4', '1:6', '1:8']} />
+      <Select label="每班人數上限" bind:value={maxClassSizeLabel} options={MAX_CLASS_SIZE_OPTIONS} />
     </div>
   </Card>
 
@@ -66,22 +127,19 @@
   <Card padding={24}>
     <h3 class="sec-title" style="margin-bottom:12px">通知與自動化</h3>
     <SettingsRow label="Email 通知" desc="報名、繳費與請假以 Email 通知家長">
-      <Switch bind:checked={email} on:change={(e) => toggled('Email 通知', e.detail)} />
+      <Switch bind:checked={email} />
     </SettingsRow>
     <SettingsRow label="簡訊提醒" desc="課前一日發送簡訊提醒（需加購點數）">
-      <Switch bind:checked={sms} on:change={(e) => toggled('簡訊提醒', e.detail)} />
+      <Switch bind:checked={sms} />
     </SettingsRow>
     <SettingsRow label="出席偏低警示" desc="學員出席率低於 75% 時通知管理員">
-      <Switch bind:checked={lowAtt} on:change={(e) => toggled('出席偏低警示', e.detail)} />
+      <Switch bind:checked={lowAtt} />
     </SettingsRow>
     <SettingsRow label="自動候補遞補" desc="額滿班級有人退出時自動通知候補學員">
-      <Switch bind:checked={autoWait} on:change={(e) => toggled('自動候補遞補', e.detail)} />
+      <Switch bind:checked={autoWait} />
     </SettingsRow>
     <div style="display:flex;justify-content:flex-end;margin-top:18px">
-      <Button
-        variant="primary"
-        on:click={() => toasts.notify('success', '已儲存', '系統設定已更新。')}
-      >
+      <Button variant="primary" disabled={saving} on:click={save}>
         <Icon name="check" size={16} />
         儲存變更
       </Button>
@@ -98,7 +156,7 @@
       label="雙重驗證（2FA）"
       desc={twoFA ? '已啟用 · 登入時需輸入動態驗證碼' : '建議啟用以提升帳號安全'}
     >
-      <Switch checked={twoFA} on:change={(e) => onTwoFA(e.detail)} />
+      <Switch bind:checked={twoFA} />
     </SettingsRow>
 
     <div style="margin-top:18px">
@@ -138,6 +196,16 @@
 </div>
 
 <PasswordDialog open={pwOpen} onClose={() => (pwOpen = false)} onSave={() => (pwOpen = false)} />
+{:else if $gate === 'error'}
+  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
+{:else}
+  <div style="display:flex;flex-direction:column;gap:20px;max-width:760px" data-testid="settings-skeleton">
+    <Skeleton w={160} h={32} r={8} />
+    <SkelCard><Skeleton w="100%" h={180} r={12} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={260} r={12} /></SkelCard>
+  </div>
+{/if}
 
 <style>
   .sec-title {

@@ -19,7 +19,9 @@ vi.mock('$lib/admin/api', () => ({
 	updateMember: vi.fn(),
 	getOrders: vi.fn(),
 	updateOrderStatus: vi.fn(),
-	getReports: vi.fn()
+	getReports: vi.fn(),
+	getSettings: vi.fn(),
+	putSettings: vi.fn()
 }));
 vi.mock('$lib/coach/api', () => ({
 	getDashboard: vi.fn(),
@@ -48,7 +50,9 @@ import {
 	getCsettings,
 	getAdminHome,
 	getOpsCollections,
-	getMessages
+	getMessages,
+	getSettings,
+	putSettings
 } from './api';
 import { PROFILES, TODAY, ACTIVITY } from './data';
 
@@ -211,5 +215,30 @@ describe('getMessages', () => {
 			{ id: 'c1', from: '王媽媽', initial: '王', color: '#000', preview: '哈囉', time: '09:10', unread: true },
 			{ id: 'c2', from: '陳爸爸', initial: '陳', color: '#000', preview: '謝謝', time: '昨天', unread: false }
 		]);
+	});
+});
+
+describe('getSettings / putSettings — 零映射 re-export（Task F9：GET/PUT /settings，桌面/行動共用同一組欄位）', () => {
+	it('getSettings 直接委派給桌面 admin/api.ts 的 getSettings verbatim', async () => {
+		const payload = {
+			studioProfile: { name: 'X', phone: '', address: '', defaultRatio: '1:6', maxClassSize: 12 },
+			notificationFlags: { email: true, sms: false, lowAtt: true, autoWait: true },
+			security: { twoFA: true }
+		};
+		vi.mocked(adminApi.getSettings).mockResolvedValue(payload as never);
+		expect(await getSettings()).toBe(payload);
+	});
+
+	it('putSettings 直接委派給桌面 admin/api.ts 的 putSettings，body 原樣傳遞 verbatim', async () => {
+		const payload = {
+			studioProfile: { name: 'Y', phone: '', address: '', defaultRatio: '1:6', maxClassSize: 12 },
+			notificationFlags: { email: false, sms: false, lowAtt: false, autoWait: false },
+			security: { twoFA: false }
+		};
+		vi.mocked(adminApi.putSettings).mockResolvedValue(payload as never);
+		const body = { security: { twoFA: false } };
+
+		expect(await putSettings(body)).toBe(payload);
+		expect(adminApi.putSettings).toHaveBeenCalledWith(body);
 	});
 });

@@ -27,7 +27,9 @@ import {
 	updateCoupon,
 	deleteCoupon,
 	createMember,
-	updateMember
+	updateMember,
+	getSettings,
+	putSettings
 } from './api';
 import { api, ApiError } from '$lib/api/client';
 import { mapMemberAccount } from './data';
@@ -983,5 +985,150 @@ describe('getReports — GET /reports/admin（admin，§3.24）', () => {
 		expect(d.members).toEqual({ total: 0, newThisMonth: 0, active: 0 });
 		expect(d.courses).toEqual([]);
 		expect(d.coaches).toEqual([]);
+	});
+});
+
+describe('getSettings — GET /settings（admin，契約 §3.25，Task F9：系統設定頁接真）', () => {
+	it('映射三個慣例 key：studio_profile 欄位改 camelCase(default_ratio→defaultRatio 等)，notification_flags/security 逐欄位原樣穿透(camelCase 對齊，契約裁決 4)', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /settings': {
+					settings: {
+						studio_profile: {
+							name: '夢想體操館',
+							phone: '04-1111-2222',
+							address: '台北市',
+							default_ratio: '1:4',
+							max_class_size: 8
+						},
+						notification_flags: { email: false, sms: true, lowAtt: false, autoWait: false },
+						security: { twoFA: false }
+					}
+				}
+			})
+		);
+
+		const d = await getSettings();
+
+		expect(api).toHaveBeenCalledWith('/settings');
+		expect(d).toEqual({
+			studioProfile: {
+				name: '夢想體操館',
+				phone: '04-1111-2222',
+				address: '台北市',
+				defaultRatio: '1:4',
+				maxClassSize: 8
+			},
+			notificationFlags: { email: false, sms: true, lowAtt: false, autoWait: false },
+			security: { twoFA: false }
+		});
+	});
+
+	it('新裝機：settings 為空物件 {} 時，三組皆補齊完整前端預設值(不留 undefined 欄位)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /settings': { settings: {} } }));
+
+		const d = await getSettings();
+
+		expect(d).toEqual({
+			studioProfile: {
+				name: 'Dream Fly 夢飛體操館',
+				phone: '04-2376-1688',
+				address: '台中市西區美村路一段 168 號',
+				defaultRatio: '1:6',
+				maxClassSize: 12
+			},
+			notificationFlags: { email: true, sms: false, lowAtt: true, autoWait: true },
+			security: { twoFA: true }
+		});
+	});
+
+	it('部分欄位：某個慣例 key 只有部分子欄位時，缺的子欄位個別補預設值，而非整組回退預設(逐欄位填補，非整包替換)', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /settings': {
+					settings: {
+						studio_profile: { name: '只改了名稱' },
+						notification_flags: { sms: true }
+					}
+				}
+			})
+		);
+
+		const d = await getSettings();
+
+		expect(d.studioProfile).toEqual({
+			name: '只改了名稱',
+			phone: '04-2376-1688', // 缺席欄位補預設
+			address: '台中市西區美村路一段 168 號',
+			defaultRatio: '1:6',
+			maxClassSize: 12
+		});
+		expect(d.notificationFlags).toEqual({ email: true, sms: true, lowAtt: true, autoWait: true });
+		expect(d.security).toEqual({ twoFA: true }); // security key 整個缺席 → 全預設
+	});
+
+	it('propagates a rejected request (e.g. 403 非 admin) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /settings': new ApiError(403, 'forbidden') }));
+		await expect(getSettings()).rejects.toThrow('forbidden');
+	});
+});
+
+describe('putSettings — PUT /settings（admin，契約 §3.25，Task F9：系統設定頁接真）', () => {
+	it('包成 { settings: body } 送出(逐 key upsert)，回應同 GET 經同一支映射', async () => {
+		const responseAfterPut = {
+			settings: {
+				studio_profile: {
+					name: '改名體操館',
+					phone: '04-2376-1688',
+					address: '台中市西區美村路一段 168 號',
+					default_ratio: '1:8',
+					max_class_size: 10
+				},
+				notification_flags: { email: false, sms: false, lowAtt: true, autoWait: true },
+				security: { twoFA: false }
+			}
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PUT /settings': responseAfterPut }));
+
+		const body = {
+			studio_profile: { name: '改名體操館', default_ratio: '1:8', max_class_size: 10 },
+			notification_flags: { email: false, sms: false, lowAtt: true, autoWait: true },
+			security: { twoFA: false }
+		};
+		const result = await putSettings(body);
+
+		expect(api).toHaveBeenCalledWith('/settings', {
+			method: 'PUT',
+			body: JSON.stringify({ settings: body })
+		});
+		expect(result).toEqual({
+			studioProfile: {
+				name: '改名體操館',
+				phone: '04-2376-1688',
+				address: '台中市西區美村路一段 168 號',
+				defaultRatio: '1:8',
+				maxClassSize: 10
+			},
+			notificationFlags: { email: false, sms: false, lowAtt: true, autoWait: true },
+			security: { twoFA: false }
+		});
+	});
+
+	it('空物件 {} 送出視為 no-op(契約裁決 2)：body 序列化為 { settings: {} }，不是 400', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PUT /settings': { settings: {} } })
+		);
+
+		await putSettings({});
+
+		expect(api).toHaveBeenCalledWith('/settings', {
+			method: 'PUT',
+			body: JSON.stringify({ settings: {} })
+		});
+	});
+
+	it('propagates a rejected request (e.g. 403 非 admin) to the caller', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PUT /settings': new ApiError(403, 'forbidden') }));
+		await expect(putSettings({ security: { twoFA: true } })).rejects.toThrow('forbidden');
 	});
 });
