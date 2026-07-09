@@ -7,6 +7,7 @@
  * 的欄位，這裡原樣沿用同一份 mock/預設值——不發明桌面沒有的假來源，也不重新
  * 實作桌面已經做過的映射邏輯。逐函式來源見 task-19-report.md 的盤點表。 */
 import type { CatalogCourse } from '$lib/public/adapters';
+import { api } from '$lib/api/client';
 import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
 // 刻意從 $lib/domain/member-app 取寬鬆版型別(tone/status 為 string，非窄化
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
@@ -27,6 +28,7 @@ import {
 	type ReportsData
 } from '$lib/member/api';
 import { ANNOUNCE, type Announce, type Course } from './data';
+import type { Prefs } from './stores';
 
 /** 課程分類 → icon。真後端 CatalogCourse(`$lib/public/adapters`)沒有 icon 欄位
  *  (courses 表本身不存這個欄位)——對照首頁/課程介紹頁既有 CATS 分類清單的圖示
@@ -198,3 +200,51 @@ export const submitTrialInquiry = (input: TrialInquiryInput): Promise<ApiInquiry
 			note: input.note
 		}
 	});
+
+/* ---- 帳戶設定(SettingsScreen)偏好持久化 — Task F10：users.preferences(B7；
+ * integration-contract.md §3.2)整包覆寫語意 ----
+ * GET /users/me 已回 preferences(object|null，未設定過為 null)；PATCH /users/me
+ * 的 preferences 欄位帶了就整個取代、不做深合併、不逐 key 驗證(契約原文)。慣例
+ * key(僅文件性列舉，後端不驗證其形狀)：class_reminder/coach_msg/promo/dark，
+ * 對應 mobile/stores.ts 既有 Prefs 的四個布林開關——這裡只做 snake_case⇄
+ * camelCase 映射；null 或缺 key 時的預設值直接沿用 Prefs store 既有初始值(見
+ * 該檔案 `prefs` 宣告)，不是這裡新發明的規則。savePreferences 永遠送滿四個
+ * key 的整包物件、不送 `preferences: null`——後端這欄位是單一 Option 語意，
+ * 顯式 null 等同不帶(維持原值不動，不是清空)，跟這裡「整包覆寫」的既有用法
+ * 無關，但也表示這裡不能拿 null 當清空路徑用(本來就沒有清空需求)。 */
+interface ApiUserPreferences {
+	preferences: Partial<Record<'class_reminder' | 'coach_msg' | 'promo' | 'dark', boolean>> | null;
+}
+
+const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
+
+function mapPreferences(raw: ApiUserPreferences['preferences']): Prefs {
+	return {
+		classReminder: raw?.class_reminder ?? PREFS_DEFAULT.classReminder,
+		coachMsg: raw?.coach_msg ?? PREFS_DEFAULT.coachMsg,
+		promo: raw?.promo ?? PREFS_DEFAULT.promo,
+		dark: raw?.dark ?? PREFS_DEFAULT.dark
+	};
+}
+
+/** GET /users/me — SettingsScreen 開啟時載入，用來覆蓋本地 prefs store 快取
+ *  (本地 store 本身仍是載入前/離線時的顯示來源，見該畫面 onMount 呼叫端)。 */
+export const getPreferences = async (): Promise<Prefs> => {
+	const user = await api<ApiUserPreferences>('/users/me');
+	return mapPreferences(user.preferences);
+};
+
+/** PATCH /users/me { preferences } — 切換開關時整包覆寫四個慣例 key(呼叫端
+ *  負責組出切換後的完整 Prefs，見 SettingsScreen 的 setPref())。 */
+export const savePreferences = (p: Prefs): Promise<void> =>
+	api<ApiUserPreferences>('/users/me', {
+		method: 'PATCH',
+		body: JSON.stringify({
+			preferences: {
+				class_reminder: p.classReminder,
+				coach_msg: p.coachMsg,
+				promo: p.promo,
+				dark: p.dark
+			}
+		})
+	}).then(() => undefined);

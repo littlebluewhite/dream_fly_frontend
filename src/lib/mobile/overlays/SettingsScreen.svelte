@@ -4,8 +4,14 @@
    * → 儲存變更（toast）→ 登出帳號（authStore.logout() + goto /mobile/login）。
    * Legacy Svelte（無 runes）。Task 19:登出改真 authStore.logout()(清 token,
    * 不再是示範性的 df_mobile_session，同 account/+page.svelte 的 logout()）。
-   * 「儲存變更」按鈕與通知偏好本身仍是本地端 prefs store(無對應後端端點,
-   * 同 desktop 完全未接的等值狀態,P2)。 */
+   * Task F10:通知偏好 + 深色模式四個開關改真 users.preferences(PATCH /users/me
+   * 整包覆寫，見 $lib/mobile/api.ts 的 getPreferences/savePreferences)——開啟
+   * 畫面背景水合覆蓋本地 prefs 快取，切換即送出，失敗回滾該開關 + 錯誤 toast；
+   * 本地 prefs store 保留為快取(離線/載入前的顯示來源)。「儲存變更」按鈕與
+   * 個人資料欄位(姓名/生日/電話等)本身仍是本地端 store、無對應可寫後端欄位
+   * (同 desktop 未接的等值狀態,P2)。 */
+  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -15,6 +21,7 @@
   import { authStore } from '$lib/stores/authStore';
   import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
+  import { getPreferences, savePreferences } from '$lib/mobile/api';
 
   export let onBack: () => void;
 
@@ -34,8 +41,29 @@
     { icon: 'megaphone', label: '活動公告', sub: '新課程與優惠資訊', k: 'promo', last: true }
   ];
 
-  function setPref(k: keyof Prefs, v: boolean) {
+  // 開啟畫面時背景水合真偏好(users.preferences，Task F10)，覆蓋本地 prefs
+  // 快取；本地 store 本身仍是載入前/離線時的顯示來源(同 CartSheet 開啟時
+  // refreshPoints() 的 best-effort 慣例，見該檔案 onMount)——失敗就沿用目前
+  // 快取值，不顯示錯誤(讀取失敗不影響既有可用性)。
+  onMount(() => {
+    getPreferences()
+      .then((p) => prefs.set(p))
+      .catch((err) => console.error('SettingsScreen: 偏好載入失敗，沿用本地快取', err));
+  });
+
+  // 切換開關即時 PATCH /users/me(整包覆寫 preferences)；樂觀更新 + 失敗只
+  // 回滾「這一顆」開關(讀切換前的舊值,不是整包快照)，避免波及使用者緊接著
+  // 切換、送出中尚未完成的其他開關。
+  async function setPref(k: keyof Prefs, v: boolean) {
+    const before = get(prefs)[k];
     prefs.update((p) => ({ ...p, [k]: v }));
+    try {
+      await savePreferences(get(prefs));
+    } catch (err) {
+      prefs.update((p) => ({ ...p, [k]: before }));
+      console.error('SettingsScreen: 偏好儲存失敗', err);
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    }
   }
 
   function logout() {

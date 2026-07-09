@@ -8,7 +8,9 @@ import {
 	getSchedule,
 	getPoints,
 	getReports,
-	submitTrialInquiry
+	submitTrialInquiry,
+	getPreferences,
+	savePreferences
 } from './api';
 import {
 	getCourses as memberGetCourses,
@@ -21,6 +23,7 @@ import {
 	getReportStats as memberGetReportStats
 } from '$lib/member/api';
 import { sendContactInquiry } from '$lib/public/api';
+import { api } from '$lib/api/client';
 import { ANNOUNCE } from './data';
 
 /* Task 19：mobile/api.ts 從整包 reply() mock 改為 desktop member seams 的薄層。
@@ -28,7 +31,10 @@ import { ANNOUNCE } from './data';
  * 映射)——驗證 mobile 的每支函式「call 對桌面 seam + 正確薄映射/passthrough」，
  * 不重新測一次桌面早就測過的 HTTP 映射邏輯。Task F8：submitTrialInquiry() 同理
  * 只 mock `$lib/public/api` 的 sendContactInquiry(已在 public/api.test.ts 端對端
- * 測過 POST /contact 映射)。 */
+ * 測過 POST /contact 映射)。Task F10：getPreferences/savePreferences 直接呼叫
+ * `$lib/api/client` 的 api()(沒有桌面 seam 可薄包，users.preferences 是
+ * mobile-only 的 Prefs 形狀)，因此這裡另外 mock api()，同 PointsScreen.test.ts
+ * 的既有慣例。 */
 vi.mock('$lib/member/api', () => ({
 	getCourses: vi.fn(),
 	getMine: vi.fn(),
@@ -40,6 +46,10 @@ vi.mock('$lib/member/api', () => ({
 	getReportStats: vi.fn()
 }));
 vi.mock('$lib/public/api', () => ({ sendContactInquiry: vi.fn() }));
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 const CATALOG_FIXTURE = [
 	{ id: 'c1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', days: '週二 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '示範課程', spots: 1 },
@@ -70,6 +80,7 @@ beforeEach(() => {
 	vi.mocked(memberGetReports).mockReset().mockResolvedValue({ reportCards: [], certificates: [], stats: { attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 } });
 	vi.mocked(memberGetReportStats).mockReset().mockResolvedValue({ attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 });
 	vi.mocked(sendContactInquiry).mockReset().mockResolvedValue({} as never);
+	vi.mocked(api).mockReset();
 });
 
 describe('getHome — 復用桌面 getCourses()/getMine()，薄映射 icon', () => {
@@ -222,5 +233,59 @@ describe('submitTrialInquiry — 復用桌面 sendContactInquiry()(POST /contact
 		const fixture = { id: 'inq1' };
 		vi.mocked(sendContactInquiry).mockResolvedValue(fixture as never);
 		expect(await submitTrialInquiry(INPUT)).toBe(fixture);
+	});
+});
+
+describe('getPreferences — GET /users/me，preferences 映射(Task F10：users.preferences)', () => {
+	it('preferences 為 null(未設定過)時四個 key 全部落回本地既有預設值', async () => {
+		vi.mocked(api).mockResolvedValue({ id: 'u1', preferences: null });
+		expect(await getPreferences()).toEqual({ classReminder: true, coachMsg: true, promo: false, dark: false });
+	});
+
+	it('preferences 缺 key 時該欄位落回預設值，其餘欄位取後端值', async () => {
+		vi.mocked(api).mockResolvedValue({ id: 'u1', preferences: { class_reminder: false } });
+		expect(await getPreferences()).toEqual({ classReminder: false, coachMsg: true, promo: false, dark: false });
+	});
+
+	it('preferences 四個 key 齊全時 snake_case 逐一映射為 camelCase', async () => {
+		vi.mocked(api).mockResolvedValue({
+			id: 'u1',
+			preferences: { class_reminder: false, coach_msg: false, promo: true, dark: true }
+		});
+		expect(await getPreferences()).toEqual({ classReminder: false, coachMsg: false, promo: true, dark: true });
+	});
+
+	it('呼叫 GET /users/me(無 body)', async () => {
+		vi.mocked(api).mockResolvedValue({ id: 'u1', preferences: null });
+		await getPreferences();
+		expect(api).toHaveBeenCalledWith('/users/me');
+	});
+});
+
+describe('savePreferences — PATCH /users/me { preferences }，整包覆寫(Task F10)', () => {
+	it('camelCase → snake_case，送出四個慣例 key 的整包物件', async () => {
+		vi.mocked(api).mockResolvedValue({ id: 'u1', preferences: {} });
+		await savePreferences({ classReminder: false, coachMsg: true, promo: false, dark: true });
+		expect(api).toHaveBeenCalledWith('/users/me', {
+			method: 'PATCH',
+			body: JSON.stringify({
+				preferences: { class_reminder: false, coach_msg: true, promo: false, dark: true }
+			})
+		});
+	});
+
+	it('不會送出 preferences: null(整包覆寫用法，不做清空路徑)', async () => {
+		vi.mocked(api).mockResolvedValue({ id: 'u1', preferences: {} });
+		await savePreferences({ classReminder: true, coachMsg: true, promo: false, dark: false });
+		const [, init] = vi.mocked(api).mock.calls[0];
+		const sentBody = JSON.parse((init as RequestInit).body as string);
+		expect(sentBody.preferences).not.toBeNull();
+	});
+
+	it('失敗時原樣拋出(呼叫端負責回滾 + 錯誤提示)', async () => {
+		vi.mocked(api).mockRejectedValue(new Error('network'));
+		await expect(
+			savePreferences({ classReminder: true, coachMsg: true, promo: false, dark: false })
+		).rejects.toThrow('network');
 	});
 });
