@@ -5,7 +5,7 @@
  * that shared state lives in module stores instead. Since Tasks 16-17 the
  * checkout / subscriptions / points / notifications state is backed by the real
  * API (hydrated via each module's refresh* functions); only the cart itself stays
- * a local store, synced to the server at checkout time (syncCartToServer).
+ * a local store, synced to the server at checkout time (placeOrder).
  *
  * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 8 個
  * 關切模組的 public exports（型別一律用 `export type`）。新增 store／函式請寫進

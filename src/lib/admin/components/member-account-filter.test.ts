@@ -29,6 +29,11 @@ describe('filterMemberAccounts', () => {
 		expect(out.map((m) => m.id)).toEqual(['u1']);
 	});
 
+	it('trims leading/trailing whitespace from the query before matching', () => {
+		const out = filterMemberAccounts(ROWS, { query: ' 王小明 ' });
+		expect(out.map((m) => m.id)).toEqual(['u1']);
+	});
+
 	it('matches by id (case-insensitive)', () => {
 		const out = filterMemberAccounts(ROWS, { query: 'U2' });
 		expect(out.map((m) => m.id)).toEqual(['u2']);

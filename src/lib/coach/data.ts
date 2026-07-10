@@ -142,12 +142,6 @@ export interface ThreadMsg {
 	failed?: ThreadFail;
 	time: string;
 }
-export interface SharedFile {
-	name: string;
-	meta: string;
-	icon: string;
-	tint: string;
-}
 export interface Notif {
 	icon: string;
 	tone: string;
@@ -235,7 +229,7 @@ export const CONVERSATIONS: Conversation[] = [
 
 // Task 1(C2 死種子退役):THREAD/SHARED_FILES(訊息串示範資料,王媽媽 thread)已
 // 退役——訊息中心頁改走 getThread() 真後端接縫,這兩份 mock 已無 runtime 消費者。
-// ThreadMsg/ThreadAttach/ThreadFail/SharedFile interface 仍供頁面型別標註使用,
+// ThreadMsg/ThreadAttach/ThreadFail interface 仍供頁面型別標註使用,
 // 保留。
 
 /* ──────────────── notifications (topbar bell menu) ────────────────

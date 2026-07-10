@@ -155,8 +155,6 @@ export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => ({
 	orderId: o.id
 }));
 
-export { ORDER_STATUS } from '$lib/api/wire';
-
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {
 	time: string;

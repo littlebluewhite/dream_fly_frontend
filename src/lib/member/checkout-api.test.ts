@@ -1,8 +1,9 @@
 /* Dream Fly — member 結帳「真訂單」API 層單測（Task 16；Task 17 加了 refreshPoints
  * 的 ledger 映射與 refreshNotifications）
  *
- * 覆蓋 stores.ts 新增的網路層：syncCartToServer / placeOrder / refreshSubscriptions /
- * refreshPoints / refreshNotifications。只替換 $lib/api/client 的 api()，ApiError
+ * 覆蓋 member 結帳網路層：$lib/checkout-order 的 syncCartToServer，以及 stores.ts barrel
+ * 轉出的 placeOrder / refreshSubscriptions / refreshPoints / refreshNotifications。只替換
+ * $lib/api/client 的 api()，ApiError
  * 用回真實類別（判斷 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→
  * POST /orders→GET×2）是這裡的核心斷言，不是只驗證最終 state。 */
 

@@ -1,6 +1,6 @@
 import { ApiError } from './client';
 
-/** 透傳式：ApiError 帶後端訊息就給，否則連線 fallback。 */
+/** 透傳式：ApiError 一律透傳 message（含空字串——現況普查 10/10 皆無 truthy 檢查，見 ADR 0011），否則連線 fallback。 */
 export function apiErrorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   return '連線發生問題，請稍後再試。';

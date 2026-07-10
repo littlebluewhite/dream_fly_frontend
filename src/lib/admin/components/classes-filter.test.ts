@@ -45,6 +45,12 @@ describe('filterClasses', () => {
 		expect(out.every((k) => k.name.includes('跑酷'))).toBe(true);
 	});
 
+	it('trims leading/trailing whitespace from the query before matching', () => {
+		const out = filterClasses(CLASSES, { query: ' 跑酷 ' });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((k) => k.name.includes('跑酷'))).toBe(true);
+	});
+
 	it('query matches by coach name', () => {
 		const coach = '林雅婷';
 		const out = filterClasses(CLASSES, { query: coach });

@@ -4,8 +4,9 @@
  * refreshNotifications/notificationsHydrated 的 gate 語意（guard 短路、post-await
  * re-check、翻旗）已由 checkout-api.test.ts 的「refreshNotifications(Task 17)」
  * 三個 it 與 hydration-gate.test.ts 的 createHydrationGate 單測覆蓋——本檔案只補
- * markRead/markAllRead 這兩個新 export，語意直接搬自被刪除的頁面舊測試（樂觀更新、
- * PATCH 佈線、失敗不回滾、allSettled 部分失敗回 'partial'）。
+ * markRead/markAllRead 這兩個新 export 的模組層測試，與 routes/member/notifications/
+ * page.test.ts 既有的頁面測試並存、是模組層的第二層覆蓋（樂觀更新、PATCH 佈線、
+ * 失敗不回滾、allSettled 部分失敗回 'partial'）。
  *
  * 只替換 $lib/api/client 的 api()。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

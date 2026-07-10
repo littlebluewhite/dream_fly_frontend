@@ -112,6 +112,12 @@ describe('filterOrders', () => {
 		expect(out.every((o) => o.member.includes('王承恩'))).toBe(true);
 	});
 
+	it('trims leading/trailing whitespace from the query before matching', () => {
+		const out = filterOrders(ORDERS, { query: ' 王承恩 ' });
+		expect(out.length).toBeGreaterThan(0);
+		expect(out.every((o) => o.member.includes('王承恩'))).toBe(true);
+	});
+
 	it('matches by item substring', () => {
 		const out = filterOrders(ORDERS, { query: '跑酷' });
 		expect(out.length).toBeGreaterThan(0);

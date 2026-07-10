@@ -140,8 +140,9 @@ redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.t
 `OrderStatus`/`ORDER_STATUS` from wire instead of holding verbatim copies, and its two dynamic badge
 lookups use wire's `orderStatusBadge` fallback). Error-toast plumbing is single-sourced the same way:
 `src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never
-leaks the backend message) replaced 22 per-page inline mappers, each call site keeping its own 1-4-line
-entity text table (`docs/adr/0011`).
+leaks the backend message) replaced 22 per-page inline mappers — 12 are table-form, each call site
+keeping its own 1-4-line entity text table; the other 10 are pass-through, delegating outright
+(`docs/adr/0011`).
 Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
 variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
 `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
