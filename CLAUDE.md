@@ -22,9 +22,10 @@ on `mobile`. Mock data remains only in a
 handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
 of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
 read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
-profile-field save on both mobile's settings screen and the member account page (only birthday is real
-there — name/phone/notification-contact fields aren't), and the admin settings page's local-only
-login-device list. Google OAuth login is wired for `member` and (since Round 4) `mobile` — `staff` and
+profile-field save on both mobile's settings screen and the member account page (only the desktop account
+page's birthday is real — mobile hasn't wired it; name/phone/notification-contact fields aren't), and the
+admin settings page's local-only login-device list. Google OAuth login is wired for `member` and (since
+Round 4) `mobile` — `staff` and
 `mobile-admin` still have no Google option, because the backend's Google flow only ever grants the
 `member` role. See `docs/adr/0006` for the full inventory.
 
