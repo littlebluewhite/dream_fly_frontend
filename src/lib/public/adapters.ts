@@ -1,10 +1,10 @@
 /* Dream Fly — public/marketing surface adapters：cents/enum/id 轉換的唯一位置。
  * 頁面一律吃這裡轉出的形狀渲染，不自行 /100、不自行查 enum 表。
  *
- * `CatalogCourse`（本檔案定義）與 member surface 的同名型別（lib/domain/member-app.ts）
- * 形狀不同、互不相干 —— member 版本 id 是 number 且多一個 icon 欄位，這裡的
- * id 是後端來的 uuid string。`Coach` 則直接沿用既有行銷用型別（lib/data/coaches.ts），
- * 該檔的 `id` 欄位已放寬為 `number | string` 以容納真實教練的 uuid。 */
+ * 本檔案適配的型別與 member surface 的對應型別形狀可能不同：例如 member 版本的型別 id
+ * 是 number 且包含 icon 欄位，而本檔案適配後的型別 id 則是後端來的 uuid string。
+ * `Coach` 型別直接沿用既有行銷用型別（lib/data/coaches.ts），該檔的 `id` 欄位已
+ * 放寬為 `number | string` 以容納真實教練的 uuid。 */
 
 import type { ApiCourse, ApiCoach, ApiProduct } from './api';
 import type { Coach } from '$lib/data/coaches';

@@ -1,13 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { getSchedule } from '$lib/member/api';
-import { SCHEDULE } from '$lib/member/data';
 import type { ScheduleBlock } from '$lib/member/data';
 import Page from './+page.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/member/api', () => ({ getSchedule: vi.fn() }));
 
+// Task 1(C2 死種子退役):member/data.ts 的 SCHEDULE(值)已退役——改為檔內 inline
+// fixture(2 筆,沿用真實種子前兩列的欄位值)。
+const SCHEDULE: ScheduleBlock[] = [
+  { day: 1, start: '19:00', end: '20:30', name: '競技啦啦隊 進階班', room: 'A 訓練館', coach: '林雅婷', color: '#0066CC', tone: 'primary' },
+  { day: 3, start: '17:00', end: '19:00', name: '競技體操 選手班', room: 'A 訓練館', coach: '林雅婷', color: '#F59E0B', tone: 'accent' }
+];
 const SEED = { schedule: SCHEDULE };
 
 beforeEach(() => {

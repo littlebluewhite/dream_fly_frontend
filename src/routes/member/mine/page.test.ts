@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { getMine, getEnrolmentAttendance } from '$lib/member/api';
-import { MY_COURSES } from '$lib/member/data';
-import type { AttRecord } from '$lib/member/data';
+import type { AttRecord, EnrolledCourse } from '$lib/member/data';
 import { get } from 'svelte/store';
 import { waitlist, leaveRequests, toasts } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
@@ -36,6 +35,13 @@ function fakeRouter(overrides: Record<string, unknown>) {
   });
 }
 
+// Task 1(C2 死種子退役):member/data.ts 的 MY_COURSES(值)已退役——改為檔內 inline
+// fixture(2 筆,沿用真實種子 k1/k6 的欄位值;下方多處斷言依賴 index 0/1 各自的
+// id/name 相異)。
+const MY_COURSES: EnrolledCourse[] = [
+  { id: 'k1', name: '競技啦啦隊 進階班', cat: '競技啦啦隊', level: '進階', coach: '林雅婷', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: 'A 訓練館', att: 98, attended: 23, total: 24, next: '明日 19:00', term: '2026 春季', remain: 14 },
+  { id: 'k6', name: '競技體操 選手班', cat: '競技體操', level: '選手', coach: '林雅婷', icon: 'medal', color: '#F59E0B', schedule: '週四 17:00–19:00', room: 'A 訓練館', att: 88, attended: 21, total: 24, next: '週四 17:00', term: '2026 春季', remain: 10 }
+];
 const SEED = { courses: MY_COURSES };
 
 beforeEach(() => {

@@ -3,10 +3,18 @@ import { render, fireEvent, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, toasts } from '$lib/mobile/stores';
-import { CATALOG } from '$lib/mobile/data';
+import type { Course } from '$lib/mobile/data';
 import { getCourses } from '$lib/mobile/api';
 
 vi.mock('$lib/mobile/api', () => ({ getCourses: vi.fn() }));
+
+/* Task 1(C2 死種子退役):mobile/data.ts 的 CATALOG(值)已退役——改為檔內 inline
+ * fixture(2 筆,沿用真實種子 id 3(有空位)/id 5(額滿 spots:0)——下方候補守門
+ * 測試需要「唯一額滿課程」與「有空位課程」各一筆)。 */
+const CATALOG: Course[] = [
+	{ id: '3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', icon: 'sparkles', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '適合已有翻滾基礎、想挑戰特技與團隊編排的學員。小班 12 人內、雙教練保護。', spots: 1 },
+	{ id: '5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', icon: 'flame', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '在安全環境中學習翻越、落地與移動技巧，建立空間判斷與身體控制。', spots: 0 }
+];
 
 beforeEach(() => {
 	vi.mocked(getCourses).mockReset();

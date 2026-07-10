@@ -2,9 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getAccount } from '$lib/mobile/api';
-import { ORDERS } from '$lib/mobile/data';
 
 vi.mock('$lib/mobile/api', () => ({ getAccount: vi.fn() }));
+
+// Task 1(C2 死種子退役):mobile/data.ts 的 ORDERS(值)已退役——改為檔內 inline
+// fixture;下方唯一的 it() 用自己的「相異 fixture」覆寫，這個預設值只供 beforeEach
+// 使用，內容本身不受斷言檢查。
+const ORDERS = [
+	{ id: 'DF-24061', item: '競技啦啦隊 進階班 · 2026 春季', amount: 4800, status: ['success', '已付款'] as [string, string], date: '2026/03/01' }
+];
 
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();

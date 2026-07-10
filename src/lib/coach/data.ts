@@ -12,7 +12,14 @@
  *   the backend's course_level enum is 5 values and all three surfaces
  *   (admin/coach/member) share one label set.
  *
- * Mock-only, no backend. */
+ * Task 1(C2 死種子退役):本檔案現況是「活查表 + 活種子 + 型別」混合,不再是
+ * mock-only。COACH/NOTIFS/TODAY_LABEL/CONVERSATIONS 是 coach/api.ts 或
+ * Topbar/Sidebar 等元件直接消費的活種子;CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
+ * CAT_COLOR 是頁面與元件消費的活查表;其餘示範資料(TODAY_CLASSES/STUDENTS/
+ * SCHED_DAYS/SCHED_COURSES/ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES/THREAD/
+ * SHARED_FILES)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
+ * getSchedule()/getAttendance()/getThread() 等真後端接縫,經確認無 runtime
+ * 消費者後已退役——interface 仍供頁面與 api.ts 的型別標註使用,全數保留。 */
 import type { Level } from '$lib/domain/course-level';
 
 /* ──────────────── unions ──────────────── */
@@ -174,18 +181,9 @@ export const COACH: Coach = {
 
 export const TODAY_LABEL = '2026年5月30日 星期六';
 
-/* ──────────────── today's classes (5 堂) ──────────────── */
-// FE#17: level 值改走共用 5 級（啟蒙/入門/基礎/進階/選手）——tc1/tc2/tc4 原本的
-// 初級/中級/高級 分別對到 入門/基礎/選手（tc4 課名本就叫「…選手班」，選手比進階
-// 更貼近字面）；tc3/tc5 原本就是合法值(啟蒙/基礎)，維持不變。
-export const TODAY_CLASSES: TodayClass[] = [
-	{ id: 'tc1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '主場館 A 教室', count: 12, level: '入門', cat: '體操', status: 'done' },
-	{ id: 'tc2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '主場館 B 教室', count: 8, level: '基礎', cat: '體操', status: 'live' },
-	{ id: 'tc3', start: '11:45', end: '12:45', name: '幼兒體操啟蒙班', room: '主場館 A 教室', count: 10, level: '啟蒙', cat: '體操', status: 'soon' },
-	{ id: 'tc4', start: '14:00', end: '15:30', name: '競技體操選手班', room: '競技訓練館', count: 6, level: '選手', cat: '體操', status: 'wait' },
-	{ id: 'tc5', start: '17:00', end: '18:00', name: '成人體適能班', room: '副館 C 教室', count: 15, level: '基礎', cat: '體操', status: 'wait' }
-];
-
+// Task 1(C2 死種子退役):TODAY_CLASSES(今日課程 5 堂示範資料)已退役——首頁/今日課程
+// 頁改走 getDashboard()/getToday() 真後端接縫,這份 mock 已無 runtime 消費者。
+// TodayClass interface 仍供頁面與 api.ts 的型別標註使用,保留。
 export const CLASS_STATUS: Record<TodayStatus, { label: string; bg: string; fg: string }> = {
 	done: { label: '已結束', bg: '#F1F5F9', fg: '#475569' },
 	live: { label: '上課中', bg: 'var(--df-success-bg)', fg: 'var(--df-success-strong)' },
@@ -201,108 +199,29 @@ export const LEVEL_TINT: Record<StudentLevel, { bg: string; fg: string }> = {
 	選手: { bg: '#EDE9FE', fg: '#5B21B6' }
 };
 
-/* courses：單堂課 mock（course_name 即 cls；同班學員共用 course_id），enrolment_id
- * 每人一組——寫評語 dialog（Task 13）吃結構化清單。 */
-export const STUDENTS: Student[] = [
-	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }], level: '初階', skill: '前滾翻', pct: 80, att: 98 },
-	{ user_id: 'su02', name: '陳柏睿', initial: '陳', color: '#EC4899', cls: '兒童體操中階 A 班', courses: [{ course_id: 'c-mid-a', course_name: '兒童體操中階 A 班', enrolment_id: 'en-su02' }], level: '中階', skill: '後空翻', pct: 72, att: 95 },
-	{ user_id: 'su03', name: '林芷晴', initial: '林', color: '#10B981', cls: '幼兒體操初階班', courses: [{ course_id: 'c-kids', course_name: '幼兒體操初階班', enrolment_id: 'en-su03' }], level: '初階', skill: '倒立', pct: 65, att: 90 },
-	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }], level: '選手', skill: '空中轉體', pct: 88, att: 99 },
-	{ user_id: 'su05', name: '黃詩涵', initial: '黃', color: '#F59E0B', cls: '兒童體操中階 B 班', courses: [{ course_id: 'c-mid-b', course_name: '兒童體操中階 B 班', enrolment_id: 'en-su05' }], level: '中階', skill: '側手翻', pct: 78, att: 86 },
-	{ user_id: 'su06', name: '吳承翰', initial: '吳', color: '#0EA5E9', cls: '兒童體操初階 A 班', courses: [{ course_id: 'c-jr-a', course_name: '兒童體操初階 A 班', enrolment_id: 'en-su06' }], level: '初階', skill: '橋式', pct: 58, att: 72 },
-	{ user_id: 'su07', name: '劉若彤', initial: '劉', color: '#EF4444', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su07' }], level: '選手', skill: '後空翻兩周', pct: 91, att: 97 },
-	{ user_id: 'su08', name: '蔡明軒', initial: '蔡', color: '#0066CC', cls: '兒童體操中階 A 班', courses: [{ course_id: 'c-mid-a', course_name: '兒童體操中階 A 班', enrolment_id: 'en-su08' }], level: '中階', skill: '前空翻', pct: 70, att: 93 },
-	{ user_id: 'su09', name: '鄭雅雯', initial: '鄭', color: '#14B8A6', cls: '幼兒體操初階班', courses: [{ course_id: 'c-kids', course_name: '幼兒體操初階班', enrolment_id: 'en-su09' }], level: '初階', skill: '平衡木走步', pct: 62, att: 68 },
-	{ user_id: 'su10', name: '許書豪', initial: '許', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su10' }], level: '選手', skill: '團身後空翻', pct: 85, att: 96 },
-	{ user_id: 'su11', name: '楊子萱', initial: '楊', color: '#EC4899', cls: '兒童體操中階 B 班', courses: [{ course_id: 'c-mid-b', course_name: '兒童體操中階 B 班', enrolment_id: 'en-su11' }], level: '中階', skill: '跳箱', pct: 75, att: 88 },
-	{ user_id: 'su12', name: '周冠廷', initial: '周', color: '#F59E0B', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su12' }], level: '初階', skill: '蹲撐', pct: 68, att: 91 }
-];
+// Task 1(C2 死種子退役):STUDENTS(我的學員 12 筆示範資料)已退役——學員頁改走
+// getStudents() 真後端接縫,這份 mock 已無 runtime 消費者。Student/StudentCourse
+// interface 仍供頁面與 api.ts 的型別標註使用,保留。
 
-/* ──────────────── weekly schedule (排課管理) ──────────────── */
-export const SCHED_DAYS: SchedDay[] = [
-	{ key: 'Mon', zh: '一', date: '5/25' },
-	{ key: 'Tue', zh: '二', date: '5/26' },
-	{ key: 'Wed', zh: '三', date: '5/27' },
-	{ key: 'Thu', zh: '四', date: '5/28' },
-	{ key: 'Fri', zh: '五', date: '5/29' },
-	{ key: 'Sat', zh: '六', date: '5/30', today: true },
-	{ key: 'Sun', zh: '日', date: '5/31' }
-];
+// Task 1(C2 死種子退役):SCHED_DAYS/SCHED_COURSES(排課管理示範資料)已退役——排課
+// 管理頁改走 getSchedule() 真後端接縫,這兩份 mock 已無 runtime 消費者。SchedDay/
+// SchedCourse interface 仍供 ScheduleGrid/ScheduleMonth 等元件的型別標註使用,保留。
 export const SCHED_HOURS: string[] = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
-export const SCHED_COURSES: SchedCourse[] = [
-	{ day: 'Mon', start: '09:00', end: '10:00', name: '幼兒體操初階', count: 8, cat: '體操', venue: '主場館' },
-	{ day: 'Mon', start: '15:00', end: '16:30', name: '青少年競技組', count: 12, cat: '體操', venue: '競技訓練館' },
-	{ day: 'Tue', start: '10:00', end: '11:00', name: '啦啦隊基礎', count: 10, cat: '啦啦隊', venue: '主場館' },
-	{ day: 'Wed', start: '09:00', end: '10:30', name: '成人體操', count: 6, cat: '體操', venue: '副館' },
-	{ day: 'Wed', start: '16:00', end: '17:00', name: '跑酷入門', count: 8, cat: '跑酷', venue: '副館' },
-	{ day: 'Thu', start: '14:00', end: '15:00', name: '幼兒體操進階', count: 10, cat: '體操', venue: '主場館' },
-	{ day: 'Fri', start: '10:00', end: '11:30', name: '競技啦啦隊', count: 14, cat: '啦啦隊', venue: '競技訓練館' },
-	{ day: 'Fri', start: '17:00', end: '18:00', name: '跑酷進階', count: 6, cat: '跑酷', venue: '副館' },
-	{ day: 'Sat', start: '09:00', end: '10:00', name: '週末親子班', count: 12, cat: '體操', venue: '主場館' },
-	{ day: 'Sat', start: '11:00', end: '12:00', name: '幼兒體操初階', count: 8, cat: '體操', venue: '主場館' }
-];
 export const CAT_COLOR: Record<SchedCat, { bar: string; bg: string; fg: string }> = {
 	體操: { bar: 'var(--df-primary)', bg: 'var(--df-primary-bg)', fg: 'var(--df-primary-dark)' },
 	啦啦隊: { bar: 'var(--df-accent-dark)', bg: '#FFF8DB', fg: '#92400E' },
 	跑酷: { bar: 'var(--df-success)', bg: 'var(--df-success-bg)', fg: 'var(--df-success-strong)' }
 };
 
-/* ──────────────── attendance roster (出勤記錄 · 兒童體操初階班) ──────────────── */
-export const ATT_CLASS: AttClass = { name: '兒童體操初階班', time: '今日 16:00–17:30', room: 'A 教室', coach: '陳怡君' };
-export const ATT_ROSTER: AttRow[] = [
-	{ n: '01', name: '王承恩', initial: '王', color: '#0066CC', mid: 'GY2024001', def: 'present' },
-	{ n: '02', name: '林佳穎', initial: '林', color: '#EC4899', mid: 'GY2024014', def: 'late' },
-	{ n: '03', name: '陳冠廷', initial: '陳', color: '#10B981', mid: 'GY2024022', def: 'present' },
-	{ n: '04', name: '張雅婷', initial: '張', color: '#8B5CF6', mid: 'GY2024030', def: 'leave' },
-	{ n: '05', name: '李宗翰', initial: '李', color: '#F59E0B', mid: 'GY2024041', def: 'present' },
-	{ n: '06', name: '黃詩涵', initial: '黃', color: '#0EA5E9', mid: 'GY2024055', def: 'present' },
-	{ n: '07', name: '吳柏宇', initial: '吳', color: '#EF4444', mid: 'GY2024063', def: 'absent' },
-	{ n: '08', name: '劉芷瑄', initial: '劉', color: '#14B8A6', mid: 'GY2024074', def: 'present' },
-	{ n: '09', name: '蔡承勳', initial: '蔡', color: '#0066CC', mid: 'GY2024088', def: 'present' },
-	{ n: '10', name: '鄭于晴', initial: '鄭', color: '#EC4899', mid: 'GY2024092', def: 'present' },
-	{ n: '11', name: '許家豪', initial: '許', color: '#8B5CF6', mid: 'GY2024101', def: 'present' }
-];
-
-/* ──────────────── today's classes to take attendance for (切換班級) ────────────────
- * A1 of the attendance roster is the FIRST class — it reuses ATT_CLASS + ATT_ROSTER
- * verbatim so 出勤記錄 opens on the same roster as before. The other classes carry
- * their own small rosters. `id` is the switch key (CoachDropdown echoes the NAME,
- * the handler maps name→id). */
+// Task 1(C2 死種子退役):ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES(出勤記錄示範資料)
+// 已退役——出勤記錄頁改走 getAttendance() 真後端接縫,這三份 mock 已無 runtime
+// 消費者。AttClass/AttRow/AttClassFull interface 仍供頁面與 api.ts 的型別標註
+// 使用,保留(id 是切換班級的 switch key,CoachDropdown echoes the NAME,
+// the handler maps name→id)。
 export interface AttClassFull extends AttClass {
 	id: string;
 	roster: AttRow[];
 }
-export const ATT_TODAY_CLASSES: AttClassFull[] = [
-	{ id: 'ac1', ...ATT_CLASS, roster: ATT_ROSTER },
-	{
-		id: 'ac2',
-		name: '青少年體操中級班',
-		time: '今日 13:30–15:00',
-		room: 'B 教室',
-		coach: '陳怡君',
-		roster: [
-			{ n: '01', name: '周彥廷', initial: '周', color: '#0066CC', mid: 'GY2023012', def: 'present' },
-			{ n: '02', name: '簡子涵', initial: '簡', color: '#EC4899', mid: 'GY2023027', def: 'present' },
-			{ n: '03', name: '潘宥廷', initial: '潘', color: '#10B981', mid: 'GY2023039', def: 'late' },
-			{ n: '04', name: '蕭詠晴', initial: '蕭', color: '#8B5CF6', mid: 'GY2023044', def: 'present' },
-			{ n: '05', name: '范書瑋', initial: '范', color: '#F59E0B', mid: 'GY2023051', def: 'leave' },
-			{ n: '06', name: '葉承恩', initial: '葉', color: '#0EA5E9', mid: 'GY2023068', def: 'present' }
-		]
-	},
-	{
-		id: 'ac3',
-		name: '競技體操選手班',
-		time: '今日 16:00–18:00',
-		room: '競技訓練館',
-		coach: '李志偉',
-		roster: [
-			{ n: '01', name: '張家豪', initial: '張', color: '#8B5CF6', mid: 'GY2022003', def: 'present' },
-			{ n: '02', name: '劉若彤', initial: '劉', color: '#EF4444', mid: 'GY2022011', def: 'present' },
-			{ n: '03', name: '許書豪', initial: '許', color: '#14B8A6', mid: 'GY2022018', def: 'present' },
-			{ n: '04', name: '鍾佩珊', initial: '鍾', color: '#0066CC', mid: 'GY2022025', def: 'late' }
-		]
-	}
-];
 
 /* ──────────────── messages (訊息中心) ──────────────── */
 export const CONVERSATIONS: Conversation[] = [
@@ -314,21 +233,10 @@ export const CONVERSATIONS: Conversation[] = [
 	{ id: 'v6', name: '吳媽媽', initial: '吳', color: '#0EA5E9', kind: '家長', time: '週一', preview: '收到，謝謝您。', sla: '已回覆', slaTone: 'success' }
 ];
 
-/* thread for 王媽媽 — me = 李教練 (right aligned) */
-export const THREAD: ThreadMsg[] = [
-	{ who: 'them', text: '教練好！想請問小明最近的狀況 😊', time: '09:10' },
-	{ who: 'me', text: '王媽媽好！小明這週進步很多 👍', time: '09:15' },
-	{ who: 'me', text: '後滾翻已經很穩定，平衡木也更有自信了', time: '09:15' },
-	{ who: 'me', attach: { name: '小明_平衡木練習.mp4', meta: '影片 · 12.4 MB', kind: 'video' }, time: '09:16' },
-	{ who: 'them', text: '太好了！謝謝教練這麼用心 🙏', time: '09:20' },
-	{ who: 'them', text: '好的，謝謝教練！下週見 😊', time: '09:24' },
-	{ who: 'me', failed: { name: '示範動作_平衡木.mp4', meta: '18.4 MB' }, time: '09:18 · 未送出' }
-];
-
-export const SHARED_FILES: SharedFile[] = [
-	{ name: '小明_平衡木練習.mp4', meta: '影片 · 12.4 MB', icon: 'circle-play', tint: 'var(--df-primary)' },
-	{ name: '比賽報名表.jpg', meta: '圖片 · 2.1 MB', icon: 'image', tint: 'var(--df-success)' }
-];
+// Task 1(C2 死種子退役):THREAD/SHARED_FILES(訊息串示範資料,王媽媽 thread)已
+// 退役——訊息中心頁改走 getThread() 真後端接縫,這兩份 mock 已無 runtime 消費者。
+// ThreadMsg/ThreadAttach/ThreadFail/SharedFile interface 仍供頁面型別標註使用,
+// 保留。
 
 /* ──────────────── notifications (topbar bell menu) ────────────────
  * Defined in the prototype's shell.jsx; data, so it lives here. Old-style icon

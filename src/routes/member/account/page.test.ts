@@ -6,18 +6,20 @@ import { subscriptions, toasts } from '$lib/member/stores';
 import { getAccount, saveBirthDate } from '$lib/member/api';
 import type { AccountData } from '$lib/member/api';
 import { ME, type Order } from '$lib/member/data';
-// domain 的 Order.status 是寬鬆的 [string, string]；member/data.ts 的 Order 是嚴格的
-// [Tone, string]（此檔案原本經 member/data 再匯出取得時，那份 facade 就是這樣斷言的，
-// 見 Task 11 P2 清理前的 member/data.ts）——這裡改直接匯入 domain 值後比照斷言回同一個
-// 嚴格型別，維持與 AccountData.orders: Order[] 的相容。
-import { ORDERS as ORDERS_BASE } from '$lib/domain/member-app';
 
 vi.mock('$lib/member/api', () => ({ getAccount: vi.fn(), saveBirthDate: vi.fn() }));
 
 // The 帳戶 page must surface the member's 訂閱/使用權 (subscriptions created at pass
 // checkout) in a card after the points card.
 
-const ORDERS = ORDERS_BASE as Order[];
+// Task 1(C2 死種子退役):domain/member-app.ts 的 ORDERS(值)已退役——改為檔內 inline
+// fixture(2 筆)。domain 的 Order.status 是寬鬆的 [string, string]；member/data.ts
+// 的 Order 是嚴格的 [Tone, string]——沿用既有慣例宣告成嚴格型別，維持與
+// AccountData.orders: Order[] 的相容。
+const ORDERS: Order[] = [
+	{ id: 'DF-24061', item: '競技啦啦隊 進階班 · 2026 春季', amount: 4800, status: ['success', '已付款'], date: '2026/03/01' },
+	{ id: 'DF-23955', item: '兒童翻滾 技巧班 · 2026 春季', amount: 3400, status: ['success', '已付款'], date: '2026/02/24' }
+];
 
 const SEED: AccountData = {
 	orders: ORDERS,

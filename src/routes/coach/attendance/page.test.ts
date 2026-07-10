@@ -1,12 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import AttendancePage from './+page.svelte';
-import { ATT_TODAY_CLASSES } from '$lib/coach/data';
+import type { AttClassFull } from '$lib/coach/data';
 import { getAttendance, saveAttendance } from '$lib/coach/api';
 import { toasts } from '$lib/coach/stores';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$lib/coach/api', () => ({ getAttendance: vi.fn(), saveAttendance: vi.fn() }));
+
+/* Task 1(C2 死種子退役):coach/data.ts 的 ATT_TODAY_CLASSES/ATT_CLASS/ATT_ROSTER
+ * (值)已退役——改為檔內 inline fixture(≥2 班、含請假(leave)學員,維持既有測試
+ * 前提)。C1 的 4 筆名冊複製真實種子的組成:1 筆 present(王承恩,index 0,供多個
+ * 斷言鎖定第一列)+ 1 筆既有 late(林佳穎,供「本批含遲到標記」測試不點擊任何列
+ * 就已經是 hadLate)+ 1 筆 leave(張雅婷,供「已請假」靜態 badge 分支)+ 1 筆
+ * absent(吳柏宇)——非 present 筆數(3)對到「初始 3 筆變更」的既有斷言。 */
+const ATT_TODAY_CLASSES: AttClassFull[] = [
+	{
+		id: 'ac1',
+		name: '兒童體操初階班',
+		time: '今日 16:00–17:30',
+		room: 'A 教室',
+		coach: '陳怡君',
+		roster: [
+			{ n: '01', name: '王承恩', initial: '王', color: '#0066CC', mid: 'GY2024001', def: 'present' },
+			{ n: '02', name: '林佳穎', initial: '林', color: '#EC4899', mid: 'GY2024014', def: 'late' },
+			{ n: '03', name: '張雅婷', initial: '張', color: '#8B5CF6', mid: 'GY2024030', def: 'leave' },
+			{ n: '04', name: '吳柏宇', initial: '吳', color: '#EF4444', mid: 'GY2024063', def: 'absent' }
+		]
+	},
+	{
+		id: 'ac2',
+		name: '青少年體操中級班',
+		time: '今日 13:30–15:00',
+		room: 'B 教室',
+		coach: '陳怡君',
+		roster: [
+			{ n: '01', name: '周彥廷', initial: '周', color: '#0066CC', mid: 'GY2023012', def: 'present' },
+			{ n: '02', name: '簡子涵', initial: '簡', color: '#EC4899', mid: 'GY2023027', def: 'present' }
+		]
+	}
+];
 
 beforeEach(() => {
 	vi.mocked(getAttendance).mockReset();

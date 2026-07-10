@@ -4,10 +4,9 @@ import { COACHES } from './coaches';
 import { CLASSES_BASE } from './classes';
 import { MEMBERS_BASE } from './members';
 import { ORDERS_BASE } from './orders';
-import { CAMPUSES, ENROLL_SOURCES } from './shared';
+import { CAMPUSES } from './shared';
 import { VENUES } from './venues';
 import { TICKETS } from './tickets';
-import { ACTIVITY } from './activity';
 
 /* ── row-count canaries ── */
 describe('row counts', () => {
@@ -103,17 +102,12 @@ describe('shared constants', () => {
 		expect(CAMPUSES).toHaveLength(3);
 		CAMPUSES.forEach((s) => expect(s.length).toBeGreaterThan(0));
 	});
-	it('ENROLL_SOURCES has exactly 6 non-empty strings', () => {
-		expect(ENROLL_SOURCES).toHaveLength(6);
-		ENROLL_SOURCES.forEach((s) => expect(s.length).toBeGreaterThan(0));
-	});
 });
 
 /* ── new dataset row counts ── */
 describe('new dataset row counts', () => {
 	it('VENUES has 6 rows', () => expect(VENUES).toHaveLength(6));
 	it('TICKETS has 6 rows', () => expect(TICKETS).toHaveLength(6));
-	it('ACTIVITY has 8 rows', () => expect(ACTIVITY).toHaveLength(8));
 });
 
 /* ── new dataset id uniqueness ── */
@@ -144,7 +138,7 @@ describe('new dataset enum membership', () => {
 /* ── new datasets non-empty ── */
 describe('new datasets non-empty', () => {
 	it('all new arrays are non-empty', () => {
-		for (const arr of [VENUES, TICKETS, ACTIVITY]) {
+		for (const arr of [VENUES, TICKETS]) {
 			expect(arr.length).toBeGreaterThan(0);
 		}
 	});

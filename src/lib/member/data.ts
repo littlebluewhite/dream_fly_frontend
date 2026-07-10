@@ -18,14 +18,19 @@ export type { Tone } from '$lib/api/wire';
 export { ME, type Member } from '$lib/domain/member-app';
 export { STATS, type Stat } from '$lib/domain/member-app';
 export { SKILLS, type Skill } from '$lib/domain/member-app';
-export { MY_COURSES, type EnrolledCourse } from '$lib/domain/member-app';
+// MY_COURSES(值)不在此列——Task 1(C2 死種子退役)確認這份 facade 再匯出已無
+// runtime 消費者(我的課程頁走真實 getMine())後移除；EnrolledCourse interface
+// 仍供 LeaveDialog 等元件的型別標註使用，繼續轉出。
+export type { EnrolledCourse } from '$lib/domain/member-app';
 // ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
 // (member/api.ts 的 getEnrolmentAttendance())，這份 mock 已無 runtime 消費者。
 export type { AttRecord } from '$lib/domain/member-app';
 // CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
 // getCourses()，回傳 $lib/public/adapters 的 CatalogCourse，非這份 domain mock），這份
-// facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體不變。
-export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
+// facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體的
+// CATALOG/CatalogCourse 隨後也經 Task 1(C2 死種子退役)確認無任何消費者後整段移除。
+// MAKEUP_SLOTS 不在此列——Task 1(C2 死種子退役)確認這份 facade 再匯出已無 runtime
+// 消費者後移除；MakeupSlot interface 本身也已無消費者，domain 本體一併整段退役。
 export { CONTACT_THREAD, type ChatMessage } from '$lib/domain/member-app';
 // REWARDS/Reward 不在此列——Task 14 把 member 的兌換品項目錄換成真 GET /rewards
 // (integration-contract.md §3.23，見 member/api.ts 的 Reward/mapReward)；domain 的
@@ -39,7 +44,6 @@ export type { LedgerType };
 // (declared at its original spot below) where the const is (re-)declared.
 import {
   UPCOMING as UPCOMING_BASE,
-  SCHEDULE as SCHEDULE_BASE,
   NOTIFS_SEED as NOTIFS_SEED_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
@@ -209,8 +213,9 @@ export const LEVEL_TONE: Record<string, Tone> = {
 
 /* Weekly schedule grid — member's classes */
 export const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
-/* tone is Tone-typed here; domain stores the loose shape, so assert back. */
-export const SCHEDULE: ScheduleBlock[] = SCHEDULE_BASE as ScheduleBlock[];
+// SCHEDULE（值）不在此列——Task 1（C2 死種子退役）確認課表頁走真實 getSchedule()
+// 後，這份 mock 已無 runtime 消費者，隨 domain/member-app.ts 本體的 SCHEDULE 一併
+// 退役。ScheduleBlock interface（見上）仍供 +page.svelte 型別標註使用，不受影響。
 export const TIME_ROWS = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 
 /* Announcements (場館公告) — kept local: mobile's 3rd item has a different `bg`. */

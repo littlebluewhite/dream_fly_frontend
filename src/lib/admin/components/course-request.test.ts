@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody } from './course-request';
-import { CLASSES, type ClassRow, type Coach } from '$lib/admin/data';
+import type { ClassRow, Coach } from '$lib/admin/data';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 
 /* course-request.ts — 純函式，組出 POST/PATCH /courses body（Task 8 piece 1）。
  * 反向對照 admin/api.ts 唯讀映射用到的三個小函式（COURSE_LEVEL_TO_CLASS_LEVEL /
- * splitSchedule / ageRange）。全部無需渲染，直接測純函式輸出。 */
+ * splitSchedule / ageRange）。全部無需渲染，直接測純函式輸出。
+ *
+ * Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——`BASE_CLASS` 是檔內
+ * inline fixture(沿用真實種子 k1 的欄位值)，供下方各 it() 用 spread 覆寫個別
+ * 欄位。 */
+const BASE_CLASS: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: 'A 訓練館', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 86, makeup: 0, durationMinutes: 90 };
 
 describe('levelToApi — 5 態本地分級 → 後端 5 態 course_level enum', () => {
 	it('maps all 5 levels to their own backend enum value (no 5→3 fold)', () => {
@@ -91,7 +96,7 @@ describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_m
 
 	it('assembles name/level/category/coach_id/schedule_text/age/price_cents/max_students', () => {
 		const k: ClassRow = {
-			...CLASSES[0],
+			...BASE_CLASS,
 			name: '測試班級',
 			level: '進階',
 			cat: '競技體操',
@@ -116,7 +121,7 @@ describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_m
 	});
 
 	it('omits coach_id/schedule_text/age keys when there is nothing to derive them from', () => {
-		const k: ClassRow = { ...CLASSES[0], coach: '', day: '', time: '', age: '' };
+		const k: ClassRow = { ...BASE_CLASS, coach: '', day: '', time: '', age: '' };
 		const body = buildCourseBody(k, coaches);
 		expect(body.coach_id).toBeUndefined();
 		expect(body.schedule_text).toBeUndefined();
@@ -125,7 +130,7 @@ describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_m
 	});
 
 	it('price_cents uses toCents (NT$ → cents), never a raw *100 inline', () => {
-		const k: ClassRow = { ...CLASSES[0], price: 3200 };
+		const k: ClassRow = { ...BASE_CLASS, price: 3200 };
 		expect(buildCourseBody(k, coaches).price_cents).toBe(320000);
 	});
 });

@@ -2,14 +2,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { render, fireEvent } from '@testing-library/svelte';
 import ClassEditDialog from './ClassEditDialog.svelte';
-import { CLASSES, type ClassRow } from '$lib/admin/data';
+import type { ClassRow } from '$lib/admin/data';
 import { COACHES } from '$lib/domain/coaches';
 import { toasts } from '$lib/admin/stores';
 
 /* ClassEditDialog — edit form in an EditModal (admin.jsx ClassEditDialog). It
  * holds a local copy of the class; 儲存課程 fires onSave(updated) + a success
- * toast. We assert the fields render and the onSave wiring carries the edit. */
-const base: ClassRow = CLASSES[0];
+ * toast. We assert the fields render and the onSave wiring carries the edit.
+ *
+ * Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——改為檔內 inline
+ * ClassRow fixture(沿用真實種子 k1 的欄位值)。 */
+const base: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: 'A 訓練館', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 86, makeup: 0, durationMinutes: 90 };
 
 describe('ClassEditDialog', () => {
 	it('renders open with the class name field and the 儲存課程 primary', () => {

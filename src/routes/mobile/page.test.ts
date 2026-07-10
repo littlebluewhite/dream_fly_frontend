@@ -2,9 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getHome } from '$lib/mobile/api';
-import { CATALOG, ANNOUNCE, MY_COURSES } from '$lib/mobile/data';
+import { ANNOUNCE } from '$lib/mobile/data';
+import type { Course, MyCourse } from '$lib/mobile/data';
 
 vi.mock('$lib/mobile/api', () => ({ getHome: vi.fn() }));
+
+// Task 1(C2 死種子退役):mobile/data.ts 的 CATALOG/MY_COURSES(值)已退役——本檔案
+// 每個 it() 大多用自己的「相異 fixture」覆寫 getHome() 回應(證明資料來自接縫而非
+// 直接 import seed),下方僅供 beforeEach 預設值,內容本身不受個別斷言檢查。
+const CATALOG: Course[] = [
+	{ id: '3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', icon: 'sparkles', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '適合已有翻滾基礎、想挑戰特技與團隊編排的學員。', spots: 1 }
+];
+const MY_COURSES: MyCourse[] = [
+	{ id: 'k1', name: '競技啦啦隊 進階班', cat: '競技啦啦隊', level: '進階', coach: '林雅婷', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: 'A 訓練館', att: 98, attended: 23, total: 24, next: '明日 19:00', term: '2026 春季', remain: 14 }
+];
 
 beforeEach(() => {
 	vi.mocked(getHome).mockReset();

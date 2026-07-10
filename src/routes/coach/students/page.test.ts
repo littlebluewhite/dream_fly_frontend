@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import StudentsPage from './+page.svelte';
-import { STUDENTS } from '$lib/coach/data';
+import type { Student } from '$lib/coach/data';
 import { getStudents } from '$lib/coach/api';
 
 // createCertificate/createReportCard 也在此一併 mock（不執行真呼叫）——
@@ -9,6 +9,15 @@ import { getStudents } from '$lib/coach/api';
 // dialog 元件初始化時解析成 undefined 的具名匯出;本檔案只驗證「發證書」「寫評語」
 // 開啟 dialog 的接線，送出/錯誤分支見各 dialog 自己的測試檔。
 vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn(), createReportCard: vi.fn() }));
+
+// Task 1(C2 死種子退役):coach/data.ts 的 STUDENTS(值)已退役——改為檔內 inline
+// fixture(2 筆,沿用真實種子 su01(初階)/su04(選手)的欄位值——下方「程度篩選」
+// 測試需要一個非啟蒙 level 被篩掉、一個被篩中,且「啟蒙」篩選需為空集合,同既有
+// 測試前提:真實種子從未出現 level:'啟蒙' 的學員)。
+const STUDENTS: Student[] = [
+	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }], level: '初階', skill: '前滾翻', pct: 80, att: 98 },
+	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }], level: '選手', skill: '空中轉體', pct: 88, att: 99 }
+];
 
 beforeEach(() => {
 	vi.mocked(getStudents).mockReset();

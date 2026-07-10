@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { ORDERS } from '$lib/admin/data';
+import type { Order } from '$lib/admin/data';
 import { search, toasts } from '$lib/admin/stores';
 import { fmtNT } from '$lib/admin/format';
 import { countByStatus, paidRevenue } from '$lib/admin/components/orders-filter';
@@ -10,6 +10,14 @@ import { getOrders, updateOrderStatus } from '$lib/admin/api';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$lib/admin/api', () => ({ getOrders: vi.fn(), updateOrderStatus: vi.fn() }));
+
+// Task 1(C2 死種子退役):admin/data.ts 的 ORDERS(值)已退役——改為檔內 inline
+// fixture(3 筆,含 1 筆 paid 供「變更狀態接真 API」測試 find 到目標)。
+const ORDERS: Order[] = [
+	{ id: 'DF-24061', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', invoice: 'QX-48120391', discount: '—', handler: '陳怡君', campus: '美村本館', tax: 229, net: 4571, paidAt: '06/08 14:22', taxId: '53901240', orderId: 'uuid-DF-24061' },
+	{ id: 'DF-24059', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', invoice: 'QX-48120377', discount: '—', handler: '系統自動', campus: '文心分館', tax: 152, net: 3048, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-DF-24059' },
+	{ id: 'DF-24057', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', invoice: 'QX-48120344', discount: '體驗折抵', handler: '王思齊', campus: '北屯分館', tax: 29, net: 571, paidAt: '06/06 10:12', taxId: '—', orderId: 'uuid-DF-24057', reason: '家長申請改期，全額退款' }
+];
 
 beforeEach(() => {
 	search.set('');

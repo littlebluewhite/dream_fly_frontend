@@ -1,10 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import TodayPage from './+page.svelte';
-import { TODAY_LABEL, TODAY_CLASSES } from '$lib/coach/data';
+import { TODAY_LABEL } from '$lib/coach/data';
+import type { TodayClass } from '$lib/coach/data';
 import { getToday } from '$lib/coach/api';
 
 vi.mock('$lib/coach/api', () => ({ getToday: vi.fn() }));
+
+// Task 1(C2 死種子退役):coach/data.ts 的 TODAY_CLASSES(值)已退役——改為檔內
+// inline fixture(3 筆,涵蓋 done/live/wait 三態,供下方 KPI/直播 banner 斷言)。
+const TODAY_CLASSES: TodayClass[] = [
+	{ id: 'tc1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '主場館 A 教室', count: 12, level: '入門', cat: '體操', status: 'done' },
+	{ id: 'tc2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '主場館 B 教室', count: 8, level: '基礎', cat: '體操', status: 'live' },
+	{ id: 'tc4', start: '14:00', end: '15:30', name: '競技體操選手班', room: '競技訓練館', count: 6, level: '選手', cat: '體操', status: 'wait' }
+];
 
 beforeEach(() => {
 	vi.mocked(getToday).mockReset();

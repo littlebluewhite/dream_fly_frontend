@@ -1,11 +1,14 @@
 /* Dream Fly — 行動版會員 App · mock data + helpers (ported from mobile/data.jsx).
  *
  * Task 19：`getHome()`/`getCourses()`/`getMine()`/`getAccount()`/`getNotifications()`
- * 在 `$lib/mobile/api.ts` 已改接真後端(復用 `$lib/member/api.ts` 的既有 seam)——
- * 這個檔案現在混合兩種常數：(a) 仍是畫面唯一資料源的 mock(如 ANNOUNCE、
- * COACH_REPLIES — 對應的桌面版同樣是 mock，見各自的 P2 註解)；(b) 已改為
- * 「只供既有測試當 fixture 用、production code 不再讀取」的舊 mock(如
- * CATALOG — 見下方個別註解)。 */
+ * 在 `$lib/mobile/api.ts` 已改接真後端(復用 `$lib/member/api.ts` 的既有 seam)。
+ * Task 1(C2 死種子退役)：本檔案原本混合兩種常數——(a) 仍是畫面唯一資料源的 mock、
+ * (b) 已無 production 消費者、僅供既有測試當 fixture 用的舊 mock(如 CATALOG)。
+ * 經逐一確認 runtime 消費者後，(b) 類整批退役(STATS/SKILLS/SCHEDULE/ORDERS/
+ * MAKEUP_SLOTS/REWARDS/REPORTS/UPCOMING/MY_COURSES/POINTS_LEDGER/CERTS 的轉出行、
+ * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。現存常數皆為
+ * (a) 畫面仍在讀的 mock(ANNOUNCE、COACH_REPLIES — 對應桌面版同樣是 mock，見各自
+ * 的 P2 註解)、查表、或 `$lib/domain/member-app` 轉出的活值/活型別。 */
 
 export const fmtNT = (n: number): string => 'NT$' + n.toLocaleString('en-US');
 
@@ -15,34 +18,34 @@ export type Tone = [string, string];
 /* ---- single-source domain seed ----
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
  * `$lib/domain/member-app`；這裡 pass-through 值 + 型別(名稱不同時用
- * `export type { X as Y }` 別名)，或匯入基底值後保留自己原本的 interface(CATALOG
- * 的 Course 多一個 index signature，形狀有出入)。mobile 的公開 API 不變。ANNOUNCE
- * 因兩側有一則公告的 bg 色不同，留在本檔案原地(見下方),未搬進 domain。 */
+ * `export type { X as Y }` 別名)。mobile 的公開 API 不變。ANNOUNCE 因兩側有一則
+ * 公告的 bg 色不同，留在本檔案原地(見下方),未搬進 domain。
+ *
+ * Task 1(C2 死種子退役)：STATS/SKILLS/SCHEDULE/ORDERS/MAKEUP_SLOTS/REWARDS/
+ * REPORTS/UPCOMING 的轉出(值+型別)經確認這個 facade 本身無 runtime 消費者(mobile
+ * 頁面走真後端接縫，或如 STATS/SKILLS 一樣只有桌面 member/api.ts 在用)後移除。
+ * MY_COURSES/POINTS_LEDGER/CERTS 只刪值(仍有測試以外的型別消費者用得到別名型
+ * 別)：MyCourse/PointsEntry/Cert 型別中，MyCourse 供多個 overlay 元件消費而保留，
+ * PointsEntry/Cert 一併確認無型別消費者後隨值整組退役。 */
 export { ME, type Member } from '$lib/domain/member-app';
-export { STATS, type Stat } from '$lib/domain/member-app';
-export { SKILLS, type Skill } from '$lib/domain/member-app';
+// STATS/SKILLS(值+型別)不在此列——Task 1 確認這份 facade 的轉出無 runtime 消費者
+// (僅桌面 member/api.ts 消費自己那份 member/data.ts 轉出)後移除。
 // ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
 // (MyCourseDetail.svelte 直接復用桌面 member/api.ts 的 getEnrolmentAttendance())，
 // 這份 mock 已無 runtime 消費者。
 export type { AttRecord } from '$lib/domain/member-app';
-export { SCHEDULE, type ScheduleBlock } from '$lib/domain/member-app';
-export { ORDERS, type Order } from '$lib/domain/member-app';
-export { MAKEUP_SLOTS, type MakeupSlot } from '$lib/domain/member-app';
-export { REWARDS, type Reward } from '$lib/domain/member-app';
-export { REPORTS, type Report } from '$lib/domain/member-app';
+// SCHEDULE/ORDERS/MAKEUP_SLOTS/REWARDS/REPORTS(值+型別)不在此列——mobile/api.ts
+// 直接從 domain 匯入 ScheduleBlock/Order 型別(不經這個 facade)，Reward 型別另有
+// member/api.ts 的真實版本；四者的轉出本身皆無 runtime 消費者，Task 1 確認後移除。
 // Named differently on this side than in domain/member — preserve mobile's own names.
-export { UPCOMING } from '$lib/domain/member-app';
-export type { UpcomingClass as Upcoming } from '$lib/domain/member-app';
-export { MY_COURSES } from '$lib/domain/member-app';
+// UPCOMING/Upcoming 不在此列——Task 1 確認無 runtime 消費者(含測試)後移除。
 export type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 export { CONTACT_THREAD } from '$lib/domain/member-app';
 export type { ChatMessage as ThreadMsg } from '$lib/domain/member-app';
 export { NOTIFS_SEED } from '$lib/domain/member-app';
 export type { Notification as NotifItem } from '$lib/domain/member-app';
-export { POINTS_LEDGER } from '$lib/domain/member-app';
-export type { LedgerEntry as PointsEntry } from '$lib/domain/member-app';
-export { CERTS } from '$lib/domain/member-app';
-export type { Certificate as Cert } from '$lib/domain/member-app';
+// POINTS_LEDGER/PointsEntry、CERTS/Cert 不在此列——Task 1 確認兩者的轉出(值+型別)
+// 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
 import type { CatalogCourse } from '$lib/public/adapters';
 
 /* ---- Attendance history (active course) ----
@@ -61,18 +64,10 @@ export interface Course extends CatalogCourse {
 	icon: string;
 	[k: string]: unknown;
 }
-/** 僅供既有測試當 fixture 用(data.test.ts 形狀測試、courses/page.test.ts 候補
- *  守門測試、home page.test.ts)—— getCourses()/getHome() 已改真接後端，
- *  production code 不再讀這個常數；id 由舊 mock 的 number 改 string，對齊
- *  Course 型別(見上)。 */
-export const CATALOG: Course[] = [
-	{ id: '1', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', icon: 'baby', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '透過遊戲與軟墊活動建立平衡、協調與身體覺察，循序漸進培養孩子對體操的興趣。', spots: 2 },
-	{ id: '2', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', icon: 'rotate-cw', days: '週一 / 週三 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '從前滾翻、後滾翻到基礎倒立，建立扎實的體操底子，每班 6–8 人小班制。', spots: 2 },
-	{ id: '3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', icon: 'sparkles', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '適合已有翻滾基礎、想挑戰特技與團隊編排的學員。小班 12 人內、雙教練保護。', spots: 1 },
-	{ id: '4', name: '成人體操 基礎班', level: '基礎', cat: '成人體操', age: '16 歲以上', icon: 'dumbbell', days: '週五 20:00', price: 3600, hot: false, coach: '王思齊', desc: '為成人設計的入門體操，著重柔軟度、核心力量與安全保護，零基礎可上。', spots: 3 },
-	{ id: '5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', icon: 'flame', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '在安全環境中學習翻越、落地與移動技巧，建立空間判斷與身體控制。', spots: 0 },
-	{ id: '6', name: '親子體操 同樂班', level: '啟蒙', cat: '幼兒體操', age: '2–4 歲', icon: 'heart', days: '週日 10:00', price: 2600, hot: false, coach: '黃詩涵', desc: '家長與孩子一起參與，透過親子互動建立信任與運動習慣。', spots: 3 }
-];
+// Task 1(C2 死種子退役)：CATALOG(值)已退役——getCourses()/getHome() 已改真接
+// 後端，這份 mock 已無 runtime 消費者；曾經的「僅供既有測試當 fixture 用」用途
+// 也已改為各測試檔內的 inline Course fixture。Course interface(見上)仍供
+// api.ts/元件的型別標註使用，保留。
 export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
 
 /* ---- Weekly schedule grid ---- */

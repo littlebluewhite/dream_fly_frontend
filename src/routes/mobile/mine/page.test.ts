@@ -2,9 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getMine } from '$lib/mobile/api';
-import { MY_COURSES, SCHEDULE } from '$lib/mobile/data';
+import type { MyCourse } from '$lib/mobile/data';
 
 vi.mock('$lib/mobile/api', () => ({ getMine: vi.fn() }));
+
+/* Task 1(C2 死種子退役):mobile/data.ts 的 MY_COURSES/SCHEDULE(值)已退役——改為
+ * 檔內 inline fixture。無任何斷言檢查這兩者的具體內容(各 it() 若需要特定內容
+ * 一律用自己的「相異 fixture」覆寫,同 CATALOG 退役後的既有模式),故 SCHEDULE
+ * 沿用檔案其餘「相異 fixture」區塊的既有寫法,不額外標註型別。 */
+const MY_COURSES: MyCourse[] = [
+	{ id: 'k1', name: '競技啦啦隊 進階班', cat: '競技啦啦隊', level: '進階', coach: '林雅婷', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: 'A 訓練館', att: 98, attended: 23, total: 24, next: '明日 19:00', term: '2026 春季', remain: 14 }
+];
+const SCHEDULE = [
+	{ day: 1, start: '19:00', end: '20:30', name: '競技啦啦隊 進階班', room: 'A 訓練館', coach: '林雅婷', color: '#0066CC', tone: 'primary' }
+];
 
 beforeEach(() => {
 	vi.mocked(getMine).mockReset();

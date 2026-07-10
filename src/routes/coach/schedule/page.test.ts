@@ -1,10 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import SchedulePage from './+page.svelte';
-import { SCHED_COURSES } from '$lib/coach/data';
+import type { SchedCourse } from '$lib/coach/data';
 import { getSchedule } from '$lib/coach/api';
 
 vi.mock('$lib/coach/api', () => ({ getSchedule: vi.fn() }));
+
+// Task 1(C2 死種子退役):coach/data.ts 的 SCHED_COURSES(值)已退役——改為檔內
+// inline fixture(2 筆,沿用真實種子的啦啦隊/跑酷兩筆,供下方分類篩選測試)。
+const SCHED_COURSES: SchedCourse[] = [
+	{ day: 'Tue', start: '10:00', end: '11:00', name: '啦啦隊基礎', count: 10, cat: '啦啦隊', venue: '主場館' },
+	{ day: 'Wed', start: '16:00', end: '17:00', name: '跑酷入門', count: 8, cat: '跑酷', venue: '副館' }
+];
 
 beforeEach(() => {
 	vi.mocked(getSchedule).mockReset();

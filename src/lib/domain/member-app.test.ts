@@ -10,7 +10,13 @@
  *    課名、教練名、金額……)—— 誤改 domain 值時這裡變紅。
  * 3. row-count canary:防搬移 / 截斷時整列消失。
  * ANNOUNCE 因兩側有一筆公告的 bg 色不同(member 'var(--df-accent-bg)' vs mobile
- * '#FFF8DB')留在各 facade 原地,不在本檔案涵蓋範圍內。 */
+ * '#FFF8DB')留在各 facade 原地,不在本檔案涵蓋範圍內。
+ *
+ * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS(值+
+ * interface)與 MY_COURSES/SCHEDULE/ORDERS(值)經確認無 runtime 消費者後整批從
+ * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的 7 個常數。
+ * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
+ * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。 */
 import { describe, it, expect } from 'vitest';
 import * as MemberData from '$lib/member/data';
 import {
@@ -18,45 +24,18 @@ import {
 	STATS,
 	SKILLS,
 	UPCOMING,
-	MY_COURSES,
-	CATALOG,
-	SCHEDULE,
-	ORDERS,
-	MAKEUP_SLOTS,
 	CONTACT_THREAD,
 	NOTIFS_SEED,
-	POINTS_LEDGER,
-	REWARDS,
-	REPORTS,
-	CERTS
+	POINTS_LEDGER
 } from './member-app';
 
-/* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ──
- * REPORTS/CERTS 不在此列——Task 13 把 member/api.ts 的 getReports() 換成真 API
- * (GET /report-cards/me + GET /certificates/me,見 integration-contract.md §3.22)
- * 後，member facade(`$lib/member/data`)不再重新匯出這兩個 mock 常數(僅 mobile
- * 仍消費,見檔案開頭註解的 mobile/data.test.ts)，故它們不再是「member facade
- * 的同參照」守衛範圍;domain 本身的字面不變量/row-count 仍在下方第 2、3 節涵蓋。
- * REWARDS 同理——Task 14 把 member 的兌換品項目錄換成真 GET /rewards(§3.23)後，
- * member facade 也不再重新匯出這個 mock 常數(僅 mobile 的 PointsScreen 仍消費，
- * 留給 Task 19)。
- * CATALOG/ORDERS 同理——Task 11 P2 清理後，member facade(`$lib/member/data`)不再
- * 重新匯出這兩個值(課程介紹走真 GET /courses、帳戶訂單走真 GET /orders/me)，故它們
- * 也退出這份「member facade 同參照」守衛範圍；domain 本身的字面不變量/row-count
- * 仍在下方第 2、3 節涵蓋(mobile 另有自己一份 facade，不在本檔案範圍)。
- * ATT_HISTORY 同理——Task F7 把 member/mobile 的逐堂出勤明細換成真 GET
- * /enrolments/{id}/attendance(§3.12)後，這個 mock 常數已從 domain/member-app.ts
- * 本體移除(非僅 facade 不再轉出)，故不再有值可供這裡的同參照/字面不變量/row-count
- * 測試涵蓋。 */
+/* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ── */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
 		expect(MemberData.ME).toBe(ME);
 		expect(MemberData.STATS).toBe(STATS);
 		expect(MemberData.SKILLS).toBe(SKILLS);
 		expect(MemberData.UPCOMING).toBe(UPCOMING);
-		expect(MemberData.MY_COURSES).toBe(MY_COURSES);
-		expect(MemberData.SCHEDULE).toBe(SCHEDULE);
-		expect(MemberData.MAKEUP_SLOTS).toBe(MAKEUP_SLOTS);
 		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);
 		expect(MemberData.POINTS_LEDGER).toBe(POINTS_LEDGER);
@@ -83,33 +62,6 @@ describe('literal seed invariants (independent of the facades)', () => {
 		expect(UPCOMING[0].coach).toBe('林雅婷');
 		expect(UPCOMING[0].status).toEqual(['success', '可報到']);
 	});
-	it('MY_COURSES ids are k1/k6/k8 with coaches 林雅婷/林雅婷/陳冠宇', () => {
-		expect(MY_COURSES.map((c) => c.id)).toEqual(['k1', 'k6', 'k8']);
-		expect(MY_COURSES.map((c) => c.coach)).toEqual(['林雅婷', '林雅婷', '陳冠宇']);
-	});
-	it('CATALOG id 3 is 競技啦啦隊 進階班 at NT$4,800 (hot, 1 spot)', () => {
-		const c = CATALOG[2];
-		expect(c.id).toBe(3);
-		expect(c.name).toBe('競技啦啦隊 進階班');
-		expect(c.price).toBe(4800);
-		expect(c.hot).toBe(true);
-		expect(c.spots).toBe(1);
-	});
-	it('SCHEDULE[0] is Monday 19:00 競技啦啦隊 進階班', () => {
-		expect(SCHEDULE[0].day).toBe(1);
-		expect(SCHEDULE[0].start).toBe('19:00');
-		expect(SCHEDULE[0].name).toBe('競技啦啦隊 進階班');
-	});
-	it('ORDERS[0] is DF-24061 for NT$4,800, 已付款', () => {
-		expect(ORDERS[0].id).toBe('DF-24061');
-		expect(ORDERS[0].amount).toBe(4800);
-		expect(ORDERS[0].status).toEqual(['success', '已付款']);
-	});
-	it('MAKEUP_SLOTS[0] is m1 with 3 spots, coach 林雅婷', () => {
-		expect(MAKEUP_SLOTS[0].id).toBe('m1');
-		expect(MAKEUP_SLOTS[0].spots).toBe(3);
-		expect(MAKEUP_SLOTS[0].coach).toBe('林雅婷');
-	});
 	it('CONTACT_THREAD opens coach → me', () => {
 		expect(CONTACT_THREAD[0].from).toBe('coach');
 		expect(CONTACT_THREAD[1].from).toBe('me');
@@ -125,19 +77,6 @@ describe('literal seed invariants (independent of the facades)', () => {
 		expect(POINTS_LEDGER[0].type).toBe('earn');
 		expect(POINTS_LEDGER[0].delta).toBe(120);
 	});
-	it('REWARDS[0] is 報名費折抵 NT$100 for 100 points', () => {
-		expect(REWARDS[0].name).toBe('報名費折抵 NT$100');
-		expect(REWARDS[0].cost).toBe(100);
-	});
-	it('REPORTS.k1 is graded A by 林雅婷 with 6 skills', () => {
-		expect(REPORTS.k1.coach).toBe('林雅婷');
-		expect(REPORTS.k1.grade).toBe('A');
-		expect(REPORTS.k1.skills).toHaveLength(6);
-	});
-	it('CERTS[0] is ct1 issued by Dream Fly 夢飛體操館', () => {
-		expect(CERTS[0].id).toBe('ct1');
-		expect(CERTS[0].issuer).toBe('Dream Fly 夢飛體操館');
-	});
 });
 
 /* ── 3. row-count canaries(防搬移 / 截斷時整列消失) ── */
@@ -145,14 +84,7 @@ describe('row counts', () => {
 	it('STATS has 3 rows', () => expect(STATS).toHaveLength(3));
 	it('SKILLS has 4 rows', () => expect(SKILLS).toHaveLength(4));
 	it('UPCOMING has 3 rows', () => expect(UPCOMING).toHaveLength(3));
-	it('MY_COURSES has 3 rows', () => expect(MY_COURSES).toHaveLength(3));
-	it('CATALOG has 6 rows', () => expect(CATALOG).toHaveLength(6));
-	it('SCHEDULE has 4 rows', () => expect(SCHEDULE).toHaveLength(4));
-	it('ORDERS has 4 rows', () => expect(ORDERS).toHaveLength(4));
-	it('MAKEUP_SLOTS has 4 rows', () => expect(MAKEUP_SLOTS).toHaveLength(4));
 	it('CONTACT_THREAD has 2 rows', () => expect(CONTACT_THREAD).toHaveLength(2));
 	it('NOTIFS_SEED has 6 rows', () => expect(NOTIFS_SEED).toHaveLength(6));
 	it('POINTS_LEDGER has 6 rows', () => expect(POINTS_LEDGER).toHaveLength(6));
-	it('REWARDS has 4 rows', () => expect(REWARDS).toHaveLength(4));
-	it('CERTS has 3 rows', () => expect(CERTS).toHaveLength(3));
 });

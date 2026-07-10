@@ -58,13 +58,14 @@ export type { Activity } from '$lib/domain/activity';
 // real data — domain/reports.ts itself is now `git rm`'d, no surface still uses it.
 
 // Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).
-import { CLASSES_BASE, type ClassBase } from '$lib/domain/classes';
+import type { ClassBase } from '$lib/domain/classes';
 import type { MemberBase } from '$lib/domain/members';
-import { ORDERS_BASE, type OrderBase } from '$lib/domain/orders';
-import { CAMPUSES, tierOf } from '$lib/domain/shared';
+import type { OrderBase } from '$lib/domain/orders';
 import { initialOf } from '$lib/api/wire';
-// `tierOf` is re-exported as part of admin's public API (data.test.ts covers it directly).
-export { tierOf };
+// Task 1(C2 死種子退役):tierOf 轉出與其唯一消費者一併退役(唯一消費者是
+// data.test.ts 自己的直接單元測試,無 production 呼叫端)——`$lib/domain/shared`
+// 本體的 tierOf 定義同批移除,CAMPUSES 是這裡唯一還在用的值,但也僅供已退役的
+// CLASSES/ORDERS 衍生使用,一併不再從這裡 import。
 
 /* ───────────────────────── classes ───────────────────────── */
 export interface ClassRow extends ClassBase {
@@ -75,15 +76,9 @@ export interface ClassRow extends ClassBase {
 	 *  編輯流程也可調整（見 ClassEditDialog）。 */
 	durationMinutes: number;
 }
-
-// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
-export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
-	...k,
-	startDate: '2026/03/' + String((i % 27) + 1).padStart(2, '0'),
-	checkinRate: 86 + (i % 12),
-	makeup: i % 3,
-	durationMinutes: 90
-}));
+// Task 1(C2 死種子退役):CLASSES(CLASSES_BASE 的 .map 衍生)已退役——唯一消費者是
+// data.test.ts/元件測試,已改為各測試檔內的 inline ClassRow fixture。ClassRow
+// interface 仍供 classes/+page.svelte 與眾多元件的型別標註使用,保留。
 
 /* ───────────────────────── members ───────────────────────── */
 export interface Member extends MemberBase {
@@ -154,20 +149,9 @@ export interface Order extends OrderBase {
 	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
 	orderId: string;
 }
-
-// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
-export const ORDERS: Order[] = ORDERS_BASE.map((o, i) => {
-	const tax = Math.round(o.amount - o.amount / 1.05);
-	return {
-		...o,
-		campus: CAMPUSES[i % CAMPUSES.length],
-		tax,
-		net: o.amount - tax,
-		paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
-		taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
-		orderId: o.id
-	};
-});
+// Task 1(C2 死種子退役):ORDERS(ORDERS_BASE 的 .map 衍生)已退役——唯一消費者是
+// data.test.ts/元件測試,已改為各測試檔內的 inline Order fixture。Order interface
+// 仍供 orders/+page.svelte 與眾多元件的型別標註使用,保留。
 
 /* ───────────────────────── status maps (shapes differ!) ───────────────────────── */
 /** [Tone, label] tuples. */

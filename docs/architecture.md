@@ -45,17 +45,23 @@ notification bells), `lib/styles/` (`global.css` + design tokens),
 `src/lib/domain/` holds mock seed that used to be duplicated across surfaces: ops entities (`venues.ts`,
 `tickets.ts`, `coaches.ts`, `activity.ts`) plus base arrays (`CLASSES_BASE`, `MEMBERS_BASE`,
 `ORDERS_BASE` in `classes.ts` / `members.ts` / `orders.ts`) shared by the admin↔mobile-admin ops-pair, and
-`member-app.ts` — the member↔mobile desktop/mobile twin seed (15 constants; `ANNOUNCE` stays forked in
-each facade because one announcement's background colour differs between the two). Four facades consume
-it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` — mostly as verbatim
-pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE` arrays and layers its
-own derived fields on top via `.map` builders, while `member`/`mobile` re-export the same domain value
-under an `as` assertion to their own stricter local type (same reference, no transformation); `coach`
-has no persona mapping into the shared seed, so it doesn't consume `lib/domain/` at all. Because a facade
-could silently drop a re-exported *type* without vitest noticing (type-only imports erase at transpile
-time), the `facade-type-exports` convention (`src/lib/admin/facade-type-exports.test.ts`, mirrored inline
-in `src/lib/mobile/data.test.ts`) binds each re-exported type to a live value so a dropped export fails
-`npm run check` to compile, not just at runtime.
+`member-app.ts` — the member↔mobile desktop/mobile twin seed (7 constants; `ANNOUNCE` stays forked in
+each facade because one announcement's background colour differs between the two). Task 1 (C2 死種子退役,
+2026-07) retired 8 of the original 15 constants once every consumer had moved onto real backend seams —
+`CATALOG`/`MAKEUP_SLOTS`/`REWARDS`/`REPORTS`/`CERTS` (value + interface) outright, and `MY_COURSES`/
+`SCHEDULE`/`ORDERS` down to type-only exports — `EnrolledCourse`/`ScheduleBlock`/`Order` still back type
+annotations in `mobile/api.ts` and the facades' own local interfaces, just with no sample value left.
+Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
+mostly as verbatim pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE`
+arrays and layers its own derived fields on top via `.map` builders, while `member`/`mobile` re-export
+the same domain value under an `as` assertion to their own stricter local type (same reference, no
+transformation); `coach` has no persona mapping into the shared seed, so it doesn't consume `lib/domain/`
+at all. Because a facade could silently drop a re-exported *type* without vitest noticing (type-only
+imports erase at transpile time), `src/lib/mobile/data.test.ts` binds each of its re-exported types to a
+live value so a dropped export fails `npm run check` to compile, not just at runtime — the only facade
+left needing this guard now that member-app.ts is down to 7 constants; admin's former dedicated
+type-export regression file was retired once ADR 0009 emptied out the reports-domain re-exports it was
+guarding.
 
 ## Shared component shelves: `lib/components/ui` and `lib/components/mobile`
 

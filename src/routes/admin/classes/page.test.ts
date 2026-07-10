@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
-import { CLASSES, COACHES, type Coach } from '$lib/admin/data';
-import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
+import { COACHES, type Coach, type ClassRow } from '$lib/admin/data';
+import { getClasses, createCourse, updateCourse } from '$lib/admin/api';
 import { ApiError } from '$lib/api/client';
 import { toasts } from '$lib/admin/stores';
 
@@ -18,6 +18,14 @@ vi.mock('$lib/admin/api', async (importOriginal) => {
 const FIXTURE_COACHES: Coach[] = [
 	{ id: 'cx1', userId: 'ux1', name: '測試教練甲', initial: '測', title: '單元測試專用', color: '#0066CC', tags: [], isActive: true },
 	{ id: 'cx2', userId: 'ux2', name: '測試教練乙', initial: '試', title: '單元測試專用', color: '#10B981', tags: [], isActive: false }
+];
+
+// Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——改為檔內 inline
+// fixture(3 筆,沿用真實種子前三列的欄位值)。
+const CLASSES: ClassRow[] = [
+	{ id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: 'A 訓練館', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 86, makeup: 0, durationMinutes: 90 },
+	{ id: 'k2', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', coach: '陳冠宇', room: 'B 教室', day: '週一 / 週三', time: '17:30–18:30', enrolled: 8, cap: 10, age: '7–9 歲', price: 3200, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/02', checkinRate: 87, makeup: 1, durationMinutes: 90 },
+	{ id: 'k3', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', coach: '黃詩涵', room: 'C 軟墊區', day: '週六', time: '10:00–11:00', enrolled: 6, cap: 8, age: '3–5 歲', price: 2800, status: '招生中', wait: 0, term: '2026 春季', sessions: 12, startDate: '2026/03/03', checkinRate: 88, makeup: 2, durationMinutes: 90 }
 ];
 
 beforeEach(() => {

@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { ORDERS } from '$lib/admin/data';
 import type { Order, OrderStatus } from '$lib/admin/data';
 import {
 	filterOrders,
@@ -9,10 +8,21 @@ import {
 	applyStatusChange
 } from './orders-filter';
 
-/* Task 6 (FE#9): the ORDERS seed only carries paid/pending/refunded rows, so a
- * small hand-built fixture (one row per status) is needed to exercise
- * processing/completed/cancelled — the 3 statuses the tab set didn't tally
- * before this task. */
+/* Task 1(C2 死種子退役):admin/data.ts 的 ORDERS(值)已退役——這裡改為檔內 inline
+ * fixture，比照真實 ORDERS_BASE 只出現 paid/pending/refunded 三態的現況(Task 6
+ * FE#9 的既有前提)，維持「paid+pending+refunded 三態切片加總 = 全集」這條測試
+ * 前提成立。 */
+const ORDERS: Order[] = [
+	{ id: 'DF-24061', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', invoice: 'QX-48120391', discount: '—', handler: '陳怡君', campus: '美村本館', tax: 229, net: 4571, paidAt: '06/08 14:22', taxId: '53901240', orderId: 'uuid-DF-24061' },
+	{ id: 'DF-24059', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', invoice: 'QX-48120377', discount: '—', handler: '系統自動', campus: '文心分館', tax: 152, net: 3048, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-DF-24059' },
+	{ id: 'DF-24057', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', invoice: 'QX-48120344', discount: '體驗折抵', handler: '王思齊', campus: '北屯分館', tax: 29, net: 571, paidAt: '06/06 10:12', taxId: '—', orderId: 'uuid-DF-24057', reason: '家長申請改期，全額退款' },
+	{ id: 'DF-24058', member: '吳冠霖', initial: '吳', color: '#0066CC', item: '競技體操 選手班 · 春季', amount: 6200, status: 'paid', method: '信用卡', date: '06/07 16:30', invoice: 'QX-48120362', discount: '續報 -300', handler: '林雅婷', campus: '美村本館', tax: 295, net: 5905, paidAt: '06/07 16:30', taxId: '—', orderId: 'uuid-DF-24058' }
+];
+
+/* Task 6 (FE#9): the ORDERS fixture above only carries paid/pending/refunded
+ * rows, so a small hand-built fixture (one row per status) is needed to
+ * exercise processing/completed/cancelled — the 3 statuses the tab set didn't
+ * tally before this task. */
 function makeOrder(status: OrderStatus, id: string): Order {
 	return {
 		id,
