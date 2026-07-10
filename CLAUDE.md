@@ -14,13 +14,18 @@ Dream Fly (夢飛) — the frontend for a **gymnastics & competitive-cheer acade
 SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. The backend is
 the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
 `/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, and (since Round 3)
-both `mobile` and `mobile-admin` — call it for real now. Mock data remains only in a handful of explicitly
-**P2-commented** spots where no backend endpoint exists (or the gap is purely cosmetic): mobile's
-trial-booking and settings-save toasts, mobile's per-course attendance history, member/mobile dashboard
-stats (`attendanceRate`/`streak`/`skillsMastered`), the mobile-admin identity chip and its page-1-only list
-fetches, admin/mobile-admin coach and venue/ticket write forms, and the admin/mobile-admin system-settings
-toggle. Google OAuth login is wired for the `member` surface only (`staff`/`mobile`/`mobile-admin` have no
-Google option). See `docs/adr/0006` for the full inventory.
+both `mobile` and `mobile-admin` — call it for real now. Round 4 wired most of what was still mock:
+dashboard stats, per-course attendance history, trial-booking, mobile preference persistence, the admin
+dashboard's today/activity panels, admin coach/venue/ticket/coupon/system-settings writes, the 13-panel
+admin reports page (see `docs/adr/0009`), and Google OAuth on `mobile`. Mock data remains only in a
+handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
+of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
+read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
+profile-field save on both mobile's settings screen and the member account page (only birthday is real
+there — name/phone/notification-contact fields aren't), and the admin settings page's local-only
+login-device list. Google OAuth login is wired for `member` and (since Round 4) `mobile` — `staff` and
+`mobile-admin` still have no Google option, because the backend's Google flow only ever grants the
+`member` role. See `docs/adr/0006` for the full inventory.
 
 > `README.md` is a quick-start summary; `CONTEXT.md`, `docs/adr/`, and `docs/architecture.md` remain the
 > authoritative deep references.
