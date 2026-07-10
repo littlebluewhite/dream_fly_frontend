@@ -78,7 +78,10 @@
 				[tone, label] = PAY_STATUS[value as PayStatus];
 				break;
 			case 'ticket':
-				[tone, label] = TICKET_TYPE[value as TicketType];
+				// 容錯查表(同 $lib/api/wire.ts orderStatusBadge 慣例)：product_type 契約若
+				// 擴出第 4 值(見 admin/api.ts mapProduct 的 as TicketType 註解)，查無 →
+				// 中性 tone + 原字串標籤，不會 destructure 到 undefined 而炸掉整頁。
+				[tone, label] = TICKET_TYPE[value as TicketType] ?? ['neutral', value];
 				break;
 			case 'classLevel':
 				tone = LEVEL_TONE[value as Level];

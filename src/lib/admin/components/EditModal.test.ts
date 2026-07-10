@@ -58,4 +58,41 @@ describe('EditModal', () => {
 		expect(queryByText('編輯班級')).toBeNull();
 		expect(queryByText('儲存')).toBeNull();
 	});
+
+	/* Important #1 (終審)：五個真寫入呼叫端(tickets/venues/coupons/coaches/members)的
+	 * onSave 最終都是 async 的 page-level save()，連點主按鈕會送出兩次 POST/PATCH。
+	 * EditModal 在 onSave() 回傳 promise 時自動鎖住主按鈕(busy)，落定後才解鎖——
+	 * 呼叫端不需要各自管理 saving 狀態，也不會漏接。onSave 同步回傳(如表單驗證失敗
+	 * 提早 return)則不鎖，不影響既有同步呼叫端。 */
+	it('連點主按鈕：onSave 回傳的 promise 落定前再次點擊不會重複呼叫 onSave，按鈕停用並顯示處理中', async () => {
+		let resolveSave!: () => void;
+		const pending = new Promise<void>((resolve) => {
+			resolveSave = resolve;
+		});
+		const onSave = vi.fn(() => pending);
+		const { getByText } = render(EditModal, { open: true, title: '編輯班級', onSave });
+
+		const btn = getByText('儲存').closest('button') as HTMLButtonElement;
+		await fireEvent.click(btn);
+		expect(onSave).toHaveBeenCalledTimes(1);
+		expect(btn.disabled).toBe(true);
+		expect(btn.textContent).toContain('處理中');
+
+		// 連點第二次：promise 尚未落定，busy 鎖仍在，onSave 不應再被呼叫。
+		await fireEvent.click(btn);
+		expect(onSave).toHaveBeenCalledTimes(1);
+
+		resolveSave();
+		await pending;
+		await Promise.resolve(); // flush the finally{} that clears busy
+	});
+
+	it('onSave 同步回傳(非 promise)時不鎖按鈕——不影響既有同步呼叫端', async () => {
+		const onSave = vi.fn();
+		const { getByText } = render(EditModal, { open: true, title: '編輯班級', onSave });
+		const btn = getByText('儲存').closest('button') as HTMLButtonElement;
+		await fireEvent.click(btn);
+		expect(onSave).toHaveBeenCalledTimes(1);
+		expect(btn.disabled).toBe(false);
+	});
 });

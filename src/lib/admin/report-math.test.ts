@@ -10,6 +10,7 @@ import {
 	fmtHours,
 	TIER_LABEL,
 	REVENUE_SOURCE_LABEL,
+	revenueSourceLabel,
 	PAYMENT_METHOD_LABEL,
 	paymentMethodLabel,
 	WEEKDAY_LABEL,
@@ -224,6 +225,20 @@ describe('REVENUE_SOURCE_LABEL — 收入來源桶對照(P4-F2)', () => {
 		for (const { color } of Object.values(REVENUE_SOURCE_LABEL)) {
 			expect(color).toMatch(/^#|^var\(--df-/);
 		}
+	});
+});
+
+/* Important #2(c)(d)(終審)：IncomeSources.svelte/ReportsScreen.svelte 原本把
+ * groupIncomeSources() 攤平出的純字串 source 直接 `as keyof typeof
+ * REVENUE_SOURCE_LABEL` 窄化 cast，再直接索引查表——查無 key(契約若擴集)會炸頁。
+ * revenueSourceLabel() 是容忍未知 key 的查表版本，同 paymentMethodLabel 慣例。 */
+describe('revenueSourceLabel — 容忍未知 source 的查表', () => {
+	it('已知 key 回傳對應的 REVENUE_SOURCE_LABEL 項目', () => {
+		expect(revenueSourceLabel('course')).toEqual(REVENUE_SOURCE_LABEL.course);
+	});
+
+	it('查無對應 key 時原字串穿透＋中性灰，不丟例外', () => {
+		expect(revenueSourceLabel('gift_card')).toEqual({ label: 'gift_card', color: 'var(--df-text-muted)' });
 	});
 });
 

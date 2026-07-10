@@ -12,13 +12,13 @@
   import type { AdminIncomeSourceRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT, fmtPct } from '$lib/admin/format';
-  import { groupIncomeSources, pctShares, REVENUE_SOURCE_LABEL } from '$lib/admin/report-math';
+  import { groupIncomeSources, pctShares, revenueSourceLabel } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminIncomeSourceRow[] } = $props();
 
   const totals = $derived(
     groupIncomeSources(rows).map((s) => ({
-      source: s.source as keyof typeof REVENUE_SOURCE_LABEL,
+      source: s.source,
       totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
     }))
   );
@@ -38,11 +38,11 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
             <span
-              style="width:9px; height:9px; border-radius:5px; background:{REVENUE_SOURCE_LABEL[s.source]
+              style="width:9px; height:9px; border-radius:5px; background:{revenueSourceLabel(s.source)
                 .color};"
             ></span>
             <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">
-              {REVENUE_SOURCE_LABEL[s.source].label}
+              {revenueSourceLabel(s.source).label}
             </span>
           </span>
           <span
@@ -53,9 +53,9 @@
         </div>
         <div class="track">
           <div
-            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{REVENUE_SOURCE_LABEL[
+            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{revenueSourceLabel(
               s.source
-            ].color};"
+            ).color};"
           ></div>
         </div>
         <div style="font-size:11px; color:var(--df-text-light); margin-top:4px;">

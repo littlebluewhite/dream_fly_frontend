@@ -34,12 +34,21 @@ import {
 	putSettings
 } from './api';
 import { api, ApiError } from '$lib/api/client';
+import { deriveSessionStatus } from '$lib/coach/api';
 import { mapMemberAccount } from './data';
 import { ORDER_STATUS } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
+});
+
+// deriveSessionStatus 預設沿用真實實作(其餘既有測試靠 vi.setSystemTime 驅動真實時間
+// 比較邏輯)——只有下面「soon 分支」測試會用 mockReturnValueOnce 強制覆寫一次，驗證
+// TODAY_TONE_LABEL 已補齊的第 4 值查表分支(Important #2(b) 終審修正)。
+vi.mock('$lib/coach/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/coach/api')>();
+	return { ...actual, deriveSessionStatus: vi.fn(actual.deriveSessionStatus) };
 });
 
 /** 極小 fake router：依 "METHOD path" key 回應覆寫值；未交代的端點一律丟錯，讓漏掉
@@ -1270,6 +1279,26 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /sessions/today': [] }));
 		const d = await getTodaySessions();
 		expect(d.sessions).toEqual([]);
+	});
+
+	/* Important #2(b)(終審)：deriveSessionStatus 宣告的回傳型別 TodayStatus 是 4 值
+	 * 聯集(soon 是現行實作推導不到、但型別上合法的第 4 值)。之前 mapTodaySession 把
+	 * 回傳值窄化 cast 成 'wait'|'live'|'done' 3 態去查一張只有 3 個 key 的表——查表
+	 * 一旦真的遇到 soon 就會 destructure 到 undefined 而炸掉。TODAY_TONE_LABEL 現已
+	 * 補齊 soon 分支、移除窄化 cast，這裡用 mock 強制 deriveSessionStatus 回傳 soon
+	 * 驗證查表能正確降級，不會炸。 */
+	it('state 推導：deriveSessionStatus 回傳 soon(現行實作不會產生，但型別合法的第 4 態)時查表仍有對應 tone/label，不會炸掉', async () => {
+		vi.mocked(deriveSessionStatus).mockReturnValueOnce('soon');
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /sessions/today': [
+					{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
+				]
+			})
+		);
+
+		const d = await getTodaySessions();
+		expect(d.sessions[0]).toMatchObject({ state: 'soon', tone: 'warning', label: '即將開始' });
 	});
 });
 

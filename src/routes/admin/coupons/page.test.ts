@@ -132,7 +132,7 @@ describe('優惠碼管理 — 新增優惠碼（POST /coupons）', () => {
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toContain('已存在');
 		expect(getCoupons).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
-		expect(getByText('建立優惠碼')).toBeInTheDocument(); // 對話框仍開著
+		expect(await findByText('建立優惠碼')).toBeInTheDocument(); // 對話框仍開著（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 		expect(queryByText('NEWCODE')).toBeNull();
 	});
 });

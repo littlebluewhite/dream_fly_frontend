@@ -174,22 +174,59 @@ describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /produ
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toContain('已存在');
 		expect(queryByText('重複票券')).toBeNull(); // 未進入列表
-		expect(getByText('建立票券')).toBeInTheDocument(); // 對話框仍開著，可修正重試
+		expect(await findByText('建立票券')).toBeInTheDocument(); // 對話框仍開著，可修正重試（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+	});
+
+	/* Important #1(終審)：EditModal 的 busy 鎖是共用機制(見 EditModal.test.ts)，這裡
+	 * 補一個代表性頁面的端對端驗證——連點「建立票券」兩次，createProduct 只送出一次
+	 * (其餘四個呼叫端 tickets/venues/coupons/coaches/members 靠同一支 EditModal 機制，
+	 * 不逐一重複整合測試)。 */
+	it('連點「建立票券」兩次只送出一次 createProduct（EditModal 防連點鎖）', async () => {
+		let resolveCreate!: (v: Awaited<ReturnType<typeof createProduct>>) => void;
+		vi.mocked(createProduct).mockReturnValue(
+			new Promise((resolve) => {
+				resolveCreate = resolve;
+			})
+		);
+
+		const { getByText, getByLabelText, findByText } = render(TicketsPage);
+		await findByText(TICKETS[0].name);
+		await fireEvent.click(getByText('新增票券'));
+		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '連點票券' } });
+
+		const saveBtn = getByText('建立票券');
+		await fireEvent.click(saveBtn);
+		await fireEvent.click(saveBtn); // 連點第二次：按鈕此時應已被 busy 鎖 disabled
+
+		resolveCreate({
+			id: 'p-new', name: '連點票券', slug: 'new', product_type: 'ticket', description: '',
+			price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false,
+			badge: null, stock: 100, quota: 100, sold: 0, valid_days: null, session_count: null,
+			is_active: true, created_at: '', updated_at: ''
+		});
+
+		await vi.waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
+		// 等整條成功流程(closeEdit + toast + gate.silentRefresh，皆在 save() 內接續 await)
+		// 完整跑完，不留下未 await 的 promise 尾巴——toasts/gate 是跨測試共用的 module-level
+		// 狀態，沒等到底會讓殘留的 toast/getTickets 呼叫污染下一個測試。
+		await vi.waitFor(() => expect(getTickets).toHaveBeenCalledTimes(2));
 	});
 
 	it('編輯票券失敗（422 驗證）→ 顯示繁中錯誤 toast，列表維持原值', async () => {
 		vi.mocked(updateProduct).mockRejectedValue(new ApiError(422, 'invalid product_type'));
-		const before = get(toasts).length;
 
 		const { getByText, getAllByText, findByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		await fireEvent.click(getAllByText('編輯')[0]);
 		await fireEvent.click(getByText('儲存票券'));
 
-		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		// toasts store 全域 CAP=4(見 $lib/stores/toasts.ts)——同檔案內先跑過的測試累積的
+		// toast 一旦頂到上限，長度就會卡住不再增加(舊的被擠掉)，用「長度變成 before+1」
+		// 判斷不可靠；改判斷「最新一則」的內容，不受上限擠壓影響(同 coaches/page.test.ts
+		// 既有慣例：`get(toasts).at(-1)?.title`)。
+		await vi.waitFor(() => expect(get(toasts).at(-1)?.body).toContain('不符規則'));
 		expect(get(toasts).at(-1)?.tone).toBe('error');
-		expect(get(toasts).at(-1)?.body).toContain('不符規則');
 		expect(await findByText(TICKETS[0].name)).toBeInTheDocument(); // 原名稱仍在
 		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
 	});

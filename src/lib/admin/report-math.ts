@@ -113,6 +113,17 @@ export const REVENUE_SOURCE_LABEL: Record<
 	venue_rental: { label: '場地租借', color: '#EC4899' }
 };
 
+/** 容忍未知 source 的查表(income_sources_12m 的 source 是 groupIncomeSources() 攤平出
+ *  的純字串，非型別窄化過的 canonical 6 值)：查無 key → 中性灰 + 原字串穿透，不丟
+ *  例外(同 paymentMethodLabel／$lib/api/wire.ts orderStatusBadge 的容忍查表慣例)。
+ *  契約現為封閉 6 值，但若擴集，呼叫端(IncomeSources.svelte/ReportsScreen.svelte)靠
+ *  這支查表降級，不會在 REVENUE_SOURCE_LABEL[source] 直接索引時因 undefined 炸頁。 */
+export const revenueSourceLabel = (source: string): { label: string; color: string } =>
+	(REVENUE_SOURCE_LABEL as Record<string, { label: string; color: string } | undefined>)[source] ?? {
+		label: source,
+		color: 'var(--df-text-muted)'
+	};
+
 /** payment_split.method(應用層自由字串；契約僅列舉本輪已知值，NULL 已由後端轉
  *  "unknown")→ 中文標籤查表。 */
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {

@@ -186,7 +186,14 @@
     {/if}
   </div>
 
-  <CoachEditDialog coach={editing} open={editOpen} isNew={addNew} onClose={closeEdit} onSave={save} />
+  <CoachEditDialog
+    coach={editing}
+    open={editOpen}
+    isNew={addNew}
+    {pendingUserId}
+    onClose={closeEdit}
+    onSave={save}
+  />
 {:else if $gate === 'error'}
   <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
 {:else}

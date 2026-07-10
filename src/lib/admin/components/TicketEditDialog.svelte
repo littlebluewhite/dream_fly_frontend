@@ -56,7 +56,7 @@
       // 空白 = 不限（null）；否則 floor 於 1（0/NaN 會讓票券卡 ProgressBar 除以 0 → NaN%）。
       quota: quotaRaw === '' ? null : Math.max(1, parseInt(quotaRaw, 10) || 1)
     };
-    onSave(updated);
+    return onSave(updated);
   }
 </script>
 

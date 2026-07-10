@@ -41,7 +41,7 @@
     const body: UpdateMemberBody = { name: name.trim(), is_active: isActive };
     const trimmedPhone = phone.trim();
     if (trimmedPhone) body.phone = trimmedPhone;
-    onSave(member.id, body);
+    return onSave(member.id, body);
   }
 </script>
 

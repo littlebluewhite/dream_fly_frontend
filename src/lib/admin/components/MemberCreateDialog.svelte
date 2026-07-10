@@ -54,7 +54,7 @@
     const trimmedPhone = phone.trim();
     if (trimmedPhone) body.phone = trimmedPhone;
     if (birthDate) body.birth_date = birthDate;
-    onSave(body);
+    return onSave(body);
   }
 </script>
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import StatusBadge from './StatusBadge.svelte';
+import type { TicketType } from '$lib/admin/data';
 
 /* StatusBadge maps a (kind, value) pair onto the shared Badge, resolving tone +
  * label from the frozen $lib/admin/data status maps and applying the per-kind
@@ -72,5 +73,18 @@ describe('StatusBadge', () => {
 		expect(getByText('月票方案')).toBeInTheDocument();
 		expect(dot(container)).toBeNull();
 		expect(isSolid(container)).toBe(false);
+	});
+
+	/* Important #2(a)(終審)：product_type 契約若擴出第 4 值(admin/api.ts mapProduct
+	 * 的 `p.product_type as TicketType` 目前無法在編譯期擋下)，TICKET_TYPE 查表查無
+	 * 對應 key——降級為 neutral tone + 原字串標籤，不會 destructure 到 undefined 而
+	 * 讓整頁 crash。 */
+	it('ticket/未知值(契約若擴集) → 降級為 neutral tone + 原字串標籤，不會炸掉', () => {
+		const { container, getByText } = render(StatusBadge, {
+			kind: 'ticket',
+			value: 'gift_card' as TicketType
+		});
+		expect(getByText('gift_card')).toBeInTheDocument();
+		expect(dot(container)).toBeNull();
 	});
 });

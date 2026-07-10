@@ -30,6 +30,11 @@
   export let isNew = false;
   export let onClose: () => void = () => {};
   export let onSave: (values: CoachFormValues) => void = () => {};
+  /** 非 null＝新增流程第一步(createMember)已成功、第二步(createCoach)失敗待重試
+   *  （見呼叫端 coaches/+page.svelte 的 pendingUserId 註解）。此時鎖住 email/姓名——
+   *  重試只會重打 createCoach，不會回頭重打 createMember，這兩欄位這時候編輯了也是
+   *  靜默被忽略，鎖住比讓使用者誤以為改了會生效更誠實。 */
+  export let pendingUserId: string | null = null;
 
   // Local editable fields, reset whenever the coach prop changes — INCLUDING
   // coach → null on close — or when the dialog transitions to open (single-stage
@@ -77,7 +82,7 @@
       .split(/[、,，]/)
       .map((t) => t.trim())
       .filter(Boolean);
-    onSave({ email: email.trim(), password, name: name.trim(), title: trimmedTitle, tags, isActive });
+    return onSave({ email: email.trim(), password, name: name.trim(), title: trimmedTitle, tags, isActive });
   }
 </script>
 
@@ -92,9 +97,15 @@
 >
   <div style="display:flex;flex-direction:column;gap:14px">
     {#if isNew}
-      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" />
+      <Input
+        label="Email"
+        type="email"
+        bind:value={email}
+        placeholder="coach@example.com"
+        disabled={pendingUserId !== null}
+      />
     {/if}
-    <Input label="教練姓名" bind:value={name} />
+    <Input label="教練姓名" bind:value={name} disabled={pendingUserId !== null} />
     <Input label="職稱 / 專業" required error={titleError} bind:value={title} />
     <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
     {#if isNew}

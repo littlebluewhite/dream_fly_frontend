@@ -59,7 +59,7 @@
       active: isActive,
       expiresAt: expiresDate || '—'
     };
-    onSave(updated);
+    return onSave(updated);
   }
 </script>
 

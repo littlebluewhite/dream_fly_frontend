@@ -168,7 +168,7 @@ describe('教練團隊 — 新增/編輯接真 API（Task F5：兩步流程 POST
 		await vi.waitFor(() => expect(get(toasts).at(-1)?.body).toContain('Email 已被使用'));
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(createCoach).not.toHaveBeenCalled();
-		expect(getByText('建立教練')).toBeInTheDocument(); // 對話框仍開著
+		expect(await findByText('建立教練')).toBeInTheDocument(); // 對話框仍開著（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 		expect(getCoaches).toHaveBeenCalledTimes(1); // 失敗不刷新
 	});
 
@@ -193,7 +193,7 @@ describe('教練團隊 — 新增/編輯接真 API（Task F5：兩步流程 POST
 		await vi.waitFor(() => expect(get(toasts).at(-1)?.title).toBe('教練綁定失敗'));
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toContain('帳號「orphan@test.com」已建立');
-		expect(getByText('建立教練')).toBeInTheDocument(); // 對話框仍開著，可重試
+		expect(await findByText('建立教練')).toBeInTheDocument(); // 對話框仍開著，可重試（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 		expect(getCoaches).toHaveBeenCalledTimes(1); // 失敗不刷新
 		expect(createMember).toHaveBeenCalledTimes(1);
 		expect(createCoach).toHaveBeenCalledTimes(1);

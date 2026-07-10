@@ -154,7 +154,7 @@ describe('學員管理 — 新增學員（POST /users，Task 16）', () => {
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toBe('Email 已被使用'); // ApiError.message 直通，無二次改寫
 		expect(getMembers).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
-		expect(getByText('建立學員')).toBeInTheDocument(); // 對話框仍開著
+		expect(await findByText('建立學員')).toBeInTheDocument(); // 對話框仍開著（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 	});
 });
 

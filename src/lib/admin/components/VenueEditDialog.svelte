@@ -53,7 +53,7 @@
         .map((e) => e.trim())
         .filter(Boolean)
     };
-    onSave(updated);
+    return onSave(updated);
   }
 </script>
 

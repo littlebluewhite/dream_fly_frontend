@@ -16,7 +16,25 @@
   export let icon: string | undefined = undefined;
   export let primaryLabel = '儲存';
   export let onClose: () => void = () => {};
-  export let onSave: () => void = () => {};
+  export let onSave: () => void | Promise<void> = () => {};
+
+  // 防連點守衛(同 settings 頁 saving／CheckoutDialog paying 慣例)：onSave() 若回傳
+  // promise(五個真寫入呼叫端的 save() 皆為 async，見各 XxxEditDialog 的 `return
+  // onSave(...)`)，鎖住主按鈕直到 promise 落定，避免連點造成雙重送出。onSave 若同步
+  // 返回(如表單驗證失敗提早 return)則不鎖，不影響既有行為。
+  let busy = false;
+  async function handleSave() {
+    if (busy) return;
+    const result = onSave();
+    if (result instanceof Promise) {
+      busy = true;
+      try {
+        await result;
+      } finally {
+        busy = false;
+      }
+    }
+  }
 
   function onKey(e: KeyboardEvent) {
     if (open && e.key === 'Escape') onClose();
@@ -50,9 +68,9 @@
       <div class="body"><slot /></div>
       <div class="foot">
         <Button variant="secondary" on:click={onClose}>取消</Button>
-        <Button variant="primary" on:click={onSave}>
+        <Button variant="primary" on:click={handleSave} disabled={busy}>
           <Icon name="check" size={16} />
-          {primaryLabel}
+          {busy ? '處理中…' : primaryLabel}
         </Button>
       </div>
     </div>

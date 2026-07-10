@@ -169,7 +169,7 @@ describe('場館管理 — 新增/編輯接真 API（Task F4：POST/PATCH /venue
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toContain('slug');
 		expect(queryByText('重複場地')).toBeNull(); // 未進入列表
-		expect(getByText('建立場地')).toBeInTheDocument(); // 對話框仍開著，可修正重試
+		expect(await findByText('建立場地')).toBeInTheDocument(); // 對話框仍開著，可修正重試（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
 		expect(getVenues).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
 	});
 

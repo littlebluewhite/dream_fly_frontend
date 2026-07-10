@@ -40,6 +40,7 @@
     fmtHours,
     TIER_LABEL,
     REVENUE_SOURCE_LABEL,
+    revenueSourceLabel,
     paymentMethodLabel,
     WEEKDAY_LABEL,
     AGE_BUCKET_LABEL,
@@ -113,7 +114,7 @@
   $: topCourses = topCoursesFrom(data?.courses ?? []);
 
   $: incomeTotals = groupIncomeSources(data?.incomeSources12m ?? []).map((s) => ({
-    source: s.source as keyof typeof REVENUE_SOURCE_LABEL,
+    source: s.source,
     totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
   }));
   $: incomeShares = pctShares(incomeTotals.map((t) => t.totalCents));
@@ -269,10 +270,10 @@
           {#each incomeTotals as s, i (s.source)}
             <div>
               <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
-                <span style="color:var(--df-text-dark); font-weight:600;">{REVENUE_SOURCE_LABEL[s.source].label}</span>
+                <span style="color:var(--df-text-dark); font-weight:600;">{revenueSourceLabel(s.source).label}</span>
                 <span style="color:var(--df-text-light);"><b style="color:var(--df-text-dark); font-family:var(--df-font-mono);">{fmtNT(ntd(s.totalCents))}</b> · {fmtPct(incomeShares[i])}</span>
               </div>
-              <MiniBar value={incomeShares[i] * 100} tone={REVENUE_SOURCE_LABEL[s.source].color} height={7} />
+              <MiniBar value={incomeShares[i] * 100} tone={revenueSourceLabel(s.source).color} height={7} />
             </div>
           {/each}
           {#if incomeTotals.length === 0}
