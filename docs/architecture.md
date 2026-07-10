@@ -30,7 +30,11 @@ Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mob
 one exception to the single-file pattern: it's a pure barrel re-exporting 8 concern modules that live
 alongside it (`cart.ts`, `waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `checkout-sync.ts`,
 `notifications.ts`, `ui.ts`) — new store/function additions go in the owning module, never in the barrel
-file itself. Cross-surface shared code lives in: `lib/components/` (marketing/shared UI, plus the `ui/`
+file itself. Cross-surface shared code lives in: lib-root single-file pure modules
+(`checkout-math.ts`/`checkout-gate.ts`/`checkout-order.ts`/`load-gate.ts`/`hydration-gate.ts`, joined
+2026-07-11 by `cart-item.ts` — the `CartItem` types + `courseToCartItem`/`passToCartItem` adapters lifted
+out of `member/data.ts` so member/mobile/public routes stop reaching into a surface facade for them),
+`lib/components/` (marketing/shared UI, plus the `ui/`
 and `mobile/` shelves below), `lib/data/` (marketing seed + nav config), `lib/domain/` (single-source
 seed feeding several facades —
 see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `toasts.ts` /
@@ -105,6 +109,10 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   `localStorage` key is gone. Per ADR 0001 the two remain independent products.
 - **Waitlist guard:** a full course (`spots: 0`) is blocked from the paid cart and routed to 候補
   (waitlist) — see the `AddResult = 'added' | 'bumped' | 'waitlisted'` add path in member stores.
+  Since 2026-07-11 mobile's cart takes the same shape: `add()` only returns `'waitlisted'` and the
+  three call sites `await joinWaitlist()` against the real `/waitlist` endpoint (the old in-memory
+  mobile-only waitlist array is gone), so a mobile 候補 is the same server row the desktop
+  member/mine card shows.
 - **Staff role switch:** `lib/staff/roles.ts` maps admin↔coach and remembers the last role in
   `df_staff_last_role` — a local UI convenience, independent of the real role check at staff login.
 
@@ -128,7 +136,12 @@ only where the mobile shape diverges, with their own small residual mock spots (
 inlined the same direct way. Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, display atoms like
 `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
-redeclaring its own copy (`docs/adr/0007`).
+redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` re-exports
+`OrderStatus`/`ORDER_STATUS` from wire instead of holding verbatim copies, and its two dynamic badge
+lookups use wire's `orderStatusBadge` fallback). Error-toast plumbing is single-sourced the same way:
+`src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never
+leaks the backend message) replaced 22 per-page inline mappers, each call site keeping its own 1-4-line
+entity text table (`docs/adr/0011`).
 Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
 variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
 `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
@@ -145,7 +158,9 @@ override `slot="error"` with a bare `ErrorState` because they already sit inside
 `gate.refresh()` always re-fetching for `ErrorState`'s retry regardless of the guard — but the guard's
 ownership differs by surface. Member/mobile notifications are page-owned: the store write happens in the
 gate's `onData`, and the gate's own `generation`/`destroyed` bookkeeping (no page-local flag needed any
-more) discards a response that resolves after the page unmounts. Mobile-admin's ops collections and
+more) discards a response that resolves after the page unmounts (member's read-state *mutations* —
+`markRead`/`markAllRead`, optimistic update + PATCH + `markMutated()` — live in `member/notifications.ts`
+since 2026-07-11; the page keeps only the toast). Mobile-admin's ops collections and
 messages are store-owned: the write lives in `stores.ts`'s `hydrateOps`/`hydrateMessages`, which the gate
 calls directly as `fetch`/`refresh` — the gate's own bookkeeping protects only the page's local phase,
 never the shared store; store-write protection instead comes from the `*Hydrated` guard itself, which
@@ -157,8 +172,10 @@ Task 20 moved class/member writes and Round 4's Task F5 moved coach writes to th
 refetch, bypassing `markMutated()` entirely). That store-owned guard + post-await re-check
 protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate.ts`'s
 `createHydrationGate` (`hydrate`/`refresh`/`markMutated`), which `mobile-admin/stores.ts`'s
-`hydrateOps`/`hydrateMessages` build on; `member/notifications.ts`'s `refreshNotifications()` isn't wired
-to the factory but hand-carries the same one-line post-await re-check. Layout shells stay outside the seam
+`hydrateOps`/`hydrateMessages` build on; since 2026-07-11 `member/notifications.ts` is the factory's
+second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
+own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
+unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
