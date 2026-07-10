@@ -8,11 +8,6 @@ import { CAMPUSES, ENROLL_SOURCES } from './shared';
 import { VENUES } from './venues';
 import { TICKETS } from './tickets';
 import { ACTIVITY } from './activity';
-import {
-	CATEGORY_SPLIT, TOP_COURSES, VENUE_USAGE,
-	ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE, PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST,
-	INCOME_SOURCES, COACH_PERF
-} from './reports';
 
 /* ── row-count canaries ── */
 describe('row counts', () => {
@@ -119,19 +114,6 @@ describe('new dataset row counts', () => {
 	it('VENUES has 6 rows', () => expect(VENUES).toHaveLength(6));
 	it('TICKETS has 6 rows', () => expect(TICKETS).toHaveLength(6));
 	it('ACTIVITY has 8 rows', () => expect(ACTIVITY).toHaveLength(8));
-	it('CATEGORY_SPLIT has 4 rows', () => expect(CATEGORY_SPLIT).toHaveLength(4));
-	it('TOP_COURSES has 5 rows', () => expect(TOP_COURSES).toHaveLength(5));
-	it('VENUE_USAGE has 6 rows', () => expect(VENUE_USAGE).toHaveLength(6));
-	it('ATT_DIST has 4 rows', () => expect(ATT_DIST).toHaveLength(4));
-	it('RETENTION has 6 rows', () => expect(RETENTION).toHaveLength(6));
-	it('AGE_DIST has 4 rows', () => expect(AGE_DIST).toHaveLength(4));
-	it('CAMPUS_REVENUE has 3 rows', () => expect(CAMPUS_REVENUE).toHaveLength(3));
-	it('PAYMENT_SPLIT has 5 rows', () => expect(PAYMENT_SPLIT).toHaveLength(5));
-	it('FUNNEL has 4 rows', () => expect(FUNNEL).toHaveLength(4));
-	it('WEEKDAY_LOAD has 7 rows', () => expect(WEEKDAY_LOAD).toHaveLength(7));
-	it('TIER_DIST has 4 rows', () => expect(TIER_DIST).toHaveLength(4));
-	it('INCOME_SOURCES has 4 rows', () => expect(INCOME_SOURCES).toHaveLength(4));
-	it('COACH_PERF has 7 rows', () => expect(COACH_PERF).toHaveLength(7));
 });
 
 /* ── new dataset id uniqueness ── */
@@ -162,9 +144,7 @@ describe('new dataset enum membership', () => {
 /* ── new datasets non-empty ── */
 describe('new datasets non-empty', () => {
 	it('all new arrays are non-empty', () => {
-		for (const arr of [VENUES, TICKETS, ACTIVITY, CATEGORY_SPLIT, TOP_COURSES,
-			VENUE_USAGE, ATT_DIST, RETENTION, AGE_DIST, CAMPUS_REVENUE,
-			PAYMENT_SPLIT, FUNNEL, WEEKDAY_LOAD, TIER_DIST, INCOME_SOURCES, COACH_PERF]) {
+		for (const arr of [VENUES, TICKETS, ACTIVITY]) {
 			expect(arr.length).toBeGreaterThan(0);
 		}
 	});

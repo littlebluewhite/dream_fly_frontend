@@ -31,7 +31,8 @@ import {
 	type UpdateMemberBody,
 	type CoachWriteBody,
 	type SettingsData,
-	type SettingsWriteBody
+	type SettingsWriteBody,
+	type ReportsData
 } from '$lib/admin/api';
 import type { CoachFormValues, TodayClass } from '$lib/admin/data';
 import {
@@ -78,13 +79,20 @@ export type {
 	CoachWriteBody,
 	CoachFormValues,
 	SettingsData,
-	SettingsWriteBody
+	SettingsWriteBody,
+	ReportsData
 };
 export { createCourse, updateCourse, mapCourse, createMember, updateMember, createCoach, updateCoach, updateOrderStatus };
 // getSettings/putSettings(GET/PUT /settings，Task F9)——桌面與行動版系統設定畫面
 // 消費完全相同的欄位形狀(場館資訊/通知與自動化/帳號與安全)，零映射，直接重新匯出
 // 桌面 admin/api.ts 的實作(同 createCourse 等零映射寫入端點的既有慣例)。
 export { getSettings, putSettings };
+// getReports(GET /reports/admin，Task P4-F3)——mobile-admin 報表分析畫面與桌面消費
+// 完全相同的 ReportsData 形狀(revenue/kpis/各段彙總/courses/coaches)，零映射，直接
+// 重新匯出桌面 admin/api.ts 的實作(同 getSettings/putSettings 零映射既有慣例)。
+// getAdminHome() 下方已用別名 adminGetReports 內部呼叫同一支函式取兩項首頁 KPI；
+// 這裡另外以 getReports 之名重新匯出供 ReportsScreen.svelte 使用。
+export const getReports = adminGetReports;
 // createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
 // 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
 // 假裝有接這個功能。

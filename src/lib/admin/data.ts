@@ -53,8 +53,9 @@ export type { Activity } from '$lib/domain/activity';
 // Task 15: admin's report analytics (getReports()) now maps GET /reports/admin
 // (integration-contract.md §3.24) instead of this mock seed — the re-export of
 // domain/reports.ts's 13 arrays/types was dropped here (nothing in admin/ imports
-// them anymore). domain/reports.ts itself is untouched — mobile-admin/data.ts still
-// re-exports it independently for the mobile-admin surface (still mock, out of scope).
+// them anymore). Task P4-F3: mobile-admin/data.ts's own re-export of it (the last
+// remaining consumer) was retired the same way once ReportsScreen.svelte wired to
+// real data — domain/reports.ts itself is now `git rm`'d, no surface still uses it.
 
 // Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).
 import { CLASSES_BASE, type ClassBase } from '$lib/domain/classes';

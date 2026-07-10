@@ -23,24 +23,10 @@ export const fmtK = (n: number): string =>
 export { COACHES, type Coach } from '$lib/domain/coaches';
 export { VENUES, type Venue } from '$lib/domain/venues';
 export { TICKETS, type Ticket } from '$lib/domain/tickets';
-export { ACTIVITY, type Activity } from '$lib/domain/activity';
-export {
-	CATEGORY_SPLIT,
-	TOP_COURSES,
-	VENUE_USAGE,
-	ATT_DIST,
-	RETENTION,
-	AGE_DIST,
-	CAMPUS_REVENUE,
-	PAYMENT_SPLIT,
-	FUNNEL,
-	WEEKDAY_LOAD,
-	TIER_DIST,
-	INCOME_SOURCES,
-	COACH_PERF
-} from '$lib/domain/reports';
-// `Split` was mobile's name for the percentage-split row type on `main` — preserve it as an alias.
-export type { PctSlice as Split } from '$lib/domain/reports';
+// Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(見
+// $lib/mobile-admin/api 的 getReports() 零映射 re-export)——domain/reports.ts 的
+// 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
+// 已無任何消費者，domain/reports.ts 本身隨此任務一併 `git rm`。
 
 // Base arrays consumed by the `.map` derivations that STAY in mobile (import, not re-export).
 import { CLASSES_BASE } from '$lib/domain/classes';
@@ -189,13 +175,10 @@ export interface TodayRow {
 	label: string;
 	taken?: boolean;
 }
-export const TODAY: TodayRow[] = [
-	{ time: '10:00', name: '幼兒體操 啟蒙班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, tone: 'neutral', label: '已結束' },
-	{ time: '16:00', name: '親子體操 同樂班', coach: '黃詩涵', room: 'C 軟墊區', count: 5, tone: 'info', label: '備課中' },
-	{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, tone: 'success', label: '進行中' },
-	{ time: '19:00', name: '競技啦啦隊 進階班', coach: '林雅婷', room: 'A 訓練館', count: 11, tone: 'warning', label: '即將開始' },
-	{ time: '20:00', name: '成人體操 基礎班', coach: '王思齊', room: 'A 訓練館', count: 9, tone: 'neutral', label: '尚未開始' }
-];
+// Task P4-F3：TODAY mock 退役(F11 已把 mobile-admin getAdminHome() 的今日課表改讀真
+// GET /sessions/today admin 分支——見 $lib/mobile-admin/api getAdminHome()，唯一消費者
+// 早已改吃 payload，此常數自 F11 起無 production 引用)。TodayRow 型別(下方 COACH_TODAY
+// 與 api.ts 的映射函式仍在用)維持不動。
 export const COACH_TODAY: TodayRow[] = [
 	{ time: '17:00', name: '競技體操 選手班', room: 'A 訓練館', count: 12, tone: 'success', label: '進行中', taken: true },
 	{ time: '19:00', name: '競技啦啦隊 進階班', room: 'A 訓練館', count: 11, tone: 'warning', label: '即將開始', taken: false }
@@ -250,8 +233,10 @@ export const MESSAGES: MessageRow[] = [
 ];
 
 /* ---- Activity feed ---- */
-// `ACTIVITY` + `type Activity` are re-exported from `$lib/domain/activity` (top of
-// file). Keep the original `ActivityRow` name as an alias for the public API.
+// Task P4-F3：ACTIVITY mock 退役(F11 已把 mobile-admin getAdminHome() 的最新動態改讀
+// 真 GET /reports/admin/activity——見 $lib/mobile-admin/api getAdminHome()，唯一消費者
+// 早已改吃 payload，此值與其 `Activity` 型別重新匯出自 F11 起無 production 引用)。
+// ActivityRow(下方 api.ts 仍在用的型別別名)只做型別匯入 + 更名，不再連帶匯出 mock 值。
 import type { Activity as ActivityRowType } from '$lib/domain/activity';
 export type ActivityRow = ActivityRowType;
 
@@ -286,37 +271,10 @@ export const MEMBER_STATUS: Record<MemberAccountStatus, Tone> = {
 export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
 export const STATUS_TONE: Record<string, string> = { 招生中: 'success', 候補: 'warning', 額滿: 'neutral' };
 
-/* ===== 報表分析 data ===== */
-export interface Kpi {
-	icon: string;
-	label: string;
-	value: string;
-	delta: string;
-	up: boolean;
-	tint: string;
-	color: string;
-}
-export const REPORT_KPIS: Kpi[] = [
-	{ icon: 'dollar-sign', label: '本月營收', value: 'NT$458K', delta: '+12.5%', up: true, tint: 'var(--df-primary-bg)', color: 'var(--df-primary)' },
-	{ icon: 'book-open', label: '課程報名', value: '142', delta: '+8.3%', up: true, tint: 'var(--df-success-bg)', color: '#10B981' },
-	{ icon: 'user-plus', label: '新增會員', value: '86', delta: '+24.8%', up: true, tint: '#FFF3D6', color: '#F59E0B' },
-	{ icon: 'ticket', label: '票券銷售', value: '234', delta: '+18.7%', up: true, tint: '#F3EEFE', color: '#8B5CF6' },
-	{ icon: 'repeat', label: '會員留存率', value: '88.4%', delta: '+3.1%', up: true, tint: '#E0F2FE', color: '#0EA5E9' },
-	{ icon: 'calendar-check', label: '平均出席率', value: '91.2%', delta: '+1.4%', up: true, tint: 'var(--df-success-bg)', color: '#10B981' }
-];
-export const REVENUE_TREND: { m: string; h: number; peak?: boolean }[] = [
-	{ m: '1', h: 102 }, { m: '2', h: 112 }, { m: '3', h: 107 }, { m: '4', h: 121 },
-	{ m: '5', h: 128 }, { m: '6', h: 138 }, { m: '7', h: 133 }, { m: '8', h: 144 },
-	{ m: '9', h: 151 }, { m: '10', h: 160, peak: true }, { m: '11', h: 148 }, { m: '12', h: 156 }
-];
-
-/* revenue-source drill-down */
-export const REVENUE_TOTAL = 'NT$458,200';
-export const REVENUE_BREAKDOWN: { name: string; meta: string; amount: string; drill: string; dot: string }[] = [
-	{ name: '課程報名訂單', meta: '142 筆 · 平均客單 NT$2,197', amount: 'NT$312,000', drill: '班級／訂單', dot: 'var(--df-primary)' },
-	{ name: '票券銷售', meta: '234 張 · 月票 / 體驗券 / 比賽票', amount: 'NT$98,400', drill: '票券來源', dot: '#8B5CF6' },
-	{ name: '裝備與週邊', meta: '86 筆 · 護具 / 隊服', amount: 'NT$47,800', drill: '訂單明細', dot: 'var(--df-warning)' }
-];
+// Task P4-F3：報表分析 mock 全面退役——KPI 卡(REPORT_KPIS/Kpi)、營收趨勢
+// (REVENUE_TREND)、本月營收來源拆解(REVENUE_TOTAL/REVENUE_BREAKDOWN)原本這裡的三組
+// 常數，隨 ReportsScreen.svelte 接真 GET /reports/admin 一併移除(唯一消費者已改吃
+// getReports() payload；見 $lib/mobile-admin/api 的 getReports() 與 report-math.ts)。
 
 /* ===== 場館管理 data ===== */
 // `Venue` + `VENUES` are re-exported from `$lib/domain/venues` (top of file).
