@@ -10,8 +10,7 @@
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getNotifications } from '$lib/member/api';
-  import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
-  import { api } from '$lib/api/client';
+  import { notifications, notificationsHydrated, markRead, markAllRead, toasts } from '$lib/member/stores';
 
   let cat = 'all';
 
@@ -31,27 +30,12 @@
   const countOf = (c: string) =>
     c === 'all' ? $notifications.length : $notifications.filter((n) => n.cat === c).length;
 
-  // 樂觀更新本地 store,再送 PATCH 到後端;失敗只記錄錯誤、不還原(避免使用者感覺
-  // 「點了又跳回未讀」的閃爍)。markAll 的後端同步策略見其上方註解。
-  const markRead = (id: string) => {
-    notifications.update((p) => p.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    api(`/notifications/${id}/read`, { method: 'PATCH' }).catch((err) => {
-      console.error('Failed to mark notification as read:', err);
-    });
-  };
-  // 全部已讀:同 markRead 的樂觀更新,但後端只有單筆 PATCH 端點(無批次已讀),
-  // 對每個「目前未讀」的 id 各發一次(allSettled 併發;已讀的不重發)。全部成功才報
-  // 成功;任何失敗改報「部分通知標記失敗」——本地已讀狀態一律不還原(與 markRead
-  // 的不閃爍原則一致;成功的那些後端已落地,失敗的重新整理後會恢復未讀)。
+  // 已讀 mutation 收進 $lib/member/notifications 模組(C1；markRead/markAllRead)
+  // ——樂觀更新、後端同步、併發判定的邏輯全部在模組裡(見該模組註解)，頁面只負責
+  // 依回傳值顯示既有 toast 文案。
   const markAll = async () => {
-    const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
-    notifications.update((p) => p.map((n) => ({ ...n, read: true })));
-    const results = await Promise.allSettled(
-      unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
-    );
-    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-    if (failures.length > 0) {
-      failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
+    const result = await markAllRead();
+    if (result === 'partial') {
       toasts.notify('error', '部分通知標記失敗', '部分通知未能同步已讀狀態，請稍後重新整理。');
     } else {
       toasts.notify('success', '已全部標為已讀', '通知中心已清空未讀。');

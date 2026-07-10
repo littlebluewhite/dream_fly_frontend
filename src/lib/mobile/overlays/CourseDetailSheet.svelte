@@ -1,6 +1,7 @@
 <script lang="ts">
   /* 課程介紹 sheet。mobile/home.jsx CourseDetailSheet (201-242)。
-   * 加入購物車 → cart.add + toast，然後 onClose。候補（spots 0）走加入候補名單文案。 */
+   * 加入購物車 → cart.add + toast，然後 onClose。候補（spots 0）走加入候補名單文案，
+   * 並改呼叫 joinWaitlist() 真的登記候補(C8，Round 2 批次甲——見 $lib/member/waitlist)。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import LevelBadge from '$lib/mobile/components/LevelBadge.svelte';
@@ -8,6 +9,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { cart, toasts, type CartInput } from '$lib/mobile/stores';
+  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
   import { fmtNT, type Course } from '$lib/mobile/data';
 
   export let onClose: () => void;
@@ -25,10 +27,19 @@
       ] as [string, string, string][])
     : [];
 
-  function add() {
+  async function add() {
     if (!c) return;
     const r = cart.add(c as CartInput);
-    toasts.notify(r === 'waitlisted' ? 'info' : 'success', r === 'waitlisted' ? '已加入候補名單' : '已加入購物車', c.name);
+    if (r === 'waitlisted') {
+      try {
+        await joinWaitlist(c.id);
+        toasts.notify('info', '已加入候補名單', c.name);
+      } catch (err) {
+        toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
+      }
+    } else {
+      toasts.notify('success', '已加入購物車', c.name);
+    }
     onClose();
   }
 </script>

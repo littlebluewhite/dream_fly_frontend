@@ -132,7 +132,6 @@ describe('cart waitlist guard', () => {
 		const r = c.add(fullCourse);
 		expect(r).toBe('waitlisted');
 		expect(get(c)).toHaveLength(0); // never enters the paid cart
-		expect(get(c.waitlist)).toContain('k9'); // registered for waitlist
 	});
 
 	it('adds a course that still has spots to the paid cart and returns "added"', () => {
@@ -140,14 +139,12 @@ describe('cart waitlist guard', () => {
 		const r = c.add({ id: 'k1', name: '競技啦啦隊 進階班', price: 4800, spots: 1 });
 		expect(r).toBe('added');
 		expect(get(c)).toHaveLength(1);
-		expect(get(c.waitlist)).toHaveLength(0);
 	});
 
-	it('keeps the waitlist idempotent when the same full course is added twice', () => {
+	it('reports "waitlisted" on every add of a full course — no local list to dedup; the caller\'s joinWaitlist() call now owns idempotency via the backend 409 (C8)', () => {
 		const c = createCart();
-		c.add(fullCourse);
-		c.add(fullCourse);
-		expect(get(c.waitlist)).toEqual(['k9']); // recorded once
+		expect(c.add(fullCourse)).toBe('waitlisted');
+		expect(c.add(fullCourse)).toBe('waitlisted');
 		expect(get(c)).toHaveLength(0); // still never in the paid cart
 	});
 });

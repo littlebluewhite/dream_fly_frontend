@@ -18,6 +18,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type MobileCoursesData } from '$lib/mobile/api';
   import { overlay, cart, toasts } from '$lib/mobile/stores';
+  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
 
   /* category taxonomy — home.jsx CATS (6-13). */
   const CATS: { key: string; label: string; icon: string }[] = [
@@ -49,13 +50,18 @@
       (!q || (c.name + c.cat + c.coach).toLowerCase().includes(q.toLowerCase()))
   );
 
-  function addToCart(c: Course) {
+  async function addToCart(c: Course) {
     const r = cart.add(c);
-    toasts.notify(
-      r === 'waitlisted' ? 'info' : 'success',
-      r === 'waitlisted' ? '已加入候補' : '已加入購物車',
-      c.name
-    );
+    if (r === 'waitlisted') {
+      try {
+        await joinWaitlist(c.id);
+        toasts.notify('info', '已加入候補', c.name);
+      } catch (err) {
+        toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
+      }
+      return;
+    }
+    toasts.notify('success', '已加入購物車', c.name);
   }
 </script>
 

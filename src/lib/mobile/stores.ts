@@ -49,24 +49,22 @@ export interface CartInput {
 export interface CartLine extends CartInput {
 	qty: number;
 }
-/** add() records a full course (spots 0) on the waitlist instead of adding it to
- *  the paid cart. A repeat add of a course already in the cart is a no-op that
- *  reports 'bumped' — a course is an enrolment, not a quantity, so it never
- *  accumulates qty (mirrors member cart's addItem; see CONTEXT.md 報名). There
- *  is no updateQty(): with courses as the only line type, an increment/decrement
- *  control would have nothing legitimate to do (matches member cart's course
- *  qty lock — see its updateQty doc). */
+/** A full course (spots 0) never enters the paid cart — add() just reports
+ *  'waitlisted'; the caller is expected to call joinWaitlist() itself (C8,
+ *  Round 2 批次甲：mobile 候補改接 server seam，mirrors member/cart.ts's addItem —
+ *  see routes/member/courses/+page.svelte). A repeat add of a course already in
+ *  the cart is a no-op that reports 'bumped' — a course is an enrolment, not a
+ *  quantity, so it never accumulates qty (mirrors member cart's addItem; see
+ *  CONTEXT.md 報名). There is no updateQty(): with courses as the only line
+ *  type, an increment/decrement control would have nothing legitimate to do
+ *  (matches member cart's course qty lock — see its updateQty doc). */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';
 export function createCart() {
 	const { subscribe, update, set } = writable<CartLine[]>([]);
-	// 候補登記:額滿(spots 0)課程不進付費購物車,改記在此(去重、冪等)。
-	const waitlist = writable<(string | number)[]>([]);
 	return {
 		subscribe,
-		waitlist,
 		add(course: CartInput): AddResult {
 			if (course.spots === 0) {
-				waitlist.update((ids) => (ids.includes(course.id) ? ids : [...ids, course.id]));
 				return 'waitlisted';
 			}
 			let result: AddResult = 'added';

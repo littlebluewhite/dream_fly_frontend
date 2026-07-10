@@ -25,6 +25,7 @@
   import { getHome, type MobileHomeData } from '$lib/mobile/api';
   import { overlay, cart, toasts, unread } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
+  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
 
   /* category taxonomy — home.jsx CATS (6-13). */
   const CATS: { key: string; label: string; icon: string }[] = [
@@ -60,13 +61,18 @@
   $: next = myCourses[0]?.next ? myCourses[0] : undefined;
   $: [nextDay, nextTime] = next ? next.next.split(' ') : ['', ''];
 
-  function addToCart(c: Course) {
+  async function addToCart(c: Course) {
     const r = cart.add(c);
-    toasts.notify(
-      r === 'waitlisted' ? 'info' : 'success',
-      r === 'waitlisted' ? '已加入候補' : '已加入購物車',
-      c.name
-    );
+    if (r === 'waitlisted') {
+      try {
+        await joinWaitlist(c.id);
+        toasts.notify('info', '已加入候補', c.name);
+      } catch (err) {
+        toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
+      }
+      return;
+    }
+    toasts.notify('success', '已加入購物車', c.name);
   }
 </script>
 
