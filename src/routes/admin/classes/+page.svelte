@@ -30,7 +30,7 @@
   import { search, toasts } from '$lib/admin/stores';
   import { CATS, type ClassRow, type Coach } from '$lib/admin/data';
   import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   // Blank班級 for the 新增 flow (ported from admin.jsx blankClass, enriched with
   // the ClassRow-only fields the detail view reads). Takes `coaches` as a
@@ -106,12 +106,11 @@
   // 422 驗證 / 403 權限 / 409 衝突（如同名課程 slug 撞號）→ 對應的繁中錯誤提示；
   // 其餘（連線問題等）給通用訊息，同 coach/+page.svelte 的 ApiError 判斷慣例。
   function courseErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-      if (e.status === 409) return '課程名稱或代碼已存在，請調整後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      422: '輸入資料不符規則，請確認後再試。',
+      403: '沒有權限執行此操作。',
+      409: '課程名稱或代碼已存在，請調整後再試。'
+    });
   }
 
   async function save(updated: ClassRow, durationMinutes: number) {

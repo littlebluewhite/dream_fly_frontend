@@ -43,7 +43,7 @@
     type CreateMemberBody,
     type UpdateMemberBody
   } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
 
   let showFilter = false;
 
@@ -71,15 +71,11 @@
 
   // 409（email 重複）/ 422（驗證）皆已是後端給的 繁中 使用者可讀文字，直接透傳
   // e.message，不像 courses/coupons 頁那樣另建 status→自訂文案的對照表。
-  function memberErrorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
-
   async function create(body: CreateMemberBody) {
     try {
       await createMember(body);
     } catch (e) {
-      toasts.notify('error', '新增失敗', memberErrorMessage(e));
+      toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;
     }
     createOpen = false;
@@ -91,7 +87,7 @@
     try {
       await updateMember(id, body);
     } catch (e) {
-      toasts.notify('error', '儲存失敗', memberErrorMessage(e));
+      toasts.notify('error', '儲存失敗', apiErrorMessage(e));
       return;
     }
     closeEdit();

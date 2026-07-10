@@ -26,7 +26,7 @@
   import { fmtNT } from '$lib/admin/format';
   import { countByStatus, paidRevenue, applyStatusChange } from '$lib/admin/components/orders-filter';
   import { getOrders, updateOrderStatus } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   // Single source of truth for the orders surface: both the summary KPIs and the
   // table derive from this mutable copy, so 變更狀態 keeps the StatCards in sync
@@ -46,11 +46,10 @@
   // 400（非法轉換，理論上不會發生——OrderDialog 只提供合法選項）/ 403 權限 →
   // 對應繁中提示；其餘（連線問題等）給通用訊息，同 classes 頁的 ApiError 判斷慣例。
   function statusErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 400) return '狀態轉換不合法，請重新整理後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      400: '狀態轉換不合法，請重新整理後再試。',
+      403: '沒有權限執行此操作。'
+    });
   }
 
   async function changeStatus(o: Order, next: OrderStatus) {

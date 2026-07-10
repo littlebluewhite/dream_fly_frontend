@@ -31,7 +31,7 @@
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
   import { getTickets, createProduct, updateProduct, type ProductWriteBody } from '$lib/admin/api';
   import { toCents } from '$lib/public/adapters';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   const notify = toasts.notify;
 
@@ -96,12 +96,11 @@
   // 422 驗證 / 403 權限 / 409 衝突（如同名方案 slug 撞號）→ 對應的繁中錯誤提示；
   // 其餘（連線問題等）給通用訊息，同 classes/coupons 頁的 ApiError 判斷慣例。
   function productErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-      if (e.status === 409) return '票券名稱或代碼已存在，請調整後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      422: '輸入資料不符規則，請確認後再試。',
+      403: '沒有權限執行此操作。',
+      409: '票券名稱或代碼已存在，請調整後再試。'
+    });
   }
 
   async function save(updated: Ticket) {

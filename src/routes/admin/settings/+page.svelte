@@ -23,7 +23,7 @@
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, putSettings, type SettingsWriteBody } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   let name = '';
   let phone = '';
@@ -63,8 +63,7 @@
   });
 
   function settingsErrorMessage(e: unknown): string {
-    if (e instanceof ApiError && e.status === 403) return '沒有權限執行此操作。';
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, { 403: '沒有權限執行此操作。' });
   }
 
   async function save() {

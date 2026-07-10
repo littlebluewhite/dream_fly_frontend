@@ -10,7 +10,7 @@
   import { getPendingLeaveRequests, decideLeaveRequest } from '$lib/coach/api';
   import type { CoachLeaveRequest } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -33,15 +33,6 @@
     gate.load();
   });
 
-  /** PATCH /leave-requests/{id} 的錯誤分支(§3.20：404/403/409/422)——這個後端模組
-   *  (dream_fly_backend/src/modules/leave/service.rs)的錯誤字串本身就是繁中，
-   *  直接透傳即可(同 member/stores.ts 的 leaveRequestErrorMessage 慣例，不需要
-   *  另外的英文子字串對照表)。 */
-  function decisionErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) return e.message;
-    return '連線發生問題，請稍後再試。';
-  }
-
   async function decide(r: CoachLeaveRequest, status: 'approved' | 'rejected') {
     if (decidingId) return;
     decidingId = r.id;
@@ -55,7 +46,11 @@
         r.user_name + ' · ' + r.course_name
       );
     } catch (err) {
-      toasts.notify('error', '審核失敗', decisionErrorMessage(err));
+      // PATCH /leave-requests/{id} 的錯誤分支(§3.20：404/403/409/422)——這個後端模組
+      // (dream_fly_backend/src/modules/leave/service.rs)的錯誤字串本身就是繁中，
+      // 直接透傳即可(apiErrorMessage，同 member/stores.ts 的 leaveRequestErrorMessage
+      // 慣例，不需要另外的英文子字串對照表)。
+      toasts.notify('error', '審核失敗', apiErrorMessage(err));
     } finally {
       decidingId = null;
     }

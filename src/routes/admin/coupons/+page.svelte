@@ -18,20 +18,12 @@
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
+  import { buildCreateCouponBody, buildUpdateCouponBody } from '$lib/admin/components/coupon-request';
   import { fmtNT } from '$lib/admin/format';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
-  import {
-    getCoupons,
-    createCoupon,
-    updateCoupon,
-    deleteCoupon,
-    type Coupon,
-    type CreateCouponBody,
-    type UpdateCouponBody
-  } from '$lib/admin/api';
-  import { toCents } from '$lib/public/adapters';
-  import { ApiError } from '$lib/api/client';
+  import { getCoupons, createCoupon, updateCoupon, deleteCoupon, type Coupon } from '$lib/admin/api';
+  import { apiErrorText } from '$lib/api/error-text';
 
   // Blank 優惠碼 for the 新增 flow (mirrors tickets/venues 頁 blankTicket/blankVenue)。
   const blankCoupon = (): Coupon => ({ id: '', code: '', discount: 0, active: true, expiresAt: '—' });
@@ -69,32 +61,12 @@
   // 409（代碼重複）/ 422 驗證 / 403 權限 / 404（操作當下代碼已被別處刪除）→ 對應的
   // 繁中錯誤提示；其餘給通用訊息，同 tickets/venues 頁的 ApiError 判斷慣例。
   function couponErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 409) return '此優惠碼代碼已存在，請換一組代碼。';
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-      if (e.status === 404) return '此優惠碼已不存在，請重新整理列表。';
-    }
-    return '連線發生問題，請稍後再試。';
-  }
-
-  // Coupon（表單形狀）→ POST /coupons：code 不可省略；expires_at 留白（'—'）就整個
-  // 欄位省略（JSON.stringify 略過 undefined），對應「永不過期」。
-  function buildCreateCouponBody(c: Coupon): CreateCouponBody {
-    const body: CreateCouponBody = { code: c.code.trim(), discount_cents: toCents(c.discount) };
-    if (c.expiresAt !== '—') body.expires_at = `${c.expiresAt}T23:59:59Z`;
-    return body;
-  }
-
-  // Coupon（表單形狀）→ PATCH /coupons/{id}：全量送出 discount_cents/is_active/
-  // expires_at 三欄（同全量 resend 慣例，見 admin/api.ts updateCoupon 註解）；
-  // expiresAt 為 '—'（清空）明確送 null，讓後端把到期日清成永久有效。
-  function buildUpdateCouponBody(c: Coupon): UpdateCouponBody {
-    return {
-      discount_cents: toCents(c.discount),
-      is_active: c.active,
-      expires_at: c.expiresAt === '—' ? null : `${c.expiresAt}T23:59:59Z`
-    };
+    return apiErrorText(e, {
+      409: '此優惠碼代碼已存在，請換一組代碼。',
+      422: '輸入資料不符規則，請確認後再試。',
+      403: '沒有權限執行此操作。',
+      404: '此優惠碼已不存在，請重新整理列表。'
+    });
   }
 
   async function save(updated: Coupon) {

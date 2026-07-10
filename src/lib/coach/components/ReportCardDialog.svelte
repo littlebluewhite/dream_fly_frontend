@@ -16,7 +16,7 @@
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import { createReportCard, type CreateReportCardBody } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
   import type { Student } from '$lib/coach/data';
 
   export let open = false;
@@ -53,14 +53,6 @@
 
   $: valid = !!enrolmentId && termLabel.trim() !== '' && comment.trim() !== '';
 
-  /** 後端(leave/certificates/report-cards 模組)錯誤字串本身即繁中(409「此期別已建立
-   *  過成績單」、403「非本課教練」、422 欄位驗證)，直接透傳，同 CertificateDialog
-   *  慣例。 */
-  function reportCardErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) return e.message;
-    return '連線發生問題，請稍後再試。';
-  }
-
   async function submit() {
     if (!student || !valid || submitting) return;
     submitting = true;
@@ -75,7 +67,10 @@
       toasts.notify('success', '已建立成績單', `${student.name} · ${termLabel.trim()}`);
       onClose();
     } catch (e) {
-      toasts.notify('error', '成績單建立失敗', reportCardErrorMessage(e));
+      // 後端(leave/certificates/report-cards 模組)錯誤字串本身即繁中(409「此期別已
+      // 建立過成績單」、403「非本課教練」、422 欄位驗證)，直接透傳(apiErrorMessage)，
+      // 同 CertificateDialog 慣例。
+      toasts.notify('error', '成績單建立失敗', apiErrorMessage(e));
     } finally {
       submitting = false;
     }

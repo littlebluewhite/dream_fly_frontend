@@ -32,7 +32,7 @@
   import type { Conversation, Student, ThreadMsg } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
   import { toasts, search } from '$lib/coach/stores';
 
   /* ── state (legacy, no runes) ── */
@@ -111,11 +111,6 @@
 
   function handleSelect(e: CustomEvent<string>) {
     sel = e.detail;
-  }
-
-  function apiErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) return e.message;
-    return '連線發生問題，請稍後再試。';
   }
 
   /** conversationId 在送出當下(sel 目前指向的對話)被捕捉為區域變數；await 期間使用者

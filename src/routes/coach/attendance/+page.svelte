@@ -18,14 +18,23 @@
    * attendance；成功以伺服器回傳的最新名冊同步 marks/classes(而非樂觀本地值 ——
    * 'late'(遲到)沒有對應後端狀態、送出時併入 'present'，若不用伺服器回應同步，畫面會
    * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
-   * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。 */
+   * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。
+   *
+   * SaveBar(草稿狀態機)的轉移邏輯已抽成純函式模組 $lib/coach/attendance-draft.ts
+   * (Round 2 C5)——本頁只保留 Svelte 變數鏡射 draft 欄位、呼叫真實 API、發 toast 與
+   * load-gate 佈線；回應同步 guard(state!=='saving' 就丟棄過期回應)留在頁層。 */
   import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
-  import { ApiError } from '$lib/api/client';
+  import {
+    initDraft, setMark as draftSetMark, applyNote as draftApplyNote, markAllPresent,
+    undo as draftUndo, canSwitchClass, stashAndRestore, hadLate as draftHadLate,
+    beginSave, applySaveResult, saveFailed, type SaveBar
+  } from '$lib/coach/attendance-draft';
+  import { apiErrorText } from '$lib/api/error-text';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
@@ -40,7 +49,7 @@
   $: curClass = classes.find((c) => c.id === curClassId)!;
   $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
 
-  // ── 狀態 ──────────────────────────────────────────────────────────────
+  // ── 狀態(鏡射 attendance-draft.ts 的 SaveBar 欄位) ───────────────────────
   let marks: Record<string, AttDefault> = {};
   let notes: Record<string, string> = {};
   let noteFor: AttRow | null = null;
@@ -49,14 +58,21 @@
   let savedAt: string | null = null;
   let dirtyCount = 0;
 
+  // currentDraft/applyDraft 是鏡射變數 ⇄ attendance-draft.ts SaveBar 的雙向轉接。
+  function currentDraft(): SaveBar {
+    return { marks, notes, state, savedAt, dirtyCount };
+  }
+  function applyDraft(next: SaveBar) {
+    ({ marks, notes, state, savedAt, dirtyCount } = next);
+  }
+
   const gate = createLoadGate({
     fetch: getAttendance,
     onData: (d) => {
       classes = d.classes;
       const first = classes[0];
       curClassId = first?.id ?? '';
-      marks = first ? buildMarks(first.roster) : {};
-      dirtyCount = first ? first.roster.filter((r) => r.def !== 'present').length : 0;
+      applyDraft(initDraft(first?.roster ?? []));
       // 部分名冊載入失敗(seam 已做 allSettled 隔離)：成功班級照常可點名，
       // 失敗班級以 toast 提示，不整頁打成 error。
       if (d.failedClasses.length > 0) {
@@ -76,29 +92,23 @@
   // The save bar is driven by state/savedAt/dirtyCount, not just marks — so a
   // single-step undo must capture all of them. `prev != null` drives the 復原
   // control's visibility.
-  type SaveBar = {
-    marks: Record<string, AttDefault>;
-    notes: Record<string, string>;
-    state: 'dirty' | 'saving' | 'saved';
-    savedAt: string | null;
-    dirtyCount: number;
-  };
   let prev: SaveBar | null = null;
-  function snapshot() {
-    prev = { marks, notes, state, savedAt, dirtyCount };
+  // 修改前先快照(供復原)，並回傳同一份 draft 餵給接著要呼叫的純函式轉移。
+  function snapshot(): SaveBar {
+    const before = currentDraft();
+    prev = before;
+    return before;
   }
   function undo() {
-    if (!prev) return;
-    ({ marks, notes, state, savedAt, dirtyCount } = prev);
+    const restored = draftUndo(prev);
+    if (!restored) return;
+    applyDraft(restored);
     prev = null;
   }
 
   // ── 動作 ──────────────────────────────────────────────────────────────
   function setMark(mid: string, v: AttDefault) {
-    snapshot();
-    marks = { ...marks, [mid]: v };
-    state = 'dirty';
-    dirtyCount += 1;
+    applyDraft(draftSetMark(snapshot(), mid, v));
   }
 
   function openNote(r: AttRow) {
@@ -108,13 +118,8 @@
 
   function saveNote() {
     if (!noteFor) return;
-    snapshot();
-    notes = { ...notes, [noteFor.mid]: noteText };
+    applyDraft(draftApplyNote(snapshot(), noteFor.mid, noteText)); // codex r1 (P2)：見 applyNote 註解
     noteFor = null;
-    // codex r1 (P2): a note edit is an unsaved change too — re-dirty the save bar
-    // so a coach who annotates after syncing isn't told everything is uploaded.
-    state = 'dirty';
-    dirtyCount += 1;
   }
 
   function closeNote() {
@@ -122,47 +127,28 @@
   }
 
   function markAll() {
-    snapshot();
-    // codex r2 (P2): bump dirtyCount by the rows this bulk action actually changes,
-    // so the save bar / status card don't claim "0 筆變更" after a sync.
-    const changed = roster.filter((r) => r.def !== 'leave' && marks[r.mid] !== 'present').length;
-    marks = Object.fromEntries(
-      roster.map((r) => [r.mid, r.def === 'leave' ? 'leave' : 'present'] as [string, AttDefault])
-    );
-    state = 'dirty';
-    dirtyCount += changed;
+    applyDraft(markAllPresent(snapshot(), roster)); // codex r2 (P2)：見 markAllPresent 註解
   }
 
   // Per-class drafts: switching stashes the current class's whole save-bar state and
   // restores the target's (or inits it), so an unsaved edit survives a round-trip
   // switch instead of silently resetting to defaults. (codex round 2 P2)
   let byClass: Record<string, SaveBar> = {};
-  function buildMarks(rows: AttRow[]): Record<string, AttDefault> {
-    return Object.fromEntries(rows.map((r) => [r.mid, r.def] as [string, AttDefault]));
-  }
   function selectClass(name: string) {
     const next = classes.find((c) => c.name === name);
     if (!next || next.id === curClassId) return;
     // Don't switch mid-save: the in-flight doSave() callback completes against the
     // live state, so stashing a 'saving' class would leave it stuck on 儲存中 forever
     // (and the success toast could land on the wrong class). (codex round 3 P1)
-    if (state === 'saving') {
+    if (!canSwitchClass(currentDraft())) {
       toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
       return;
     }
     // stash the current class's draft, then restore the target's (or build a fresh one).
-    // Read `next` DIRECTLY — the legacy `$: roster` doesn't update mid-handler.
-    byClass[curClassId] = { marks, notes, state, savedAt, dirtyCount };
-    const saved = byClass[next.id];
-    if (saved) {
-      ({ marks, notes, state, savedAt, dirtyCount } = saved);
-    } else {
-      marks = buildMarks(next.roster);
-      notes = {};
-      state = 'dirty';
-      savedAt = null;
-      dirtyCount = next.roster.filter((r) => r.def !== 'present').length;
-    }
+    // Pass `next` DIRECTLY — the legacy `$: roster` doesn't update mid-handler.
+    const result = stashAndRestore(byClass, curClassId, currentDraft(), next);
+    byClass = result.byClass;
+    applyDraft(result.draft);
     prev = null;
     curClassId = next.id;
   }
@@ -179,30 +165,25 @@
    *  對應繁中錯誤提示；其餘(連線問題等)給通用訊息，同 coach/+page.svelte 的 ApiError
    *  判斷慣例。 */
   function attendanceErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 403) return '沒有權限為此堂課點名。';
-      if (e.status === 404) return '找不到此場次，請重新整理頁面後再試。';
-      if (e.status === 422) return '點名資料有誤，本次變更未儲存，請重新整理後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      403: '沒有權限為此堂課點名。',
+      404: '找不到此場次，請重新整理頁面後再試。',
+      422: '點名資料有誤，本次變更未儲存，請重新整理後再試。'
+    });
   }
 
   function doSave() {
-    state = 'saving';
-    // 送出前先記錄本批是否含「遲到」標記——後端不區分遲到(status 僅 present/absent/
-    // leave)，遲到會以出席送出、儲存後名冊同步也會把遲到列翻成出席；成功 toast 追加
-    // 一句說明，避免教練誤以為點選沒存到。在呼叫前快照，不受 in-flight 期間的編輯影響。
-    const hadLate = Object.values(marks).some((m) => m === 'late');
+    applyDraft(beginSave(currentDraft()));
+    // 送出前(await 前)先快照是否含「遲到」——見 hadLate 註解；成功 toast 據此追加
+    // 一句折疊說明，避免教練誤以為點選沒存到。
+    const hadLate = draftHadLate(marks);
     saveAttendance(curClassId, marks)
       .then((updatedRoster) => {
         // codex r3 (P2)：若在請求進行中又被編輯過(state 已變回 dirty)，不要用這次
         // 回應蓋掉新的未存變更 —— 同既有(原 setTimeout 版)guard。
         if (state !== 'saving') return;
         classes = classes.map((c) => (c.id === curClassId ? { ...c, roster: updatedRoster } : c));
-        marks = buildMarks(updatedRoster);
-        state = 'saved';
-        savedAt = nowHHMM();
-        dirtyCount = 0;
+        applyDraft(applySaveResult(currentDraft(), updatedRoster, nowHHMM()));
         toasts.notify(
           'success',
           '點名已儲存',
@@ -211,7 +192,7 @@
         );
       })
       .catch((e) => {
-        state = 'dirty';
+        applyDraft(saveFailed(currentDraft()));
         toasts.notify('error', '點名儲存失敗', attendanceErrorMessage(e));
       });
   }

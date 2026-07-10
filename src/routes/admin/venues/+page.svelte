@@ -30,7 +30,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import type { Venue } from '$lib/admin/data';
   import { getVenues, createVenue, updateVenue, type VenueWriteBody } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   const notify = toasts.notify;
 
@@ -90,12 +90,11 @@
   // 通用訊息，同 tickets/+page.svelte 的 ApiError 判斷慣例。slug 由名稱自動產生且
   // 表單不可編輯，409 文案明講「改名稱」而非「改代號」，才是使用者能實際採取的動作。
   function venueErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-      if (e.status === 409) return '場地代號（slug）重複，請修改場地名稱後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      422: '輸入資料不符規則，請確認後再試。',
+      403: '沒有權限執行此操作。',
+      409: '場地代號（slug）重複，請修改場地名稱後再試。'
+    });
   }
 
   async function save(updated: Venue) {

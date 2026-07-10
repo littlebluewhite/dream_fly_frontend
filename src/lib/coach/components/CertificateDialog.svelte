@@ -20,7 +20,7 @@
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import { createCertificate, type CreateCertificateBody } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
   import type { Student } from '$lib/coach/data';
 
   export let open = false;
@@ -59,14 +59,6 @@
    *  issued_on 由 <input type=date> 保證格式且預設今天，不另檢。 */
   $: valid = title.trim() !== '';
 
-  /** 後端(dream_fly_backend/src/modules/certificates)的錯誤字串本身就是繁中(403「僅
-   *  能發給自己課程的學員」、422 欄位長度)，直接透傳即可，同 leave-requests 頁的
-   *  decisionErrorMessage 慣例。 */
-  function certificateErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) return e.message;
-    return '連線發生問題，請稍後再試。';
-  }
-
   async function submit() {
     if (!student || !valid || submitting) return;
     submitting = true;
@@ -82,7 +74,10 @@
       toasts.notify('success', '已發放證書', `${student.name} · ${title.trim()}`);
       onClose();
     } catch (e) {
-      toasts.notify('error', '發放失敗', certificateErrorMessage(e));
+      // 後端(dream_fly_backend/src/modules/certificates)的錯誤字串本身就是繁中(403
+      // 「僅能發給自己課程的學員」、422 欄位長度)，直接透傳(apiErrorMessage)即可，
+      // 同 leave-requests 頁的慣例。
+      toasts.notify('error', '發放失敗', apiErrorMessage(e));
     } finally {
       submitting = false;
     }

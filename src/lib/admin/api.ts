@@ -957,7 +957,7 @@ export interface UpdateCouponBody {
 
 /** PATCH /coupons/{id}：discount_cents/is_active/expires_at 皆選填（省略＝維持原
  *  值），expires_at 明確傳 null 可把到期日清成永久有效。呼叫端（CouponCreateDialog
- *  編輯模式 + coupons/+page.svelte 的 buildUpdateCouponBody）一律全量送出這三欄，
+ *  編輯模式 + coupon-request.ts 的 buildUpdateCouponBody，經 coupons/+page.svelte）一律全量送出這三欄，
  *  不利用「省略」語意——表單本來就持有完整的目前值，沒有「部分欄位」的中介狀態需要
  *  表達（同 MemberEditDialog/CoachEditDialog 的全量 resend 慣例）。 */
 export const updateCoupon = (id: string, body: UpdateCouponBody): Promise<ApiCoupon> =>

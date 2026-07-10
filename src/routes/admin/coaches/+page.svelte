@@ -43,7 +43,7 @@
     updateMember,
     type CoachWriteBody
   } from '$lib/admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
 
   let coaches: Coach[] = [];
 
@@ -91,23 +91,15 @@
     pendingUserId = null;
   }
 
-  // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
-  // 文字(例："Email 已被使用")，直接透傳，同 members/+page.svelte 的
-  // memberErrorMessage 慣例。
-  function memberErrorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
-
   // /coaches 端點的 404/409 是後端英文文字(coaches/service.rs 的
   // AppError::NotFound/Conflict)，跟 /users 端點的 繁中 訊息來源不同，故用狀態碼
   // 對應繁中文案(同 venueErrorMessage 慣例)，不直接顯示 e.message。
   function coachErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 404) return '找不到對應的使用者帳號。';
-      if (e.status === 409) return '這個帳號已經是教練身分了。';
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
+    return apiErrorText(e, {
+      404: '找不到對應的使用者帳號。',
+      409: '這個帳號已經是教練身分了。',
+      422: '輸入資料不符規則，請確認後再試。'
+    });
   }
 
   function coachBody(v: CoachFormValues): CoachWriteBody {
@@ -118,9 +110,11 @@
     let userId = pendingUserId;
     if (!userId) {
       try {
+        // /users 端點(createMember)的錯誤訊息已是後端給的 繁中 使用者可讀文字(例：
+        // "Email 已被使用")，直接透傳(apiErrorMessage)，同 members/+page.svelte 慣例。
         userId = (await createMember({ email: v.email, name: v.name, password: v.password })).id;
       } catch (e) {
-        toasts.notify('error', '新增失敗', memberErrorMessage(e));
+        toasts.notify('error', '新增失敗', apiErrorMessage(e));
         return;
       }
     }
@@ -148,7 +142,7 @@
       try {
         await updateMember(target.userId, { name: v.name.trim() });
       } catch (e) {
-        toasts.notify('error', '儲存失敗', memberErrorMessage(e));
+        toasts.notify('error', '儲存失敗', apiErrorMessage(e));
         return;
       }
     }
