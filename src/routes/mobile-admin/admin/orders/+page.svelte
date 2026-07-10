@@ -15,7 +15,8 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, adminNotifs, adminUnreadCount, toasts, orders, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
-  import { ORDER_STATUS, fmtNT } from '$lib/mobile-admin/data';
+  import { fmtNT } from '$lib/mobile-admin/data';
+  import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
@@ -94,7 +95,7 @@
       {:else}
         <div style="display:flex; flex-direction:column; gap:10px;">
           {#each rows as o (o.id)}
-            {@const st = ORDER_STATUS[o.status]}
+            {@const st = orderStatusBadge(o.status)}
             <button
               on:click={() => overlay.sheet('order', { o })}
               class="df-tapscale"

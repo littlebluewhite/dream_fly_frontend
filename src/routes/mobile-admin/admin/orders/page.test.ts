@@ -70,4 +70,13 @@ describe('mobile-admin/admin/orders 頁', () => {
 		const { findByText } = render(OrdersPage);
 		expect(await findByText('找不到符合的訂單')).toBeInTheDocument();
 	});
+
+	it('未知 status(契約若擴出新值) → 該筆訂單降級為 neutral 徽章 + 原字串，不會炸掉(orderStatusBadge fallback)', async () => {
+		const unknownOrder = mkOrder({ id: 'DF-TEST03', member: '測試學員丙', status: 'future_status' as OrderRow['status'] });
+		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [unknownOrder] });
+
+		const { container, findByText } = render(OrdersPage);
+		expect(await findByText('測試學員丙')).toBeInTheDocument();
+		expect(container.querySelector('.badge.neutral')).not.toBeNull();
+	});
 });

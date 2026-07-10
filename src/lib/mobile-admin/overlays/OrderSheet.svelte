@@ -9,9 +9,10 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
-  import { ORDER_STATUS, fmtNT, type OrderRow } from '$lib/mobile-admin/data';
+  import { fmtNT, type OrderRow } from '$lib/mobile-admin/data';
   import { updateOrderStatus } from '$lib/mobile-admin/api';
   import { ApiError } from '$lib/api/client';
+  import { orderStatusBadge } from '$lib/api/wire';
 
   export let onClose: () => void;
   export let o: OrderRow | null = null;
@@ -28,7 +29,7 @@
     return '連線發生問題，請稍後再試。';
   }
 
-  $: [tone, label] = (o ? ORDER_STATUS[o.status] : ['neutral', '-']) as [Tone, string];
+  $: [tone, label] = (o ? orderStatusBadge(o.status) : ['neutral', '-']) as [Tone, string];
   $: rows = o
     ? ((() => {
         const r: [string, string, string?][] = [

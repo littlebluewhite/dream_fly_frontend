@@ -33,6 +33,7 @@ import { CLASSES_BASE } from '$lib/domain/classes';
 import { MEMBERS_BASE } from '$lib/domain/members';
 import { ORDERS_BASE } from '$lib/domain/orders';
 import { CAMPUSES } from '$lib/domain/shared';
+import type { OrderStatus } from '$lib/api/wire';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -117,10 +118,9 @@ export const MEMBERS: MemberRow[] = MEMBERS_BASE.map((m) => ({
 }));
 
 /* ---- Orders / 訂單 ---- */
-// Task 20：同桌面 admin/data.ts 的 OrderStatus（FE#18 起widened 為真後端 GET /orders
-// admin 的完整 6 態），OrderRow.status 不再窄化成 3 態——ORDERS_BASE(`$lib/domain/
-// orders`)本身已是 6 態型別，這裡直接沿用同一型別，不用不安全的 cast 硬塞。
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+// OrderStatus 單源改自 $lib/api/wire re-export(鏡射 admin/data.ts 先例，同 ADR 0007)——
+// 不再本地重宣告 6 態 union。
+export type { OrderStatus } from '$lib/api/wire';
 export interface OrderRow {
 	id: string;
 	member: string;
@@ -155,14 +155,7 @@ export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => ({
 	orderId: o.id
 }));
 
-export const ORDER_STATUS: Record<OrderStatus, Tone> = {
-	pending: ['warning', '待付款'],
-	paid: ['success', '已付款'],
-	processing: ['info', '處理中'],
-	completed: ['neutral', '已完成'],
-	cancelled: ['error', '已取消'],
-	refunded: ['neutral', '已退款']
-};
+export { ORDER_STATUS } from '$lib/api/wire';
 
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {

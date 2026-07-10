@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import OrderSheet from './OrderSheet.svelte';
 import { orders } from '$lib/mobile-admin/stores';
 import { updateOrderStatus } from '$lib/mobile-admin/api';
+import type { OrderRow } from '$lib/mobile-admin/data';
 
 vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
@@ -38,5 +39,15 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalled());
 		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('pending');
 		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it('未知 status(契約若擴出新值) → 降級為 neutral 徽章 + 原字串，不會炸掉(orderStatusBadge fallback)', () => {
+		const pending = get(orders).find((o) => o.status === 'pending');
+		const unknownOrder: OrderRow = { ...pending!, status: 'future_status' as OrderRow['status'] };
+
+		const { container, getByText } = render(OrderSheet, { props: { onClose: () => {}, o: unknownOrder } });
+
+		expect(getByText('future_status')).toBeInTheDocument();
+		expect(container.querySelector('.badge.neutral')).not.toBeNull();
 	});
 });
