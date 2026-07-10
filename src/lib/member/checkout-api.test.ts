@@ -9,6 +9,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
+import { syncCartToServer } from '$lib/checkout-order';
+import type { ApiOrder } from '$lib/checkout-order';
 import {
   cart,
   subscriptions,
@@ -17,7 +19,6 @@ import {
   notifications,
   notificationsHydrated,
   waitlist,
-  syncCartToServer,
   placeOrder,
   refreshSubscriptions,
   refreshPoints,
@@ -27,8 +28,7 @@ import {
   cancelWaitlist,
   joinWaitlistErrorMessage
 } from './stores';
-import type { ApiOrder } from './stores';
-import type { CartItem } from './data';
+import type { CartItem } from '$lib/cart-item';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();

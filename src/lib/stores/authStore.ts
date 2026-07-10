@@ -9,7 +9,7 @@
 import { writable, derived } from 'svelte/store';
 import { api, refreshTokens } from '$lib/api/client';
 import { getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
-import type { Member } from '$lib/member/data';
+import type { Member } from '$lib/domain/member-app';
 
 const AUTH_STORAGE_KEY = 'dreamfly_auth';
 // Backend has no per-member avatar colour; default to the brand primary token

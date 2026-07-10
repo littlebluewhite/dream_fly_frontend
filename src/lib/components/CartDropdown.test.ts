@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CartDropdown from './CartDropdown.svelte';
 import { cart } from '$lib/member/stores';
-import { courseToCartItem, passToCartItem } from '$lib/member/data';
+import { courseToCartItem, passToCartItem } from '$lib/cart-item';
 import { authStore } from '$lib/stores/authStore';
 import { checkoutTarget } from '$lib/checkout-gate';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';

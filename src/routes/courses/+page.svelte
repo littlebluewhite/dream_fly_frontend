@@ -8,7 +8,7 @@
   import { listCourses, listCoaches } from '$lib/public/api';
   import { toCatalogCourse, type CatalogCourse } from '$lib/public/adapters';
   import { cart, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
-  import { courseToCartItem } from '$lib/member/data';
+  import { courseToCartItem } from '$lib/cart-item';
   import { toasts } from '$lib/stores/marketingToasts';
   import { isLoggedIn } from '$lib/stores/authStore';
 

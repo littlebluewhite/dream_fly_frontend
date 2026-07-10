@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { api, ApiError } from '$lib/api/client';
 import { submitOrder } from './checkout-order';
 import type { ApiOrder } from './checkout-order';
-import type { CartItem } from '$lib/member/data';
+import type { CartItem } from '$lib/cart-item';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();

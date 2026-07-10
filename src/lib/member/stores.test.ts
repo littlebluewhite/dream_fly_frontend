@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { createCart, cart, cartCount, subscriptions, points, pointsLedger } from './stores';
-import { ME, POINTS_LEDGER, courseToCartItem, passToCartItem } from './data';
+import { ME, POINTS_LEDGER } from './data';
+import { courseToCartItem, passToCartItem } from '$lib/cart-item';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 // The singleton cart / subscriptions persist to localStorage; reset them (and

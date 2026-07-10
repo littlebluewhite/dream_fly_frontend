@@ -3,7 +3,7 @@
   import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { cart, subscriptions } from '$lib/member/stores';
-  import { passToCartItem } from '$lib/member/data';
+  import { passToCartItem } from '$lib/cart-item';
   import { toasts } from '$lib/stores/marketingToasts';
   import { listProducts } from '$lib/public/api';
   import { toPass, type Ticket } from '$lib/public/adapters';

@@ -12,9 +12,6 @@ import { refreshPoints } from './points';
  * hydrate 回 store——實際的同步/送單序列現在單源自 `$lib/checkout-order` 的
  * `submitOrder`，本檔只注入 member 專屬的 store 讀寫。 */
 
-export { syncCartToServer } from '$lib/checkout-order';
-export type { ApiOrderItem, ApiOrder, PaymentMethod } from '$lib/checkout-order';
-
 /** 送出訂單 — 委派 `$lib/checkout-order` 的 `submitOrder`：本檔只負責注入 member
  *  專屬的 store 操作——lines 用現行購物車的可計費項目（chargeableLines）、
  *  afterOrder 對應現行的 refreshSubscriptions()/refreshPoints() promise 陣列、

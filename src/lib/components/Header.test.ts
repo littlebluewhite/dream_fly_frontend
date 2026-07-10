@@ -4,7 +4,7 @@ import { readable } from 'svelte/store';
 import Header from './Header.svelte';
 import { authStore } from '$lib/stores/authStore';
 import { cart } from '$lib/member/stores';
-import { courseToCartItem } from '$lib/member/data';
+import { courseToCartItem } from '$lib/cart-item';
 import type { CatalogCourse } from '$lib/public/adapters';
 
 // Header reads $page.url.pathname (Navigation active state). Stub a static page.

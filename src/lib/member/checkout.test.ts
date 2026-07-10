@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { chargeableLines, validateCoupon, orderErrorMessage } from './checkout';
-import type { CartItem } from './checkout';
+import type { CartItem } from '$lib/cart-item';
 import { api, ApiError } from '$lib/api/client';
 
 // 只替換 api()，ApiError 用回真實類別（validateCoupon 靠 instanceof 判斷 404）。

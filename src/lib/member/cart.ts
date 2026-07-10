@@ -1,6 +1,6 @@
 import { writable, derived, get, type Readable } from 'svelte/store';
 import type { CatalogCourse } from '$lib/public/adapters';
-import { courseToCartItem, type CartItem, type CartItemInput } from './data';
+import { courseToCartItem, type CartItem, type CartItemInput } from '$lib/cart-item';
 
 /* ---- Cart ---- */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';

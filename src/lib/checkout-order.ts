@@ -13,7 +13,7 @@
 
 import { api } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
-import type { CartItem } from '$lib/member/data';
+import type { CartItem } from '$lib/cart-item';
 
 /** 付款方式（Round 4 Task P4-B1；integration-contract.md §1.8/§3.10）值域——純應用層
  *  值域，非 DB enum。不帶時後端預設 credit_card；帶入值域外字串回 422。目前仍是

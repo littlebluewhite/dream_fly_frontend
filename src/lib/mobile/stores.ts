@@ -23,7 +23,7 @@ import { createReadState, unreadCount } from '$lib/stores/read-state';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints } from '$lib/member/stores';
-import type { CartItem } from '$lib/member/data';
+import type { CartItem } from '$lib/cart-item';
 import { ME, NOTIFS_SEED, type NotifItem } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */

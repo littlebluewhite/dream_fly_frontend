@@ -5,7 +5,7 @@
   import { checkoutTarget } from '$lib/checkout-gate';
   import { subtotalOf } from '$lib/checkout-math';
   import { toasts } from '$lib/stores/marketingToasts';
-  import type { CartItem } from '$lib/member/data';
+  import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   $: total = subtotalOf($cart);

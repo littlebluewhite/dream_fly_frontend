@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { courseToCartItem, passToCartItem } from './data';
+import { courseToCartItem, passToCartItem } from './cart-item';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 /* cart v3 — cart-item adapters now consume the API-shaped public CatalogCourse /

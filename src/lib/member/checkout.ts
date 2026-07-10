@@ -9,13 +9,9 @@
  * （final review 裁定）：金額/點數/報名/訂閱的商業規則以後端為準（stores.ts 的
  * placeOrder），前端不再平行維護一份會漂移的副本。 */
 
-import type { CartItem } from '$lib/member/data';
+import type { CartItem } from '$lib/cart-item';
 import { api, ApiError } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
-
-/* ─── 公開型別 ────────────────────────────────────────────────── */
-
-export type { CartItem };
 
 /* ─── chargeableLines ─────────────────────────────────────────── */
 
