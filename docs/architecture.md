@@ -41,7 +41,7 @@ see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `t
 ## `src/lib/domain/` — single source for the ops-pair and member-app facades
 
 `src/lib/domain/` holds mock seed that used to be duplicated across surfaces: ops entities (`venues.ts`,
-`tickets.ts`, `coaches.ts`, `activity.ts`, `reports.ts`) plus base arrays (`CLASSES_BASE`, `MEMBERS_BASE`,
+`tickets.ts`, `coaches.ts`, `activity.ts`) plus base arrays (`CLASSES_BASE`, `MEMBERS_BASE`,
 `ORDERS_BASE` in `classes.ts` / `members.ts` / `orders.ts`) shared by the admin↔mobile-admin ops-pair, and
 `member-app.ts` — the member↔mobile desktop/mobile twin seed (16 constants; `ANNOUNCE` stays forked in
 each facade because one announcement's background colour differs between the two). Four facades consume

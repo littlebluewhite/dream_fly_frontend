@@ -16,8 +16,9 @@ the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), servi
 `/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, and (since Round 3)
 both `mobile` and `mobile-admin` — call it for real now. Round 4 wired most of what was still mock:
 dashboard stats, per-course attendance history, trial-booking, mobile preference persistence, the admin
-dashboard's today/activity panels, admin coach/venue/ticket/coupon/system-settings writes, the 13-panel
-admin reports page (see `docs/adr/0009`), and Google OAuth on `mobile`. Mock data remains only in a
+dashboard's today/activity panels, admin coach/venue/ticket/coupon/system-settings writes, the admin
+reports page (13 restored panels + the always-live revenue trend; see `docs/adr/0009`), and Google OAuth
+on `mobile`. Mock data remains only in a
 handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
 of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
 read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
