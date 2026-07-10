@@ -9,6 +9,7 @@ import {
 	groupIncomeSources,
 	fmtHours,
 	TIER_LABEL,
+	REVENUE_SOURCE_LABEL,
 	PAYMENT_METHOD_LABEL,
 	paymentMethodLabel,
 	WEEKDAY_LABEL,
@@ -206,6 +207,23 @@ describe('TIER_LABEL — points_balance 分級桶對照', () => {
 		expect(TIER_LABEL.bronze.color).toMatch(/^#/);
 		expect(TIER_LABEL.silver.color).toMatch(/^#/);
 		expect(TIER_LABEL.gold.color).toMatch(/^#/);
+	});
+});
+
+describe('REVENUE_SOURCE_LABEL — 收入來源桶對照(P4-F2)', () => {
+	it('6 個 canonical source key 對照中文標籤(product_type 三值對齊既有票券文案)', () => {
+		expect(REVENUE_SOURCE_LABEL.course.label).toBe('課程報名');
+		expect(REVENUE_SOURCE_LABEL.ticket.label).toBe('單次票券');
+		expect(REVENUE_SOURCE_LABEL.membership.label).toBe('月票方案');
+		expect(REVENUE_SOURCE_LABEL.course_package.label).toBe('課程套裝');
+		expect(REVENUE_SOURCE_LABEL.merchandise.label).toBe('裝備週邊');
+		expect(REVENUE_SOURCE_LABEL.venue_rental.label).toBe('場地租借');
+	});
+
+	it('每桶皆帶代表色(hex 或 CSS 變數)', () => {
+		for (const { color } of Object.values(REVENUE_SOURCE_LABEL)) {
+			expect(color).toMatch(/^#|^var\(--df-/);
+		}
 	});
 });
 

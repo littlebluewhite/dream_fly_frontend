@@ -96,6 +96,23 @@ export const TIER_LABEL: Record<'regular' | 'bronze' | 'silver' | 'gold', { labe
 	gold: { label: '金', color: '#F59E0B' }
 };
 
+/** revenue_breakdown / income_sources_12m / category_split 的 source 桶 key →
+ *  中文標籤 + 代表色(契約 §3.24 canonical 6 值封閉集合,不需容錯 fallback;
+ *  category_split 只會出現前 5 桶——venue_rental 非 order line)。標籤對齊既有
+ *  product_type 三值的中文(單次票券/月票方案/課程套裝,見 TicketEditDialog),
+ *  色票沿用歸檔 REVENUE_BREAKDOWN/INCOME_SOURCES 的既定配色。P4-F2 新增。 */
+export const REVENUE_SOURCE_LABEL: Record<
+	'course' | 'ticket' | 'membership' | 'course_package' | 'merchandise' | 'venue_rental',
+	{ label: string; color: string }
+> = {
+	course: { label: '課程報名', color: 'var(--df-primary)' },
+	ticket: { label: '單次票券', color: '#8B5CF6' },
+	membership: { label: '月票方案', color: '#0EA5E9' },
+	course_package: { label: '課程套裝', color: '#10B981' },
+	merchandise: { label: '裝備週邊', color: 'var(--df-warning)' },
+	venue_rental: { label: '場地租借', color: '#EC4899' }
+};
+
 /** payment_split.method(應用層自由字串；契約僅列舉本輪已知值，NULL 已由後端轉
  *  "unknown")→ 中文標籤查表。 */
 export const PAYMENT_METHOD_LABEL: Record<string, string> = {

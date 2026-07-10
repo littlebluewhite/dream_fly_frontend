@@ -1,27 +1,40 @@
 <script lang="ts">
   /* 報表分析 — SvelteKit port of reports.jsx `ReportsView`, re-scoped in Task 15 to
-   * real data. The shell wraps /admin, so this renders page content only: a
-   * PageHead (匯出報表), a real-data KPI band (revenue this/last month + member
-   * counts), the 12-month RevenueTrend chart, and two honest tables (courses/
-   * coaches). The prototype's period-picker + 15 mock chart panels (kpis/
-   * revenueBreakdown/categorySplit/topCourses/incomeSources/coachPerf/venueUsage/
-   * attDist/retention/ageDist/tierDist/campusRevenue/paymentSplit/funnel/
-   * weekdayLoad) had no GET /reports/admin data source (integration-contract.md
-   * §3.24「mock 有但契約無」清單) and were removed along with their chart
-   * components/period picker (裁決 9：不留假數字) — see admin/api.ts's ReportsData
-   * for the surviving real shape (revenue/members/courses/coaches).
+   * real data and re-expanded in Round 4 P4-F2. The shell wraps /admin, so this
+   * renders page content only: a PageHead (匯出報表), a 6-card KPI band (本月營收/
+   * 新會員/新報名/訂單數/出席率/留存率 — 環比 delta 由 report-math 的 deltaPct()
+   * 前端算,null → 卡上「—」), then the 13 chart panels restored from the archived
+   * prototype (689769a^) re-plumbed onto GET /reports/admin 的真實彙總 sections
+   * (P4-F1 擴充的 ReportsData;契約 §3.24), and finally the two honest tables
+   * (courses/coaches). CampusRevenue(單一場館無分校維度)與 period picker 依裁決
+   * 不還原;topCourses 由 topCoursesFrom(courses) 純函式推導,不是後端欄位。
    *
-   * Data arrives async via getReports(): onMount loads it into a three-state gate
-   * (loading/error/ready). */
+   * Data arrives async via getReports() — ONE call feeds the KPI band and every
+   * panel — into a three-state gate (loading/error/ready). */
   import { onMount } from 'svelte';
   import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
-  import StatCard from '$lib/admin/components/StatCard.svelte';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/admin/api';
   import { fmtNT, fmtPct } from '$lib/admin/format';
+  import { deltaPct, topCoursesFrom } from '$lib/admin/report-math';
+
+  import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
+  import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
   import RevenueTrend from '$lib/admin/components/reports/RevenueTrend.svelte';
+  import CategoryDonut from '$lib/admin/components/reports/CategoryDonut.svelte';
+  import TopCourses from '$lib/admin/components/reports/TopCourses.svelte';
+  import IncomeSources from '$lib/admin/components/reports/IncomeSources.svelte';
+  import CoachPerf from '$lib/admin/components/reports/CoachPerf.svelte';
+  import VenueUsage from '$lib/admin/components/reports/VenueUsage.svelte';
+  import AttDist from '$lib/admin/components/reports/AttDist.svelte';
+  import RetentionTrend from '$lib/admin/components/reports/RetentionTrend.svelte';
+  import AgeDist from '$lib/admin/components/reports/AgeDist.svelte';
+  import TierDist from '$lib/admin/components/reports/TierDist.svelte';
+  import PaymentSplit from '$lib/admin/components/reports/PaymentSplit.svelte';
+  import ConversionFunnel from '$lib/admin/components/reports/ConversionFunnel.svelte';
+  import WeekdayLoad from '$lib/admin/components/reports/WeekdayLoad.svelte';
 
   let data: ReportsData | null = null;
 
@@ -51,14 +64,83 @@
     </PageHead>
 
     <div class="kpi-grid">
-      <StatCard icon="dollar-sign" label="本月營收" value={fmtNT(data.revenue.thisMonth)} tint="var(--df-primary-bg)" color="var(--df-primary)" />
-      <StatCard icon="circle-dollar-sign" label="上月營收" value={fmtNT(data.revenue.lastMonth)} tint="var(--df-bg-light)" color="var(--df-text-light)" />
-      <StatCard icon="users" label="會員總數" value={data.members.total} tint="var(--df-success-bg)" color="var(--df-success)" />
-      <StatCard icon="user-plus" label="本月新增會員" value={data.members.newThisMonth} tint="#F59E0B14" color="#F59E0B" />
-      <StatCard icon="user-check" label="在學會員" value={data.members.active} tint="#8B5CF614" color="#8B5CF6" />
+      <ReportKpi
+        icon="dollar-sign"
+        label="本月營收"
+        value={fmtNT(data.revenue.thisMonth)}
+        delta={deltaPct(data.revenue.thisMonth, data.revenue.lastMonth)}
+        tint="#0066CC14"
+        color="var(--df-primary)"
+      />
+      <ReportKpi
+        icon="user-plus"
+        label="本月新會員"
+        value="{data.kpis.newMembers.thisMonth} 位"
+        delta={deltaPct(data.kpis.newMembers.thisMonth, data.kpis.newMembers.lastMonth)}
+        tint="#F59E0B14"
+        color="#F59E0B"
+      />
+      <ReportKpi
+        icon="book-open"
+        label="本月新報名"
+        value="{data.kpis.newEnrolments.thisMonth} 筆"
+        delta={deltaPct(data.kpis.newEnrolments.thisMonth, data.kpis.newEnrolments.lastMonth)}
+        tint="#10B98114"
+        color="#10B981"
+      />
+      <ReportKpi
+        icon="receipt"
+        label="本月訂單數"
+        value="{data.kpis.paidOrdersCount.thisMonth} 筆"
+        delta={deltaPct(data.kpis.paidOrdersCount.thisMonth, data.kpis.paidOrdersCount.lastMonth)}
+        tint="#8B5CF614"
+        color="#8B5CF6"
+      />
+      <ReportKpi
+        icon="calendar-check"
+        label="本月出席率"
+        value={fmtPct(data.kpis.attendanceRate.thisMonth)}
+        delta={deltaPct(data.kpis.attendanceRate.thisMonth, data.kpis.attendanceRate.lastMonth)}
+        tint="#10B98114"
+        color="#10B981"
+      />
+      <ReportKpi
+        icon="repeat"
+        label="會員留存率"
+        value={fmtPct(data.retention.at(-1)?.rate ?? null)}
+        delta={null}
+        tint="#0EA5E914"
+        color="#0EA5E9"
+      />
     </div>
 
-    <RevenueTrend rows={data.revenue.trend} />
+    <RevenueBreakdown rows={data.revenueBreakdown} />
+
+    <div class="panel-row">
+      <RevenueTrend rows={data.revenue.trend} />
+      <CategoryDonut rows={data.categorySplit} />
+    </div>
+    <div class="panel-row">
+      <TopCourses rows={topCoursesFrom(data.courses)} />
+      <IncomeSources rows={data.incomeSources12m} />
+    </div>
+    <div class="panel-row">
+      <CoachPerf rows={data.coaches} />
+      <VenueUsage rows={data.venueUsage} />
+    </div>
+    <div class="panel-row">
+      <AttDist rows={data.attendanceDistribution} />
+      <RetentionTrend rows={data.retention} />
+    </div>
+    <div class="panel-row">
+      <AgeDist rows={data.ageDistribution} />
+      <TierDist rows={data.tierDistribution} />
+    </div>
+    <div class="panel-row">
+      <ConversionFunnel funnel={data.funnel} />
+      <PaymentSplit rows={data.paymentSplit} />
+    </div>
+    <WeekdayLoad rows={data.weekdayLoad} />
 
     <Card padding={0} style="overflow:hidden">
       <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
@@ -122,7 +204,7 @@
   <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
     <Skeleton w={220} h={32} r={8} />
     <div class="kpi-grid">
-      {#each [0, 1, 2, 3, 4] as i (i)}
+      {#each [0, 1, 2, 3, 4, 5] as i (i)}
         <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
       {/each}
     </div>
@@ -133,8 +215,14 @@
 <style>
   .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
+  }
+  .panel-row {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+    flex-wrap: wrap;
   }
   .th {
     text-align: left;
