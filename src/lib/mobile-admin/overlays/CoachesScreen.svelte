@@ -34,28 +34,21 @@
     type CoachFormValues,
     type CoachWriteBody
   } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;
   export let onNew: (() => void) | undefined = undefined;
 
   // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
-  // 文字，直接透傳，同桌面 memberErrorMessage 慣例。
-  function memberErrorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
-
+  // 文字 → apiErrorMessage 直接透傳，同桌面 coaches 頁慣例。
   // /coaches 端點的 404/409 是後端英文文字(coaches/service.rs)，跟 /users 端點的
-  // 繁中 訊息來源不同，故用狀態碼對應繁中文案，不直接顯示 e.message（同桌面
-  // coachErrorMessage 慣例）。
-  function coachErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 404) return '找不到對應的使用者帳號。';
-      if (e.status === 409) return '這個帳號已經是教練身分了。';
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
-  }
+  // 繁中 訊息來源不同，故用狀態碼查表對應繁中文案，不透傳 e.message（apiErrorText
+  // + 本頁自持文案表，同桌面 coaches 頁慣例）。
+  const COACH_ERROR_TEXT: Record<number, string> = {
+    404: '找不到對應的使用者帳號。',
+    409: '這個帳號已經是教練身分了。',
+    422: '輸入資料不符規則，請確認後再試。'
+  };
 
   function coachBody(v: CoachFormValues): CoachWriteBody {
     return { title: v.title, specialties: v.tags, is_active: v.isActive };
@@ -66,7 +59,7 @@
     try {
       userId = (await createMember({ email: v.email, name: v.name, password: v.password })).id;
     } catch (e) {
-      toasts.notify('error', '新增失敗', memberErrorMessage(e));
+      toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;
     }
     try {
@@ -75,7 +68,7 @@
       toasts.notify(
         'error',
         '教練綁定失敗',
-        `帳號「${v.email}」已建立，但綁定教練身分失敗（${coachErrorMessage(e)}）。請至「學員管理」頁確認該帳號，或重新新增一次教練。`
+        `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(e, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新新增一次教練。`
       );
       return;
     }
@@ -88,14 +81,14 @@
       try {
         await updateMember(coach.userId, { name: v.name.trim() });
       } catch (e) {
-        toasts.notify('error', '儲存失敗', memberErrorMessage(e));
+        toasts.notify('error', '儲存失敗', apiErrorMessage(e));
         return;
       }
     }
     try {
       await updateCoach(coach.id, coachBody(v));
     } catch (e) {
-      toasts.notify('error', '儲存失敗', coachErrorMessage(e));
+      toasts.notify('error', '儲存失敗', apiErrorText(e, COACH_ERROR_TEXT));
       return;
     }
     toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);

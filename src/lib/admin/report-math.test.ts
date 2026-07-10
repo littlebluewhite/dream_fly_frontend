@@ -7,6 +7,17 @@ import {
 	normalizeBars,
 	topCoursesFrom,
 	groupIncomeSources,
+	revenueTrendVM,
+	breakdownTotalCents,
+	incomeSourcesVM,
+	coachPerfVM,
+	venueUsageVM,
+	attDistVM,
+	tierVM,
+	weekdayVM,
+	retentionVM,
+	funnelVM,
+	paymentVM,
 	fmtHours,
 	TIER_LABEL,
 	REVENUE_SOURCE_LABEL,
@@ -172,6 +183,203 @@ describe('groupIncomeSources — 收入來源時間序列重塑', () => {
 
 	it('空陣列回空陣列', () => {
 		expect(groupIncomeSources([])).toEqual([]);
+	});
+});
+
+/* ═════════════ 逐面板 view-model(Round 2 C3)——固定兩 surface 既有算式的行為 ═════════════ */
+
+describe('revenueTrendVM — 月營收趨勢', () => {
+	it('total 為 12 月加總、max 為最大月(ReportsScreen fixture 驗算:總計 1,078,200)', () => {
+		const vm = revenueTrendVM([{ h: 300000 }, { h: 320000 }, { h: 458200 }]);
+		expect(vm.total).toBe(1078200);
+		expect(vm.max).toBe(458200);
+	});
+
+	it('空庫全 0:total 0、max 保底 1(桌面 (h/max)*160 高度為 0,不產生 NaN)', () => {
+		const vm = revenueTrendVM([{ h: 0 }, { h: 0 }, { h: 0 }]);
+		expect(vm.total).toBe(0);
+		expect(vm.max).toBe(1);
+	});
+
+	it('空陣列:total 0、max 保底 1', () => {
+		expect(revenueTrendVM([])).toEqual({ total: 0, max: 1 });
+	});
+});
+
+describe('breakdownTotalCents — 本月營收來源拆解合計', () => {
+	it('合計取列本身 grossCents 加總(ReportsScreen fixture 驗算:41,040,000 cents)', () => {
+		expect(breakdownTotalCents([{ grossCents: 31200000 }, { grossCents: 9840000 }])).toBe(41040000);
+	});
+
+	it('空陣列合計 0', () => {
+		expect(breakdownTotalCents([])).toBe(0);
+	});
+});
+
+describe('incomeSourcesVM — 收入來源分析', () => {
+	it('每 source 12 月加總 + 0–1 占比(charts fixture 驗算:course 75% / ticket 25%)', () => {
+		const vm = incomeSourcesVM([
+			{ month: '2025-09', source: 'course', grossCents: 100000 },
+			{ month: '2025-10', source: 'course', grossCents: 200000 },
+			{ month: '2025-09', source: 'ticket', grossCents: 100000 },
+			{ month: '2025-10', source: 'ticket', grossCents: 0 }
+		]);
+		expect(vm.totals).toEqual([
+			{ source: 'course', totalCents: 300000 },
+			{ source: 'ticket', totalCents: 100000 }
+		]);
+		expect(vm.shares).toEqual([0.75, 0.25]);
+	});
+
+	it('全 0 毛額:占比全 0,不除以 0', () => {
+		const vm = incomeSourcesVM([{ month: '2025-09', source: 'course', grossCents: 0 }]);
+		expect(vm.shares).toEqual([0]);
+	});
+
+	it('空陣列:totals/shares 皆空', () => {
+		expect(incomeSourcesVM([])).toEqual({ totals: [], shares: [] });
+	});
+});
+
+describe('coachPerfVM — 教練表現排行', () => {
+	it('依 revenueCents12m 降冪排序並保留呼叫端欄位,寬度相對最大值(100/50)', () => {
+		const rows = [
+			{ id: 'co2', name: '陳大明', revenueCents12m: 42500000 },
+			{ id: 'co1', name: '林雅婷', revenueCents12m: 85000000 }
+		];
+		const vm = coachPerfVM(rows);
+		expect(vm.ranked.map((c) => c.name)).toEqual(['林雅婷', '陳大明']);
+		expect(vm.widths).toEqual([100, 50]);
+	});
+
+	it('同額維持輸入序(sort 穩定性),且不變動輸入陣列', () => {
+		const rows = [
+			{ id: 'a', revenueCents12m: 100 },
+			{ id: 'b', revenueCents12m: 100 }
+		];
+		const copy = [...rows];
+		expect(coachPerfVM(rows).ranked.map((c) => c.id)).toEqual(['a', 'b']);
+		expect(rows).toEqual(copy);
+	});
+
+	it('全零營收:零寬長條,不產生 NaN;空陣列回空', () => {
+		expect(coachPerfVM([{ revenueCents12m: 0 }]).widths).toEqual([0]);
+		expect(coachPerfVM([])).toEqual({ ranked: [], widths: [] });
+	});
+});
+
+describe('venueUsageVM — 場館使用時數', () => {
+	it('minutes 相對最忙場地 0–100(charts fixture 驗算:150/60 → 100%/40%)', () => {
+		expect(venueUsageVM([{ minutes: 150 }, { minutes: 60 }])).toEqual([100, 40]);
+	});
+
+	it('空陣列回空陣列', () => {
+		expect(venueUsageVM([])).toEqual([]);
+	});
+});
+
+describe('attDistVM — 出席率分布', () => {
+	it('count 柱高吃呼叫端 maxScale(桌面 110:最大桶滿高、其餘等比)', () => {
+		const heights = attDistVM([{ count: 11 }, { count: 10 }, { count: 5 }, { count: 6 }], 110);
+		expect(heights[0]).toBe(110);
+		expect(heights[1]).toBeCloseTo(100, 10);
+		expect(heights[2]).toBeCloseTo(50, 10);
+		expect(heights[3]).toBeCloseTo(60, 10); // (6/11)*110,IEEE754 下為 59.999…
+	});
+
+	it('行動 84:最大桶滿高 84', () => {
+		expect(attDistVM([{ count: 11 }, { count: 0 }], 84)).toEqual([84, 0]);
+	});
+
+	it('固定桶全零:全 0,不除以 0', () => {
+		expect(attDistVM([{ count: 0 }, { count: 0 }], 110)).toEqual([0, 0]);
+	});
+});
+
+describe('tierVM — 會員分級分布', () => {
+	it('count 柱高吃呼叫端 maxScale(桌面 100:16 桶滿高)', () => {
+		expect(tierVM([{ count: 10 }, { count: 16 }, { count: 13 }, { count: 9 }], 100)).toEqual([
+			62.5, 100, 81.25, 56.25
+		]);
+	});
+
+	it('行動 84:最大桶滿高 84、其餘等比', () => {
+		expect(tierVM([{ count: 10 }, { count: 16 }], 84)).toEqual([52.5, 84]);
+	});
+});
+
+describe('weekdayVM — 星期別出席負載', () => {
+	it('presentCount 柱高(桌面 104)+ 最忙桶原始人次', () => {
+		const rows = [9, 8, 11, 9, 12, 10, 14].map((presentCount) => ({ presentCount }));
+		const vm = weekdayVM(rows, 104);
+		expect(vm.max).toBe(14);
+		expect(vm.heights[6]).toBe(104);
+		expect(vm.heights[0]).toBeCloseTo((9 / 14) * 104, 10);
+	});
+
+	it('固定 7 桶全零:高度全 0、max 0(呼叫端不畫最忙強調)', () => {
+		const vm = weekdayVM(Array.from({ length: 7 }, () => ({ presentCount: 0 })), 92);
+		expect(vm.heights).toEqual([0, 0, 0, 0, 0, 0, 0]);
+		expect(vm.max).toBe(0);
+	});
+});
+
+describe('retentionVM — 新生 vs 回訪', () => {
+	it('月總數疊柱高(桌面 116,最大月滿高)+ 末桶留存率', () => {
+		const vm = retentionVM(
+			[
+				{ newCount: 14, returningCount: 38, rate: null },
+				{ newCount: 24, returningCount: 52, rate: 0.884 }
+			],
+			116
+		);
+		expect(vm.heights[1]).toBe(116); // 24+52=76 為最大月
+		expect(vm.heights[0]).toBeCloseTo((52 / 76) * 116, 10);
+		expect(vm.lastRate).toBe(0.884);
+	});
+
+	it('末桶 rate null → null;全零月份柱高 0', () => {
+		const vm = retentionVM([{ newCount: 0, returningCount: 0, rate: null }], 104);
+		expect(vm.lastRate).toBeNull();
+		expect(vm.heights).toEqual([0]);
+	});
+
+	it('空陣列:lastRate null、heights 空', () => {
+		expect(retentionVM([], 116)).toEqual({ heights: [], lastRate: null });
+	});
+});
+
+describe('funnelVM — 試上洽詢 → 報名 轉換', () => {
+	it('條寬相對較大段、轉化率=報名/洽詢(charts fixture 驗算:142/318)', () => {
+		const vm = funnelVM({ trialInquiries: 318, newEnrolments: 142 });
+		expect(vm.widths[0]).toBe(100);
+		expect(vm.widths[1]).toBeCloseTo((142 / 318) * 100, 10);
+		expect(vm.conversion).toBe(142 / 318);
+	});
+
+	it('洽詢 0 → 轉化 null、條寬全 0,不除以 0', () => {
+		expect(funnelVM({ trialInquiries: 0, newEnrolments: 0 })).toEqual({
+			widths: [0, 0],
+			conversion: null
+		});
+	});
+
+	it('報名可能非全來自試上:>1 如實回傳,不封頂', () => {
+		expect(funnelVM({ trialInquiries: 10, newEnrolments: 12 }).conversion).toBe(1.2);
+	});
+});
+
+describe('paymentVM — 付款方式占比', () => {
+	it('count 占比 0–1 + hasData(charts fixture 驗算:46/24)', () => {
+		const vm = paymentVM([{ count: 46 }, { count: 24 }]);
+		expect(vm.shares[0]).toBeCloseTo(46 / 70, 10);
+		expect(vm.shares[1]).toBeCloseTo(24 / 70, 10);
+		expect(vm.hasData).toBe(true);
+	});
+
+	it('空陣列/全零筆數:hasData false(呼叫端畫中性圓環),占比不除以 0', () => {
+		expect(paymentVM([])).toEqual({ shares: [], hasData: false });
+		expect(paymentVM([{ count: 0 }])).toEqual({ shares: [0], hasData: false });
 	});
 });
 

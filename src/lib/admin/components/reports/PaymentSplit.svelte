@@ -10,7 +10,7 @@
   import { Card } from '$lib/components/ui';
   import type { AdminPaymentSplitRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { paymentMethodLabel, pctShares } from '$lib/admin/report-math';
+  import { paymentMethodLabel, paymentVM } from '$lib/admin/report-math';
   import { donutStops } from './donut';
 
   let { rows }: { rows: AdminPaymentSplitRow[] } = $props();
@@ -18,11 +18,12 @@
   /* 開放集合(付款方式不定)的循環色盤 — 純呈現層,沿用歸檔 mock 的既定色系。 */
   const PALETTE = ['var(--df-primary)', '#10B981', '#0EA5E9', '#8B5CF6', 'var(--df-warning)', '#EC4899'];
 
-  const shares = $derived(pctShares(rows.map((p) => p.count)));
+  const vm = $derived(paymentVM(rows));
+  const shares = $derived(vm.shares);
   const stops = $derived(
     donutStops(shares.map((share, i) => ({ pct: share * 100, color: PALETTE[i % PALETTE.length] })))
   );
-  const hasData = $derived(rows.some((p) => p.count > 0));
+  const hasData = $derived(vm.hasData);
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">

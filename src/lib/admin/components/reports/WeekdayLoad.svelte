@@ -10,12 +10,13 @@
    * render zero-height bars (and no highlight), never NaN. */
   import { Card } from '$lib/components/ui';
   import type { AdminWeekdayLoadRow } from '$lib/admin/api';
-  import { WEEKDAY_LABEL, normalizeBars } from '$lib/admin/report-math';
+  import { WEEKDAY_LABEL, weekdayVM } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminWeekdayLoadRow[] } = $props();
 
-  const heights = $derived(normalizeBars(rows.map((d) => d.presentCount), 104));
-  const max = $derived(Math.max(...rows.map((d) => d.presentCount), 0));
+  const vm = $derived(weekdayVM(rows, 104));
+  const heights = $derived(vm.heights);
+  const max = $derived(vm.max);
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">

@@ -4,7 +4,11 @@
    *
    * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $orders store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 markOrderPaid
-   * 等 mutation,refreshOps() 供 ErrorState 重試(不受守衛短路)。 */
+   * 等 mutation,refreshOps() 供 ErrorState 重試(不受守衛短路)。
+   *
+   * Round 2 C3:計數/已收/篩選改共用桌面 orders-filter.ts 純函式(countByStatus/
+   * paidRevenue/filterOrders)——OrderRow 結構同桌面 Order,structural typing 直接
+   * 相容;本頁 chips 只消費 7 桶計數中的 4 桶。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -18,6 +22,7 @@
   import { fmtNT } from '$lib/mobile-admin/data';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
+  import { countByStatus, paidRevenue, filterOrders, type OrderStatusFilter } from '$lib/admin/components/orders-filter';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -29,16 +34,11 @@
     gate.load();
   });
 
-  let tab = 'all';
+  let tab: OrderStatusFilter = 'all';
   let q = '';
 
-  $: counts = {
-    all: $orders.length,
-    paid: $orders.filter((o) => o.status === 'paid').length,
-    pending: $orders.filter((o) => o.status === 'pending').length,
-    refunded: $orders.filter((o) => o.status === 'refunded').length
-  };
-  $: revenue = $orders.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
+  $: counts = countByStatus($orders);
+  $: revenue = paidRevenue($orders);
   $: chips = [
     { key: 'all', label: '全部', count: counts.all },
     { key: 'paid', label: '已付款', count: counts.paid },
@@ -50,9 +50,7 @@
     overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
   }
 
-  $: rows = $orders
-    .filter((o) => tab === 'all' || o.status === tab)
-    .filter((o) => !q || (o.id + o.member + o.item).toLowerCase().includes(q.toLowerCase()));
+  $: rows = filterOrders($orders, { status: tab, query: q });
 </script>
 
 <LoadGate {gate}>
@@ -74,7 +72,7 @@
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
     <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋訂單編號、學員…" />
-    <FilterChips items={chips} value={tab} onChange={(k) => (tab = k)} />
+    <FilterChips items={chips} value={tab} onChange={(k) => (tab = k as OrderStatusFilter)} />
   </div>
 
   <div class="df-scroll df-view">

@@ -24,7 +24,7 @@
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -48,14 +48,13 @@
   }
   const openRole = () => overlay.sheet('role', { role: $role, setRole: (r: typeof $role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 
-  function memberErrorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
+  // POST /users 的錯誤訊息已是後端給的繁中使用者可讀文字 → apiErrorMessage 直接透傳，
+  // 同 members 頁慣例。
   async function quickCreateMember(body: CreateMemberBody) {
     try {
       await createMember(body);
     } catch (e) {
-      toasts.notify('error', '新增失敗', memberErrorMessage(e));
+      toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;
     }
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);

@@ -12,17 +12,13 @@
   import type { AdminIncomeSourceRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT, fmtPct } from '$lib/admin/format';
-  import { groupIncomeSources, pctShares, revenueSourceLabel } from '$lib/admin/report-math';
+  import { incomeSourcesVM, revenueSourceLabel } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminIncomeSourceRow[] } = $props();
 
-  const totals = $derived(
-    groupIncomeSources(rows).map((s) => ({
-      source: s.source,
-      totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
-    }))
-  );
-  const shares = $derived(pctShares(totals.map((t) => t.totalCents)));
+  const vm = $derived(incomeSourcesVM(rows));
+  const totals = $derived(vm.totals);
+  const shares = $derived(vm.shares);
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">

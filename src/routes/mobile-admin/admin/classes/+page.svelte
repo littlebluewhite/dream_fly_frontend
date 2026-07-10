@@ -33,7 +33,8 @@
   import type { ClassRow } from '$lib/mobile-admin/data';
   import { createCourse, updateCourse } from '$lib/mobile-admin/api';
   import { buildCourseBody } from '$lib/admin/components/course-request';
-  import { ApiError } from '$lib/api/client';
+  import { filterClasses } from '$lib/admin/components/classes-filter';
+  import { apiErrorText } from '$lib/api/error-text';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -63,16 +64,14 @@
     overlay.sheet('class', { k, onEdit: openEdit });
   }
 
-  // 422 驗證 / 403 權限 / 409 衝突 → 對應的繁中錯誤提示；其餘給通用訊息，同桌面
-  // classes/+page.svelte 的 courseErrorMessage 慣例。
-  function courseErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 422) return '輸入資料不符規則，請確認後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-      if (e.status === 409) return '課程名稱或代碼已存在，請調整後再試。';
-    }
-    return '連線發生問題，請稍後再試。';
-  }
+  // 422 驗證 / 403 權限 / 409 衝突 → 對應的繁中錯誤提示；其餘由 apiErrorText 給通用
+  // 訊息（查表引擎共用 $lib/api/error-text，per-entity 文案表留在頁），同桌面
+  // classes/+page.svelte 慣例。
+  const COURSE_ERROR_TEXT: Record<number, string> = {
+    422: '輸入資料不符規則，請確認後再試。',
+    403: '沒有權限執行此操作。',
+    409: '課程名稱或代碼已存在，請調整後再試。'
+  };
 
   async function save(updated: ClassRow, durationMinutes: number, isNew: boolean) {
     const body = buildCourseBody(updated, $coaches);
@@ -85,15 +84,16 @@
         toasts.notify('success', '已儲存課程', `「${updated.name}」已更新。`);
       }
     } catch (e) {
-      toasts.notify('error', isNew ? '新增失敗' : '儲存失敗', courseErrorMessage(e));
+      toasts.notify('error', isNew ? '新增失敗' : '儲存失敗', apiErrorText(e, COURSE_ERROR_TEXT));
       return;
     }
     await refreshOps();
   }
 
-  $: list = $classes
-    .filter((k) => cat === '全部' || k.cat === cat)
-    .filter((k) => !q || (k.name + k.coach).toLowerCase().includes(q.toLowerCase()));
+  // Round 2 C3:分類/搜尋改共用桌面 classes-filter.ts 的 filterClasses()(兩邊
+  // ClassRow 結構相同;上方 cats chips 字面量保留——桌面 CATS 不含「全部」且順序相異,
+  // 非同一份 render 資料)。
+  $: list = filterClasses($classes, { cat, query: q });
 </script>
 
 <LoadGate {gate}>

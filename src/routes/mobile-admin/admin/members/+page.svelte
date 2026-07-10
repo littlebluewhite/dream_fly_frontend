@@ -28,7 +28,8 @@
   import { createLoadGate } from '$lib/load-gate';
   import type { MemberRow } from '$lib/mobile-admin/data';
   import { createMember, updateMember, type CreateMemberBody, type UpdateMemberBody } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
+  import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';
 
   const gate = createLoadGate({
     fetch: hydrateOps,
@@ -38,24 +39,20 @@
     gate.load();
   });
 
-  let tab = 'all';
+  let tab: MemberAccountStatusFilter = 'all';
   let q = '';
 
   function openNotif() {
     overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
   }
 
-  // 409(email 重複)/422(驗證) 皆已是後端給的繁中使用者可讀文字，直接透傳 e.message，
-  // 同桌面 admin/members/+page.svelte 的 memberErrorMessage 慣例。
-  function memberErrorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
-
+  // 409(email 重複)/422(驗證) 皆已是後端給的繁中使用者可讀文字 → apiErrorMessage
+  // 直接透傳 e.message，同桌面 admin/members/+page.svelte 慣例。
   async function createAndRefresh(body: CreateMemberBody) {
     try {
       await createMember(body);
     } catch (e) {
-      toasts.notify('error', '新增失敗', memberErrorMessage(e));
+      toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;
     }
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
@@ -65,7 +62,7 @@
     try {
       await updateMember(id, body);
     } catch (e) {
-      toasts.notify('error', '儲存失敗', memberErrorMessage(e));
+      toasts.notify('error', '儲存失敗', apiErrorMessage(e));
       return;
     }
     toasts.notify('success', '已儲存', `${body.name ?? ''} 學員資料已更新。`);
@@ -86,19 +83,15 @@
     overlay.sheet('member', { m, onEdit: openEdit });
   }
 
-  $: counts = {
-    all: $members.length,
-    active: $members.filter((m) => m.status === 'active').length,
-    inactive: $members.filter((m) => m.status === 'inactive').length
-  };
+  // Round 2 C3:計數/篩選改共用桌面 member-account-filter.ts 純函式(MemberRow 結構
+  // 同桌面 MemberAccount,structural typing 直接相容)。
+  $: counts = countByAccountStatus($members);
   $: chips = [
     { key: 'all', label: '全部', count: counts.all },
     { key: 'active', label: '啟用中', count: counts.active },
     { key: 'inactive', label: '已停用', count: counts.inactive }
   ];
-  $: rows = $members
-    .filter((m) => tab === 'all' || m.status === tab)
-    .filter((m) => !q || (m.name + m.id + m.phone).toLowerCase().includes(q.toLowerCase()));
+  $: rows = filterMemberAccounts($members, { status: tab, query: q });
 </script>
 
 <LoadGate {gate}>
@@ -117,7 +110,7 @@
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
     <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、電話、編號…" />
-    <FilterChips items={chips} value={tab} onChange={(k) => (tab = k)} />
+    <FilterChips items={chips} value={tab} onChange={(k) => (tab = k as MemberAccountStatusFilter)} />
   </div>
 
   <div class="df-scroll df-view">

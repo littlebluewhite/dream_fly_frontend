@@ -36,7 +36,17 @@
     pctShares,
     normalizeBars,
     topCoursesFrom,
-    groupIncomeSources,
+    revenueTrendVM,
+    breakdownTotalCents,
+    incomeSourcesVM,
+    coachPerfVM,
+    venueUsageVM,
+    attDistVM,
+    tierVM,
+    weekdayVM,
+    retentionVM,
+    funnelVM,
+    paymentVM,
     fmtHours,
     TIER_LABEL,
     REVENUE_SOURCE_LABEL,
@@ -46,6 +56,10 @@
     AGE_BUCKET_LABEL,
     ATTENDANCE_BUCKET_LABEL
   } from '$lib/admin/report-math';
+  // conic-gradient 累計色標——直接共用桌面 reports/donut.ts 的 donutStops()(Round 2
+  // C3:純邏輯跨 surface 單源,同 classes 頁 import course-request.ts 先例;per-surface
+  // 各自持有的是元件與色盤,不是純函式——ADR 0009)。
+  import { donutStops } from '$lib/admin/components/reports/donut';
 
   export let onBack: () => void;
 
@@ -84,19 +98,6 @@
     gte_95: 'var(--df-success)', '85_94': 'var(--df-primary)', '75_84': '#0EA5E9', lt_75: 'var(--df-warning)'
   };
 
-  /** conic-gradient 累計色標(同桌面 admin/components/reports/donut.ts 的
-   *  donutStops())——本檔唯一一處圓餅圖用，就地實作，不跨 surface 引入該檔。 */
-  function donutStops(slices: { pct: number; color: string }[]): string {
-    let acc = 0;
-    return slices
-      .map((s) => {
-        const start = acc;
-        acc += s.pct;
-        return `${s.color} ${start}% ${acc}%`;
-      })
-      .join(', ');
-  }
-
   $: kpiRevenue = deltaDisplay(data?.revenue.thisMonth ?? null, data?.revenue.lastMonth ?? null);
   $: kpiNewMembers = deltaDisplay(data?.kpis.newMembers.thisMonth ?? null, data?.kpis.newMembers.lastMonth ?? null);
   $: kpiNewEnrolments = deltaDisplay(data?.kpis.newEnrolments.thisMonth ?? null, data?.kpis.newEnrolments.lastMonth ?? null);
@@ -105,22 +106,21 @@
 
   $: trend = data?.revenue.trend ?? [];
   $: trendHeights = normalizeBars(trend.map((d) => d.h), 108);
-  $: trendTotal = trend.reduce((sum, d) => sum + d.h, 0);
+  $: trendTotal = revenueTrendVM(trend).total;
 
-  $: revenueBreakdownTotalCents = (data?.revenueBreakdown ?? []).reduce((sum, r) => sum + r.grossCents, 0);
+  $: revenueBreakdownTotalCents = breakdownTotalCents(data?.revenueBreakdown ?? []);
 
   $: ageShares = pctShares((data?.ageDistribution ?? []).map((a) => a.count));
 
   $: topCourses = topCoursesFrom(data?.courses ?? []);
 
-  $: incomeTotals = groupIncomeSources(data?.incomeSources12m ?? []).map((s) => ({
-    source: s.source,
-    totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
-  }));
-  $: incomeShares = pctShares(incomeTotals.map((t) => t.totalCents));
+  $: incomeVm = incomeSourcesVM(data?.incomeSources12m ?? []);
+  $: incomeTotals = incomeVm.totals;
+  $: incomeShares = incomeVm.shares;
 
-  $: sortedCoaches = [...(data?.coaches ?? [])].sort((a, b) => b.revenueCents12m - a.revenueCents12m);
-  $: coachWidths = normalizeBars(sortedCoaches.map((c) => c.revenueCents12m));
+  $: coachVm = coachPerfVM(data?.coaches ?? []);
+  $: sortedCoaches = coachVm.ranked;
+  $: coachWidths = coachVm.widths;
   $: coachRows = sortedCoaches.map((c, i) => ({
     id: c.id,
     name: c.name,
@@ -131,7 +131,7 @@
     widthPct: coachWidths[i]
   }));
 
-  $: venueWidths = normalizeBars((data?.venueUsage ?? []).map((v) => v.minutes));
+  $: venueWidths = venueUsageVM(data?.venueUsage ?? []);
   $: venueRows = (data?.venueUsage ?? []).map((v, i) => ({
     venue: v.venue,
     hoursLabel: fmtHours(v.minutes),
@@ -139,22 +139,28 @@
     widthPct: venueWidths[i]
   }));
 
-  $: attHeights = normalizeBars((data?.attendanceDistribution ?? []).map((d) => d.count), 84);
+  $: attHeights = attDistVM(data?.attendanceDistribution ?? [], 84);
 
-  $: retentionHeights = normalizeBars((data?.retention ?? []).map((d) => d.newCount + d.returningCount), 104);
-  $: retentionLastRate = data?.retention.at(-1)?.rate ?? null;
+  $: retentionVm = retentionVM(data?.retention ?? [], 104);
+  $: retentionHeights = retentionVm.heights;
+  $: retentionLastRate = retentionVm.lastRate;
 
-  $: tierHeights = normalizeBars((data?.tierDistribution ?? []).map((d) => d.count), 84);
+  $: tierHeights = tierVM(data?.tierDistribution ?? [], 84);
 
-  $: weekdayHeights = normalizeBars((data?.weekdayLoad ?? []).map((d) => d.presentCount), 92);
-  $: weekdayMax = Math.max(...(data?.weekdayLoad ?? []).map((d) => d.presentCount), 0);
+  $: weekdayVm = weekdayVM(data?.weekdayLoad ?? [], 92);
+  $: weekdayHeights = weekdayVm.heights;
+  $: weekdayMax = weekdayVm.max;
 
-  $: funnelWidths = normalizeBars([data?.funnel.trialInquiries ?? 0, data?.funnel.newEnrolments ?? 0]);
-  $: funnelConversion =
-    data && data.funnel.trialInquiries > 0 ? data.funnel.newEnrolments / data.funnel.trialInquiries : null;
+  $: funnelVm = funnelVM({
+    trialInquiries: data?.funnel.trialInquiries ?? 0,
+    newEnrolments: data?.funnel.newEnrolments ?? 0
+  });
+  $: funnelWidths = funnelVm.widths;
+  $: funnelConversion = funnelVm.conversion;
 
-  $: paymentShares = pctShares((data?.paymentSplit ?? []).map((p) => p.count));
-  $: paymentHasData = (data?.paymentSplit ?? []).some((p) => p.count > 0);
+  $: paymentVm = paymentVM(data?.paymentSplit ?? []);
+  $: paymentShares = paymentVm.shares;
+  $: paymentHasData = paymentVm.hasData;
   $: paymentStops = donutStops(
     (data?.paymentSplit ?? []).map((p, i) => ({
       pct: paymentShares[i] * 100,

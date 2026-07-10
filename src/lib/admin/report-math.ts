@@ -75,6 +75,109 @@ export function groupIncomeSources(
 	});
 }
 
+/* ═════════════ 逐面板 view-model(Round 2 C3:桌面 reports 元件 × mobile-admin ReportsScreen 共用) ═════════════
+ * 每面板一支「數字→數字」純函式,收斂兩個 surface 原本各自 re-inline 的同一套算式
+ * (ADR 0009:per-surface 的是元件,共用的只有純邏輯)。柱高/條寬的 maxScale 由呼叫端
+ * 傳入——桌面/行動的像素值域本來就不同(110/84、104/92、116/104…),不在本檔硬編。 */
+
+/** 月營收趨勢:total=12 月加總;max=桌面高度公式 (h/max)*160 的分母,保底 1——空庫
+ *  全 0 時 0/1 高度為 0,不產生 NaN(行動版高度另走 normalizeBars,只消費 total)。 */
+export function revenueTrendVM(rows: { h: number }[]): { total: number; max: number } {
+	return {
+		total: rows.reduce((sum, d) => sum + d.h, 0),
+		max: Math.max(...rows.map((d) => d.h), 1)
+	};
+}
+
+/** 本月營收來源拆解:合計毛額(cents)——合計取自列本身加總,非 revenue KPI 的實收
+ *  口徑(折扣後、僅訂單),兩者刻意不對帳(見 RevenueBreakdown.svelte 檔頭)。 */
+export function breakdownTotalCents(rows: { grossCents: number }[]): number {
+	return rows.reduce((sum, r) => sum + r.grossCents, 0);
+}
+
+/** 收入來源分析:groupIncomeSources() 每 source 的 12 月毛額加總 + pctShares() 占比
+ *  (0–1,fmtPct-ready;全 0 → 全 0,不除以 0)。source 序=canonical 輸入序。 */
+export function incomeSourcesVM(rows: { month: string; source: string; grossCents: number }[]): {
+	totals: { source: string; totalCents: number }[];
+	shares: number[];
+} {
+	const totals = groupIncomeSources(rows).map((s) => ({
+		source: s.source,
+		totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
+	}));
+	return { totals, shares: pctShares(totals.map((t) => t.totalCents)) };
+}
+
+/** 教練表現排行:依 12 月營收降冪排序(複本,不變動輸入;同額靠 sort 穩定性維持輸入
+ *  序)+ normalizeBars 橫條寬(相對最大值 0–100)。泛型讓呼叫端的顯示欄位(name/
+ *  studentCount…)原樣通過排序帶回。 */
+export function coachPerfVM<T extends { revenueCents12m: number }>(
+	rows: T[]
+): { ranked: T[]; widths: number[] } {
+	const ranked = [...rows].sort((a, b) => b.revenueCents12m - a.revenueCents12m);
+	return { ranked, widths: normalizeBars(ranked.map((c) => c.revenueCents12m)) };
+}
+
+/** 場館使用時數:minutes 選擇器 → normalizeBars 橫條寬(兩 surface 皆用預設 0–100)。 */
+export function venueUsageVM(rows: { minutes: number }[], maxScale = 100): number[] {
+	return normalizeBars(rows.map((v) => v.minutes), maxScale);
+}
+
+/** 出席率分布:count 選擇器 → normalizeBars 柱高(桌面 110px、行動 84px)。 */
+export function attDistVM(rows: { count: number }[], maxScale = 100): number[] {
+	return normalizeBars(rows.map((d) => d.count), maxScale);
+}
+
+/** 會員分級分布:count 選擇器 → normalizeBars 柱高(桌面 100px、行動 84px)。 */
+export function tierVM(rows: { count: number }[], maxScale = 100): number[] {
+	return normalizeBars(rows.map((d) => d.count), maxScale);
+}
+
+/** 星期別出席負載:presentCount 選擇器 → normalizeBars 柱高(桌面 104px、行動 92px)
+ *  + 最忙桶原始人次(max,0 保底——全 0 時呼叫端據此不畫最忙強調色)。 */
+export function weekdayVM(
+	rows: { presentCount: number }[],
+	maxScale = 100
+): { heights: number[]; max: number } {
+	return {
+		heights: normalizeBars(rows.map((d) => d.presentCount), maxScale),
+		max: Math.max(...rows.map((d) => d.presentCount), 0)
+	};
+}
+
+/** 新生 vs 回訪:月活躍總數(new+returning)→ normalizeBars 疊柱高(桌面 116px、行動
+ *  104px)+ 末桶留存率(空清單或末桶 rate 為 null → null,交給 fmtPct 畫「—」)。 */
+export function retentionVM(
+	rows: { newCount: number; returningCount: number; rate: number | null }[],
+	maxScale = 100
+): { heights: number[]; lastRate: number | null } {
+	return {
+		heights: normalizeBars(rows.map((d) => d.newCount + d.returningCount), maxScale),
+		lastRate: rows.at(-1)?.rate ?? null
+	};
+}
+
+/** 試上洽詢 → 報名:兩段條寬(相對較大段 0–100,全 0 → 全 0)+ 轉化率(洽詢 0 →
+ *  null,不除以 0;報名可能非全來自試上,>1 如實回傳)。 */
+export function funnelVM(funnel: { trialInquiries: number; newEnrolments: number }): {
+	widths: number[];
+	conversion: number | null;
+} {
+	return {
+		widths: normalizeBars([funnel.trialInquiries, funnel.newEnrolments]),
+		conversion: funnel.trialInquiries > 0 ? funnel.newEnrolments / funnel.trialInquiries : null
+	};
+}
+
+/** 付款方式占比:count 占比(0–1)+ 是否有任何進帳(hasData=false 時呼叫端畫中性圓
+ *  環)。conic 色標(donutStops+色盤)屬呈現層,留在各 surface 呼叫端。 */
+export function paymentVM(rows: { count: number }[]): { shares: number[]; hasData: boolean } {
+	return {
+		shares: pctShares(rows.map((p) => p.count)),
+		hasData: rows.some((p) => p.count > 0)
+	};
+}
+
 /* ═════════════════════════ 顯示格式化 ═════════════════════════ */
 
 /** 分鐘 → 「X 小時」/「X.5 小時」顯示字串，四捨五入至最近半小時(venue_usage.minutes

@@ -9,7 +9,7 @@
    * (empty-library) month. */
   import { Card } from '$lib/components/ui';
   import type { AdminAttendanceDistRow } from '$lib/admin/api';
-  import { ATTENDANCE_BUCKET_LABEL, normalizeBars } from '$lib/admin/report-math';
+  import { ATTENDANCE_BUCKET_LABEL, attDistVM } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminAttendanceDistRow[] } = $props();
 
@@ -21,7 +21,7 @@
     lt_75: 'var(--df-warning)'
   };
 
-  const heights = $derived(normalizeBars(rows.map((d) => d.count), 110));
+  const heights = $derived(attDistVM(rows, 110));
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">

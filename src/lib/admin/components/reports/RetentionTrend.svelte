@@ -11,12 +11,13 @@
   import { Card } from '$lib/components/ui';
   import type { AdminRetentionRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { normalizeBars } from '$lib/admin/report-math';
+  import { retentionVM } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminRetentionRow[] } = $props();
 
-  const heights = $derived(normalizeBars(rows.map((d) => d.newCount + d.returningCount), 116));
-  const lastRate = $derived(rows.at(-1)?.rate ?? null);
+  const vm = $derived(retentionVM(rows, 116));
+  const heights = $derived(vm.heights);
+  const lastRate = $derived(vm.lastRate);
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">

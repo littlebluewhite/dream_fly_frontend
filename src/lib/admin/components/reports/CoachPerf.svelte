@@ -12,15 +12,16 @@
   import type { AdminReportCoachRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT, fmtPct } from '$lib/admin/format';
-  import { normalizeBars } from '$lib/admin/report-math';
+  import { coachPerfVM } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminReportCoachRow[] } = $props();
 
   /* 開放集合(教練人數不定)的循環色盤 — 純呈現層,沿用歸檔 mock 的既定色系。 */
   const PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
 
-  const ranked = $derived([...rows].sort((a, b) => b.revenueCents12m - a.revenueCents12m));
-  const widths = $derived(normalizeBars(ranked.map((c) => c.revenueCents12m)));
+  const vm = $derived(coachPerfVM(rows));
+  const ranked = $derived(vm.ranked);
+  const widths = $derived(vm.widths);
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">

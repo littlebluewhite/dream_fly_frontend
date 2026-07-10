@@ -11,14 +11,13 @@
   import { Card } from '$lib/components/ui';
   import type { AdminFunnel } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { normalizeBars } from '$lib/admin/report-math';
+  import { funnelVM } from '$lib/admin/report-math';
 
   let { funnel }: { funnel: AdminFunnel } = $props();
 
-  const widths = $derived(normalizeBars([funnel.trialInquiries, funnel.newEnrolments]));
-  const conversion = $derived(
-    funnel.trialInquiries > 0 ? funnel.newEnrolments / funnel.trialInquiries : null
-  );
+  const vm = $derived(funnelVM(funnel));
+  const widths = $derived(vm.widths);
+  const conversion = $derived(vm.conversion);
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">

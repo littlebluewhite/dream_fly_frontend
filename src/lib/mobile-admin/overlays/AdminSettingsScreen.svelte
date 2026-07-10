@@ -21,7 +21,7 @@
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, putSettings, type SettingsWriteBody } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;
 
@@ -62,10 +62,8 @@
     gate.load();
   });
 
-  function settingsErrorMessage(e: unknown): string {
-    if (e instanceof ApiError && e.status === 403) return '沒有權限執行此操作。';
-    return '連線發生問題，請稍後再試。';
-  }
+  // PUT /settings:403 無權限 → 繁中文案查表(apiErrorText)，其餘通用訊息。
+  const SETTINGS_ERROR_TEXT: Record<number, string> = { 403: '沒有權限執行此操作。' };
 
   async function save() {
     if (saving) return;
@@ -84,7 +82,7 @@
     try {
       await putSettings(body);
     } catch (e) {
-      toasts.notify('error', '儲存失敗', settingsErrorMessage(e));
+      toasts.notify('error', '儲存失敗', apiErrorText(e, SETTINGS_ERROR_TEXT));
       saving = false;
       return;
     }

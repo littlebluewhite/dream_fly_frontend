@@ -13,11 +13,11 @@
   import type { AdminRevenueBreakdownRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT } from '$lib/admin/format';
-  import { REVENUE_SOURCE_LABEL } from '$lib/admin/report-math';
+  import { REVENUE_SOURCE_LABEL, breakdownTotalCents } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminRevenueBreakdownRow[] } = $props();
 
-  const totalCents = $derived(rows.reduce((sum, r) => sum + r.grossCents, 0));
+  const totalCents = $derived(breakdownTotalCents(rows));
 </script>
 
 <Card padding={0} style="overflow:hidden">

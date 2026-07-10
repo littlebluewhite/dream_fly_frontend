@@ -21,7 +21,7 @@
     type CreateCertificateBody,
     type CreateReportCardBody
   } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorMessage } from '$lib/api/error-text';
   import type { Student } from '$lib/coach/data';
 
   export let onClose: () => void;
@@ -64,12 +64,8 @@
   $: validReportCard = !!enrolmentId && termLabel.trim() !== '' && comment.trim() !== '';
   $: valid = mode === 'certificate' ? validCert : validReportCard;
 
-  /** 後端(certificates/report-cards 模組)的錯誤字串本身就是繁中，直接透傳，同
-   *  桌面 CertificateDialog/ReportCardDialog 慣例。 */
-  function errorMessage(e: unknown): string {
-    return e instanceof ApiError ? e.message : '連線發生問題，請稍後再試。';
-  }
-
+  // 後端(certificates/report-cards 模組)的錯誤字串本身就是繁中 → apiErrorMessage
+  // 直接透傳，同桌面 CertificateDialog/ReportCardDialog 慣例。
   async function submit() {
     if (!student || !valid || submitting) return;
     submitting = true;
@@ -88,7 +84,7 @@
       }
       onClose();
     } catch (e) {
-      toasts.notify('error', mode === 'certificate' ? '發放失敗' : '成績單建立失敗', errorMessage(e));
+      toasts.notify('error', mode === 'certificate' ? '發放失敗' : '成績單建立失敗', apiErrorMessage(e));
     } finally {
       submitting = false;
     }

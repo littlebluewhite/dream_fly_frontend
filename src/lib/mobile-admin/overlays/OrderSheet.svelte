@@ -11,7 +11,7 @@
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
   import { fmtNT, type OrderRow } from '$lib/mobile-admin/data';
   import { updateOrderStatus } from '$lib/mobile-admin/api';
-  import { ApiError } from '$lib/api/client';
+  import { apiErrorText } from '$lib/api/error-text';
   import { orderStatusBadge } from '$lib/api/wire';
 
   export let onClose: () => void;
@@ -21,13 +21,12 @@
 
   let saving = false;
 
-  function statusErrorMessage(e: unknown): string {
-    if (e instanceof ApiError) {
-      if (e.status === 409) return '訂單狀態已變更，請重新整理後再試。';
-      if (e.status === 403) return '沒有權限執行此操作。';
-    }
-    return '連線發生問題，請稍後再試。';
-  }
+  // PATCH /orders/{id}/status:409 併發衝突 / 403 權限 → 繁中文案查表(apiErrorText)，
+  // 其餘通用訊息。
+  const STATUS_ERROR_TEXT: Record<number, string> = {
+    409: '訂單狀態已變更，請重新整理後再試。',
+    403: '沒有權限執行此操作。'
+  };
 
   $: [tone, label] = (o ? orderStatusBadge(o.status) : ['neutral', '-']) as [Tone, string];
   $: rows = o
@@ -67,7 +66,7 @@
       toasts.notify('success', '已標記收款', target.id + ' · ' + fmtNT(target.amount) + ' 已入帳。');
       onClose();
     } catch (e) {
-      toasts.notify('error', '標記失敗', statusErrorMessage(e));
+      toasts.notify('error', '標記失敗', apiErrorText(e, STATUS_ERROR_TEXT));
     } finally {
       saving = false;
     }
