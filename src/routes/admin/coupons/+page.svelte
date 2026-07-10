@@ -14,7 +14,7 @@
    * 維持開啟以便修正重試（同 tickets/venues 頁慣例），刪除確認對話框則無論成敗都
    * 關閉（沒有「欄位」可修正重試，失敗只能之後從列表重新觸發一次）。 */
   import { onMount } from 'svelte';
-  import { Button, Card, Icon, Dialog, ErrorState, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
+  import { Button, Card, Icon, Dialog, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
@@ -152,7 +152,12 @@
   }
 </script>
 
-{#if $gate.phase === 'ready'}
+<LoadGate {gate}>
+  <div class="view" data-testid="coupons-skeleton" slot="loading">
+    <Skeleton w={180} h={32} r={8} />
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
   <div class="view">
     <PageHead title="優惠碼管理" sub={$gate.total + ' 組優惠碼'}>
       <svelte:fragment slot="actions">
@@ -237,14 +242,7 @@
       </p>
     {/if}
   </Dialog>
-{:else if $gate.phase === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="view" data-testid="coupons-skeleton">
-    <Skeleton w={180} h={32} r={8} />
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>
 
 <style>
   .view {

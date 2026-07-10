@@ -148,7 +148,7 @@ export interface Notif {
 	title: string;
 	body: string;
 	time: string;
-	unread: boolean;
+	read: boolean;
 	to: string;
 }
 
@@ -334,8 +334,8 @@ export const SHARED_FILES: SharedFile[] = [
  * Defined in the prototype's shell.jsx; data, so it lives here. Old-style icon
  * `alert-triangle` is translated to the registry's `triangle-alert`. */
 export const NOTIFS: Notif[] = [
-	{ icon: 'clipboard-check', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', title: '點名提醒', body: '青少年體操中級班 上課中，尚未完成點名', time: '5 分鐘前', unread: true, to: 'attendance' },
-	{ icon: 'message-circle', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', title: '王媽媽（小明家長）', body: '老師您好，小明明天的課可以調整時間嗎？', time: '18 分鐘前', unread: true, to: 'messages' },
-	{ icon: 'triangle-alert', tone: 'var(--df-error)', bg: 'var(--df-error-bg)', title: '緊急訊息逾時', body: '黃媽媽的訊息已逾回覆時效 1.5 小時', time: '1 小時前', unread: true, to: 'messages' },
-	{ icon: 'award', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', title: '評核待更新', body: '競技選手培訓班 3 位學員技能評量待更新', time: '昨天 16:05', unread: false, to: 'students' }
+	{ icon: 'clipboard-check', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', title: '點名提醒', body: '青少年體操中級班 上課中，尚未完成點名', time: '5 分鐘前', read: false, to: 'attendance' },
+	{ icon: 'message-circle', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', title: '王媽媽（小明家長）', body: '老師您好，小明明天的課可以調整時間嗎？', time: '18 分鐘前', read: false, to: 'messages' },
+	{ icon: 'triangle-alert', tone: 'var(--df-error)', bg: 'var(--df-error-bg)', title: '緊急訊息逾時', body: '黃媽媽的訊息已逾回覆時效 1.5 小時', time: '1 小時前', read: false, to: 'messages' },
+	{ icon: 'award', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', title: '評核待更新', body: '競技選手培訓班 3 位學員技能評量待更新', time: '昨天 16:05', read: true, to: 'students' }
 ];

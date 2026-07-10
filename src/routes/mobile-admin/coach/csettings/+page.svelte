@@ -25,8 +25,7 @@
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
-  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { LoadGate, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, role, switchRole, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
@@ -115,171 +114,171 @@
   }
 </script>
 
-{#if $gate === 'ready' && data}
-{@const p = cInfo ? { name: cInfo.name, initial: cInfo.initial, role: cInfo.role, desc: '', color: 'var(--df-primary)', id: cInfo.id } : { name: '', initial: '?', role: '', desc: '', color: 'var(--df-primary)', id: '' }}
-<HeroHeader role="coach" {p} unread={0} onBell={() => {}} {onRole} greeting="個人設定" sub="個人資料、通知偏好與帳號安全" />
-
-<div class="df-scroll df-view">
-  <div style="padding:16px; display:flex; flex-direction:column; gap:18px; margin-top:-2px;">
-  {#if !cInfo}
-    <EmptyState icon="user-x" title="找不到教練資料" body="請確認教練帳號設定。" />
-  {:else}
-    <!-- profile summary -->
-    <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
-      <div style="display:flex; align-items:center; gap:13px;">
-        <div style="position:relative; flex:none;">
-          <Avatar name={cInfo.initial} size="lg" color="var(--df-primary)" />
-          <span style="position:absolute; right:0; bottom:0; width:14px; height:14px; border-radius:999px; background:var(--df-success); border:2.5px solid #fff;"></span>
-        </div>
-        <div style="flex:1; min-width:0;">
-          <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{cInfo.full}</span></div>
-          <div style="font-size:12px; color:var(--df-primary); margin-top:2px;">{cInfo.role}</div>
-        </div>
-        <button
-          on:click={() => toasts.notify('info', '更換照片', '請上傳正方形大頭照。')}
-          class="df-tapscale"
-          style="width:40px; height:40px; border-radius:11px; border:1.5px solid var(--df-border); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"
-        ><Icon name="camera" size={18} color="var(--df-text-light)" /></button>
-      </div>
-      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:15px; border-top:1px solid var(--df-border); padding-top:14px;">
-        {#each STATS as [v, l] (l)}
-          <div style="text-align:center;">
-            <div style="font-size:16.5px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{v}</div>
-            <div style="font-size:11px; color:var(--df-text-light); margin-top:1px;">{l}</div>
-          </div>
-        {/each}
-      </div>
-    </div>
-
-    <!-- contact info -->
-    <Panel title="基本資料" pad={16}>
-      <div style="display:flex; flex-direction:column; gap:12px;">
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">姓名</div>
-          <input bind:value={name} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
-        </div>
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">職稱</div>
-          <input value={cInfo.role} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
-        </div>
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
-          <input bind:value={phone} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
-        </div>
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">Email</div>
-          <input value={cInfo.email} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
-        </div>
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">教練簡介</div>
-          <textarea bind:value={bio} rows={3} style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;"></textarea>
-        </div>
-        <div>
-          <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:7px;">專長領域</div>
-          <div style="display:flex; gap:7px; flex-wrap:wrap;">
-            {#each cInfo.chips as t (t)}
-              <span style="display:inline-flex; align-items:center; padding:4px 10px; border-radius:var(--df-radius-sm); background:var(--df-primary-bg); border:1px solid var(--df-primary); font-size:var(--df-text-xs); font-weight:var(--df-weight-medium); color:var(--df-primary); white-space:nowrap;">{t}</span>
-            {/each}
-          </div>
-        </div>
-      </div>
-    </Panel>
-
-    <!-- notification prefs -->
-    <Panel title="通知偏好">
-      {#each notifRows as [k, ic, t, d], i (k)}
-        <div style="display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:{i < notifRows.length - 1 ? '1px solid var(--df-border)' : 'none'};">
-          <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name={ic} size={17} color="var(--df-text-light)" /></div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{t}</div>
-            <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{d}</div>
-          </div>
-          <Switch bind:checked={notif[k]} />
-        </div>
-      {/each}
-    </Panel>
-
-    <!-- account -->
-    <Panel title="帳號與安全">
-      <div style="display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px solid var(--df-border);">
-        <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="key-round" size={17} color="var(--df-text-light)" /></div>
-        <div style="flex:1; min-width:0;">
-          <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">變更密碼</div>
-          <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">上次更新於 2026/03/12</div>
-        </div>
-        <button
-          on:click={() => (pwOpen = true)}
-          class="df-tapscale"
-          style="height:34px; padding:0 14px; border-radius:9px; border:1.5px solid var(--df-border); background:#fff; color:var(--df-primary); font-size:13px; font-weight:700; cursor:pointer;"
-        >變更</button>
-      </div>
-      <div style="display:flex; align-items:center; gap:12px; padding:13px 16px;">
-        <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="shield-check" size={17} color="var(--df-text-light)" /></div>
-        <div style="flex:1; min-width:0;">
-          <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">雙重驗證（2FA）</div>
-          <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{twoFA ? '已啟用 · 登入需動態驗證碼' : '建議啟用'}</div>
-        </div>
-        <Switch checked={twoFA} on:change={(e) => { twoFA = e.detail; toasts.notify(twoFA ? 'success' : 'warning', twoFA ? '已啟用雙重驗證' : '已關閉雙重驗證', twoFA ? '下次登入將需要動態驗證碼。' : '帳號安全性已降低。'); }} />
-      </div>
-    </Panel>
-
-    <!-- login devices -->
-    <Panel title="登入裝置" sub="近期登入此帳號的裝置">
-      <button slot="right" on:click={() => toasts.notify('warning', '已登出其他裝置', '除目前裝置外，所有工作階段已結束。')} style="border:none; background:none; font-size:12.5px; font-weight:700; color:var(--df-error); cursor:pointer;">登出其他</button>
-      {#each LOGINS as l, i (i)}
-        <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:{i < LOGINS.length - 1 ? '1px solid var(--df-border)' : 'none'};">
-          <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name={l.icon} size={17} color="var(--df-text-light)" /></div>
-          <div style="flex:1; min-width:0;">
-            <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{l.device}</div>
-            <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{l.place}</div>
-          </div>
-          {#if l.now}
-            <Badge tone="success" dot>{l.time}</Badge>
-          {:else}
-            <span style="font-size:11.5px; color:var(--df-text-muted); font-family:var(--df-font-mono);">{l.time}</span>
-          {/if}
-        </div>
-      {/each}
-    </Panel>
-
-    <Button variant="primary" fullWidth disabled={saving} on:click={save}>
-      <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />{saving ? '儲存中…' : '儲存變更'}</span>
-    </Button>
-    <button
-      on:click={logout}
-      class="df-tapscale"
-      style="display:flex; align-items:center; justify-content:center; gap:8px; height:48px; border-radius:12px; border:none; background:#FEF2F2; color:var(--df-error); font-size:14px; font-weight:700; cursor:pointer;"
-    >
-      <Icon name="log-out" size={17} color="var(--df-error)" /> 登出
-    </button>
-  {/if}
-    <div style="height:8px;"></div>
-  </div>
-</div>
-
-<!-- change-password sheet -->
-<Sheet open={pwOpen} onClose={() => (pwOpen = false)} title="變更密碼">
-  <div style="display:flex; flex-direction:column; gap:14px;">
-    {#each [['目前密碼', '輸入目前密碼'], ['新密碼', '至少 8 碼，含英數'], ['確認新密碼', '再次輸入新密碼']] as [l, ph] (l)}
-      <div>
-        <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">{l}</div>
-        <input type="password" placeholder={ph} style="width:100%; height:46px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:10px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
-      </div>
-    {/each}
-  </div>
-  <svelte:fragment slot="footer">
-    <Button variant="secondary" on:click={() => (pwOpen = false)}>取消</Button>
-    <Button variant="primary" style="flex:1;" on:click={() => { pwOpen = false; toasts.notify('success', '密碼已更新', '請於下次登入使用新密碼。'); }}>
-      <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />更新密碼</span>
-    </Button>
-  </svelte:fragment>
-</Sheet>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="df-scroll df-view" data-testid="csettings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
+  <div class="df-scroll df-view" data-testid="csettings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;" slot="loading">
     <SkelCard><Skeleton w="100%" h={100} r={16} /></SkelCard>
     <SkelCard padding={0}><Skeleton w="100%" h={180} r={16} /></SkelCard>
     <SkelCard padding={0}><Skeleton w="100%" h={220} r={16} /></SkelCard>
   </div>
-{/if}
+
+  {#if data}
+    {@const p = cInfo ? { name: cInfo.name, initial: cInfo.initial, role: cInfo.role, desc: '', color: 'var(--df-primary)', id: cInfo.id } : { name: '', initial: '?', role: '', desc: '', color: 'var(--df-primary)', id: '' }}
+    <HeroHeader role="coach" {p} unread={0} onBell={() => {}} {onRole} greeting="個人設定" sub="個人資料、通知偏好與帳號安全" />
+
+    <div class="df-scroll df-view">
+      <div style="padding:16px; display:flex; flex-direction:column; gap:18px; margin-top:-2px;">
+      {#if !cInfo}
+        <EmptyState icon="user-x" title="找不到教練資料" body="請確認教練帳號設定。" />
+      {:else}
+        <!-- profile summary -->
+        <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
+          <div style="display:flex; align-items:center; gap:13px;">
+            <div style="position:relative; flex:none;">
+              <Avatar name={cInfo.initial} size="lg" color="var(--df-primary)" />
+              <span style="position:absolute; right:0; bottom:0; width:14px; height:14px; border-radius:999px; background:var(--df-success); border:2.5px solid #fff;"></span>
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:7px;"><span style="font-size:18px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{cInfo.full}</span></div>
+              <div style="font-size:12px; color:var(--df-primary); margin-top:2px;">{cInfo.role}</div>
+            </div>
+            <button
+              on:click={() => toasts.notify('info', '更換照片', '請上傳正方形大頭照。')}
+              class="df-tapscale"
+              style="width:40px; height:40px; border-radius:11px; border:1.5px solid var(--df-border); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"
+            ><Icon name="camera" size={18} color="var(--df-text-light)" /></button>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:15px; border-top:1px solid var(--df-border); padding-top:14px;">
+            {#each STATS as [v, l] (l)}
+              <div style="text-align:center;">
+                <div style="font-size:16.5px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{v}</div>
+                <div style="font-size:11px; color:var(--df-text-light); margin-top:1px;">{l}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- contact info -->
+        <Panel title="基本資料" pad={16}>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">姓名</div>
+              <input bind:value={name} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">職稱</div>
+              <input value={cInfo.role} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
+              <input bind:value={phone} style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">Email</div>
+              <input value={cInfo.email} disabled style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; box-sizing:border-box; background:var(--df-bg-light);" />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">教練簡介</div>
+              <textarea bind:value={bio} rows={3} style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;"></textarea>
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:7px;">專長領域</div>
+              <div style="display:flex; gap:7px; flex-wrap:wrap;">
+                {#each cInfo.chips as t (t)}
+                  <span style="display:inline-flex; align-items:center; padding:4px 10px; border-radius:var(--df-radius-sm); background:var(--df-primary-bg); border:1px solid var(--df-primary); font-size:var(--df-text-xs); font-weight:var(--df-weight-medium); color:var(--df-primary); white-space:nowrap;">{t}</span>
+                {/each}
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        <!-- notification prefs -->
+        <Panel title="通知偏好">
+          {#each notifRows as [k, ic, t, d], i (k)}
+            <div style="display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:{i < notifRows.length - 1 ? '1px solid var(--df-border)' : 'none'};">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name={ic} size={17} color="var(--df-text-light)" /></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{t}</div>
+                <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{d}</div>
+              </div>
+              <Switch bind:checked={notif[k]} />
+            </div>
+          {/each}
+        </Panel>
+
+        <!-- account -->
+        <Panel title="帳號與安全">
+          <div style="display:flex; align-items:center; gap:12px; padding:13px 16px; border-bottom:1px solid var(--df-border);">
+            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="key-round" size={17} color="var(--df-text-light)" /></div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">變更密碼</div>
+              <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">上次更新於 2026/03/12</div>
+            </div>
+            <button
+              on:click={() => (pwOpen = true)}
+              class="df-tapscale"
+              style="height:34px; padding:0 14px; border-radius:9px; border:1.5px solid var(--df-border); background:#fff; color:var(--df-primary); font-size:13px; font-weight:700; cursor:pointer;"
+            >變更</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; padding:13px 16px;">
+            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="shield-check" size={17} color="var(--df-text-light)" /></div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">雙重驗證（2FA）</div>
+              <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{twoFA ? '已啟用 · 登入需動態驗證碼' : '建議啟用'}</div>
+            </div>
+            <Switch checked={twoFA} on:change={(e) => { twoFA = e.detail; toasts.notify(twoFA ? 'success' : 'warning', twoFA ? '已啟用雙重驗證' : '已關閉雙重驗證', twoFA ? '下次登入將需要動態驗證碼。' : '帳號安全性已降低。'); }} />
+          </div>
+        </Panel>
+
+        <!-- login devices -->
+        <Panel title="登入裝置" sub="近期登入此帳號的裝置">
+          <button slot="right" on:click={() => toasts.notify('warning', '已登出其他裝置', '除目前裝置外，所有工作階段已結束。')} style="border:none; background:none; font-size:12.5px; font-weight:700; color:var(--df-error); cursor:pointer;">登出其他</button>
+          {#each LOGINS as l, i (i)}
+            <div style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:{i < LOGINS.length - 1 ? '1px solid var(--df-border)' : 'none'};">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name={l.icon} size={17} color="var(--df-text-light)" /></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{l.device}</div>
+                <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{l.place}</div>
+              </div>
+              {#if l.now}
+                <Badge tone="success" dot>{l.time}</Badge>
+              {:else}
+                <span style="font-size:11.5px; color:var(--df-text-muted); font-family:var(--df-font-mono);">{l.time}</span>
+              {/if}
+            </div>
+          {/each}
+        </Panel>
+
+        <Button variant="primary" fullWidth disabled={saving} on:click={save}>
+          <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />{saving ? '儲存中…' : '儲存變更'}</span>
+        </Button>
+        <button
+          on:click={logout}
+          class="df-tapscale"
+          style="display:flex; align-items:center; justify-content:center; gap:8px; height:48px; border-radius:12px; border:none; background:#FEF2F2; color:var(--df-error); font-size:14px; font-weight:700; cursor:pointer;"
+        >
+          <Icon name="log-out" size={17} color="var(--df-error)" /> 登出
+        </button>
+      {/if}
+        <div style="height:8px;"></div>
+      </div>
+    </div>
+
+    <!-- change-password sheet -->
+    <Sheet open={pwOpen} onClose={() => (pwOpen = false)} title="變更密碼">
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        {#each [['目前密碼', '輸入目前密碼'], ['新密碼', '至少 8 碼，含英數'], ['確認新密碼', '再次輸入新密碼']] as [l, ph] (l)}
+          <div>
+            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">{l}</div>
+            <input type="password" placeholder={ph} style="width:100%; height:46px; padding:0 13px; border:1.5px solid var(--df-border-strong); border-radius:10px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; box-sizing:border-box;" />
+          </div>
+        {/each}
+      </div>
+      <svelte:fragment slot="footer">
+        <Button variant="secondary" on:click={() => (pwOpen = false)}>取消</Button>
+        <Button variant="primary" style="flex:1;" on:click={() => { pwOpen = false; toasts.notify('success', '密碼已更新', '請於下次登入使用新密碼。'); }}>
+          <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />更新密碼</span>
+        </Button>
+      </svelte:fragment>
+    </Sheet>
+  {/if}
+</LoadGate>

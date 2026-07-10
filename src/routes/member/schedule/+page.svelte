@@ -5,7 +5,7 @@
    * are visual-only; clicking a class block raises an info toast. Data +
    * primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
+  import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import { WEEK, TIME_ROWS, type ScheduleBlock } from '$lib/member/data';
   import { toasts } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
@@ -32,7 +32,17 @@
   });
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate}>
+  <div class="df-view" data-testid="schedule-skeleton" slot="loading">
+    <Skeleton w="100%" h={46} r={9} style="margin-bottom:18px" />
+    <SkelCard padding={0}>
+      {#each [0, 1, 2, 3, 4] as i (i)}
+        <Skeleton w="100%" h={60} r={0} style="border-bottom:1px solid var(--df-border)" />
+      {/each}
+    </SkelCard>
+  </div>
+
+  {#if data}
   {#if data.schedule.length === 0}
     <div class="df-view">
       <EmptyState icon="calendar-x" title="尚未報名任何課程" body="完成報名後，你的每週課表將會在這裡顯示。" />
@@ -84,18 +94,10 @@
     </Card>
   </div>
   {/if}
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div class="df-view" data-testid="schedule-skeleton">
-    <Skeleton w="100%" h={46} r={9} style="margin-bottom:18px" />
-    <SkelCard padding={0}>
-      {#each [0, 1, 2, 3, 4] as i (i)}
-        <Skeleton w="100%" h={60} r={0} style="border-bottom:1px solid var(--df-border)" />
-      {/each}
-    </SkelCard>
-  </div>
-{/if}
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <style>
   .block {

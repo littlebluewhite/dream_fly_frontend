@@ -8,7 +8,7 @@
   import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, type CoachSettingsData } from '$lib/coach/api';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import CoachAvatar from '$lib/coach/components/CoachAvatar.svelte';
@@ -60,7 +60,13 @@
   ];
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="settings-skeleton" slot="loading">
+    <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
+{#if data}
 <div style="display:flex;flex-direction:column;gap:16px">
   <!-- Profile header card -->
   <Card padding={24}>
@@ -119,11 +125,5 @@
     {/if}
   </div>
 </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px" data-testid="settings-skeleton">
-    <SkelCard><Skeleton w="100%" h={140} r={12} /></SkelCard>
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
 {/if}
+</LoadGate>

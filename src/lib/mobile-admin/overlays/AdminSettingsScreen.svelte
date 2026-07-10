@@ -16,7 +16,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
@@ -96,158 +96,158 @@
 
 <PushScreen>
   <ScreenHeader {onBack} title="系統設定" sub="場館資訊、通知與權限" />
-  {#if $gate === 'ready'}
-  <div class="df-scroll">
-    <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
-      <Panel title="場館資訊" sub="顯示於官網與報名通知" pad={16}>
-        <div style="display:flex; flex-direction:column; gap:13px;">
-          <div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">場館名稱</div>
-            <input
-              bind:value={name}
-              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
-                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                outline:none; box-sizing:border-box;"
-            />
-          </div>
-          <div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
-            <input
-              bind:value={phone}
-              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
-                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                outline:none; box-sizing:border-box;"
-            />
-          </div>
-          <div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">地址</div>
-            <input
-              bind:value={address}
-              style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
-                border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                outline:none; box-sizing:border-box;"
-            />
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-            <div>
-              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">預設師生比</div>
-              <select
-                bind:value={defaultRatio}
-                style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
-                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                  outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
-              >
-                {#each RATIO_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
-              </select>
-            </div>
-            <div>
-              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">每班人數上限</div>
-              <select
-                bind:value={maxClassSizeLabel}
-                style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
-                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
-                  outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
-              >
-                {#each MAX_CLASS_SIZE_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
-              </select>
-            </div>
-          </div>
-        </div>
-      </Panel>
-
-      <Panel title="通知與自動化">
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
-            border-bottom:1px solid var(--df-border);"
-        >
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="mail" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">Email 通知</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">報名、繳費與請假通知家長</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Switch bind:checked={email} /></div>
-        </div>
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
-            border-bottom:1px solid var(--df-border);"
-        >
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="smartphone" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">簡訊提醒</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">課前一日發送簡訊（需點數）</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Switch bind:checked={sms} /></div>
-        </div>
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
-            border-bottom:1px solid var(--df-border);"
-        >
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="user-x" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">出席偏低警示</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">出席率低於 75% 通知管理員</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Switch bind:checked={lowAtt} /></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;">
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="repeat" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">自動候補遞補</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">額滿班級退出時通知候補</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Switch bind:checked={autoWait} /></div>
-        </div>
-      </Panel>
-
-      <Panel title="帳號與安全">
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
-            border-bottom:1px solid var(--df-border);"
-        >
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="key-round" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">變更密碼</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">上次更新於 2026/03/12</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Icon name="chevron-right" size={18} color="var(--df-text-muted)" /></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;">
-          <div style="display:flex; align-items:center; gap:12px; min-width:0;">
-            <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="shield-check" size={17} color="var(--df-text-light)" /></div>
-            <div style="min-width:0;">
-              <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">雙重驗證（2FA）</div>
-              <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">登入時需動態驗證碼</div>
-            </div>
-          </div>
-          <div style="flex:none;"><Switch bind:checked={twoFA} /></div>
-        </div>
-      </Panel>
-
-      <Button variant="primary" fullWidth disabled={saving} on:click={save}>
-        <Icon name="check" size={16} style="margin-right:6px;" />儲存變更
-      </Button>
-      <div style="height:8px;"></div>
-    </div>
-  </div>
-  {:else if $gate === 'error'}
-    <div class="df-scroll" style="padding:16px;">
-      <ErrorState onRetry={gate.refresh} />
-    </div>
-  {:else}
-    <div class="df-scroll" data-testid="settings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+  <LoadGate {gate}>
+    <div class="df-scroll" data-testid="settings-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:18px;" slot="loading">
       {#each [0, 1, 2] as i (i)}
         <SkelCard padding={16}><Skeleton w="100%" h={i === 0 ? 220 : 140} r={12} /></SkelCard>
       {/each}
     </div>
-  {/if}
+
+    <div class="df-scroll" style="padding:16px;" slot="error">
+      <ErrorState onRetry={gate.refresh} />
+    </div>
+
+    <div class="df-scroll">
+      <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
+        <Panel title="場館資訊" sub="顯示於官網與報名通知" pad={16}>
+          <div style="display:flex; flex-direction:column; gap:13px;">
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">場館名稱</div>
+              <input
+                bind:value={name}
+                style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                  outline:none; box-sizing:border-box;"
+              />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
+              <input
+                bind:value={phone}
+                style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                  outline:none; box-sizing:border-box;"
+              />
+            </div>
+            <div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">地址</div>
+              <input
+                bind:value={address}
+                style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
+                  border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                  outline:none; box-sizing:border-box;"
+              />
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div>
+                <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">預設師生比</div>
+                <select
+                  bind:value={defaultRatio}
+                  style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
+                    border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                    outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
+                >
+                  {#each RATIO_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
+                </select>
+              </div>
+              <div>
+                <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">每班人數上限</div>
+                <select
+                  bind:value={maxClassSizeLabel}
+                  style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
+                    border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
+                    outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
+                >
+                  {#each MAX_CLASS_SIZE_OPTIONS as o (o)}<option value={o}>{o}</option>{/each}
+                </select>
+              </div>
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="通知與自動化">
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
+              border-bottom:1px solid var(--df-border);"
+          >
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="mail" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">Email 通知</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">報名、繳費與請假通知家長</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Switch bind:checked={email} /></div>
+          </div>
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
+              border-bottom:1px solid var(--df-border);"
+          >
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="smartphone" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">簡訊提醒</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">課前一日發送簡訊（需點數）</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Switch bind:checked={sms} /></div>
+          </div>
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
+              border-bottom:1px solid var(--df-border);"
+          >
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="user-x" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">出席偏低警示</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">出席率低於 75% 通知管理員</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Switch bind:checked={lowAtt} /></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;">
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="repeat" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">自動候補遞補</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">額滿班級退出時通知候補</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Switch bind:checked={autoWait} /></div>
+          </div>
+        </Panel>
+
+        <Panel title="帳號與安全">
+          <div
+            style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
+              border-bottom:1px solid var(--df-border);"
+          >
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="key-round" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">變更密碼</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">上次更新於 2026/03/12</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Icon name="chevron-right" size={18} color="var(--df-text-muted)" /></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;">
+            <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+              <div style="width:36px; height:36px; border-radius:9px; background:var(--df-bg-light); display:flex; align-items:center; justify-content:center; flex:none;"><Icon name="shield-check" size={17} color="var(--df-text-light)" /></div>
+              <div style="min-width:0;">
+                <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">雙重驗證（2FA）</div>
+                <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">登入時需動態驗證碼</div>
+              </div>
+            </div>
+            <div style="flex:none;"><Switch bind:checked={twoFA} /></div>
+          </div>
+        </Panel>
+
+        <Button variant="primary" fullWidth disabled={saving} on:click={save}>
+          <Icon name="check" size={16} style="margin-right:6px;" />儲存變更
+        </Button>
+        <div style="height:8px;"></div>
+      </div>
+    </div>
+  </LoadGate>
 </PushScreen>

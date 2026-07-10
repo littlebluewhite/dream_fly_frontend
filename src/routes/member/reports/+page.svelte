@@ -6,7 +6,7 @@
    * term_label/comment/rating(1–5|null) 三個欄位、且同一課程可能橫跨多期別各有一筆
    * 成績單，故改為列表呈現每一筆成績單（新到舊，同後端排序），不再有「課程picker」。 */
   import { onMount } from 'svelte';
-  import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
+  import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/member/api';
   import { fmtRate } from '$lib/member/format';
@@ -25,7 +25,13 @@
   const STARS = [1, 2, 3, 4, 5];
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate}>
+  <div class="df-view" data-testid="reports-skeleton" slot="loading">
+    <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />
+    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
+  </div>
+
+  {#if data}
   <div class="df-view">
     <div class="stats-row">
       <Card padding={16}>
@@ -139,14 +145,10 @@
       {/if}
     {/if}
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div class="df-view" data-testid="reports-skeleton">
-    <Skeleton w={200} h={36} r={9} style="margin-bottom:20px" />
-    <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
-  </div>
-{/if}
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <style>
   .stats-row {

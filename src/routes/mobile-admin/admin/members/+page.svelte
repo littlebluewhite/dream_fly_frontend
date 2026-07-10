@@ -22,8 +22,7 @@
   import StatusBadgeM from '$lib/mobile-admin/components/StatusBadgeM.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
-  import Card from '$lib/components/ui/Card.svelte';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
@@ -102,56 +101,54 @@
     .filter((m) => !q || (m.name + m.id + m.phone).toLowerCase().includes(q.toLowerCase()));
 </script>
 
-{#if $gate === 'ready'}
-<ScreenHeader title="學員管理" sub={counts.all + ' 位學員'}>
-  <div slot="right" style="display:flex; gap:8px;">
-    <HeaderIcon icon="user-plus" label="新增學員" onClick={openNew} />
-    <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
-  </div>
-</ScreenHeader>
-
-<div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
-  <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、電話、編號…" />
-  <FilterChips items={chips} value={tab} onChange={(k) => (tab = k)} />
-</div>
-
-<div class="df-scroll df-view">
-  <div style="padding:16px; display:flex; flex-direction:column; gap:11px;">
-    {#if rows.length === 0}
-      <MEmpty icon="search-x" title="找不到符合的學員" body="換個關鍵字或篩選條件試試。" />
-    {:else}
-      {#each rows as m (m.id)}
-        <button
-          on:click={() => openDetail(m)}
-          class="df-tapscale"
-          style="display:flex; align-items:center; gap:12px; padding:14px; border-radius:14px; border:1px solid var(--df-border);
-            background:#fff; box-shadow:var(--df-shadow-card); cursor:pointer; text-align:left; width:100%;"
-        >
-          <Avatar name={m.initial} size="md" color="var(--df-primary)" />
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
-              <span style="font-size:15px; font-weight:700; color:var(--df-ink);">{m.name}</span>
-              <span style="font-size:11px; color:var(--df-text-muted); font-family:var(--df-font-mono);">{m.id}</span>
-            </div>
-            <div style="font-size:12.5px; color:var(--df-text-light); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{m.phone || '—'} · {m.points} 點</div>
-            <div style="font-size:11.5px; color:var(--df-text-muted); margin-top:2px;">入會 {m.joined}</div>
-          </div>
-          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;">
-            <StatusBadgeM s={m.status} />
-            <Icon name="chevron-right" size={18} color="var(--df-text-muted)" />
-          </div>
-        </button>
-      {/each}
-    {/if}
-    <div style="height:8px;"></div>
-  </div>
-</div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="df-scroll df-view" data-testid="members-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:11px;">
+<LoadGate {gate}>
+  <div class="df-scroll df-view" data-testid="members-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:11px;" slot="loading">
     {#each [0, 1, 2, 3] as i (i)}
       <SkelCard><Skeleton w="100%" h={100} r={14} /></SkelCard>
     {/each}
   </div>
-{/if}
+
+  <ScreenHeader title="學員管理" sub={counts.all + ' 位學員'}>
+    <div slot="right" style="display:flex; gap:8px;">
+      <HeaderIcon icon="user-plus" label="新增學員" onClick={openNew} />
+      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
+    </div>
+  </ScreenHeader>
+
+  <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
+    <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、電話、編號…" />
+    <FilterChips items={chips} value={tab} onChange={(k) => (tab = k)} />
+  </div>
+
+  <div class="df-scroll df-view">
+    <div style="padding:16px; display:flex; flex-direction:column; gap:11px;">
+      {#if rows.length === 0}
+        <MEmpty icon="search-x" title="找不到符合的學員" body="換個關鍵字或篩選條件試試。" />
+      {:else}
+        {#each rows as m (m.id)}
+          <button
+            on:click={() => openDetail(m)}
+            class="df-tapscale"
+            style="display:flex; align-items:center; gap:12px; padding:14px; border-radius:14px; border:1px solid var(--df-border);
+              background:#fff; box-shadow:var(--df-shadow-card); cursor:pointer; text-align:left; width:100%;"
+          >
+            <Avatar name={m.initial} size="md" color="var(--df-primary)" />
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+                <span style="font-size:15px; font-weight:700; color:var(--df-ink);">{m.name}</span>
+                <span style="font-size:11px; color:var(--df-text-muted); font-family:var(--df-font-mono);">{m.id}</span>
+              </div>
+              <div style="font-size:12.5px; color:var(--df-text-light); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{m.phone || '—'} · {m.points} 點</div>
+              <div style="font-size:11.5px; color:var(--df-text-muted); margin-top:2px;">入會 {m.joined}</div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none;">
+              <StatusBadgeM s={m.status} />
+              <Icon name="chevron-right" size={18} color="var(--df-text-muted)" />
+            </div>
+          </button>
+        {/each}
+      {/if}
+      <div style="height:8px;"></div>
+    </div>
+  </div>
+</LoadGate>

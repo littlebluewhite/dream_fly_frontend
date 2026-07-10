@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import CoachCard from '$lib/components/CoachCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { listCoaches } from '$lib/public/api';
   import { toMarketingCoach } from '$lib/public/adapters';
@@ -50,16 +50,8 @@
 
   <section class="coaches-list">
     <div class="container">
-      {#if $gate === 'ready'}
-        <div class="coaches-grid">
-          {#each coaches as coach (coach.id)}
-            <CoachCard {coach} />
-          {/each}
-        </div>
-      {:else if $gate === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
-      {:else}
-        <div class="coaches-grid" data-testid="coaches-skeleton">
+      <LoadGate {gate}>
+        <div class="coaches-grid" data-testid="coaches-skeleton" slot="loading">
           {#each [0, 1, 2, 3] as i (i)}
             <SkelCard>
               <Skeleton w={80} h={80} r={40} style="margin-bottom:14px" />
@@ -68,7 +60,15 @@
             </SkelCard>
           {/each}
         </div>
-      {/if}
+
+        <div class="coaches-grid">
+          {#each coaches as coach (coach.id)}
+            <CoachCard {coach} />
+          {/each}
+        </div>
+
+        <div class="card" style="padding:0" slot="error"><ErrorState onRetry={gate.refresh} /></div>
+      </LoadGate>
     </div>
   </section>
 

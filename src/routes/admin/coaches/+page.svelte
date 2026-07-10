@@ -31,7 +31,7 @@
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import CoachCard from '$lib/admin/components/CoachCard.svelte';
   import CoachEditDialog from '$lib/admin/components/CoachEditDialog.svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach, CoachFormValues } from '$lib/admin/data';
   import { search, toasts } from '$lib/admin/stores';
@@ -168,7 +168,13 @@
   }
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div class="grid" data-testid="coaches-skeleton" slot="loading">
+    {#each [0, 1, 2] as i (i)}
+      <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
+    {/each}
+  </div>
+
   <PageHead title="教練團隊" sub={coaches.length + ' 位專任教練'}>
     <svelte:fragment slot="actions">
       <Button variant="primary" size="sm" on:click={openNew}>
@@ -194,15 +200,7 @@
     onClose={closeEdit}
     onSave={save}
   />
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div class="grid" data-testid="coaches-skeleton">
-    {#each [0, 1, 2] as i (i)}
-      <SkelCard><Skeleton w="100%" h={240} r={12} /></SkelCard>
-    {/each}
-  </div>
-{/if}
+</LoadGate>
 
 <style>
   .grid {

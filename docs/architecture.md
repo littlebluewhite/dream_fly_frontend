@@ -35,7 +35,9 @@ and `mobile/` shelves below), `lib/data/` (marketing seed + nav config), `lib/do
 seed feeding several facades —
 see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep store `toasts.ts` /
 `marketingToasts.ts` is cross-cutting too, via three adapters in `lib/components/toast/` per ADR 0005 —
-`notificationsStore` alone stays public/marketing-only), `lib/styles/` (`global.css` + design tokens),
+`notificationsStore` alone stays public/marketing-only; `read-state.ts`'s `createReadState` factory,
+2026-07-08, is the shared per-item read/unread store shape behind mobile's, mobile-admin's, and coach's
+notification bells), `lib/styles/` (`global.css` + design tokens),
 `lib/types/`, `lib/utils/`.
 
 ## `src/lib/domain/` — single source for the ops-pair and member-app facades
@@ -64,7 +66,11 @@ loading/error states; the shimmer animation `Skeleton` uses (`df-shimmer`) is no
 `global.css` instead of a per-component style block. `lib/components/mobile/` is the parallel shelf for
 the two mobile surfaces — `Sheet`, `TabBar`, `ScreenHeader`, plus smaller pieces (`HeaderIcon`, `NoteBox`,
 `SectionTitle`, …) — consumed directly by both `mobile` and `mobile-admin`'s pages/overlays; each surface
-still wraps the shared `TabBar` in its own thin local component to attach its own tab items.
+still wraps the shared `TabBar` in its own thin local component to attach its own tab items. The same
+shelf also holds `overlay.ts` (2026-07-08) — the `createOverlay` factory (push/pop screen stack + one
+bottom sheet) single-sourced from what used to be two byte-identical copies inside `mobile`'s and
+`mobile-admin`'s `stores.ts`; each surface still re-exports it and builds its own singleton
+(`overlay = createOverlay()`).
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
 
@@ -82,7 +88,9 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   `createCart(persist=false)` factory exists so tests get an isolated, non-persisting cart.
 - **Routing contract is single-sourced** in `lib/checkout-gate.ts`: `checkoutTarget()`, `wantsCheckout()`,
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
-- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it (`placeOrder()` in member stores); the
+- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it (`placeOrder()` in member stores and
+  mobile stores — both thin adapters since 2026-07-08 over the shared wire orchestration
+  `src/lib/checkout-order.ts`'s `submitOrder()`, see `docs/adr/0003`'s appendix); the
   backend creates both artifacts atomically in one transaction. A `type: 'course'` line becomes a real 報名
   (enrolment row); the member's weekly schedule is real too, hydrated from `GET /schedule/me`
   (`member/api.ts`'s `getSchedule()`, derived from the member's active enrolments, see `docs/adr/0006`);
@@ -103,13 +111,15 @@ Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobi
 `src/lib/<surface>/api.ts`: async getters that originally all wrapped the surface's seed through one knob,
 `reply = <T>(value: T) => Promise.resolve(value)` (full design:
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). That knob is exactly where the swap to the
-real `dream_fly_backend` API landed: `public`, `admin`, `coach`, and `member`'s getters now mostly call
-`api<T>()` (`lib/api/client.ts`) instead, falling back to `reply()` only for a handful of P2-commented gaps
-that have no backend equivalent (or are purely cosmetic) — full inventory in `docs/adr/0006`. `mobile` and
-`mobile-admin` (Round 3, Task 19/20) no longer call `reply()` throughout either: both now hold a thin
-`api.ts` that re-delegates to the real getters already built for their desktop counterpart (`mobile` →
-`$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), falling back to `reply()` only for
-their own small residual mock spots (same ADR 0006 inventory). Backend wire shapes shared across ≥2
+real `dream_fly_backend` API landed, and the knob itself is gone now — no surface's `api.ts` calls
+`reply()` any more. `public`, `admin`, `coach`, and `member`'s getters mostly call `api<T>()`
+(`lib/api/client.ts`) instead; the handful of P2-commented gaps that have no backend equivalent (or are
+purely cosmetic) just return the mock/hardcoded value directly inside the same `async` getter — full
+inventory in `docs/adr/0006`. `mobile` and `mobile-admin` (Round 3, Task 19/20) landed the same way: both
+hold an `api.ts` that re-delegates to the real getters already built for their desktop counterpart
+(`mobile` → `$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping
+only where the mobile shape diverges, with their own small residual mock spots (same ADR 0006 inventory)
+inlined the same direct way. Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, display atoms like
 `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
 redeclaring its own copy (`docs/adr/0007`).
@@ -117,7 +127,13 @@ Pages that used to import seed constants directly, or hand-roll their own `onMou
 variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
 `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
 and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
-`Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Data that already lives in a store
+`Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Since 2026-07-08 that branching is itself
+usually collapsed into a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` /
+`slot="error"` with `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never
+`load()`), consumed at 53 of those call sites (45 route pages + 7 mobile/mobile-admin overlay screens,
+plus in-card attendance-history gates on the member 我的課程 page and mobile's `MyCourseDetail`, which
+override `slot="error"` with a bare `ErrorState` because they already sit inside a `Card`) —
+`ScheduleCalendar` keeps its bespoke inline template outside the wrapper. Data that already lives in a store
 (mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
 `*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) passed to the gate as `skip`, with
 `gate.refresh()` always re-fetching for `ErrorState`'s retry regardless of the guard — but the guard's
@@ -127,18 +143,29 @@ more) discards a response that resolves after the page unmounts. Mobile-admin's 
 messages are store-owned: the write lives in `stores.ts`'s `hydrateOps`/`hydrateMessages`, which the gate
 calls directly as `fetch`/`refresh` — the gate's own bookkeeping protects only the page's local phase,
 never the shared store; store-write protection instead comes from the `*Hydrated` guard itself, which
-mutators (`saveMember`/`saveClass`/`saveCoach`/`markOrderPaid`/`markMessageRead`) also flip true (a
-mutation *is* the session's source of truth) and which is rechecked right before the hydrate write lands,
-so a mutation racing an in-flight fetch always wins. Layout shells stay outside the seam
+mutators (`markOrderPaid`/`markMessageRead`) also flip true (a mutation *is* the session's
+source of truth) and which is rechecked right before the hydrate write lands, so a mutation racing an
+in-flight fetch always wins (`saveMember`/`saveClass`/`saveCoach` no longer exist as local mutators —
+Task 20 moved class/member writes and Round 4's Task F5 moved coach writes to the real
+`/courses`/`/users`/`/coaches` API followed by an unconditional `refreshOps()`
+refetch, bypassing `markMutated()` entirely). That store-owned guard + post-await re-check
+protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate.ts`'s
+`createHydrationGate` (`hydrate`/`refresh`/`markMutated`), which `mobile-admin/stores.ts`'s
+`hydrateOps`/`hydrateMessages` build on; `member/notifications.ts`'s `refreshNotifications()` isn't wired
+to the factory but hand-carries the same one-line post-await re-check. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
 synchronously, never through `api.ts` or the load gate. `staff` remains excluded because it's pre-auth
 login/role-switch UI with no `data.ts` to seam. `public` gained its own seam later (`src/lib/public/api.ts`
 + `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id shapes into the existing
-marketing types, including the single cents→NT$ conversion point `ntd()`, see `docs/adr/0006`) once its
+marketing types, including cents→NT$ conversion via the shared `ntd()` helper — single *definition*
+here, not its only caller, see `docs/adr/0006`) once its
 pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venues`, `/schedule`, `/posts`,
-`/contact` endpoints.
+`/contact` endpoints. `src/lib/public/calendar-grid.ts` (2026-07-08) is the same shape applied to
+`ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions pulled out of the component,
+which is now a thin adapter over them; deliberately incompatible with, and never merged into, coach's own
+Monday-leading `schedule-dates.ts`.
 
 ## Testing
 

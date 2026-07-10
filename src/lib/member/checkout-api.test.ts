@@ -70,6 +70,16 @@ function fakeRouter(overrides: Record<string, unknown>) {
   });
 }
 
+/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers
+ *  （手法同 load-gate.test.ts 開頭的 createDeferred）。 */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   localStorage.clear();
   cart.clear();
@@ -152,7 +162,11 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
     });
     expect(api).toHaveBeenNthCalledWith(5, '/subscriptions/me');
     expect(api).toHaveBeenNthCalledWith(6, '/points/me');
-    expect(order).toEqual(SAMPLE_ORDER);
+    expect(order.raw).toEqual(SAMPLE_ORDER);
+    expect(order.total).toBe(4700); // ntd(470000) 換算後的 NT$ 整數
+    expect(order.hasCourse).toBe(true);
+    expect(order.hasPass).toBe(false);
+    expect(order.orderNumber).toBe('DF-20260704ABCD1234');
     expect(get(cart)).toEqual([]);
     expect(get(points)).toBe(235);
   });
@@ -272,7 +286,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
 
     const order = await placeOrder('', false); // 不 reject — 訂單本身已成功
 
-    expect(order).toEqual(SAMPLE_ORDER);
+    expect(order.raw).toEqual(SAMPLE_ORDER);
     expect(get(cart)).toEqual([]); // 本地購物車仍照樣清空
     expect(get(points)).toBe(235); // 沒失敗的那支照樣 hydrate
   });
@@ -445,6 +459,25 @@ describe('refreshNotifications(Task 17)', () => {
 
     expect(api).not.toHaveBeenCalled();
     expect(get(notifications)).toEqual(sentinel); // 未被覆寫
+  });
+
+  it('in-flight 中 notificationsHydrated 被其他來源設為 true（mutation）→ resolve 後不覆寫 store（post-await re-check，C1 最小修）', async () => {
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(async () => deferred.promise);
+
+    const p = refreshNotifications(); // 通過 top guard（hydrated=false），fetch 掛起中
+
+    const sentinel = [
+      { id: 's2', cat: 'system' as const, icon: 'bell', tone: 'neutral' as const, title: '飛行中寫入', body: '', time: '2026-01-01 00:00', read: true }
+    ];
+    notifications.set(sentinel); // 模擬 mutation：飛行中已有其他來源寫入
+    notificationsHydrated.set(true);
+
+    deferred.resolve([{ id: 'n3', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
+    await p;
+
+    expect(get(notifications)).toEqual(sentinel); // 過期回應未覆寫 mutation 勝出的結果
+    expect(get(notificationsHydrated)).toBe(true);
   });
 });
 

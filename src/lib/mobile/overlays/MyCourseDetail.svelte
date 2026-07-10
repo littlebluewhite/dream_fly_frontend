@@ -26,6 +26,7 @@
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
+  import LoadGate from '$lib/components/ui/LoadGate.svelte';
   import { overlay, toasts } from '$lib/mobile/stores';
   import {
     leaveRequests,
@@ -261,27 +262,31 @@
         <!-- attendance history(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12) -->
         <Card padding={16}>
           <h3 style="margin:0 0 12px; font-size:15.5px; font-weight:700; color:var(--df-ink);">出席紀錄</h3>
-          {#if $attGate === 'loading'}
-            <Skeleton w="100%" h={60} r={8} />
-          {:else if $attGate === 'error'}
-            <ErrorState onRetry={attGate.refresh} />
-          {:else if attendance && attendance.length === 0}
-            <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
-          {:else if attendance}
-            <div style="display:flex; flex-direction:column;">
-              {#each attendance as a, i (i)}
-                {@const [tone, label] = ATT_STATE[a.state]}
-                <div
-                  style="display:flex; align-items:center; gap:12px; padding:10px 0;
-                    border-top:{i ? '1px solid var(--df-border)' : 'none'};"
-                >
-                  <Icon name="calendar" size={16} color="var(--df-text-muted)" />
-                  <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">2026 / {a.date}</span>
-                  <Badge tone={tone as Tone} dot>{label}</Badge>
-                </div>
-              {/each}
-            </div>
-          {/if}
+          <LoadGate gate={attGate}>
+            <Skeleton slot="loading" w="100%" h={60} r={8} />
+            <!-- 卡片內區塊層級的 gate：已在 Card 裡，錯誤畫面覆寫為裸 ErrorState，
+                 不用預設 fallback 的 Card 包裝（避免 Card 套 Card）。 -->
+            <svelte:fragment slot="error" let:retry>
+              <ErrorState onRetry={retry} />
+            </svelte:fragment>
+            {#if attendance && attendance.length === 0}
+              <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
+            {:else if attendance}
+              <div style="display:flex; flex-direction:column;">
+                {#each attendance as a, i (i)}
+                  {@const [tone, label] = ATT_STATE[a.state]}
+                  <div
+                    style="display:flex; align-items:center; gap:12px; padding:10px 0;
+                      border-top:{i ? '1px solid var(--df-border)' : 'none'};"
+                  >
+                    <Icon name="calendar" size={16} color="var(--df-text-muted)" />
+                    <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">2026 / {a.date}</span>
+                    <Badge tone={tone as Tone} dot>{label}</Badge>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </LoadGate>
         </Card>
         <div style="height:8px;"></div>
       </div>

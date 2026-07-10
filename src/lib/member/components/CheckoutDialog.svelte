@@ -16,7 +16,6 @@
   import { fmtNT } from '$lib/member/format';
   import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
-  import { ntd } from '$lib/public/adapters';
 
   // 付款方式(Round 4 Task P4-F4;integration-contract.md §1.8/§3.10)——單選、
   // 純資料欄位。目前仍是模擬金流,選擇不影響任何真金流 UI 或下單流程,只決定
@@ -115,16 +114,16 @@
     if (paying || chargeable.length === 0) return;
     paying = true;
     try {
-      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod);
-      const hasCourse = order.items.some((i) => i.item_type === 'course');
-      const hasPass = order.items.some((i) => i.item_type === 'product');
+      const confirmation = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod);
+      const hasCourse = confirmation.hasCourse;
+      const hasPass = confirmation.hasPass;
       paid = {
-        total: ntd(order.total_cents),
-        earned: order.points_earned,
-        ptRedeem: order.points_used,
+        total: confirmation.total,
+        earned: confirmation.earned,
+        ptRedeem: confirmation.ptRedeem,
         hasCourse,
         hasPass,
-        orderNumber: order.order_number
+        orderNumber: confirmation.orderNumber
       };
       const redeemNote = paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '';
       if (hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。');

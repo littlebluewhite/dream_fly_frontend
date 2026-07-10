@@ -14,7 +14,7 @@
   import { get } from 'svelte/store';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
@@ -43,8 +43,8 @@
   }
 </script>
 
-{#if $gate === 'loading'}
-  <div class="m-top-inset df-scroll df-view" data-testid="notifications-skeleton" style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+<LoadGate {gate}>
+  <div class="m-top-inset df-scroll df-view" data-testid="notifications-skeleton" style="padding:14px; display:flex; flex-direction:column; gap:10px;" slot="loading">
     <div style="display:flex; gap:8px; margin-bottom:8px;">
       {#each [50, 50, 50, 50, 50] as w, i (i)}
         <Skeleton {w} h={28} r={999} />
@@ -66,81 +66,81 @@
       {/each}
     </SkelCard>
   </div>
-{:else if $gate === 'error'}
-  <div class="m-top-inset df-scroll df-view" style="padding:14px;">
+
+  <div class="m-top-inset df-scroll df-view" style="padding:14px;" slot="error">
     <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
-{:else}
-<ScreenHeader title="通知中心" sub={$unread > 0 ? $unread + ' 則未讀' : '全部已讀'}>
-  <svelte:fragment slot="right">
-    <div style="display:flex; gap:8px;">
-      <button
-        on:click={gate.refresh}
-        class="df-tapscale"
-        style="border:none; background:var(--df-bg-light); color:var(--df-text-dark); font-size:12.5px;
-          font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;
-          display:flex; align-items:center; gap:5px;"
-      ><Icon name="rotate-cw" size={14} />重新整理</button>
-      {#if $unread > 0}
-        <button
-          on:click={markAll}
-          class="df-tapscale"
-          style="border:none; background:var(--df-primary-bg); color:var(--df-primary); font-size:12.5px;
-            font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;"
-        >全部已讀</button>
-      {/if}
-    </div>
-  </svelte:fragment>
-</ScreenHeader>
 
-<div style="flex:none; background:#fff; border-bottom:1px solid var(--df-border);">
-  <div class="df-hide-scrollbar" style="display:flex; gap:8px; overflow-x:auto; padding:0 14px 11px;">
-    {#each NOTIF_CATS as [k, l] (k)}
-      <button
-        on:click={() => (cat = k)}
-        class="df-tapscale"
-        style="flex:none; height:32px; padding:0 13px; border-radius:999px;
-          border:1.5px solid {cat === k ? 'var(--df-primary)' : 'var(--df-border)'};
-          background:{cat === k ? 'var(--df-primary)' : '#fff'};
-          color:{cat === k ? '#fff' : 'var(--df-text-dark)'}; font-size:12.5px;
-          font-weight:{cat === k ? 700 : 500}; cursor:pointer; white-space:nowrap;"
-      >{l}</button>
-    {/each}
-  </div>
-</div>
-
-<div class="df-scroll df-view">
-  <div style="padding:14px; display:flex; flex-direction:column; gap:10px;">
-    {#if list.length === 0}
-      <MEmpty icon="bell-off" title="沒有通知" body="這個分類目前沒有任何通知。" />
-    {:else}
-      {#each list as n (n.id)}
+  <ScreenHeader title="通知中心" sub={$unread > 0 ? $unread + ' 則未讀' : '全部已讀'}>
+    <svelte:fragment slot="right">
+      <div style="display:flex; gap:8px;">
         <button
-          on:click={() => notifs.markRead(n.id)}
+          on:click={gate.refresh}
           class="df-tapscale"
-          style="text-align:left; display:flex; gap:12px; padding:13px; border-radius:14px;
-            border:1px solid var(--df-border); background:{n.read ? '#fff' : 'var(--df-primary-bg)'}; cursor:pointer;"
-        >
-          <div
-            style="width:40px; height:40px; border-radius:11px; background:{NOTIF_TONE_BG[n.tone]};
-              display:flex; align-items:center; justify-content:center; flex:none;"
-          >
-            <Icon name={n.icon} size={20} color={NOTIF_TONE_FG[n.tone]} />
-          </div>
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:center; gap:7px; margin-bottom:3px;">
-              <span style="font-size:14px; font-weight:700; color:var(--df-ink); flex:1; min-width:0;">{n.title}</span>
-              {#if !n.read}
-                <span style="width:8px; height:8px; border-radius:999px; background:var(--df-accent); flex:none;"></span>
-              {/if}
-            </div>
-            <div style="font-size:12.5px; color:var(--df-text-light); line-height:1.55;">{n.body}</div>
-            <div style="font-size:11.5px; color:var(--df-text-muted); margin-top:5px;">{n.time}</div>
-          </div>
-        </button>
+          style="border:none; background:var(--df-bg-light); color:var(--df-text-dark); font-size:12.5px;
+            font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;
+            display:flex; align-items:center; gap:5px;"
+        ><Icon name="rotate-cw" size={14} />重新整理</button>
+        {#if $unread > 0}
+          <button
+            on:click={markAll}
+            class="df-tapscale"
+            style="border:none; background:var(--df-primary-bg); color:var(--df-primary); font-size:12.5px;
+              font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;"
+          >全部已讀</button>
+        {/if}
+      </div>
+    </svelte:fragment>
+  </ScreenHeader>
+
+  <div style="flex:none; background:#fff; border-bottom:1px solid var(--df-border);">
+    <div class="df-hide-scrollbar" style="display:flex; gap:8px; overflow-x:auto; padding:0 14px 11px;">
+      {#each NOTIF_CATS as [k, l] (k)}
+        <button
+          on:click={() => (cat = k)}
+          class="df-tapscale"
+          style="flex:none; height:32px; padding:0 13px; border-radius:999px;
+            border:1.5px solid {cat === k ? 'var(--df-primary)' : 'var(--df-border)'};
+            background:{cat === k ? 'var(--df-primary)' : '#fff'};
+            color:{cat === k ? '#fff' : 'var(--df-text-dark)'}; font-size:12.5px;
+            font-weight:{cat === k ? 700 : 500}; cursor:pointer; white-space:nowrap;"
+        >{l}</button>
       {/each}
-    {/if}
-    <div style="height:8px;"></div>
+    </div>
   </div>
-</div>
-{/if}
+
+  <div class="df-scroll df-view">
+    <div style="padding:14px; display:flex; flex-direction:column; gap:10px;">
+      {#if list.length === 0}
+        <MEmpty icon="bell-off" title="沒有通知" body="這個分類目前沒有任何通知。" />
+      {:else}
+        {#each list as n (n.id)}
+          <button
+            on:click={() => notifs.markRead(n.id)}
+            class="df-tapscale"
+            style="text-align:left; display:flex; gap:12px; padding:13px; border-radius:14px;
+              border:1px solid var(--df-border); background:{n.read ? '#fff' : 'var(--df-primary-bg)'}; cursor:pointer;"
+          >
+            <div
+              style="width:40px; height:40px; border-radius:11px; background:{NOTIF_TONE_BG[n.tone]};
+                display:flex; align-items:center; justify-content:center; flex:none;"
+            >
+              <Icon name={n.icon} size={20} color={NOTIF_TONE_FG[n.tone]} />
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:7px; margin-bottom:3px;">
+                <span style="font-size:14px; font-weight:700; color:var(--df-ink); flex:1; min-width:0;">{n.title}</span>
+                {#if !n.read}
+                  <span style="width:8px; height:8px; border-radius:999px; background:var(--df-accent); flex:none;"></span>
+                {/if}
+              </div>
+              <div style="font-size:12.5px; color:var(--df-text-light); line-height:1.55;">{n.body}</div>
+              <div style="font-size:11.5px; color:var(--df-text-muted); margin-top:5px;">{n.time}</div>
+            </div>
+          </button>
+        {/each}
+      {/if}
+      <div style="height:8px;"></div>
+    </div>
+  </div>
+</LoadGate>

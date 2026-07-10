@@ -24,8 +24,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import ConversationRow from '$lib/coach/components/ConversationRow.svelte';
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
@@ -179,7 +178,15 @@
   }
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div style="height:calc(100vh - 68px - 52px);min-height:560px;" data-testid="messages-skeleton" slot="loading">
+    <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;">
+      <div style="padding:16px;"><Skeleton w="100%" h={40} r={8} /></div>
+      <div style="padding:16px;display:flex;align-items:center;justify-content:center;"><SkelCard><Skeleton w={280} h={200} r={12} /></SkelCard></div>
+      <div style="padding:16px;"><SkelCard><Skeleton w="100%" h={300} r={12} /></SkelCard></div>
+    </div>
+  </div>
+
 <div style="height:calc(100vh - 68px - 52px);min-height:560px;padding:0">
   <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;box-shadow:var(--df-shadow-card)">
 
@@ -364,14 +371,4 @@
     </div>
   {/if}
 </Dialog>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="height:calc(100vh - 68px - 52px);min-height:560px;" data-testid="messages-skeleton">
-    <div style="display:grid;grid-template-columns:320px 1fr 300px;gap:0;height:100%;background:#fff;border:1px solid var(--df-border);border-radius:14px;overflow:hidden;">
-      <div style="padding:16px;"><Skeleton w="100%" h={40} r={8} /></div>
-      <div style="padding:16px;display:flex;align-items:center;justify-content:center;"><SkelCard><Skeleton w={280} h={200} r={12} /></SkelCard></div>
-      <div style="padding:16px;"><SkelCard><Skeleton w="100%" h={300} r={12} /></SkelCard></div>
-    </div>
-  </div>
-{/if}
+</LoadGate>

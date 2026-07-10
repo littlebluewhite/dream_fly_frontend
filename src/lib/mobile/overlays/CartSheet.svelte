@@ -24,7 +24,6 @@
   import { checkoutMath } from '$lib/checkout-math';
   import { points, refreshPoints } from '$lib/member/stores';
   import { validateCoupon, orderErrorMessage } from '$lib/member/checkout';
-  import { ntd } from '$lib/public/adapters';
 
   export let onClose: () => void;
 
@@ -76,12 +75,12 @@
     if (paying) return;
     paying = true;
     try {
-      const order = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
+      const confirmation = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
       paid = {
-        total: ntd(order.total_cents),
-        earned: order.points_earned,
-        ptRedeem: order.points_used,
-        orderNumber: order.order_number
+        total: confirmation.total,
+        earned: confirmation.earned,
+        ptRedeem: confirmation.ptRedeem,
+        orderNumber: confirmation.orderNumber
       };
       const redeemNote = paid.ptRedeem > 0 ? `，使用 ${paid.ptRedeem} 點折抵` : '';
       toasts.notify('success', '報名完成', `課程已加入你的日程${redeemNote}，獲得 ${paid.earned} 點回饋。`);

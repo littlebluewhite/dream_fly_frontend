@@ -16,7 +16,7 @@
    * 「登入裝置清單」不在本任務範圍(契約 §3.25 開頭：需 session 管理，另案處理)，
    * 維持現狀——LOGINS 仍是純本地 mock，最小 diff。 */
   import { onMount } from 'svelte';
-  import { Card, Input, Select, Switch, Button, Badge, Icon, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Card, Input, Select, Switch, Button, Badge, Icon, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import SettingsRow from '$lib/admin/components/SettingsRow.svelte';
   import PasswordDialog from '$lib/admin/components/PasswordDialog.svelte';
@@ -106,106 +106,104 @@
   ];
 </script>
 
-{#if $gate === 'ready'}
-<div class="df-view" style="display:flex;flex-direction:column;gap:20px;max-width:760px">
-  <PageHead title="系統設定" sub="場館資訊、通知與權限" />
-
-  <!-- 場館資訊 -->
-  <Card padding={24}>
-    <h3 class="sec-title">場館資訊</h3>
-    <p class="sec-sub">顯示於官網與報名通知</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <Input label="場館名稱" bind:value={name} />
-      <Input label="聯絡電話" bind:value={phone} />
-      <Input label="地址" bind:value={address} style="grid-column:span 2" />
-      <Select label="預設師生比" bind:value={defaultRatio} options={['1:4', '1:6', '1:8']} />
-      <Select label="每班人數上限" bind:value={maxClassSizeLabel} options={MAX_CLASS_SIZE_OPTIONS} />
-    </div>
-  </Card>
-
-  <!-- 通知與自動化 -->
-  <Card padding={24}>
-    <h3 class="sec-title" style="margin-bottom:12px">通知與自動化</h3>
-    <SettingsRow label="Email 通知" desc="報名、繳費與請假以 Email 通知家長">
-      <Switch bind:checked={email} />
-    </SettingsRow>
-    <SettingsRow label="簡訊提醒" desc="課前一日發送簡訊提醒（需加購點數）">
-      <Switch bind:checked={sms} />
-    </SettingsRow>
-    <SettingsRow label="出席偏低警示" desc="學員出席率低於 75% 時通知管理員">
-      <Switch bind:checked={lowAtt} />
-    </SettingsRow>
-    <SettingsRow label="自動候補遞補" desc="額滿班級有人退出時自動通知候補學員">
-      <Switch bind:checked={autoWait} />
-    </SettingsRow>
-    <div style="display:flex;justify-content:flex-end;margin-top:18px">
-      <Button variant="primary" disabled={saving} on:click={save}>
-        <Icon name="check" size={16} />
-        儲存變更
-      </Button>
-    </div>
-  </Card>
-
-  <!-- 帳號與安全 -->
-  <Card padding={24}>
-    <h3 class="sec-title" style="margin-bottom:12px">帳號與安全</h3>
-    <SettingsRow label="變更密碼" desc="上次更新於 2026/03/12">
-      <Button variant="secondary" size="sm" on:click={() => (pwOpen = true)}>變更密碼</Button>
-    </SettingsRow>
-    <SettingsRow
-      label="雙重驗證（2FA）"
-      desc={twoFA ? '已啟用 · 登入時需輸入動態驗證碼' : '建議啟用以提升帳號安全'}
-    >
-      <Switch bind:checked={twoFA} />
-    </SettingsRow>
-
-    <div style="margin-top:18px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="font-size:13.5px;font-weight:600;color:var(--df-text-dark)">登入裝置</div>
-        <button
-          type="button"
-          class="signout"
-          on:click={() =>
-            toasts.notify('warning', '已登出其他裝置', '除目前裝置外，所有工作階段已結束。')}
-        >
-          <Icon name="log-out" size={14} color="var(--df-error)" />
-          登出其他裝置
-        </button>
-      </div>
-      {#each LOGINS as l, i}
-        <div
-          class="device"
-          style={i < LOGINS.length - 1 ? 'border-bottom:1px solid var(--df-border)' : ''}
-        >
-          <div class="device-icon"><Icon name={l.icon} size={17} color="var(--df-text-light)" /></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{l.device}</div>
-            <div style="font-size:12px;color:var(--df-text-light);margin-top:1px">{l.place}</div>
-          </div>
-          {#if l.now}
-            <Badge tone="success" dot>{l.time}</Badge>
-          {:else}
-            <span style="font-size:12.5px;color:var(--df-text-muted);font-family:var(--df-font-mono)"
-              >{l.time}</span
-            >
-          {/if}
-        </div>
-      {/each}
-    </div>
-  </Card>
-</div>
-
-<PasswordDialog open={pwOpen} onClose={() => (pwOpen = false)} onSave={() => (pwOpen = false)} />
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:20px;max-width:760px" data-testid="settings-skeleton">
+<LoadGate {gate}>
+  <div style="display:flex;flex-direction:column;gap:20px;max-width:760px" data-testid="settings-skeleton" slot="loading">
     <Skeleton w={160} h={32} r={8} />
     <SkelCard><Skeleton w="100%" h={180} r={12} /></SkelCard>
     <SkelCard><Skeleton w="100%" h={220} r={12} /></SkelCard>
     <SkelCard><Skeleton w="100%" h={260} r={12} /></SkelCard>
   </div>
-{/if}
+
+  <div class="df-view" style="display:flex;flex-direction:column;gap:20px;max-width:760px">
+    <PageHead title="系統設定" sub="場館資訊、通知與權限" />
+
+    <!-- 場館資訊 -->
+    <Card padding={24}>
+      <h3 class="sec-title">場館資訊</h3>
+      <p class="sec-sub">顯示於官網與報名通知</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <Input label="場館名稱" bind:value={name} />
+        <Input label="聯絡電話" bind:value={phone} />
+        <Input label="地址" bind:value={address} style="grid-column:span 2" />
+        <Select label="預設師生比" bind:value={defaultRatio} options={['1:4', '1:6', '1:8']} />
+        <Select label="每班人數上限" bind:value={maxClassSizeLabel} options={MAX_CLASS_SIZE_OPTIONS} />
+      </div>
+    </Card>
+
+    <!-- 通知與自動化 -->
+    <Card padding={24}>
+      <h3 class="sec-title" style="margin-bottom:12px">通知與自動化</h3>
+      <SettingsRow label="Email 通知" desc="報名、繳費與請假以 Email 通知家長">
+        <Switch bind:checked={email} />
+      </SettingsRow>
+      <SettingsRow label="簡訊提醒" desc="課前一日發送簡訊提醒（需加購點數）">
+        <Switch bind:checked={sms} />
+      </SettingsRow>
+      <SettingsRow label="出席偏低警示" desc="學員出席率低於 75% 時通知管理員">
+        <Switch bind:checked={lowAtt} />
+      </SettingsRow>
+      <SettingsRow label="自動候補遞補" desc="額滿班級有人退出時自動通知候補學員">
+        <Switch bind:checked={autoWait} />
+      </SettingsRow>
+      <div style="display:flex;justify-content:flex-end;margin-top:18px">
+        <Button variant="primary" disabled={saving} on:click={save}>
+          <Icon name="check" size={16} />
+          儲存變更
+        </Button>
+      </div>
+    </Card>
+
+    <!-- 帳號與安全 -->
+    <Card padding={24}>
+      <h3 class="sec-title" style="margin-bottom:12px">帳號與安全</h3>
+      <SettingsRow label="變更密碼" desc="上次更新於 2026/03/12">
+        <Button variant="secondary" size="sm" on:click={() => (pwOpen = true)}>變更密碼</Button>
+      </SettingsRow>
+      <SettingsRow
+        label="雙重驗證（2FA）"
+        desc={twoFA ? '已啟用 · 登入時需輸入動態驗證碼' : '建議啟用以提升帳號安全'}
+      >
+        <Switch bind:checked={twoFA} />
+      </SettingsRow>
+
+      <div style="margin-top:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:13.5px;font-weight:600;color:var(--df-text-dark)">登入裝置</div>
+          <button
+            type="button"
+            class="signout"
+            on:click={() =>
+              toasts.notify('warning', '已登出其他裝置', '除目前裝置外，所有工作階段已結束。')}
+          >
+            <Icon name="log-out" size={14} color="var(--df-error)" />
+            登出其他裝置
+          </button>
+        </div>
+        {#each LOGINS as l, i}
+          <div
+            class="device"
+            style={i < LOGINS.length - 1 ? 'border-bottom:1px solid var(--df-border)' : ''}
+          >
+            <div class="device-icon"><Icon name={l.icon} size={17} color="var(--df-text-light)" /></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{l.device}</div>
+              <div style="font-size:12px;color:var(--df-text-light);margin-top:1px">{l.place}</div>
+            </div>
+            {#if l.now}
+              <Badge tone="success" dot>{l.time}</Badge>
+            {:else}
+              <span style="font-size:12.5px;color:var(--df-text-muted);font-family:var(--df-font-mono)"
+                >{l.time}</span
+              >
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </Card>
+  </div>
+
+  <PasswordDialog open={pwOpen} onClose={() => (pwOpen = false)} onSave={() => (pwOpen = false)} />
+</LoadGate>
 
 <style>
   .sec-title {

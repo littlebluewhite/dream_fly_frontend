@@ -12,7 +12,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Card from '$lib/components/ui/Card.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { fmtNT } from '$lib/mobile/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
@@ -36,7 +36,17 @@
 
 <PushScreen>
   <ScreenHeader {onBack} title="我的訂單" sub={$gate === 'ready' ? orders.length + ' 筆報名紀錄' : ''} />
-  {#if $gate === 'ready'}
+  <LoadGate {gate}>
+    <div class="df-scroll" data-testid="orders-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;" slot="loading">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard padding={15}><Skeleton w="100%" h={80} r={10} /></SkelCard>
+      {/each}
+    </div>
+
+    <div class="df-scroll" style="padding:16px;" slot="error">
+      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
+    </div>
+
     <div class="df-scroll">
       <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
         {#if orders.length === 0}
@@ -59,15 +69,5 @@
         <div style="height:8px;"></div>
       </div>
     </div>
-  {:else if $gate === 'error'}
-    <div class="df-scroll" style="padding:16px;">
-      <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-    </div>
-  {:else}
-    <div class="df-scroll" data-testid="orders-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard padding={15}><Skeleton w="100%" h={80} r={10} /></SkelCard>
-      {/each}
-    </div>
-  {/if}
+  </LoadGate>
 </PushScreen>

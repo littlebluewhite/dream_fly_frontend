@@ -12,7 +12,7 @@
    * redemptions/me 未接：本頁的「點數明細」（左側 pointsLedger）本來就會在
    * refreshPoints() 後含入這筆 reason="redeem" 的扣點紀錄，不需要另一張表。 */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { PT_TYPE } from '$lib/member/data';
   import { points, pointsLedger, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
@@ -66,7 +66,32 @@
   }
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate}>
+  <div class="df-view" data-testid="points-skeleton" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start" slot="loading">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <SkelCard>
+        <Skeleton w={120} h={14} />
+        <Skeleton w={160} h={40} style="margin:14px 0 8px" />
+        <Skeleton w="60%" h={11} />
+      </SkelCard>
+      <SkelCard padding={0}>
+        {#each [0, 1, 2, 3] as i (i)}
+          <div style="display:flex;justify-content:space-between;padding:15px 22px;{i < 3 ? 'border-bottom:1px solid var(--df-border)' : ''}">
+            <Skeleton w="50%" h={12} />
+            <Skeleton w={50} h={12} />
+          </div>
+        {/each}
+      </SkelCard>
+    </div>
+    <SkelCard>
+      <Skeleton w={120} h={14} style="margin-bottom:16px" />
+      {#each [0, 1, 2] as i (i)}
+        <Skeleton w="100%" h={64} r={12} style="margin-bottom:12px" />
+      {/each}
+    </SkelCard>
+  </div>
+
+  {#if data}
   <div class="df-view" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
     <!-- Left: balance hero + ledger -->
     <div style="display:flex;flex-direction:column;gap:18px">
@@ -148,33 +173,10 @@
       </div>
     </Card>
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div class="df-view" data-testid="points-skeleton" style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
-    <div style="display:flex;flex-direction:column;gap:18px">
-      <SkelCard>
-        <Skeleton w={120} h={14} />
-        <Skeleton w={160} h={40} style="margin:14px 0 8px" />
-        <Skeleton w="60%" h={11} />
-      </SkelCard>
-      <SkelCard padding={0}>
-        {#each [0, 1, 2, 3] as i (i)}
-          <div style="display:flex;justify-content:space-between;padding:15px 22px;{i < 3 ? 'border-bottom:1px solid var(--df-border)' : ''}">
-            <Skeleton w="50%" h={12} />
-            <Skeleton w={50} h={12} />
-          </div>
-        {/each}
-      </SkelCard>
-    </div>
-    <SkelCard>
-      <Skeleton w={120} h={14} style="margin-bottom:16px" />
-      {#each [0, 1, 2] as i (i)}
-        <Skeleton w="100%" h={64} r={12} style="margin-bottom:12px" />
-      {/each}
-    </SkelCard>
-  </div>
-{/if}
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <Dialog
   open={!!confirm}

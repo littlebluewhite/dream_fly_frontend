@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { cart, subscriptions } from '$lib/member/stores';
   import { passToCartItem } from '$lib/member/data';
@@ -70,7 +70,17 @@
 
   <section class="tickets-list">
     <div class="container">
-      {#if $gate === 'ready'}
+      <LoadGate {gate}>
+        <div class="tickets-grid" data-testid="tickets-skeleton" slot="loading">
+          {#each [0, 1, 2] as i (i)}
+            <SkelCard>
+              <Skeleton w="60%" h={24} r={6} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={80} r={8} style="margin-bottom:14px" />
+              <Skeleton w="100%" h={40} r={8} />
+            </SkelCard>
+          {/each}
+        </div>
+
         <div class="tickets-grid">
           {#each tickets as ticket (ticket.id)}
             <div class="ticket-card card" class:highlighted={ticket.highlighted}>
@@ -113,19 +123,9 @@
             </div>
           {/each}
         </div>
-      {:else if $gate === 'error'}
-        <div class="card" style="padding:0"><ErrorState onRetry={gate.refresh} /></div>
-      {:else}
-        <div class="tickets-grid" data-testid="tickets-skeleton">
-          {#each [0, 1, 2] as i (i)}
-            <SkelCard>
-              <Skeleton w="60%" h={24} r={6} style="margin-bottom:14px" />
-              <Skeleton w="100%" h={80} r={8} style="margin-bottom:14px" />
-              <Skeleton w="100%" h={40} r={8} />
-            </SkelCard>
-          {/each}
-        </div>
-      {/if}
+
+        <div class="card" style="padding:0" slot="error"><ErrorState onRetry={gate.refresh} /></div>
+      </LoadGate>
     </div>
   </section>
 

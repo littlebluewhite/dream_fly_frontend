@@ -12,7 +12,7 @@
    * Data arrives async via getReports() — ONE call feeds the KPI band and every
    * panel — into a three-state gate (loading/error/ready). */
   import { onMount } from 'svelte';
-  import { Button, Icon, Card, ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { Button, Icon, Card, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
@@ -47,161 +47,8 @@
   });
 </script>
 
-{#if $gate === 'ready' && data}
-  <div style="display:flex; flex-direction:column; gap:20px;">
-    <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
-      <svelte:fragment slot="actions">
-        <Button
-          variant="primary"
-          size="sm"
-          on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
-        >
-          <span style="display:inline-flex; align-items:center; gap:8px;">
-            <Icon name="download" size={15} />匯出報表
-          </span>
-        </Button>
-      </svelte:fragment>
-    </PageHead>
-
-    <div class="kpi-grid">
-      <ReportKpi
-        icon="dollar-sign"
-        label="本月營收"
-        value={fmtNT(data.revenue.thisMonth)}
-        delta={deltaPct(data.revenue.thisMonth, data.revenue.lastMonth)}
-        tint="#0066CC14"
-        color="var(--df-primary)"
-      />
-      <ReportKpi
-        icon="user-plus"
-        label="本月新會員"
-        value="{data.kpis.newMembers.thisMonth} 位"
-        delta={deltaPct(data.kpis.newMembers.thisMonth, data.kpis.newMembers.lastMonth)}
-        tint="#F59E0B14"
-        color="#F59E0B"
-      />
-      <ReportKpi
-        icon="book-open"
-        label="本月新報名"
-        value="{data.kpis.newEnrolments.thisMonth} 筆"
-        delta={deltaPct(data.kpis.newEnrolments.thisMonth, data.kpis.newEnrolments.lastMonth)}
-        tint="#10B98114"
-        color="#10B981"
-      />
-      <ReportKpi
-        icon="receipt"
-        label="本月訂單數"
-        value="{data.kpis.paidOrdersCount.thisMonth} 筆"
-        delta={deltaPct(data.kpis.paidOrdersCount.thisMonth, data.kpis.paidOrdersCount.lastMonth)}
-        tint="#8B5CF614"
-        color="#8B5CF6"
-      />
-      <ReportKpi
-        icon="calendar-check"
-        label="本月出席率"
-        value={fmtPct(data.kpis.attendanceRate.thisMonth)}
-        delta={deltaPct(data.kpis.attendanceRate.thisMonth, data.kpis.attendanceRate.lastMonth)}
-        tint="#10B98114"
-        color="#10B981"
-      />
-      <ReportKpi
-        icon="repeat"
-        label="會員留存率"
-        value={fmtPct(data.retention.at(-1)?.rate ?? null)}
-        delta={null}
-        tint="#0EA5E914"
-        color="#0EA5E9"
-      />
-    </div>
-
-    <RevenueBreakdown rows={data.revenueBreakdown} />
-
-    <div class="panel-row">
-      <RevenueTrend rows={data.revenue.trend} />
-      <CategoryDonut rows={data.categorySplit} />
-    </div>
-    <div class="panel-row">
-      <TopCourses rows={topCoursesFrom(data.courses)} />
-      <IncomeSources rows={data.incomeSources12m} />
-    </div>
-    <div class="panel-row">
-      <CoachPerf rows={data.coaches} />
-      <VenueUsage rows={data.venueUsage} />
-    </div>
-    <div class="panel-row">
-      <AttDist rows={data.attendanceDistribution} />
-      <RetentionTrend rows={data.retention} />
-    </div>
-    <div class="panel-row">
-      <AgeDist rows={data.ageDistribution} />
-      <TierDist rows={data.tierDistribution} />
-    </div>
-    <div class="panel-row">
-      <ConversionFunnel funnel={data.funnel} />
-      <PaymentSplit rows={data.paymentSplit} />
-    </div>
-    <WeekdayLoad rows={data.weekdayLoad} />
-
-    <Card padding={0} style="overflow:hidden">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
-        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">課程報名狀況</h3>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:var(--df-bg-light)">
-            <th class="th">課程</th>
-            <th class="th">已報名 / 名額</th>
-            <th class="th">滿班率</th>
-            <th class="th">候補人數</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.courses as c (c.id)}
-            <tr class="row">
-              <td class="td">{c.name}</td>
-              <td class="td td-muted">{c.enrolled} / {c.maxStudents}</td>
-              <td class="td">{fmtPct(c.fillRate)}</td>
-              <td class="td td-muted">{c.waitlistCount}</td>
-            </tr>
-          {/each}
-          {#if data.courses.length === 0}
-            <tr><td colspan="4" class="empty">尚無課程資料</td></tr>
-          {/if}
-        </tbody>
-      </table>
-    </Card>
-
-    <Card padding={0} style="overflow:hidden">
-      <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
-        <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">教練授課概況</h3>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:var(--df-bg-light)">
-            <th class="th">教練</th>
-            <th class="th">授課班級數</th>
-            <th class="th">學員人數</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each data.coaches as c (c.id)}
-            <tr class="row">
-              <td class="td">{c.name}</td>
-              <td class="td td-muted">{c.courseCount}</td>
-              <td class="td td-muted">{c.studentCount}</td>
-            </tr>
-          {/each}
-          {#if data.coaches.length === 0}
-            <tr><td colspan="3" class="empty">尚無教練資料</td></tr>
-          {/if}
-        </tbody>
-      </table>
-    </Card>
-  </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton">
+<LoadGate {gate}>
+  <div style="display:flex; flex-direction:column; gap:20px;" data-testid="reports-skeleton" slot="loading">
     <Skeleton w={220} h={32} r={8} />
     <div class="kpi-grid">
       {#each [0, 1, 2, 3, 4, 5] as i (i)}
@@ -210,7 +57,161 @@
     </div>
     <SkelCard><Skeleton w="100%" h={200} r={12} /></SkelCard>
   </div>
-{/if}
+
+  <!-- 僅為 TS 縮小 data | null:onData 先於 ready,執行期必有值 -->
+  {#if data}
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      <PageHead title="報表分析" sub="檢視營運數據、營收趨勢與課程分析報表">
+        <svelte:fragment slot="actions">
+          <Button
+            variant="primary"
+            size="sm"
+            on:click={() => toasts.notify('info', '匯出報表', '報表將以 PDF 寄送至您的信箱。')}
+          >
+            <span style="display:inline-flex; align-items:center; gap:8px;">
+              <Icon name="download" size={15} />匯出報表
+            </span>
+          </Button>
+        </svelte:fragment>
+      </PageHead>
+
+      <div class="kpi-grid">
+        <ReportKpi
+          icon="dollar-sign"
+          label="本月營收"
+          value={fmtNT(data.revenue.thisMonth)}
+          delta={deltaPct(data.revenue.thisMonth, data.revenue.lastMonth)}
+          tint="#0066CC14"
+          color="var(--df-primary)"
+        />
+        <ReportKpi
+          icon="user-plus"
+          label="本月新會員"
+          value="{data.kpis.newMembers.thisMonth} 位"
+          delta={deltaPct(data.kpis.newMembers.thisMonth, data.kpis.newMembers.lastMonth)}
+          tint="#F59E0B14"
+          color="#F59E0B"
+        />
+        <ReportKpi
+          icon="book-open"
+          label="本月新報名"
+          value="{data.kpis.newEnrolments.thisMonth} 筆"
+          delta={deltaPct(data.kpis.newEnrolments.thisMonth, data.kpis.newEnrolments.lastMonth)}
+          tint="#10B98114"
+          color="#10B981"
+        />
+        <ReportKpi
+          icon="receipt"
+          label="本月訂單數"
+          value="{data.kpis.paidOrdersCount.thisMonth} 筆"
+          delta={deltaPct(data.kpis.paidOrdersCount.thisMonth, data.kpis.paidOrdersCount.lastMonth)}
+          tint="#8B5CF614"
+          color="#8B5CF6"
+        />
+        <ReportKpi
+          icon="calendar-check"
+          label="本月出席率"
+          value={fmtPct(data.kpis.attendanceRate.thisMonth)}
+          delta={deltaPct(data.kpis.attendanceRate.thisMonth, data.kpis.attendanceRate.lastMonth)}
+          tint="#10B98114"
+          color="#10B981"
+        />
+        <ReportKpi
+          icon="repeat"
+          label="會員留存率"
+          value={fmtPct(data.retention.at(-1)?.rate ?? null)}
+          delta={null}
+          tint="#0EA5E914"
+          color="#0EA5E9"
+        />
+      </div>
+
+      <RevenueBreakdown rows={data.revenueBreakdown} />
+
+      <div class="panel-row">
+        <RevenueTrend rows={data.revenue.trend} />
+        <CategoryDonut rows={data.categorySplit} />
+      </div>
+      <div class="panel-row">
+        <TopCourses rows={topCoursesFrom(data.courses)} />
+        <IncomeSources rows={data.incomeSources12m} />
+      </div>
+      <div class="panel-row">
+        <CoachPerf rows={data.coaches} />
+        <VenueUsage rows={data.venueUsage} />
+      </div>
+      <div class="panel-row">
+        <AttDist rows={data.attendanceDistribution} />
+        <RetentionTrend rows={data.retention} />
+      </div>
+      <div class="panel-row">
+        <AgeDist rows={data.ageDistribution} />
+        <TierDist rows={data.tierDistribution} />
+      </div>
+      <div class="panel-row">
+        <ConversionFunnel funnel={data.funnel} />
+        <PaymentSplit rows={data.paymentSplit} />
+      </div>
+      <WeekdayLoad rows={data.weekdayLoad} />
+
+      <Card padding={0} style="overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">課程報名狀況</h3>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--df-bg-light)">
+              <th class="th">課程</th>
+              <th class="th">已報名 / 名額</th>
+              <th class="th">滿班率</th>
+              <th class="th">候補人數</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each data.courses as c (c.id)}
+              <tr class="row">
+                <td class="td">{c.name}</td>
+                <td class="td td-muted">{c.enrolled} / {c.maxStudents}</td>
+                <td class="td">{fmtPct(c.fillRate)}</td>
+                <td class="td td-muted">{c.waitlistCount}</td>
+              </tr>
+            {/each}
+            {#if data.courses.length === 0}
+              <tr><td colspan="4" class="empty">尚無課程資料</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </Card>
+
+      <Card padding={0} style="overflow:hidden">
+        <div style="padding:18px 22px;border-bottom:1px solid var(--df-border)">
+          <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">教練授課概況</h3>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--df-bg-light)">
+              <th class="th">教練</th>
+              <th class="th">授課班級數</th>
+              <th class="th">學員人數</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each data.coaches as c (c.id)}
+              <tr class="row">
+                <td class="td">{c.name}</td>
+                <td class="td td-muted">{c.courseCount}</td>
+                <td class="td td-muted">{c.studentCount}</td>
+              </tr>
+            {/each}
+            {#if data.coaches.length === 0}
+              <tr><td colspan="3" class="empty">尚無教練資料</td></tr>
+            {/if}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  {/if}
+</LoadGate>
 
 <style>
   .kpi-grid {

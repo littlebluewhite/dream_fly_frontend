@@ -10,7 +10,7 @@
   import { onMount } from 'svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { ErrorState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { CAT_COLOR } from '$lib/coach/data';
   import type { SchedCat, SchedVenue, SchedCourse } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
@@ -74,7 +74,12 @@
     'display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--df-border);border-radius:8px;background:#fff;padding:7px 10px;cursor:pointer';
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
+  <div style="display:flex;flex-direction:column;gap:16px" data-testid="schedule-skeleton" slot="loading">
+    <SkelCard><Skeleton w="100%" h={54} r={10} /></SkelCard>
+    <SkelCard><Skeleton w="100%" h={420} r={12} /></SkelCard>
+  </div>
+
 <div style="display:flex;flex-direction:column;gap:16px">
   <!-- filter bar -->
   <Card>
@@ -179,11 +184,4 @@
     </span>
   </div>
 </div>
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState title={errorTitle} body={errorBody} onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px" data-testid="schedule-skeleton">
-    <SkelCard><Skeleton w="100%" h={54} r={10} /></SkelCard>
-    <SkelCard><Skeleton w="100%" h={420} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>

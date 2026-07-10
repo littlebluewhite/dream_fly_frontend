@@ -4,7 +4,7 @@
    * member-points card and the order/payment history table; editing opens the
    * ProfileEditDialog. Data + primitives come from the shared foundation. */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState } from '$lib/components/ui';
+  import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { fmtNT } from '$lib/member/format';
   import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
@@ -46,7 +46,17 @@
   }
 </script>
 
-{#if $gate === 'ready' && data && profile}
+<LoadGate {gate}>
+  <div data-testid="account-skeleton" class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start" slot="loading">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={96} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
+  </div>
+
+  {#if data && profile}
   <div class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">
       <Card padding={24} style="text-align:center">
@@ -130,15 +140,7 @@
       onSave={saveProfile}
     />
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div data-testid="account-skeleton" class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
-    <div style="display:flex;flex-direction:column;gap:18px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={96} r={12} /></SkelCard>
-      {/each}
-    </div>
-    <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
-  </div>
-{/if}
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>

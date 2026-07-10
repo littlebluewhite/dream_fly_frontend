@@ -23,6 +23,7 @@ export const notificationsHydrated = writable(false);
 export async function refreshNotifications(): Promise<void> {
   if (get(notificationsHydrated)) return;
   const list = await api<ApiNotification[]>('/notifications');
+  if (get(notificationsHydrated)) return; // mutation 勝出，放棄覆寫
   notifications.set(list.map(mapNotification));
   notificationsHydrated.set(true);
 }

@@ -9,7 +9,7 @@
    * 現在吃 leaveRequest，不是課程層級動作，所以課程詳情動作列不再有「預約補課」
    * 按鈕）。 */
   import { onMount } from 'svelte';
-  import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState } from '$lib/components/ui';
+  import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
@@ -112,7 +112,17 @@
   ] : [];
 </script>
 
-{#if $gate === 'ready' && data}
+<LoadGate {gate}>
+  <div data-testid="mine-skeleton" class="df-view" style="display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start" slot="loading">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard><Skeleton w="100%" h={96} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
+  </div>
+
+  {#if data}
   {#if data.courses.length === 0}
     <div class="df-view">
       <EmptyState
@@ -187,23 +197,27 @@
           <!-- Attendance history(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12) -->
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--df-ink);margin-bottom:12px">出席紀錄</div>
-            {#if $attGate === 'loading'}
-              <Skeleton w="100%" h={56} r={8} />
-            {:else if $attGate === 'error'}
-              <ErrorState onRetry={attGate.refresh} />
-            {:else if attendance && attendance.length === 0}
-              <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
-            {:else if attendance}
-              <div style="display:flex;flex-wrap:wrap;gap:8px">
-                {#each attendance as h, i (i)}
-                  {@const [tone, label] = ATT_STATE[h.state]}
-                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
-                    <Badge {tone} dot>{label}</Badge>
-                    <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
-                  </div>
-                {/each}
-              </div>
-            {/if}
+            <LoadGate gate={attGate}>
+              <Skeleton slot="loading" w="100%" h={56} r={8} />
+              <!-- 卡片內區塊層級的 gate：已在 Card 裡，錯誤畫面覆寫為裸 ErrorState，
+                   不用預設 fallback 的 Card 包裝（避免 Card 套 Card）。 -->
+              <svelte:fragment slot="error" let:retry>
+                <ErrorState onRetry={retry} />
+              </svelte:fragment>
+              {#if attendance && attendance.length === 0}
+                <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
+              {:else if attendance}
+                <div style="display:flex;flex-wrap:wrap;gap:8px">
+                  {#each attendance as h, i (i)}
+                    {@const [tone, label] = ATT_STATE[h.state]}
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+                      <Badge {tone} dot>{label}</Badge>
+                      <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            </LoadGate>
           </div>
 
           <!-- Actions -->
@@ -320,18 +334,10 @@
       {/if}
     </Card>
   </div>
-{:else if $gate === 'error'}
-  <div class="df-view"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
-{:else}
-  <div data-testid="mine-skeleton" class="df-view" style="display:grid;grid-template-columns:1fr 1.2fr;gap:18px;align-items:start">
-    <div style="display:flex;flex-direction:column;gap:14px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={96} r={12} /></SkelCard>
-      {/each}
-    </div>
-    <SkelCard><Skeleton w="100%" h={340} r={12} /></SkelCard>
-  </div>
-{/if}
+  {/if}
+
+  <div class="df-view" slot="error"><Card padding={0}><ErrorState onRetry={gate.refresh} /></Card></div>
+</LoadGate>
 
 <style>
   .course-btn {

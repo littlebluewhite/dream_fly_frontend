@@ -26,7 +26,7 @@
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
   import { ApiError } from '$lib/api/client';
-  import { ErrorState, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
+  import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -235,7 +235,17 @@
   }[state];
 </script>
 
-{#if $gate === 'ready'}
+<LoadGate {gate}>
+  <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;" data-testid="attendance-skeleton" slot="loading">
+    <SkelCard><Skeleton w="100%" h={64} r={12} /></SkelCard>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      {#each [0, 1, 2, 3, 4] as i (i)}
+        <SkelCard><Skeleton w="100%" h={56} r={12} /></SkelCard>
+      {/each}
+    </div>
+    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
+  </div>
+
 {#if classes.length === 0}
   <!-- ── 今日無場次：空狀態(同 coach/today 頁「今日尚無場次」用詞慣例) ──────── -->
   <Card padding={0}><EmptyState icon="calendar-x" title="今日尚無場次" body="今天沒有排定課程，無需點名。" pad="56px 24px" /></Card>
@@ -417,16 +427,4 @@
   {/if}
 </Dialog>
 {/if}
-{:else if $gate === 'error'}
-  <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
-{:else}
-  <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;" data-testid="attendance-skeleton">
-    <SkelCard><Skeleton w="100%" h={64} r={12} /></SkelCard>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      {#each [0, 1, 2, 3, 4] as i (i)}
-        <SkelCard><Skeleton w="100%" h={56} r={12} /></SkelCard>
-      {/each}
-    </div>
-    <SkelCard><Skeleton w="100%" h={320} r={12} /></SkelCard>
-  </div>
-{/if}
+</LoadGate>

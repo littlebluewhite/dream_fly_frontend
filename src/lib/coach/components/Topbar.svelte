@@ -1,3 +1,12 @@
+<script context="module" lang="ts">
+  /* 已讀狀態單例——刻意放在 module context（非元件實例 script），確保「store 活在
+   * 模組層」：跨導航（甚至元件重新掛載）持久化已讀狀態，同 C6 計畫核可的行為變更。 */
+  import { createReadState } from '$lib/stores/read-state';
+  import { NOTIFS } from '$lib/coach/data';
+
+  const notifState = createReadState(NOTIFS);
+</script>
+
 <script lang="ts">
   /* 教練端 topbar (shell.jsx:171-199): 68px white sticky bar — breadcrumb + title
    * on the left; right cluster = optional per-view action (only 排課管理 supplies
@@ -13,16 +22,16 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { search, toasts } from '$lib/coach/stores';
-  import { NOTIFS, COACH } from '$lib/coach/data';
+  import { COACH } from '$lib/coach/data';
   import { coachPath } from '$lib/coach/nav';
+  import { unreadCount } from '$lib/stores/read-state';
 
   export let crumb: string;
   export let title: string;
 
   let notif = false;
-  let allRead = false; // codex r1 (P3): 全部標為已讀 actually clears the unread state
   $: isSchedule = $page.url.pathname === '/coach/schedule';
-  $: unread = allRead ? 0 : NOTIFS.filter((n) => n.unread).length;
+  $: unread = unreadCount($notifState);
 
   function addClass() {
     toasts.notify('info', '新增課程', '建立新的課程時段（示範）。');
@@ -93,7 +102,7 @@
             </div>
             <button
               on:click={() => {
-                allRead = true;
+                notifState.markAllRead();
                 notif = false;
               }}
               style="border:none;background:transparent;color:var(--df-primary);font-weight:600;font-size:12.5px;cursor:pointer;font-family:var(--df-font-body)"
@@ -102,13 +111,13 @@
             </button>
           </div>
           <div style="max-height:380px;overflow-y:auto">
-            {#each NOTIFS as n, i (i)}
-              {@const rowUnread = n.unread && !allRead}
+            {#each $notifState as n, i (i)}
+              {@const rowUnread = !n.read}
               <button
                 class="df-rowhover"
                 on:click={() => openNotif(n.to)}
                 style="display:flex;gap:12px;width:100%;padding:13px 18px;border:none;border-bottom:{i <
-                NOTIFS.length - 1
+                $notifState.length - 1
                   ? '1px solid var(--df-border)'
                   : 'none'};background:{rowUnread ? 'var(--df-primary-bg)' : '#fff'};cursor:pointer;text-align:left;font-family:var(--df-font-body)"
               >

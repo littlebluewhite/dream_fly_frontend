@@ -26,3 +26,23 @@
 - **報名／訂閱獨立性(ADR-0001)維持不變**:本次只**搬遷** commit 的歸屬與形狀,未耦合兩種產品(方案不自動涵蓋課程報名)。
 - **測試金字塔成形**:結算規則改由純函式 `commitCheckout` 單測(`member/checkout.test.ts`)釘住、store 寫入由 `applyOrder` 整合測(`member/stores.test.ts`)釘住,render 測試瘦身為只測文案／顯示分支。
 - **若未來架構審查再建議「合併兩 surface 的結帳」**:請先回看本 ADR 的載重理由。
+
+## 附錄(2026-07-08):共享 wire orchestration 不違本 ADR
+
+本 ADR 當年禁止的是跨 surface 共用**結算**——業務規則(金額拆解、報名／訂閱與點數變動的認定)。
+該業務規則已隨後端串接(Task 16 前後,見 ADR 0006)整段移入後端;前端原本擔任「結算」角色的
+`commitCheckout`／`CheckoutContext`／`CheckoutResult` 已刪除(`member/checkout.ts` 檔頭註解:
+「Task 16 前的本地結算 commitCheckout / CheckoutContext / CheckoutResult 已移除(final review
+裁定):金額/點數/報名/訂閱的商業規則以後端為準(stores.ts 的 placeOrder),前端不再平行維護
+一份會漂移的副本。」)——本 ADR 所護的對象(跨 surface 共用的本地結算邏輯)已不存在於前端。
+
+2026-07-08 落地的 `src/lib/checkout-order.ts` 收斂的只是 **wire 序列**:同步購物車
+(`syncCartToServer`)→ `POST /orders` → 呼叫端提供的 `afterOrder` 副作用以 `allSettled` 執行 →
+清購物車 → 把後端回應適配成 `OrderConfirmation` 形狀。store 寫入一律由呼叫端以參數注入
+(`lines`／`afterOrder`／`clearCart`),模組本身不 import 任何 surface 的 store——
+`member/checkout-sync.ts` 與 `mobile/stores.ts` 的 `placeOrder` 都改為委派 `submitOrder` 的薄
+adapter,各自傳入自己 surface 的可計費購物車行、後續刷新 store 的 promise、清購物車函式。
+per-surface 結算的精神(兩 surface 不共用 store,各自決定要注入什麼)不變。
+
+`member/checkout.ts` 的純函式(`chargeableLines`／`validateCoupon`／`orderErrorMessage`)原地不動,
+未被本次收斂觸碰。
