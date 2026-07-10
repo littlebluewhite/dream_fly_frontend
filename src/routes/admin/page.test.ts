@@ -21,6 +21,25 @@ vi.mock('$lib/admin/api', () => ({
  * Promise.all 併入。 */
 const REPORTS: ReportsData = {
 	revenue: { thisMonth: 458200, lastMonth: 400000, trend: [] },
+	// Round 4 P4-F1：ReportsData 新增 12 組金流/人流彙總，此頁(dashboard KPI 帶)不消費
+	// 這些欄位——測試 fixture 補齊型別必要欄位即可，皆給誠實的全 0/空陣列/null。
+	kpis: {
+		newMembers: { thisMonth: 0, lastMonth: 0 },
+		newEnrolments: { thisMonth: 0, lastMonth: 0 },
+		paidOrdersCount: { thisMonth: 0, lastMonth: 0 },
+		attendanceRate: { thisMonth: null, lastMonth: null }
+	},
+	revenueBreakdown: [],
+	incomeSources12m: [],
+	categorySplit: [],
+	paymentSplit: [],
+	attendanceDistribution: [],
+	ageDistribution: [],
+	tierDistribution: [],
+	retention: [],
+	funnel: { trialInquiries: 0, newEnrolments: 0 },
+	weekdayLoad: [],
+	venueUsage: [],
 	members: { total: 120, newThisMonth: 8, active: 96 },
 	courses: [],
 	coaches: []

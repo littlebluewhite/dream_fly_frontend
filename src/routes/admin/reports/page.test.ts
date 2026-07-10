@@ -10,6 +10,28 @@ vi.mock('$lib/admin/api', () => ({ getReports: vi.fn() }));
  * a real-data KPI band (revenue this/last month + member counts), the 12-month
  * RevenueTrend chart, and two honest courses/coaches tables. Data arrives through
  * the getReports() seam (async), so every assertion first awaits the ready phase. */
+// Round 4 P4-F1：ReportsData 新增 12 組金流/人流彙總 sections + coaches[] 兩新欄——
+// 此頁(P4-F2 之前)尚未消費，fixture 補齊型別必要欄位即可，皆給誠實的全 0/空陣列/null。
+const EMPTY_REPORT_SECTIONS = {
+	kpis: {
+		newMembers: { thisMonth: 0, lastMonth: 0 },
+		newEnrolments: { thisMonth: 0, lastMonth: 0 },
+		paidOrdersCount: { thisMonth: 0, lastMonth: 0 },
+		attendanceRate: { thisMonth: null, lastMonth: null }
+	},
+	revenueBreakdown: [],
+	incomeSources12m: [],
+	categorySplit: [],
+	paymentSplit: [],
+	attendanceDistribution: [],
+	ageDistribution: [],
+	tierDistribution: [],
+	retention: [],
+	funnel: { trialInquiries: 0, newEnrolments: 0 },
+	weekdayLoad: [],
+	venueUsage: []
+};
+
 const PAYLOAD: ReportsData = {
 	revenue: {
 		thisMonth: 458200,
@@ -20,12 +42,13 @@ const PAYLOAD: ReportsData = {
 			{ m: '2025-10', h: 458200 }
 		]
 	},
+	...EMPTY_REPORT_SECTIONS,
 	members: { total: 120, newThisMonth: 8, active: 96 },
 	courses: [
 		{ id: 'c1', name: '競技體操 選手班', enrolled: 12, maxStudents: 12, fillRate: 1, waitlistCount: 4 },
 		{ id: 'c2', name: '兒童基礎 B 班', enrolled: 7, maxStudents: 10, fillRate: 0.7, waitlistCount: 0 }
 	],
-	coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28 }]
+	coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28, revenueCents12m: 850000, attendanceRate: 0.92 }]
 };
 
 beforeEach(() => {
@@ -93,6 +116,7 @@ describe('報表分析 (+page)', () => {
 		const zeroTrend = Array.from({ length: 12 }, (_, i) => ({ m: `2025-${String(i + 1).padStart(2, '0')}`, h: 0 }));
 		vi.mocked(getReports).mockResolvedValue({
 			revenue: { thisMonth: 0, lastMonth: 0, trend: zeroTrend },
+			...EMPTY_REPORT_SECTIONS,
 			members: { total: 0, newThisMonth: 0, active: 0 },
 			courses: [],
 			coaches: []
