@@ -8,13 +8,16 @@
 import type { Tone } from '$lib/api/wire';
 export type { Tone, OrderStatus } from '$lib/api/wire';
 // 活 facade:StatusBadge/OrdersTable/orders-filter 等經本檔取得 Tone/OrderStatus/ORDER_STATUS(來源=$lib/api/wire,見 ADR 0007)
+import { LEVELS, type Level } from '$lib/domain/course-level';
+export { LEVELS };
+export type { Level };
+// 活 facade:course-request.ts/ClassEditDialog.svelte/StatusBadge.svelte 等經本檔取得 LEVELS/Level(來源=$lib/domain/course-level,FE#17)
 
 export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
 export type TicketType = 'ticket' | 'membership' | 'course_package';
 export type VenueStatus = 'available' | 'maintenance';
-export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 export type ClassStatus = '招生中' | '候補' | '額滿';
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
@@ -203,7 +206,6 @@ export const STATUS_TONE: Record<ClassStatus, Tone> = {
 };
 
 /* ───────────────────────── form constants ───────────────────────── */
-export const LEVELS: Level[] = ['啟蒙', '入門', '基礎', '進階', '選手'];
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];
 export const CLASS_STATUS: ClassStatus[] = ['招生中', '候補', '額滿'];
 /** Ticket type union as a 新增/編輯票券 Select source (keys of TICKET_TYPE). */

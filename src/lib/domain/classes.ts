@@ -1,9 +1,11 @@
 /* src/lib/domain/classes.ts — 課程 seed data (base only; ClassRow derivation stays in admin) */
 
+import type { Level } from './course-level';
+
 export interface ClassBase {
 	id: string;
 	name: string;
-	level: '啟蒙' | '入門' | '基礎' | '進階' | '選手';
+	level: Level;
 	cat: string;
 	coach: string;
 	room: string;

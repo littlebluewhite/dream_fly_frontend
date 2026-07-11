@@ -47,6 +47,7 @@ import {
   NOTIFS_SEED as NOTIFS_SEED_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
+import type { Level } from '$lib/domain/course-level';
 
 export interface UpcomingClass {
   name: string;
@@ -147,7 +148,7 @@ export const LEVEL_TONE: Record<string, Tone> = {
   // 公開 catalog 路徑）與 getMine() 現在都經 $lib/domain/course-level 的共用 5 級對照
   // （COURSE_LEVEL_LABEL）產生 level，不會再吐出這三個舊值——先前這裡的註解聲稱
   // getCourses() 仍會產生這三值，方向與現況相反，一併移除。
-};
+} satisfies Record<Level, Tone>;
 
 /* Weekly schedule grid — member's classes */
 export const WEEK = ['一', '二', '三', '四', '五', '六', '日'];

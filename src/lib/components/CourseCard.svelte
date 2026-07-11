@@ -2,28 +2,37 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import type { CatalogCourse } from '$lib/public/adapters';
+  import type { Level } from '$lib/domain/course-level';
 
   export let course: CatalogCourse;
   export let showCartButton = false;
   export let onAdd: (course: CatalogCourse) => void = () => {};
 
-  // Map level to Badge tone
-  const levelTones: Record<string, 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral'> = {
+  type BadgeTone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'accent' | 'neutral';
+
+  // Map level to Badge tone — legacy 公開頁分類 keys（不屬於 $lib/domain/course-level 的 5 級課程分級），字面保留。
+  const legacyLevelTones: Record<string, BadgeTone> = {
     '青少年': 'warning',
     '客製化': 'accent',
     '體驗': 'info',
     '幼兒': 'success',
     '競技': 'error',
-    '成人': 'primary',
-    // FE#17 補完：5 級課程分級（$lib/domain/course-level 共用常數）色階對齊
-    // admin/member/mobile/mobile-admin 既有的 LEVEL_TONE（啟蒙/入門 info、基礎
-    // primary、進階 warning、選手 accent），避免 foundation/elite 落回預設 primary。
+    '成人': 'primary'
+  };
+
+  // FE#17：5 級課程分級（$lib/domain/course-level 共用常數）色階對齊
+  // admin/member/mobile/mobile-admin 既有的 LEVEL_TONE（啟蒙/入門 info、基礎
+  // primary、進階 warning、選手 accent），避免 foundation/elite 落回預設 primary。
+  // satisfies 對 Level 鍵集合做編譯期守護，色值所有權留在本檔（不共用 tone 常數）。
+  const canonicalLevelTones = {
     '啟蒙': 'info',
     '入門': 'info',
     '基礎': 'primary',
     '選手': 'accent',
     '進階': 'warning'
-  };
+  } satisfies Record<Level, BadgeTone>;
+
+  const levelTones: Record<string, BadgeTone> = { ...legacyLevelTones, ...canonicalLevelTones };
 
   $: levelTone = levelTones[course.level] || 'primary';
 </script>

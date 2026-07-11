@@ -47,6 +47,7 @@ export type { Notification as NotifItem } from '$lib/domain/member-app';
 // POINTS_LEDGER/PointsEntry、CERTS/Cert 不在此列——Task 1 確認兩者的轉出(值+型別)
 // 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
 import type { CatalogCourse } from '$lib/public/adapters';
+import type { Level } from '$lib/domain/course-level';
 
 /* ---- Attendance history (active course) ----
  * 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
@@ -68,7 +69,7 @@ export interface Course extends CatalogCourse {
 // 後端，這份 mock 已無 runtime 消費者；曾經的「僅供既有測試當 fixture 用」用途
 // 也已改為各測試檔內的 inline Course fixture。Course interface(見上)仍供
 // api.ts/元件的型別標註使用，保留。
-export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
+export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' } satisfies Record<Level, string>;
 
 /* ---- Weekly schedule grid ---- */
 export const WEEK = ['一', '二', '三', '四', '五', '六', '日'];

@@ -7,6 +7,7 @@ import { ORDERS_BASE } from './orders';
 import { CAMPUSES } from './shared';
 import { VENUES } from './venues';
 import { TICKETS } from './tickets';
+import { LEVELS } from './course-level';
 
 /* ── row-count canaries ── */
 describe('row counts', () => {
@@ -38,7 +39,7 @@ describe('id uniqueness', () => {
 
 /* ── enum membership ── */
 describe('enum membership', () => {
-	const levels = new Set(['啟蒙', '入門', '基礎', '進階', '選手']);
+	const levels = new Set(LEVELS);
 	const classStatuses = new Set(['招生中', '候補', '額滿']);
 	const memberStatuses = new Set(['active', 'warning', 'paused']);
 	const payStatuses = new Set(['paid', 'due', 'trial']);

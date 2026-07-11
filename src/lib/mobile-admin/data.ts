@@ -34,6 +34,7 @@ import { MEMBERS_BASE } from '$lib/domain/members';
 import { ORDERS_BASE } from '$lib/domain/orders';
 import { CAMPUSES } from '$lib/domain/shared';
 import type { OrderStatus } from '$lib/api/wire';
+import type { Level } from '$lib/domain/course-level';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -56,7 +57,7 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 export interface ClassRow {
 	id: string;
 	name: string;
-	level: '啟蒙' | '入門' | '基礎' | '進階' | '選手';
+	level: Level;
 	cat: string;
 	coach: string;
 	room: string;
@@ -259,7 +260,7 @@ export const MEMBER_STATUS: Record<MemberAccountStatus, Tone> = {
 	active: ['success', '啟用中'],
 	inactive: ['neutral', '已停用']
 };
-export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' };
+export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' } satisfies Record<Level, string>;
 export const STATUS_TONE: Record<string, string> = { 招生中: 'success', 候補: 'warning', 額滿: 'neutral' };
 
 // Task P4-F3：報表分析 mock 全面退役——KPI 卡(REPORT_KPIS/Kpi)、營收趨勢
