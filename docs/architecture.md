@@ -136,9 +136,10 @@ only where the mobile shape diverges, with their own small residual mock spots (
 inlined the same direct way. Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, display atoms like
 `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
-redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` re-exports
-`OrderStatus`/`ORDER_STATUS` from wire instead of holding verbatim copies, and its two dynamic badge
-lookups use wire's `orderStatusBadge` fallback). Error-toast plumbing is single-sourced the same way:
+redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` re-exports the `OrderStatus` type
+from wire instead of holding a verbatim copy, and its two dynamic badge lookups use wire's
+`orderStatusBadge` fallback — which left a re-exported `ORDER_STATUS` table consumer-less, so it
+was dropped). Error-toast plumbing is single-sourced the same way:
 `src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never
 leaks the backend message) replaced 22 per-page inline mappers — 12 are table-form, each call site
 keeping its own 1-4-line entity text table; the other 10 are pass-through, delegating outright

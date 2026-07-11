@@ -154,4 +154,19 @@ describe('mobile-admin/admin/members 頁', () => {
 
 		expect(get(toasts).some((t) => t.title === '新增失敗')).toBe(true);
 	});
+
+	/* trim 回歸釘子若只釘桌面 filter 純函式層,頁面斷開共用 filter 退回舊 inline
+	 * 不 trim 邏輯時仍會全綠——這筆測「頁面已接線」本身(同 orders 頁的釘法)。 */
+	it('搜尋框退化查詢走桌面 filterMemberAccounts 的 trim 語意:padded 命中、純空白回全部', async () => {
+		const { findByText, queryByText, getByPlaceholderText } = render(MembersPage);
+		await findByText('測試學員甲');
+
+		const input = getByPlaceholderText('搜尋學員姓名、電話、編號…');
+		await fireEvent.input(input, { target: { value: ' 測試學員甲 ' } });
+		expect(await findByText('測試學員甲')).toBeInTheDocument();
+		expect(queryByText('測試學員乙')).toBeNull();
+
+		await fireEvent.input(input, { target: { value: '   ' } });
+		expect(await findByText('測試學員乙')).toBeInTheDocument();
+	});
 });

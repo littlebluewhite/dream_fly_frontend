@@ -78,5 +78,25 @@ describe('mobile-admin/admin/orders 頁', () => {
 		const { container, findByText } = render(OrdersPage);
 		expect(await findByText('測試學員丙')).toBeInTheDocument();
 		expect(container.querySelector('.badge.neutral')).not.toBeNull();
+		// fallback label = 原字串(orderStatusBadge 查無回 ['neutral', s])——沒有這行,
+		// label 被換掉或遺失時只驗 .badge.neutral 的斷言仍會綠。
+		expect(await findByText('future_status')).toBeInTheDocument();
+	});
+
+	/* trim 回歸釘子若只釘桌面 filter 純函式層,頁面斷開共用 filter 退回舊 inline
+	 * 不 trim 邏輯時仍會全綠——這筆測「頁面已接線」本身:padded 查詢命中、純空白
+	 * 查詢視同無查詢回全部(兩者在舊 inline 的裸 includes 下都會變成空清單)。 */
+	it('搜尋框退化查詢走桌面 filterOrders 的 trim 語意:padded 命中、純空白回全部', async () => {
+		const { findByText, queryByText, getByPlaceholderText } = render(OrdersPage);
+		await findByText('測試學員甲');
+
+		const input = getByPlaceholderText('搜尋訂單編號、學員…');
+		await fireEvent.input(input, { target: { value: ' 測試學員甲 ' } });
+		expect(await findByText('測試學員甲')).toBeInTheDocument();
+		expect(queryByText('測試學員乙')).toBeNull();
+
+		await fireEvent.input(input, { target: { value: '   ' } });
+		expect(await findByText('測試學員乙')).toBeInTheDocument();
+		expect(queryByText('測試學員甲')).not.toBeNull();
 	});
 });

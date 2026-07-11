@@ -123,4 +123,27 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 		expect(get(toasts).some((t) => t.title === '新增失敗')).toBe(true);
 	});
+
+	/* trim 回歸釘子若只釘桌面 filter 純函式層,頁面斷開共用 filter 退回舊 inline
+	 * 不 trim 邏輯時仍會全綠——這筆測「頁面已接線」本身(同 orders 頁的釘法)。
+	 * 共用 fixture 只有一筆,無法區分「過濾後剩一筆」與「沒過濾」,故本 it 局部
+	 * mock 兩筆。 */
+	it('搜尋框退化查詢走桌面 filterClasses 的 trim 語意:padded 命中、純空白回全部', async () => {
+		vi.mocked(getOpsCollections).mockResolvedValue({
+			members: MEMBERS,
+			classes: [FIXTURE_CLASSES[0], { ...FIXTURE_CLASSES[0], id: 'zz2', name: '測試班級乙' }],
+			coaches: COACHES,
+			orders: ORDERS
+		});
+		const { findByText, queryByText, getByPlaceholderText } = render(ClassesPage);
+		await findByText('測試班級甲');
+
+		const input = getByPlaceholderText('搜尋班級、教練…');
+		await fireEvent.input(input, { target: { value: ' 測試班級甲 ' } });
+		expect(await findByText('測試班級甲')).toBeInTheDocument();
+		expect(queryByText('測試班級乙')).toBeNull();
+
+		await fireEvent.input(input, { target: { value: '   ' } });
+		expect(await findByText('測試班級乙')).toBeInTheDocument();
+	});
 });

@@ -19,7 +19,8 @@
  * SCHED_DAYS/SCHED_COURSES/ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES/THREAD/
  * SHARED_FILES)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
  * getSchedule()/getAttendance()/getThread() 等真後端接縫,經確認無 runtime
- * 消費者後已退役——interface 仍供頁面與 api.ts 的型別標註使用,全數保留。 */
+ * 消費者後已退役——interface 仍供頁面與 api.ts 的型別標註使用,除 SharedFile
+ * (零型別消費者,隨值一併退役)外全數保留。 */
 import type { Level } from '$lib/domain/course-level';
 
 /* ──────────────── unions ──────────────── */
