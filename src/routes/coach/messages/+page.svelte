@@ -19,7 +19,10 @@
    *   就選中既有列不重複插入；全新對話插入清單頂端並選中(伺服器排序把尚無訊息的
    *   對話排最後，本地置頂是「剛發起」的工作階段 UX，下次整頁載入回歸伺服器排序)。
    *   失敗(422「僅支援教練與會員間的對話」等)以 ApiError.message 繁中 toast 提示，
-   *   對話框保持開啟供改選。 */
+   *   對話框保持開啟供改選。
+   * - 過濾清單(tab×搜尋)、選取回退 guard、confirmCompose 的插入/reset 四欄指令邏輯
+   *   已收進純模組 $lib/coach/conversations-filter.ts(Round 3 K3)——本頁保留 store
+   *   解構、stale-response guard 與 loadThread/markRead 等副作用。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
@@ -30,6 +33,7 @@
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
   import type { Conversation, Student, ThreadMsg } from '$lib/coach/data';
+  import { filterConversations, pickSelection, applyCreatedConversation } from '$lib/coach/conversations-filter';
   import { createLoadGate } from '$lib/load-gate';
   import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { apiErrorMessage } from '$lib/api/error-text';
@@ -93,19 +97,12 @@
     { k: '家長', label: '家長' },
   ];
 
-  /* wired to topbar search store */
-  $: q = $search.trim().toLowerCase();
+  $: list = filterConversations(convos, { tab, query: $search });
 
-  $: list = convos.filter((c) => {
-    if (tab === '緊急' && !c.urgent) return false;
-    if (tab === '未讀' && !c.badge) return false;
-    if (tab === '家長' && c.kind !== '家長') return false;
-    if (q && !(c.name + c.preview).toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  /* selection guard: if current sel falls out of filtered list, auto-select first */
-  $: if (list.length && !list.some((c) => c.id === sel)) sel = list[0].id;
+  /* selection guard: if current sel falls out of filtered list, auto-select first.
+   * pickSelection 是冪等的回退函式，primitive 自指一輪即穩——Svelte legacy 反應式
+   * 下的既有慣例。 */
+  $: sel = pickSelection(list, sel);
 
   $: cur = convos.find((c) => c.id === sel) || convos[0];
 
@@ -147,22 +144,24 @@
       });
   }
 
-  /** POST /conversations（get-or-create）。回傳 id 已在清單中就選中既有列（保留其
-   *  badge/preview，不用 create 回應的貧乏映射覆蓋）；全新對話插入頂端並選中——選中
-   *  觸發 loadThread 載入串（既有對話載出歷史訊息、全新對話顯示「尚無訊息」空狀態）。
-   *  失敗以 ApiError.message 繁中 toast 提示（§3.21 的 422 等後端本身回繁中訊息，同
-   *  decideLeaveRequest 直接透傳慣例），對話框保持開啟供改選。 */
+  /** POST /conversations（get-or-create）。插入/選取與 tab、search 重置的指令邏輯已
+   *  收進 applyCreatedConversation()（$lib/coach/conversations-filter.ts，Round 3
+   *  K3）——回傳 id 已在清單中就選中既有列（保留其 badge/preview，不用 create 回應
+   *  的貧乏映射覆蓋）；全新對話插入頂端並選中——選中觸發 loadThread 載入串（既有
+   *  對話載出歷史訊息、全新對話顯示「尚無訊息」空狀態）。失敗以 ApiError.message
+   *  繁中 toast 提示（§3.21 的 422 等後端本身回繁中訊息，同 decideLeaveRequest 直接
+   *  透傳慣例），對話框保持開啟供改選。 */
   async function confirmCompose() {
     if (!composePick || creating) return;
     const r = composePick;
     creating = true;
     try {
       const convo = await createConversation(r.user_id, r.name);
-      if (!convos.some((c) => c.id === convo.id)) convos = [convo, ...convos];
-      // reset the filters so the guard can't re-select the first visible row over us.
-      tab = '全部';
-      search.set('');
-      sel = convo.id;
+      const result = applyCreatedConversation(convos, convo);
+      convos = result.convos;
+      tab = result.tab;
+      search.set(result.search);
+      sel = result.sel;
       composeOpen = false;
       composePick = null;
     } catch (err) {
