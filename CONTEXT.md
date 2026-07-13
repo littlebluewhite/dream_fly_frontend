@@ -76,7 +76,7 @@ _Avoid_: 統計(過於籠統)
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
 `createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。共享 store 的水合協定可經
 `hydrate` 選項直接收進閘門本身(guard 短路/post-await 重查/mutator 翻旗一次到位),語意同下方
-「水合閘門」詞條(見 `docs/adr/0008` 增補、`docs/adr/0012`)。
+「水合閘門」詞條(見 `docs/adr/0008` 增補)。
 _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合
 
 **水合閘門 (Hydration Gate)**:

@@ -234,7 +234,8 @@ that `docs/adr/0011` already rejected.
 - **`src/lib/coach/attendance-controller.ts`**'s `createAttendanceController` (K1) sits between the
   existing pure reducer `attendance-draft.ts` and `coach/attendance/+page.svelte`: a single
   `AttendanceViewState` snapshot store replaces five mirrored page variables, with `saveAttendance`/`now`
-  injected as deps (no Svelte import at module scope, SSR-safe). `save()` layers an incrementing
+  injected as deps (no Svelte component/lifecycle imports — `svelte/store` only — and construction is
+  side-effect-free, SSR-safe). `save()` layers an incrementing
   save-token guard on top of the pre-existing state-based stale guard — not a replacement for it —
   closing a latent ABA hole where an in-flight save's late response could land on a class switched away
   from mid-save.
