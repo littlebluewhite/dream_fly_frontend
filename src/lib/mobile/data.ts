@@ -59,9 +59,10 @@ export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'],
  * Task 19：getCourses()/getHome() 改接真後端(見 api.ts，復用 member/api.ts 的
  * getCourses() —— $lib/public/adapters 的 CatalogCourse，id 是後端 uuid string，
  * 沒有 icon 欄位)。這裡的 Course 改為擴充該真實形狀 + 補一個 icon 欄位(api.ts
- * 依課程分類薄映射)，id 型別由 number 改 string。 index signature 保留，讓
- * Course 仍滿足購物車 CartInput 的形狀(把 icon/level/desc…等欄位原樣帶進
- * cart line)。 */
+ * 依課程分類薄映射)，id 型別由 number 改 string。index signature 是 K5 前購物車
+ * 自持 CartInput/CartLine(index signature 形)的殘留——現行 courseToCartItem
+ * (見 $lib/cart-item)只讀 Course 的具名欄位建構 CartItem(見 stores.ts 的
+ * createCart())，不再倚賴這個 index signature，原樣保留。 */
 export interface Course extends CatalogCourse {
 	icon: IconName;
 	[k: string]: unknown;

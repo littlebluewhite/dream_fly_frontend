@@ -7,7 +7,7 @@
    *   - slot="error":錯誤畫面;未提供時 fallback 為慣用的 Card + ErrorState,
    *     覆寫時以 `let:retry` 取得重試函式
    *   - default slot:ready 內容
-   * retry 一律呼叫 gate.refresh()、絕不呼叫 load()——`skip` 守衛只擋 load(),
+   * retry 一律呼叫 gate.refresh()、絕不呼叫 load()——`hydrate` 選項的 guard 短路只擋 load(),
    * refresh() 一律真抓(ADR 0008),retry 走 refresh 才不會被守衛短路。 */
   import type { LoadGate, PagedLoadGate } from '$lib/load-gate';
   import Card from './Card.svelte';

@@ -1,9 +1,9 @@
 /* Foundation contract guards for the /mobile + /mobile-admin surfaces.
  *
- * This is a static-source check (no rendering) that protects the one remaining
- * contract the parallel build relied on which the build itself still cannot
- * catch — a deleted route only 404s at navigation time: route inventory, below,
- * checks every bottom-tab + login route file exists.
+ * This is a static-source check (no rendering) that protects the two remaining
+ * contracts the parallel build relied on that the build itself still cannot
+ * catch: route inventory, below (a deleted route only 404s at navigation time),
+ * and css safety, below (two regression regexes `npm run check` doesn't cover).
  *
  * icon-registry completeness(原①)已退役(T12/K6-3)：Icon.svelte 的 `name` prop
  * 收窄為 `IconName`(見 $lib/icon-registry)後，未註冊的 icon 名稱在編譯期就會被

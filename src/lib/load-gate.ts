@@ -149,7 +149,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 
 	async function load(): Promise<void> {
 		if (options.hydrate && get(options.hydrate.flag)) {
-			// 已水合 → 短路,不發 fetch,同 skip 語意。
+			// 已水合 → 短路,不發 fetch(guard 短路只擋 load(),見下方 refresh())。
 			setPhase('ready');
 			return;
 		}
@@ -157,7 +157,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	}
 
 	async function refresh(): Promise<void> {
-		// 一律真抓,無視 skip/hydrate 旗標——守衛短路後 retry 仍要重抓。
+		// 一律真抓,無視 hydrate 旗標——guard 短路只擋 load(),retry 仍要重抓。
 		await run(options.refresh ?? options.fetch, applyRefreshed);
 	}
 
