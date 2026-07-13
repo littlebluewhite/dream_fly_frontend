@@ -154,6 +154,25 @@ describe('getDashboard', () => {
     expect(d.nextClass).toBe('');
   });
 
+  it('points/notifications hydrate 失敗時 console.error 記錄「getDashboard: <資源> hydrate 失敗」+ reason（雙端點皆失敗，逐字格式釘）', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pointsError = new Error('points network down');
+    const notifError = new Error('notifications network down');
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /reports/me': EMPTY_STATS_API,
+        'GET /points/me': pointsError,
+        'GET /notifications': notifError
+      })
+    );
+
+    await getDashboard();
+
+    expect(errorSpy).toHaveBeenCalledWith('getDashboard: 點數 hydrate 失敗', pointsError);
+    expect(errorSpy).toHaveBeenCalledWith('getDashboard: 通知 hydrate 失敗', notifError);
+  });
+
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
@@ -533,6 +552,25 @@ describe('getAccount', () => {
     expect(d.orders).toEqual([
       { id: 'DF-9', item: '訂單 DF-9', amount: 1000, status: ['success', '已付款'], date: '2026-02-01' }
     ]);
+  });
+
+  it('側效 hydrate 失敗時 console.error 記錄「getAccount: <資源> hydrate 失敗」+ reason（雙端點皆失敗，逐字格式釘）', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const pointsError = new Error('points network down');
+    const subsError = new Error('subscriptions network down');
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'u6', email: 'a@b.com', name: '測試六', phone: null, created_at: '2026-01-01T00:00:00Z' },
+        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /points/me': pointsError,
+        'GET /subscriptions/me': subsError
+      })
+    );
+
+    await getAccount();
+
+    expect(errorSpy).toHaveBeenCalledWith('getAccount: 點數 hydrate 失敗', pointsError);
+    expect(errorSpy).toHaveBeenCalledWith('getAccount: 訂閱 hydrate 失敗', subsError);
   });
 
   it('phone 為 null 時映射為空字串', async () => {

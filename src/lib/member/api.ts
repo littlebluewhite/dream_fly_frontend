@@ -46,22 +46,48 @@ async function activeEnrolments(): Promise<ApiEnrolment[]> {
   return list.filter((e) => e.status === 'active');
 }
 
+/** getDashboard/getAccount 進頁時「順手」把共享 store(points/notifications/
+ *  subscriptions)水合成真資料——這兩支 getter 本身的回傳值(DashboardData/
+ *  AccountData)不含這些欄位，呼叫端(Topbar/Sidebar 的未讀角標、CheckoutDialog
+ *  的 $points)是直接讀對應 store，不是讀 getter 的回傳值。
+ *
+ *  best-effort 語意：tasks 彼此獨立，用 Promise.allSettled 平行執行，單項失敗
+ *  只 console.error 記錄、不 throw——不讓一個非核心 store 的暫時性失敗擋住整頁。
+ *  呼叫端的主資料(profile/orders/stats 等)已經由各自的 Promise.all fail-hard
+ *  取得，這裡的 store hydrate 只是「順便」；失敗時 store 保留前值，頁面仍可
+ *  正常顯示。
+ *
+ *  與 getPoints() 刻意不同：getPoints 的 refreshPoints() 是用 Promise.all(fail-
+ *  hard)——那裡的 rewards 目錄跟 points store 是同一次「進頁必要資料」的並行
+ *  副產品，失敗即代表頁面本身也拿不到資料，理應讓錯誤浮上去；這裡的 tasks 則是
+ *  「頁面主資料以外」的順手動作，兩者語意刻意不同，不要合流。
+ *
+ *  tuple 形而非物件形：[中文資源名, hydrate 函式] 讓 label 留在呼叫端視野，
+ *  一眼看出 log 會印出什麼資源名。
+ *
+ *  @param caller 呼叫端函式名，作為 log 前綴(如 'getDashboard')
+ *  @param tasks [中文資源名, hydrate 函式] tuple 陣列 */
+async function hydrateSessionStores(
+  caller: string,
+  tasks: ReadonlyArray<readonly [label: string, hydrate: () => Promise<void>]>
+): Promise<void> {
+  const results = await Promise.allSettled(tasks.map(([, hydrate]) => hydrate()));
+  results.forEach((result, i) => {
+    if (result.status === 'rejected') console.error(`${caller}: ${tasks[i][0]} hydrate 失敗`, result.reason);
+  });
+}
+
 /** 儀表板 — nextClass 來自最新一筆有效報名的 schedule_text（沒有報名則空字串）；
  *  track 後端無對應資料，一律空字串。stats 三卡(報名課程數/本月出席率/會員點數)
  *  改接 GET /reports/me(經 getReportStats() 映射,§3.24)——只換 value,icon/tint/
  *  color/label 沿用既有 STATS 版型；attendanceRate 為 null(無點名資料,裁決 3)
  *  顯示「—」,不是 0%(0% 會誤導成「有資料、出席率為零」)。skills/upcoming/announce
  *  不在本次映射範圍內(無後端資料源、頁面也不直接讀 store),沿用 mock。
- *  順手 refresh points/notifications store —— 這是會員登入後第一個會進的頁面，
- *  讓 Topbar/Sidebar 的未讀角標、CheckoutDialog 的 $points 一開始就是真資料，不用
- *  等使用者先逛過點數頁/通知頁才 hydrate。這兩支只是「順便」，失敗不影響 dashboard
- *  本身能否顯示，所以用 allSettled、只記錄錯誤（同 stores.ts 的 placeOrder() 對
- *  post-checkout hydrate 失敗的處理方式）。 */
+ *  順手 hydrate points/notifications store(best-effort 語意，見 hydrateSessionStores()
+ *  檔頭)。 */
 export const getDashboard = async (): Promise<DashboardData> => {
   const [active, stats] = await Promise.all([activeEnrolments(), getReportStats()]);
-  const [pointsResult, notifResult] = await Promise.allSettled([refreshPoints(), refreshNotifications()]);
-  if (pointsResult.status === 'rejected') console.error('getDashboard: 點數 hydrate 失敗', pointsResult.reason);
-  if (notifResult.status === 'rejected') console.error('getDashboard: 通知 hydrate 失敗', notifResult.reason);
+  await hydrateSessionStores('getDashboard', [['點數', refreshPoints], ['通知', refreshNotifications]]);
   return {
     me: me(),
     stats: [
@@ -360,19 +386,15 @@ function mapProfile(u: ApiUser): AccountProfile {
   };
 }
 
-/** GET /users/me + GET /orders/me；順手 refresh points/subscriptions —— 帳戶頁直接
- *  讀 $points / $subscriptions store(不是這裡的回傳值)。主資料(profile+orders)
- *  fail-hard(Promise.all)；側效 hydrate 則 best-effort(allSettled、失敗只記錄，
- *  同 getDashboard 模式)——主資料都到手了，不該因為側效暫時失敗把整頁打成 error，
- *  store 保留前值仍可正常顯示。 */
+/** GET /users/me + GET /orders/me；主資料(profile+orders)fail-hard(Promise.all)。
+ *  順手 hydrate points/subscriptions store(best-effort 語意，見 hydrateSessionStores()
+ *  檔頭)——帳戶頁直接讀 $points / $subscriptions store(不是這裡的回傳值)。 */
 export const getAccount = async (): Promise<AccountData> => {
   const [user, orderList] = await Promise.all([
     api<ApiUser>('/users/me'),
     api<ApiOrderListResponse>('/orders/me')
   ]);
-  const [pointsResult, subsResult] = await Promise.allSettled([refreshPoints(), refreshSubscriptions()]);
-  if (pointsResult.status === 'rejected') console.error('getAccount: 點數 hydrate 失敗', pointsResult.reason);
-  if (subsResult.status === 'rejected') console.error('getAccount: 訂閱 hydrate 失敗', subsResult.reason);
+  await hydrateSessionStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
   return {
     orders: orderList.orders.map(mapOrder),
     profile: mapProfile(user)
