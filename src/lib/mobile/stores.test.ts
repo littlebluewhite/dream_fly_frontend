@@ -123,6 +123,19 @@ describe('notifs singleton — 同步 seed + 水合守衛(notifications 頁 core
 		expect(get(notifs)[0]).not.toBe(NOTIFS_SEED[0]);
 		expect(get(notifsHydrated)).toBe(false);
 	});
+
+	// K2-c 協定補完:markRead/markAllRead 先前完全沒有翻旗,mutation 後
+	// notifsHydrated 仍是 false,重訪通知頁會被 load-gate 判定「尚未水合」而
+	// 整包重抓、覆寫掉這裡剛做的已讀 mutation。包裝函式對齊 member 的
+	// markMutated 協定,呼叫共用邏輯後翻旗。
+	it('markRead/markAllRead 呼叫共用邏輯後翻 notifsHydrated 為 true', () => {
+		notifs.markRead(NOTIFS_SEED[0].id);
+		expect(get(notifsHydrated)).toBe(true);
+
+		notifsHydrated.set(false); // 重置守衛,單獨驗證 markAllRead 這條路徑也會翻旗
+		notifs.markAllRead();
+		expect(get(notifsHydrated)).toBe(true);
+	});
 });
 
 describe('cart waitlist guard', () => {

@@ -148,8 +148,26 @@ export { unreadCount };
 // (unread,TabBar/首頁鈴鐺都讀)一開始就有值。首次造訪通知頁時經 getNotifications()
 // 接縫水合覆寫一次(見該頁 load()/refresh());notifsHydrated 是 load-once 守衛,
 // 防止重訪重抓覆寫已讀狀態。
-export const notifs = createNotifs<NotifItem>(NOTIFS_SEED);
+const notifsBase = createNotifs<NotifItem>(NOTIFS_SEED);
 export const notifsHydrated = writable(false);
+/** K2-c 協定補完:markRead/markAllRead 原本完全沒有翻旗協定,mutation 後
+ *  notifsHydrated 仍是 false,重訪通知頁會被 load-gate 判定「尚未水合」而整包
+ *  重抓、覆寫掉這裡的已讀 mutation。包裝函式在呼叫共用邏輯後翻
+ *  notifsHydrated.set(true),對齊 member 的 markMutated 協定(見
+ *  $lib/member/notifications.ts)。set() 不繞這層——水合本身由通知頁的
+ *  load-gate hydrate 選項在 into() 之後自己翻旗,不需要這裡重覆翻。 */
+export const notifs = {
+	subscribe: notifsBase.subscribe,
+	set: notifsBase.set,
+	markRead(id: string) {
+		notifsBase.markRead(id);
+		notifsHydrated.set(true);
+	},
+	markAllRead() {
+		notifsBase.markAllRead();
+		notifsHydrated.set(true);
+	}
+};
 export const unread = derived(notifs, ($n) => unreadCount($n));
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */

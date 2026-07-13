@@ -11,7 +11,6 @@
    * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試
    * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 既有 mutation 不動。 */
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
@@ -24,12 +23,15 @@
 
   let cat = 'all';
 
-  // 首次 client mount 透過接縫水合一次 feed;重訪時守衛已為 true 就跳過 fetch
-  // (不覆寫已讀狀態 / 未讀徽章)。
+  // 水合協定改走 load-gate 的 hydrate 選項:guard 短路、post-await 重查(mutation
+  // 勝出時放棄覆寫)、成功後翻旗都收進 gate 內部(同 $lib/hydration-gate 語意),
+  // 頁面不再手焊 skip/onData。
   const gate = createLoadGate({
     fetch: getNotifications,
-    skip: () => get(notifsHydrated),
-    onData: (d) => { notifs.set(d); notifsHydrated.set(true); }
+    hydrate: {
+      flag: notifsHydrated,
+      into: (d) => notifs.set(d)
+    }
   });
   onMount(() => {
     gate.load();
