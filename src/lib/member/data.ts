@@ -178,9 +178,12 @@ export const COACH_REPLIES = [
   '了解～這部分我會特別注意。'
 ];
 
-/* Notification center (通知中心) — tone/cat are Tone-/NotifCat-typed here;
- * domain stores the loose shape, so assert back to this file's stricter type. */
-export const NOTIFS_SEED: Notification[] = NOTIFS_SEED_BASE as Notification[];
+/* Notification center (通知中心) — tone is Tone-typed here。T12 codex 終審修正:
+ * 原整陣列 `as Notification[]` 會把所有欄位(含 icon: IconName)一併豁免型別檢查
+ * ——domain 宣告改以 satisfies 保留 tone/icon 字面型別(見該檔宣告處註解)後,
+ * 這裡用純型別註記把「同一個參照」(單源契約,domain/member-app.test.ts 以 toBe
+ * 釘住——不能重建陣列)逐元素實檢收窄回本檔的嚴格 Tone,零斷言。 */
+export const NOTIFS_SEED: Notification[] = NOTIFS_SEED_BASE;
 export const NOTIF_CATS: [string, string][] = [
   ['all', '全部'],
   ['class', '課程'],

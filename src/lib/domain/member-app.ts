@@ -174,15 +174,20 @@ export interface Notification {
 	read: boolean;
 }
 
-/* Notification center (通知中心) */
-export const NOTIFS_SEED: Notification[] = [
+/* Notification center (通知中心)
+ * T12 codex 終審連帶:改 satisfies 宣告(原 `: Notification[]` 註記會把 tone 字面
+ * 抹寬成 string,member facade 只能靠整陣列 `as` 斷言收窄——不驗字面)。satisfies
+ * 目標的 tone 聯集是本 seed 實際用到的值(值衍生、零 import;Tone 型別本身依檔頭
+ * 決策仍不進 domain),tone/icon 字面自此在本宣告處逐一實檢,member facade 得以
+ * 用純型別註記(零斷言)收窄同一個參照。新增列若用到新 tone,把它補進聯集即可。 */
+export const NOTIFS_SEED = [
 	{ id: 'n1', cat: 'class', icon: 'calendar-clock', tone: 'primary', title: '明日課程提醒', body: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館，記得提前 10 分鐘到館熱身。', time: '1 小時前', read: false },
 	{ id: 'n2', cat: 'coach', icon: 'message-circle', tone: 'info', title: '林雅婷 教練回覆了你的訊息', body: '承恩這週的後手翻進步很多，下週我們來加上連續動作。', time: '3 小時前', read: false },
 	{ id: 'n3', cat: 'order', icon: 'credit-card', tone: 'success', title: '報名付款成功', body: '訂單 DF-24061 · 競技啦啦隊 進階班 · 2026 春季 NT$4,800 已完成付款。', time: '昨天', read: false },
 	{ id: 'n4', cat: 'class', icon: 'rotate-cw', tone: 'info', title: '補課時段已開放', body: '5/21 請假的「競技體操 選手班」可於 6/13 10:00 補課，請於我的課程預約。', time: '2 天前', read: true },
 	{ id: 'n5', cat: 'system', icon: 'award', tone: 'accent', title: '獲得會員點數 +120', body: '完課獎勵點數已入帳，目前可用點數 1,250 點。', time: '3 天前', read: true },
 	{ id: 'n6', cat: 'system', icon: 'calendar-off', tone: 'warning', title: '端午連假停課公告', body: '6/14–6/16 全館停課，相關課程將安排補課，請留意通知。', time: '5 天前', read: true }
-];
+] satisfies (Notification & { tone: 'primary' | 'info' | 'success' | 'warning' | 'accent' })[];
 
 /* ---- 點數明細(member 稱 LedgerEntry、mobile 稱 PointsEntry，同形;LedgerType
  * 兩側是同一組三個字面值，member 額外具名匯出這個型別) ---- */
