@@ -69,25 +69,6 @@ describe('createLoadGate', () => {
 		gate.destroy();
 	});
 
-	it('skip 短路 load()(不打 API、不呼叫 onData);refresh() 一律真抓、無視 skip', async () => {
-		const data = { value: 42 };
-		const fetch = vi.fn(async () => data);
-		const onData = vi.fn();
-		const gate = createLoadGate({ fetch, skip: () => true, onData });
-
-		await gate.load();
-		expect(get(gate)).toBe('ready');
-		expect(fetch).not.toHaveBeenCalled();
-		expect(onData).not.toHaveBeenCalled();
-
-		await gate.refresh();
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(onData).toHaveBeenCalledWith(data);
-		expect(get(gate)).toBe('ready');
-
-		gate.destroy();
-	});
-
 	it('destroy 後 in-flight 回應不寫入:load() 進行中 destroy(),resolve 後 phase 仍是 loading、onData 未被呼叫', async () => {
 		const d = createDeferred<{ v: number }>();
 		const onData = vi.fn();
@@ -102,7 +83,7 @@ describe('createLoadGate', () => {
 		expect(onData).not.toHaveBeenCalled();
 	});
 
-	it('不快取:未提供 skip 時連續兩次 load() 各自呼叫 fetch,onData 各自收到該次回應', async () => {
+	it('不快取:連續兩次 load() 各自呼叫 fetch,onData 各自收到該次回應', async () => {
 		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 }).mockResolvedValueOnce({ v: 2 });
 		const onData = vi.fn();
 		const gate = createLoadGate({ fetch, onData });
@@ -478,17 +459,22 @@ describe('hydrate 選項', () => {
 
 	/* F2(codex B0 r1):上面這條測試執行 silentRefresh() 當下,旗標已經被前面的
 	 * load() 翻成 true 了,砍掉 applyRefreshed 的 flag.set(true) 一樣不會被發現。這裡
-	 * 用 skip 讓 load() 短路到 ready、不去動旗標,乾淨地釘住 silentRefresh() 自己的
-	 * false → true 轉移。 */
-	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(skip 先讓 phase 到 ready,不動旗標)', async () => {
-		const flag = writable(false);
+	 * 讓旗標先 true、借 hydrate 自己的短路讓 load() 到 ready 但不觸發 fetch/into,再手動
+	 * 撥回 false,乾淨地釘住 silentRefresh() 自己的 false → true 轉移(T9:skip 選項退役,
+	 * 原本借 skip 短路做同一件事,現改借 hydrate 短路)。 */
+	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(hydrate 短路先到 ready,手動撥回旗標)', async () => {
+		const flag = writable(true); // 先 true 讓 load() 走 hydrate 短路,不觸發 fetch/into
 		const data = { v: 5 };
 		const fetch = vi.fn(async () => data);
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch, skip: () => true, hydrate: { flag, into } });
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
 		await gate.load();
 		expect(get(gate)).toBe('ready');
-		expect(get(flag)).toBe(false); // skip 短路,旗標未被動過
+		expect(fetch).not.toHaveBeenCalled();
+		expect(into).not.toHaveBeenCalled();
+		expect(get(flag)).toBe(true); // hydrate 短路,旗標維持建構時的初值,未被動過
+
+		flag.set(false); // 手動撥回,隔離 silentRefresh() 自己的 false → true 轉移
 
 		await gate.silentRefresh();
 

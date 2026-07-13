@@ -30,8 +30,6 @@ interface LoadGateBaseOptions<T> {
 	fetch: () => Promise<T>;
 	/** 省略時 refresh() 沿用 fetch(mobile-admin store-owned 變體會分開傳 hydrate/refresh) */
 	refresh?: () => Promise<T>;
-	/** 只有 load() 檢查;回 true → 直接 ready、不打 API(守衛頁變體) */
-	skip?: () => boolean;
 	/** 失敗時通知(coach 頁動態錯誤文案用) */
 	onError?: (e: unknown) => void;
 }
@@ -150,10 +148,6 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	}
 
 	async function load(): Promise<void> {
-		if (options.skip?.()) {
-			setPhase('ready');
-			return;
-		}
 		if (options.hydrate && get(options.hydrate.flag)) {
 			// 已水合 → 短路,不發 fetch,同 skip 語意。
 			setPhase('ready');
