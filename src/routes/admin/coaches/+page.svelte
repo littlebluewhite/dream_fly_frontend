@@ -26,7 +26,13 @@
    * updateCoach(coach.id,...)（同 MemberEditDialog 的全量 resend 慣例——PATCH
    * /coaches/{id} 對未變動的欄位是 no-op，只刷新 updated_at，不是驗證錯誤）。兩者
    * 皆有變動時依序執行：先 users 後 coaches，任一失敗即中止並顯示對應錯誤，不繼續
-   * 打下一支。 */
+   * 打下一支。
+   *
+   * 上述兩階段序列本身（Round 3 K4）已收進 $lib/admin/components/coach-save.ts 的
+   * 無狀態純函式 saveNewCoach/saveCoachEdit（deps 注入 createMember/createCoach/
+   * updateMember/updateCoach）；本頁保留哨兵 pendingUserId 的儲存/生命週期
+   * （openNew/closeEdit 清空）與依 outcome.kind 翻譯繁中 toast 文案（兩支 mapper：
+   * apiErrorMessage 透傳、coachErrorMessage 查表，見下方——皆留頁面，ADR 0011）。 */
   import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import CoachCard from '$lib/admin/components/CoachCard.svelte';
@@ -35,15 +41,9 @@
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach, CoachFormValues } from '$lib/admin/data';
   import { search, toasts } from '$lib/admin/stores';
-  import {
-    getCoaches,
-    createCoach,
-    updateCoach,
-    createMember,
-    updateMember,
-    type CoachWriteBody
-  } from '$lib/admin/api';
+  import { getCoaches, createCoach, updateCoach, createMember, updateMember } from '$lib/admin/api';
   import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
+  import { saveNewCoach, saveCoachEdit } from '$lib/admin/components/coach-save';
 
   let coaches: Coach[] = [];
 
@@ -102,59 +102,52 @@
     });
   }
 
-  function coachBody(v: CoachFormValues): CoachWriteBody {
-    return { title: v.title, specialties: v.tags, is_active: v.isActive };
-  }
-
   async function saveNew(v: CoachFormValues) {
-    let userId = pendingUserId;
-    if (!userId) {
-      try {
+    const outcome = await saveNewCoach(v, pendingUserId, { createMember, createCoach });
+    switch (outcome.kind) {
+      case 'userCreateFailed':
         // /users 端點(createMember)的錯誤訊息已是後端給的 繁中 使用者可讀文字(例：
         // "Email 已被使用")，直接透傳(apiErrorMessage)，同 members/+page.svelte 慣例。
-        userId = (await createMember({ email: v.email, name: v.name, password: v.password })).id;
-      } catch (e) {
-        toasts.notify('error', '新增失敗', apiErrorMessage(e));
+        toasts.notify('error', '新增失敗', apiErrorMessage(outcome.error));
         return;
-      }
+      case 'coachBindFailed':
+        pendingUserId = outcome.pendingUserId; // 帳號已建立——留給同一個對話框工作階段內的重試
+        toasts.notify(
+          'error',
+          '教練綁定失敗',
+          `帳號「${v.email}」已建立，但綁定教練身分失敗（${coachErrorMessage(outcome.error)}）。可重新點擊「建立教練」重試綁定，或至「會員管理」頁面確認該帳號。`
+        );
+        return;
+      case 'created':
+        pendingUserId = null;
+        closeEdit();
+        toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
+        await gate.silentRefresh();
+        return;
     }
-    try {
-      await createCoach({ user_id: userId, ...coachBody(v) });
-    } catch (e) {
-      pendingUserId = userId; // 帳號已建立——留給同一個對話框工作階段內的重試
-      toasts.notify(
-        'error',
-        '教練綁定失敗',
-        `帳號「${v.email}」已建立，但綁定教練身分失敗（${coachErrorMessage(e)}）。可重新點擊「建立教練」重試綁定，或至「會員管理」頁面確認該帳號。`
-      );
-      return;
-    }
-    pendingUserId = null;
-    closeEdit();
-    toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
-    await gate.silentRefresh();
   }
 
   async function saveEdit(v: CoachFormValues) {
     if (!editing) return;
     const target = editing;
-    if (v.name.trim() !== target.name) {
-      try {
-        await updateMember(target.userId, { name: v.name.trim() });
-      } catch (e) {
-        toasts.notify('error', '儲存失敗', apiErrorMessage(e));
+    const outcome = await saveCoachEdit(
+      v,
+      { id: target.id, userId: target.userId, name: target.name },
+      { updateMember, updateCoach }
+    );
+    switch (outcome.kind) {
+      case 'nameUpdateFailed':
+        toasts.notify('error', '儲存失敗', apiErrorMessage(outcome.error));
         return;
-      }
+      case 'coachUpdateFailed':
+        toasts.notify('error', '儲存失敗', coachErrorMessage(outcome.error));
+        return;
+      case 'saved':
+        closeEdit();
+        toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
+        await gate.silentRefresh();
+        return;
     }
-    try {
-      await updateCoach(target.id, coachBody(v));
-    } catch (e) {
-      toasts.notify('error', '儲存失敗', coachErrorMessage(e));
-      return;
-    }
-    closeEdit();
-    toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
-    await gate.silentRefresh();
   }
 
   function save(v: CoachFormValues): Promise<void> {
