@@ -124,8 +124,10 @@ codex 以 TypeScript compiler API 實證：整陣列/物件的 `as X[]` 斷言**
 只要求陣列字面的推導型別與目標型別「足夠重疊」，混在合法 sibling 中的一個非法字面會被斷言
 吞掉，之後帶著這個已斷言的型別抵達 `<Icon name>`/`overlay.push()` 等消費點，等於在
 `foundation-contracts.test.ts` 檔頭「`check` 是原掃描的嚴格超集」這個宣稱上開一個洞（洞
-存在但當時尚無非法字面掉進去）。修復：14 處 `as X[]`/`as X` 全數改 `satisfies X[]`（例如
-`[...] satisfies [IconName, string][]`），讓每個字面被 `check` 逐一驗證。**自本輪起，宣告
+存在但當時尚無非法字面掉進去）。修復：本輪 14 處 `as X[]`/`as X` 全數改 `satisfies X[]`（例如
+`[...] satisfies [IconName, string][]`），讓每個字面被 `check` 逐一驗證；T14 收尾與終審 Part A
+又各掃出 1 處同型整陣列斷言（`SettingsScreen` 的 personal 陣列、`NOTIFS_SEED`——commits
+`e7ee259`/`47ca9eb`），依同慣例退役，合計 16 處。**自本輪起，宣告
 字面陣列/物件、同時掛型別標註只用三種形式——`satisfies`、顯式型別注記（如
 `const x: T[] = [...]`）、`as const`——整段 `as T[]` 斷言不在其中**；日後遇到需要壓字面
 型別的場景，改用前三形之一，不再用整段 `as` 斷言。
