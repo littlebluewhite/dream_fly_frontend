@@ -5,7 +5,6 @@
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState, LoadGate } from '$lib/components/ui';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { createLoadGate } from '$lib/load-gate';
@@ -14,12 +13,15 @@
 
   let cat = 'all';
 
-  // First client mount hydrates the feed once via the seam; re-visits skip the
-  // fetch (guard already true) so read-state / unread badge aren't clobbered.
+  // 水合協定改走 load-gate 的 hydrate 選項:guard 短路、post-await 重查(mutation
+  // 勝出時放棄覆寫)、成功後翻旗都收進 gate 內部(同 $lib/hydration-gate 語意),
+  // 頁面不再手焊 skip/onData。
   const gate = createLoadGate({
     fetch: getNotifications,
-    skip: () => get(notificationsHydrated),
-    onData: (d) => { notifications.set(d); notificationsHydrated.set(true); }
+    hydrate: {
+      flag: notificationsHydrated,
+      into: (d) => notifications.set(d)
+    }
   });
   onMount(() => {
     gate.load();
