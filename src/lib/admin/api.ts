@@ -28,6 +28,7 @@ import type {
 	TodayClass,
 	Activity
 } from './data';
+import type { IconName } from '$lib/icon-registry';
 
 /* ═════════════════════════ 場館（GET /venues，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
@@ -646,7 +647,7 @@ interface ApiAdminActivityResponse {
 /** kind → icon/tone/bg 對照(前端配置——後端只給 kind，不含圖示資訊，見契約裁決「kind
  *  供前端配對應圖示，不做其他語意保證」)。沿用既有 Icon 註冊集與 Activity 既有
  *  tone(CSS 變數字串，非 Badge Tone)/bg 慣例。 */
-const ACTIVITY_KIND_ICON: Record<ApiAdminActivityItem['kind'], { icon: string; tone: string; bg: string }> = {
+const ACTIVITY_KIND_ICON: Record<ApiAdminActivityItem['kind'], { icon: IconName; tone: string; bg: string }> = {
 	user: { icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
 	order: { icon: 'credit-card', tone: 'var(--df-success)', bg: 'var(--df-success-bg)' },
 	enrolment: { icon: 'book-open', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },

@@ -10,6 +10,8 @@
  * backend uuid (course.id / product.id). No more number-id namespacing: the
  * store dedups by (type, id) instead, so a course and a pass can never
  * collide even if their uuids somehow matched. */
+import type { IconName } from '$lib/icon-registry';
+
 export type CartItemType = 'course' | 'pass';
 
 export interface CartItem {
@@ -18,7 +20,7 @@ export interface CartItem {
   name: string;
   price: number; // NT$ integer
   qty: number;
-  icon: string;
+  icon: IconName;
   spots?: number;
   desc?: string;
   level?: string;

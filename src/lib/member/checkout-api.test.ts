@@ -452,7 +452,7 @@ describe('refreshNotifications(Task 17)', () => {
 
   it('已經 hydrate 過就不重覆抓 —— 避免蓋掉本地已讀狀態(同通知頁 load() 的既有守衛)', async () => {
     notificationsHydrated.set(true);
-    const sentinel = [{ id: 's1', cat: 'system' as const, icon: 'bell', tone: 'neutral' as const, title: '哨兵', body: '', time: '2026-01-01 00:00', read: true }];
+    const sentinel = [{ id: 's1', cat: 'system' as const, icon: 'bell' as const, tone: 'neutral' as const, title: '哨兵', body: '', time: '2026-01-01 00:00', read: true }];
     notifications.set(sentinel);
     vi.mocked(api).mockResolvedValue([{ id: 'n2', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
 
@@ -469,7 +469,7 @@ describe('refreshNotifications(Task 17)', () => {
     const p = refreshNotifications(); // 通過 top guard（hydrated=false），fetch 掛起中
 
     const sentinel = [
-      { id: 's2', cat: 'system' as const, icon: 'bell', tone: 'neutral' as const, title: '飛行中寫入', body: '', time: '2026-01-01 00:00', read: true }
+      { id: 's2', cat: 'system' as const, icon: 'bell' as const, tone: 'neutral' as const, title: '飛行中寫入', body: '', time: '2026-01-01 00:00', read: true }
     ];
     notifications.set(sentinel); // 模擬 mutation：飛行中已有其他來源寫入
     notificationsHydrated.set(true);

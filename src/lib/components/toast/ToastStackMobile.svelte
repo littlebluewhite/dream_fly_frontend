@@ -5,10 +5,11 @@
    * error→circle-x / accent→star. */
   import type { ToastTone, createToasts } from '$lib/stores/toasts';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let toasts: ReturnType<typeof createToasts>;
 
-  const ICONS: Record<ToastTone, string> = {
+  const ICONS: Record<ToastTone, IconName> = {
     success: 'circle-check',
     info: 'info',
     warning: 'triangle-alert',

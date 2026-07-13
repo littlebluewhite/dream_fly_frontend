@@ -6,10 +6,12 @@
  * by Sidebar, Topbar, ProfileMenu, NotifMenu and the layout title map. Pure
  * functions, unit-tested in nav.test.ts. Ported from shell.jsx NAV + PAGES. */
 
+import type { IconName } from '$lib/icon-registry';
+
 export interface CoachNav {
 	id: string;
 	label: string;
-	icon: string;
+	icon: IconName;
 	badge?: number;
 }
 

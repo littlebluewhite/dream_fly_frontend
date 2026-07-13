@@ -2,6 +2,7 @@
   import { notificationsStore } from '$lib/stores/notificationsStore';
   import { getRelativeTime } from '$lib/utils/timeUtils';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let isOpen = false;
   export let onClose: () => void;
@@ -17,7 +18,7 @@
   }
 
   // Map notification types to Lucide icon names
-  const notificationIconNames: Record<string, string> = {
+  const notificationIconNames: Record<string, IconName> = {
     reminder: 'clock',
     promotion: 'sparkles',
     schedule: 'calendar-days',

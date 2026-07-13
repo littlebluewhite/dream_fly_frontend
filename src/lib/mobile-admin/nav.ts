@@ -7,12 +7,14 @@
  * activeTab are shared by the role layouts' TabBar. Pure, unit-tested in
  * nav.test.ts. Ported from ui.jsx ADMIN_TABS / COACH_TABS. */
 
+import type { IconName } from '$lib/icon-registry';
+
 export type Role = 'admin' | 'coach';
 
 export interface AdminTab {
 	id: string;
 	label: string;
-	icon: string;
+	icon: IconName;
 }
 
 /* admin bottom tabs (ui.jsx:96-102). */

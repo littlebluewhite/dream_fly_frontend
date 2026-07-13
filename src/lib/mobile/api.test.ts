@@ -57,7 +57,7 @@ const CATALOG_FIXTURE = [
 ];
 
 const MY_COURSES_FIXTURE = [
-	{ id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '', icon: 'sparkles', color: '#0066CC', schedule: '週二 19:00', room: '', att: 96, attended: 24, total: 25, next: '', term: '', remain: 0 }
+	{ id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '', icon: 'sparkles' as const, color: '#0066CC', schedule: '週二 19:00', room: '', att: 96, attended: 24, total: 25, next: '', term: '', remain: 0 }
 ];
 
 const SCHEDULE_FIXTURE = [
@@ -152,7 +152,7 @@ describe('getAccount — 復用桌面 getAccount().orders', () => {
 
 describe('getNotifications — 復用桌面 getNotifications()，零映射', () => {
 	it('直接透傳', async () => {
-		const fixture = [{ id: 'n1', cat: 'system' as const, icon: 'bell', tone: 'info' as const, title: 't', body: 'b', time: '剛剛', read: false }];
+		const fixture = [{ id: 'n1', cat: 'system' as const, icon: 'bell' as const, tone: 'info' as const, title: 't', body: 'b', time: '剛剛', read: false }];
 		vi.mocked(memberGetNotifications).mockResolvedValue(fixture);
 		expect(await getNotifications()).toBe(fixture);
 	});

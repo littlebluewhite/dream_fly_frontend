@@ -8,6 +8,8 @@
  * cheerleading, adult, parkour). Content/icons follow the implementation brief.
  */
 
+import type { IconName } from '$lib/icon-registry';
+
 /** [title, subtitle] pairs for the navy proof strip. */
 export const DF_PROOF: [string, string][] = [
   ['第一次到館', '先評估再推薦班級'],
@@ -17,7 +19,7 @@ export const DF_PROOF: [string, string][] = [
 ];
 
 export interface WhyItem {
-  icon: string;
+  icon: IconName;
   title: string;
   desc: string;
 }
@@ -30,7 +32,7 @@ export const DF_WHY: WhyItem[] = [
 ];
 
 export interface CategoryItem {
-  icon: string;
+  icon: IconName;
   name: string;
   age: string;
   desc: string;

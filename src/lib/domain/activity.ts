@@ -5,8 +5,10 @@
  * mock 陣列已無 runtime 消費者。Activity interface 仍是 ActivityPanel props 的形狀
  * 來源,保留。 */
 
+import type { IconName } from '$lib/icon-registry';
+
 export interface Activity {
-	icon: string;
+	icon: IconName;
 	tone: string;
 	bg: string;
 	text: string;

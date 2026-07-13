@@ -5,13 +5,14 @@
   import { createEventDispatcher } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { type Conversation, type SlaTone } from '$lib/coach/data';
+  import type { IconName } from '$lib/icon-registry';
 
   export let c: Conversation;
   export let active: boolean = false;
 
   const dispatch = createEventDispatcher<{ select: string }>();
 
-  const SLA_TONE: Record<SlaTone, { fg: string; icon: string }> = {
+  const SLA_TONE: Record<SlaTone, { fg: string; icon: IconName }> = {
     warning: { fg: 'var(--df-warning)', icon: 'clock' },
     error: { fg: 'var(--df-error)', icon: 'triangle-alert' },
     success: { fg: 'var(--df-success-strong)', icon: 'check' },

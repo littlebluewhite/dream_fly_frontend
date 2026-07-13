@@ -22,6 +22,7 @@
  * 消費者後已退役——interface 仍供頁面與 api.ts 的型別標註使用,除 SharedFile
  * (零型別消費者,隨值一併退役)外全數保留。 */
 import type { Level } from '$lib/domain/course-level';
+import type { IconName } from '$lib/icon-registry';
 
 /* ──────────────── unions ──────────────── */
 export type TodayStatus = 'done' | 'live' | 'soon' | 'wait';
@@ -144,7 +145,7 @@ export interface ThreadMsg {
 	time: string;
 }
 export interface Notif {
-	icon: string;
+	icon: IconName;
 	tone: string;
 	bg: string;
 	title: string;

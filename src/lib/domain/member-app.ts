@@ -19,6 +19,8 @@
  * ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)因仍供 api.ts 型別標註
  * 使用而保留。既有測試改為檔內 inline fixture,不再從這裡 import 死值。 */
 
+import type { IconName } from '$lib/icon-registry';
+
 /* ---- 會員 ---- */
 export interface Member {
 	name: string;
@@ -43,7 +45,7 @@ export const ME: Member = {
 
 /* ---- 總覽統計 ---- */
 export interface Stat {
-	icon: string;
+	icon: IconName;
 	label: string;
 	value: string;
 	tint: string;
@@ -94,7 +96,7 @@ export interface EnrolledCourse {
 	cat: string;
 	level: string;
 	coach: string;
-	icon: string;
+	icon: IconName;
 	color: string;
 	schedule: string;
 	room: string;
@@ -164,7 +166,7 @@ export const CONTACT_THREAD: ChatMessage[] = [
 export interface Notification {
 	id: string;
 	cat: 'class' | 'order' | 'coach' | 'system';
-	icon: string;
+	icon: IconName;
 	tone: string;
 	title: string;
 	body: string;

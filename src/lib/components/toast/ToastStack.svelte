@@ -1,9 +1,10 @@
 <script context="module" lang="ts">
   import type { ToastTone } from '$lib/stores/toasts';
+  import type { IconName } from '$lib/icon-registry';
 
   /* Tone → icon name, exported so the mapping can be asserted in a unit test
    * without rendering. */
-  export const TONE_ICONS: Record<ToastTone, string> = {
+  export const TONE_ICONS: Record<ToastTone, IconName> = {
     success: 'circle-check',
     info: 'info',
     warning: 'triangle-alert',

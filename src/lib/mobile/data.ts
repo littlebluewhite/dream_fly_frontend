@@ -48,6 +48,7 @@ export type { Notification as NotifItem } from '$lib/domain/member-app';
 // 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
 import type { CatalogCourse } from '$lib/public/adapters';
 import type { Level } from '$lib/domain/course-level';
+import type { IconName } from '$lib/icon-registry';
 
 /* ---- Attendance history (active course) ----
  * 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
@@ -62,7 +63,7 @@ export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'],
  * Course 仍滿足購物車 CartInput 的形狀(把 icon/level/desc…等欄位原樣帶進
  * cart line)。 */
 export interface Course extends CatalogCourse {
-	icon: string;
+	icon: IconName;
 	[k: string]: unknown;
 }
 // Task 1(C2 死種子退役)：CATALOG(值)已退役——getCourses()/getHome() 已改真接
@@ -77,7 +78,7 @@ export const TIME_ROWS = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', 
 
 /* ---- Announcements (home) — kept local: member's 3rd item has a different `bg`. ---- */
 export interface Announce {
-	icon: string;
+	icon: IconName;
 	tone: string;
 	bg: string;
 	title: string;

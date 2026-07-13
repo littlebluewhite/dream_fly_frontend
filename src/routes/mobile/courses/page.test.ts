@@ -129,7 +129,7 @@ describe('課程介紹 — 三態 + 接縫 wiring', () => {
 					level: '入門',
 					cat: '幼兒體操',
 					age: '3-5 歲',
-					icon: 'baby',
+					icon: 'baby' as const,
 					days: '週一 10:00–11:00',
 					price: 999,
 					hot: false,

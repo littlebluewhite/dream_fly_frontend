@@ -1,14 +1,16 @@
+import type { IconName } from '$lib/icon-registry';
+
 export interface NavItem {
   label: string;
   href?: string;
-  icon?: string;
+  icon?: IconName;
   hasDropdown?: boolean;
   categories?: NavCategory[];
 }
 
 export interface NavCategory {
   title: string;
-  icon: string;
+  icon: IconName;
   items: NavLink[];
 }
 

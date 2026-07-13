@@ -35,6 +35,7 @@ import { ORDERS_BASE } from '$lib/domain/orders';
 import { CAMPUSES } from '$lib/domain/shared';
 import type { OrderStatus } from '$lib/api/wire';
 import type { Level } from '$lib/domain/course-level';
+import type { IconName } from '$lib/icon-registry';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -234,7 +235,7 @@ export type ActivityRow = ActivityRowType;
 
 /* ---- Notifications (mobile bell) ---- */
 export interface AdminNotif {
-	icon: string;
+	icon: IconName;
 	tone: string;
 	bg: string;
 	title: string;

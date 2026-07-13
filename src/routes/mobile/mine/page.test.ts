@@ -50,7 +50,7 @@ describe('我的課程頁 — 三態', () => {
 					cat: '競技體操',
 					level: '進階',
 					coach: '測試教練',
-					icon: 'medal',
+					icon: 'medal' as const,
 					color: '#123456',
 					schedule: '週日 09:00–10:00',
 					room: 'Z 教室',

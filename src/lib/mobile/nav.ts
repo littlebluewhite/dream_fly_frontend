@@ -6,10 +6,12 @@
  * shared by the layout TabBar. Pure functions, unit-tested in nav.test.ts.
  * Ported from ui.jsx TABS. */
 
+import type { IconName } from '$lib/icon-registry';
+
 export interface MobileTab {
 	id: string;
 	label: string;
-	icon: string;
+	icon: IconName;
 }
 
 /* 5 bottom tabs (ui.jsx:64-70). */

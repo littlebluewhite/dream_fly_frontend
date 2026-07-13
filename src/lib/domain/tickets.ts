@@ -1,6 +1,8 @@
 /* Dream Fly — 票券 seed (single source of truth)
  * Data copied verbatim from src/lib/admin/data.ts. */
 
+import type { IconName } from '$lib/icon-registry';
+
 export interface Ticket {
 	id: string;
 	name: string;
@@ -11,7 +13,7 @@ export interface Ticket {
 	sold: number;
 	quota: number | null; // null = 不限（見 ProductResponse.quota，src/lib/admin/api.ts getTickets()）
 	color: string;
-	icon: string;
+	icon: IconName;
 	desc: string;
 }
 

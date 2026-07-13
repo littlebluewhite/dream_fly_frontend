@@ -48,6 +48,7 @@ import {
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import type { Level } from '$lib/domain/course-level';
+import type { IconName } from '$lib/icon-registry';
 
 export interface UpcomingClass {
   name: string;
@@ -71,7 +72,7 @@ export interface ScheduleBlock {
 }
 
 export interface Announcement {
-  icon: string;
+  icon: IconName;
   tone: string;
   bg: string;
   title: string;
@@ -91,7 +92,7 @@ export type NotifCat = 'class' | 'order' | 'coach' | 'system';
 export interface Notification {
   id: string;
   cat: NotifCat;
-  icon: string;
+  icon: IconName;
   tone: Tone;
   title: string;
   body: string;
@@ -216,7 +217,7 @@ export interface ApiNotification {
   metadata: unknown;
   created_at: string;
 }
-const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: string; tone: Tone }> = {
+const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: IconName; tone: Tone }> = {
   booking_confirmed: { cat: 'class', icon: 'calendar-check', tone: 'success' },
   booking_cancelled: { cat: 'class', icon: 'calendar-off', tone: 'warning' },
   order_placed: { cat: 'order', icon: 'credit-card', tone: 'success' },
@@ -225,7 +226,10 @@ const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: string; tone: Tone }
   promotion: { cat: 'system', icon: 'megaphone', tone: 'accent' }
 };
 // 未知型別 fallback：不讓頁面因後端新增 enum 值而炸掉（同 adapters.ts 的慣例）。
-const DEFAULT_NOTIF_META = { cat: 'system' as NotifCat, icon: 'bell', tone: 'neutral' as Tone };
+// icon 這個未標型別的物件屬性預設會拓寬為 string(同 cat/tone 需要 as 收窄的
+// 理由)——用 as const 收窄回字面型別('bell' 本身就是合法 IconName 成員),
+// 不是 as IconName 斷言。
+const DEFAULT_NOTIF_META = { cat: 'system' as NotifCat, icon: 'bell' as const, tone: 'neutral' as Tone };
 
 export function mapNotification(n: ApiNotification): Notification {
   const meta = NOTIF_TYPE_MAP[n.type] ?? DEFAULT_NOTIF_META;

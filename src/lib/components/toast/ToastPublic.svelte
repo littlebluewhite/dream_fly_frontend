@@ -5,10 +5,11 @@
   import type { ToastTone, createToasts } from '$lib/stores/toasts';
   import { fade, fly } from 'svelte/transition';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let toasts: ReturnType<typeof createToasts>;
 
-  const toastIconNames: Record<ToastTone, string> = {
+  const toastIconNames: Record<ToastTone, IconName> = {
     success: 'circle-check',
     error: 'circle-alert',
     info: 'info',

@@ -34,7 +34,7 @@ const COURSE = {
 	type: 'course' as const,
 	name: '競技啦啦隊 進階班',
 	price: 4800,
-	icon: 'sparkles',
+	icon: 'sparkles' as const,
 	days: '週二 / 週四 19:00'
 };
 
