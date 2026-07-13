@@ -4,6 +4,7 @@
    * push 一律帶 onBack={overlay.pop}，sheet 一律帶 onClose={overlay.closeSheet}，
    * 其餘 props 由 push/sheet 呼叫端透過 props 傳入並展開。 */
   import { overlay } from '$lib/mobile-admin/stores';
+  import type { MobileAdminPushId, MobileAdminSheetId } from '$lib/mobile-admin/stores';
 
   import CoachesScreen from '$lib/mobile-admin/overlays/CoachesScreen.svelte';
   import VenuesScreen from '$lib/mobile-admin/overlays/VenuesScreen.svelte';
@@ -25,7 +26,7 @@
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type Comp = any;
 
-  const PUSH: Record<string, Comp> = {
+  const PUSH: Record<MobileAdminPushId, Comp> = {
     coaches: CoachesScreen,
     venues: VenuesScreen,
     tickets: TicketsScreen,
@@ -33,7 +34,7 @@
     settings: AdminSettingsScreen,
     messageThread: MessageThread
   };
-  const SHEETS: Record<string, Comp> = {
+  const SHEETS: Record<MobileAdminSheetId, Comp> = {
     member: MemberSheet,
     class: ClassSheet,
     order: OrderSheet,

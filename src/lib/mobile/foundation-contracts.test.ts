@@ -1,17 +1,21 @@
 /* Foundation contract guards for the /mobile + /mobile-admin surfaces.
  *
- * These are static-source checks (no rendering) that protect the contracts the
- * parallel build relied on — and that the build itself CANNOT catch, because an
- * unregistered overlay id is a runtime no-op and a deleted route only 404s at
- * navigation time:
- *   1. overlay-map completeness — every planned push/sheet id is registered in the
- *      surface's OverlayHost.
- *   2. route inventory — every bottom-tab + login route file exists.
+ * This is a static-source check (no rendering) that protects the one remaining
+ * contract the parallel build relied on which the build itself still cannot
+ * catch — a deleted route only 404s at navigation time: route inventory, below,
+ * checks every bottom-tab + login route file exists.
  *
  * icon-registry completeness(原①)已退役(T12/K6-3)：Icon.svelte 的 `name` prop
  * 收窄為 `IconName`(見 $lib/icon-registry)後，未註冊的 icon 名稱在編譯期就會被
  * `npm run check` 擋下——型別系統本身即是這條契約的實作，不再需要這裡的執行期
- * 原始碼掃描重複把關，也沒有空窗(check 覆蓋全倉，是比原掃描更嚴格的超集)。 */
+ * 原始碼掃描重複把關，也沒有空窗(check 覆蓋全倉，是比原掃描更嚴格的超集)。
+ *
+ * overlay-map completeness(原②)已退役(T12/K6-4)：createOverlay 收斂為
+ * PushId/SheetId 雙泛型(見 $lib/components/mobile/overlay)，兩個 OverlayHost 的
+ * PUSH/SHEETS 表改 `Record<union, Comp>` 後，漏鍵/多餘鍵在編譯期雙向擋下——是
+ * 原掃描的嚴格超集，且多驗到一條原掃描從未覆蓋的保障：呼叫端 push()/sheet()
+ * 傳入的 id 也必須屬於該 surface 的註冊集合(原掃描只查「計畫中的 id 有沒有
+ * 出現在 OverlayHost」，反過來「呼叫端有沒有傳出界」完全沒查)。 */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
@@ -33,28 +37,6 @@ function walk(dir: string): string[] {
 
 const SURFACE_DIRS = ['src/lib/mobile', 'src/lib/mobile-admin', 'src/lib/components/mobile', 'src/routes/mobile', 'src/routes/mobile-admin'].map(r);
 const surfaceFiles = SURFACE_DIRS.flatMap(walk).filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte'));
-
-describe('overlay-map completeness', () => {
-	const cases: Array<[string, string, string[]]> = [
-		[
-			'mobile',
-			'src/lib/mobile/OverlayHost.svelte',
-			['courseDetail', 'schedule', 'report', 'points', 'orders', 'settings', 'trial', 'course', 'cart', 'leave', 'makeup', 'contact', 'editProfile']
-		],
-		[
-			'mobile-admin',
-			'src/lib/mobile-admin/OverlayHost.svelte',
-			['coaches', 'venues', 'tickets', 'reports', 'settings', 'messageThread', 'member', 'class', 'order', 'memberForm', 'classForm', 'coachForm', 'notif', 'role', 'studentAction']
-		]
-	];
-	for (const [surface, file, ids] of cases) {
-		it(`${surface} OverlayHost registers every planned push/sheet id`, () => {
-			const src = readFileSync(r(file), 'utf8');
-			const missing = ids.filter((id) => !new RegExp(`\\b${id}\\s*:`).test(src));
-			expect(missing, `overlay ids missing from ${file}: ${missing.join(', ')}`).toEqual([]);
-		});
-	}
-});
 
 describe('route inventory', () => {
 	const routes = [

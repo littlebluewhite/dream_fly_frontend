@@ -19,13 +19,14 @@
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, profile } from '$lib/mobile/stores';
+  import type { MobilePushId } from '$lib/mobile/stores';
   import { points } from '$lib/member/stores';
   import { authStore } from '$lib/stores/authStore';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
   import type { IconName } from '$lib/icon-registry';
 
-  type Item = { id: string; icon: IconName; label: string; sub: string; tone: string; tint: string };
+  type Item = { id: MobilePushId; icon: IconName; label: string; sub: string; tone: string; tint: string };
 
   let data: MobileAccountData | null = null;
   const gate = createLoadGate({

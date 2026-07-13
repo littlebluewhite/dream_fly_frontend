@@ -14,6 +14,7 @@
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import { overlay, role, switchRole } from '$lib/mobile-admin/stores';
+  import type { MobileAdminPushId } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getMore, type MoreData } from '$lib/mobile-admin/api';
@@ -40,7 +41,7 @@
         ['系統', [
           ['系統設定', 'settings', '場館資訊與通知', 'settings']
         ]]
-      ] as [string, [string, IconName, string, string][]][])
+      ] as [string, [string, IconName, string, MobileAdminPushId][]][])
     : [];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });

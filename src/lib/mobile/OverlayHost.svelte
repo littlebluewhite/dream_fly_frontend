@@ -4,6 +4,7 @@
    * push 一律帶 onBack={overlay.pop}，sheet 一律帶 onClose={overlay.closeSheet}，
    * 其餘 props 由 push/sheet 呼叫端透過 props 傳入並展開。 */
   import { overlay } from '$lib/mobile/stores';
+  import type { MobilePushId, MobileSheetId } from '$lib/mobile/stores';
 
   import MyCourseDetail from '$lib/mobile/overlays/MyCourseDetail.svelte';
   import ScheduleScreen from '$lib/mobile/overlays/ScheduleScreen.svelte';
@@ -23,7 +24,7 @@
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type Comp = any;
 
-  const PUSH: Record<string, Comp> = {
+  const PUSH: Record<MobilePushId, Comp> = {
     courseDetail: MyCourseDetail,
     schedule: ScheduleScreen,
     report: ReportScreen,
@@ -32,7 +33,7 @@
     settings: SettingsScreen,
     trial: TrialScreen
   };
-  const SHEETS: Record<string, Comp> = {
+  const SHEETS: Record<MobileSheetId, Comp> = {
     course: CourseDetailSheet,
     cart: CartSheet,
     leave: LeaveSheet,

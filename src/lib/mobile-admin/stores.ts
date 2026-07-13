@@ -26,7 +26,21 @@ import { getOpsCollections, getMessages, markRead } from './api';
  * 狀態)。 */
 export { createOverlay };
 export type { OverlayEntry, OverlayState } from '$lib/components/mobile/overlay';
-export const overlay = createOverlay();
+// K6-4:push/sheet 各自的合法 id 集合,緊鄰 singleton 宣告——成員對齊現行
+// OverlayHost.svelte 的 PUSH/SHEETS 註冊表鍵。overlay 泛型化後,呼叫端傳入不在
+// 集合內的 id 會在編譯期被擋下(K6-3 前只有執行期的 foundation-contracts 掃描)。
+export type MobileAdminPushId = 'coaches' | 'venues' | 'tickets' | 'reports' | 'settings' | 'messageThread';
+export type MobileAdminSheetId =
+	| 'member'
+	| 'class'
+	| 'order'
+	| 'memberForm'
+	| 'classForm'
+	| 'coachForm'
+	| 'notif'
+	| 'role'
+	| 'studentAction';
+export const overlay = createOverlay<MobileAdminPushId, MobileAdminSheetId>();
 
 /* ---------- Notifications (mobile bell — `read` flag) ----------
  * 單源於 `$lib/stores/read-state` 的 createReadState(Admin / coach 通知鈴鐺全部
