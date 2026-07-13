@@ -33,7 +33,7 @@ const surfaceFiles = SURFACE_DIRS.flatMap(walk).filter((f) => /\.(svelte|ts)$/.t
 
 describe('icon-registry completeness', () => {
 	it('every icon used by the mobile + mobile-admin surfaces is registered in Icon.svelte', () => {
-		const iconSrc = readFileSync(r('src/lib/components/ui/Icon.svelte'), 'utf8');
+		const iconSrc = readFileSync(r('src/lib/icon-registry.ts'), 'utf8');
 		const registered = new Set([...iconSrc.matchAll(/'([a-z0-9-]+)'\s*:/g)].map((m) => m[1]));
 
 		const used = new Map<string, string>(); // name -> first file that uses it

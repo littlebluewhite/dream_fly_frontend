@@ -1,0 +1,306 @@
+/*
+ * Dream Fly icon 註冊表——全倉 icon 名稱的單一權威來源(單源宣告)。放在
+ * lib-root 而非 components/ 下:components 對 lib-root 的值 import 是既有向下
+ * 方向,domain/data 層之後只需要對本檔做 type-only import(`IconName`),編譯
+ * 後零 runtime 邊,不會開一條 domain → components 的反向邊。
+ *
+ * Data-driven icons reference a kebab-case string name (navigationConfig
+ * categories, homepage course/why cards, etc.) and resolve through this map,
+ * so this is the single shared registry — add new icon names HERE rather than
+ * scattering per-file imports. One-off icons used directly in markup may still
+ * be imported straight from '@lucide/svelte/icons/<name>'.
+ *
+ * Each import is tree-shakable (per-icon module), so the bundle only carries
+ * the icons listed below.
+ */
+
+import Activity from '@lucide/svelte/icons/activity';
+import ArrowRight from '@lucide/svelte/icons/arrow-right';
+import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+import Award from '@lucide/svelte/icons/award';
+import Baby from '@lucide/svelte/icons/baby';
+import Bell from '@lucide/svelte/icons/bell';
+import Calendar from '@lucide/svelte/icons/calendar';
+import CalendarCheck from '@lucide/svelte/icons/calendar-check';
+import CalendarDays from '@lucide/svelte/icons/calendar-days';
+import Check from '@lucide/svelte/icons/check';
+import ChevronDown from '@lucide/svelte/icons/chevron-down';
+import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+import ChevronRight from '@lucide/svelte/icons/chevron-right';
+import ChevronUp from '@lucide/svelte/icons/chevron-up';
+import CircleAlert from '@lucide/svelte/icons/circle-alert';
+import CircleCheck from '@lucide/svelte/icons/circle-check';
+import CircleX from '@lucide/svelte/icons/circle-x';
+import Clock from '@lucide/svelte/icons/clock';
+import CreditCard from '@lucide/svelte/icons/credit-card';
+import Dumbbell from '@lucide/svelte/icons/dumbbell';
+import Flame from '@lucide/svelte/icons/flame';
+import Footprints from '@lucide/svelte/icons/footprints';
+import GraduationCap from '@lucide/svelte/icons/graduation-cap';
+import Heart from '@lucide/svelte/icons/heart';
+import House from '@lucide/svelte/icons/house';
+import Info from '@lucide/svelte/icons/info';
+import Layers from '@lucide/svelte/icons/layers';
+import Mail from '@lucide/svelte/icons/mail';
+import MapPin from '@lucide/svelte/icons/map-pin';
+import Medal from '@lucide/svelte/icons/medal';
+import Menu from '@lucide/svelte/icons/menu';
+import Minus from '@lucide/svelte/icons/minus';
+import Music from '@lucide/svelte/icons/music';
+import Phone from '@lucide/svelte/icons/phone';
+import Plus from '@lucide/svelte/icons/plus';
+import RotateCw from '@lucide/svelte/icons/rotate-cw';
+import Search from '@lucide/svelte/icons/search';
+import Send from '@lucide/svelte/icons/send';
+import Settings from '@lucide/svelte/icons/settings';
+import ShieldCheck from '@lucide/svelte/icons/shield-check';
+import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+import Sparkles from '@lucide/svelte/icons/sparkles';
+import Star from '@lucide/svelte/icons/star';
+import Target from '@lucide/svelte/icons/target';
+import Ticket from '@lucide/svelte/icons/ticket';
+import Trash2 from '@lucide/svelte/icons/trash-2';
+import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+import User from '@lucide/svelte/icons/user';
+import Users from '@lucide/svelte/icons/users';
+import X from '@lucide/svelte/icons/x';
+// ── Member-centre additions ──
+import ArrowUpRight from '@lucide/svelte/icons/arrow-up-right';
+import BadgeCheck from '@lucide/svelte/icons/badge-check';
+import BellOff from '@lucide/svelte/icons/bell-off';
+import BookOpen from '@lucide/svelte/icons/book-open';
+import CalendarClock from '@lucide/svelte/icons/calendar-clock';
+import CalendarOff from '@lucide/svelte/icons/calendar-off';
+import CalendarX from '@lucide/svelte/icons/calendar-x';
+import CheckCheck from '@lucide/svelte/icons/check-check';
+import ClipboardList from '@lucide/svelte/icons/clipboard-list';
+import CloudOff from '@lucide/svelte/icons/cloud-off';
+import Download from '@lucide/svelte/icons/download';
+import Eye from '@lucide/svelte/icons/eye';
+import EyeOff from '@lucide/svelte/icons/eye-off';
+import Hourglass from '@lucide/svelte/icons/hourglass';
+import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
+import Lock from '@lucide/svelte/icons/lock';
+import LogOut from '@lucide/svelte/icons/log-out';
+import Megaphone from '@lucide/svelte/icons/megaphone';
+import MessageCircle from '@lucide/svelte/icons/message-circle';
+import PencilLine from '@lucide/svelte/icons/pencil-line';
+import SearchX from '@lucide/svelte/icons/search-x';
+import Shirt from '@lucide/svelte/icons/shirt';
+import UserRound from '@lucide/svelte/icons/user-round';
+// ── Admin back-office additions ──
+import BarChart3 from '@lucide/svelte/icons/bar-chart-3';
+import Building2 from '@lucide/svelte/icons/building-2';
+import CalendarRange from '@lucide/svelte/icons/calendar-range';
+import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+import CircleDollarSign from '@lucide/svelte/icons/circle-dollar-sign';
+import DollarSign from '@lucide/svelte/icons/dollar-sign';
+import Filter from '@lucide/svelte/icons/filter';
+import KeyRound from '@lucide/svelte/icons/key-round';
+import Monitor from '@lucide/svelte/icons/monitor';
+import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
+import Receipt from '@lucide/svelte/icons/receipt';
+import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+import Repeat from '@lucide/svelte/icons/repeat';
+import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+import ScanLine from '@lucide/svelte/icons/scan-line';
+import ShoppingBag from '@lucide/svelte/icons/shopping-bag';
+import Smartphone from '@lucide/svelte/icons/smartphone';
+import Tablet from '@lucide/svelte/icons/tablet';
+import Tickets from '@lucide/svelte/icons/tickets';
+import TrendingDown from '@lucide/svelte/icons/trending-down';
+import TrendingUp from '@lucide/svelte/icons/trending-up';
+import Trophy from '@lucide/svelte/icons/trophy';
+import UserCheck from '@lucide/svelte/icons/user-check';
+import UserPlus from '@lucide/svelte/icons/user-plus';
+import UserX from '@lucide/svelte/icons/user-x';
+import Cake from '@lucide/svelte/icons/cake';
+import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
+import History from '@lucide/svelte/icons/history';
+import Percent from '@lucide/svelte/icons/percent';
+import Repeat2 from '@lucide/svelte/icons/repeat-2';
+// ── Coach + staff additions ──
+import ArrowUpDown from '@lucide/svelte/icons/arrow-up-down';
+import ClipboardCheck from '@lucide/svelte/icons/clipboard-check';
+import Image from '@lucide/svelte/icons/image';
+import Lightbulb from '@lucide/svelte/icons/lightbulb';
+import Loader from '@lucide/svelte/icons/loader';
+import PenLine from '@lucide/svelte/icons/pen-line';
+import CirclePlay from '@lucide/svelte/icons/circle-play';
+import Save from '@lucide/svelte/icons/save';
+import Signal from '@lucide/svelte/icons/signal';
+import StickyNote from '@lucide/svelte/icons/sticky-note';
+import UserCog from '@lucide/svelte/icons/user-cog';
+import Paperclip from '@lucide/svelte/icons/paperclip';
+import Play from '@lucide/svelte/icons/play';
+import FileVideo from '@lucide/svelte/icons/file-video';
+import MessagesSquare from '@lucide/svelte/icons/messages-square';
+import FileText from '@lucide/svelte/icons/file-text';
+import Camera from '@lucide/svelte/icons/camera';
+import ShieldAlert from '@lucide/svelte/icons/shield-alert';
+import Cloud from '@lucide/svelte/icons/cloud';
+import CloudCheck from '@lucide/svelte/icons/cloud-check';
+import Video from '@lucide/svelte/icons/video';
+import File from '@lucide/svelte/icons/file';
+// ── Mobile + mobile-admin additions ──
+import Circle from '@lucide/svelte/icons/circle';
+import Radio from '@lucide/svelte/icons/radio';
+import ExternalLink from '@lucide/svelte/icons/external-link';
+import MessageSquareQuote from '@lucide/svelte/icons/message-square-quote';
+import Inbox from '@lucide/svelte/icons/inbox';
+import Hash from '@lucide/svelte/icons/hash';
+import Moon from '@lucide/svelte/icons/moon';
+import Globe from '@lucide/svelte/icons/globe';
+import BellPlus from '@lucide/svelte/icons/bell-plus';
+
+export type IconComponent = typeof Activity;
+
+export const ICONS = {
+  'activity': Activity,
+  'arrow-right': ArrowRight,
+  'arrow-left': ArrowLeft,
+  'award': Award,
+  'baby': Baby,
+  'bell': Bell,
+  'calendar': Calendar,
+  'calendar-check': CalendarCheck,
+  'calendar-days': CalendarDays,
+  'check': Check,
+  'chevron-down': ChevronDown,
+  'chevron-left': ChevronLeft,
+  'chevron-right': ChevronRight,
+  'chevron-up': ChevronUp,
+  'circle-alert': CircleAlert,
+  'circle-check': CircleCheck,
+  'circle-x': CircleX,
+  'clock': Clock,
+  'credit-card': CreditCard,
+  'dumbbell': Dumbbell,
+  'flame': Flame,
+  'footprints': Footprints,
+  'graduation-cap': GraduationCap,
+  'heart': Heart,
+  'house': House,
+  'home': House, // alias → house
+  'info': Info,
+  'layers': Layers,
+  'mail': Mail,
+  'map-pin': MapPin,
+  'medal': Medal,
+  'menu': Menu,
+  'minus': Minus,
+  'music': Music,
+  'phone': Phone,
+  'plus': Plus,
+  'rotate-cw': RotateCw,
+  'search': Search,
+  'send': Send,
+  'settings': Settings,
+  'shield-check': ShieldCheck,
+  'shopping-cart': ShoppingCart,
+  'sparkles': Sparkles,
+  'star': Star,
+  'target': Target,
+  'ticket': Ticket,
+  'trash-2': Trash2,
+  'triangle-alert': TriangleAlert,
+  'user': User,
+  'users': Users,
+  'x': X,
+  // ── Member-centre additions ──
+  'arrow-up-right': ArrowUpRight,
+  'badge-check': BadgeCheck,
+  'bell-off': BellOff,
+  'book-open': BookOpen,
+  'calendar-clock': CalendarClock,
+  'calendar-off': CalendarOff,
+  'calendar-x': CalendarX,
+  'check-check': CheckCheck,
+  'clipboard-list': ClipboardList,
+  'cloud-off': CloudOff,
+  'download': Download,
+  'eye': Eye,
+  'eye-off': EyeOff,
+  'hourglass': Hourglass,
+  'layout-dashboard': LayoutDashboard,
+  'lock': Lock,
+  'log-out': LogOut,
+  'megaphone': Megaphone,
+  'message-circle': MessageCircle,
+  'pencil-line': PencilLine,
+  'search-x': SearchX,
+  'shirt': Shirt,
+  'user-round': UserRound,
+  // ── Admin back-office additions ──
+  'bar-chart-3': BarChart3,
+  'building-2': Building2,
+  'calendar-range': CalendarRange,
+  'chevrons-up-down': ChevronsUpDown,
+  'circle-dollar-sign': CircleDollarSign,
+  'dollar-sign': DollarSign,
+  'filter': Filter,
+  'key-round': KeyRound,
+  'monitor': Monitor,
+  'more-horizontal': MoreHorizontal,
+  'receipt': Receipt,
+  'refresh-cw': RefreshCw,
+  'repeat': Repeat,
+  'rotate-ccw': RotateCcw,
+  'scan-line': ScanLine,
+  'shopping-bag': ShoppingBag,
+  'smartphone': Smartphone,
+  'tablet': Tablet,
+  'tickets': Tickets,
+  'trending-down': TrendingDown,
+  'trending-up': TrendingUp,
+  'trophy': Trophy,
+  'user-check': UserCheck,
+  'user-plus': UserPlus,
+  'user-x': UserX,
+  'cake': Cake,
+  'calendar-plus': CalendarPlus,
+  'history': History,
+  'percent': Percent,
+  'repeat-2': Repeat2,
+  // ── Coach + staff additions ──
+  'arrow-up-down': ArrowUpDown,
+  'clipboard-check': ClipboardCheck,
+  'image': Image,
+  'lightbulb': Lightbulb,
+  'loader': Loader,
+  'pen-line': PenLine,
+  'circle-play': CirclePlay,
+  'play-circle': CirclePlay, // alias → circle-play (old-style name)
+  'save': Save,
+  'signal': Signal,
+  'sticky-note': StickyNote,
+  'user-cog': UserCog,
+  'paperclip': Paperclip,
+  'play': Play,
+  'file-video': FileVideo,
+  'messages-square': MessagesSquare,
+  'file-text': FileText,
+  'camera': Camera,
+  'shield-alert': ShieldAlert,
+  'cloud': Cloud,
+  'cloud-check': CloudCheck,
+  'video': Video,
+  'file': File,
+  'alert-triangle': TriangleAlert, // alias → triangle-alert (old-style name)
+  'circle-check-big': CircleCheck, // alias → circle-check (old-style name)
+  // ── Mobile + mobile-admin additions ──
+  'circle': Circle,
+  'radio': Radio,
+  'external-link': ExternalLink,
+  'message-square-quote': MessageSquareQuote,
+  'inbox': Inbox,
+  'hash': Hash,
+  'moon': Moon,
+  'globe': Globe,
+  'bell-plus': BellPlus,
+  'alert-circle': CircleAlert, // alias → circle-alert (old-style name)
+  'check-circle': CircleCheck, // alias → circle-check (old-style name)
+  'x-circle': CircleX // alias → circle-x (old-style name)
+} satisfies Record<string, IconComponent>;
+
+export type IconName = keyof typeof ICONS;
