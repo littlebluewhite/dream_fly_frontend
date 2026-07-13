@@ -127,13 +127,24 @@ describe('notifs singleton — 同步 seed + 水合守衛(notifications 頁 core
 	// K2-c 協定補完:markRead/markAllRead 先前完全沒有翻旗,mutation 後
 	// notifsHydrated 仍是 false,重訪通知頁會被 load-gate 判定「尚未水合」而
 	// 整包重抓、覆寫掉這裡剛做的已讀 mutation。包裝函式對齊 member 的
-	// markMutated 協定,呼叫共用邏輯後翻旗。
-	it('markRead/markAllRead 呼叫共用邏輯後翻 notifsHydrated 為 true', () => {
-		notifs.markRead(NOTIFS_SEED[0].id);
+	// markMutated 協定,呼叫共用邏輯後翻旗。除了旗標也斷言 read 真的被改寫
+	// ——wrapper 若忘了委派共用邏輯,這裡會紅(上面 describe('notifs') 測的是
+	// createNotifs 獨立 instance,蓋不到 export 出去的這顆 singleton wrapper)。
+	it('markRead/markAllRead 委派共用邏輯改寫 read,並翻 notifsHydrated 為 true', () => {
+		// 直接 seed singleton 已知 fixture,不依賴檔內其他測試的執行順序。
+		notifs.set([
+			{ id: 'w1', cat: 'class', icon: 'bell', tone: 'info', title: '甲', body: '乙', time: '剛才', read: false },
+			{ id: 'w2', cat: 'system', icon: 'bell', tone: 'info', title: '丙', body: '丁', time: '剛才', read: false }
+		]);
+		notifsHydrated.set(false);
+
+		notifs.markRead('w1');
+		expect(get(notifs).find((n) => n.id === 'w1')?.read).toBe(true);
 		expect(get(notifsHydrated)).toBe(true);
 
 		notifsHydrated.set(false); // 重置守衛,單獨驗證 markAllRead 這條路徑也會翻旗
 		notifs.markAllRead();
+		expect(get(notifs).every((n) => n.read)).toBe(true);
 		expect(get(notifsHydrated)).toBe(true);
 	});
 });
