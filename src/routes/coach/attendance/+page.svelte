@@ -20,20 +20,18 @@
    * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
    * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。
    *
-   * SaveBar(草稿狀態機)的轉移邏輯已抽成純函式模組 $lib/coach/attendance-draft.ts
-   * (Round 2 C5)——本頁只保留 Svelte 變數鏡射 draft 欄位、呼叫真實 API、發 toast 與
-   * load-gate 佈線；回應同步 guard(state!=='saving' 就丟棄過期回應)留在頁層。 */
+   * SaveBar(草稿狀態機)的純轉移在 $lib/coach/attendance-draft.ts(Round 2 C5);其上的
+   * 編排(鏡射、snapshot/undo、byClass 切班暫存、save 生命週期與 state 回應同步 guard)已
+   * 收進 $lib/coach/attendance-controller.ts(Round 3 K1)。本頁退化為薄 adapter:解構
+   * controller 的單一快照 store、事件轉呼 controller 方法、把 save 的 SaveOutcome 翻成
+   * toast 文案,並保留 noteFor/noteText 編輯暫存、failedClasses 提示與五條顯示衍生。 */
   import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
-  import {
-    initDraft, setMark as draftSetMark, applyNote as draftApplyNote, markAllPresent,
-    undo as draftUndo, canSwitchClass, stashAndRestore, hadLate as draftHadLate,
-    beginSave, applySaveResult, saveFailed, type SaveBar
-  } from '$lib/coach/attendance-draft';
+  import { createAttendanceController } from '$lib/coach/attendance-controller';
   import { apiErrorText } from '$lib/api/error-text';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
@@ -42,37 +40,31 @@
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
 
+  const ctrl = createAttendanceController({ saveAttendance, now: nowHHMM });
+
+  // ── 單一快照 store 解構鏡射(原五條鏡射變數 + classes/curClassId + canUndo 衍生) ──
   let classes: AttClassFull[] = [];
-
-  // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
   let curClassId = '';
-  $: curClass = classes.find((c) => c.id === curClassId)!;
-  $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
-
-  // ── 狀態(鏡射 attendance-draft.ts 的 SaveBar 欄位) ───────────────────────
   let marks: Record<string, AttDefault> = {};
   let notes: Record<string, string> = {};
-  let noteFor: AttRow | null = null;
-  let noteText = '';
   let state: 'dirty' | 'saving' | 'saved' = 'dirty';
   let savedAt: string | null = null;
   let dirtyCount = 0;
+  let canUndo = false;
+  $: ({ classes, curClassId, marks, notes, state, savedAt, dirtyCount, canUndo } = $ctrl);
 
-  // currentDraft/applyDraft 是鏡射變數 ⇄ attendance-draft.ts SaveBar 的雙向轉接。
-  function currentDraft(): SaveBar {
-    return { marks, notes, state, savedAt, dirtyCount };
-  }
-  function applyDraft(next: SaveBar) {
-    ({ marks, notes, state, savedAt, dirtyCount } = next);
-  }
+  // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
+  $: curClass = classes.find((c) => c.id === curClassId)!;
+  $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
+
+  // ── 備註編輯暫存(留頁面,非 controller 收編範圍) ──────────────────────────
+  let noteFor: AttRow | null = null;
+  let noteText = '';
 
   const gate = createLoadGate({
     fetch: getAttendance,
     onData: (d) => {
-      classes = d.classes;
-      const first = classes[0];
-      curClassId = first?.id ?? '';
-      applyDraft(initDraft(first?.roster ?? []));
+      ctrl.init(d.classes);
       // 部分名冊載入失敗(seam 已做 allSettled 隔離)：成功班級照常可點名，
       // 失敗班級以 toast 提示，不整頁打成 error。
       if (d.failedClasses.length > 0) {
@@ -88,27 +80,14 @@
     gate.load();
   });
 
-  // ── 復原快照 ───────────────────────────────────────────────────────────
-  // The save bar is driven by state/savedAt/dirtyCount, not just marks — so a
-  // single-step undo must capture all of them. `prev != null` drives the 復原
-  // control's visibility.
-  let prev: SaveBar | null = null;
-  // 修改前先快照(供復原)，並回傳同一份 draft 餵給接著要呼叫的純函式轉移。
-  function snapshot(): SaveBar {
-    const before = currentDraft();
-    prev = before;
-    return before;
-  }
+  // ── 動作(轉呼 controller 方法;snapshot/undo 副作用已在 controller 內) ────────
+  // canUndo(= controller 舊 `prev != null`)驅動樣板的「復原」控制項顯示。
   function undo() {
-    const restored = draftUndo(prev);
-    if (!restored) return;
-    applyDraft(restored);
-    prev = null;
+    ctrl.undo();
   }
 
-  // ── 動作 ──────────────────────────────────────────────────────────────
   function setMark(mid: string, v: AttDefault) {
-    applyDraft(draftSetMark(snapshot(), mid, v));
+    ctrl.setMark(mid, v);
   }
 
   function openNote(r: AttRow) {
@@ -118,7 +97,7 @@
 
   function saveNote() {
     if (!noteFor) return;
-    applyDraft(draftApplyNote(snapshot(), noteFor.mid, noteText)); // codex r1 (P2)：見 applyNote 註解
+    ctrl.applyNote(noteFor.mid, noteText); // codex r1 (P2)：備註編輯也算未存變更,見 draft applyNote 註解
     noteFor = null;
   }
 
@@ -127,30 +106,17 @@
   }
 
   function markAll() {
-    applyDraft(markAllPresent(snapshot(), roster)); // codex r2 (P2)：見 markAllPresent 註解
+    ctrl.markAllPresent(); // codex r2 (P2)：changed 計數規則見 draft markAllPresent 註解
   }
 
-  // Per-class drafts: switching stashes the current class's whole save-bar state and
-  // restores the target's (or inits it), so an unsaved edit survives a round-trip
-  // switch instead of silently resetting to defaults. (codex round 2 P2)
-  let byClass: Record<string, SaveBar> = {};
+  // CoachDropdown echoes the NAME; selectClass maps name→id via the controller (byClass
+  // 切班暫存已在 controller 內)。blocked(儲存中不可切班：in-flight save 回呼只認得 live
+  // 狀態,切走會卡在 儲存中,成功 toast 也可能落錯班)由 controller 回報,頁面據此發提示
+  // toast。(codex round 3 P1)
   function selectClass(name: string) {
-    const next = classes.find((c) => c.name === name);
-    if (!next || next.id === curClassId) return;
-    // Don't switch mid-save: the in-flight doSave() callback completes against the
-    // live state, so stashing a 'saving' class would leave it stuck on 儲存中 forever
-    // (and the success toast could land on the wrong class). (codex round 3 P1)
-    if (!canSwitchClass(currentDraft())) {
+    if (ctrl.selectClass(name) === 'blocked') {
       toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
-      return;
     }
-    // stash the current class's draft, then restore the target's (or build a fresh one).
-    // Pass `next` DIRECTLY — the legacy `$: roster` doesn't update mid-handler.
-    const result = stashAndRestore(byClass, curClassId, currentDraft(), next);
-    byClass = result.byClass;
-    applyDraft(result.draft);
-    prev = null;
-    curClassId = next.id;
   }
 
   /** 目前時間 "HH:MM"，供儲存成功後的「已同步至雲端」時間戳使用(真實存檔時間，取代
@@ -172,29 +138,20 @@
     });
   }
 
-  function doSave() {
-    applyDraft(beginSave(currentDraft()));
-    // 送出前(await 前)先快照是否含「遲到」——見 hadLate 註解；成功 toast 據此追加
-    // 一句折疊說明，避免教練誤以為點選沒存到。
-    const hadLate = draftHadLate(marks);
-    saveAttendance(curClassId, marks)
-      .then((updatedRoster) => {
-        // codex r3 (P2)：若在請求進行中又被編輯過(state 已變回 dirty)，不要用這次
-        // 回應蓋掉新的未存變更 —— 同既有(原 setTimeout 版)guard。
-        if (state !== 'saving') return;
-        classes = classes.map((c) => (c.id === curClassId ? { ...c, roster: updatedRoster } : c));
-        applyDraft(applySaveResult(currentDraft(), updatedRoster, nowHHMM()));
-        toasts.notify(
-          'success',
-          '點名已儲存',
-          curClass.name + ' · ' + updatedRoster.length + ' 位學員出勤已同步至雲端。' +
-            (hadLate ? '遲到已以出席紀錄（系統不區分遲到）。' : '')
-        );
-      })
-      .catch((e) => {
-        applyDraft(saveFailed(currentDraft()));
-        toasts.notify('error', '點名儲存失敗', attendanceErrorMessage(e));
-      });
+  async function doSave() {
+    const outcome = await ctrl.save();
+    if (outcome.kind === 'saved') {
+      // 成功 toast 據 await 前的 hadLate 快照追加一句折疊說明,避免教練誤以為點選沒存到。
+      toasts.notify(
+        'success',
+        '點名已儲存',
+        outcome.className + ' · ' + outcome.rosterCount + ' 位學員出勤已同步至雲端。' +
+          (outcome.hadLate ? '遲到已以出席紀錄（系統不區分遲到）。' : '')
+      );
+    } else if (outcome.kind === 'failed') {
+      toasts.notify('error', '點名儲存失敗', attendanceErrorMessage(outcome.error));
+    }
+    // stale：in-flight 期間又編輯過,回應被丟棄——頁面不做任何事(同現行 state guard 的 return)。
   }
 
   // ── 衍生 ──────────────────────────────────────────────────────────────
@@ -346,7 +303,7 @@
         <div style="font-size:14.5px;font-weight:700;color:var(--df-text-dark);">{SS.title}</div>
         <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px;">{SS.desc}</div>
       </div>
-      {#if prev != null}
+      {#if canUndo}
         <button
           type="button"
           on:click={undo}

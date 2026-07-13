@@ -3,9 +3,10 @@
  * 原頁面內嵌邏輯，零行為變更，只是把「怎麼轉移」搬出 Svelte 元件，方便脫離渲染直接
  * 表格測試（含 mid-save 切班擋、markAll 計數規則、undo 邊界等競態分支的純函式形狀）。
  *
- * 時間戳（頁面的 nowHHMM()）與「回應同步 guard」（state==='saving' 才套用儲存結果）
- * 刻意不放進這裡——前者是壁鐘副作用，後者是頁面才知道「這次回應是否仍對應目前這次
- * 儲存」的職責，兩者都留在 +page.svelte 的 adapter 層。 */
+ * 時間戳（nowHHMM()）與「回應同步 guard」（state==='saving' 才套用儲存結果）刻意不放
+ * 進這裡——前者是壁鐘副作用，後者是編排層才知道「這次回應是否仍對應目前這次儲存」的
+ * 職責，兩者都在 $lib/coach/attendance-controller 的編排層（Round 3 K1；guard 在 save()
+ * 內，時間戳由 controller 的 now dep 注入、頁面傳 nowHHMM()）。 */
 import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
 
 export type SaveBar = {
@@ -58,7 +59,7 @@ export function markAllPresent(draft: SaveBar, roster: AttRow[]): SaveBar {
 }
 
 /** 復原：prev===null 代表沒有可復原的快照（原樣回傳 null）；否則原樣回傳快照本身
- *  供套用。是否套用、何時清空 prev 由呼叫端（頁面 adapter）決定——這裡只表達「復原
+ *  供套用。是否套用、何時清空 prev 由呼叫端（attendance-controller 編排層）決定——這裡只表達「復原
  *  這個轉移，輸入是什麼快照，輸出就是什麼」的邊界語意。 */
 export function undo(prev: SaveBar | null): SaveBar | null {
 	return prev;
