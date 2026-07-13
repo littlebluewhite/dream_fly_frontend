@@ -109,14 +109,22 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	}
 
 	/** refresh()/silentRefresh() 共用的資料套用:無條件套用,不做旗標重查(後發先至
-	 *  的競態由既有 generation 機制管)。 */
-	function applyRefreshed(data: T): void {
+	 *  的競態由既有 generation 機制管)。
+	 *
+	 *  F5(codex B0 r1 追補):與 applyLoaded 對稱的同步重入防護——into() 的
+	 *  subscriber 可能同步重入 gate.load(),而此刻旗標尚未翻(into 先於 flag.set),
+	 *  load() 不短路、發第二次 fetch、generation++;舊一輪隨後的翻旗會讓新一輪的回應
+	 *  在 applyLoaded 的旗標重查誤判 mutation 勝出而丟棄新資料。into() 之後重查
+	 *  generation,不符即不翻旗(翻旗交給新一輪)。「無條件」指不做 mutation 旗標
+	 *  重查(不看 get(flag)),gen 檢查是重入取代的另一維度,into 照常套用。 */
+	function applyRefreshed(data: T, gen: number): void {
 		const hydrate = options.hydrate;
 		if (!hydrate) {
 			options.onData?.(data);
 			return;
 		}
 		hydrate.into(data);
+		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
 		hydrate.flag.set(true);
 	}
 
@@ -168,7 +176,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		try {
 			const data = await (options.refresh ?? options.fetch)();
 			if (destroyed || gen !== generation) return;
-			applyRefreshed(data);
+			applyRefreshed(data, gen);
 		} catch {
 			/* 靜默吞掉 */
 		}

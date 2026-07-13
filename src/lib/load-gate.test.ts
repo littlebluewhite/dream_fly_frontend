@@ -394,6 +394,51 @@ describe('hydrate 選項', () => {
 		gate.destroy();
 	});
 
+	/* F5(codex B0 r1 追補):applyRefreshed 有與 F1 完全同款的同步重入 gap——
+	 * refresh() 的 into(data) 觸發 subscriber 同步重入 gate.load()(此刻旗標尚未翻,
+	 * into 先於 flag.set,load 不短路、發第二次 fetch、generation++)。沒有 gen 重查,
+	 * 舊 refresh 隨後的無條件翻旗會讓新 load 的回應在 applyLoaded 的旗標重查誤判
+	 * mutation 勝出而丟棄新資料——store 停在 refresh 的舊資料。 */
+	it('重入釘子(refresh 路徑):into() 的 subscriber 同步重入 load(),最終共享 store 是 load(新 generation)的 payload、phase ready、flag true', async () => {
+		const flag = writable(false);
+		const sharedStore = writable<{ v: number } | null>(null);
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const into = (data: { v: number }) => sharedStore.set(data);
+
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		let reentrantLoad: Promise<void> | undefined;
+		let sawWrite = false;
+		const unsub = sharedStore.subscribe((val) => {
+			// 同上一條:略過 subscribe() 當下的初值(null)觸發;第一次真正寫入
+			// (refresh 的 into({v:1}))才同步重入 gate.load()。
+			if (val !== null && !sawWrite) {
+				sawWrite = true;
+				reentrantLoad = gate.load();
+			}
+		});
+
+		const p1 = gate.refresh(); // 與 F3 唯一的差別:第一輪從 refresh() 出發
+		d1.resolve({ v: 1 });
+		await p1;
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 重入時旗標尚未翻,load() 不短路、已發出第二次 fetch
+		expect(get(flag)).toBe(false); // 舊 refresh 一輪的 into() 之後不得翻旗(F5)
+		expect(get(gate)).toBe('loading'); // 舊一輪不得把 phase 推成 ready(F1 的 run() 重查)
+
+		d2.resolve({ v: 2 });
+		await reentrantLoad;
+
+		expect(get(sharedStore)).toEqual({ v: 2 }); // 是 load(新 generation)的 payload,不是 refresh 的舊 {v:1}
+		expect(get(flag)).toBe(true);
+		expect(get(gate)).toBe('ready');
+
+		unsub();
+		gate.destroy();
+	});
+
 	it('失敗路徑:fetch reject → phase 進 error(與 onData 路徑相同語意),不翻旗', async () => {
 		const flag = writable(false);
 		const err = new Error('boom');
