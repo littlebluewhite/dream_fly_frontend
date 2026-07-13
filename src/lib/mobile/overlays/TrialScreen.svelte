@@ -76,7 +76,7 @@
     ['map-pin', '地點', (chosenSlot?.room || '') + ' · Dream Fly 夢飛體操館'],
     ['user-round', '授課教練', (chosenSlot?.coach || '') + ' 教練'],
     ['baby', '學員', student + ' · ' + age]
-  ] as [IconName, string, string][];
+  ] satisfies [IconName, string, string][];
 
   async function goStep(n: number) {
     step = n;

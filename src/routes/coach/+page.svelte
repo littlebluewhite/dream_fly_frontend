@@ -151,7 +151,7 @@
           icon: 'message-circle',
           iconColor: 'var(--df-error)'
         }
-      ] as { label: string; value: string | number; sub: string; subTone: string; icon: IconName; iconColor: string }[])
+      ] satisfies { label: string; value: string | number; sub: string; subTone: string; icon: IconName; iconColor: string }[])
     : [];
 
   /* ── todo checklist ───────────────────────────────────────────────── */

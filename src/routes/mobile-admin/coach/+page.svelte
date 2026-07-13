@@ -50,12 +50,12 @@
   $: stats = [
     [String(classCount), '今日課堂', 'calendar-days', 'var(--df-primary)'],
     [String(studentCount), '今日學員', 'users', 'var(--df-success)']
-  ] as [string, string, IconName, string][];
+  ] satisfies [string, string, IconName, string][];
   $: tasks = data
     ? ([
         { icon: 'calendar-check', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: data.pendingClasses + ' 待點名', action: '去點名', to: 'attendance' },
         { icon: 'message-circle', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', text: data.pendingReplies + ' 訊息待回覆', action: '查看', to: 'messages' }
-      ] as { icon: IconName; tone: string; bg: string; text: string; action: string; to: string }[])
+      ] satisfies { icon: IconName; tone: string; bg: string; text: string; action: string; to: string }[])
     : [];
 
   const setTab = (id: string) => goto(adminPath('coach', id));

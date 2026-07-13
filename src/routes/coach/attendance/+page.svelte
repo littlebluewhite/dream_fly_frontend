@@ -66,7 +66,7 @@
           ['clock', curClass.time],
           ['map-pin', curClass.room],
           ['user', '授課教練：' + curClass.coach]
-        ] as [IconName, string][])
+        ] satisfies [IconName, string][])
       : [];
 
   // ── 備註編輯暫存(留頁面,非 controller 收編範圍) ──────────────────────────

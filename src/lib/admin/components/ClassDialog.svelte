@@ -34,7 +34,7 @@
         ['user-plus', '候補人數', klass.wait + ' 人'],
         ['history', '補課名額', klass.makeup + ' 位'],
         ['circle-dollar-sign', '季費', fmtNT(klass.price)]
-      ] as [IconName, string, string][])
+      ] satisfies [IconName, string, string][])
     : [];
 </script>
 

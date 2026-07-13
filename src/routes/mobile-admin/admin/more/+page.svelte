@@ -41,7 +41,7 @@
         ['系統', [
           ['系統設定', 'settings', '場館資訊與通知', 'settings']
         ]]
-      ] as [string, [string, IconName, string, MobileAdminPushId][]][])
+      ] satisfies [string, [string, IconName, string, MobileAdminPushId][]][])
     : [];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });

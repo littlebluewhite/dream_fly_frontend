@@ -25,7 +25,7 @@
         ['cake', '適合年齡', c.age],
         ['layers', '課程類別', c.cat],
         ['bar-chart-3', '程度', c.level]
-      ] as [IconName, string, string][])
+      ] satisfies [IconName, string, string][])
     : [];
 
   async function add() {

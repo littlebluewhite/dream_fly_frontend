@@ -61,7 +61,7 @@
         ['map-pin', c.room],
         ['user-round', c.coach + ' 教練'],
         ['ticket', '本季尚餘 ' + c.remain + ' 堂']
-      ] as [IconName, string][])
+      ] satisfies [IconName, string][])
     : [];
 
   // 我的請假 —— 復用桌面 mine 頁同一顆 leaveRequests store，範圍收斂到這門課程

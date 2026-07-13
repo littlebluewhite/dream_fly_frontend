@@ -39,7 +39,7 @@
         ['user-plus', '候補人數', k.wait + ' 人'],
         ['history', '補課名額', k.makeup + ' 位'],
         ['circle-dollar-sign', '季費', fmtNT(k.price)]
-      ] as [IconName, string, string][])
+      ] satisfies [IconName, string, string][])
     : [];
 </script>
 

@@ -106,11 +106,11 @@
 
   $: cur = data && active != null ? (data.courses.find((c) => c.id === active) ?? data.courses[0]) : null;
 
-  $: stats = cur ? [
+  $: stats = cur ? ([
     { icon: 'calendar-check', value: cur.att + '%', label: '出席率' },
     { icon: 'calendar-clock', value: cur.next, label: '下一堂' },
     { icon: 'hourglass', value: cur.remain + ' 堂', label: '剩餘堂數' }
-  ] as { icon: IconName; value: string; label: string }[] : [];
+  ] satisfies { icon: IconName; value: string; label: string }[]) : [];
 </script>
 
 <LoadGate {gate}>

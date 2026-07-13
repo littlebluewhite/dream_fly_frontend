@@ -24,11 +24,11 @@
     gate.load();
   });
 
-  $: contacts = profile ? [
+  $: contacts = profile ? ([
     ['phone', profile.phone],
     ['mail', profile.email],
     ['users', profile.guardian]
-  ] as [IconName, string][] : [];
+  ] satisfies [IconName, string][]) : [];
 
   // 儲存個人資料（Round 4 Task P4-F4）——目前只有「生日」真的寫回後端（PATCH
   // /users/me），其餘欄位（姓名/電話/家長聯絡人/通知偏好）維持既有的本地端編輯、

@@ -25,7 +25,7 @@
     ['user', k.coach + ' 教練'],
     ['calendar-days', k.day + ' · ' + k.time],
     ['map-pin', k.room + ' · ' + k.age]
-  ] as [IconName, string][];
+  ] satisfies [IconName, string][];
 
   function roster() {
     toastStore.notify('info', k.name, '顯示班級學員名單（' + k.enrolled + ' 人）。');

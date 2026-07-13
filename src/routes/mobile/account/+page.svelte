@@ -42,7 +42,7 @@
     { id: 'orders', icon: 'receipt', label: '我的訂單', sub: (data?.orders.length ?? 0) + ' 筆報名紀錄', tone: 'var(--df-primary)', tint: 'var(--df-primary-bg)' },
     { id: 'report', icon: 'clipboard-list', label: '成績單與證書', sub: '查看學習成果與獎狀', tone: 'var(--df-success)', tint: 'var(--df-success-bg)' },
     { id: 'settings', icon: 'settings', label: '帳號設定', sub: '個人資料與偏好設定', tone: 'var(--df-text-light)', tint: 'var(--df-bg-light)' }
-  ] as Item[];
+  ] satisfies Item[];
 
   function logout() {
     authStore.logout();
