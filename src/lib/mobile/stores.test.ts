@@ -243,7 +243,23 @@ describe('placeOrder — 委派 submitOrder(mobile adapter,C4 首套單測)', ()
 
 		expect(submitOrder).toHaveBeenCalledTimes(1);
 		const [lines, opts] = vi.mocked(submitOrder).mock.calls[0];
-		expect(lines).toEqual([{ id: 'p1', type: 'course', name: '基礎體操班', price: 3200, qty: 1, icon: 'dumbbell' }]);
+		// K5-b：toOrderItem 投影 adapter 已刪，placeOrder 直傳 get(cart)——lines
+		// 現在是購物車行本身(CartItem 全欄)，不再是窄化過的 6 欄投影。
+		expect(lines).toEqual([
+			{
+				id: 'p1',
+				type: 'course',
+				name: '基礎體操班',
+				price: 3200,
+				qty: 1,
+				icon: 'dumbbell',
+				spots: course.spots,
+				desc: course.desc,
+				level: course.level,
+				cat: course.cat,
+				days: course.days
+			}
+		]);
 		expect(opts.coupon).toBe('DREAMFLY100');
 		expect(opts.usePoints).toBe(true);
 		expect(opts.idempotencyKey).toBe('key-1');

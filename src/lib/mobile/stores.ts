@@ -92,24 +92,6 @@ export const cartTotal = derived(cart, ($c) => cartCount($c));
  * C4 收斂：原本焊在這裡的「同步購物車 → POST /orders → 下單後刷新 → 清購物車」
  * orchestration 已收斂進共用的 submitOrder(見 $lib/checkout-order)，placeOrder
  * 瘦成薄 adapter，只把行動版自己的東西經參數注入(見下方兩個函式)。 */
-/** 行動版購物車行 → 伺服器 CartItem 的對映(submitOrder 的 lines 參數)。行動版
- *  購物車只有課程(沒有方案購買動線)，對映一律 type:'course'、qty 鎖 1；不需要
- *  桌面 chargeableLines 的「已持有 pass 跳過」過濾——那個過濾對 type:'course'
- *  恆是 no-op(只濾 type:'pass')。
- *  K5-a 過渡:購物車本身已收斂為 CartItem[](見上 createCart()),參數型別同步
- *  改為 CartItem(原 CartLine 已刪)以保持可編譯;函式本體(窄化投影)不動，
- *  K5-b 整顆函式刪除、placeOrder 改直傳 get(cart)。 */
-function toOrderItem(line: CartItem): CartItem {
-	return {
-		id: String(line.id),
-		type: 'course',
-		name: line.name,
-		price: line.price,
-		qty: 1,
-		icon: typeof line.icon === 'string' ? line.icon : 'graduation-cap'
-	};
-}
-
 /** 送出訂單：委派 submitOrder(同步購物車 → POST /orders(帶呼叫端提供的
  *  Idempotency-Key) → 下單後重新水合真點數餘額 → 清空(僅)行動版本地購物車)。
  *  回傳值為 OrderConfirmation(total 已是 NT$ 整數，呼叫端見 CartSheet)。任何
@@ -117,14 +99,18 @@ function toOrderItem(line: CartItem): CartItem {
  *  空購物車——呼叫端(CartSheet)catch 後用 member/checkout 的 orderErrorMessage()
  *  轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。
  *  paymentMethod(Round 4 Task P4-F4):mobile 不做付款方式選擇 UI(計畫裁決)，
- *  呼叫端一律沿用預設 credit_card。 */
+ *  呼叫端一律沿用預設 credit_card。
+ *  K5-b:購物車本身已是 CartItem[](見上 cart 段)，直接把 get(cart) 傳給
+ *  submitOrder——mobile 只有課程來源(沒有方案購買動線)，不需要桌面
+ *  chargeableLines 的「已持有 pass 跳過」過濾(那個過濾對 type:'course' 恆是
+ *  no-op)，原本焊在這裡的 toOrderItem 投影 adapter 已整顆刪除。 */
 export async function placeOrder(
 	coupon: string,
 	usePoints: boolean,
 	idempotencyKey: string = crypto.randomUUID(),
 	paymentMethod: PaymentMethod = 'credit_card'
 ): Promise<OrderConfirmation> {
-	return submitOrder(get(cart).map(toOrderItem), {
+	return submitOrder(get(cart), {
 		coupon,
 		usePoints,
 		paymentMethod,
