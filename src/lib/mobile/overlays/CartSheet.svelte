@@ -120,7 +120,7 @@
           {#each $cart as c (c.id)}
             <div style="display:flex; align-items:center; gap:11px; background:var(--df-bg-light); border-radius:13px; padding:11px;">
               <div style="width:44px; height:44px; border-radius:11px; background:#fff; display:flex; align-items:center; justify-content:center; flex:none;">
-                <Icon name={c.icon as string} size={22} color="var(--df-primary)" />
+                <Icon name={c.icon} size={22} color="var(--df-primary)" />
               </div>
               <div style="flex:1; min-width:0;">
                 <div style="font-size:14px; font-weight:700; color:var(--df-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{c.name}</div>

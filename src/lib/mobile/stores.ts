@@ -23,8 +23,8 @@ import { createReadState, unreadCount } from '$lib/stores/read-state';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints } from '$lib/member/stores';
-import type { CartItem } from '$lib/cart-item';
-import { ME, NOTIFS_SEED, type NotifItem } from './data';
+import { courseToCartItem, type CartItem } from '$lib/cart-item';
+import { ME, NOTIFS_SEED, type NotifItem, type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 // C5:factory 單源於 components/mobile/overlay.ts(與 mobile-admin 共用複本合併
@@ -35,20 +35,6 @@ export type { OverlayEntry, OverlayState } from '$lib/components/mobile/overlay'
 export const overlay = createOverlay();
 
 /* ---------- Shopping cart (報名購物車) ---------- */
-/** A catalog course as added to the cart — core fields are typed; the index
- *  signature carries the rest of the course verbatim (icon / level / desc …)
- *  for the cart sheet. Kept as its own interface (not `Omit<CartLine>`) because
- *  an index signature collapses `keyof`, which would break Omit. */
-export interface CartInput {
-	id: string | number;
-	name: string;
-	price: number;
-	spots: number;
-	[k: string]: unknown;
-}
-export interface CartLine extends CartInput {
-	qty: number;
-}
 /** A full course (spots 0) never enters the paid cart — add() just reports
  *  'waitlisted'; the caller is expected to call joinWaitlist() itself (C8,
  *  Round 2 批次甲：mobile 候補改接 server seam，mirrors member/cart.ts's addItem —
@@ -59,27 +45,34 @@ export interface CartLine extends CartInput {
  *  type, an increment/decrement control would have nothing legitimate to do
  *  (matches member cart's course qty lock — see its updateQty doc). */
 export type AddResult = 'added' | 'bumped' | 'waitlisted';
+/** K5:自持的 CartInput/CartLine 一次性型別已退役，購物車行收斂為全站共用的
+ *  `CartItem`（見 $lib/cart-item）——欄位對映單源於 courseToCartItem，這裡只做
+ *  一件事：spread 後覆寫 icon，保留課程自帶 icon（來自 api.ts 的 CATEGORY_ICON
+ *  薄映射）蓋過 courseToCartItem 對 CatalogCourse 消費端的硬編預設
+ *  （'sparkles'）。去重鍵同步升級為 (type, id) 複合鍵，鏡射 member cart 的
+ *  addItem 慣例；mobile 目前仍只有 course 一種來源，不開放 addItem（interface
+ *  不膨脹）。 */
 export function createCart() {
-	const { subscribe, update, set } = writable<CartLine[]>([]);
+	const { subscribe, update, set } = writable<CartItem[]>([]);
 	return {
 		subscribe,
-		add(course: CartInput): AddResult {
+		add(course: Course): AddResult {
 			if (course.spots === 0) {
 				return 'waitlisted';
 			}
+			const item: CartItem = { ...courseToCartItem(course), icon: course.icon };
 			let result: AddResult = 'added';
 			update((items) => {
-				const ex = items.find((c) => c.id === course.id);
+				const ex = items.find((c) => c.type === item.type && c.id === item.id);
 				if (ex) {
 					result = 'bumped';
 					return items; // qty 鎖 1 —— 課程是報名不是數量
 				}
-				const line: CartLine = { ...course, qty: 1 };
-				return [...items, line];
+				return [...items, item];
 			});
 			return result;
 		},
-		remove(id: string | number) {
+		remove(id: string) {
 			update((items) => items.filter((c) => c.id !== id));
 		},
 		clear() {
@@ -102,8 +95,11 @@ export const cartTotal = derived(cart, ($c) => cartCount($c));
 /** 行動版購物車行 → 伺服器 CartItem 的對映(submitOrder 的 lines 參數)。行動版
  *  購物車只有課程(沒有方案購買動線)，對映一律 type:'course'、qty 鎖 1；不需要
  *  桌面 chargeableLines 的「已持有 pass 跳過」過濾——那個過濾對 type:'course'
- *  恆是 no-op(只濾 type:'pass')。 */
-function toOrderItem(line: CartLine): CartItem {
+ *  恆是 no-op(只濾 type:'pass')。
+ *  K5-a 過渡:購物車本身已收斂為 CartItem[](見上 createCart()),參數型別同步
+ *  改為 CartItem(原 CartLine 已刪)以保持可編譯;函式本體(窄化投影)不動，
+ *  K5-b 整顆函式刪除、placeOrder 改直傳 get(cart)。 */
+function toOrderItem(line: CartItem): CartItem {
 	return {
 		id: String(line.id),
 		type: 'course',

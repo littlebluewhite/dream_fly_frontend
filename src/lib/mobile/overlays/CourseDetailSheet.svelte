@@ -8,7 +8,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { cart, toasts, type CartInput } from '$lib/mobile/stores';
+  import { cart, toasts } from '$lib/mobile/stores';
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
   import { fmtNT, type Course } from '$lib/mobile/data';
 
@@ -29,7 +29,7 @@
 
   async function add() {
     if (!c) return;
-    const r = cart.add(c as CartInput);
+    const r = cart.add(c);
     if (r === 'waitlisted') {
       try {
         await joinWaitlist(c.id);

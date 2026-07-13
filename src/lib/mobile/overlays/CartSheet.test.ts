@@ -5,6 +5,7 @@ import CartSheet from './CartSheet.svelte';
 import { cart, toasts } from '$lib/mobile/stores';
 import { points } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
+import type { Course } from '$lib/mobile/data';
 
 /* CartSheet 結帳接真（複審後）：confirmPayment 現在打真實 POST /orders（復用
  * desktop member 的 syncCartToServer + api()，見 $lib/mobile/stores.ts 的
@@ -15,7 +16,27 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   return { ...actual, api: vi.fn() };
 });
 
-const COURSE = { id: 'course-uuid-9', name: '競技啦啦隊 進階班', price: 4800, spots: 3, icon: 'sparkles' };
+// K5-a：cart.add() 收窄為 add(course: Course)，檔頭原本的五欄鬆物件在 TS
+// strict 下無法編譯（缺 level/cat/age/days/hot/coach/desc）——換成回傳完整
+// Course 的 builder，其餘欄位沿用 CourseCard.test.ts 既有的 fixture 慣例。
+function courseFixture(overrides: Partial<Course> = {}): Course {
+  return {
+    id: 'course-uuid-9',
+    name: '競技啦啦隊 進階班',
+    level: '進階',
+    cat: '競技啦啦隊',
+    age: '6–12 歲',
+    days: '週六 10:00',
+    price: 4800,
+    hot: false,
+    coach: '',
+    desc: '',
+    spots: 3,
+    icon: 'sparkles',
+    ...overrides
+  };
+}
+const COURSE = courseFixture();
 
 const SAMPLE_ORDER = {
   id: 'order-1',
