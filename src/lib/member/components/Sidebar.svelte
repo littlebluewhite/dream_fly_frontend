@@ -8,12 +8,13 @@
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import { unreadCount, toasts } from '$lib/member/stores';
   import { authStore } from '$lib/stores/authStore';
+  import type { IconName } from '$lib/icon-registry';
 
   // Real identity (Task 11 P2 cleanup — was the mock `ME` constant). A guest
   // render (no SSR route guard on /member) falls back to '?' / brand primary / 會員.
   $: member = $authStore.member;
 
-  const NAV = [
+  const NAV: { href: string; label: string; icon: IconName }[] = [
     { href: '/member', label: '總覽', icon: 'layout-dashboard' },
     { href: '/member/courses', label: '課程介紹', icon: 'graduation-cap' },
     { href: '/member/mine', label: '我的課程', icon: 'calendar-check' },

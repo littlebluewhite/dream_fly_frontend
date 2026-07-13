@@ -20,6 +20,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { authStore } from '$lib/stores/authStore';
   import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
+  import type { IconName } from '$lib/icon-registry';
   import '$lib/styles/mobile-frame.css';
 
   const googleEnabled = isGoogleLoginEnabled();
@@ -32,7 +33,7 @@
   let emailFocus = false;
   let pwFocus = false;
 
-  const TRUST: [string, string, string][] = [
+  const TRUST: [IconName, string, string][] = [
     ['shield-check', '安全有保障', '小班 6–8 人 · 雙教練保護'],
     ['sparkles', '先試再決定', '15 分鐘評估 + 60 分鐘體驗'],
     ['users', '專業教練群', '競賽選手出身 · 循序漸進']

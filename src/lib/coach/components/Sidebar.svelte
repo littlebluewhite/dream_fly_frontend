@@ -12,11 +12,12 @@
   import { COACH } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
+  import type { IconName } from '$lib/icon-registry';
 
   let menu = false;
   $: path = $page.url.pathname;
 
-  const MENU_ROWS = [
+  const MENU_ROWS: { icon: IconName; label: string; desc: string; to: string }[] = [
     { icon: 'user-cog', label: '個人設定', desc: '編輯個人資料與偏好', to: 'settings' },
     { icon: 'calendar-days', label: '排課管理', desc: '查看本週授課時段', to: 'schedule' },
     { icon: 'shield-check', label: '帳號安全', desc: '密碼、雙重驗證、登入紀錄', to: 'settings' }

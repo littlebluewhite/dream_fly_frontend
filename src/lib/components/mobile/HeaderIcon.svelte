@@ -1,8 +1,9 @@
 <script lang="ts">
   /* 圓形 header icon 按鈕，可帶數字 badge。ui.jsx HeaderIcon。 */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon: string;
+  export let icon: IconName;
   export let onClick: (() => void) | undefined = undefined;
   export let badge = 0;
   export let light = false;

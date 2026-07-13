@@ -6,8 +6,9 @@
    * delta is omitted when null/undefined. */
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon: string;
+  export let icon: IconName;
   export let label: string;
   export let value: string | number;
   export let delta: string | number | null | undefined = undefined;

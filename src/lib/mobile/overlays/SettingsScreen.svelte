@@ -24,11 +24,12 @@
   import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
   import { getPreferences, savePreferences } from '$lib/mobile/api';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
 
-  type FieldRow = { icon: string; label: string; value: string; last?: boolean };
-  type ToggleRow = { icon: string; label: string; sub?: string; k: keyof Prefs; last?: boolean };
+  type FieldRow = { icon: IconName; label: string; value: string; last?: boolean };
+  type ToggleRow = { icon: IconName; label: string; sub?: string; k: keyof Prefs; last?: boolean };
 
   $: personal = [
     { icon: 'user-round', label: '姓名', value: $profile.name },

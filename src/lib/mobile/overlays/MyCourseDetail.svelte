@@ -40,6 +40,7 @@
   import { formatSessionDateTime } from '$lib/member/session-format';
   import { createLoadGate } from '$lib/load-gate';
   import { ATT_STATE, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
+  import type { IconName } from '$lib/icon-registry';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -60,7 +61,7 @@
         ['map-pin', c.room],
         ['user-round', c.coach + ' 教練'],
         ['ticket', '本季尚餘 ' + c.remain + ' 堂']
-      ] as [string, string][])
+      ] as [IconName, string][])
     : [];
 
   // 我的請假 —— 復用桌面 mine 頁同一顆 leaveRequests store，範圍收斂到這門課程

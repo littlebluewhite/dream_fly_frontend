@@ -18,8 +18,9 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { toasts } from '$lib/admin/stores';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
+  import type { IconName } from '$lib/icon-registry';
 
-  const NAV = [
+  const NAV: { href: string; label: string; icon: IconName }[] = [
     { href: '/admin', label: '儀表板總覽', icon: 'layout-dashboard' },
     { href: '/admin/members', label: '會員管理', icon: 'users' },
     { href: '/admin/coaches', label: '教練管理', icon: 'user-check' },

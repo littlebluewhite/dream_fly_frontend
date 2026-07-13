@@ -9,6 +9,7 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import { get } from 'svelte/store';
   import { profile, prefs, toasts, type Prefs } from '$lib/mobile/stores';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;
 
@@ -32,7 +33,7 @@
     onClose();
   }
 
-  const PREF_ROWS: { icon: string; label: string; sub: string; k: keyof Prefs }[] = [
+  const PREF_ROWS: { icon: IconName; label: string; sub: string; k: keyof Prefs }[] = [
     { icon: 'calendar-clock', label: '課前提醒', sub: '課程開始前一日推播', k: 'classReminder' },
     { icon: 'message-circle', label: '教練訊息', sub: '教練回覆即時通知', k: 'coachMsg' },
     { icon: 'megaphone', label: '活動與優惠', sub: '新課程與優惠資訊', k: 'promo' }

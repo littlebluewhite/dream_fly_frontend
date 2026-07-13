@@ -7,6 +7,7 @@
    * the unit differs per card (NT$ / 位 / 筆 / %), so the page composes it with
    * fmtNT()/fmtPct(). Visually unchanged: 44px icon chip, 27px value, pill delta. */
   import { Card, Icon } from '$lib/components/ui';
+  import type { IconName } from '$lib/icon-registry';
 
   let {
     icon,
@@ -16,7 +17,7 @@
     tint,
     color
   }: {
-    icon: string;
+    icon: IconName;
     label: string;
     value: string;
     /** deltaPct() 環比 %(如 12.5 = +12.5%);null → 顯示「—」。 */

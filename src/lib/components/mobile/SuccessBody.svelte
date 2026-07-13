@@ -1,8 +1,9 @@
 <script lang="ts">
   /* 成功完成版面（圓形 icon + 標題 + 說明）。ported from ui.jsx SuccessBody。 */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon = 'check';
+  export let icon: IconName = 'check';
   export let title: string;
   export let body = '';
 </script>

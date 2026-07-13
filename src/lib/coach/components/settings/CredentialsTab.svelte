@@ -5,11 +5,12 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachTag from '$lib/coach/components/CoachTag.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let coach: Coach;
 
   // Certifications derived from COACH chips + extras
-  const CERTS = [
+  const CERTS: { icon: IconName; tone: 'accent' | 'primary' | 'success' | 'warning'; name: string; issuer: string; date: string; expiry: string; active: boolean }[] = [
     { icon: 'award', tone: 'accent' as const, name: '國際體操裁判認證', issuer: 'FIG 國際體操總會', date: '2021-06', expiry: '2025-06', active: false },
     { icon: 'badge-check', tone: 'primary' as const, name: '資深體操教練執照', issuer: '中華民國體操協會', date: '2019-08', expiry: '永久有效', active: true },
     { icon: 'shield-check', tone: 'success' as const, name: '幼兒體能發展指導員', issuer: '教育部體育署', date: '2022-03', expiry: '2026-03', active: true },
@@ -17,7 +18,7 @@
   ];
 
   // Credential history
-  const HISTORY = [
+  const HISTORY: { date: string; event: string; icon: IconName; tone: string }[] = [
     { date: '2023-04', event: '完成進階培訓課程「競技體操選手訓練策略」', icon: 'graduation-cap', tone: 'var(--df-primary)' },
     { date: '2022-03', event: '取得幼兒體能發展指導員認證', icon: 'badge-check', tone: 'var(--df-success)' },
     { date: '2021-06', event: '通過 FIG 國際體操裁判考試', icon: 'award', tone: 'var(--df-accent-dark)' },

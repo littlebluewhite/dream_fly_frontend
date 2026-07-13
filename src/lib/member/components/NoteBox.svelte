@@ -1,7 +1,8 @@
 <script lang="ts">
   /* Inline note / hint row with a leading icon. */
   import Icon from '$lib/components/ui/Icon.svelte';
-  export let icon = 'info';
+  import type { IconName } from '$lib/icon-registry';
+  export let icon: IconName = 'info';
   export let tone = 'var(--df-primary)';
 </script>
 

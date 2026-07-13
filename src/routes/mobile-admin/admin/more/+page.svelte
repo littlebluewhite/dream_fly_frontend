@@ -18,6 +18,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getMore, type MoreData } from '$lib/mobile-admin/api';
   import { authStore } from '$lib/stores/authStore';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: MoreData | null = null;
   const gate = createLoadGate({
@@ -39,7 +40,7 @@
         ['系統', [
           ['系統設定', 'settings', '場館資訊與通知', 'settings']
         ]]
-      ] as [string, [string, string, string, string][]][])
+      ] as [string, [string, IconName, string, string][]][])
     : [];
 
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });

@@ -39,6 +39,7 @@
   import Card from '$lib/components/ui/Card.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   const ctrl = createAttendanceController({ saveAttendance, now: nowHHMM });
 
@@ -56,6 +57,17 @@
   // ── 當前班級 / 名冊 ────────────────────────────────────────────────────
   $: curClass = classes.find((c) => c.id === curClassId)!;
   $: roster = classes.find((c) => c.id === curClassId)?.roster ?? [];
+  // 班級卡片的三顆 icon meta rows(時段/教室/教練)——原模板內聯 each 陣列 hoist 至此並標型別。
+  // classes.length 守衛鏡射模板既有的 {#if classes.length === 0}…{:else} 分支——
+  // curClass 的 `!` 斷言只在 classes 非空時成立，這裡不能無條件先算(見上方 curClass 附註)。
+  $: curClassMeta =
+    classes.length > 0
+      ? ([
+          ['clock', curClass.time],
+          ['map-pin', curClass.room],
+          ['user', '授課教練：' + curClass.coach]
+        ] as [IconName, string][])
+      : [];
 
   // ── 備註編輯暫存(留頁面,非 controller 收編範圍) ──────────────────────────
   let noteFor: AttRow | null = null;
@@ -166,11 +178,11 @@
   ];
 
   // 儲存狀態卡片設定 (circle-check-big → circle-check per icon naming guide)
-  $: SS = {
+  $: SS = ({
     dirty:  { icon: 'circle-alert', tone: 'var(--df-warning)',  bg: 'var(--df-warning-bg)',  title: '尚未儲存', desc: dirtyCount + ' 筆出席變更尚未儲存，離開前請記得儲存' },
     saving: { icon: 'loader',       tone: 'var(--df-primary)',  bg: 'var(--df-primary-bg)', title: '儲存中…',  desc: '正在同步至雲端，請勿關閉頁面' },
     saved:  { icon: 'circle-check', tone: 'var(--df-success)',  bg: 'var(--df-success-bg)', title: '已儲存',   desc: (savedAt || nowHHMM()) + ' 已同步至雲端 · 全部 ' + roster.length + ' 位學員' },
-  }[state];
+  } satisfies Record<'dirty' | 'saving' | 'saved', { icon: IconName; tone: string; bg: string; title: string; desc: string }>)[state];
 </script>
 
 <LoadGate {gate}>
@@ -201,7 +213,7 @@
         <div>
           <div style="font-size:18px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading);">{curClass.name}</div>
           <div style="display:flex;gap:14px;margin-top:5px;flex-wrap:wrap;">
-            {#each [['clock', curClass.time], ['map-pin', curClass.room], ['user', '授課教練：' + curClass.coach]] as [ic, t]}
+            {#each curClassMeta as [ic, t]}
               <span style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--df-text-light);">
                 <Icon name={ic} size={13} color="var(--df-text-muted)" />{t}
               </span>

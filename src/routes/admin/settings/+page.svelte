@@ -24,6 +24,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, putSettings, type SettingsWriteBody } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';
+  import type { IconName } from '$lib/icon-registry';
 
   let name = '';
   let phone = '';
@@ -92,7 +93,7 @@
     saving = false;
   }
 
-  const LOGINS = [
+  const LOGINS: { icon: IconName; device: string; place: string; time: string; now: boolean }[] = [
     { icon: 'monitor', device: 'MacBook · Chrome', place: '台中 · 辦公室', time: '目前使用中', now: true },
     {
       icon: 'smartphone',

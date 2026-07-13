@@ -16,6 +16,7 @@
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
   import TodayClassCard from '$lib/coach/components/TodayClassCard.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: TodayData | null = null;
   let errorTitle = '載入失敗';
@@ -41,7 +42,7 @@
   });
 
   /* ── 課堂提醒 reminders (reconstructed per spec) ── */
-  const reminders: { icon: string; text: string }[] = [
+  const reminders: { icon: IconName; text: string }[] = [
     { icon: 'clock',          text: '競技選手班需提前 15 分鐘開放熱身區，請確認場地已清場。' },
     { icon: 'triangle-alert', text: '幼兒啟蒙班家長接送高峰期在 12:40–13:00，請提前告知助理。' },
     { icon: 'sparkles',       text: '今日成人班為月末體能測評日，請準備評量表格。' }

@@ -9,6 +9,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { overlay, toasts } from '$lib/mobile-admin/stores';
   import { STATUS_TONE, fmtNT, type ClassRow } from '$lib/mobile-admin/data';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
@@ -38,7 +39,7 @@
         ['user-plus', '候補人數', k.wait + ' 人'],
         ['history', '補課名額', k.makeup + ' 位'],
         ['circle-dollar-sign', '季費', fmtNT(k.price)]
-      ] as [string, string, string][])
+      ] as [IconName, string, string][])
     : [];
 </script>
 

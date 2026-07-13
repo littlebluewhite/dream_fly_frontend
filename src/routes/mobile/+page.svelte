@@ -26,9 +26,10 @@
   import { overlay, cart, toasts, unread } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
+  import type { IconName } from '$lib/icon-registry';
 
   /* category taxonomy — home.jsx CATS (6-13). */
-  const CATS: { key: string; label: string; icon: string }[] = [
+  const CATS: { key: string; label: string; icon: IconName }[] = [
     { key: '幼兒體操', label: '幼兒', icon: 'baby' },
     { key: '兒童基礎', label: '兒童', icon: 'rotate-cw' },
     { key: '競技啦啦隊', label: '啦啦隊', icon: 'sparkles' },

@@ -5,8 +5,9 @@
    * (×2, decorative — constant value + no-op onChange). Selecting calls
    * onChange(option) and closes. */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon = '';
+  export let icon: IconName | undefined = undefined;
   export let value: string;
   export let options: string[] = [];
   export let onChange: (v: string) => void = () => {};

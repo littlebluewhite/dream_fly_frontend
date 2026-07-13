@@ -9,11 +9,12 @@
    * Escape). Body is fully slotted and the primary label is overridable so
    * downstream dialogs can wrap it. Overlay click and Escape both call onClose. */
   import { Button, IconButton, Icon } from '$lib/components/ui';
+  import type { IconName } from '$lib/icon-registry';
 
   export let open = false;
   export let title = '';
   export let sub = '';
-  export let icon: string | undefined = undefined;
+  export let icon: IconName | undefined = undefined;
   export let primaryLabel = '儲存';
   export let onClose: () => void = () => {};
   export let onSave: () => void | Promise<void> = () => {};

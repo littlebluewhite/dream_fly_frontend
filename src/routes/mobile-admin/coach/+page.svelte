@@ -21,6 +21,7 @@
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getCoachHome, CoachNotFoundError, type MCoachHomeData } from '$lib/mobile-admin/api';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: MCoachHomeData | null = null;
   let errorTitle = '載入失敗';
@@ -49,12 +50,12 @@
   $: stats = [
     [String(classCount), '今日課堂', 'calendar-days', 'var(--df-primary)'],
     [String(studentCount), '今日學員', 'users', 'var(--df-success)']
-  ] as [string, string, string, string][];
+  ] as [string, string, IconName, string][];
   $: tasks = data
-    ? [
+    ? ([
         { icon: 'calendar-check', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: data.pendingClasses + ' 待點名', action: '去點名', to: 'attendance' },
         { icon: 'message-circle', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', text: data.pendingReplies + ' 訊息待回覆', action: '查看', to: 'messages' }
-      ]
+      ] as { icon: IconName; tone: string; bg: string; text: string; action: string; to: string }[])
     : [];
 
   const setTab = (id: string) => goto(adminPath('coach', id));

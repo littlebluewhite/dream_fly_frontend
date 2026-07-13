@@ -19,10 +19,11 @@
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
   import { stepValid, buildTrialInquiry } from './trialValidation';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
 
-  type Cat = { key: string; label: string; icon: string; age: string };
+  type Cat = { key: string; label: string; icon: IconName; age: string };
   const TRIAL_CATS: Cat[] = [
     { key: '幼兒體操', label: '幼兒體操', icon: 'baby', age: '3–5 歲' },
     { key: '兒童基礎', label: '兒童基礎', icon: 'rotate-cw', age: '6–9 歲' },
@@ -66,8 +67,16 @@
 
   $: chosenSlot = TRIAL_SLOTS.find((s) => s.id === slot);
   $: chosenDay = TRIAL_DAYS.find((d) => d.d === day);
-  $: catIcon = (TRIAL_CATS.find((c) => c.key === cat) || {}).icon || 'graduation-cap';
+  $: catIcon = TRIAL_CATS.find((c) => c.key === cat)?.icon ?? 'graduation-cap';
   $: state = { cat, age, day, slot, parent, phone, student };
+  // step 3 預約單的五列 icon meta rows——原模板內聯 each 陣列 hoist 至此並標型別。
+  $: ticketRows = [
+    ['graduation-cap', '課程類別', cat],
+    ['calendar-days', '試上時段', (chosenDay?.full || '') + ' ' + (chosenSlot?.time || '')],
+    ['map-pin', '地點', (chosenSlot?.room || '') + ' · Dream Fly 夢飛體操館'],
+    ['user-round', '授課教練', (chosenSlot?.coach || '') + ' 教練'],
+    ['baby', '學員', student + ' · ' + age]
+  ] as [IconName, string, string][];
 
   async function goStep(n: number) {
     step = n;
@@ -263,7 +272,7 @@
               <Icon name="ticket" size={18} color="var(--df-accent)" /><span style="font-size:14px; font-weight:700;">免費試上預約單</span><span style="margin-left:auto; font-size:11.5px; opacity:0.7; font-family:var(--df-font-mono);">{ticket}</span>
             </div>
             <div style="padding:4px 16px;">
-              {#each [['graduation-cap', '課程類別', cat], ['calendar-days', '試上時段', (chosenDay?.full || '') + ' ' + (chosenSlot?.time || '')], ['map-pin', '地點', (chosenSlot?.room || '') + ' · Dream Fly 夢飛體操館'], ['user-round', '授課教練', (chosenSlot?.coach || '') + ' 教練'], ['baby', '學員', student + ' · ' + age]] as [ic, k, v], i (k)}
+              {#each ticketRows as [ic, k, v], i (k)}
                 <div style="display:flex; align-items:center; gap:11px; padding:12px 0; border-top:{i ? '1px solid var(--df-border)' : 'none'};">
                   <Icon name={ic} size={17} color="var(--df-primary)" />
                   <span style="font-size:13px; color:var(--df-text-light); width:64px; flex:none;">{k}</span>

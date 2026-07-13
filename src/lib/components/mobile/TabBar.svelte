@@ -1,8 +1,9 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let tabs: { id: string; label: string; icon: string }[];
+  export let tabs: { id: string; label: string; icon: IconName }[];
   export let hrefFor: (id: string) => string;
   export let isActive: (href: string, path: string) => boolean;
   export let badges: Record<string, number> = {};

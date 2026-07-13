@@ -1,8 +1,9 @@
 <script lang="ts">
   /* 空狀態。ported from ui.jsx MEmpty。slot `action` 取代 React `action` prop。 */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon = 'inbox';
+  export let icon: IconName = 'inbox';
   export let title: string;
   export let body = '';
   export let pad = '46px 24px';

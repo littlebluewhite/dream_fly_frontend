@@ -35,6 +35,7 @@
   import { buildCourseBody } from '$lib/admin/components/course-request';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { apiErrorText } from '$lib/api/error-text';
+  import type { IconName } from '$lib/icon-registry';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -94,6 +95,16 @@
   // ClassRow 結構相同;上方 cats chips 字面量保留——桌面 CATS 不含「全部」且順序相異,
   // 非同一份 render 資料)。
   $: list = filterClasses($classes, { cat, query: q });
+
+  // 班級卡片的三顆 icon meta rows(教練/日期時段/教室)——原模板內聯 each 陣列
+  // hoist 為純函式並標型別(依 k 逐卡片而異，不是單一靜態陣列)。
+  function classMetaRows(k: ClassRow): [IconName, string][] {
+    return [
+      ['user', k.coach + ' 教練'],
+      ['calendar-days', k.day + ' · ' + k.time],
+      ['map-pin', k.room]
+    ];
+  }
 </script>
 
 <LoadGate {gate}>
@@ -135,7 +146,7 @@
               </div>
               <div style="font-size:16.5px; font-weight:700; color:var(--df-ink); font-family:var(--df-font-heading);">{k.name}</div>
               <div style="display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:9px;">
-                {#each [['user', k.coach + ' 教練'], ['calendar-days', k.day + ' · ' + k.time], ['map-pin', k.room]] as [ic, txt] (txt)}
+                {#each classMetaRows(k) as [ic, txt] (txt)}
                   <span style="display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--df-text-light);">
                     <Icon name={ic} size={13} color="var(--df-text-muted)" />{txt}
                   </span>

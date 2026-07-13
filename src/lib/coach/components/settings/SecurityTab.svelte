@@ -10,6 +10,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachSettingRow from '$lib/coach/components/CoachSettingRow.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let coach: Coach;
 
@@ -56,7 +57,7 @@
   }
 
   // Login devices (mock)
-  const DEVICES = [
+  const DEVICES: { id: string; name: string; icon: IconName; location: string; time: string; current: boolean }[] = [
     { id: 'd1', name: 'MacBook Pro 14"', icon: 'monitor', location: '台北市', time: '目前使用中', current: true },
     { id: 'd2', name: 'iPhone 15 Pro',   icon: 'smartphone', location: '台北市', time: '昨天 20:14', current: false },
     { id: 'd3', name: 'iPad Air',         icon: 'tablet',    location: '台北市', time: '2 天前',     current: false }

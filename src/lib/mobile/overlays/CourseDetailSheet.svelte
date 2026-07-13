@@ -11,6 +11,7 @@
   import { cart, toasts } from '$lib/mobile/stores';
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
   import { fmtNT, type Course } from '$lib/mobile/data';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;
   export let course: Course | null = null;
@@ -24,7 +25,7 @@
         ['cake', '適合年齡', c.age],
         ['layers', '課程類別', c.cat],
         ['bar-chart-3', '程度', c.level]
-      ] as [string, string, string][])
+      ] as [IconName, string, string][])
     : [];
 
   async function add() {

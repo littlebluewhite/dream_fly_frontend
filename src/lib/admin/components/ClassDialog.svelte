@@ -10,6 +10,7 @@
   import StatusBadge from './StatusBadge.svelte';
   import { fmtNT } from '$lib/admin/format';
   import type { ClassRow } from '$lib/admin/data';
+  import type { IconName } from '$lib/icon-registry';
 
   export let klass: ClassRow | null = null;
   export let onClose: () => void = () => {};
@@ -33,7 +34,7 @@
         ['user-plus', '候補人數', klass.wait + ' 人'],
         ['history', '補課名額', klass.makeup + ' 位'],
         ['circle-dollar-sign', '季費', fmtNT(klass.price)]
-      ] as [string, string, string][])
+      ] as [IconName, string, string][])
     : [];
 </script>
 

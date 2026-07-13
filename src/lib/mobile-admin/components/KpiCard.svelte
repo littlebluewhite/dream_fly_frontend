@@ -1,8 +1,9 @@
 <script lang="ts">
   /* KPI 統計卡（2-up grid）。ui.jsx KpiCard (206-217)。 */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon: string;
+  export let icon: IconName;
   export let label: string;
   export let value: string | number;
   export let delta = '';

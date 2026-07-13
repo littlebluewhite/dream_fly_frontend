@@ -10,6 +10,7 @@
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, saveBirthDate, type AccountData, type AccountProfile } from '$lib/member/api';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: AccountData | null = null;
   let profile: AccountProfile | null = null;
@@ -27,7 +28,7 @@
     ['phone', profile.phone],
     ['mail', profile.email],
     ['users', profile.guardian]
-  ] as [string, string][] : [];
+  ] as [IconName, string][] : [];
 
   // 儲存個人資料（Round 4 Task P4-F4）——目前只有「生日」真的寫回後端（PATCH
   // /users/me），其餘欄位（姓名/電話/家長聯絡人/通知偏好）維持既有的本地端編輯、

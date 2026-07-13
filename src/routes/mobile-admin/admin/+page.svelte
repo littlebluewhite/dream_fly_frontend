@@ -25,6 +25,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
+  import type { IconName } from '$lib/icon-registry';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -60,7 +61,7 @@
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
   }
 
-  const actions: [string, string, () => void][] = [
+  const actions: [IconName, string, () => void][] = [
     ['plus', '新增課程', () => { go('classes'); toasts.notify('info', '新增課程', '已開啟新班級建立精靈。'); }],
     ['user-plus', '新增學員', () => overlay.sheet('memberForm', { m: null, onSave: (body: CreateMemberBody) => quickCreateMember(body) })],
     ['download', '匯出報表', () => toasts.notify('info', '報表匯出中', '本月營運報表將寄送至您的信箱。')]

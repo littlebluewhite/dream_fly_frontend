@@ -11,6 +11,7 @@
   import { fmtNT } from '$lib/admin/format';
   import { toasts as toastStore } from '$lib/admin/stores';
   import type { ClassRow } from '$lib/admin/data';
+  import type { IconName } from '$lib/icon-registry';
 
   export let k: ClassRow;
   export let onEdit: () => void = () => {};
@@ -24,7 +25,7 @@
     ['user', k.coach + ' 教練'],
     ['calendar-days', k.day + ' · ' + k.time],
     ['map-pin', k.room + ' · ' + k.age]
-  ] as [string, string][];
+  ] as [IconName, string][];
 
   function roster() {
     toastStore.notify('info', k.name, '顯示班級學員名單（' + k.enrolled + ' 人）。');

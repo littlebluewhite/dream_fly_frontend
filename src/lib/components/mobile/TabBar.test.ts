@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { readable } from 'svelte/store';
 import TabBar from './TabBar.svelte';
+import type { IconName } from '$lib/icon-registry';
 
 // Shell reads $page.url.pathname for active state. Stub to /mobile/courses.
 vi.mock('$app/stores', () => ({
@@ -12,7 +13,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-const SAMPLE_TABS = [
+const SAMPLE_TABS: { id: string; label: string; icon: IconName }[] = [
 	{ id: 'home', label: '首頁', icon: 'house' },
 	{ id: 'courses', label: '課程', icon: 'graduation-cap' },
 	{ id: 'mine', label: '我的課程', icon: 'calendar-check' }

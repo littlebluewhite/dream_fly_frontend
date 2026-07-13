@@ -4,12 +4,13 @@
    * right-hand icon tile. */
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let label: string;
   export let value: string | number;
   export let sub = '';
   export let subTone = 'var(--df-primary)';
-  export let icon = '';
+  export let icon: IconName | undefined = undefined;
   export let iconColor = 'var(--df-primary)';
 </script>
 

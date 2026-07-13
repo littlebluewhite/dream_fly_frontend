@@ -44,7 +44,7 @@ const noNaN = (container: HTMLElement) => expect(container.innerHTML).not.toCont
 
 describe('ReportKpi (KPI card)', () => {
 	const base = {
-		icon: 'dollar-sign',
+		icon: 'dollar-sign' as const,
 		label: '本月營收',
 		value: 'NT$458,200',
 		tint: '#0066CC14',

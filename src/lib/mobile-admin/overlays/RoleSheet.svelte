@@ -5,12 +5,13 @@
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import { PROFILES } from '$lib/mobile-admin/data';
   import type { Role } from '$lib/mobile-admin/nav';
+  import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;
   export let role: Role;
   export let setRole: (r: Role) => void;
 
-  const opts = [
+  const opts: { id: Role; icon: IconName; label: string; desc: string; tone: string }[] = [
     { id: 'admin' as Role, icon: 'shield-check', label: '管理後台', desc: PROFILES.admin.name + ' · ' + PROFILES.admin.role, tone: 'var(--df-primary)' },
     { id: 'coach' as Role, icon: 'graduation-cap', label: '教練工作台', desc: PROFILES.coach.name + ' · ' + PROFILES.coach.role, tone: 'var(--df-accent-dark)' }
   ];

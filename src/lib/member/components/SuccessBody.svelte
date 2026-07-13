@@ -2,7 +2,8 @@
   /* Centered success confirmation (round green check bubble + title + body).
    * Used inside dialogs after a successful action. */
   import Icon from '$lib/components/ui/Icon.svelte';
-  export let icon = 'check';
+  import type { IconName } from '$lib/icon-registry';
+  export let icon: IconName = 'check';
   export let title = '';
   export let body = '';
 </script>

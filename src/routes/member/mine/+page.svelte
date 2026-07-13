@@ -30,6 +30,7 @@
   } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getMine, getEnrolmentAttendance, type MineData } from '$lib/member/api';
+  import type { IconName } from '$lib/icon-registry';
 
   let active: string | null = null;
   let dialog: 'leave' | 'contact' | null = null;
@@ -109,7 +110,7 @@
     { icon: 'calendar-check', value: cur.att + '%', label: '出席率' },
     { icon: 'calendar-clock', value: cur.next, label: '下一堂' },
     { icon: 'hourglass', value: cur.remain + ' 堂', label: '剩餘堂數' }
-  ] : [];
+  ] as { icon: IconName; value: string; label: string }[] : [];
 </script>
 
 <LoadGate {gate}>

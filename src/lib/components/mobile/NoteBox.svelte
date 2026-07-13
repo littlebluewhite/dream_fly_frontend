@@ -1,8 +1,9 @@
 <script lang="ts">
   /* 提示框（灰底）。ported from ui.jsx NoteBox。default slot = 內容。 */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon = 'info';
+  export let icon: IconName = 'info';
   export let tone = 'var(--df-primary)';
 </script>
 

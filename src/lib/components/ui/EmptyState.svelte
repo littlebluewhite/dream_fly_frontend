@@ -2,7 +2,8 @@
   /* Empty-state block — icon bubble, title, optional body, optional `action`
    * slot (e.g. a button). */
   import Icon from '$lib/components/ui/Icon.svelte';
-  export let icon = 'info';
+  import type { IconName } from '$lib/icon-registry';
+  export let icon: IconName = 'info';
   export let title = '';
   export let body = '';
   export let pad = '56px 24px';

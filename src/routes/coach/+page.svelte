@@ -22,6 +22,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Checkbox from '$lib/components/ui/Checkbox.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: CoachDashboardData | null = null;
   let errorTitle = '載入失敗';
@@ -117,7 +118,7 @@
   /* ── KPI data (今日課程 由 todayClasses 衍生;其餘 3 欄原為頁面硬編字串,現讀
    * getDashboard() payload) ──────────────────────────────────────────── */
   $: kpis = data
-    ? [
+    ? ([
         {
           label: '今日課程',
           value: `${todayClasses.length} 堂`,
@@ -150,7 +151,7 @@
           icon: 'message-circle',
           iconColor: 'var(--df-error)'
         }
-      ]
+      ] as { label: string; value: string | number; sub: string; subTone: string; icon: IconName; iconColor: string }[])
     : [];
 
   /* ── todo checklist ───────────────────────────────────────────────── */

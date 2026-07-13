@@ -1,10 +1,11 @@
 <script lang="ts">
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
   export let src: string;
   export let alt: string;
   export let variant: 'hero' | 'gallery' = 'gallery';
-  export let icon = 'image';
+  export let icon: IconName = 'image';
   export let showCaption = true;
 
   function isPlaceholder(u: string): boolean {

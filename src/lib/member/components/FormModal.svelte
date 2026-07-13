@@ -4,10 +4,11 @@
    * slot) and an optional footer slot. Ported from the prototype's FormModal
    * (client/components.jsx). Overlay click and Escape both call onClose. */
   import { IconButton, Icon } from '$lib/components/ui';
+  import type { IconName } from '$lib/icon-registry';
 
   export let open = false;
   export let onClose: () => void = () => {};
-  export let icon: string | undefined = undefined;
+  export let icon: IconName | undefined = undefined;
   export let color = 'var(--df-primary)';
   export let title = '';
   export let subtitle = '';

@@ -38,6 +38,7 @@
   import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import { toasts, search } from '$lib/coach/stores';
+  import type { IconName } from '$lib/icon-registry';
 
   /* ── state (legacy, no runes) ── */
   let convos: Conversation[] = [];
@@ -96,6 +97,9 @@
     { k: '未讀', label: '未讀' },
     { k: '家長', label: '家長' },
   ];
+
+  // thread header 三顆動作 icon——原模板內聯 each 陣列 hoist 至此並標型別。
+  const threadActionIcons: IconName[] = ['phone', 'video', 'more-horizontal'];
 
   $: list = filterConversations(convos, { tab, query: $search });
 
@@ -240,7 +244,7 @@
           <div style="font-size:15.5px;font-weight:700;color:var(--df-ink)">{cur.name}</div>
           <div style="font-size:12.5px;color:var(--df-text-light)">{cur.kind}</div>
         </div>
-        {#each ['phone', 'video', 'more-horizontal'] as ic}
+        {#each threadActionIcons as ic}
           <button
             on:click={() => toasts.notify('info', ic === 'phone' ? '語音通話' : ic === 'video' ? '視訊通話' : '更多', ic === 'more-horizontal' ? '更多對話選項。' : '此原型不含通話功能。')}
             aria-label={ic}

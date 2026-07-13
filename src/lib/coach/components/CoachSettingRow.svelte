@@ -3,8 +3,9 @@
    * Props: icon (kebab name), title, desc.
    * Trailing slot is for a Switch or other control. */
   import Icon from '$lib/components/ui/Icon.svelte';
+  import type { IconName } from '$lib/icon-registry';
 
-  export let icon = '';
+  export let icon: IconName;
   export let title = '';
   export let desc = '';
 </script>

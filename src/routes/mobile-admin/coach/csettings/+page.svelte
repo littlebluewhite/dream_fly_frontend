@@ -31,6 +31,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getCsettings, saveSettings, CoachNotFoundError, type CsettingsData } from '$lib/mobile-admin/api';
   import { authStore } from '$lib/stores/authStore';
+  import type { IconName } from '$lib/icon-registry';
 
   let data: CsettingsData | null = null;
   let errorTitle = '載入失敗';
@@ -78,13 +79,13 @@
   let twoFA = true;
   let pwOpen = false;
 
-  const LOGINS = [
+  const LOGINS: { icon: IconName; device: string; place: string; time: string; now: boolean }[] = [
     { icon: 'smartphone', device: 'iPhone · Dream Fly App', place: '台中 · 行動網路', time: '目前使用中', now: true },
     { icon: 'monitor', device: 'MacBook · Chrome', place: '台中 · 場館', time: '今天 08:14', now: false },
     { icon: 'tablet', device: 'iPad · Safari', place: '台中 · 場館 Wi-Fi', time: '昨天 19:32', now: false }
   ];
   // alarm-clock → clock（registry 未含 alarm-clock）
-  const notifRows: [keyof typeof notif, string, string, string][] = [
+  const notifRows: [keyof typeof notif, IconName, string, string][] = [
     ['parentMsg', 'message-circle', '家長訊息通知', '有家長傳送新訊息時即時通知'],
     ['classRemind', 'clock', '課前提醒', '上課前 30 分鐘提醒準備與點名'],
     ['attUndone', 'calendar-check', '點名未完成提醒', '課後尚未點名於 30 分鐘後提醒'],
