@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 預約免費試上 push screen。trial.jsx TrialScreen (29)。
    * 4 步 stepper：0 課程+年齡 → 1 日期+時段 → 2 聯絡資料 → 3 完成（SuccessBody + 預約單）。
-   * 逐步驗證委派給 trialValidation.stepValid（已測試）。
+   * 逐步驗證與送出 body 組裝委派給 trialValidation 的 stepValid / buildTrialInquiry（皆已測試）。
    * Task F8：送出改打真 $lib/mobile/api submitTrialInquiry()（POST /contact,
    * inquiry_type='trial'，§3.17）——成功才前進 step 3 + toasts.notify('accent', …)，
    * 失敗停留本步驟並 toasts.notify('error', …)，按鈕於 finally 解除 submitting
@@ -18,7 +18,7 @@
   import { toasts, profile } from '$lib/mobile/stores';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
-  import { stepValid } from './trialValidation';
+  import { stepValid, buildTrialInquiry } from './trialValidation';
 
   export let onBack: () => void;
 
@@ -81,16 +81,7 @@
     if (!stepValid(2, state) || submitting) return;
     submitting = true;
     try {
-      await submitTrialInquiry({
-        category: cat,
-        studentAge: age,
-        preferredDay: chosenDay?.full ?? day,
-        preferredSlot: chosenSlot?.time ?? slot,
-        parentName: parent,
-        parentPhone: phone,
-        studentName: student,
-        note
-      });
+      await submitTrialInquiry(buildTrialInquiry(state, note, { days: TRIAL_DAYS, slots: TRIAL_SLOTS }));
       goStep(3);
       toasts.notify('accent', '試上預約已送出', (chosenDay?.full || '') + ' ' + (chosenSlot?.time || ''));
     } catch (err) {

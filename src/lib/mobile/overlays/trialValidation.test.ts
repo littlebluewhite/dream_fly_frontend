@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stepValid, TW_PHONE, type TrialState } from './trialValidation';
+import { stepValid, TW_PHONE, buildTrialInquiry, type TrialState } from './trialValidation';
 
 const base: TrialState = { cat: '', age: '', day: '', slot: '', parent: '', phone: '', student: '' };
 
@@ -51,5 +51,41 @@ describe('TW_PHONE', () => {
 describe('stepValid step 3 (完成)', () => {
 	it('is always open (no gate on the success step)', () => {
 		expect(stepValid(3, base)).toBe(true);
+	});
+});
+
+describe('buildTrialInquiry', () => {
+	const filled: TrialState = { cat: '幼兒體操', age: '3–5 歲', day: '06/14', slot: 't1', parent: '王先生', phone: '0912-345-678', student: '小恩' };
+	const lookup = {
+		days: [{ d: '06/14', full: '2026/06/14 (六)' }],
+		slots: [{ id: 't1', time: '10:00–11:15' }]
+	};
+
+	it('assembles the 8-field submitTrialInquiry body, resolving day/slot lookup hits to full/time', () => {
+		expect(buildTrialInquiry(filled, '曾學過舞蹈', lookup)).toEqual({
+			category: '幼兒體操',
+			studentAge: '3–5 歲',
+			preferredDay: '2026/06/14 (六)',
+			preferredSlot: '10:00–11:15',
+			parentName: '王先生',
+			parentPhone: '0912-345-678',
+			studentName: '小恩',
+			note: '曾學過舞蹈'
+		});
+	});
+
+	it('falls back to the raw day string when the day lookup misses', () => {
+		const result = buildTrialInquiry({ ...filled, day: '99/99' }, '', lookup);
+		expect(result.preferredDay).toBe('99/99');
+	});
+
+	it('falls back to the raw slot string when the slot lookup misses', () => {
+		const result = buildTrialInquiry({ ...filled, slot: 'unknown' }, '', lookup);
+		expect(result.preferredSlot).toBe('unknown');
+	});
+
+	it('passes an empty note through unchanged (not undefined/null)', () => {
+		const result = buildTrialInquiry(filled, '', lookup);
+		expect(result.note).toBe('');
 	});
 });

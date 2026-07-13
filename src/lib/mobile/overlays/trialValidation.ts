@@ -3,6 +3,8 @@
  * `stepValid(n, state)` returns whether step n's "下一步 / 送出" should enable.
  * Mock-only, no backend. */
 
+import type { TrialInquiryInput } from '$lib/mobile/api';
+
 export interface TrialState {
   cat: string;
   age: string;
@@ -23,4 +25,41 @@ export function stepValid(step: number, s: TrialState): boolean {
   if (step === 1) return Boolean(s.day && s.slot);
   if (step === 2) return Boolean(s.parent.trim() && TW_PHONE.test(s.phone.trim()) && s.student.trim());
   return true;
+}
+
+/** Minimal day-option shape needed below — TrialScreen's TRIAL_DAYS entries
+ *  (which carry extra fields) are structurally compatible, no cast needed. */
+export interface TrialDayOption {
+  d: string;
+  full: string;
+}
+
+/** Minimal slot-option shape needed below — TrialScreen's TRIAL_SLOTS entries
+ *  are structurally compatible, no cast needed. */
+export interface TrialSlotOption {
+  id: string;
+  time: string;
+}
+
+/** Assembles the 8-field submitTrialInquiry body (moved verbatim from TrialScreen
+ *  submit()). A day/slot lookup hit sends the display string (`full` / `time`); a
+ *  miss falls back to the raw selected value — the original `??` sentinel behaviour,
+ *  kept as-is. `note` passes through unchanged (an empty string stays ''). */
+export function buildTrialInquiry(
+  s: TrialState,
+  note: string,
+  lookup: { days: readonly TrialDayOption[]; slots: readonly TrialSlotOption[] }
+): TrialInquiryInput {
+  const chosenDay = lookup.days.find((d) => d.d === s.day);
+  const chosenSlot = lookup.slots.find((sl) => sl.id === s.slot);
+  return {
+    category: s.cat,
+    studentAge: s.age,
+    preferredDay: chosenDay?.full ?? s.day,
+    preferredSlot: chosenSlot?.time ?? s.slot,
+    parentName: s.parent,
+    parentPhone: s.phone,
+    studentName: s.student,
+    note
+  };
 }
