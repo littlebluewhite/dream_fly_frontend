@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import VenuesPage from './+page.svelte';
-import { VENUES } from '$lib/admin/data';
+import { VENUES } from '$lib/domain/venues';
 import { getVenues, createVenue, updateVenue } from '$lib/admin/api';
 import { toasts } from '$lib/admin/stores';
 import { ApiError } from '$lib/api/client';

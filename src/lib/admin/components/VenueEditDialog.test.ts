@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import VenueEditDialog from './VenueEditDialog.svelte';
-import { VENUES, type Venue } from '$lib/admin/data';
+import { VENUES } from '$lib/domain/venues';
+import type { Venue } from '$lib/admin/data';
 
 /* VenueEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog / CoachEditDialog). Holds a local copy of the venue; 儲存 fires

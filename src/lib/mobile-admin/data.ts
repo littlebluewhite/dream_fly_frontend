@@ -8,8 +8,6 @@
 export type Tone = [string, string];
 
 export const fmtNT = (n: number): string => 'NT$' + n.toLocaleString('en-US');
-export const fmtK = (n: number): string =>
-	n >= 1000 ? 'NT$' + (n / 1000).toFixed(n % 1000 === 0 ? 0 : 1) + 'K' : 'NT$' + n;
 
 /* ---- single-source domain seed ----
  * The ops-pair shared seed (coaches / classes / members / orders + venues /

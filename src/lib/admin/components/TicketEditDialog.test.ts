@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import TicketEditDialog from './TicketEditDialog.svelte';
-import { TICKETS, type Ticket } from '$lib/admin/data';
+import { TICKETS } from '$lib/domain/tickets';
+import type { Ticket } from '$lib/admin/data';
 
 /* TicketEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog). Holds a local copy of the ticket; 儲存 fires onSave(updated)

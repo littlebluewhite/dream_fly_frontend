@@ -3,8 +3,6 @@ import { get } from 'svelte/store';
 import { createReadState } from '$lib/stores/read-state';
 import {
 	createOverlay,
-	upsertById,
-	nextId,
 	adminUnread,
 	role,
 	overlay,
@@ -71,27 +69,6 @@ describe('createReadState (adminNotifs/coachNotifs 的底層 factory)', () => {
 		n.markAllRead();
 		expect(adminUnread(get(n))).toBe(0);
 		expect(seed.filter((x) => !x.read)).toHaveLength(2);
-	});
-});
-
-describe('upsertById', () => {
-	it('replaces an existing record in place by id', () => {
-		const list = [{ id: '1', v: 'a' }, { id: '2', v: 'b' }];
-		expect(upsertById(list, { id: '2', v: 'B' })).toEqual([{ id: '1', v: 'a' }, { id: '2', v: 'B' }]);
-	});
-	it('prepends a brand-new record', () => {
-		const list = [{ id: '1', v: 'a' }];
-		expect(upsertById(list, { id: '9', v: 'z' })).toEqual([{ id: '9', v: 'z' }, { id: '1', v: 'a' }]);
-	});
-});
-
-describe('nextId', () => {
-	it('builds the next id from a prefix + (count + 1)', () => {
-		expect(nextId('k', [{}, {}])).toBe('k3');
-		expect(nextId('c', [{}])).toBe('c2');
-	});
-	it('zero-pads to a fixed width when asked (member ids)', () => {
-		expect(nextId('GY2026', [{}, {}], 3)).toBe('GY2026003');
 	});
 });
 

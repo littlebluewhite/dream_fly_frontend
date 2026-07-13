@@ -1,10 +1,10 @@
 /**
  * Convert a timestamp to a relative time string in Chinese
  * @param timestamp ISO timestamp string
+ * @param now 比較基準時間(seam,預設 new Date())——測試可注入固定時間,避免依賴真實時鐘
  * @returns Chinese relative time string
  */
-export function getRelativeTime(timestamp: string): string {
-  const now = new Date();
+export function getRelativeTime(timestamp: string, now: Date = new Date()): string {
   const past = new Date(timestamp);
   const diffMs = now.getTime() - past.getTime();
 

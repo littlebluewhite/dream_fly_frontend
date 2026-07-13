@@ -150,38 +150,27 @@ describe('getAccount — 復用桌面 getAccount().orders', () => {
 	});
 });
 
-describe('getNotifications — 復用桌面 getNotifications()，零映射', () => {
-	it('直接透傳', async () => {
-		const fixture = [{ id: 'n1', cat: 'system' as const, icon: 'bell' as const, tone: 'info' as const, title: 't', body: 'b', time: '剛剛', read: false }];
-		vi.mocked(memberGetNotifications).mockResolvedValue(fixture);
-		expect(await getNotifications()).toBe(fixture);
-	});
-});
+describe('getNotifications / getSchedule / getPoints / getReports — surface 邊界契約(純 identity 委派，零映射)', () => {
+	it('四支皆直接透傳桌面 seam 的解析結果(toBe 比 toEqual 更強：reference 相等即委派證明)', async () => {
+		const notificationsFixture = [{ id: 'n1', cat: 'system' as const, icon: 'bell' as const, tone: 'info' as const, title: 't', body: 'b', time: '剛剛', read: false }];
+		vi.mocked(memberGetNotifications).mockResolvedValue(notificationsFixture);
+		expect(await getNotifications()).toBe(notificationsFixture);
 
-describe('getSchedule — 復用桌面 getSchedule()，零映射(Task 9 週課表 seam)', () => {
-	it('直接透傳桌面回應', async () => {
-		expect(await getSchedule()).toEqual({ schedule: SCHEDULE_FIXTURE });
-		expect(memberGetSchedule).toHaveBeenCalled();
-	});
-});
+		const scheduleFixture = { schedule: SCHEDULE_FIXTURE };
+		vi.mocked(memberGetSchedule).mockResolvedValue(scheduleFixture);
+		expect(await getSchedule()).toBe(scheduleFixture);
 
-describe('getPoints — 復用桌面 getPoints()，零映射(Task 14 rewards seam)', () => {
-	it('直接透傳桌面回應(rewards/expiring/expiryDate)', async () => {
-		const fixture = { rewards: [{ id: 'r1', name: '毛巾', description: null, pointsCost: 300, stock: 5 }], expiring: '360 點', expiryDate: '2026/12/31' };
-		vi.mocked(memberGetPoints).mockResolvedValue(fixture);
-		expect(await getPoints()).toBe(fixture);
-	});
-});
+		const pointsFixture = { rewards: [{ id: 'r1', name: '毛巾', description: null, pointsCost: 300, stock: 5 }], expiring: '360 點', expiryDate: '2026/12/31' };
+		vi.mocked(memberGetPoints).mockResolvedValue(pointsFixture);
+		expect(await getPoints()).toBe(pointsFixture);
 
-describe('getReports — 復用桌面 getReports()，零映射(Task 13 seam)', () => {
-	it('直接透傳桌面回應(reportCards/certificates/stats)', async () => {
-		const fixture = {
+		const reportsFixture = {
 			reportCards: [{ id: 'r1', courseName: '課程', termLabel: '2026 春季', comment: '很好', rating: 5, issuerName: '教練', createdAt: '2026-01-01' }],
 			certificates: [],
 			stats: { attendedTotal: 10, attendanceRate: 90, pointsBalance: 500, activeEnrolments: 2, upcomingSessions7d: 1 }
 		};
-		vi.mocked(memberGetReports).mockResolvedValue(fixture);
-		expect(await getReports()).toBe(fixture);
+		vi.mocked(memberGetReports).mockResolvedValue(reportsFixture);
+		expect(await getReports()).toBe(reportsFixture);
 	});
 });
 

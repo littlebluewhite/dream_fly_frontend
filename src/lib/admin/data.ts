@@ -28,8 +28,9 @@ export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
  * is exactly one copy of every value. Admin's public API is unchanged. */
 
 // Pure pass-throughs (no local use) — re-export domain's value + type verbatim.
-// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
-export { COACHES, type Coach } from '$lib/domain/coaches';
+// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,coaches 頁接真後端後值消費者萎縮至僅
+// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
+export type { Coach } from '$lib/domain/coaches';
 
 /** CoachEditDialog（新增/編輯共用一個對話框，Task F5）的 onSave 輸出形狀——UI 端草稿,
  *  不是 wire body。呼叫端(routes/admin/coaches/+page.svelte)依新增/編輯模式，各自把
@@ -45,10 +46,12 @@ export interface CoachFormValues {
 	tags: string[];
 	isActive: boolean;
 }
-// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
-export { VENUES, type Venue } from '$lib/domain/venues';
-// TEST-FIXTURE ONLY(無 runtime 消費者)——僅供測試 fixture 使用,勿在頁面/元件 import
-export { TICKETS, type Ticket } from '$lib/domain/tickets';
+// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,venues 頁接真後端後值消費者萎縮至僅
+// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
+export type { Venue } from '$lib/domain/venues';
+// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,tickets 頁接真後端後值消費者萎縮至僅
+// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
+export type { Ticket } from '$lib/domain/tickets';
 // Task F11：ACTIVITY live-mock 退役(唯一消費者 ActivityPanel 改吃 props；真資料見
 // admin/api.ts 的 getRecentActivity()，對應 GET /reports/admin/activity，integration-
 // contract.md §3.24)。型別仍為 ActivityPanel props 的形狀來源，保留 re-export。
@@ -232,8 +235,9 @@ export interface TodayClass {
 // 型別可讓真資料的 3 態直接指派、不需額外 cast。
 
 /* ───────────────────────── activity / venues / tickets ─────────────────────────
- * `COACHES`, `VENUES`, `TICKETS` are re-exported from `$lib/domain` at the top
- * (`Activity` type only — see Task F11 note above). */
+ * `Activity`/`Coach`/`Venue`/`Ticket` 皆為 type-only re-export(值定義已全數退役——
+ * Activity 見 Task F11 note above,Coach/Venue/Ticket 見各自 export type 行旁的
+ * ADR 0010 §4 漂移註記)。 */
 
 /* ═════════════════════════ 報表分析 ═════════════════════════
  * Task 15: getReports() now maps real GET /reports/admin data (revenue/members/

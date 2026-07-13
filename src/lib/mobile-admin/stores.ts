@@ -51,16 +51,6 @@ export const adminNotifs = createReadState<AdminNotif>(ADMIN_NOTIFS);
 export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 
 /* ---------- Live collections (新增 / 編輯 表單寫回) ---------- */
-/** Replace a record by id, or prepend it when the id is new (app.jsx save*). */
-export function upsertById<T extends { id: string | number }>(list: T[], rec: T): T[] {
-	return list.some((x) => x.id === rec.id) ? list.map((x) => (x.id === rec.id ? rec : x)) : [rec, ...list];
-}
-/** Next sequential id: `${prefix}${count + 1}`, optionally zero-padded to `pad`. */
-export function nextId(prefix: string, list: unknown[], pad = 0): string {
-	const n = String(list.length + 1);
-	return prefix + (pad ? n.padStart(pad, '0') : n);
-}
-
 export const members = writable<MemberRow[]>(MEMBERS);
 export const classes = writable<ClassRow[]>(CLASSES);
 // saveMember/saveClass/saveCoach 的本地寫入版本已分別隨 Task 20（courses/users）與
