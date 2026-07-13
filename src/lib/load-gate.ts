@@ -89,8 +89,14 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	/** load() 成功後套用資料:hydrate 選項下需重查旗標——in-flight 期間旗標被翻
 	 *  true(mutation 發生)代表 mutation 勝出,放棄套用、不覆寫共享 store(phase 仍
 	 *  會在 run() 收斂為 ready,資料已經在 store 裡);未帶 hydrate 時退回既有
-	 *  onData 語意。 */
-	function applyLoaded(data: T): void {
+	 *  onData 語意。
+	 *
+	 *  F1(codex B0 r1):into() 通常寫共享 writable,其 subscriber 可能同步重入
+	 *  gate.load()(generation++、發第二次 fetch)。into() 返回後、flag.set(true) 之前
+	 *  重查 generation——不符(或已 destroy)代表已被重入的新一輪取代,直接 return、
+	 *  不翻旗(翻旗交給新一輪自己的 applyLoaded 呼叫);否則舊一輪的翻旗會讓新一輪的
+	 *  回應在自己的旗標重查時誤判 mutation 勝出,把真正的新資料丟棄。 */
+	function applyLoaded(data: T, gen: number): void {
 		const hydrate = options.hydrate;
 		if (!hydrate) {
 			options.onData?.(data);
@@ -98,6 +104,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		}
 		if (get(hydrate.flag)) return; // mutation 勝出,不覆寫、不翻旗
 		hydrate.into(data);
+		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
 		hydrate.flag.set(true);
 	}
 
@@ -113,13 +120,19 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		hydrate.flag.set(true);
 	}
 
-	async function run(fetcher: () => Promise<T>, apply: (data: T) => void): Promise<void> {
+	async function run(
+		fetcher: () => Promise<T>,
+		apply: (data: T, gen: number) => void
+	): Promise<void> {
 		const gen = ++generation;
 		setPhase('loading');
 		try {
 			const data = await fetcher();
 			if (destroyed || gen !== generation) return; // 過期或已卸載,忽略
-			apply(data);
+			apply(data, gen);
+			// F1(codex B0 r1):apply()(hydrate 的 into())可能同步重入 load(),推進
+			// generation——此時 phase 收斂的主導權已經交給新一輪,舊一輪不得再推 phase。
+			if (destroyed || gen !== generation) return;
 			setPhase('ready');
 		} catch (e) {
 			if (destroyed || gen !== generation) return;

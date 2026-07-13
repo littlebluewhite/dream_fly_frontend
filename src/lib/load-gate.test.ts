@@ -310,6 +310,26 @@ describe('hydrate 選項', () => {
 		gate.destroy();
 	});
 
+	/* F2(codex B0 r1):上面這條測試旗標從 true 開始,砍掉 applyRefreshed 的
+	 * flag.set(true) 不會被它發現(true 砍成 true 還是 true)。這裡補從 false 出發的
+	 * 版本,把「完成後旗標為 true」這個轉移本身釘住。 */
+	it('refresh() 從旗標 false 出發:套用 into 後翻為 true(即使從未呼叫過 load())', async () => {
+		const flag = writable(false);
+		const data = { v: 3 };
+		const fetch = vi.fn(async () => data);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		await gate.refresh();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith(data);
+		expect(get(flag)).toBe(true); // false → true 的轉移才是這條測試要釘的行為
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
 	it('in-flight 翻旗競態釘:load() fetch 進行中(await 期間)旗標被翻 true → resolve 後不套 into(共享 store 不被覆寫)、但 phase 收斂 ready', async () => {
 		const flag = writable(false);
 		const d = createDeferred<{ v: number }>();
@@ -326,6 +346,51 @@ describe('hydrate 選項', () => {
 		expect(into).not.toHaveBeenCalled(); // mutation 勝出,不覆寫共享 store
 		expect(get(gate)).toBe('ready'); // 資料已在 store(mutation 寫的),仍要收斂離開骨架
 
+		gate.destroy();
+	});
+
+	/* F3(codex B0 r1):F1 修的是比上面「外部旗標被直接 set(true)」更深一層的競態——
+	 * into() 本身(它的 subscriber)同步重入 gate.load(),開出新一輪 generation。沒有
+	 * F1 的重查,舊一輪的 into() 之後會無條件翻旗,新一輪自己的 into() 就會被這個旗標
+	 * 擋下、真正的新資料永遠寫不進共享 store(最終停在 stale {v:1} 而非 {v:2})。 */
+	it('重入釘子:into() 的 subscriber 同步重入 load(),最終共享 store 是第二次(新 generation)的 payload、phase ready、flag true', async () => {
+		const flag = writable(false);
+		const sharedStore = writable<{ v: number } | null>(null);
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const into = (data: { v: number }) => sharedStore.set(data);
+
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		let reentrantLoad: Promise<void> | undefined;
+		let sawWrite = false;
+		const unsub = sharedStore.subscribe((val) => {
+			// subscribe() 當下會用初值(null)立即同步觸發一次,跳過;第一次真正寫入
+			// (into({v:1}))才同步重入 gate.load(),模擬共享 store 的訂閱者收到更新後
+			// 自己也要重新拉一次資料。
+			if (val !== null && !sawWrite) {
+				sawWrite = true;
+				reentrantLoad = gate.load();
+			}
+		});
+
+		const p1 = gate.load();
+		d1.resolve({ v: 1 });
+		await p1;
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 重入已經發出第二次 fetch
+		expect(get(flag)).toBe(false); // 舊一輪的 into() 之後不得翻旗(F1)
+		expect(get(gate)).toBe('loading'); // 舊一輪不得把 phase 推成 ready(F1)
+
+		d2.resolve({ v: 2 });
+		await reentrantLoad;
+
+		expect(get(sharedStore)).toEqual({ v: 2 }); // 是第二次(新 generation)的 payload,不是 stale {v:1}
+		expect(get(flag)).toBe(true);
+		expect(get(gate)).toBe('ready');
+
+		unsub();
 		gate.destroy();
 	});
 
@@ -361,6 +426,30 @@ describe('hydrate 選項', () => {
 		expect(into).toHaveBeenCalledTimes(2); // load() 一次 + silentRefresh 一次
 		expect(into).toHaveBeenLastCalledWith({ v: 2 });
 		expect(get(flag)).toBe(true);
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	/* F2(codex B0 r1):上面這條測試執行 silentRefresh() 當下,旗標已經被前面的
+	 * load() 翻成 true 了,砍掉 applyRefreshed 的 flag.set(true) 一樣不會被發現。這裡
+	 * 用 skip 讓 load() 短路到 ready、不去動旗標,乾淨地釘住 silentRefresh() 自己的
+	 * false → true 轉移。 */
+	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(skip 先讓 phase 到 ready,不動旗標)', async () => {
+		const flag = writable(false);
+		const data = { v: 5 };
+		const fetch = vi.fn(async () => data);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, skip: () => true, hydrate: { flag, into } });
+		await gate.load();
+		expect(get(gate)).toBe('ready');
+		expect(get(flag)).toBe(false); // skip 短路,旗標未被動過
+
+		await gate.silentRefresh();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith(data);
+		expect(get(flag)).toBe(true); // false → true 的轉移由 silentRefresh() 自己完成
 		expect(get(gate)).toBe('ready');
 
 		gate.destroy();
@@ -519,5 +608,19 @@ describe('createPagedLoadGate', () => {
 		expect(get(gate).page).toBe(2); // 沒有把事件物件寫進 page
 
 		gate.destroy();
+	});
+});
+
+// F4(codex B0 r1):onData 與 hydrate 型別層互斥(LoadGateOptions 的 discriminated
+// union)——同時提供兩者應為編譯期錯誤,靠下面的 @ts-expect-error 釘住;svelte-check
+// 若在它「沒有錯誤可壓」時報錯,即代表這條負向測試失敗(XOR 契約鬆綁了)。這條只驗證
+// 型別、不執行(it.skip)。
+it.skip('型別:onData 與 hydrate 不得同時提供', () => {
+	const flag = writable(false);
+	// @ts-expect-error onData 與 hydrate 互斥,見 LoadGateOptions 的 discriminated union
+	createLoadGate({
+		fetch: async () => ({ v: 1 }),
+		onData: () => {},
+		hydrate: { flag, into: () => {} }
 	});
 });
