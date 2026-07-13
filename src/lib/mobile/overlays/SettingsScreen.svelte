@@ -36,7 +36,7 @@
     { icon: 'hash', label: '會員編號', value: $profile.id },
     { icon: 'cake', label: '生日', value: $profile.birth },
     { icon: 'phone', label: '聯絡電話', value: $profile.phone, last: true }
-  ] as FieldRow[];
+  ] satisfies FieldRow[];
 
   const notifyRows: ToggleRow[] = [
     { icon: 'calendar-clock', label: '課程提醒', sub: '課前一日推播提醒', k: 'classReminder' },
