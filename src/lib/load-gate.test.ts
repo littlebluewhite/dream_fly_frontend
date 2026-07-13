@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { render } from '@testing-library/svelte';
 import {
 	createLoadGate,
@@ -246,6 +246,122 @@ describe('createLoadGate', () => {
 		expect(get(gate)).toBe('ready'); // 未被誤判為過期而 strand 在 loading
 		expect(onData).toHaveBeenCalledTimes(1);
 		expect(onData).toHaveBeenCalledWith({ v: 1 });
+
+		gate.destroy();
+	});
+});
+
+/* Task T1(B0/K2-a)：hydrate 選項——把兩個通知頁手焊的「skip 讀旗標 + onData 寫旗標」
+ * 4 行邏輯收進 load-gate 本身，成為型別層與 onData 互斥的獨立選項。語意仿
+ * $lib/hydration-gate 的 createHydrationGate（guard 短路 + post-await re-check +
+ * mutator 翻旗），差異只在 load() 的 in-flight 競態改由 flag 重查、且重查為 true 時
+ * phase 仍要收斂 ready（資料已經在 store 裡，不該卡在骨架）。 */
+describe('hydrate 選項', () => {
+	it('旗標已 true → load() 短路不發 fetch、phase 收斂 ready', async () => {
+		const flag = writable(true);
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		await gate.load();
+
+		expect(fetch).not.toHaveBeenCalled();
+		expect(into).not.toHaveBeenCalled();
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	it('旗標 false → load() 正常序:fetch → into(d) → 翻旗 → ready', async () => {
+		const flag = writable(false);
+		const data = { v: 1 };
+		const fetch = vi.fn(async () => data);
+		const into = vi.fn((d: typeof data) => {
+			expect(d).toEqual(data);
+			expect(get(flag)).toBe(false); // into 呼叫當下旗標還沒被翻
+			expect(get(gate)).toBe('loading'); // into 呼叫當下 phase 還沒變成 ready
+		});
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		await gate.load();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith(data);
+		expect(get(flag)).toBe(true); // into 之後才翻旗
+		expect(get(gate)).toBe('ready'); // 翻旗之後才收斂 ready
+
+		gate.destroy();
+	});
+
+	it('refresh() 無視旗標:旗標 true 仍發 fetch 並套用 into + 翻旗', async () => {
+		const flag = writable(true);
+		const data = { v: 2 };
+		const fetch = vi.fn(async () => data);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		await gate.refresh();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith(data);
+		expect(get(flag)).toBe(true);
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	it('in-flight 翻旗競態釘:load() fetch 進行中(await 期間)旗標被翻 true → resolve 後不套 into(共享 store 不被覆寫)、但 phase 收斂 ready', async () => {
+		const flag = writable(false);
+		const d = createDeferred<{ v: number }>();
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch: () => d.promise, hydrate: { flag, into } });
+
+		const loadPromise = gate.load();
+		expect(get(gate)).toBe('loading'); // in-flight,尚未收斂
+
+		flag.set(true); // in-flight 期間旗標被翻 true——模擬 mutator 直接對共用 writable set(true)
+		d.resolve({ v: 1 });
+		await loadPromise; // re-check 應放棄套用,promise 正常 resolve(不 reject)
+
+		expect(into).not.toHaveBeenCalled(); // mutation 勝出,不覆寫共享 store
+		expect(get(gate)).toBe('ready'); // 資料已在 store(mutation 寫的),仍要收斂離開骨架
+
+		gate.destroy();
+	});
+
+	it('失敗路徑:fetch reject → phase 進 error(與 onData 路徑相同語意),不翻旗', async () => {
+		const flag = writable(false);
+		const err = new Error('boom');
+		const fetch = vi.fn(async () => {
+			throw err;
+		});
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+
+		await gate.load();
+
+		expect(into).not.toHaveBeenCalled();
+		expect(get(flag)).toBe(false);
+		expect(get(gate)).toBe('error');
+
+		gate.destroy();
+	});
+
+	it('silentRefresh() 無條件套用 + 翻旗', async () => {
+		const flag = writable(false);
+		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 }).mockResolvedValueOnce({ v: 2 });
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+		await gate.load();
+		expect(get(gate)).toBe('ready');
+		expect(get(flag)).toBe(true);
+
+		await gate.silentRefresh();
+
+		expect(into).toHaveBeenCalledTimes(2); // load() 一次 + silentRefresh 一次
+		expect(into).toHaveBeenLastCalledWith({ v: 2 });
+		expect(get(flag)).toBe(true);
+		expect(get(gate)).toBe('ready');
 
 		gate.destroy();
 	});
