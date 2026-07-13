@@ -79,8 +79,25 @@ the two mobile surfaces — `Sheet`, `TabBar`, `ScreenHeader`, plus smaller piec
 still wraps the shared `TabBar` in its own thin local component to attach its own tab items. The same
 shelf also holds `overlay.ts` (2026-07-08) — the `createOverlay` factory (push/pop screen stack + one
 bottom sheet) single-sourced from what used to be two byte-identical copies inside `mobile`'s and
-`mobile-admin`'s `stores.ts`; each surface still re-exports it and builds its own singleton
-(`overlay = createOverlay()`).
+`mobile-admin`'s `stores.ts`; each surface still re-exports it and builds its own singleton, now
+instantiated with its own push/sheet id unions since 2026-07-14
+(`overlay = createOverlay<MobilePushId, MobileSheetId>()` in `mobile/stores.ts`, K6-4 — push and sheet
+are non-intersecting id namespaces, so a single shared type parameter would let an id legal only on one
+side leak onto the other) so a `push()`/`sheet()` call carrying an id outside that surface's registered
+set is a compile error.
+
+`src/lib/icon-registry.ts` (K6, 2026-07-13/14) is the single source of every icon name used anywhere in
+the codebase. It sits at lib-root rather than under `lib/components/`, deliberately: `lib/components/`
+(including `Icon.svelte`) already imports lib-root values downward, and this way `lib/domain`/each
+surface's `data.ts` only need a type-only import of `IconName` — erased at transpile time, so no
+`domain → components` runtime edge opens. `Icon.svelte`'s `name` prop and every data-layer `icon` field
+are typed `IconName = keyof typeof ICONS`, so an unregistered icon name is now a `npm run check` failure
+everywhere it's used, not just where `<Icon>` renders it. Together with the overlay id unions above, this
+let `src/lib/mobile/foundation-contracts.test.ts` retire its icon-registry-completeness and
+overlay-map-completeness source scans — both were a strict subset of what `check` now catches; the
+file's two remaining contracts are route inventory (a deleted route only 404s at navigation time) and CSS
+safety (two regression regexes `check` can't reach). See `docs/adr/0012` for the full K6 rationale,
+including a type-assertion lesson from the same batch.
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
 
@@ -100,7 +117,10 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
 - **Course vs Pass**: checkout syncs the cart and `POST /orders`s it (`placeOrder()` in member stores and
   mobile stores — both thin adapters since 2026-07-08 over the shared wire orchestration
-  `src/lib/checkout-order.ts`'s `submitOrder()`, see `docs/adr/0003`'s appendix); the
+  `src/lib/checkout-order.ts`'s `submitOrder()`, see `docs/adr/0003`'s appendix — since 2026-07-13
+  mobile's cart itself is typed as the shared `CartItem` (`$lib/cart-item`, see above) rather than a
+  surface-local `CartInput`/`CartLine` pair, so `placeOrder()` passes `get(cart)` straight to
+  `submitOrder()` with no projection step; the former `toOrderItem` adapter is gone); the
   backend creates both artifacts atomically in one transaction. A `type: 'course'` line becomes a real 報名
   (enrolment row); the member's weekly schedule is real too, hydrated from `GET /schedule/me`
   (`member/api.ts`'s `getSchedule()`, derived from the member's active enrolments, see `docs/adr/0006`);
@@ -155,14 +175,20 @@ usually collapsed into a presentation wrapper, `src/lib/components/ui/LoadGate.s
 plus in-card attendance-history gates on the member 我的課程 page and mobile's `MyCourseDetail`, which
 override `slot="error"` with a bare `ErrorState` because they already sit inside a `Card`) —
 `ScheduleCalendar` keeps its bespoke inline template outside the wrapper. Data that already lives in a store
-(mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind a
-`*Hydrated` guard (`notifsHydrated`, `opsHydrated`, `messagesHydrated`) passed to the gate as `skip`, with
+(member/mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind
+a `*Hydrated` guard (`notificationsHydrated`, `notifsHydrated`, `opsHydrated`, `messagesHydrated`), with
 `gate.refresh()` always re-fetching for `ErrorState`'s retry regardless of the guard — but the guard's
-ownership differs by surface. Member/mobile notifications are page-owned: the store write happens in the
-gate's `onData`, and the gate's own `generation`/`destroyed` bookkeeping (no page-local flag needed any
-more) discards a response that resolves after the page unmounts (member's read-state *mutations* —
+mechanism and ownership differ by surface. Member/mobile notifications are page-owned: since 2026-07-13
+the page's own `createLoadGate` call carries a `hydrate: { flag, into }` option instead of hand-rolled
+`skip`+`onData` — `flag` is the `*Hydrated` writable, `into` performs the store write, and the guard
+short-circuit / post-await mutation-wins re-check / flag-flip that used to be hand-rolled at the page now
+live inside `load()`/`refresh()`/`silentRefresh()` themselves (`docs/adr/0008`). The gate's own
+`generation`/`destroyed` bookkeeping (no page-local flag needed any more) still discards a response that
+resolves after the page unmounts (member's read-state *mutations* —
 `markRead`/`markAllRead`, optimistic update + PATCH + `markMutated()` — live in `member/notifications.ts`
-since 2026-07-11; the page keeps only the toast). Mobile-admin's ops collections and
+since 2026-07-11; mobile's equivalent mutators flip `notifsHydrated` — a plain `writable(false)`, not a
+`createHydrationGate` instance — by hand in `mobile/stores.ts`; the page keeps only the toast).
+Mobile-admin's ops collections and
 messages are store-owned: the write lives in `stores.ts`'s `hydrateOps`/`hydrateMessages`, which the gate
 calls directly as `fetch`/`refresh` — the gate's own bookkeeping protects only the page's local phase,
 never the shared store; store-write protection instead comes from the `*Hydrated` guard itself, which
@@ -177,7 +203,12 @@ protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate
 `hydrateOps`/`hydrateMessages` build on; since 2026-07-11 `member/notifications.ts` is the factory's
 second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
 own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
-unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Layout shells stay outside the seam
+unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Separately, member's
+`getDashboard()`/`getAccount()` getters (`member/api.ts`) also opportunistically hydrate session-scoped
+stores (points/notifications/subscriptions) as a side effect, behind a private, named
+`hydrateSessionStores(caller, tasks)` helper (2026-07-13) — `Promise.allSettled`, best-effort (a failed
+hydrate only `console.error`s, never throws) — deliberately unlike `getPoints()`'s own fail-hard points
+refresh, which is page-critical rather than incidental. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
 static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
@@ -191,6 +222,30 @@ pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venue
 `ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions pulled out of the component,
 which is now a thin adapter over them; deliberately incompatible with, and never merged into, coach's own
 Monday-leading `schedule-dates.ts`.
+
+## Single-page controllers and orchestrators (coach, admin)
+
+Some pages have a same-page-only state-orchestration layer thick enough to be worth extracting into a
+sibling `.ts` (per the Testing convention below) but not general enough to become a shared
+`lib/<surface>/` module consumed by more than one caller — see `docs/adr/0012` for the four-part test
+this round (K1/K3/K4) settled on, and its contrast with the cross-page "list-page controller factory"
+that `docs/adr/0011` already rejected.
+
+- **`src/lib/coach/attendance-controller.ts`**'s `createAttendanceController` (K1) sits between the
+  existing pure reducer `attendance-draft.ts` and `coach/attendance/+page.svelte`: a single
+  `AttendanceViewState` snapshot store replaces five mirrored page variables, with `saveAttendance`/`now`
+  injected as deps (no Svelte import at module scope, SSR-safe). `save()` layers an incrementing
+  save-token guard on top of the pre-existing state-based stale guard — not a replacement for it —
+  closing a latent ABA hole where an in-flight save's late response could land on a class switched away
+  from mid-save.
+- **`src/lib/coach/conversations-filter.ts`** (K3) is a framework-free port of
+  `coach/messages/+page.svelte`'s tab × search filtering, selection-fallback, and compose-insert logic
+  (`filterConversations`/`pickSelection`/`applyCreatedConversation`), consumed only by that page.
+- **`src/lib/admin/components/coach-save.ts`**'s `saveNewCoach`/`saveCoachEdit` (K4) is a stateless async
+  orchestrator for `admin/coaches/+page.svelte`'s two-step account-then-coach create sequence and its
+  `pendingUserId` retry sentinel — sentinel *semantics* live in the module, sentinel *storage* stays on
+  the page. Both functions return a `kind`-tagged outcome so the page — not the module — picks the error
+  mapper (`docs/adr/0011`) and toast text.
 
 ## Testing
 
