@@ -284,3 +284,52 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		expect(view.state).toBe('saved');
 	});
 });
+
+describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 latent 洞真的存在）', () => {
+	// 現行 state guard 的 latent ABA 洞：儲存中先編輯把 state 打回 dirty，放行切班，再啟
+	// 第二次 save 後，舊回應見 state==='saving' 穿透 guard、以 live curClassId 把舊班
+	// roster 寫進新班（resolve 分支）；catch 分支更全無 guard，舊請求失敗會把新班打成
+	// failed。遞增序號 token 在 resolve 與 catch 皆驗 token===current，不符即丟棄。
+
+	it('ABA resolve 丟棄：A save→編輯→切班→B save→A resolve 不汙染 B 的 roster', async () => {
+		const dA = deferred<AttRow[]>();
+		const dB = deferred<AttRow[]>();
+		deps.saveAttendance.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise);
+		ctrl.init([CLASS_A, CLASS_B]);
+
+		const pA = ctrl.save(); // A（ac1）save 起飛，state saving
+		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → state 打回 dirty，放行切班
+		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched'); // 切到 B（ac2）
+		void ctrl.save(); // B（ac2）save 起飛，seq 遞增、state saving
+
+		dA.resolve(serverAllPresent(ROSTER_A)); // A 的舊回應（4 筆）現在才回來
+		const outcomeA = await pA;
+
+		expect(outcomeA).toEqual({ kind: 'stale' }); // 舊回應被 token guard 丟棄
+		const view = get(ctrl);
+		expect(view.curClassId).toBe('ac2'); // 仍在 B
+		expect(view.state).toBe('saving'); // B 仍 in-flight，未被 A 打成 saved
+		expect(view.marks).toEqual({ GY012: 'present' }); // B 的 marks（1 筆），非 A 的 4 筆
+		expect(view.classes.find((c) => c.id === 'ac2')!.roster).toHaveLength(1); // B roster 未被 A 覆蓋
+	});
+
+	it('stale reject 丟棄：A reject 不把 B 打成 failed、不發 failed outcome', async () => {
+		const dA = deferred<AttRow[]>();
+		const dB = deferred<AttRow[]>();
+		deps.saveAttendance.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise);
+		ctrl.init([CLASS_A, CLASS_B]);
+
+		const pA = ctrl.save(); // A save
+		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → dirty，放行切班
+		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched');
+		void ctrl.save(); // B save，state saving
+
+		dA.reject(new Error('A 的舊請求失敗')); // A 的舊回應失敗
+		const outcomeA = await pA;
+
+		expect(outcomeA).toEqual({ kind: 'stale' }); // 丟棄，非 failed
+		const view = get(ctrl);
+		expect(view.state).toBe('saving'); // B 未被 A 的 catch 打成 dirty
+		expect(view.curClassId).toBe('ac2');
+	});
+});

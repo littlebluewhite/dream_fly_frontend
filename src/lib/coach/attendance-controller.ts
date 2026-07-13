@@ -8,11 +8,13 @@
  * （渲染與 toast 文案）。時鐘（now）與 saveAttendance 皆為注入依賴，無 svelte 元件相依、
  * 建構零副作用（SSR 安全）。
  *
- * save() 的 state-based stale guard（await 後 state!=='saving' 即丟棄回應）與 catch 分支
- * 無 guard，皆逐字複刻頁面現行語意——含已知的 latent ABA 缺陷（儲存中先編輯把 state 打回
- * dirty、放行切班、再啟第二次 save 後，舊回應見 state==='saving' 穿透 guard 以 live
- * curClassId 把舊班 roster 寫進新班；catch 更全無 guard）。save-token guard 是獨立的後續
- * 變更（K1 c3），不在本層的複刻範圍內混入。 */
+ * save() 的 state guard（await 後 state!=='saving' 即丟棄回應）逐字複刻自頁面現行語意；
+ * 其上再疊一層 save-token guard（K1 c3）：每次 save() ++seq 並捕捉 token，resolve 與 catch
+ * 皆驗 token===seq，不符即丟棄過期回應——修掉 state guard 單獨存在時的 latent ABA 洞（儲存
+ * 中先編輯把 state 打回 dirty、放行切班、再啟第二次 save 後，舊回應見 state==='saving' 穿透
+ * guard 以 live curClassId 把舊班 roster 寫進新班；catch 更全無 guard 會把新班打成 failed）。
+ * token guard 疊加、不取代 state guard——單一 in-flight 的行為逐點不變（page.test 16 it 續
+ * 綠）。 */
 import { writable, type Readable } from 'svelte/store';
 import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
 import {
@@ -78,6 +80,10 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 	let dirtyCount = 0;
 	let prev: SaveBar | null = null;
 	let byClass: Record<string, SaveBar> = {};
+	// save-token（K1 c3）：遞增序號。每次 save() 起始 ++seq 並捕捉為 token；resolve 與
+	// catch 皆驗 token===seq，不符即丟棄過期回應。疊加在 state guard 之上、不取代它——
+	// 單一 in-flight 的行為逐點不變。
+	let seq = 0;
 
 	// currentDraft/applyDraft：內部狀態 ⇄ draft reducer 的 SaveBar 雙向轉接（同頁面）。
 	function currentDraft(): SaveBar {
@@ -161,17 +167,23 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 		// 送出前（await 前）先快照是否含「遲到」——不受 in-flight 期間後續編輯影響，且不能
 		// 由 await 後的伺服器回應推導（回應永不含 late，見 saveAttendance）。
 		const hadLate = draftHadLate(marks);
+		const token = ++seq;
 		try {
 			const updatedRoster = await deps.saveAttendance(curClassId, marks);
+			// save-token guard（K1 c3）：ABA 併發時舊回應的 token 已非最新即丟棄——避免以 live
+			// curClassId 把舊班 roster 寫進新班。疊加在下方 state guard 之上、不取代它。
+			if (token !== seq) return { kind: 'stale' };
 			// state-based stale guard：若 in-flight 期間又被編輯過（state 已變回 dirty），不要
-			// 用這次回應蓋掉新的未存變更。逐字複刻頁面現行 guard（c1 不改）。
+			// 用這次回應蓋掉新的未存變更。逐字複刻頁面現行 guard。
 			if (state !== 'saving') return { kind: 'stale' };
 			classes = classes.map((c) => (c.id === curClassId ? { ...c, roster: updatedRoster } : c));
 			applyDraft(applySaveResult(currentDraft(), updatedRoster, deps.now()));
 			publish();
 			return { kind: 'saved', className: curClass()?.name ?? '', rosterCount: updatedRoster.length, hadLate };
 		} catch (error) {
-			// catch 分支無 guard——與頁面現況相同（已知 latent 缺陷，c3 才修）。
+			// save-token guard（K1 c3）：舊請求失敗的 token 已非最新即丟棄——不可把新班打成
+			// failed（c1 此處全無 guard，是已知 latent 缺陷）。疊加在既有 catch 行為之上。
+			if (token !== seq) return { kind: 'stale' };
 			applyDraft(saveFailed(currentDraft()));
 			publish();
 			return { kind: 'failed', error };
