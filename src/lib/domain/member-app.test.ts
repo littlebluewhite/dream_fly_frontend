@@ -14,7 +14,7 @@
  *
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS(值+
  * interface)與 MY_COURSES/SCHEDULE/ORDERS(值)經確認無 runtime 消費者後整批從
- * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的 7 個常數。
+ * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的 11 個常數。
  * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
  * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。 */
 import { describe, it, expect } from 'vitest';
@@ -26,7 +26,11 @@ import {
 	UPCOMING,
 	CONTACT_THREAD,
 	NOTIFS_SEED,
-	POINTS_LEDGER
+	POINTS_LEDGER,
+	WEEK,
+	TIME_ROWS,
+	COACH_REPLIES,
+	NOTIF_CATS
 } from './member-app';
 
 /* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ── */
@@ -39,6 +43,10 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);
 		expect(MemberData.POINTS_LEDGER).toBe(POINTS_LEDGER);
+		expect(MemberData.WEEK).toBe(WEEK);
+		expect(MemberData.TIME_ROWS).toBe(TIME_ROWS);
+		expect(MemberData.COACH_REPLIES).toBe(COACH_REPLIES);
+		expect(MemberData.NOTIF_CATS).toBe(NOTIF_CATS);
 	});
 });
 
@@ -77,6 +85,15 @@ describe('literal seed invariants (independent of the facades)', () => {
 		expect(POINTS_LEDGER[0].type).toBe('earn');
 		expect(POINTS_LEDGER[0].delta).toBe(120);
 	});
+	it('WEEK covers all 7 weekdays 一 through 日', () => {
+		expect(WEEK).toEqual(['一', '二', '三', '四', '五', '六', '日']);
+	});
+	it('COACH_REPLIES leads with 收到！我會留意，謝謝家長。', () => {
+		expect(COACH_REPLIES[0]).toBe('收到！我會留意，謝謝家長。');
+	});
+	it('NOTIF_CATS[0] is the 全部 (all) tab', () => {
+		expect(NOTIF_CATS[0]).toEqual(['all', '全部']);
+	});
 });
 
 /* ── 3. row-count canaries(防搬移 / 截斷時整列消失) ── */
@@ -87,4 +104,8 @@ describe('row counts', () => {
 	it('CONTACT_THREAD has 2 rows', () => expect(CONTACT_THREAD).toHaveLength(2));
 	it('NOTIFS_SEED has 6 rows', () => expect(NOTIFS_SEED).toHaveLength(6));
 	it('POINTS_LEDGER has 6 rows', () => expect(POINTS_LEDGER).toHaveLength(6));
+	it('WEEK has 7 rows', () => expect(WEEK).toHaveLength(7));
+	it('TIME_ROWS has 8 rows', () => expect(TIME_ROWS).toHaveLength(8));
+	it('COACH_REPLIES has 4 rows', () => expect(COACH_REPLIES).toHaveLength(4));
+	it('NOTIF_CATS has 5 rows', () => expect(NOTIF_CATS).toHaveLength(5));
 });

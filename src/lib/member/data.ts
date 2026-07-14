@@ -47,7 +47,7 @@ import {
   NOTIFS_SEED as NOTIFS_SEED_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
-import type { Level } from '$lib/domain/course-level';
+import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 
 export interface UpcomingClass {
@@ -139,24 +139,17 @@ export const LEAVE_STATUS: Record<string, [Tone, string]> = {
   cancelled: ['neutral', '已取消']
 };
 
-export const LEVEL_TONE: Record<string, Tone> = {
-  啟蒙: 'info',
-  入門: 'info',
-  基礎: 'primary',
-  進階: 'warning',
-  選手: 'accent'
-  // 舊 3 級（初級/中級/高級）鍵已移除（Task 21 doc-sync）：getCourses()（toCatalogCourse，
-  // 公開 catalog 路徑）與 getMine() 現在都經 $lib/domain/course-level 的共用 5 級對照
-  // （COURSE_LEVEL_LABEL）產生 level，不會再吐出這三個舊值——先前這裡的註解聲稱
-  // getCourses() 仍會產生這三值，方向與現況相反，一併移除。
-} satisfies Record<Level, Tone>;
+// 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
+// 已單源收斂 5 級對照）；保留本檔既有 Record<string, Tone> 寬鍵（CourseDetailDialog.svelte
+// 等消費端索引值是 string）。
+export const LEVEL_TONE: Record<string, Tone> = LEVEL_TONE_BASE;
 
 /* Weekly schedule grid — member's classes */
-export const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
+export { WEEK } from '$lib/domain/member-app';
 // SCHEDULE（值）不在此列——Task 1（C2 死種子退役）確認課表頁走真實 getSchedule()
 // 後，這份 mock 已無 runtime 消費者，隨 domain/member-app.ts 本體的 SCHEDULE 一併
 // 退役。ScheduleBlock interface（見上）仍供 +page.svelte 型別標註使用，不受影響。
-export const TIME_ROWS = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+export { TIME_ROWS } from '$lib/domain/member-app';
 
 /* Announcements (場館公告) — kept local: mobile's 3rd item has a different `bg`. */
 export const ANNOUNCE: Announcement[] = [
@@ -171,12 +164,7 @@ export const ANNOUNCE: Announcement[] = [
 
 /* Canned coach replies for the contact thread (聯絡教練 / 訊息 — 罐頭回覆;
  * CONTACT_THREAD 本體在 $lib/domain/member-app) */
-export const COACH_REPLIES = [
-  '收到！我會留意，謝謝家長。',
-  '好的，我們課堂上再幫承恩加強。',
-  '沒問題，有任何狀況都歡迎隨時跟我說 🙂',
-  '了解～這部分我會特別注意。'
-];
+export { COACH_REPLIES } from '$lib/domain/member-app';
 
 /* Notification center (通知中心) — tone is Tone-typed here。T12 codex 終審修正:
  * 原整陣列 `as Notification[]` 會把所有欄位(含 icon: IconName)一併豁免型別檢查
@@ -184,13 +172,7 @@ export const COACH_REPLIES = [
  * 這裡用純型別註記把「同一個參照」(單源契約,domain/member-app.test.ts 以 toBe
  * 釘住——不能重建陣列)逐元素實檢收窄回本檔的嚴格 Tone,零斷言。 */
 export const NOTIFS_SEED: Notification[] = NOTIFS_SEED_BASE;
-export const NOTIF_CATS: [string, string][] = [
-  ['all', '全部'],
-  ['class', '課程'],
-  ['order', '訂單'],
-  ['coach', '教練'],
-  ['system', '系統']
-];
+export { NOTIF_CATS } from '$lib/domain/member-app';
 export const NOTIF_TONE_BG: Record<string, string> = {
   primary: 'var(--df-primary-bg)',
   info: 'var(--df-info-bg)',

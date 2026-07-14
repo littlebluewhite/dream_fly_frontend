@@ -3,6 +3,8 @@ import { LEVELS, COURSE_LEVEL_LABEL, LEVEL_TONE, type Level } from './course-lev
 import { LEVELS as ADMIN_LEVELS, LEVEL_TONE as ADMIN_LEVEL_TONE } from '$lib/admin/data';
 import { LEVEL_TONE as MOBILE_ADMIN_LEVEL_TONE } from '$lib/mobile-admin/data';
 import { F_LEVELS } from '$lib/mobile-admin/form-options';
+import { LEVEL_TONE as MEMBER_LEVEL_TONE } from '$lib/member/data';
+import { LEVEL_TONE as MOBILE_LEVEL_TONE } from '$lib/mobile/data';
 
 /* 課程等級單一共用對照表（Task 18 FE#17）—— admin/coach/member 三 surface 共
  * import，取代各自分歧的舊 label map。 */
@@ -57,5 +59,13 @@ describe('單源參照相等 — re-export 而非複本', () => {
 
 	it('mobile-admin/data.ts 的 LEVEL_TONE 與單源同一份物件參照(member/mobile 兩發留給 W2b)', () => {
 		expect(MOBILE_ADMIN_LEVEL_TONE).toBe(LEVEL_TONE);
+	});
+
+	it('member/data.ts 的 LEVEL_TONE 與單源同一份物件參照(W2b 補上)', () => {
+		expect(MEMBER_LEVEL_TONE).toBe(LEVEL_TONE);
+	});
+
+	it('mobile/data.ts 的 LEVEL_TONE 與單源同一份物件參照(W2b 補上)', () => {
+		expect(MOBILE_LEVEL_TONE).toBe(LEVEL_TONE);
 	});
 });

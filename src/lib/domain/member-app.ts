@@ -1,5 +1,5 @@
 /* src/lib/domain/member-app.ts — 會員 app(member 桌面 / mobile 手機雙生)共用 seed 單一來源。
- * 值逐位元組沿用 member 側；僅收值相等的常數，查表與型別留在各 facade。
+ * 值逐位元組沿用 member 側;僅收值相等的常數 —— 自 ADR 0013 起含顯示查表/成對常數;Tone 等 facade 專屬型別仍留各 facade。
  *
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生，data.ts 近乎重複(同 persona
  * 王承恩 GY2024001)。這裡只收兩側 JSON.stringify 深度相等的常數 —— ANNOUNCE 有一筆
@@ -11,7 +11,7 @@
  * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED 的 tone 相關欄位 member 端是嚴格
  * `Tone` 型別、mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的
  * 一側保留自己原本的 interface 宣告、只從這裡匯入值並自行斷言回自己的型別。
- * `Tone`(member 側是 union、mobile 側是 tuple，兩者不相容)一律不進這裡。
+ * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(NOTIFS_SEED 前例)。
  *
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS 五組(值+
  * interface)、以及 MY_COURSES/SCHEDULE/ORDERS 三組的值,經確認無 runtime 消費者
@@ -138,6 +138,10 @@ export interface ScheduleBlock {
 	tone: string;
 }
 
+/* ---- 每週課表格線(WEEK 星期列、TIME_ROWS 時段列;兩側逐位元組相等) ---- */
+export const WEEK: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+export const TIME_ROWS: string[] = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+
 /* ---- 訂單歷史 ---- status 的 tone 兩側型別不同，處理同 SCHEDULE。 */
 export interface Order {
 	id: string;
@@ -158,6 +162,14 @@ export interface ChatMessage {
 export const CONTACT_THREAD: ChatMessage[] = [
 	{ from: 'coach', text: '承恩這週的後手翻進步很多，下週我們來加上連續動作！', time: '昨天 18:20' },
 	{ from: 'me', text: '好的教練，謝謝！週四他會準時到。', time: '昨天 20:05' }
+];
+
+/* Canned coach replies for the contact thread(聯絡教練 / 訊息 — 罐頭回覆;兩側逐位元組相等) */
+export const COACH_REPLIES: string[] = [
+	'收到！我會留意，謝謝家長。',
+	'好的，我們課堂上再幫承恩加強。',
+	'沒問題，有任何狀況都歡迎隨時跟我說 🙂',
+	'了解～這部分我會特別注意。'
 ];
 
 /* ---- 通知中心 ----
@@ -188,6 +200,15 @@ export const NOTIFS_SEED = [
 	{ id: 'n5', cat: 'system', icon: 'award', tone: 'accent', title: '獲得會員點數 +120', body: '完課獎勵點數已入帳，目前可用點數 1,250 點。', time: '3 天前', read: true },
 	{ id: 'n6', cat: 'system', icon: 'calendar-off', tone: 'warning', title: '端午連假停課公告', body: '6/14–6/16 全館停課，相關課程將安排補課，請留意通知。', time: '5 天前', read: true }
 ] satisfies (Notification & { tone: 'primary' | 'info' | 'success' | 'warning' | 'accent' })[];
+
+/* 通知分類 tab(all/class/order/coach/system;兩側逐位元組相等) */
+export const NOTIF_CATS: [string, string][] = [
+	['all', '全部'],
+	['class', '課程'],
+	['order', '訂單'],
+	['coach', '教練'],
+	['system', '系統']
+];
 
 /* ---- 點數明細(member 稱 LedgerEntry、mobile 稱 PointsEntry，同形;LedgerType
  * 兩側是同一組三個字面值，member 額外具名匯出這個型別) ---- */

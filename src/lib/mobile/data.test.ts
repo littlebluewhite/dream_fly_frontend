@@ -25,25 +25,33 @@ import { describe, it, expect } from 'vitest';
  * MAKEUP_SLOTS/POINTS_LEDGER/REWARDS/REPORTS/CERTS 的值，以及 Stat/Skill/
  * Upcoming/ScheduleBlock/Order/MakeupSlot/PointsEntry/Reward/Report/Cert 型別，
  * 經確認這個 facade 本身無 runtime 消費者後整批移除——下面兩個守衛區塊同步縮減
- * 為僅涵蓋還活著的 ME/CONTACT_THREAD/NOTIFS_SEED 三個值與 Member/MyCourse/
- * AttRecord/ThreadMsg/NotifItem 五個型別；MyCourse 改用檔內 inline literal（同
- * ATT_HISTORY 退役後的既有模式）驗證型別匯出仍可用，不再借用已退役的
- * MY_COURSES[0]。 */
+ * 為僅涵蓋還活著的 ME/CONTACT_THREAD/NOTIFS_SEED/WEEK/COACH_REPLIES/NOTIF_CATS
+ * 六個值（WEEK/COACH_REPLIES/NOTIF_CATS 是批次 2 W2b 新增的 re-export）與
+ * Member/MyCourse/AttRecord/ThreadMsg/NotifItem 五個型別；MyCourse 改用檔內
+ * inline literal（同 ATT_HISTORY 退役後的既有模式）驗證型別匯出仍可用，不再
+ * 借用已退役的 MY_COURSES[0]。 */
 
 import {
 	ME,
 	CONTACT_THREAD,
 	NOTIFS_SEED,
+	WEEK,
+	COACH_REPLIES,
+	NOTIF_CATS,
 	type Member,
 	type MyCourse,
 	type AttRecord,
 	type ThreadMsg,
-	type NotifItem
+	type NotifItem,
+	type Tone
 } from '$lib/mobile/data';
 import {
 	ME as D_ME,
 	CONTACT_THREAD as D_CONTACT_THREAD,
-	NOTIFS_SEED as D_NOTIFS_SEED
+	NOTIFS_SEED as D_NOTIFS_SEED,
+	WEEK as D_WEEK,
+	COACH_REPLIES as D_COACH_REPLIES,
+	NOTIF_CATS as D_NOTIF_CATS
 } from '$lib/domain/member-app';
 
 describe('mobile facade re-exports domain/member-app by reference (single source)', () => {
@@ -51,6 +59,9 @@ describe('mobile facade re-exports domain/member-app by reference (single source
 		expect(ME).toBe(D_ME);
 		expect(CONTACT_THREAD).toBe(D_CONTACT_THREAD);
 		expect(NOTIFS_SEED).toBe(D_NOTIFS_SEED);
+		expect(WEEK).toBe(D_WEEK);
+		expect(COACH_REPLIES).toBe(D_COACH_REPLIES);
+		expect(NOTIF_CATS).toBe(D_NOTIF_CATS);
 	});
 });
 
@@ -69,6 +80,9 @@ describe('mobile facade preserves every TYPE export (zero-API-change guard)', ()
 		const f: AttRecord = { date: '06/06', state: 'present' };
 		const k: ThreadMsg = CONTACT_THREAD[0];
 		const l: NotifItem = NOTIFS_SEED[0];
-		expect([a, e, f, k, l].every((x) => x != null)).toBe(true);
+		// 批次 2 W2b:NOTIF_CATS 改 re-assert 自 domain 後，證明其值仍結構滿足本檔
+		// 自身的 Tone tuple 型別(零斷言;NOTIF_CATS_BASE 型別與 Tone[] 恆等)。
+		const t: Tone = NOTIF_CATS[0];
+		expect([a, e, f, k, l, t].every((x) => x != null)).toBe(true);
 	});
 });

@@ -31,7 +31,7 @@ export { ME, type Member } from '$lib/domain/member-app';
 // STATS/SKILLS(值+型別)不在此列——Task 1 確認這份 facade 的轉出無 runtime 消費者
 // (僅桌面 member/api.ts 消費自己那份 member/data.ts 轉出)後移除。
 // ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
-// (MyCourseDetail.svelte 直接復用桌面 member/api.ts 的 getEnrolmentAttendance())，
+// (MyCourseDetail.svelte 經 mobile/api.ts 轉發桌面 member/api.ts 的 getEnrolmentAttendance())，
 // 這份 mock 已無 runtime 消費者。
 export type { AttRecord } from '$lib/domain/member-app';
 // SCHEDULE/ORDERS/MAKEUP_SLOTS/REWARDS/REPORTS(值+型別)不在此列——mobile/api.ts
@@ -47,7 +47,8 @@ export type { Notification as NotifItem } from '$lib/domain/member-app';
 // POINTS_LEDGER/PointsEntry、CERTS/Cert 不在此列——Task 1 確認兩者的轉出(值+型別)
 // 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
 import type { CatalogCourse } from '$lib/public/adapters';
-import type { Level } from '$lib/domain/course-level';
+import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
+import { NOTIF_CATS as NOTIF_CATS_BASE } from '$lib/domain/member-app';
 import type { IconName } from '$lib/icon-registry';
 
 /* ---- Attendance history (active course) ----
@@ -67,11 +68,14 @@ export interface Course extends CatalogCourse {
 // 後端，這份 mock 已無 runtime 消費者；曾經的「僅供既有測試當 fixture 用」用途
 // 也已改為各測試檔內的 inline Course fixture。Course interface(見上)仍供
 // api.ts/元件的型別標註使用，保留。
-export const LEVEL_TONE: Record<string, string> = { 啟蒙: 'info', 入門: 'info', 基礎: 'primary', 進階: 'warning', 選手: 'accent' } satisfies Record<Level, string>;
+// 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
+// 已單源收斂 5 級對照）；保留本檔既有 Record<string, string> 寬鍵（LevelBadge.svelte
+// 等消費端吃鬆散 string）。
+export const LEVEL_TONE: Record<string, string> = LEVEL_TONE_BASE;
 
 /* ---- Weekly schedule grid ---- */
-export const WEEK = ['一', '二', '三', '四', '五', '六', '日'];
-export const TIME_ROWS = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
+export { WEEK } from '$lib/domain/member-app';
+// TIME_ROWS 不在此列——mobile 側零消費者，死出口不留（ADR 0010 精神）。
 
 /* ---- Announcements (home) — kept local: member's 3rd item has a different `bg`. ---- */
 export interface Announce {
@@ -89,7 +93,7 @@ export const ANNOUNCE: Announce[] = [
 ];
 
 /* ---- Notification center (通知中心) ---- */
-export const NOTIF_CATS: Tone[] = [['all', '全部'], ['class', '課程'], ['order', '訂單'], ['coach', '教練'], ['system', '系統']];
+export const NOTIF_CATS: Tone[] = NOTIF_CATS_BASE;
 export const NOTIF_TONE_BG: Record<string, string> = { primary: 'var(--df-primary-bg)', info: 'var(--df-info-bg)', success: 'var(--df-success-bg)', warning: 'var(--df-warning-bg)', accent: '#FFF8DB' };
 export const NOTIF_TONE_FG: Record<string, string> = { primary: 'var(--df-primary)', info: 'var(--df-info)', success: 'var(--df-success)', warning: 'var(--df-warning)', accent: 'var(--df-accent-dark)' };
 
@@ -97,4 +101,4 @@ export const NOTIF_TONE_FG: Record<string, string> = { primary: 'var(--df-primar
 export const PT_TYPE: Record<string, Tone> = { earn: ['success', '獲得'], redeem: ['primary', '折抵'], expire: ['neutral', '到期'] };
 
 /* ---- Canned coach replies (聯絡教練 / 訊息 — 罐頭回覆;CONTACT_THREAD 本體在 $lib/domain/member-app) ---- */
-export const COACH_REPLIES = ['收到！我會留意，謝謝家長。', '好的，我們課堂上再幫承恩加強。', '沒問題，有任何狀況都歡迎隨時跟我說 🙂', '了解～這部分我會特別注意。'];
+export { COACH_REPLIES } from '$lib/domain/member-app';
