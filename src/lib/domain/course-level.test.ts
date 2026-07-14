@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, COURSE_LEVEL_LABEL, type Level } from './course-level';
-import { LEVELS as ADMIN_LEVELS } from '$lib/admin/data';
+import { LEVELS, COURSE_LEVEL_LABEL, LEVEL_TONE, type Level } from './course-level';
+import { LEVELS as ADMIN_LEVELS, LEVEL_TONE as ADMIN_LEVEL_TONE } from '$lib/admin/data';
+import { LEVEL_TONE as MOBILE_ADMIN_LEVEL_TONE } from '$lib/mobile-admin/data';
 import { F_LEVELS } from '$lib/mobile-admin/form-options';
 
 /* 課程等級單一共用對照表（Task 18 FE#17）—— admin/coach/member 三 surface 共
@@ -26,6 +27,16 @@ describe('course-level — 共用 5 級對照常數', () => {
 			expect(valid.has(label)).toBe(true);
 		}
 	});
+
+	it('LEVEL_TONE 涵蓋 5 級色階(啟蒙/入門 info、基礎 primary、進階 warning、選手 accent)', () => {
+		expect(LEVEL_TONE).toEqual({
+			啟蒙: 'info',
+			入門: 'info',
+			基礎: 'primary',
+			進階: 'warning',
+			選手: 'accent'
+		});
+	});
 });
 
 /* 單源參照相等（FE#17 收尾）—— admin/mobile-admin 的 LEVELS 複本已收斂為
@@ -38,5 +49,13 @@ describe('單源參照相等 — re-export 而非複本', () => {
 
 	it('mobile-admin/form-options.ts 的 F_LEVELS 與單源同一份陣列參照', () => {
 		expect(F_LEVELS).toBe(LEVELS);
+	});
+
+	it('admin/data.ts 的 LEVEL_TONE 與單源同一份物件參照', () => {
+		expect(ADMIN_LEVEL_TONE).toBe(LEVEL_TONE);
+	});
+
+	it('mobile-admin/data.ts 的 LEVEL_TONE 與單源同一份物件參照(member/mobile 兩發留給 W2b)', () => {
+		expect(MOBILE_ADMIN_LEVEL_TONE).toBe(LEVEL_TONE);
 	});
 });
