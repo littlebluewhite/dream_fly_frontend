@@ -36,7 +36,7 @@
     type LeaveRequest
   } from '$lib/member/stores';
   import { LEAVE_STATUS } from '$lib/member/data';
-  import { getEnrolmentAttendance } from '$lib/member/api';
+  import { getEnrolmentAttendance } from '$lib/mobile/api';
   import { formatSessionDateTime } from '$lib/member/session-format';
   import { createLoadGate } from '$lib/load-gate';
   import { ATT_STATE, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
@@ -69,9 +69,10 @@
   // 填入真值，比對不到時 courseLeaves 安全落空，不拋錯)。best-effort 水合，
   // 失敗不擋課程詳情本身的顯示(同 mine 頁 load() 對候補/請假清單的處理慣例)。
   //
-  // 出席紀錄(Task F7：GET /enrolments/{id}/attendance，§3.12)—— 直接復用桌面
-  // member/api.ts 的 getEnrolmentAttendance()(零映射差異，同本檔案對 LEAVE_STATUS/
-  // refreshLeaveRequests 的既有直接引用慣例，不透過 mobile/api.ts 轉一手)。c.id 是
+  // 出席紀錄(Task F7：GET /enrolments/{id}/attendance，§3.12)—— 復用
+  // mobile/api.ts 的 getEnrolmentAttendance()(W3 收編：該函式零映射委派桌面
+  // member/api.ts 同名函式；收編前本檔案直接 import 桌面 seam，與
+  // mobile-admin 零直穿紀律相反，現已收斂對齊)。c.id 是
   // 這筆報名(enrolment)的 uuid(見 EnrolledCourse.id 的既有註解)。overlay push 一律
   // 帶入非 null 的 course(見 OverlayHost.svelte)，僅在有值時才載入。
   let attendance: AttRecord[] | null = null;

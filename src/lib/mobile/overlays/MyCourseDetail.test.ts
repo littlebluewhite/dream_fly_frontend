@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import MyCourseDetail from './MyCourseDetail.svelte';
 import { overlay } from '$lib/mobile/stores';
 import { leaveRequests, refreshLeaveRequests, cancelLeaveRequest, type LeaveRequest } from '$lib/member/stores';
-import { getEnrolmentAttendance } from '$lib/member/api';
+import { getEnrolmentAttendance } from '$lib/mobile/api';
 import type { MyCourse, AttRecord } from '$lib/mobile/data';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
@@ -12,16 +12,17 @@ import type { MyCourse, AttRecord } from '$lib/mobile/data';
  * 「我的請假」卡片復用 $lib/member/stores 的 leaveRequests store，範圍收斂到
  * 這門課程(course_id 比對)。
  *
- * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock $lib/member/api
- * 的 getEnrolmentAttendance()。預設值刻意保留一筆 'leave' 紀錄(對齊已退役的
+ * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock $lib/mobile/api
+ * 的 getEnrolmentAttendance()(W3：該函式零映射委派桌面 member/api.ts 同名
+ * 函式)。預設值刻意保留一筆 'leave' 紀錄(對齊已退役的
  * ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/聯絡教練兩個
  * 動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。 */
 vi.mock('$lib/member/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/member/stores')>();
 	return { ...actual, refreshLeaveRequests: vi.fn(), cancelLeaveRequest: vi.fn() };
 });
-vi.mock('$lib/member/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/api')>();
+vi.mock('$lib/mobile/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
 	return { ...actual, getEnrolmentAttendance: vi.fn() };
 });
 

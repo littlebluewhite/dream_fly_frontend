@@ -13,7 +13,7 @@ import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
 // 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
 // 一直以來都是對這個寬鬆版型別寫的，沿用它才不會逼既有呼叫端也跟著窄化。
-import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, Notification } from '$lib/domain/member-app';
+import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, Notification, AttRecord } from '$lib/domain/member-app';
 import {
 	getCourses as memberGetCourses,
 	getMine as memberGetMine,
@@ -23,12 +23,13 @@ import {
 	getPoints as memberGetPoints,
 	getReports as memberGetReports,
 	getReportStats as memberGetReportStats,
+	getEnrolmentAttendance as memberGetEnrolmentAttendance,
 	type PointsData,
 	type Reward,
 	type ReportsData
 } from '$lib/member/api';
 import { ANNOUNCE, type Announce, type Course } from './data';
-import type { Prefs } from './stores';
+import { PREFS_DEFAULT, type Prefs } from './stores';
 import type { IconName } from '$lib/icon-registry';
 
 /** 課程分類 → icon。真後端 CatalogCourse(`$lib/public/adapters`)沒有 icon 欄位
@@ -153,6 +154,13 @@ export type { ReportsData };
  *  沒有的欄位。 */
 export const getReports = (): Promise<ReportsData> => memberGetReports();
 
+/** 出席紀錄(Task F7 沿用；§3.12)— 復用桌面 getEnrolmentAttendance()(GET
+ *  /enrolments/{id}/attendance)，零映射(AttRecord 形狀兩側同源)。W3 收編：
+ *  原為 MyCourseDetail.svelte 直穿 member/api 的唯一 data getter，收編對齊
+ *  mobile-admin 零直穿紀律，不再由呼叫端自己 import 桌面 seam。 */
+export const getEnrolmentAttendance = (id: string): Promise<AttRecord[]> =>
+	memberGetEnrolmentAttendance(id);
+
 /* ---- 試上預約(TrialScreen)送出 — Task F8：POST /contact, inquiry_type='trial' ----
  * 復用桌面 sendContactInquiry()(§3.17),不重新實作一次 HTTP。設計=洽詢特化:
  * 不佔名額、不建 booking,admin 後續以簡訊/電話人工聯繫(見 TrialScreen 既有
@@ -216,8 +224,6 @@ export const submitTrialInquiry = (input: TrialInquiryInput): Promise<ApiInquiry
 interface ApiUserPreferences {
 	preferences: Partial<Record<'class_reminder' | 'coach_msg' | 'promo' | 'dark', boolean>> | null;
 }
-
-const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
 
 function mapPreferences(raw: ApiUserPreferences['preferences']): Prefs {
 	return {
