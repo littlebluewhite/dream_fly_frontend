@@ -35,7 +35,11 @@
 - **member surface 的畫面身分已改讀 `$authStore.member`**：`Topbar.svelte`/`Sidebar.svelte` 的大頭貼
   縮寫／姓名／顏色不再讀 mock 的 `ME` 常數（已刪），改讀 `toMember()` 的
   `{ id, name, initial, since, points, color, age }` 投影；後端未提供 per-member 頭像色時一律填品牌
-  主色 `var(--df-primary)`（2026-07-07 更新）。
+  主色 `var(--df-primary)`（2026-07-07 更新）。**coach/admin 兩個桌面 shell 的身分槽位自 2026-07-14
+  起比照辦理**：coach 的 `Sidebar.svelte`/`Topbar.svelte` 與 admin 的 `Sidebar.svelte` 同樣改讀
+  `$authStore.member`，不再讀 mock 的 `COACH` 常數／admin 本地 `PROFILE.name`/`PROFILE.initial`
+  （見 `docs/adr/0013`）；**coach 桌面 Topbar 的通知鈴鐺仍讀本地 seed（`NOTIFS`）不變**——教練工作流的
+  通知目前後端無對應 feed，是既有 P2，本次身分收斂未觸及。
 
 ### 2. cents → NT$ 邊界：後端一律 `*_cents`，前端唯一換算點 `ntd()`
 

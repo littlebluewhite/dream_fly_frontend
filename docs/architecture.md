@@ -49,12 +49,17 @@ notification bells), `lib/styles/` (`global.css` + design tokens),
 `src/lib/domain/` holds mock seed that used to be duplicated across surfaces: ops entities (`venues.ts`,
 `tickets.ts`, `coaches.ts`, `activity.ts`) plus base arrays (`CLASSES_BASE`, `MEMBERS_BASE`,
 `ORDERS_BASE` in `classes.ts` / `members.ts` / `orders.ts`) shared by the admin↔mobile-admin ops-pair, and
-`member-app.ts` — the member↔mobile desktop/mobile twin seed (7 constants; `ANNOUNCE` stays forked in
+`member-app.ts` — the member↔mobile desktop/mobile twin seed (11 constants; `ANNOUNCE` stays forked in
 each facade because one announcement's background colour differs between the two). Task 1 (C2 死種子退役,
 2026-07) retired 8 of the original 15 constants once every consumer had moved onto real backend seams —
 `CATALOG`/`MAKEUP_SLOTS`/`REWARDS`/`REPORTS`/`CERTS` (value + interface) outright, and `MY_COURSES`/
 `SCHEDULE`/`ORDERS` down to type-only exports — `EnrolledCourse`/`ScheduleBlock`/`Order` still back type
 annotations in `mobile/api.ts` and the facades' own local interfaces, just with no sample value left.
+Since 2026-07-14 the per-entity ops-pair files (`venues.ts`/`tickets.ts`/`members.ts`/`classes.ts`, plus
+`course-level.ts`) each also single-source a status/type → tone-and-label display lookup
+(`VENUE_STATUS`/`TICKET_TYPE`/`MEMBER_STATUS`+`MEMBER_ACCOUNT_STATUS`/`STATUS_TONE`/`LEVEL_TONE`), and
+four more member↔mobile display constants (`WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS`) joined
+`member-app.ts` the same round, taking its count from 7 to 11 (`docs/adr/0013`).
 Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
 mostly as verbatim pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE`
 arrays and layers its own derived fields on top via `.map` builders, while `member`/`mobile` re-export
@@ -63,7 +68,7 @@ transformation); `coach` has no persona mapping into the shared seed, so it does
 at all. Because a facade could silently drop a re-exported *type* without vitest noticing (type-only
 imports erase at transpile time), `src/lib/mobile/data.test.ts` binds each of its re-exported types to a
 live value so a dropped export fails `npm run check` to compile, not just at runtime — the only facade
-left needing this guard now that member-app.ts is down to 7 constants; admin's former dedicated
+left needing this guard now that member-app.ts is down to 11 constants; admin's former dedicated
 type-export regression file was retired once ADR 0009 emptied out the reports-domain re-exports it was
 guarding.
 
@@ -210,10 +215,15 @@ stores (points/notifications/subscriptions) as a side effect, behind a private, 
 hydrate only `console.error`s, never throws) — deliberately unlike `getPoints()`'s own fail-hard points
 refresh, which is page-critical rather than incidental. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
-or `api.ts` import at all (hardcoded nav config), while `coach`'s do import seed from `data.ts` — a
-static `COACH` profile object, plus `NOTIFS` feeding the Topbar's unread-bell dropdown — but
-synchronously, never through `api.ts` or the load gate. `staff` remains excluded because it's pre-auth
-login/role-switch UI with no `data.ts` to seam. `public` gained its own seam later (`src/lib/public/api.ts`
+or `api.ts` import at all (hardcoded nav config), while `coach`'s Topbar still imports `NOTIFS` from
+`data.ts` for its unread-bell dropdown — synchronously, never through `api.ts` or the load gate (coach's
+workflow notifications have no backend feed yet, a standing P2 untouched by the identity change below).
+The identity slot itself is a separate axis: since 2026-07-14 both shells read the avatar initial /
+display name / popover off `$authStore.member` — `admin`'s `Sidebar.svelte`, and `coach`'s `Sidebar.svelte`
+plus `Topbar.svelte` — still a synchronous store read, not a new `api.ts`/load-gate seam, replacing the
+mock `COACH` constant and admin's local `PROFILE.name`/`PROFILE.initial` fields (`docs/adr/0013`).
+`staff` remains excluded because it's pre-auth login/role-switch UI with no `data.ts` to seam. `public`
+gained its own seam later (`src/lib/public/api.ts`
 + `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id shapes into the existing
 marketing types, including cents→NT$ conversion via the shared `ntd()` helper — single *definition*
 here, not its only caller, see `docs/adr/0006`) once its
@@ -222,6 +232,34 @@ pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venue
 `ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions pulled out of the component,
 which is now a thin adapter over them; deliberately incompatible with, and never merged into, coach's own
 Monday-leading `schedule-dates.ts`.
+
+## Load gate vs. hydration gate: which one owns a shared store's fetch?
+
+Three shapes exist for a page whose data already lives in a cross-route store (`docs/adr/0008`), and
+picking between them only depends on one question — can the store's hydration be triggered from more
+than one place, independent of any single page's own load-gate?
+
+- **member notifications — two entry points, one shared flag**: the notifications *page* drives its own
+  load-gate, and `member/api.ts`'s `getDashboard()` also opportunistically hydrates the same store
+  (`hydrateSessionStores`, see above) — two independent triggers that must agree on one guard. The store
+  therefore owns a full `createHydrationGate` instance, and the page's
+  `createLoadGate({ hydrate: { flag, into } })` reads/writes that *same* `gate.hydrated` writable rather
+  than declaring its own.
+- **mobile notifications — one entry point, a plain flag suffices**: nothing outside the notifications
+  page hydrates `notifs`, so there's no second trigger to coordinate with. `notifsHydrated` stays a plain
+  `writable(false)` wired straight into the page's `createLoadGate({ hydrate })` option; its mutators
+  (`markRead`/`markAllRead`, since 2026-07-14 real `PATCH /notifications/{id}/read` calls — see
+  `docs/adr/0013`) flip it by hand instead of calling a `markMutated()` on a gate instance that would
+  otherwise just wrap the same one assignment.
+- **mobile-admin ops/messages — store-owned, multiple mutators**: `hydrateOps`/`hydrateMessages` (and
+  their `refresh*` counterparts) live in `stores.ts`, not the page — the page's gate calls them directly
+  as its `fetch`/`refresh`. Several mutators (`markOrderPaid`/`markMessageRead`) can flip the guard, and
+  none of them is "the page", so the fetch/apply/guard lifecycle has to live where the mutators do: the
+  full `createHydrationGate` factory, store-owned.
+
+Rule of thumb: reach for the standalone `createHydrationGate` when a store's hydration can be triggered
+from more than one place (another getter, another mutator, another page); a lone page with a lone mutator
+can wire a plain writable straight into `load-gate.ts`'s `hydrate` option instead.
 
 ## Single-page controllers and orchestrators (coach, admin)
 
