@@ -12,13 +12,27 @@ import { LEVELS, type Level } from '$lib/domain/course-level';
 export { LEVELS };
 export type { Level };
 // 活 facade:course-request.ts/ClassEditDialog.svelte/StatusBadge.svelte 等經本檔取得 LEVELS/Level(來源=$lib/domain/course-level,FE#17)
+export { LEVEL_TONE } from '$lib/domain/course-level';
+// 活 facade:StatusBadge.svelte 經本檔取得 LEVEL_TONE(來源=$lib/domain/course-level,批次 1 W2a)
+import type { MemberAccountStatus } from '$lib/domain/members';
+export { MEMBER_STATUS, MEMBER_ACCOUNT_STATUS } from '$lib/domain/members';
+export type { MemberStatus, MemberAccountStatus } from '$lib/domain/members';
+// 活 facade:StatusBadge.svelte/admin/api.ts/member-account-filter.ts 等經本檔取得 MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/MemberStatus/MemberAccountStatus(來源=$lib/domain/members,批次 1 W2a)
+import type { VenueStatus } from '$lib/domain/venues';
+export { VENUE_STATUS } from '$lib/domain/venues';
+export type { VenueStatus } from '$lib/domain/venues';
+// 活 facade:VenueEditDialog.svelte/StatusBadge.svelte 等經本檔取得 VENUE_STATUS/VenueStatus(來源=$lib/domain/venues,批次 1 W2a)
+import type { TicketType } from '$lib/domain/tickets';
+export { TICKET_TYPE } from '$lib/domain/tickets';
+export type { TicketType } from '$lib/domain/tickets';
+// 活 facade:TicketEditDialog.svelte/admin/api.ts/StatusBadge(.test).ts 等經本檔取得 TICKET_TYPE/TicketType(來源=$lib/domain/tickets,批次 1 W2a)
+import type { ClassStatus } from '$lib/domain/classes';
+export { STATUS_TONE } from '$lib/domain/classes';
+export type { ClassStatus } from '$lib/domain/classes';
+// 活 facade:StatusBadge.svelte/admin/api.ts 等經本檔取得 STATUS_TONE/ClassStatus(來源=$lib/domain/classes,批次 1 W2a)
 
-export type MemberStatus = 'active' | 'warning' | 'paused';
 export type PayStatus = 'paid' | 'due' | 'trial';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
-export type TicketType = 'ticket' | 'membership' | 'course_package';
-export type VenueStatus = 'available' | 'maintenance';
-export type ClassStatus = '招生中' | '候補' | '額滿';
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
@@ -116,10 +130,6 @@ export interface ApiUserAccount {
 	points_balance: number;
 }
 
-/** 帳號啟用狀態 —— GET /users 只有 is_active 這個二元旗標，跟既有 MemberStatus
- *  （active/warning/paused，出席率導向）語意不同，不強塞成同一個型別。 */
-export type MemberAccountStatus = 'active' | 'inactive';
-
 export interface MemberAccount {
 	id: string;
 	name: string;
@@ -160,52 +170,21 @@ export interface Order extends OrderBase {
 // 仍供 orders/+page.svelte 與眾多元件的型別標註使用,保留。
 
 /* ───────────────────────── status maps (shapes differ!) ───────────────────────── */
-/** [Tone, label] tuples. */
-export const MEMBER_STATUS: Record<MemberStatus, [Tone, string]> = {
-	active: ['success', '在學中'],
-	warning: ['warning', '出席偏低'],
-	paused: ['neutral', '暫停中']
-};
-/** MemberAccount 專用（GET /users 的 is_active 布林值）——語意跟 MemberStatus（出席率
- *  導向的三態）不同，不能共用同一份 lookup，故獨立一份。 */
-export const MEMBER_ACCOUNT_STATUS: Record<MemberAccountStatus, [Tone, string]> = {
-	active: ['success', '啟用中'],
-	inactive: ['neutral', '已停用']
-};
+// MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/VENUE_STATUS/TICKET_TYPE/STATUS_TONE/LEVEL_TONE
+// 六張表已隨批次 1 W2a 單源收斂移至 $lib/domain（見檔頭 unions 區塊的 re-export），
+// 本檔不再本地宣告，只留下面兩張沒有搬遷的表。
 export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
 	paid: ['success', '已繳清'],
 	due: ['warning', '待續費'],
 	trial: ['info', '體驗中']
 };
 export { ORDER_STATUS } from '$lib/api/wire';
-export const VENUE_STATUS: Record<VenueStatus, [Tone, string]> = {
-	available: ['success', '可預約'],
-	maintenance: ['warning', '維護中']
-};
-export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {
-	ticket: ['accent', '單次票券'],
-	membership: ['primary', '月票方案'],
-	course_package: ['success', '課程套裝']
-};
 /** ⚠ raw hex colour + label (NOT a Tone) — used for the 6-dot attendance strip. */
 export const ATT_MARK: Record<AttMark, [string, string]> = {
 	p: ['#10B981', '出'],
 	a: ['#EF4444', '缺'],
 	l: ['#F59E0B', '遲'],
 	v: ['#94A3B8', '假']
-};
-/** plain Tone lookups. */
-export const LEVEL_TONE: Record<Level, Tone> = {
-	啟蒙: 'info',
-	入門: 'info',
-	基礎: 'primary',
-	進階: 'warning',
-	選手: 'accent'
-};
-export const STATUS_TONE: Record<ClassStatus, Tone> = {
-	招生中: 'success',
-	候補: 'warning',
-	額滿: 'neutral'
 };
 
 /* ───────────────────────── form constants ───────────────────────── */

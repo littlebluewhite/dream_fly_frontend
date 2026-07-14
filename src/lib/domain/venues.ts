@@ -5,6 +5,8 @@
  * 的裝飾欄位，已移除(見 admin/api.ts mapVenue() 註解)；新增 slug(VenueResponse.slug)
  * ，場館編輯對話框改顯示這個而非內部 id。 */
 
+import type { Tone } from '$lib/api/wire';
+
 export interface Venue {
 	id: string;
 	slug: string;
@@ -22,3 +24,14 @@ export const VENUES: Venue[] = [
 	{ id: 'E', slug: 'e', name: 'E 多功能教室', type: '律動 / 體適能', equip: ['地墊', '鏡牆', '律動球', '彈力帶'], status: 'available' },
 	{ id: 'F', slug: 'f', name: 'F 體能訓練室', type: '重訓 / 體能', equip: ['槓鈴', '壺鈴', 'TRX', '跳箱'], status: 'available' }
 ];
+
+/** 場館狀態 union（admin/mobile-admin 共用查表鍵）。 */
+export type VenueStatus = 'available' | 'maintenance';
+
+/** 場館狀態 → [Tone, 中文標籤]。canonical 標籤＝可預約——mobile-admin 舊版原本獨立
+ *  維護一份、標籤是「可使用」，語意相同但字面不同，屬靜默發散；隨本次單源收斂統一為
+ *  「可預約」（見 ADR 0013）。 */
+export const VENUE_STATUS: Record<VenueStatus, [Tone, string]> = {
+	available: ['success', '可預約'],
+	maintenance: ['warning', '維護中']
+};

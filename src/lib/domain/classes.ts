@@ -1,6 +1,7 @@
 /* src/lib/domain/classes.ts — 課程 seed data (base only; ClassRow derivation stays in admin) */
 
 import type { Level } from './course-level';
+import type { Tone } from '$lib/api/wire';
 
 export interface ClassBase {
 	id: string;
@@ -45,3 +46,14 @@ export const CLASSES_BASE: ClassBase[] = [
 	{ id: 'k21', name: '跑酷 體能班', level: '基礎', cat: '跑酷', coach: '蘇建宏', room: '戶外場', day: '週四', time: '19:00–20:30', enrolled: 9, cap: 12, age: '12 歲以上', price: 3600, status: '招生中', wait: 0, term: '2026 春季', sessions: 12 },
 	{ id: 'k22', name: '競技體操 菁英班', level: '選手', cat: '競技體操', coach: '林雅婷', room: 'A 訓練館', day: '週三 / 週六', time: '19:00–21:00', enrolled: 11, cap: 12, age: '9–15 歲', price: 6800, status: '候補', wait: 3, term: '2026 春季', sessions: 20 }
 ];
+
+/** 課程招生狀態 union（admin/mobile-admin 共用查表鍵）。 */
+export type ClassStatus = '招生中' | '候補' | '額滿';
+
+/** 課程招生狀態 → Tone（plain Tone lookup，非 [Tone, label] tuple——狀態字串本身
+ *  就是顯示標籤）。 */
+export const STATUS_TONE: Record<ClassStatus, Tone> = {
+	招生中: 'success',
+	候補: 'warning',
+	額滿: 'neutral'
+};

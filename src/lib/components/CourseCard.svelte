@@ -2,7 +2,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import type { CatalogCourse } from '$lib/public/adapters';
-  import type { Level } from '$lib/domain/course-level';
+  import { LEVEL_TONE } from '$lib/domain/course-level';
 
   export let course: CatalogCourse;
   export let showCartButton = false;
@@ -20,19 +20,11 @@
     '成人': 'primary'
   };
 
-  // FE#17：5 級課程分級（$lib/domain/course-level 共用常數）色階對齊
-  // admin/member/mobile/mobile-admin 既有的 LEVEL_TONE（啟蒙/入門 info、基礎
-  // primary、進階 warning、選手 accent），避免 foundation/elite 落回預設 primary。
-  // satisfies 對 Level 鍵集合做編譯期守護，色值所有權留在本檔（不共用 tone 常數）。
-  const canonicalLevelTones = {
-    '啟蒙': 'info',
-    '入門': 'info',
-    '基礎': 'primary',
-    '選手': 'accent',
-    '進階': 'warning'
-  } satisfies Record<Level, BadgeTone>;
-
-  const levelTones: Record<string, BadgeTone> = { ...legacyLevelTones, ...canonicalLevelTones };
+  // FE#17 引入時色階對齊 admin/member/mobile/mobile-admin 既有 LEVEL_TONE（啟蒙/入門
+  // info、基礎 primary、進階 warning、選手 accent），避免 foundation/elite 落回預設
+  // primary。批次 1 W2a 單源收斂後，改直接展開 $lib/domain/course-level 的 LEVEL_TONE
+  // （wire Tone 與本地 BadgeTone 七值同集，結構相容），不再本檔另存一份複本。
+  const levelTones: Record<string, BadgeTone> = { ...legacyLevelTones, ...LEVEL_TONE };
 
   $: levelTone = levelTones[course.level] || 'primary';
 </script>

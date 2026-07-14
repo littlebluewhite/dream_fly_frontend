@@ -2,6 +2,7 @@
  * Data copied verbatim from src/lib/admin/data.ts. */
 
 import type { IconName } from '$lib/icon-registry';
+import type { Tone } from '$lib/api/wire';
 
 export interface Ticket {
 	id: string;
@@ -25,3 +26,13 @@ export const TICKETS: Ticket[] = [
 	{ id: 'T-SEASON', name: '季票 · 暢遊', type: 'membership', price: 7200, sold: 52, quota: 120, color: '#0EA5E9', icon: 'calendar-range', desc: '單季不限堂數自由練習' },
 	{ id: 'T-FAMILY', name: '親子體驗組', type: 'ticket', price: 1000, sold: 73, quota: 150, color: '#EC4899', icon: 'users', desc: '親子雙人單堂體驗' }
 ];
+
+/** 票券類型 union（admin/mobile-admin 共用查表鍵）。 */
+export type TicketType = 'ticket' | 'membership' | 'course_package';
+
+/** 票券類型 → [Tone, 中文標籤]。 */
+export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {
+	ticket: ['accent', '單次票券'],
+	membership: ['primary', '月票方案'],
+	course_package: ['success', '課程套裝']
+};

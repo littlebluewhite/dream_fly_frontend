@@ -1,5 +1,15 @@
 /* src/lib/domain/members.ts — 學員 seed data (base only; Member derivation stays in admin) */
 
+import type { Tone } from '$lib/api/wire';
+
+/** 學員出席率三態（active=在學中/warning=出席偏低/paused=暫停中）。 */
+export type MemberStatus = 'active' | 'warning' | 'paused';
+
+/** 學員帳號啟用狀態（GET /users 的 is_active 二元旗標）。⚠ 同名異義：'active' 鍵與
+ *  MemberStatus 的 'active' 語意不同——這裡是「帳號未停用」，MemberStatus 的 'active'
+ *  是「出席率正常、在學中」，兩者不可共用同一個型別或查表。 */
+export type MemberAccountStatus = 'active' | 'inactive';
+
 export interface MemberBase {
 	id: string;
 	name: string;
@@ -8,7 +18,7 @@ export interface MemberBase {
 	course: string;
 	coach: string;
 	att: number;
-	status: 'active' | 'warning' | 'paused';
+	status: MemberStatus;
 	age: number;
 	parent: string;
 	phone: string;
@@ -72,3 +82,19 @@ export const MEMBERS_BASE: MemberBase[] = [
 	{ id: 'GY2024047', name: '歐宇翔', initial: '歐', color: '#0EA5E9', course: '競技體操 預備班', coach: '林雅婷', att: 94, status: 'active', age: 9, parent: '歐先生', phone: '0966-790-874', joined: '2024/01', points: 242, pay: 'paid', remain: 12, lastSeen: '06/10', recent: ['p', 'p', 'p', 'p', 'p', 'l'], emName: '歐媽媽', emPhone: '0966-790-878' },
 	{ id: 'GY2024048', name: '賀梓睿', initial: '賀', color: '#10B981', course: '跑酷入門班', coach: '王思齊', att: 76, status: 'warning', age: 14, parent: '賀太太', phone: '0911-900-985', joined: '2024/03', points: 172, pay: 'due', remain: 4, lastSeen: '06/02', recent: ['a', 'p', 'a', 'p', 'l', 'a'], emName: '賀先生', emPhone: '0911-900-988' }
 ];
+
+/** [Tone, label] tuples —— 出席率三態顯示（同名異義守衛見 MemberAccountStatus 註解：
+ *  這裡的 'active' 是「在學中」，非帳號啟用狀態）。 */
+export const MEMBER_STATUS: Record<MemberStatus, [Tone, string]> = {
+	active: ['success', '在學中'],
+	warning: ['warning', '出席偏低'],
+	paused: ['neutral', '暫停中']
+};
+
+/** MemberAccount 專用（GET /users 的 is_active 布林值）——同名異義：鍵面 active 與
+ *  MEMBER_STATUS.active 撞名但語意不同（這裡=啟用中，MEMBER_STATUS=在學中），故獨立
+ *  一份查表，不可共用。 */
+export const MEMBER_ACCOUNT_STATUS: Record<MemberAccountStatus, [Tone, string]> = {
+	active: ['success', '啟用中'],
+	inactive: ['neutral', '已停用']
+};

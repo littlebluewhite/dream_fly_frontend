@@ -9,6 +9,8 @@
  * elite 永遠對不出對應的繁中標籤。收斂為這裡單一共用常數，三 surface 一致
  * import，不再各自分歧；建課/篩選/badge 全走這 5 級。 */
 
+import type { Tone } from '$lib/api/wire';
+
 /** 前端顯示用的 5 級繁中標籤（單一 source of truth，供 admin/coach/member 共用）。 */
 export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 
@@ -23,4 +25,16 @@ export const COURSE_LEVEL_LABEL: Record<string, Level> = {
 	intermediate: '基礎',
 	advanced: '進階',
 	elite: '選手'
+};
+
+/** 5 級課程分級 → Badge tone。批次 1 W2a 單源收斂：production `src` 內原有 4 份
+ *  facade 複本（admin/data.ts、mobile-admin/data.ts、member/data.ts、mobile/data.ts）
+ *  ＋ CourseCard.svelte 自己的一份，共 5 複本收斂到這裡（member/mobile 兩發 facade
+ *  留給 W2b）。docs/design 原型另有一份，是 reference-only、不隨此收斂變動。 */
+export const LEVEL_TONE: Record<Level, Tone> = {
+	啟蒙: 'info',
+	入門: 'info',
+	基礎: 'primary',
+	進階: 'warning',
+	選手: 'accent'
 };
