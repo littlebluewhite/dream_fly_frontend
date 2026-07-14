@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import CoachHomePage from './+page.svelte';
 import { COACH, TODAY_LABEL, CONVERSATIONS } from '$lib/coach/data';
 import type { TodayClass } from '$lib/coach/data';
@@ -52,6 +53,7 @@ describe('/coach (+page) — 儀表板首頁', () => {
 		// 日期標籤跟著 payload 走,不是殘留的 seed 值。
 		expect(txt).toContain(FIXTURE.todayLabel);
 		expect(txt).not.toContain(TODAY_LABEL);
+		expect(txt).not.toContain('（李教練）');
 	});
 
 	it('renders every today class name in the 今日課程表 panel', async () => {
@@ -176,5 +178,39 @@ describe('/coach — 上班/下班打卡', () => {
 
 		expect(clockOut).toHaveBeenCalledWith(FIXTURE.coach.id);
 		expect(await findByText('上班打卡')).toBeInTheDocument();
+	});
+
+	it('clockTouched 防護：手動打卡後，晚到的開機查詢結果不得覆寫本地狀態(mutation wins)', async () => {
+		let resolveBoot!: (v: boolean) => void;
+		const boot = new Promise<boolean>((r) => { resolveBoot = r; });
+		vi.mocked(isClockedIn).mockReturnValueOnce(boot);
+		vi.mocked(clockIn).mockResolvedValue({ id: 'r1', clock_in: '', clock_out: null, note: null, created_at: '' });
+		const { getByText, findByText, queryByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+
+		await fireEvent.click(getByText('上班打卡'));
+		await findByText('下班打卡');
+
+		// 晚到的開機查詢結果(false)才 resolve——不得覆寫手動打卡後的本地狀態。
+		resolveBoot(false);
+		await Promise.resolve();
+		await tick();
+
+		expect(await findByText('下班打卡')).toBeInTheDocument();
+		expect(queryByText('上班打卡')).toBeNull();
+	});
+
+	it('尚未上班(後端 404)時顯示「尚未上班」toast，並將按鈕視為已下班', async () => {
+		vi.mocked(isClockedIn).mockResolvedValue(true);
+		vi.mocked(clockOut).mockRejectedValue(new ApiError(404, 'no active clock-in record found'));
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		const { getByText, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+		expect(await findByText('下班打卡')).toBeInTheDocument();
+
+		await fireEvent.click(getByText('下班打卡'));
+
+		expect(await findByText('上班打卡')).toBeInTheDocument();
+		expect(notifySpy).toHaveBeenCalledWith('error', '尚未上班', expect.any(String));
 	});
 });
