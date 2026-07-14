@@ -18,6 +18,7 @@
  * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
 
 import { writable, derived, get } from 'svelte/store';
+import { api } from '$lib/api/client';
 import { createToasts } from '$lib/stores/toasts';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import { createOverlay } from '$lib/components/mobile/overlay';
@@ -142,17 +143,34 @@ export const notifsHydrated = writable(false);
  *  重抓、覆寫掉這裡的已讀 mutation。包裝函式在呼叫共用邏輯後翻
  *  notifsHydrated.set(true),對齊 member 的 markMutated 協定(見
  *  $lib/member/notifications.ts)。set() 不繞這層——水合本身由通知頁的
- *  load-gate hydrate 選項在 into() 之後自己翻旗,不需要這裡重覆翻。 */
+ *  load-gate hydrate 選項在 into() 之後自己翻旗,不需要這裡重覆翻。
+ *  W1:markRead/markAllRead 原本只翻本地旗、不打後端,重新整理或新 session 會
+ *  讓已讀狀態回退成未讀(使用者可見 bug)。現在樂觀更新本地 store 後改送 PATCH
+ *  /notifications/{id}/read 落庫;失敗只記錄錯誤、不還原本地狀態(不閃爍原則,
+ *  同 $lib/member/notifications.ts 的 markRead/markAllRead 一致)。點擊已讀項
+ *  仍會重送 PATCH——端點冪等(同 member 沒有另外擋),不為此加 guard。 */
 export const notifs = {
 	subscribe: notifsBase.subscribe,
 	set: notifsBase.set,
-	markRead(id: string) {
-		notifsBase.markRead(id);
-		notifsHydrated.set(true);
+	async markRead(id: string): Promise<void> {
+		notifsBase.markRead(id); // 樂觀更新
+		notifsHydrated.set(true); // 翻旗(≡ markMutated)
+		try {
+			await api(`/notifications/${id}/read`, { method: 'PATCH' });
+		} catch (err) {
+			console.error('Failed to mark notification as read:', err); // 不還原(member 不閃爍原則)
+		}
 	},
-	markAllRead() {
+	async markAllRead(): Promise<'ok' | 'partial'> {
+		const unreadIds = get(notifsBase).filter((n) => !n.read).map((n) => n.id); // 必須在 markAllRead() 前捕捉
 		notifsBase.markAllRead();
 		notifsHydrated.set(true);
+		const results = await Promise.allSettled(
+			unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
+		);
+		const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+		failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
+		return failures.length > 0 ? 'partial' : 'ok';
 	}
 };
 export const unread = derived(notifs, ($n) => unreadCount($n));
@@ -167,7 +185,12 @@ export interface Prefs {
 	promo: boolean;
 	dark: boolean;
 }
-export const prefs = writable<Prefs>({ classReminder: true, coachMsg: true, promo: false, dark: false });
+/** W3:PREFS_DEFAULT 原本在這裡與 api.ts(getPreferences 後端未設定值時的
+ *  fallback)各自硬編一份同字面常數,兩處要同步改。單源改宣告在這裡,api.ts
+ *  改 import 使用。顯式型別註記 `: Prefs`(非整段 `as Prefs` 斷言)——ADR 0012
+ *  §3 合規。 */
+export const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
+export const prefs = writable<Prefs>({ ...PREFS_DEFAULT }); // spread 防常數被 store 突變污染
 
 export const profile = writable({
 	...ME,

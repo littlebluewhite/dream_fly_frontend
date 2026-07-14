@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
+import { api } from '$lib/api/client';
 import {
 	createOverlay,
 	createCart,
@@ -9,9 +10,11 @@ import {
 	notifs,
 	notifsHydrated,
 	cart,
-	placeOrder
+	placeOrder,
+	prefs,
+	PREFS_DEFAULT
 } from './stores';
-import { NOTIFS_SEED, type Course } from './data';
+import { NOTIFS_SEED, type Course, type NotifItem } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
@@ -42,6 +45,13 @@ function courseFixture(overrides: Partial<Course> = {}): Course {
 vi.mock('$lib/checkout-order', () => ({
 	submitOrder: vi.fn()
 }));
+// W1:notifs.markRead/markAllRead 現在會送 PATCH 落庫(見 stores.ts)——只替換
+// $lib/api/client 的 api(),spread 保留 ApiError 等其餘 export(同
+// member/notifications.test.ts 既有慣例)。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 describe('createOverlay', () => {
 	it('pushes and pops the screen stack', () => {
@@ -185,6 +195,75 @@ describe('notifs singleton — 同步 seed + 水合守衛(notifications 頁 core
 	});
 });
 
+describe('notifs singleton — 已讀落庫(W1:PATCH /notifications/{id}/read)', () => {
+	// 與 $lib/member/notifications.ts 的 markRead/markAllRead 行為同構(PATCH 端點、
+	// 樂觀更新失敗不還原、allSettled 併發送出、全部成功回 'ok' 否則 'partial' 四點
+	// 對齊),結構刻意不同——member 走 gate.markMutated + notifications.update,這裡
+	// 走 notifsBase + notifsHydrated 這顆 plain flag(見 stores.ts 的 notifs 宣告)。
+	const seed: NotifItem[] = [
+		{ id: 'w1', cat: 'class', icon: 'bell', tone: 'info', title: '甲', body: '乙', time: '剛才', read: false },
+		{ id: 'w2', cat: 'system', icon: 'bell', tone: 'info', title: '丙', body: '丁', time: '剛才', read: false },
+		{ id: 'w3', cat: 'system', icon: 'bell', tone: 'info', title: '戊', body: '己', time: '剛才', read: true }
+	];
+
+	beforeEach(() => {
+		vi.mocked(api).mockReset();
+		vi.mocked(api).mockResolvedValue(undefined);
+		notifs.set(seed.map((n) => ({ ...n })));
+		notifsHydrated.set(false);
+	});
+
+	it('markRead 樂觀更新後送 PATCH /notifications/{id}/read 落庫，並翻 notifsHydrated', async () => {
+		await notifs.markRead('w1');
+
+		expect(api).toHaveBeenCalledWith('/notifications/w1/read', { method: 'PATCH' });
+		expect(get(notifs).find((n) => n.id === 'w1')?.read).toBe(true);
+		expect(get(notifsHydrated)).toBe(true);
+	});
+
+	it('markRead 的 PATCH 失敗只記錄錯誤，樂觀更新的已讀狀態不還原', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockRejectedValue(new Error('network error'));
+
+		await notifs.markRead('w1');
+
+		expect(get(notifs).find((n) => n.id === 'w1')?.read).toBe(true);
+		expect(console.error).toHaveBeenCalledWith('Failed to mark notification as read:', expect.any(Error));
+	});
+
+	it("markAllRead 只對未讀各發一次 PATCH(已讀的 w3 不重發)，全部成功回 'ok'", async () => {
+		const result = await notifs.markAllRead();
+
+		expect(result).toBe('ok');
+		const patchCalls = vi.mocked(api).mock.calls.filter(([, init]) => (init as RequestInit)?.method === 'PATCH');
+		const patchPaths = patchCalls.map(([path]) => path).sort();
+		expect(patchPaths).toEqual(['/notifications/w1/read', '/notifications/w2/read']);
+		expect(patchPaths).not.toContain('/notifications/w3/read'); // w3 已讀，不重發
+	});
+
+	it("markAllRead 任一 PATCH 失敗回 'partial'，本地已讀狀態不還原", async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockImplementation(async (path: string) => {
+			if (path === '/notifications/w2/read') throw new Error('network error');
+			return undefined;
+		});
+
+		const result = await notifs.markAllRead();
+
+		expect(result).toBe('partial');
+		expect(get(notifs).every((n) => n.read)).toBe(true);
+	});
+
+	it("無未讀時零 PATCH 仍回 'ok'——unreadIds 必須在 notifsBase.markAllRead() 前捕捉，不是事後從已被翻成全已讀的 store 反查", async () => {
+		notifs.set(seed.map((n) => ({ ...n, read: true })));
+
+		const result = await notifs.markAllRead();
+
+		expect(api).not.toHaveBeenCalled();
+		expect(result).toBe('ok');
+	});
+});
+
 describe('cart waitlist guard', () => {
 	const fullCourse = courseFixture({ id: 'k9', name: '額滿體操班', price: 5000, spots: 0 });
 	it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
@@ -300,5 +379,16 @@ describe('placeOrder — 委派 submitOrder(mobile adapter,C4 首套單測)', ()
 		await expect(placeOrder('', false, 'key-3')).rejects.toBe(err);
 
 		expect(get(cart)).toHaveLength(1); // adapter 沒有自己的 try/catch,失敗原樣拋出、不會動購物車
+	});
+});
+
+describe('prefs', () => {
+	// W3:PREFS_DEFAULT 單源改宣告在 stores.ts(api.ts 的 getPreferences fallback
+	// 改 import 這裡的常數,不再各自硬編一份字面)。prefs store 的初始值必須是
+	// PREFS_DEFAULT 的 spread 拷貝,不是同一參照——否則 store 之後的突變會污染
+	// 這顆共用常數。
+	it('初始值等於 PREFS_DEFAULT，但非同一參照(spread 隔離)', () => {
+		expect(get(prefs)).toEqual(PREFS_DEFAULT);
+		expect(get(prefs)).not.toBe(PREFS_DEFAULT);
 	});
 });

@@ -2,14 +2,17 @@
   /* 通知 tab。account.jsx NotificationsScreen (6-45)。
    * ScreenHeader（右側「重新整理」+「全部已讀」，未讀>0 才顯示）、NOTIF_CATS 類別
    * chip（本地 cat）、notifs store 清單、點擊 → notifs.markRead(id)、全部已讀 →
-   * notifs.markAllRead + toast、MEmpty fallback。
+   * notifs.markAllRead 依回傳值分流 toast、MEmpty fallback。
    * Legacy Svelte（無 runes）、繁體中文文案。
    *
    * 資料改由 getNotifications()(API 接縫)非同步水合共享 notifs store
    * (member notifications 範本同款):createLoadGate($lib/load-gate)取代手寫
    * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、notifsHydrated
    * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試
-   * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 既有 mutation 不動。 */
+   * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 現已落庫 PATCH
+   * /notifications/{id}/read(W1,失敗不還原;細節見 $lib/mobile/stores.ts 的
+   * notifs wrapper 註解),頁面只依 markAllRead 回傳值('ok'|'partial')分流
+   * toast 文案。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -39,9 +42,13 @@
 
   $: list = $notifs.filter((n) => cat === 'all' || n.cat === cat);
 
-  function markAll() {
-    notifs.markAllRead();
-    toasts.notify('success', '已全部標示為已讀');
+  async function markAll() {
+    const result = await notifs.markAllRead();
+    if (result === 'partial') {
+      toasts.notify('error', '部分通知標記失敗', '部分通知未能同步已讀狀態，請稍後重新整理。');
+    } else {
+      toasts.notify('success', '已全部標示為已讀');
+    }
   }
 </script>
 

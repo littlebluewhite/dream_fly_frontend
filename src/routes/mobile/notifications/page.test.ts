@@ -3,15 +3,27 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { getNotifications } from '$lib/mobile/api';
-import { notifs, notifsHydrated } from '$lib/mobile/stores';
+import { api } from '$lib/api/client';
+import { notifs, notifsHydrated, toasts } from '$lib/mobile/stores';
 import { NOTIFS_SEED } from '$lib/mobile/data';
 import type { NotifItem } from '$lib/mobile/data';
 import Page from './+page.svelte';
 
 vi.mock('$lib/mobile/api', () => ({ getNotifications: vi.fn() }));
+// W1:notifs.markRead/markAllRead 現在會送 PATCH 落庫(見 $lib/mobile/stores.ts)——
+// 只替換 $lib/api/client 的 api(),spread 保留其餘 export(同 member 前例)。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 beforeEach(() => {
 	vi.mocked(getNotifications).mockReset();
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockResolvedValue(undefined);
+	// toasts 是自動過期的 singleton — 前一個測試的 toast 會殘留到下一個測試,
+	// 清掉才能對「某 toast 不得出現」做可靠斷言(同 member 前例)。
+	get(toasts).forEach((t) => toasts.dismiss(t.id));
 	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
 	notifsHydrated.set(false);
 	// 重新 seed 共享 feed(store 同步 seed 起始,比照 member 前例),避免前一
@@ -116,5 +128,56 @@ describe('mobile/notifications 頁', () => {
 		vi.mocked(getNotifications).mockResolvedValue([]);
 		render(Page);
 		expect(await screen.findByText('沒有通知')).toBeInTheDocument();
+	});
+
+	// 回歸主測(W1):seed 預設 3 筆未讀,點其中 1 筆後 header 仍是「2 則未讀」,
+	// 斷不出「已讀有沒有真的落庫、重新整理會不會回退」的乾淨信號——改用只有
+	// 1 筆未讀的 fixture,點過之後 header 會轉成極端值「全部已讀」，才是可靠訊號。
+	it('點通知標記已讀送出 PATCH，重新整理後已讀不回退、header 轉為「全部已讀」', async () => {
+		const SINGLE_UNREAD: NotifItem[] = [
+			{ id: 'w1', cat: 'system', icon: 'bell', tone: 'info', title: '單筆未讀通知', body: '內容', time: '剛才', read: false }
+		];
+		vi.mocked(getNotifications).mockResolvedValueOnce(SINGLE_UNREAD.map((n) => ({ ...n })));
+		render(Page);
+		await screen.findByText('單筆未讀通知');
+		expect(screen.getByText('1 則未讀')).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByText('單筆未讀通知'));
+		expect(api).toHaveBeenCalledWith('/notifications/w1/read', { method: 'PATCH' });
+
+		// 模擬後端已落庫:「重新整理」重新 fetch 到的這筆資料已是 read:true。
+		vi.mocked(getNotifications).mockResolvedValueOnce([{ ...SINGLE_UNREAD[0], read: true }]);
+		await fireEvent.click(screen.getByRole('button', { name: /重新整理/ }));
+
+		await screen.findByText('全部已讀');
+	});
+
+	it('全部已讀成功 → success toast', async () => {
+		vi.mocked(getNotifications).mockResolvedValue(NOTIFS_SEED.map((n) => ({ ...n })));
+		render(Page);
+		await screen.findByText('明日課程提醒');
+
+		await fireEvent.click(screen.getByRole('button', { name: '全部已讀' }));
+
+		await vi.waitFor(() => {
+			expect(get(toasts).some((t) => t.title === '已全部標示為已讀')).toBe(true);
+		});
+	});
+
+	it('任一已讀 PATCH 失敗 → error toast「部分通知標記失敗」', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(getNotifications).mockResolvedValue(NOTIFS_SEED.map((n) => ({ ...n })));
+		vi.mocked(api).mockImplementation(async (path: string) => {
+			if (path === '/notifications/n2/read') throw new Error('network error');
+			return undefined;
+		});
+		render(Page);
+		await screen.findByText('明日課程提醒');
+
+		await fireEvent.click(screen.getByRole('button', { name: '全部已讀' }));
+
+		await vi.waitFor(() => {
+			expect(get(toasts).some((t) => t.title === '部分通知標記失敗')).toBe(true);
+		});
 	});
 });
