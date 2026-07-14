@@ -27,12 +27,14 @@ session 就回退成未讀。本 ADR 記錄三者的收斂決定、判準,以及
 | `LEVEL_TONE`(5 級課程分級) | `domain/course-level.ts` | admin(活 re-export),mobile-admin/member/mobile(皆純註記 re-assert,各自收窄回自身型別),`CourseCard.svelte`(公開行銷頁,直接展開) |
 | `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` | `domain/member-app.ts` | member(活 re-export,`TIME_ROWS` 亦同)、mobile(`WEEK`/`COACH_REPLIES` 活 re-export、`NOTIF_CATS` 純註記收窄、`TIME_ROWS` 不轉出) |
 
-**宣告形與不 `readonly` 理由**:domain 各檔一律用明確 `Record<K, V>` 型別註記(非 `as const`、非
+**宣告形與不 `readonly` 理由**:五個 entity 查表檔(members/venues/tickets/classes/course-level)
+一律用明確 `Record<K, V>` 型別註記(非 `as const`、非
 `readonly`)。不用 `readonly` 是刻意的——`readonly` 陣列/tuple 無法賦值給可變陣列型別的位置,而
 mobile/mobile-admin 自己的 `Tone` 是可變 tuple(`[string, string]`),若 domain 端把值宣告成
-`readonly`,mobile 側純註記收窄回自己 `Record<string, Tone>` 的賦值就會直接編譯失敗。domain 各檔一律
-`import type { Tone } from '$lib/api/wire'`(type-only,沿 `domain/orders.ts` 既有的 `OrderStatus`
-先例)。
+`readonly`,mobile 側純註記收窄回自己 `Record<string, Tone>` 的賦值就會直接編譯失敗。五個 entity
+查表檔一律 `import type { Tone } from '$lib/api/wire'`(type-only,沿 `domain/orders.ts` 既有的
+`OrderStatus` 先例)。`member-app.ts` 的成對常數不在此形之內——依其檔頭章程以寬鬆結構型別宣告
+(`string[]`、`[string, string][]`),`Tone` 型別零 import(見下文「member-app 章程部分重開原文」)。
 
 **facade 三形**——同一份 domain 查表,三種 facade 依自身型別限制選用其中一形,而非統一成一種:
 

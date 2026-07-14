@@ -4,9 +4,9 @@
    * so this navy-on-gold variant is custom.
    *
    * `initial` 為 optional prop(審查回修):已接縫頁面(settings/ProfileTab)
-   * 傳入 payload 的 coach.initial;預設值保住 Sidebar/Topbar 等 layout 殼層的
-   * 既有無-prop 呼叫 — 這是殼層邊界的刻意預設,與頁面元件 required-props 原則
-   * 不衝突。 */
+   * 傳入 payload 的 coach.initial;W4(ADR 0013 §2)起 Sidebar 亦顯式傳入
+   * authStore 衍生縮寫,所有 production 呼叫端均已傳 prop — `COACH.initial`
+   * 預設值已無 production 觸達路徑,依該 ADR 裁決刻意保留(退役另 pass 處理)。 */
   import { COACH } from '$lib/coach/data';
   export let size = 40;
   export let online = false;
