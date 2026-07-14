@@ -218,9 +218,10 @@ refresh, which is page-critical rather than incidental. Layout shells stay outsi
 or `api.ts` import at all (hardcoded nav config), while `coach`'s Topbar still imports `NOTIFS` from
 `data.ts` for its unread-bell dropdown — synchronously, never through `api.ts` or the load gate (coach's
 workflow notifications have no backend feed yet, a standing P2 untouched by the identity change below).
-The identity slot itself is a separate axis: since 2026-07-14 both shells read the avatar initial /
-display name / popover off `$authStore.member` — `admin`'s `Sidebar.svelte`, and `coach`'s `Sidebar.svelte`
-plus `Topbar.svelte` — still a synchronous store read, not a new `api.ts`/load-gate seam, replacing the
+The identity slot itself is a separate axis: since 2026-07-14 both shells read it off `$authStore.member`
+— avatar initial, display name, and profile popover on `admin`'s and `coach`'s `Sidebar.svelte`; on
+`coach`'s `Topbar.svelte` just the avatar-initial disc (its only popover is the notification bell, not an
+identity surface) — still a synchronous store read, not a new `api.ts`/load-gate seam, replacing the
 mock `COACH` constant and admin's local `PROFILE.name`/`PROFILE.initial` fields (`docs/adr/0013`).
 `staff` remains excluded because it's pre-auth login/role-switch UI with no `data.ts` to seam. `public`
 gained its own seam later (`src/lib/public/api.ts`

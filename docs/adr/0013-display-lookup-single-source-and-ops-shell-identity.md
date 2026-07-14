@@ -40,9 +40,13 @@ mobile/mobile-admin 自己的 `Tone` 是可變 tuple(`[string, string]`),若 dom
    (連同對應型別的 `export type {...} from`)——admin 端本來就用 wire 的 `Tone` 型別,不需要另外收窄,
    直接轉手。
 2. **mobile-admin(純註記 re-assert)**:`import { X as X_BASE } from '$lib/domain/Y'; export const X:
-   Record<string, Tone> = X_BASE;`——`X_BASE` 是 bare reference,不是字面重建;mobile-admin 自己的
-   `Tone` 是本地 tuple 型別、鍵也偏好鬆散 `string`(供 `LevelBadge.svelte` 等消費端索引),不能直接
-   `export {...} from` 域檔的窄型別,但賦值仍是同一個參照。
+   <本檔可見型別> = X_BASE;`——核心不變量是 `X_BASE` 為 bare reference、賦值後仍是同一個參照,不是
+   字面重建。可見型別的組合依表而異,不是一律同一種:`VENUE_STATUS`/`TICKET_TYPE` 是
+   `Record<string, Tone>`(鬆散 `string` 鍵 + 本檔 tuple `Tone` 值),`MEMBER_ACCOUNT_STATUS` 鍵保留
+   具名 union(`Record<MemberAccountStatus, Tone>`),`LEVEL_TONE`/`STATUS_TONE` 是
+   `Record<string, string>`(plain-tone 表,值非 tuple)。mobile-admin 自己的 `Tone` 是本地 tuple
+   型別、多數表的鍵偏好鬆散 `string`(供 `LevelBadge.svelte` 等消費端索引),不能直接
+   `export {...} from` 域檔的窄型別。
 3. **member/mobile(以自身較嚴格型別純註記收窄同參照)**:domain 存放結構寬鬆的型別,member/mobile
    匯入 `X_BASE` 後宣告 `export const X: Record<string, 自己的嚴格 Tone> = X_BASE;`——同一個參照,
    零 `as` 斷言,先例是 `NOTIFS_SEED` 的 `satisfies` 搭配(domain 宣告處用 `satisfies` 鎖住 tone 字面,
@@ -77,8 +81,10 @@ domain 只存放能被兩側各自純註記收窄的寬鬆結構型別。
 也維護一份 5 鍵 `canonicalLevelTones`(`satisfies Record<Level, BadgeTone>`),是 `LEVEL_TONE` 的
 第 5 份複本(前 4 份是 admin/mobile-admin/member/mobile 各自 facade 的複本)。單源後改為直接展開
 domain 的 `LEVEL_TONE`(`{ ...legacyLevelTones, ...LEVEL_TONE }`)——wire 的 `Tone`(7 值)與本地
-`BadgeTone` 七值同集,結構相容,零額外斷言;`Level` 的型別 import 隨之從 type-only 升級為 value
-import。
+`BadgeTone` 七值同集,結構相容,零額外斷言;對 `$lib/domain/course-level` 的 import 隨之從
+`import type { Level }` 換成 `import { LEVEL_TONE }`——`canonicalLevelTones` 刪除後 `Level` 在本檔
+已無任何使用者,原 type-only import 整行移除,新增的是另一個符號的 value import,不是同一個符號
+的升級。
 
 **`TIME_ROWS` 死出口**:mobile 側 `TIME_ROWS` 原本也曾比照 `WEEK` 轉出,但複核發現 mobile 沒有等價於
 桌面 `member/schedule` 頁的「每週課表格線」畫面,是零消費者的死出口。單源到 `domain/member-app.ts`
@@ -117,10 +123,13 @@ import。
 
 ### 2. 營運桌面 shell 身分立場窄化:coach/admin 讀 `$authStore.member`
 
-coach(`Sidebar.svelte`/`Topbar.svelte`)與 admin(`Sidebar.svelte`)桌面 shell 的身分槽位(大頭貼
-縮寫、姓名、popover 內容),原本讀寫死的 mock persona——`coach/data.ts` 的 `COACH`(李志偉)、
-admin `Sidebar.svelte` 本地的 `PROFILE.name`/`PROFILE.initial`(陳怡君)。本輪改讀真實登入者
-`$authStore.member`,對齊 member surface 早自 ADR 0006 起就已完成的同類收斂。
+coach(`Sidebar.svelte`/`Topbar.svelte`)與 admin(`Sidebar.svelte`)桌面 shell 的身分槽位,原本讀
+寫死的 mock persona——`coach/data.ts` 的 `COACH`(李志偉)、admin `Sidebar.svelte` 本地的
+`PROFILE.name`/`PROFILE.initial`(陳怡君)。本輪改讀真實登入者 `$authStore.member`,對齊 member
+surface 早自 ADR 0006 起就已完成的同類收斂。三個檔案的身分槽位範圍不同:兩個 `Sidebar.svelte` 是
+「大頭貼縮寫 + 顯示名 + 身分 popover」三件套;coach `Topbar.svelte` 唯一的身分元素是右上角的大頭貼
+縮寫圓圈(`{$authStore.member?.initial ?? '?'}`),沒有姓名文字——它的 popover 是通知鈴鐺,與身分
+無關。
 
 **身分槽位讀同步 `authStore` 不算走 `api.ts`/load-gate 的語意釐清**:`docs/architecture.md` 既有的
 「layout shell 在 seam 之外」這條界線,本輪並未被打破。`$: member = $authStore.member` 是**同步的
@@ -136,10 +145,11 @@ module-context 的 `NOTIFS`,下述)。
 
 **fallback 表**(未登入或 `member` 為 `null` 時的顯示):
 
-| Shell | 顯示名 fallback | 縮寫 fallback |
-| --- | --- | --- |
-| coach `Sidebar`/`Topbar` | 「教練」 | 「?」 |
-| admin `Sidebar` | 「管理員」 | 「?」 |
+| Shell | 身分槽位 | 顯示名 fallback | 縮寫 fallback |
+| --- | --- | --- | --- |
+| coach `Sidebar` | 縮寫 + 顯示名 + popover | 「教練」 | 「?」 |
+| coach `Topbar` | 僅大頭貼縮寫圓圈 | —(無姓名槽位) | 「?」 |
+| admin `Sidebar` | 縮寫 + 姓名 + popover | 「管理員」 | 「?」 |
 
 **職稱 → 角色標籤**:coach `Sidebar.svelte` profile card 原本顯示 `COACH.role`(「資深體操教練」,
 一個具體職稱)換成靜態字面「教練」——`authStore.member` 沒有 job-title 欄位,shell 不該假造一個
