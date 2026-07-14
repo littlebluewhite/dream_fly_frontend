@@ -18,6 +18,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { toasts } from '$lib/admin/stores';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
+  import { authStore } from '$lib/stores/authStore';
   import type { IconName } from '$lib/icon-registry';
 
   const NAV: { href: string; label: string; icon: IconName }[] = [
@@ -34,14 +35,15 @@
   ];
 
   const PROFILE = {
-    name: '陳怡君',
-    initial: '陳',
     role: '系統管理員',
     desc: '可存取全平台後台 · 9 個功能模組',
     color: '#0066CC'
   };
 
   $: path = $page.url.pathname as string;
+  $: member = $authStore.member;
+  $: profileName = member?.name ?? '管理員';
+  $: profileInitial = member?.initial ?? '?';
 
   let menuOpen = false;
   function logout() {
@@ -91,9 +93,9 @@
       ></button>
       <div class="menu" role="menu">
         <div class="menu-head">
-          <Avatar name={PROFILE.initial} size="sm" color={PROFILE.color} />
+          <Avatar name={profileInitial} size="sm" color={PROFILE.color} />
           <div class="menu-head-text">
-            <div class="menu-head-name">{PROFILE.name}</div>
+            <div class="menu-head-name">{profileName}</div>
             <div class="menu-head-desc">{PROFILE.desc}</div>
           </div>
         </div>
@@ -144,9 +146,9 @@
       </div>
     {/if}
     <button class="profile" class:open={menuOpen} type="button" on:click={() => (menuOpen = !menuOpen)}>
-      <Avatar name={PROFILE.initial} size="sm" color={PROFILE.color} />
+      <Avatar name={profileInitial} size="sm" color={PROFILE.color} />
       <div class="profile-text">
-        <div class="profile-name">{PROFILE.name}</div>
+        <div class="profile-name">{profileName}</div>
         <div class="profile-role">{PROFILE.role}</div>
       </div>
       <Icon name="chevrons-up-down" size={16} color="rgba(255,255,255,0.5)" />
