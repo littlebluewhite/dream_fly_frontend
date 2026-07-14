@@ -22,9 +22,9 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { search, toasts } from '$lib/coach/stores';
-  import { COACH } from '$lib/coach/data';
   import { coachPath } from '$lib/coach/nav';
   import { unreadCount } from '$lib/stores/read-state';
+  import { authStore } from '$lib/stores/authStore';
 
   export let crumb: string;
   export let title: string;
@@ -149,7 +149,7 @@
     <div
       style="width:36px;height:36px;border-radius:50%;background:var(--df-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14.4px;flex:none;font-family:var(--df-font-body)"
     >
-      {COACH.initial}
+      {$authStore.member?.initial ?? '?'}
     </div>
   </div>
 </div>

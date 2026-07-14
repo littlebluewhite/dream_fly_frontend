@@ -13,8 +13,9 @@
  *   (admin/coach/member) share one label set.
  *
  * Task 1(C2 死種子退役):本檔案現況是「活查表 + 活種子 + 型別」混合,不再是
- * mock-only。COACH/NOTIFS/TODAY_LABEL/CONVERSATIONS 是 coach/api.ts 或
- * Topbar/Sidebar 等元件直接消費的活種子;CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
+ * mock-only。NOTIFS 是 Topbar 直接消費的活種子,TODAY_LABEL/CONVERSATIONS 是
+ * coach/api.ts 消費的活種子(COACH 消費者見其宣告旁的漂移註記——W4 起
+ * Topbar/Sidebar 已改讀 authStore,不再直接消費 COACH);CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
  * CAT_COLOR 是頁面與元件消費的活查表;其餘示範資料(TODAY_CLASSES/STUDENTS/
  * SCHED_DAYS/SCHED_COURSES/ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES/THREAD/
  * SHARED_FILES)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
@@ -156,6 +157,10 @@ export interface Notif {
 }
 
 /* ──────────────── the coach (李志偉 教練) ──────────────── */
+// Task W4(coach/admin 桌面 shell 身分接 authStore):Topbar/Sidebar 已改讀
+// $authStore.member 衍生身分槽位,COACH 值不再是這兩個元件的消費者——僅剩
+// CoachAvatar 的預設 initial 與 routes/coach/page.test.ts 的 fixture 兩處消費者;
+// Coach 型別仍是 coach/api.ts mapCoach() 的回傳形狀,不退役。
 export const COACH: Coach = {
 	name: '李志偉',
 	display: '李教練',

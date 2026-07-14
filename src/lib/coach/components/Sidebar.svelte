@@ -9,13 +9,18 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachAvatar from './CoachAvatar.svelte';
   import { NAV, coachPath, isActive } from '$lib/coach/nav';
-  import { COACH } from '$lib/coach/data';
+  import { authStore } from '$lib/stores/authStore';
+  import { initialOf } from '$lib/api/wire';
   import { toasts } from '$lib/coach/stores';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
   import type { IconName } from '$lib/icon-registry';
 
   let menu = false;
   $: path = $page.url.pathname;
+  $: member = $authStore.member;
+  $: coachInitial = member ? initialOf(member.name) : '?';
+  $: coachDisplay = member ? `${coachInitial}教練` : '教練';
+  $: coachFull = member ? `${member.name} 教練` : '教練';
 
   const MENU_ROWS: { icon: IconName; label: string; desc: string; to: string }[] = [
     { icon: 'user-cog', label: '個人設定', desc: '編輯個人資料與偏好', to: 'settings' },
@@ -92,10 +97,9 @@
       style="position:absolute;bottom:86px;left:16px;width:256px;background:#fff;border-radius:14px;box-shadow:var(--df-shadow-strong);z-index:70;max-height:calc(100vh - 112px);overflow-x:hidden;overflow-y:auto;animation:df-fade-up .16s ease both"
     >
       <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--df-border)">
-        <CoachAvatar size={40} online />
+        <CoachAvatar size={40} online initial={coachInitial} />
         <div style="min-width:0">
-          <div style="font-size:14px;font-weight:700;color:var(--df-ink)">{COACH.full}</div>
-          <div style="font-size:11.5px;color:var(--df-text-light);margin-top:2px">{COACH.id}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--df-ink)">{coachFull}</div>
         </div>
       </div>
       <!-- 切換至其他身分 (shell.jsx:57-78) -->
@@ -168,10 +172,10 @@
       ? '#243149'
       : 'var(--df-ink-soft)'};border:none;cursor:pointer;text-align:left;width:100%"
   >
-    <CoachAvatar size={40} online />
+    <CoachAvatar size={40} online initial={coachInitial} />
     <div style="flex:1;min-width:0">
-      <div style="font-size:14px;font-weight:600;color:#fff;font-family:var(--df-font-body)">{COACH.display}</div>
-      <div style="font-size:12px;color:#94A3B8;font-family:var(--df-font-body)">{COACH.role}</div>
+      <div style="font-size:14px;font-weight:600;color:#fff;font-family:var(--df-font-body)">{coachDisplay}</div>
+      <div style="font-size:12px;color:#94A3B8;font-family:var(--df-font-body)">教練</div>
     </div>
     <Icon name="log-out" size={18} color="#94A3B8" />
   </button>

@@ -197,7 +197,7 @@
   <div
     style="background:linear-gradient(135deg, var(--df-primary), var(--df-primary-dark));border-radius:14px;padding:26px 28px;color:#fff"
   >
-    <div style="font-size:22px;font-weight:800;letter-spacing:-0.3px">早安，{data.coach.display}（李教練）</div>
+    <div style="font-size:22px;font-weight:800;letter-spacing:-0.3px">早安，{data.coach.display}</div>
     <div style="font-size:14px;opacity:0.85;margin-top:6px">{data.todayLabel}</div>
     <div style="font-size:13.5px;opacity:0.78;margin-top:4px">
       今天有 {todayClasses.length} 堂課，{data.pendingClasses}待點名
