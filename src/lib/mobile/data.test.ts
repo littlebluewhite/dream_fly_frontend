@@ -25,8 +25,9 @@ import { describe, it, expect } from 'vitest';
  * MAKEUP_SLOTS/POINTS_LEDGER/REWARDS/REPORTS/CERTS 的值，以及 Stat/Skill/
  * Upcoming/ScheduleBlock/Order/MakeupSlot/PointsEntry/Reward/Report/Cert 型別，
  * 經確認這個 facade 本身無 runtime 消費者後整批移除——下面兩個守衛區塊同步縮減
- * 為僅涵蓋還活著的 ME/CONTACT_THREAD/NOTIFS_SEED/WEEK/COACH_REPLIES/NOTIF_CATS
- * 六個值（WEEK/COACH_REPLIES/NOTIF_CATS 是批次 2 W2b 新增的 re-export）與
+ * 為僅涵蓋還活著的 ME/CONTACT_THREAD/NOTIFS_SEED/WEEK/COACH_REPLIES/NOTIF_CATS/
+ * LEAVE_STATUS 七個值（WEEK/COACH_REPLIES/NOTIF_CATS 是批次 2 W2b 新增的
+ * re-export；LEAVE_STATUS 是卡 3 升遷 domain 後新增的收窄 re-assert）與
  * Member/MyCourse/AttRecord/ThreadMsg/NotifItem 五個型別；MyCourse 改用檔內
  * inline literal（同 ATT_HISTORY 退役後的既有模式）驗證型別匯出仍可用，不再
  * 借用已退役的 MY_COURSES[0]。 */
@@ -38,6 +39,7 @@ import {
 	WEEK,
 	COACH_REPLIES,
 	NOTIF_CATS,
+	LEAVE_STATUS,
 	type Member,
 	type MyCourse,
 	type AttRecord,
@@ -51,7 +53,8 @@ import {
 	NOTIFS_SEED as D_NOTIFS_SEED,
 	WEEK as D_WEEK,
 	COACH_REPLIES as D_COACH_REPLIES,
-	NOTIF_CATS as D_NOTIF_CATS
+	NOTIF_CATS as D_NOTIF_CATS,
+	LEAVE_STATUS as D_LEAVE_STATUS
 } from '$lib/domain/member-app';
 
 describe('mobile facade re-exports domain/member-app by reference (single source)', () => {
@@ -62,6 +65,9 @@ describe('mobile facade re-exports domain/member-app by reference (single source
 		expect(WEEK).toBe(D_WEEK);
 		expect(COACH_REPLIES).toBe(D_COACH_REPLIES);
 		expect(NOTIF_CATS).toBe(D_NOTIF_CATS);
+		// 卡 3:LEAVE_STATUS 是收窄 re-assert(Record<string, Tone> 純註記)——同參照
+		// 而非重建,是這次升遷的單源保證。
+		expect(LEAVE_STATUS).toBe(D_LEAVE_STATUS);
 	});
 });
 

@@ -46,13 +46,20 @@ export type { Notification as NotifItem } from '$lib/domain/member-app';
 // 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
 import type { CatalogCourse } from '$lib/public/adapters';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
-import { NOTIF_CATS as NOTIF_CATS_BASE } from '$lib/domain/member-app';
+import { NOTIF_CATS as NOTIF_CATS_BASE, LEAVE_STATUS as LEAVE_STATUS_BASE } from '$lib/domain/member-app';
 import type { IconName } from '$lib/icon-registry';
 
 /* ---- Attendance history (active course) ----
  * 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
  * present/absent/leave 三值。 */
 export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'], leave: ['info', '請假'], absent: ['error', '缺席'] };
+
+/* ---- 「我的請假」清單狀態 badge ----
+ * 卡 3：LEAVE_STATUS 升遷 $lib/domain/member-app 單源（MyCourseDetail 原跨 surface
+ * 直取 member/data，改經本 facade）——以本檔 tuple Tone 對同一參照純註記收窄、
+ * 鍵保持鬆散 string（消費端用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]`
+ * 取值），零斷言（ADR 0013 facade 三形之 member/mobile 收窄形）。 */
+export const LEAVE_STATUS: Record<string, Tone> = LEAVE_STATUS_BASE;
 
 /* ---- Course catalog (課程介紹) ----
  * Task 19：getCourses()/getHome() 改接真後端(見 api.ts，復用 member/api.ts 的

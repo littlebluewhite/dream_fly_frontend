@@ -35,11 +35,10 @@
     leaveRequestErrorMessage,
     type LeaveRequest
   } from '$lib/member/stores';
-  import { LEAVE_STATUS } from '$lib/member/data';
   import { getEnrolmentAttendance } from '$lib/mobile/api';
   import { formatSessionDateTime } from '$lib/member/session-format';
   import { createLoadGate } from '$lib/load-gate';
-  import { ATT_STATE, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
+  import { ATT_STATE, LEAVE_STATUS, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
   import type { IconName } from '$lib/icon-registry';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
@@ -223,7 +222,9 @@
                       </div>
                     {/if}
                   </div>
-                  <Badge {tone} dot>{label}</Badge>
+                  <!-- 卡 3:LEAVE_STATUS 改經 mobile/data 收窄形(tuple Tone,首元素是鬆散
+                       string)——比照下方 ATT_STATE 的既有先例,單值 as Tone 收窄。 -->
+                  <Badge tone={tone as Tone} dot>{label}</Badge>
                   {#if lr.status === 'pending'}
                     <button
                       disabled={cancellingId === lr.id}

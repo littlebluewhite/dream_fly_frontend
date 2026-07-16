@@ -124,6 +124,22 @@ export interface AttRecord {
 	state: 'present' | 'leave' | 'absent';
 }
 
+/* ---- 「我的請假」清單狀態 badge(Task 11;integration-contract.md §3.20 的四值
+ * status)----
+ * 卡 3 升遷:原本只有 member/data.ts 一份、mobile 的 MyCourseDetail 跨 surface 直取,
+ * 收斂進 domain 單源後兩側 facade 各自以自身 Tone 型別對同一參照純註記收窄。未知值
+ * fallback 為原字串(同 api.ts 的 ORDER_STATUS 慣例)——消費端用
+ * `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值(mine/+page.svelte、
+ * MyCourseDetail.svelte)。satisfies 目標明列 tone 字面聯集(NOTIFS_SEED 前例:
+ * 值衍生、零 import;Tone 型別本身依檔頭決策仍不進 domain),tuple 首元素才保得住
+ * 字面型別,窄側 facade 得以零斷言收窄;新增列若用到新 tone,把它補進聯集即可。 */
+export const LEAVE_STATUS = {
+	pending: ['warning', '待審核'],
+	approved: ['success', '已核准'],
+	rejected: ['error', '已婉拒'],
+	cancelled: ['neutral', '已取消']
+} satisfies Record<string, ['warning' | 'success' | 'error' | 'neutral', string]>;
+
 /* ---- 每週課表 ----
  * tone 兩側型別不同:member 用 Tone union、mobile 用寬鬆 string。這裡存寬鬆版，
  * member facade 匯入後斷言回自己的 ScheduleBlock(tone: Tone)。 */

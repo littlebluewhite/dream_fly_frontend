@@ -4,7 +4,8 @@
  * 1. wiring check(toBe):member facade 匯出的每個共用常數與 domain 是「同一個
  *    物件參照」—— facade 是 live re-export / `as` 斷言(runtime 消失),不是複本。
  *    注意這一層抓不到「值被誤改」(兩邊永遠同參照),那是第 2、3 層的職責。
- *    (mobile facade 的同參照 + 型別匯出守衛在 src/lib/mobile/data.test.ts。)
+ *    (mobile facade 的同參照 + 型別匯出守衛在 src/lib/mobile/data.test.ts;
+ *    LEAVE_STATUS 因兩側 facade 都是收窄 re-assert(卡 3),在本檔一併雙釘。)
  * 2. 獨立字面不變量:比照 src/lib/domain/data.test.ts 的慣例(獨立不變量,不拿
  *    下游 facade 對照),對 seed 關鍵欄位做字面快照(persona 王承恩 GY2024001、
  *    課名、教練名、金額……)—— 誤改 domain 值時這裡變紅。
@@ -14,11 +15,13 @@
  *
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS(值+
  * interface)與 MY_COURSES/SCHEDULE/ORDERS(值)經確認無 runtime 消費者後整批從
- * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的 11 個常數。
+ * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的常數,
+ * 現為 12 個(卡 3 升遷 LEAVE_STATUS 後 11→12)。
  * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
  * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。 */
 import { describe, it, expect } from 'vitest';
 import * as MemberData from '$lib/member/data';
+import * as MobileData from '$lib/mobile/data';
 import {
 	ME,
 	STATS,
@@ -30,7 +33,8 @@ import {
 	WEEK,
 	TIME_ROWS,
 	COACH_REPLIES,
-	NOTIF_CATS
+	NOTIF_CATS,
+	LEAVE_STATUS
 } from './member-app';
 
 /* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ── */
@@ -47,6 +51,12 @@ describe('member facade re-exports domain/member-app by reference (single source
 		expect(MemberData.TIME_ROWS).toBe(TIME_ROWS);
 		expect(MemberData.COACH_REPLIES).toBe(COACH_REPLIES);
 		expect(MemberData.NOTIF_CATS).toBe(NOTIF_CATS);
+	});
+	// 卡 3:LEAVE_STATUS 兩側 facade 都是「純註記收窄同一參照」形(member 收窄回
+	// [Tone, string]、mobile 收窄回自家 tuple Tone)——雙釘防任何一側改成字面重建。
+	it('LEAVE_STATUS is the SAME object through BOTH facades (member + mobile narrow one domain reference)', () => {
+		expect(MemberData.LEAVE_STATUS).toBe(LEAVE_STATUS);
+		expect(MobileData.LEAVE_STATUS).toBe(LEAVE_STATUS);
 	});
 });
 
@@ -94,6 +104,14 @@ describe('literal seed invariants (independent of the facades)', () => {
 	it('NOTIF_CATS[0] is the 全部 (all) tab', () => {
 		expect(NOTIF_CATS[0]).toEqual(['all', '全部']);
 	});
+	it('LEAVE_STATUS maps the four §3.20 statuses to tone/label pairs', () => {
+		expect(LEAVE_STATUS).toEqual({
+			pending: ['warning', '待審核'],
+			approved: ['success', '已核准'],
+			rejected: ['error', '已婉拒'],
+			cancelled: ['neutral', '已取消']
+		});
+	});
 });
 
 /* ── 3. row-count canaries(防搬移 / 截斷時整列消失) ── */
@@ -108,4 +126,5 @@ describe('row counts', () => {
 	it('TIME_ROWS has 8 rows', () => expect(TIME_ROWS).toHaveLength(8));
 	it('COACH_REPLIES has 4 rows', () => expect(COACH_REPLIES).toHaveLength(4));
 	it('NOTIF_CATS has 5 rows', () => expect(NOTIF_CATS).toHaveLength(5));
+	it('LEAVE_STATUS has 4 keys', () => expect(Object.keys(LEAVE_STATUS)).toHaveLength(4));
 });

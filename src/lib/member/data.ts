@@ -44,7 +44,8 @@ export type { LedgerType };
 // (declared at its original spot below) where the const is (re-)declared.
 import {
   UPCOMING as UPCOMING_BASE,
-  NOTIFS_SEED as NOTIFS_SEED_BASE
+  NOTIFS_SEED as NOTIFS_SEED_BASE,
+  LEAVE_STATUS as LEAVE_STATUS_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
@@ -131,13 +132,11 @@ export const ATT_STATE: Record<AttState, [Tone, string]> = {
 
 /* 「我的請假」清單狀態 badge（Task 11；integration-contract.md §3.20 的四值
  * status）。未知值 fallback 為原字串（同 api.ts 的 ORDER_STATUS 慣例）— mine/
- * +page.svelte 用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值。 */
-export const LEAVE_STATUS: Record<string, [Tone, string]> = {
-  pending: ['warning', '待審核'],
-  approved: ['success', '已核准'],
-  rejected: ['error', '已婉拒'],
-  cancelled: ['neutral', '已取消']
-};
+ * +page.svelte 用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值。
+ * 卡 3：值升遷 $lib/domain/member-app 單源（mobile 的 MyCourseDetail 原直取本檔，
+ * 改經 mobile/data facade）——這裡以本檔嚴格 [Tone, string] 對同一參照純註記收窄
+ * （domain 宣告處 satisfies 明列 tone 字面聯集，NOTIFS_SEED 同型），零斷言。 */
+export const LEAVE_STATUS: Record<string, [Tone, string]> = LEAVE_STATUS_BASE;
 
 // 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
 // 已單源收斂 5 級對照）；保留本檔既有 Record<string, Tone> 寬鍵（CourseDetailDialog.svelte
