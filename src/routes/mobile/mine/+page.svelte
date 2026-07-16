@@ -23,6 +23,7 @@
   import { WEEK, type MyCourse } from '$lib/mobile/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getMine, type MineData } from '$lib/mobile/api';
+  import { fmtRatio } from '$lib/format';
 
   const today = new Date().getDay() === 0 ? 7 : new Date().getDay();
 
@@ -41,7 +42,7 @@
   $: schedule = data?.schedule ?? [];
   // 出席率 null(無出勤資料,裁決 3)顯示「—」,不是 0%(0% 會誤導成「有資料、
   // 出席率為零」)——api.ts 只原樣透傳 attendanceRate,null 語意在此顯示層判斷。
-  $: attendanceRateLabel = !data || data.attendanceRate == null ? '—' : `${Math.round(data.attendanceRate * 100)}%`;
+  $: attendanceRateLabel = !data ? '—' : fmtRatio(data.attendanceRate, '—');
 </script>
 
 <LoadGate {gate}>

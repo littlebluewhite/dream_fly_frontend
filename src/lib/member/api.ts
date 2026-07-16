@@ -5,6 +5,7 @@
  * 維持不變，頁面不用重寫樣板。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
+import { fmtRatio } from '$lib/format';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
@@ -92,7 +93,7 @@ export const getDashboard = async (): Promise<DashboardData> => {
     me: me(),
     stats: [
       { ...STATS[0], value: String(stats.activeEnrolments) },
-      { ...STATS[1], value: stats.attendanceRate == null ? '—' : `${Math.round(stats.attendanceRate * 100)}%` },
+      { ...STATS[1], value: fmtRatio(stats.attendanceRate, '—') },
       { ...STATS[2], value: stats.pointsBalance.toLocaleString('en-US') }
     ],
     skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
