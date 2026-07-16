@@ -44,16 +44,46 @@ export const overlay = createOverlay<MobilePushId, MobileSheetId>();
 // LeaveSheet/MakeupSheet 的表單機制（場次三態/守衛/trim）與桌面 LeaveDialog/
 // MakeupDialog 共用同一份 $lib/member/leave-form 雙工廠——mobile 元件一律經這裡
 // 取用（同 createOverlay 的 re-export 慣例）。deps（getCourseSessions/
-// createLeaveRequest/bookMakeup）本卡仍直取 $lib/member/stores（sheet 測試
-// vi.mock 該路徑作佈線證明，mock 路徑不變）；存量收編另卡處理。
+// createLeaveRequest/bookMakeup）卡 3 起也經下方存量 re-export 塊取用，元件不再
+// 直取 $lib/member/stores。
 export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
 
 /* ---------- 取消請假（卡 6：desktop/mobile 雙生收斂的 surface seam） ---------- */
 // MyCourseDetail 的取消請假機制（busy 守衛 + outcome 攜原始錯誤）與桌面 mine 頁
 // 共用同一份 $lib/member/cancel-leave 工廠——mobile 元件一律經這裡取用（同上
-// leave-form 的 re-export 慣例）。deps（cancelLeaveRequest）本卡仍直取
-// $lib/member/stores（overlay 測試 vi.mock 該路徑作佈線證明）；存量收編另卡處理。
+// leave-form 的 re-export 慣例）。deps（cancelLeaveRequest）卡 3 起同樣經下方
+// 存量 re-export 塊取用。
 export { createCancelLeave } from '$lib/member/cancel-leave';
+
+/* ---------- member 側 store/動作存量收編（卡 3） ---------- */
+// mobile surface 的 production 元件一律經這裡取用 member 側的共用 store 與動作，
+// 不再逐檔直取 $lib/member/*（foundation-contracts.test.ts 的 source-scan 契約
+// 釘住：$lib/mobile/{api,stores,data,auth}.ts 四個 seam 檔之外零 $lib/member
+// import）。源路徑必須精確 '$lib/member/stores'——sheet/overlay 測試 vi.mock 攔
+// 的就是這個字串（佈線證明手段），寫錯路徑 mock 靜默失效＝假綠；同參照保證由
+// stores.test.ts 的 identity pins 釘住。消費者：points/refreshPoints（CartSheet、
+// PointsScreen、account 頁）、pointsLedger/redeemReward/redeemRewardErrorMessage
+// （PointsScreen）、joinWaitlist/joinWaitlistErrorMessage（CourseDetailSheet、
+// 首頁、courses 頁）、leave 家族（LeaveSheet/MakeupSheet/MyCourseDetail）。
+export {
+	points,
+	pointsLedger,
+	refreshPoints,
+	redeemReward,
+	redeemRewardErrorMessage,
+	joinWaitlist,
+	joinWaitlistErrorMessage,
+	leaveRequests,
+	refreshLeaveRequests,
+	createLeaveRequest,
+	cancelLeaveRequest,
+	bookMakeup,
+	leaveRequestErrorMessage,
+	getCourseSessions
+} from '$lib/member/stores';
+export type { LeaveRequest, CourseSession } from '$lib/member/stores';
+// 結帳輔助（CartSheet 的優惠碼驗證與錯誤文案映射）——同上，經 seam 收編。
+export { validateCoupon, orderErrorMessage } from '$lib/member/checkout';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** A full course (spots 0) never enters the paid cart — add() just reports

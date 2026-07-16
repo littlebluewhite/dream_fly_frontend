@@ -23,9 +23,10 @@
   import type { Course } from '$lib/mobile/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getHome, type MobileHomeData } from '$lib/mobile/api';
-  import { overlay, cart, toasts, unread } from '$lib/mobile/stores';
+  // 卡 3：joinWaitlist/joinWaitlistErrorMessage 改經 $lib/mobile/stores 的存量
+  // re-export 取用（單源仍是 member 側同一組 binding）。
+  import { overlay, cart, toasts, unread, joinWaitlist, joinWaitlistErrorMessage } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
-  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
   import type { IconName } from '$lib/icon-registry';
 
   /* category taxonomy — home.jsx CATS (6-13). */

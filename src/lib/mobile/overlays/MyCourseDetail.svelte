@@ -27,14 +27,19 @@
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import LoadGate from '$lib/components/ui/LoadGate.svelte';
-  import { overlay, toasts, createCancelLeave } from '$lib/mobile/stores';
+  // 卡 3：leave 家族 store/動作改經 $lib/mobile/stores 的存量 re-export 取用
+  // （單源仍是 member 側同一組 binding；測試 vi.mock '$lib/member/stores' 的
+  // 佈線證明不變）。
   import {
+    overlay,
+    toasts,
+    createCancelLeave,
     leaveRequests,
     refreshLeaveRequests,
     cancelLeaveRequest,
     leaveRequestErrorMessage,
     type LeaveRequest
-  } from '$lib/member/stores';
+  } from '$lib/mobile/stores';
   import { getEnrolmentAttendance } from '$lib/mobile/api';
   import { formatSessionDateTime } from '$lib/domain/session-format';
   import { createLoadGate } from '$lib/load-gate';
@@ -87,7 +92,7 @@
 
   // 取消請假（卡 6）：busy 守衛 + outcome 機制經 $lib/mobile/stores 的 re-export
   // 收斂進 $lib/member/cancel-leave（與桌面 mine 頁共用同一份雙生單源）；deps
-  // （cancelLeaveRequest）本卡仍直取 $lib/member/stores（存量收編另卡處理）；
+  // （cancelLeaveRequest）卡 3 起同樣經 $lib/mobile/stores 的存量 re-export 取用；
   // toast 文案與 leaveRequestErrorMessage 映射留在元件（ADR 0011）。
   const cancelLeave = createCancelLeave({ cancelLeaveRequest });
   $: cancellingId = $cancelLeave.cancellingLeaveId;

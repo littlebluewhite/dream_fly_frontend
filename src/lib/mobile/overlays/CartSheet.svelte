@@ -19,12 +19,12 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount } from 'svelte';
-  import { cart, toasts, placeOrder } from '$lib/mobile/stores';
+  // 卡 3：points/refreshPoints（member/stores）與 validateCoupon/orderErrorMessage
+  // （member/checkout）改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
+  import { cart, toasts, placeOrder, points, refreshPoints, validateCoupon, orderErrorMessage } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import { ME } from '$lib/mobile/data';
   import { checkoutMath } from '$lib/checkout-math';
-  import { points, refreshPoints } from '$lib/member/stores';
-  import { validateCoupon, orderErrorMessage } from '$lib/member/checkout';
 
   export let onClose: () => void;
 

@@ -19,7 +19,9 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { authStore } from '$lib/stores/authStore';
-  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
+  // 卡 3：google-oauth 效應模組改經 $lib/mobile/auth 接縫取用（實作單源仍在
+  // $lib/member/google-oauth，零複製轉手）。
+  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/mobile/auth';
   import type { IconName } from '$lib/icon-registry';
   import '$lib/styles/mobile-frame.css';
 

@@ -8,8 +8,9 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { cart, toasts } from '$lib/mobile/stores';
-  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
+  // 卡 3：joinWaitlist/joinWaitlistErrorMessage 改經 $lib/mobile/stores 的存量
+  // re-export 取用（單源仍是 $lib/member/waitlist 經 member/stores 的既有出口）。
+  import { cart, toasts, joinWaitlist, joinWaitlistErrorMessage } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import type { Course } from '$lib/mobile/data';
   import type { IconName } from '$lib/icon-registry';

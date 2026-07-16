@@ -16,6 +16,10 @@ import {
 } from './stores';
 import { NOTIFS_SEED, type Course, type NotifItem } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
+// 卡 3 identity pins：以 namespace import 對照 seam 兩側的每個收編符號。
+import * as mobileStores from './stores';
+import * as memberStores from '$lib/member/stores';
+import * as memberCheckout from '$lib/member/checkout';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
 // 在 TS strict 下無法編譯——換成回傳完整 Course 的 builder（同
@@ -390,5 +394,31 @@ describe('prefs', () => {
 	it('初始值等於 PREFS_DEFAULT，但非同一參照(spread 隔離)', () => {
 		expect(get(prefs)).toEqual(PREFS_DEFAULT);
 		expect(get(prefs)).not.toBe(PREFS_DEFAULT);
+	});
+});
+
+describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同參照,防分叉)', () => {
+	// re-export 源路徑若寫錯(相對路徑、繞道別的模組),sheet/overlay 測試的
+	// vi.mock('$lib/member/stores') 會靜默失效變假綠——這裡以 toBe 釘住每個收編
+	// 符號都是 member 側同一個 binding:路徑漂移或改成本地重包裝時直接紅燈。
+	it('member/stores 的 14 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
+		expect(mobileStores.points).toBe(memberStores.points);
+		expect(mobileStores.pointsLedger).toBe(memberStores.pointsLedger);
+		expect(mobileStores.refreshPoints).toBe(memberStores.refreshPoints);
+		expect(mobileStores.redeemReward).toBe(memberStores.redeemReward);
+		expect(mobileStores.redeemRewardErrorMessage).toBe(memberStores.redeemRewardErrorMessage);
+		expect(mobileStores.joinWaitlist).toBe(memberStores.joinWaitlist);
+		expect(mobileStores.joinWaitlistErrorMessage).toBe(memberStores.joinWaitlistErrorMessage);
+		expect(mobileStores.leaveRequests).toBe(memberStores.leaveRequests);
+		expect(mobileStores.refreshLeaveRequests).toBe(memberStores.refreshLeaveRequests);
+		expect(mobileStores.createLeaveRequest).toBe(memberStores.createLeaveRequest);
+		expect(mobileStores.cancelLeaveRequest).toBe(memberStores.cancelLeaveRequest);
+		expect(mobileStores.bookMakeup).toBe(memberStores.bookMakeup);
+		expect(mobileStores.leaveRequestErrorMessage).toBe(memberStores.leaveRequestErrorMessage);
+		expect(mobileStores.getCourseSessions).toBe(memberStores.getCourseSessions);
+	});
+	it('member/checkout 的 validateCoupon/orderErrorMessage 同參照(CartSheet 消費)', () => {
+		expect(mobileStores.validateCoupon).toBe(memberCheckout.validateCoupon);
+		expect(mobileStores.orderErrorMessage).toBe(memberCheckout.orderErrorMessage);
 	});
 });

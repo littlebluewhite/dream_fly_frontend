@@ -24,7 +24,9 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
-  import { consumeGoogleOauthState } from '$lib/member/google-oauth';
+  // 卡 3：google-oauth 效應模組改經 $lib/mobile/auth 接縫取用（實作單源仍在
+  // $lib/member/google-oauth，state 驗證邏輯與上述流程零變動）。
+  import { consumeGoogleOauthState } from '$lib/mobile/auth';
 
   let error = '';
 

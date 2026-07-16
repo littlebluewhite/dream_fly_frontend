@@ -18,9 +18,10 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, profile } from '$lib/mobile/stores';
+  // 卡 3：points 改經 $lib/mobile/stores 的存量 re-export 取用（單源仍是
+  // member 側同一顆 store，getAccount() 的側效水合不變）。
+  import { overlay, profile, points } from '$lib/mobile/stores';
   import type { MobilePushId } from '$lib/mobile/stores';
-  import { points } from '$lib/member/stores';
   import { authStore } from '$lib/stores/authStore';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';

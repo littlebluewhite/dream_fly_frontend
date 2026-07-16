@@ -19,10 +19,11 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { toasts } from '$lib/mobile/stores';
+  // 卡 3：points/pointsLedger/redeemReward/redeemRewardErrorMessage 改經
+  // $lib/mobile/stores 的存量 re-export 取用（單源仍是 member 側同一顆 store）。
+  import { toasts, points, pointsLedger, redeemReward, redeemRewardErrorMessage } from '$lib/mobile/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getPoints, type PointsData, type Reward } from '$lib/mobile/api';
-  import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
 
   export let onBack: () => void;
 

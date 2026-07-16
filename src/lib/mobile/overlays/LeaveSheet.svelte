@@ -6,9 +6,11 @@
    * 另外預約補課，是獨立動作，見 member/stores.ts 的請假模組註解)，鏡射桌面
    * Task 11 的既有決定。
    * 卡 2:表單機制(三態/守衛/trim)與桌面 LeaveDialog 共用 leave-form 雙工廠,
-   * 工廠經 $lib/mobile/stores 的 seam 取用;deps 仍直取 $lib/member/stores(存量
-   * 收編另卡)。sheet 每次 overlay.sheet() 重掛 → 新工廠實例 + onMount load,
-   * 不需要 dialog 的 lastOpen 重置守衛。 */
+   * 工廠經 $lib/mobile/stores 的 seam 取用;卡 3:deps(getCourseSessions/
+   * createLeaveRequest)與 leaveRequestErrorMessage 也改經同一 seam 的存量
+   * re-export 取用(測試仍 vi.mock '$lib/member/stores'——re-export 源路徑即該
+   * 檔,佈線證明不變)。sheet 每次 overlay.sheet() 重掛 → 新工廠實例 + onMount
+   * load,不需要 dialog 的 lastOpen 重置守衛。 */
   import { onMount } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
@@ -18,9 +20,8 @@
   import Select from '$lib/components/ui/Select.svelte';
   import Textarea from '$lib/components/ui/Textarea.svelte';
   import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
-  import { toasts, createLeaveRequestForm } from '$lib/mobile/stores';
+  import { toasts, createLeaveRequestForm, getCourseSessions, createLeaveRequest, leaveRequestErrorMessage, type CourseSession } from '$lib/mobile/stores';
   import { sessionOptions } from '$lib/domain/session-format';
-  import { getCourseSessions, createLeaveRequest, leaveRequestErrorMessage, type CourseSession } from '$lib/member/stores';
   import type { MyCourse } from '$lib/mobile/data';
 
   export let onClose: () => void;

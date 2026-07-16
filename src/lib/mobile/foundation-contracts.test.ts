@@ -67,6 +67,26 @@ describe('route inventory', () => {
 	});
 });
 
+describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/member 直取）', () => {
+	// mobile surface 的 production source（.test.ts/.fixture.svelte 已由 surfaceFiles
+	// 的既有 walker 排除）只允許 api/stores/data/auth 四個 seam 檔 import $lib/member
+	// ——其餘元件/頁面一律經 $lib/mobile/* 接縫取用。測試檔的直取（mobile/api.test.ts
+	// 與四個 sheet/overlay 測試的 vi.mock '$lib/member/stores' 等）是佈線證明手段，
+	// 明文豁免、不在本掃描範圍。掃 `from '$lib/member` 的 import/export-from 子句，
+	// 註解裡的路徑提及不會誤中。
+	const MOBILE_SEAM_FILES = ['src/lib/mobile/api.ts', 'src/lib/mobile/stores.ts', 'src/lib/mobile/data.ts', 'src/lib/mobile/auth.ts'].map(r);
+	const MOBILE_DIRS = ['src/lib/mobile', 'src/routes/mobile'].map((d) => r(d) + '/'); // 尾斜線：排除 mobile-admin
+
+	it('src/lib/mobile + src/routes/mobile 中，seam 四檔之外零 $lib/member import', () => {
+		const offenders = surfaceFiles
+			.filter((f) => MOBILE_DIRS.some((d) => f.startsWith(d)))
+			.filter((f) => !MOBILE_SEAM_FILES.includes(f))
+			.filter((f) => /from\s+['"]\$lib\/member/.test(readFileSync(f, 'utf8')))
+			.map((f) => f.replace(ROOT + '/', ''));
+		expect(offenders, `經 $lib/mobile 接縫取用，勿直取 $lib/member：${offenders.join(', ')}`).toEqual([]);
+	});
+});
+
 describe('css safety (codex P2/P3 regressions)', () => {
 	const svelteFiles = surfaceFiles.filter((f) => f.endsWith('.svelte'));
 
