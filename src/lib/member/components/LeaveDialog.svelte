@@ -3,13 +3,17 @@
    * 開啟時打 GET /courses/{course_id}/sessions 列出未來場次；選場次 + 選填事由 →
    * 送出打 POST /leave-requests。核准後的補課預約是另一個獨立動作（在「我的
    * 請假」清單裡，見 MakeupDialog），本 dialog 不再有舊 mock 版的「同時保留補課
-   * 額度」開關——契約裁決 4 明確把兩者分成兩步。 */
+   * 額度」開關——契約裁決 4 明確把兩者分成兩步。
+   * 卡 2：表單機制（場次三態/valid與in-flight守衛/reason trim）收斂進
+   * $lib/member/leave-form 的 createLeaveRequestForm（與 mobile LeaveSheet 共用）；
+   * 錯誤文案映射（leaveRequestErrorMessage）與 toast 字面留在這裡（ADR 0011）。 */
   import { Button, Select, Icon, Skeleton, ErrorState, EmptyState } from '$lib/components/ui';
   import Textarea from '$lib/components/ui/Textarea.svelte';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import NoteBox from './NoteBox.svelte';
   import { sessionOptions } from '$lib/member/session-format';
+  import { createLeaveRequestForm } from '$lib/member/leave-form';
   import {
     getCourseSessions,
     createLeaveRequest,
@@ -23,24 +27,15 @@
   export let course: EnrolledCourse | null = null;
   export let onClose: () => void = () => {};
 
+  const form = createLeaveRequestForm({ getCourseSessions, createLeaveRequest });
+  // 頂層解構 const —— Svelte legacy store binding（bind:value={$sessionId}）的前提。
+  const { sessionId, reason } = form;
   let sessionsPhase: 'loading' | 'error' | 'ready' = 'loading';
   let sessions: CourseSession[] = [];
-  let sessionId = '';
-  let reason = '';
   let submitting = false;
+  let valid = false;
+  $: ({ sessionsPhase, sessions, submitting, valid } = $form);
   let done = false;
-
-  function loadSessions(courseId: string) {
-    sessionsPhase = 'loading';
-    getCourseSessions(courseId)
-      .then((list) => {
-        sessions = list;
-        sessionsPhase = 'ready';
-      })
-      .catch(() => {
-        sessionsPhase = 'error';
-      });
-  }
 
   // Reset all state each time the dialog transitions to open, and kick off the
   // sessions fetch. Check-and-update must live in ONE reactive statement (the
@@ -51,31 +46,25 @@
   let lastOpen = false;
   $: {
     if (open && !lastOpen && course) {
-      sessionId = '';
-      reason = '';
-      submitting = false;
       done = false;
+      form.reset();
       // course_id 在 EnrolledCourse 型別上因 mobile/mock 未提供而標為 optional；
       // 這個 dialog 只會被桌面 member/mine 頁掛載（真實 getMine() 資料），
       // course_id 保證存在。
-      loadSessions(course.course_id!);
+      form.load(course.course_id!);
     }
     lastOpen = open;
   }
 
-  $: valid = !!sessionId;
-
   async function submit() {
-    if (!course || !valid || submitting) return;
-    submitting = true;
-    try {
-      await createLeaveRequest(sessionId, reason.trim() || undefined);
+    if (!course) return;
+    const outcome = await form.submit(); // null = 守衛（未選場次｜送出中）
+    if (!outcome) return;
+    if (outcome.kind === 'leaveRequested') {
       done = true;
       toasts.notify('success', '請假申請已送出', course.name + '，請等候教練或管理員審核。');
-    } catch (err) {
-      toasts.notify('error', '請假申請失敗', leaveRequestErrorMessage(err));
-    } finally {
-      submitting = false;
+    } else {
+      toasts.notify('error', '請假申請失敗', leaveRequestErrorMessage(outcome.error));
     }
   }
 </script>
@@ -103,7 +92,7 @@
       {#if sessionsPhase === 'loading'}
         <Skeleton w="100%" h={44} r={8} />
       {:else if sessionsPhase === 'error'}
-        <ErrorState onRetry={() => course && loadSessions(course.course_id!)} />
+        <ErrorState onRetry={() => course && form.load(course.course_id!)} />
       {:else if sessions.length === 0}
         <EmptyState
           icon="calendar-x"
@@ -116,13 +105,13 @@
           label="請假場次"
           required
           placeholder="選擇要請假的場次"
-          bind:value={sessionId}
+          bind:value={$sessionId}
           options={sessionOptions(sessions)}
         />
         <Textarea
           label="請假事由（選填）"
           placeholder="（選填）讓教練了解請假原因…"
-          bind:value={reason}
+          bind:value={$reason}
           rows={3}
           maxLength={500}
         />

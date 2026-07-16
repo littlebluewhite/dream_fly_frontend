@@ -9,7 +9,11 @@ import type { EnrolledCourse } from '$lib/member/data';
 /* 請假申請 dialog（Task 11；integration-contract.md §3.20 + §3.18）—— 開啟時打
  * GET /courses/{course_id}/sessions 列出未來場次；選場次 + 選填事由 → 送出打
  * POST /leave-requests。只替換 $lib/api/client 的 api()，ApiError 用回真實類別
- * （同 CheckoutDialog.test.ts 慣例）；toasts/leaveRequests 用真實 store 斷言。 */
+ * （同 CheckoutDialog.test.ts 慣例）；toasts/leaveRequests 用真實 store 斷言。
+ * 卡 2：表單機制（三態/trim/防雙送）的單元覆蓋移至 $lib/member/leave-form.test.ts；
+ * 這裡保留元件端佈線——渲染/空狀態/retry/disabled/取消/重開重置/成功畫面 + toast，
+ * 以及 409/404/422 錯誤路徑（驗留在元件的 leaveRequestErrorMessage 映射 + toast
+ * 佈線 + 不進完成狀態）。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
@@ -120,29 +124,6 @@ describe('LeaveDialog — 送出申請（POST /leave-requests）', () => {
     });
     expect(notifySpy).toHaveBeenCalledWith('success', '請假申請已送出', expect.any(String));
     expect(get(leaveRequests)[0].id).toBe('lr-1');
-  });
-
-  it('送出不含事由時省略 reason 欄位', async () => {
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'GET /courses/course-1/sessions': SESSIONS,
-        'POST /leave-requests': {
-          id: 'lr-1', course_id: 'course-1', course_name: COURSE.name,
-          session_id: 'sess-1', session_date: '2026-07-10', start_time: '19:00:00',
-          reason: null, status: 'pending',
-          makeup_session_id: null, makeup_session_date: null, makeup_start_time: null,
-          decided_at: null, created_at: '2026-07-01T00:00:00Z'
-        }
-      })
-    );
-    render(LeaveDialog, { open: true, course: COURSE });
-    await screen.findByText('2026-07-10 (五) 19:00–20:30');
-
-    await fireEvent.change(screen.getByLabelText('請假場次', { exact: false }), { target: { value: 'sess-1' } });
-    await fireEvent.click(screen.getByText('送出申請'));
-
-    await screen.findByText('請假申請已送出');
-    expect(api).toHaveBeenCalledWith('/leave-requests', { method: 'POST', body: JSON.stringify({ session_id: 'sess-1' }) });
   });
 
   it('422（場次已開始，無法請假）→ 顯示對應繁中錯誤 toast，畫面不進完成狀態', async () => {

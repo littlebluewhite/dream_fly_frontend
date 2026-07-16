@@ -3,11 +3,15 @@
    * 現在是針對「一張已核准且尚未補課的請假申請」開啟的動作（「我的請假」清單裡
    * 逐筆的「預約補課」按鈕），不再是課程層級的一般動作——所以吃 leaveRequest
    * prop，不是 course。開啟時打 GET /courses/{course_id}/sessions 列出同課程的
-   * 未來場次；選場次 → 送出打 POST /leave-requests/{id}/makeup。 */
+   * 未來場次；選場次 → 送出打 POST /leave-requests/{id}/makeup。
+   * 卡 2：表單機制（場次三態/valid與in-flight守衛）收斂進 $lib/member/leave-form 的
+   * createMakeupBookingForm（與 mobile MakeupSheet 共用）；錯誤文案映射與 toast 字面
+   * 留在這裡（ADR 0011）——成功 toast body 桌面/mobile 本有分歧，兩面各自釘各的。 */
   import { Button, Select, Icon, Skeleton, ErrorState, EmptyState } from '$lib/components/ui';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import { sessionOptions, formatSessionDateTime } from '$lib/member/session-format';
+  import { createMakeupBookingForm } from '$lib/member/leave-form';
   import {
     getCourseSessions,
     bookMakeup,
@@ -21,24 +25,16 @@
   export let leaveRequest: LeaveRequest | null = null;
   export let onClose: () => void = () => {};
 
+  const form = createMakeupBookingForm({ getCourseSessions, bookMakeup });
+  // 頂層解構 const —— Svelte legacy store binding（bind:value={$sessionId}）的前提。
+  const { sessionId } = form;
   let sessionsPhase: 'loading' | 'error' | 'ready' = 'loading';
   let sessions: CourseSession[] = [];
-  let sessionId = '';
   let submitting = false;
+  let valid = false;
+  $: ({ sessionsPhase, sessions, submitting, valid } = $form);
   let done = false;
   let bookedAt: LeaveRequest | null = null;
-
-  function loadSessions(courseId: string) {
-    sessionsPhase = 'loading';
-    getCourseSessions(courseId)
-      .then((list) => {
-        sessions = list;
-        sessionsPhase = 'ready';
-      })
-      .catch(() => {
-        sessionsPhase = 'error';
-      });
-  }
 
   // Reset state each time the dialog transitions to open, and kick off the
   // sessions fetch. Check-and-update lives in ONE reactive statement (the
@@ -47,33 +43,28 @@
   let lastOpen = false;
   $: {
     if (open && !lastOpen && leaveRequest) {
-      sessionId = '';
-      submitting = false;
       done = false;
       bookedAt = null;
-      loadSessions(leaveRequest.course_id);
+      form.reset();
+      form.load(leaveRequest.course_id);
     }
     lastOpen = open;
   }
 
-  $: valid = !!sessionId;
-
   async function confirm() {
-    if (!leaveRequest || !valid || submitting) return;
-    submitting = true;
-    try {
-      const updated = await bookMakeup(leaveRequest.id, sessionId);
-      bookedAt = updated;
+    if (!leaveRequest) return;
+    const outcome = await form.submit(leaveRequest.id); // null = 守衛（未選場次｜送出中）
+    if (!outcome) return;
+    if (outcome.kind === 'makeupBooked') {
+      bookedAt = outcome.updated;
       done = true;
       toasts.notify(
         'success',
         '補課預約成功',
-        leaveRequest.course_name + ' · ' + formatSessionDateTime(updated.makeup_session_date ?? '', updated.makeup_start_time ?? '') + '，已加入你的日程表。'
+        leaveRequest.course_name + ' · ' + formatSessionDateTime(outcome.updated.makeup_session_date ?? '', outcome.updated.makeup_start_time ?? '') + '，已加入你的日程表。'
       );
-    } catch (err) {
-      toasts.notify('error', '預約補課失敗', leaveRequestErrorMessage(err));
-    } finally {
-      submitting = false;
+    } else {
+      toasts.notify('error', '預約補課失敗', leaveRequestErrorMessage(outcome.error));
     }
   }
 </script>
@@ -96,7 +87,7 @@
       {#if sessionsPhase === 'loading'}
         <Skeleton w="100%" h={44} r={8} />
       {:else if sessionsPhase === 'error'}
-        <ErrorState onRetry={() => leaveRequest && loadSessions(leaveRequest.course_id)} />
+        <ErrorState onRetry={() => leaveRequest && form.load(leaveRequest.course_id)} />
       {:else if sessions.length === 0}
         <EmptyState
           icon="calendar-x"
@@ -109,7 +100,7 @@
           label="補課場次"
           required
           placeholder="選擇要補課的場次"
-          bind:value={sessionId}
+          bind:value={$sessionId}
           options={sessionOptions(sessions)}
         />
       {/if}
