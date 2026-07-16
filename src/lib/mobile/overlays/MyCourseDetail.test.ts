@@ -95,6 +95,27 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 		expect(cancelLeaveRequest).toHaveBeenCalledWith('lr1');
 	});
 
+	// 卡 6：busy 旗標佈線的可證偽測試——取消 in-flight（deps 未 resolve）期間按鈕
+	// 必須停用；resolve 後旗標復位、按鈕重新可用（mock 的 cancelLeaveRequest 不
+	// 改寫 store，pending 列仍在）。
+	it('取消進行中（cancelLeaveRequest 尚未完成）時「取消」按鈕停用，完成後復位', async () => {
+		leaveRequests.set([PENDING]);
+		let resolveCancel!: () => void;
+		vi.mocked(cancelLeaveRequest).mockImplementation(
+			() => new Promise<void>((res) => { resolveCancel = res; })
+		);
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+
+		const btn = await screen.findByText('取消');
+		expect(btn).not.toBeDisabled();
+
+		await fireEvent.click(btn);
+
+		await vi.waitFor(() => expect(btn).toBeDisabled());
+		resolveCancel(); // 收尾不留 in-flight
+		await vi.waitFor(() => expect(btn).not.toBeDisabled());
+	});
+
 	it('approved 且未補課顯示「預約補課」，點擊開啟 makeup sheet 並帶入該筆 leaveRequest', async () => {
 		leaveRequests.set([APPROVED_NO_MAKEUP]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });

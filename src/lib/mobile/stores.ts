@@ -48,6 +48,13 @@ export const overlay = createOverlay<MobilePushId, MobileSheetId>();
 // vi.mock 該路徑作佈線證明，mock 路徑不變）；存量收編另卡處理。
 export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
 
+/* ---------- 取消請假（卡 6：desktop/mobile 雙生收斂的 surface seam） ---------- */
+// MyCourseDetail 的取消請假機制（busy 守衛 + outcome 攜原始錯誤）與桌面 mine 頁
+// 共用同一份 $lib/member/cancel-leave 工廠——mobile 元件一律經這裡取用（同上
+// leave-form 的 re-export 慣例）。deps（cancelLeaveRequest）本卡仍直取
+// $lib/member/stores（overlay 測試 vi.mock 該路徑作佈線證明）；存量收編另卡處理。
+export { createCancelLeave } from '$lib/member/cancel-leave';
+
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** A full course (spots 0) never enters the paid cart — add() just reports
  *  'waitlisted'; the caller is expected to call joinWaitlist() itself (C8,

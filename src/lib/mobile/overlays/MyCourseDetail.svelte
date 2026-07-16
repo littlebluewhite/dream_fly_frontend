@@ -27,7 +27,7 @@
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import LoadGate from '$lib/components/ui/LoadGate.svelte';
-  import { overlay, toasts } from '$lib/mobile/stores';
+  import { overlay, toasts, createCancelLeave } from '$lib/mobile/stores';
   import {
     leaveRequests,
     refreshLeaveRequests,
@@ -86,17 +86,19 @@
   });
   $: courseLeaves = c ? $leaveRequests.filter((lr) => lr.course_id === c.course_id) : [];
 
-  let cancellingId: string | null = null;
+  // 取消請假（卡 6）：busy 守衛 + outcome 機制經 $lib/mobile/stores 的 re-export
+  // 收斂進 $lib/member/cancel-leave（與桌面 mine 頁共用同一份雙生單源）；deps
+  // （cancelLeaveRequest）本卡仍直取 $lib/member/stores（存量收編另卡處理）；
+  // toast 文案與 leaveRequestErrorMessage 映射留在元件（ADR 0011）。
+  const cancelLeave = createCancelLeave({ cancelLeaveRequest });
+  $: cancellingId = $cancelLeave.cancellingLeaveId;
   async function doCancelLeave(lr: LeaveRequest) {
-    if (cancellingId) return;
-    cancellingId = lr.id;
-    try {
-      await cancelLeaveRequest(lr.id);
-      toasts.notify('success', '已取消請假申請', lr.course_name + ' 的請假申請已取消。');
-    } catch (err) {
-      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(err));
-    } finally {
-      cancellingId = null;
+    const outcome = await cancelLeave.cancelLeave(lr); // null = busy 守衛（in-flight 早退）
+    if (!outcome) return;
+    if (outcome.kind === 'leaveCancelled') {
+      toasts.notify('success', '已取消請假申請', outcome.courseName + ' 的請假申請已取消。');
+    } else {
+      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(outcome.error));
     }
   }
 </script>
