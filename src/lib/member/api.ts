@@ -10,7 +10,7 @@ import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$li
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import { refreshPoints, refreshSubscriptions, refreshNotifications, points } from './stores';
+import { refreshPoints, refreshSubscriptions, refreshNotifications, refreshWaitlist, refreshLeaveRequests, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, ApiNotification } from './data';
 
@@ -262,9 +262,18 @@ export interface MineData {
  *  「明日/週X」相對日期格式化與 studio_timezone 牆鐘語意(§3.18 裁決 2)；盤點 UI 用途
  *  後(僅 member/mine/+page.svelte 一個「下一堂」KPI 小卡使用，非核心流程)，維持誠實
  *  空字串預設，暫不推導。
- *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。 */
+ *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。
+ *
+ *  卡 6：順手 hydrate waitlist/leaveRequests store(best-effort 語意，見
+ *  hydrateSessionStores() 檔頭)——原本焊在 mine 頁 gate 的旁路 Promise.all 收進
+ *  接縫。與 getDashboard/getAccount 的尾端序列 await 刻意不同：mine 現況本就是
+ *  主 fetch 與旁路水合「並行」，等價優先，故這裡與主 fetch 同一個 Promise.all
+ *  (hydrateSessionStores 內建 allSettled，不會讓 Promise.all reject)。 */
 export const getMine = async (): Promise<MineData> => {
-  const active = await activeEnrolments();
+  const [active] = await Promise.all([
+    activeEnrolments(),
+    hydrateSessionStores('getMine', [['候補清單', refreshWaitlist], ['我的請假', refreshLeaveRequests]])
+  ]);
   const courses: EnrolledCourse[] = active.map((e) => ({
     id: e.id,
     course_id: e.course_id, // Task 11：請假入口需要課程 id 呼叫 GET /courses/{id}/sessions

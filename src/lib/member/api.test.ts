@@ -9,7 +9,7 @@ import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, saveBirthDate, getCourses, getPoints, getNotifications } from './api';
 import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
-import { points, pointsLedger, subscriptions, notifications, notificationsHydrated } from './stores';
+import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, leaveRequests } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -46,6 +46,8 @@ beforeEach(() => {
   subscriptions.set([]);
   notifications.set([]);
   notificationsHydrated.set(false);
+  waitlist.set([]);
+  leaveRequests.set([]);
 });
 
 describe('getDashboard', () => {
@@ -329,13 +331,19 @@ describe('getSchedule — GET /schedule/me 週模式映射（§3.18）', () => {
 });
 
 describe('getMine', () => {
+  // 卡 6：getMine 現在順手水合候補/請假 store（best-effort，與主 fetch 並行——mine
+  // 頁原本的旁路 Promise.all 收進接縫）。既有 its 的 router 一律補上兩支端點的空
+  // 陣列 entry：hydrate 是 best-effort、撞到 fakeRouter 的未交代拋錯不會讓 getMine
+  // 失敗，但會留下 console.error 噪音。
   it('GET /enrolments/me → EnrolledCourse[]；只留 active；level 轉繁中；cat/coach/room 缺省空字串；attended/total 為真值、att 為兩者比率', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
           { id: 'enrol-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班', course_level: 'advanced', schedule_text: '週二 / 週四 19:00–20:30', status: 'active', enrolled_at: '2026-06-01T00:00:00Z', attended: 18, total: 24 },
           { id: 'enrol-2', course_id: 'course-2', course_name: '已取消課程', course_level: 'beginner', schedule_text: '週三 10:00', status: 'cancelled', enrolled_at: '2026-01-01T00:00:00Z', attended: 5, total: 5 }
-        ]
+        ],
+        'GET /waitlist/me': [],
+        'GET /leave-requests/me': []
       })
     );
 
@@ -358,7 +366,9 @@ describe('getMine', () => {
       fakeRouter({
         'GET /enrolments/me': [
           { id: 'e1', course_id: 'c1', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
-        ]
+        ],
+        'GET /waitlist/me': [],
+        'GET /leave-requests/me': []
       })
     );
 
@@ -381,7 +391,9 @@ describe('getMine', () => {
           { id: 'e3', course_id: 'c3', course_name: 'C', course_level: 'advanced', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e5', course_id: 'c5', course_name: 'E', course_level: 'elite', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 },
           { id: 'e4', course_id: 'c4', course_name: 'D', course_level: 'brand_new_level', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
-        ]
+        ],
+        'GET /waitlist/me': [],
+        'GET /leave-requests/me': []
       })
     );
 
@@ -394,16 +406,79 @@ describe('getMine', () => {
       fakeRouter({
         'GET /enrolments/me': [
           { id: 'enrol-3', course_id: 'course-3', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-06-01T00:00:00Z', attended: 0, total: 0 }
-        ]
+        ],
+        'GET /waitlist/me': [],
+        'GET /leave-requests/me': []
       })
     );
     const d = await getMine();
     expect(d.courses[0].schedule).toBe('');
   });
 
-  it('是 async 接縫(回 Promise)', () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /enrolments/me': [] }));
-    expect(getMine()).toBeInstanceOf(Promise);
+  it('順手 hydrate waitlist/leaveRequests store（候補只留 status=waiting，同 refreshWaitlist 語意；請假映射丟棄 decided_at）', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /waitlist/me': [
+          { id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X', status: 'waiting', created_at: '2026-07-01T00:00:00Z' },
+          { id: 'wl-2', course_id: 'course-y', course_name: '候補課程 Y（已取消）', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
+        ],
+        'GET /leave-requests/me': [
+          { id: 'lr-1', course_id: 'c1', course_name: '競技啦啦隊 進階班', session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00', reason: '生病', status: 'pending', makeup_session_id: null, makeup_session_date: null, makeup_start_time: null, decided_at: null, created_at: '2026-07-01T00:00:00Z' }
+        ]
+      })
+    );
+
+    await getMine();
+
+    expect(get(waitlist)).toEqual([{ id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X' }]);
+    expect(get(leaveRequests)).toEqual([
+      { id: 'lr-1', course_id: 'c1', course_name: '競技啦啦隊 進階班', session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00', reason: '生病', status: 'pending', makeup_session_id: null, makeup_session_date: null, makeup_start_time: null, created_at: '2026-07-01T00:00:00Z' }
+    ]);
+  });
+
+  it('waitlist/leaveRequests hydrate 失敗不影響 getMine 主結果(主 fetch fail-hard、旁路 best-effort,同 getDashboard 模式)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [
+          { id: 'e1', course_id: 'c1', course_name: '幼兒體操 啟蒙班', course_level: 'beginner', schedule_text: null, status: 'active', enrolled_at: '2026-01-01T00:00:00Z', attended: 0, total: 0 }
+        ],
+        'GET /waitlist/me': new Error('network down'),
+        'GET /leave-requests/me': new Error('network down')
+      })
+    );
+
+    const d = await getMine();
+    expect(d.courses).toHaveLength(1);
+    expect(d.courses[0].name).toBe('幼兒體操 啟蒙班');
+  });
+
+  it('hydrate 失敗時 console.error 記錄「getMine: <資源> hydrate 失敗」+ reason（雙端點皆失敗，逐字格式釘）', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const waitlistError = new Error('waitlist network down');
+    const leaveError = new Error('leave network down');
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/me': [],
+        'GET /waitlist/me': waitlistError,
+        'GET /leave-requests/me': leaveError
+      })
+    );
+
+    await getMine();
+
+    expect(errorSpy).toHaveBeenCalledWith('getMine: 候補清單 hydrate 失敗', waitlistError);
+    expect(errorSpy).toHaveBeenCalledWith('getMine: 我的請假 hydrate 失敗', leaveError);
+  });
+
+  it('是 async 接縫(回 Promise)', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /enrolments/me': [], 'GET /waitlist/me': [], 'GET /leave-requests/me': [] })
+    );
+    const p = getMine();
+    expect(p).toBeInstanceOf(Promise);
+    await p; // 卡 6：等 hydrate 副作用落定，store 寫入不逸出到下一個 it
   });
 });
 
