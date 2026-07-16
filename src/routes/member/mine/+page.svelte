@@ -29,6 +29,7 @@
     type LeaveRequest
   } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
+  import { createCancelLeave } from '$lib/member/cancel-leave';
   import { getMine, getEnrolmentAttendance, type MineData } from '$lib/member/api';
   import type { IconName } from '$lib/icon-registry';
 
@@ -37,7 +38,6 @@
   let makeupFor: LeaveRequest | null = null;
   let data: MineData | null = null;
   let cancellingId: string | null = null;
-  let cancellingLeaveId: string | null = null;
 
   // 候補清單/我的請假皆為 best-effort 的旁路 hydrate（同 getDashboard/getAccount
   // 對 points/notifications/subscriptions 的處理慣例）——失敗只記錄，不擋主要的
@@ -91,16 +91,18 @@
     }
   }
 
+  // 取消請假（卡 6）：busy 守衛 + outcome 機制收斂進 $lib/member/cancel-leave
+  // （與 mobile MyCourseDetail 共用同一份雙生單源）；toast 文案與
+  // leaveRequestErrorMessage 映射留在頁面（ADR 0011）。
+  const cancelLeave = createCancelLeave({ cancelLeaveRequest });
+  $: ({ cancellingLeaveId } = $cancelLeave);
   async function doCancelLeave(lr: LeaveRequest) {
-    if (cancellingLeaveId) return;
-    cancellingLeaveId = lr.id;
-    try {
-      await cancelLeaveRequest(lr.id);
-      toasts.notify('success', '已取消請假申請', lr.course_name + ' 的請假申請已取消。');
-    } catch (err) {
-      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(err));
-    } finally {
-      cancellingLeaveId = null;
+    const outcome = await cancelLeave.cancelLeave(lr); // null = busy 守衛（in-flight 早退）
+    if (!outcome) return;
+    if (outcome.kind === 'leaveCancelled') {
+      toasts.notify('success', '已取消請假申請', outcome.courseName + ' 的請假申請已取消。');
+    } else {
+      toasts.notify('error', '取消請假失敗', leaveRequestErrorMessage(outcome.error));
     }
   }
 
