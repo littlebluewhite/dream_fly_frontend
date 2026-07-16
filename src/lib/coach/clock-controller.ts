@@ -31,7 +31,8 @@ export interface ClockControllerDeps {
 export type ClockInOutcome = { kind: 'clockedIn' } | { kind: 'alreadyClockedIn' } | { kind: 'failed'; error: unknown };
 /** 404（尚未上班）已在 controller 內校正 clockedIn=false，頁面只負責 toast。 */
 export type ClockOutOutcome = { kind: 'clockedOut' } | { kind: 'notClockedIn' } | { kind: 'failed'; error: unknown };
-/** stale = 查詢往返期間使用者已手動打卡，結果丟棄（mutation wins）。 */
+/** stale = 曾有手動打卡（旗標不復位）——查詢往返期間或 mutation 完成後才起飛的
+ *  hydrate 一律丟棄結果（mutation wins）。 */
 export type ClockHydrateOutcome = { kind: 'hydrated'; clockedIn: boolean } | { kind: 'stale' };
 
 export interface ClockController extends Readable<ClockViewState> {

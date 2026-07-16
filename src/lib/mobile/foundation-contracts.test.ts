@@ -77,16 +77,61 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 	const MOBILE_SEAM_FILES = ['src/lib/mobile/api.ts', 'src/lib/mobile/stores.ts', 'src/lib/mobile/data.ts', 'src/lib/mobile/auth.ts'].map(r);
 	const MOBILE_DIRS = ['src/lib/mobile', 'src/routes/mobile'].map((d) => r(d) + '/'); // 尾斜線：排除 mobile-admin
 
-	// codex R1+R2：掃描器要求——涵蓋靜態 from / side-effect import / 動態 import()
+	// codex R1+R2+R3：掃描器要求——涵蓋靜態 from / side-effect import / 動態 import()
 	// （含 /* @vite-ignore */ 註解形與簡單模板字串）與相對路徑逃逸；不誤中註解、
-	// 一般字串、$lib/membership、本地 ./member* 路徑。做法：先剝註解再抽 import
-	// 位置的 specifier，$lib 形以路徑段精確比對、相對形解析回絕對路徑後檢查是否
-	// 落在 src/lib/member 之下。掃描器本身由下面的 fixture 自證 it 把關（掃描器
-	// 退化成空集合時自證 it 先紅，兩條契約 it 不會靜默假綠）。
-	const stripComments = (src: string): string =>
-		src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-	const importSpecifiers = (src: string): string[] =>
-		[...stripComments(src).matchAll(/\b(?:from|import)\s*\(?\s*['"`]([^'"`]+)['"`]/g)].map((m) => m[1]);
+	// 一般字串（含字串內的 //、/* 記號與 import(...) 字樣，兩向皆不得誤判）、
+	// $lib/membership、本地 ./member* 路徑。做法：字串感知剝註解並記錄字串跨度，
+	// 再抽 import 位置的 specifier（match 起點落在字串跨度內者丟棄），$lib 形以
+	// 路徑段精確比對、相對形解析回絕對路徑後檢查是否落在 src/lib/member 之下。
+	// 掃描器本身由下面的 fixture 自證 it 把關（掃描器退化成空集合時自證 it 先紅，
+	// 兩條契約 it 不會靜默假綠）。
+	// codex R3：剝註解必須字串感知——正規式版把字串裡的 // 或 /* 當註解起點，會把
+	// 同行／其後的真違規 import 一併吞掉（靜默假陰性）。模板字面值視為不透明跨度
+	// 即可（specifier 本身的引號屬於 import 語法，match 起點在跨度外，不受影響）。
+	const stripCommentsPreserveStrings = (src: string): { code: string; stringSpans: [number, number][] } => {
+		let code = '';
+		const stringSpans: [number, number][] = [];
+		let i = 0;
+		while (i < src.length) {
+			const ch = src[i];
+			if (ch === '/' && src[i + 1] === '/') {
+				while (i < src.length && src[i] !== '\n') i++;
+			} else if (ch === '/' && src[i + 1] === '*') {
+				i += 2;
+				while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+				i += 2;
+			} else if (ch === "'" || ch === '"' || ch === '`') {
+				const start = code.length;
+				code += ch;
+				i++;
+				while (i < src.length && src[i] !== ch) {
+					if (src[i] === '\\') {
+						code += src[i] + (src[i + 1] ?? '');
+						i += 2;
+					} else {
+						code += src[i];
+						i++;
+					}
+				}
+				code += src[i] ?? ''; // 收尾引號（未終結字串則至檔尾）
+				i++;
+				stringSpans.push([start, code.length]);
+			} else {
+				code += ch;
+				i++;
+			}
+		}
+		return { code, stringSpans };
+	};
+	const importSpecifiers = (src: string): string[] => {
+		const { code, stringSpans } = stripCommentsPreserveStrings(src);
+		return [...code.matchAll(/\b(?:from|import)\s*\(?\s*['"`]([^'"`]+)['"`]/g)]
+			.filter((m) => {
+				const at = m.index ?? 0;
+				return !stringSpans.some(([s, e]) => at >= s && at < e);
+			})
+			.map((m) => m[1]);
+	};
 	const MEMBER_DIR = r('src/lib/member');
 	const isMemberReach = (file: string, spec: string): boolean => {
 		if (spec === '$lib/member' || spec.startsWith('$lib/member/')) return true;
@@ -95,7 +140,7 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 		return resolved === MEMBER_DIR || resolved.startsWith(MEMBER_DIR + '/');
 	};
 
-	it('掃描器自證：六種違規形全數命中、四種近似形不誤中', () => {
+	it('掃描器自證：違規形全數命中、近似形不誤中（含字串感知兩向）', () => {
 		const fakeFile = r('src/lib/mobile/overlays/Fake.svelte');
 		const POSITIVE = [
 			"import { x } from '$lib/member/stores';",
@@ -103,13 +148,19 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			"const m = await import('$lib/member/stores');",
 			"const m = await import(/* @vite-ignore */ '$lib/member/stores');",
 			'const m = await import(`$lib/member/${name}`);',
-			"export { x } from '../../member/stores';"
+			"export { x } from '../../member/stores';",
+			// codex R3：字串內的 // 與 /* 不是註解——剝註解若吞掉字串，同行／夾在中間的違規 import 會被靜默放行
+			"const u = 'https://a.b'; const m = import('$lib/member/stores');",
+			"const a = '/*'; import('$lib/member/stores'); const b = '*/';"
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
 			"import { x } from './member-card/util';",
 			"// import { x } from '$lib/member/stores';",
-			'const s = "$lib/member/stores";'
+			'const s = "$lib/member/stores";',
+			// codex R3：字串裡的 import(...) 字樣不是 import；相對形須「解析後」落在 src/lib/member 才算（殺路徑段天真比對）
+			'const snippet = \'import("$lib/member/stores")\';',
+			"import { x } from './member/util';"
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
