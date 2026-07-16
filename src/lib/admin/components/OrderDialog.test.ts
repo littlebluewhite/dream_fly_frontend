@@ -131,5 +131,26 @@ describe('OrderDialog', () => {
 			const { queryByLabelText } = render(OrderDialog, { order: refunded });
 			expect(queryByLabelText('變更狀態為')).toBeNull();
 		});
+
+		/* 卡 7 reset 回歸對：OrderDialog 的 nextStatus 是 derive 形（legalNext[0]），本來
+		 * 就沒有別名缺陷——這兩個 it 釘住「跨單切換重設」與「關閉重開重 derive」的正確行為。 */
+		it('resets nextStatus to the first legal transition of the newly opened order (no stale selection)', async () => {
+			const { getByLabelText, rerender } = render(OrderDialog, { order: paid });
+			await fireEvent.change(getByLabelText('變更狀態為'), { target: { value: 'refunded' } });
+
+			await rerender({ order: pending });
+
+			expect((getByLabelText('變更狀態為') as HTMLSelectElement).value).toBe('paid');
+		});
+
+		it('re-derives nextStatus after close/re-open, discarding the dirty selection', async () => {
+			const { getByLabelText, rerender } = render(OrderDialog, { order: paid });
+			await fireEvent.change(getByLabelText('變更狀態為'), { target: { value: 'refunded' } });
+
+			await rerender({ order: null });
+			await rerender({ order: paid });
+
+			expect((getByLabelText('變更狀態為') as HTMLSelectElement).value).toBe('processing');
+		});
 	});
 });

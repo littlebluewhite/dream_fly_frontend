@@ -154,4 +154,34 @@ describe('TicketEditDialog', () => {
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	/* 卡 7 reset 回歸對（措辭仿 CouponCreateDialog.test.ts 的成對先例）：①換實體不殘留
+	 * ——working copy 與 priceText/quotaText 兩個文字 buffer 都要跟著新實體；②關閉重開
+	 * 丟棄髒草稿——同 ClassEditDialog，初始 working copy 是 clone，編輯不可污染原實體。 */
+	it('resets fields when the ticket prop changes to a different ticket (no stale data)', async () => {
+		const other: Ticket = { ...TICKETS[0], id: 'T-OTHER', name: '季票 · 測試', price: 9900, quota: 42 };
+		const { getByLabelText, rerender } = render(TicketEditDialog, { open: true, ticket: { ...TICKETS[0] } });
+
+		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '髒草稿' } });
+		await fireEvent.input(getByLabelText('票價 (NT$)'), { target: { value: '1' } });
+
+		await rerender({ open: true, ticket: other });
+
+		expect((getByLabelText('票券名稱') as HTMLInputElement).value).toBe('季票 · 測試');
+		expect((getByLabelText('票價 (NT$)') as HTMLInputElement).value).toBe('9900');
+		expect((getByLabelText('配額') as HTMLInputElement).value).toBe('42');
+	});
+
+	it('discards a dirty draft on close/re-open and never pollutes the original ticket passed in (initial working copy is a clone)', async () => {
+		const original: Ticket = { ...TICKETS[0] };
+		const { getByLabelText, rerender } = render(TicketEditDialog, { open: true, ticket: original });
+
+		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '髒草稿名稱' } });
+
+		await rerender({ open: false, ticket: null });
+		expect(original.name).toBe('月票 · 自由練習');
+
+		await rerender({ open: true, ticket: original });
+		expect((getByLabelText('票券名稱') as HTMLInputElement).value).toBe('月票 · 自由練習');
+	});
 });

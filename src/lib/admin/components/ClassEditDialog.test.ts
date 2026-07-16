@@ -158,4 +158,40 @@ describe('ClassEditDialog', () => {
 		await fireEvent.click(getByText('儲存課程'));
 		expect(onSave.mock.calls[0][1]).toBe(75);
 	});
+
+	/* 卡 7 reset 回歸對（措辭仿 CouponCreateDialog.test.ts 的成對先例）：
+	 * ①換實體不殘留——working copy 與 cap/price/sessions/duration 四個文字 buffer 都要跟著新實體；
+	 * ②關閉重開丟棄髒草稿——兼作「初始 working copy 改 clone」修正的回歸釘：初次掛載後的
+	 * bind:value 編輯絕不可寫回呼叫端傳入的原實體（別名形會讓取消不救、列表資料已髒）。 */
+	it('resets fields when the klass prop changes to a different class (no stale data)', async () => {
+		const other: ClassRow = { ...base, id: 'k2', name: '兒童基礎 B 班', cap: 20, price: 5200, sessions: 12, durationMinutes: 60 };
+		const { getByLabelText, rerender } = render(ClassEditDialog, { open: true, klass: { ...base }, coaches: COACHES });
+
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '髒草稿' } });
+		await fireEvent.input(getByLabelText('人數上限'), { target: { value: '99' } });
+
+		await rerender({ open: true, klass: other, coaches: COACHES });
+
+		expect((getByLabelText('班級名稱') as HTMLInputElement).value).toBe('兒童基礎 B 班');
+		expect((getByLabelText('人數上限') as HTMLInputElement).value).toBe('20');
+		expect((getByLabelText('季費 (NT$)') as HTMLInputElement).value).toBe('5200');
+		expect((getByLabelText('本期堂數') as HTMLInputElement).value).toBe('12');
+		expect((getByLabelText('單堂時長（分鐘）') as HTMLInputElement).value).toBe('60');
+	});
+
+	it('discards a dirty draft on close/re-open and never pollutes the original class passed in (initial working copy is a clone)', async () => {
+		const original: ClassRow = { ...base };
+		const { getByLabelText, rerender } = render(ClassEditDialog, { open: true, klass: original, coaches: COACHES });
+
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '髒草稿名稱' } });
+
+		// 關閉（呼叫端 closeEdit 會把實體設回 null）
+		await rerender({ open: false, klass: null, coaches: COACHES });
+		// 初次掛載的 working copy 必須是 clone——編輯後原實體維持舊值（別名形在此變紅）
+		expect(original.name).toBe('競技啦啦隊 進階班');
+
+		// 重開同一實體：畫面回到原值，髒草稿不殘留
+		await rerender({ open: true, klass: original, coaches: COACHES });
+		expect((getByLabelText('班級名稱') as HTMLInputElement).value).toBe('競技啦啦隊 進階班');
+	});
 });

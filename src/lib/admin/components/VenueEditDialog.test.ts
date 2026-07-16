@@ -109,4 +109,33 @@ describe('VenueEditDialog', () => {
 		await fireEvent.click(getByText('取消'));
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	/* 卡 7 reset 回歸對（措辭仿 CouponCreateDialog.test.ts 的成對先例）：①換實體不殘留
+	 * ——working copy 與 equipText buffer（join('、')）都要跟著新實體；②關閉重開丟棄
+	 * 髒草稿——同 ClassEditDialog，初始 working copy 是 clone，編輯不可污染原實體。 */
+	it('resets fields when the venue prop changes to a different venue (no stale data)', async () => {
+		const other: Venue = { ...VENUES[0], id: 'X', slug: 'x', name: 'X 測試館', equip: ['彈翻床', '海綿池'] };
+		const { getByLabelText, rerender } = render(VenueEditDialog, { open: true, venue: { ...VENUES[0] } });
+
+		await fireEvent.input(getByLabelText('場地名稱'), { target: { value: '髒草稿' } });
+		await fireEvent.input(getByLabelText('器材配置（以、分隔）'), { target: { value: '空手道墊' } });
+
+		await rerender({ open: true, venue: other });
+
+		expect((getByLabelText('場地名稱') as HTMLInputElement).value).toBe('X 測試館');
+		expect((getByLabelText('器材配置（以、分隔）') as HTMLInputElement).value).toBe('彈翻床、海綿池');
+	});
+
+	it('discards a dirty draft on close/re-open and never pollutes the original venue passed in (initial working copy is a clone)', async () => {
+		const original: Venue = { ...VENUES[0] };
+		const { getByLabelText, rerender } = render(VenueEditDialog, { open: true, venue: original });
+
+		await fireEvent.input(getByLabelText('場地名稱'), { target: { value: '髒草稿名稱' } });
+
+		await rerender({ open: false, venue: null });
+		expect(original.name).toBe('A 訓練館');
+
+		await rerender({ open: true, venue: original });
+		expect((getByLabelText('場地名稱') as HTMLInputElement).value).toBe('A 訓練館');
+	});
 });
