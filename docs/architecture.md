@@ -33,7 +33,10 @@ alongside it (`cart.ts`, `waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.
 file itself. Cross-surface shared code lives in: lib-root single-file pure modules
 (`checkout-math.ts`/`checkout-gate.ts`/`checkout-order.ts`/`load-gate.ts`/`hydration-gate.ts`, joined
 2026-07-11 by `cart-item.ts` — the `CartItem` types + `courseToCartItem`/`passToCartItem` adapters lifted
-out of `member/data.ts` so member/mobile/public routes stop reaching into a surface facade for them),
+out of `member/data.ts` so member/mobile/public routes stop reaching into a surface facade for them, and
+2026-07-16 by `format.ts` — `fmtNT` + `fmtRatio` single-sourced from what were four per-surface `fmtNT`
+copies and three percentage formatters; `admin`'s `fmtPct` and `member`'s `fmtRate` survive as one-line
+surface bindings over `fmtRatio` carrying each surface's null-label),
 `lib/components/` (marketing/shared UI, plus the `ui/`
 and `mobile/` shelves below), `lib/data/` (marketing seed + nav config), `lib/domain/` (single-source
 seed feeding several facades —
@@ -49,7 +52,7 @@ notification bells), `lib/styles/` (`global.css` + design tokens),
 `src/lib/domain/` holds mock seed that used to be duplicated across surfaces: ops entities (`venues.ts`,
 `tickets.ts`, `coaches.ts`, `activity.ts`) plus base arrays (`CLASSES_BASE`, `MEMBERS_BASE`,
 `ORDERS_BASE` in `classes.ts` / `members.ts` / `orders.ts`) shared by the admin↔mobile-admin ops-pair, and
-`member-app.ts` — the member↔mobile desktop/mobile twin seed (11 constants; `ANNOUNCE` stays forked in
+`member-app.ts` — the member↔mobile desktop/mobile twin seed (12 constants; `ANNOUNCE` stays forked in
 each facade because one announcement's background colour differs between the two). Task 1 (C2 死種子退役,
 2026-07) retired 8 of the original 15 constants once every consumer had moved onto real backend seams —
 `CATALOG`/`MAKEUP_SLOTS`/`REWARDS`/`REPORTS`/`CERTS` (value + interface) outright, and `MY_COURSES`/
@@ -59,7 +62,11 @@ Since 2026-07-14 the per-entity ops-pair files (`venues.ts`/`tickets.ts`/`member
 `course-level.ts`) each also single-source a status/type → tone-and-label display lookup
 (`VENUE_STATUS`/`TICKET_TYPE`/`MEMBER_STATUS`+`MEMBER_ACCOUNT_STATUS`/`STATUS_TONE`/`LEVEL_TONE`), and
 four more member↔mobile display constants (`WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS`) joined
-`member-app.ts` the same round, taking its count from 7 to 11 (`docs/adr/0013`).
+`member-app.ts` the same round, taking its count from 7 to 11 (`docs/adr/0013`); `LEAVE_STATUS` followed
+on 2026-07-16 (count 12), consumed by `member`'s and `mobile`'s `data.ts` as pure-annotation narrowing
+re-asserts, and the same batch moved `session-format.ts` — pure per-session display derivation — from
+`member/` into `domain/`, imported directly by its six member/mobile consumers with no facade hop
+(`docs/adr/0014`).
 Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
 mostly as verbatim pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE`
 arrays and layers its own derived fields on top via `.map` builders, while `member`/`mobile` re-export
@@ -68,7 +75,7 @@ transformation); `coach` has no persona mapping into the shared seed, so it does
 at all. Because a facade could silently drop a re-exported *type* without vitest noticing (type-only
 imports erase at transpile time), `src/lib/mobile/data.test.ts` binds each of its re-exported types to a
 live value so a dropped export fails `npm run check` to compile, not just at runtime — the only facade
-left needing this guard now that member-app.ts is down to 11 constants; admin's former dedicated
+left needing this guard now that member-app.ts holds 12 constants; admin's former dedicated
 type-export regression file was retired once ADR 0009 emptied out the reports-domain re-exports it was
 guarding.
 
@@ -158,17 +165,28 @@ inventory in `docs/adr/0006`. `mobile` and `mobile-admin` (Round 3, Task 19/20) 
 hold an `api.ts` that re-delegates to the real getters already built for their desktop counterpart
 (`mobile` → `$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping
 only where the mobile shape diverges, with their own small residual mock spots (same ADR 0006 inventory)
-inlined the same direct way. Backend wire shapes shared across ≥2
+inlined the same direct way. Since 2026-07-16 `mobile`'s *remaining* direct reaches into `$lib/member`
+are consolidated too: production code imports member stores/actions/types only through
+`mobile/stores.ts`'s re-export block (plus the new `mobile/auth.ts` for the Google-OAuth effect trio),
+an invariant pinned by a source-scan contract in `mobile/foundation-contracts.test.ts` and
+same-reference identity pins in `mobile/stores.test.ts`; test files stay exempt because
+`vi.mock('$lib/member/stores')` *is* their wiring proof (`docs/adr/0014`). Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, display atoms like
 `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
 redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` re-exports the `OrderStatus` type
 from wire instead of holding a verbatim copy, and its two dynamic badge lookups use wire's
 `orderStatusBadge` fallback — which left a re-exported `ORDER_STATUS` table consumer-less, so it
-was dropped). Error-toast plumbing is single-sourced the same way:
+was dropped; since 2026-07-16 it also re-exports `LEVEL_TINT` and the `Student`/`StudentLevel` types from
+`$lib/coach/data` — coach stays the single source — for mobile-admin's two coach-side consumers,
+`docs/adr/0014`). Error-toast plumbing is single-sourced the same way:
 `src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never
 leaks the backend message) replaced 22 per-page inline mappers — 12 are table-form, each call site
 keeping its own 1-4-line entity text table; the other 10 are pass-through, delegating outright
-(`docs/adr/0011`).
+(`docs/adr/0011`). Coach's six pages (four desktop + mobile-admin's two coach pages) also shared
+byte-identical *load*-error copy — the gate `onError` title/body pairs — single-sourced since 2026-07-16
+in `src/lib/coach/load-error-copy.ts` (name-based `CoachNotFoundError` discrimination, so page tests that
+stub the whole api module keep working; mobile-admin consumes it through `mobile-admin/api.ts`'s
+re-export); per-entity *action* error tables stay at call sites — `docs/adr/0014` draws that boundary.
 Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
 variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
 `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
@@ -209,11 +227,14 @@ protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate
 second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
 own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
 unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Separately, member's
-`getDashboard()`/`getAccount()` getters (`member/api.ts`) also opportunistically hydrate session-scoped
-stores (points/notifications/subscriptions) as a side effect, behind a private, named
+`getDashboard()`/`getAccount()`/`getMine()` getters (`member/api.ts`) also opportunistically hydrate
+session-scoped stores (points/notifications/subscriptions; `getMine()` — the third adopter, 2026-07-16 —
+候補 waitlist + 請假 leave-requests) as a side effect, behind a private, named
 `hydrateSessionStores(caller, tasks)` helper (2026-07-13) — `Promise.allSettled`, best-effort (a failed
 hydrate only `console.error`s, never throws) — deliberately unlike `getPoints()`'s own fail-hard points
-refresh, which is page-critical rather than incidental. Layout shells stay outside the seam
+refresh, which is page-critical rather than incidental. The first two tail-await the hydrate after their
+main fetch; `getMine()` instead runs it in *parallel* with the main fetch (`Promise.all`), preserving the
+mine page's pre-existing parallel shape rather than quietly serializing it (`docs/adr/0014`). Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s Topbar still imports `NOTIFS` from
 `data.ts` for its unread-bell dropdown — synchronously, never through `api.ts` or the load gate (coach's
@@ -232,7 +253,11 @@ pages moved off static mock arrays onto the real `/courses`, `/coaches`, `/venue
 `/contact` endpoints. `src/lib/public/calendar-grid.ts` (2026-07-08) is the same shape applied to
 `ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions pulled out of the component,
 which is now a thin adapter over them; deliberately incompatible with, and never merged into, coach's own
-Monday-leading `schedule-dates.ts`.
+Monday-leading `schedule-dates.ts`. Its sibling `calendar-selection.ts` (2026-07-16) does the same for the
+component's *selection* transitions — month paging and date/time-slot picking as pure
+`CalendarSelection → CalendarSelection` functions, with `gate.refresh()` staying a component-side effect
+at the `loadMonth` call site; the bespoke inline three-state template (ADR 0008's standing exemption) is
+untouched.
 
 ## Load gate vs. hydration gate: which one owns a shared store's fetch?
 
@@ -262,7 +287,7 @@ Rule of thumb: reach for the standalone `createHydrationGate` when a store's hyd
 from more than one place (another getter, another mutator, another page); a lone page with a lone mutator
 can wire a plain writable straight into `load-gate.ts`'s `hydrate` option instead.
 
-## Single-page controllers and orchestrators (coach, admin)
+## Single-page controllers, orchestrators, and twin modules (coach, admin, member)
 
 Some pages have a same-page-only state-orchestration layer thick enough to be worth extracting into a
 sibling `.ts` (per the Testing convention below) but not general enough to become a shared
@@ -286,6 +311,20 @@ that `docs/adr/0011` already rejected.
   `pendingUserId` retry sentinel — sentinel *semantics* live in the module, sentinel *storage* stays on
   the page. Both functions return a `kind`-tagged outcome so the page — not the module — picks the error
   mapper (`docs/adr/0011`) and toast text.
+- **`src/lib/coach/clock-controller.ts`**'s `createClockController` (2026-07-16) is the fourth: the coach
+  home page's clock-in/out orchestration as a two-field snapshot store (`clockedIn`/`clocking`) with
+  `clockIn`/`clockOut`/`isClockedIn` injected as deps. `ApiError` 409/404 reclassification
+  (already-clocked-in / not-clocked-in) and the hydrate-vs-mutation ABA guard (`clockTouched`, mutation
+  wins) live inside, returning `kind`-tagged outcomes so all six toast strings stay on the page — this
+  reverses the `docs/adr/0013` note that had declined the extraction; `docs/adr/0014` records the
+  re-adjudication.
+
+The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
+modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
+page: `member/leave-form.ts` (the 請假/補課 form machines behind `LeaveDialog`/`MakeupDialog` and
+mobile's `LeaveSheet`/`MakeupSheet`) and `member/cancel-leave.ts` (the shared cancel-leave busy guard
+behind member/mine and mobile's `MyCourseDetail`). Gate wiring, error mappers, and toast copy stay at
+each call site — `docs/adr/0012`'s criterion ① is relaxed for exactly this class by `docs/adr/0014`.
 
 ## Testing
 
