@@ -107,8 +107,9 @@ are typed `IconName = keyof typeof ICONS`, so an unregistered icon name is now a
 everywhere it's used, not just where `<Icon>` renders it. Together with the overlay id unions above, this
 let `src/lib/mobile/foundation-contracts.test.ts` retire its icon-registry-completeness and
 overlay-map-completeness source scans — both were a strict subset of what `check` now catches; the
-file's two remaining contracts are route inventory (a deleted route only 404s at navigation time) and CSS
-safety (two regression regexes `check` can't reach). See `docs/adr/0012` for the full K6 rationale,
+file's remaining contracts are route inventory (a deleted route only 404s at navigation time), CSS
+safety (two regression regexes `check` can't reach), and — since 2026-07-16 — the mobile
+seam-consolidation source scan plus the `mobile/stores.ts` member-source allowlist (`docs/adr/0014`). See `docs/adr/0012` for the full K6 rationale,
 including a type-assertion lesson from the same batch.
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)

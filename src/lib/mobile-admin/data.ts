@@ -26,11 +26,13 @@ export { TICKETS, type Ticket } from '$lib/domain/tickets';
 export type { MemberAccountStatus } from '$lib/domain/members';
 // 批次 1 W2a：MemberAccountStatus 本地 union 改由 domain 轉出——`export type {…} from`
 // 不引入本地作用域，本檔 MemberRow.status 仍要用到這個型別，另見下面的 import type。
-// 卡 3：LEVEL_TINT 查表 + Student/StudentLevel 型別經本 seam 轉手——單一複本留在
+// 卡 3：LEVEL_TINT 查表 + Student 型別經本 seam 轉手——單一複本留在
 // $lib/coach/data（單複本無分歧，搬 domain 只是搬家，ADR 0013 case-甲 同款否決），
 // mobile-admin 的學員頁/StudentActionSheet 一律經這裡取用，不再直取 coach surface
-// （api.ts 是 seam 本體，其對 coach/data 的型別 import 不在此列）。
-export { LEVEL_TINT, type Student, type StudentLevel } from '$lib/coach/data';
+// （api.ts 是 seam 本體，其對 coach/data 的型別 import 不在此列）。StudentLevel
+// 無 mobile-admin 消費者，不轉出——型別 re-export 轉譯期擦除，零消費者的轉出是
+// vitest/check 都護不住的死出口（codex R1）。
+export { LEVEL_TINT, type Student } from '$lib/coach/data';
 
 // Base arrays consumed by the `.map` derivations that STAY in mobile (import, not re-export).
 import { CLASSES_BASE, STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';

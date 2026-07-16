@@ -15,9 +15,11 @@ clone 進本地 `f`,並重建各自的派生 string buffer)與 **derive 族**一
 2026-07-16 使用者裁決維持分散,理由落字以防未來架構審查 re-suggest:
 
 - **derive 族有兩次回歸史**:`OrderDialog` 的 nextStatus 派生形正是先前兩次回歸修出來的形狀,
-  且 dialog 的 reset 守衛依賴「單一 reactive statement」慣用式(FE#19 教訓:拆成多條 `$:` 會因
-  Svelte legacy 靜態依賴收集而漏觸發)——一個共用 helper 必須同時容納「clone 進本地」與「即時派生」
-  兩種相反的資料流,介面複雜度趨近實作本身(shallow module)。
+  其開/關 bookkeeping 刻意拆成兩條各自無狀態的 `$:`(換單重設、關閉清空);entity 族三檔則是
+  「prop 變更 → clone 進本地 + 重建 buffer」的單條同步分支——reset 佈線形狀本就異質(member 側
+  的 Leave/MakeupDialog 另有 FE#19 單一 reactive statement 約束,見該處註解,不在本 ADR 範圍)。
+  一個共用 helper 必須同時容納「clone 進本地」與「即時派生」兩種相反的資料流與兩種守衛形,
+  介面複雜度趨近實作本身(shallow module)。
 - **entity 族每處僅省一行**:三個對話框的差異全在各自的 buffer 重建(cap/price/sessions/duration
   vs priceText/quotaText vs equipText),能共用的只有「prop 變了就 clone」一行;刪除測試(deletion
   test)下 helper 只是把複雜度搬家,不是收斂。

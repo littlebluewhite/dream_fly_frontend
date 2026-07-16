@@ -36,10 +36,13 @@ CartSheet、CourseDetailSheet、LeaveSheet、MakeupSheet、MyCourseDetail、mobi
 
 **不變量與守衛**:「mobile production source(`.test.ts`/`.fixture.svelte` 除外)中,上述四檔之外
 無任何 `$lib/member` import」——由 `mobile/foundation-contracts.test.ts` 的 source-scan 契約釘住
-(沿用該檔既有 walker 的排除慣例;落地時做過可證偽驗證:暫塞違規行會被精確點名)。**測試檔明文豁免**:
-九個測試檔仍直取或 `vi.mock('$lib/member/stores')`——mock 精確源路徑正是「元件真的接在 member 實作上」
+(沿用該檔既有 walker 的排除慣例;掃描涵蓋靜態/side-effect/動態 import 與相對路徑逃逸四種形;
+落地時做過可證偽驗證:暫塞違規行會被精確點名)。**測試檔明文豁免**:sheet/overlay 與 seam 自身的
+測試檔仍直取或 `vi.mock('$lib/member/stores')`——mock 精確源路徑正是「元件真的接在 member 實作上」
 的佈線證明手段,收編進 seam 反而會讓 mock 靜默失效變假綠。分叉風險(re-export 與源頭漂移)由
-`mobile/stores.test.ts` 的 19 個 identity pins(`toBe` 同參照)接手。
+identity pins(`toBe` 同參照;`mobile/stores.test.ts` 16 個 + `mobile/auth.test.ts` 3 個)接手;
+identity pin 驗不出「繞道 barrel 之下深模組」的路徑漂移(參照仍同、但 vi.mock 不再攔截),由
+foundation-contracts 的源路徑白名單契約(stores/checkout/leave-form/cancel-leave 四模組)補上。
 
 **顯示查表隨批升遷**:`LEAVE_STATUS` 自 `member/data.ts` 升遷 `domain/member-app.ts`(常數計數
 11→12,計數句在 `domain/member-app.test.ts`),member/mobile 兩側 facade 以 0013 Form-3 純註記收窄

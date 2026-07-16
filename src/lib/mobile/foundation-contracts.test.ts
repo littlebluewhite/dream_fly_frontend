@@ -77,13 +77,32 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 	const MOBILE_SEAM_FILES = ['src/lib/mobile/api.ts', 'src/lib/mobile/stores.ts', 'src/lib/mobile/data.ts', 'src/lib/mobile/auth.ts'].map(r);
 	const MOBILE_DIRS = ['src/lib/mobile', 'src/routes/mobile'].map((d) => r(d) + '/'); // 尾斜線：排除 mobile-admin
 
-	it('src/lib/mobile + src/routes/mobile 中，seam 四檔之外零 $lib/member import', () => {
+	// codex R1：只掃 `from '$lib/member` 會漏動態 import()、side-effect import 與相對
+	// 路徑逃逸（'../member/…'）——$lib alias 不是唯一寫法。改抽出所有 import 位置的
+	// specifier 逐一判定。
+	const importSpecifiers = (src: string): string[] =>
+		[...src.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+	const isMemberReach = (spec: string) =>
+		spec.startsWith('$lib/member') || (spec.startsWith('.') && /(^|\/)member\//.test(spec));
+
+	it('src/lib/mobile + src/routes/mobile 中，seam 四檔之外零 $lib/member import（含動態/side-effect/相對形）', () => {
 		const offenders = surfaceFiles
 			.filter((f) => MOBILE_DIRS.some((d) => f.startsWith(d)))
 			.filter((f) => !MOBILE_SEAM_FILES.includes(f))
-			.filter((f) => /from\s+['"]\$lib\/member/.test(readFileSync(f, 'utf8')))
+			.filter((f) => importSpecifiers(readFileSync(f, 'utf8')).some(isMemberReach))
 			.map((f) => f.replace(ROOT + '/', ''));
 		expect(offenders, `經 $lib/mobile 接縫取用，勿直取 $lib/member：${offenders.join(', ')}`).toEqual([]);
+	});
+
+	// codex R1：identity pin 驗「同參照」驗不出「繞道 barrel 之下的深模組」——若
+	// stores.ts 改從 $lib/member/leave 直接 re-export，參照仍同、但 sheet/overlay
+	// 測試的 vi.mock('$lib/member/stores') 會不再攔截。源路徑白名單補上這一角。
+	it('mobile/stores.ts 的 $lib/member 源路徑僅限白名單四模組（stores/checkout/leave-form/cancel-leave）', () => {
+		const ALLOWED = ['$lib/member/stores', '$lib/member/checkout', '$lib/member/leave-form', '$lib/member/cancel-leave'];
+		const offenders = importSpecifiers(readFileSync(r('src/lib/mobile/stores.ts'), 'utf8'))
+			.filter(isMemberReach)
+			.filter((s) => !ALLOWED.includes(s));
+		expect(offenders, `mobile/stores.ts 出現白名單外的 member 源路徑：${offenders.join(', ')}`).toEqual([]);
 	});
 });
 
