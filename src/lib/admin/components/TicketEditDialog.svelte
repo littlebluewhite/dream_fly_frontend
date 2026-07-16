@@ -35,7 +35,7 @@
   // Local editable copy, reset whenever the ticket prop changes (mirrors React's
   // useEffect(() => setF(t), [t])). Numeric fields are edited as text
   // (Input.value is a string) and parsed back on save.
-  let f: Ticket | null = ticket;
+  let f: Ticket | null = ticket ? { ...ticket } : null;
   let priceText = ticket ? String(ticket.price) : '';
   // null quota (不限) → empty field, never the literal "null".
   let quotaText = ticket ? String(ticket.quota ?? '') : '';

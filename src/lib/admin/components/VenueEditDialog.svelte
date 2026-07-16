@@ -35,7 +35,7 @@
   // Local editable copy + equipText buffer, reset whenever the venue prop changes
   // (mirrors React's useEffect(() => setF(v), [v])). equipText is the 、-separated
   // equip[] buffer.
-  let f: Venue | null = venue;
+  let f: Venue | null = venue ? { ...venue } : null;
   let equipText = venue ? venue.equip.join('、') : '';
   let lastVenue: Venue | null = venue;
   $: if (venue !== lastVenue) {

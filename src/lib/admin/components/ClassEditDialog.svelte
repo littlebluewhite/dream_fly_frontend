@@ -30,7 +30,7 @@
   // Local editable copy, reset whenever the klass prop changes (mirrors React's
   // useEffect(() => setF(k), [k])). Numeric fields are edited as text
   // (Input.value is a string) and parsed back on save.
-  let f: ClassRow | null = klass;
+  let f: ClassRow | null = klass ? { ...klass } : null;
   let capText = klass ? String(klass.cap) : '';
   let priceText = klass ? String(klass.price) : '';
   let sessionsText = klass ? String(klass.sessions) : '';
