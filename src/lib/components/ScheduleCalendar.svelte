@@ -14,10 +14,29 @@
     formatDate,
     slotsForDay
   } from '$lib/public/calendar-grid';
+  import {
+    previousMonth as previousMonthSel,
+    nextMonth as nextMonthSel,
+    selectDate as selectDateSel,
+    selectTimeSlot as selectTimeSlotSel,
+    slotLabel,
+    isSlotDisabled,
+    type CalendarSelection
+  } from '$lib/public/calendar-selection';
 
   let currentDate = new Date();
   let selectedDate: Date | null = null;
   let selectedTimeSlot: string | null = null;
+
+  // 選取轉移已抽純（calendar-selection.ts）：sel()/apply() 把上面三個既有 let
+  // 打包成 CalendarSelection／解構回寫，handlers 退化為「純轉移 + 套用」薄橋接。
+  function sel(): CalendarSelection {
+    return { currentDate, selectedDate, selectedTimeSlot };
+  }
+
+  function apply(next: CalendarSelection) {
+    ({ currentDate, selectedDate, selectedTimeSlot } = next);
+  }
 
   // seam 接真 API：一次拉當月排課（每日一筆 slots），取代先前的 Math.random() 假資料。
   let days: ApiDaySchedule[] = [];
@@ -39,37 +58,26 @@
     closed: '不開放'
   };
 
-  function slotLabel(slot: ApiTimeSlot): string {
-    return `${slot.start_time.slice(0, 5)}-${slot.end_time.slice(0, 5)}`;
-  }
-
-  function isSlotDisabled(slot: ApiTimeSlot): boolean {
-    return slot.status === 'full' || slot.status === 'closed';
-  }
-
-  function loadMonth(date: Date) {
-    currentDate = date;
-    selectedDate = null;
-    selectedTimeSlot = null;
+  // 月變必 refetch：gate.refresh() 副作用留在元件呼叫點，不進純轉移函式。
+  function loadMonth(next: CalendarSelection) {
+    apply(next);
     gate.refresh();
   }
 
   function previousMonth() {
-    loadMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    loadMonth(previousMonthSel(sel()));
   }
 
   function nextMonth() {
-    loadMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    loadMonth(nextMonthSel(sel()));
   }
 
   function selectDate(day: number) {
-    selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    selectedTimeSlot = null;
+    apply(selectDateSel(sel(), day));
   }
 
   function selectTimeSlot(slot: ApiTimeSlot) {
-    if (isSlotDisabled(slot)) return;
-    selectedTimeSlot = slotLabel(slot);
+    apply(selectTimeSlotSel(sel(), slot));
   }
 
   // wrapper：模板呼叫維持單參數，anchor 固定帶 currentDate（呼叫點零改動）。

@@ -104,4 +104,25 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 		const { getByTestId } = render(Page);
 		expect(getByTestId('schedule-skeleton')).toBeTruthy();
 	});
+
+	it('換月清空已選日期與時段,並以新月份 refetch', async () => {
+		const { container, queryByText } = render(Page);
+		const today = new Date();
+		const dayBtn = await findByRole(container, 'button', { name: String(today.getDate()) });
+		await fireEvent.click(dayBtn);
+
+		const openSlotBtn = await findByRole(container, 'button', { name: /06:00-08:00/ });
+		await fireEvent.click(openSlotBtn);
+		await findByRole(container, 'button', { name: /確認預約 06:00-08:00/ });
+
+		const nextBtn = await findByRole(container, 'button', { name: '>' });
+		await fireEvent.click(nextBtn);
+
+		// 等下月格線渲染完(1 日必存在)再斷言,避免撞上骨架態。
+		await findByRole(container, 'button', { name: '1' });
+		const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+		expect(getSchedule).toHaveBeenLastCalledWith(next.getFullYear(), next.getMonth() + 1);
+		expect(queryByText(/可預約時段/)).toBeNull(); // selectedDate 已清 → 時段區塊消失
+		expect(queryByText(/確認預約/)).toBeNull(); // selectedTimeSlot 已清 → 確認鈕消失
+	});
 });
