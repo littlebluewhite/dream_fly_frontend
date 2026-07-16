@@ -177,7 +177,7 @@ surfaces — order-status badges, list-page envelopes, member/coach paired DTOs,
 redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` re-exports the `OrderStatus` type
 from wire instead of holding a verbatim copy, and its two dynamic badge lookups use wire's
 `orderStatusBadge` fallback — which left a re-exported `ORDER_STATUS` table consumer-less, so it
-was dropped; since 2026-07-16 it also re-exports `LEVEL_TINT` and the `Student`/`StudentLevel` types from
+was dropped; since 2026-07-16 it also re-exports `LEVEL_TINT` and the `Student` type from
 `$lib/coach/data` — coach stays the single source — for mobile-admin's two coach-side consumers,
 `docs/adr/0014`). Error-toast plumbing is single-sourced the same way:
 `src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never

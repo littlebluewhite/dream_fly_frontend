@@ -51,8 +51,9 @@ re-assert 消費。宣告形有一個此批驗出的陷阱要記:**satisfies 目
 `[string, string]` 會把 tuple 元素契約擴寬成 `string`,下游 facade 的 `Record<string, [Tone, string]>`
 純註記收窄在 strict 下直接紅燈(同檔 NOTIFS_SEED 先例)。`session-format.ts`(純顯示派生)同批
 `git mv` 進 `domain/`,六個 member/mobile 消費者直接 import——純顯示模組無需 facade 中繼。
-mobile-admin 側同型:`LEVEL_TINT` + `type Student`/`StudentLevel` **留在** `coach/data.ts`(單複本
-無分歧,搬進 domain 只是搬家),經 `mobile-admin/data.ts` 活 re-export 供兩個消費者取用。
+mobile-admin 側同型:`LEVEL_TINT` + `type Student` **留在** `coach/data.ts`(單複本無分歧,搬進
+domain 只是搬家),經 `mobile-admin/data.ts` 活 re-export 供兩個消費者取用;`StudentLevel` 零
+mobile-admin 消費者故不轉出——零消費者的型別轉出在轉譯期擦除,是 vitest/check 皆護不住的死出口。
 
 **mine 單一接縫**:`member/api.ts` 的 `getMine()` 成為 `hydrateSessionStores(caller, tasks)` 的
 第三個採用者(候補清單 + 我的請假),但採**並行形**——主 fetch 與水合以 `Promise.all` 併發,而非
@@ -108,7 +109,10 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
 
 - `getMine()` 順手水合使 mobile 的 `getHome`/`getMine` 委派也帶上候補/請假 best-effort hydrate,
   既有的「`joinWaitlist` prepend 可能被更早發出的 in-flight `refreshWaitlist` 回應覆寫」race 面
-  隨之擴大(mine 上本已存在)。水合 guard(`createHydrationGate` 採用)屬另案裁決,不靜默出貨。
+  隨之擴大(mine 上本已存在)。請假側同款(codex R2 補名):in-flight `refreshLeaveRequests`
+  回應若晚於 `cancelLeaveRequest` 的原地 status 改寫抵達,會把已取消列蓋回 `pending`,含「首次
+  水合蓋掉水合前 mutation」變體——與候補 race 同機制、同擴散路徑(desktop mine 本已存在,經
+  mobile 委派而擴大)。水合 guard(`createHydrationGate` 採用)屬另案裁決,不靜默出貨。
 - `MyCourseDetail` onMount 的 `refreshLeaveRequests` 是「開詳情刷新最新」的刻意語意,保留;
   mine 進頁 + 開 overlay 的兩次抓取為已知重複,同屬上述另案。
 

@@ -68,6 +68,17 @@ describe('createClockController — 建構 / hydrate', () => {
 		expect(outcome).toEqual({ kind: 'stale' }); // mutation wins，結果丟棄
 		expect(get(ctrl)).toEqual({ clockedIn: true, clocking: false });
 	});
+
+	// codex R2：釘住 clockTouched 不復位的契約——不只查詢往返「期間」的 mutation，
+	// 任何 mutation 之後才起飛的 hydrate 也一律 stale（hydrate 只服務首次開機）。
+	it('mutation 完成之後才起飛的 hydrate 也回 stale，不覆寫 mutation 後狀態', async () => {
+		deps.clockIn.mockResolvedValue({});
+		deps.isClockedIn.mockResolvedValue(false);
+		await ctrl.clockIn('c-1'); // 已完成的 mutation
+		const outcome = await ctrl.hydrate('c-1'); // 之後才開始的開機查詢
+		expect(outcome).toEqual({ kind: 'stale' });
+		expect(get(ctrl)).toEqual({ clockedIn: true, clocking: false });
+	});
 });
 
 describe('clockIn — 生命週期與 409 校正', () => {

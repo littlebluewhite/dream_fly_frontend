@@ -81,4 +81,19 @@ describe('LeaveSheet — 送出真請假申請(POST /leave-requests)', () => {
 		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '請假申請失敗', '此場次已有請假紀錄'));
 		expect(screen.queryByText('請假申請已送出')).toBeNull();
 	});
+
+	// codex R2：ApiError 精確釘之外，泛用 fallback 路徑（非 ApiError 的未知錯誤）也要
+	// 保有 render 層演練——兩條輸入域各測各的。Makeup 共用同一 leaveRequestErrorMessage
+	// 映射，泛用線由本檔代表覆蓋。
+	it('失敗（非 ApiError 的未知錯誤）→ 泛用連線文案 toast', async () => {
+		vi.mocked(createLeaveRequest).mockRejectedValue(new Error('boom'));
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		render(LeaveSheet, { props: { onClose: () => {}, course: COURSE } });
+
+		const select = await screen.findByLabelText('請假場次', { exact: false });
+		await fireEvent.change(select, { target: { value: 's1' } });
+		await fireEvent.click(screen.getByText('送出申請'));
+
+		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '請假申請失敗', '連線發生問題，請稍後再試。'));
+	});
 });

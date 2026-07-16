@@ -43,7 +43,9 @@ export interface ClockController extends Readable<ClockViewState> {
 export function createClockController(deps: ClockControllerDeps): ClockController {
 	let clockedIn = false;
 	let clocking = false;
-	let clockTouched = false; // 手動打卡後，開機查詢的過期結果不得覆寫（mutation wins）
+	let clockTouched = false; // 手動打卡後，開機查詢的過期結果不得覆寫（mutation wins）——
+	// 旗標刻意不復位：任何 mutation 之後起飛的 hydrate 也一律 stale。hydrate 只服務
+	// 首次開機，與頁面時代語意逐字一致（現行 ErrorState retry 不會重進 hydrate）。
 
 	const store = writable<ClockViewState>({ clockedIn, clocking });
 	const publish = (): void => store.set({ clockedIn, clocking });
