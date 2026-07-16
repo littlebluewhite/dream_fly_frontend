@@ -104,7 +104,16 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				const start = code.length;
 				code += ch;
 				i++;
-				while (i < src.length && src[i] !== ch) {
+				let closed = false;
+				while (i < src.length) {
+					if (src[i] === ch) {
+						closed = true;
+						break;
+					}
+					// 引號字串單行封頂：JS 的 '/" 字串不能跨原始換行——掃到換行即為幻影
+					// 開頭（regex 字面值內的引號、.svelte markup 的撇號），中止且不記跨度，
+					// 讓後續行照常掃描（模板字面值豁免，合法跨行）。
+					if (ch !== '`' && src[i] === '\n') break;
 					if (src[i] === '\\') {
 						code += src[i] + (src[i + 1] ?? '');
 						i += 2;
@@ -113,9 +122,14 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 						i++;
 					}
 				}
-				code += src[i] ?? ''; // 收尾引號（未終結字串則至檔尾）
-				i++;
-				stringSpans.push([start, code.length]);
+				if (closed) {
+					code += src[i];
+					i++;
+					stringSpans.push([start, code.length]);
+				}
+				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘：同一行內
+				// 「含引號的 regex 字面值＋違規 import」的組合不在守備範圍（跨行形已由
+				// 單行封頂涵蓋；同行形需完整 regex 語彙分析，對 tripwire 不成比例）。
 			} else {
 				code += ch;
 				i++;
@@ -151,7 +165,9 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			"export { x } from '../../member/stores';",
 			// codex R3：字串內的 // 與 /* 不是註解——剝註解若吞掉字串，同行／夾在中間的違規 import 會被靜默放行
 			"const u = 'https://a.b'; const m = import('$lib/member/stores');",
-			"const a = '/*'; import('$lib/member/stores'); const b = '*/';"
+			"const a = '/*'; import('$lib/member/stores'); const b = '*/';",
+			// R3 走查：regex 字面值裡的引號不得開出跨行幻影字串跨度、吞掉下一行的違規 import（引號字串單行封頂）
+			"const re = /['\"]/;\nimport { x } from '$lib/member/stores';"
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
