@@ -319,7 +319,9 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
     await fireEvent.click(btn);
 
     await vi.waitFor(() => {
-      expect(get(toasts).some((t) => t.tone === 'error' && t.title === '取消請假失敗')).toBe(true);
+      expect(
+        get(toasts).some((t) => t.tone === 'error' && t.title === '取消請假失敗' && t.body === '僅待審核假單可取消')
+      ).toBe(true);
     });
     expect(screen.getByText('待審核')).toBeInTheDocument(); // 狀態未變
   });

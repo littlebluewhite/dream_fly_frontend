@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import LeaveSheet from './LeaveSheet.svelte';
 import { getCourseSessions, createLeaveRequest } from '$lib/member/stores';
+import { ApiError } from '$lib/api/client';
 import { toasts } from '$lib/mobile/stores';
 import type { MyCourse } from '$lib/mobile/data';
 
@@ -68,8 +69,8 @@ describe('LeaveSheet — 送出真請假申請(POST /leave-requests)', () => {
 		expect(await screen.findByText('請假申請已送出')).toBeInTheDocument();
 	});
 
-	it('失敗時顯示錯誤 toast，不切到成功畫面', async () => {
-		vi.mocked(createLeaveRequest).mockRejectedValue(new Error('此場次已有請假紀錄'));
+	it('失敗（409）時顯示精確繁中錯誤 toast，不切到成功畫面（ApiError 透傳映射佈線釘）', async () => {
+		vi.mocked(createLeaveRequest).mockRejectedValue(new ApiError(409, '此場次已有請假紀錄'));
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(LeaveSheet, { props: { onClose: () => {}, course: COURSE } });
 
@@ -77,7 +78,7 @@ describe('LeaveSheet — 送出真請假申請(POST /leave-requests)', () => {
 		await fireEvent.change(select, { target: { value: 's1' } });
 		await fireEvent.click(screen.getByText('送出申請'));
 
-		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '請假申請失敗', expect.any(String)));
+		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '請假申請失敗', '此場次已有請假紀錄'));
 		expect(screen.queryByText('請假申請已送出')).toBeNull();
 	});
 });

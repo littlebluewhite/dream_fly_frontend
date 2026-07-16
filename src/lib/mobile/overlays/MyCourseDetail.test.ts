@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MyCourseDetail from './MyCourseDetail.svelte';
-import { overlay } from '$lib/mobile/stores';
+import { overlay, toasts } from '$lib/mobile/stores';
 import { leaveRequests, refreshLeaveRequests, cancelLeaveRequest, type LeaveRequest } from '$lib/member/stores';
+import { ApiError } from '$lib/api/client';
 import { getEnrolmentAttendance } from '$lib/mobile/api';
 import type { MyCourse, AttRecord } from '$lib/mobile/data';
 
@@ -114,6 +115,22 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 		await vi.waitFor(() => expect(btn).toBeDisabled());
 		resolveCancel(); // 收尾不留 in-flight
 		await vi.waitFor(() => expect(btn).not.toBeDisabled());
+	});
+
+	// codex R1：mobile 端此前沒有取消失敗路徑測試——釘住 outcome 攜原始 ApiError →
+	// leaveRequestErrorMessage 透傳 → toast 精確 body 的整條佈線。
+	it('取消失敗（409）→ 顯示精確繁中錯誤 toast，pending 列不變', async () => {
+		leaveRequests.set([PENDING]);
+		vi.mocked(cancelLeaveRequest).mockRejectedValue(new ApiError(409, '僅待審核假單可取消'));
+		const notifySpy = vi.spyOn(toasts, 'notify');
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+
+		await fireEvent.click(await screen.findByText('取消'));
+
+		await vi.waitFor(() => {
+			expect(notifySpy).toHaveBeenCalledWith('error', '取消請假失敗', '僅待審核假單可取消');
+		});
+		expect(await screen.findByText('待審核')).toBeInTheDocument();
 	});
 
 	it('approved 且未補課顯示「預約補課」，點擊開啟 makeup sheet 並帶入該筆 leaveRequest', async () => {

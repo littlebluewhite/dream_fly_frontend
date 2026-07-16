@@ -472,6 +472,29 @@ describe('getMine', () => {
     expect(errorSpy).toHaveBeenCalledWith('getMine: 我的請假 hydrate 失敗', leaveError);
   });
 
+  it('水合與主 fetch 並行啟動（主 fetch 未 resolve 前旁路已發出——卡 6 等價保證，退化成尾端序列會紅）', async () => {
+    const seen: string[] = [];
+    let resolveEnrolments!: (v: unknown) => void;
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      const key = `${method} ${path}`;
+      seen.push(key);
+      if (key === 'GET /enrolments/me') return new Promise((res) => { resolveEnrolments = res; });
+      if (key === 'GET /waitlist/me' || key === 'GET /leave-requests/me') return [];
+      throw new Error(`unexpected api call: ${key}`);
+    });
+
+    const p = getMine();
+    await vi.waitFor(() => {
+      expect(seen).toContain('GET /waitlist/me');
+      expect(seen).toContain('GET /leave-requests/me');
+    });
+
+    resolveEnrolments([]);
+    const d = await p;
+    expect(d.courses).toEqual([]);
+  });
+
   it('是 async 接縫(回 Promise)', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({ 'GET /enrolments/me': [], 'GET /waitlist/me': [], 'GET /leave-requests/me': [] })

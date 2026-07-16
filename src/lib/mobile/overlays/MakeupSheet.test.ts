@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import MakeupSheet from './MakeupSheet.svelte';
 import { getCourseSessions, bookMakeup, type LeaveRequest } from '$lib/member/stores';
 import { toasts } from '$lib/mobile/stores';
+import { ApiError } from '$lib/api/client';
 
 /* Task 19：MakeupSheet 從「MAKEUP_SLOTS 課程層級 mock + 本地 isDone 假成功」改真
  * 後端，且改吃 leaveRequest prop(不是 course)——同桌面 Task 11 的既有裁決：
@@ -79,8 +80,8 @@ describe('MakeupSheet — 確認預約(POST /leave-requests/{id}/makeup)', () =>
 		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('success', '補課已預約', '2026-07-10 (五) 19:00'));
 	});
 
-	it('失敗時顯示錯誤 toast，不切到成功畫面', async () => {
-		vi.mocked(bookMakeup).mockRejectedValue(new Error('該場次名額已滿'));
+	it('失敗（409）時顯示精確繁中錯誤 toast，不切到成功畫面（ApiError 透傳映射佈線釘）', async () => {
+		vi.mocked(bookMakeup).mockRejectedValue(new ApiError(409, '該場次名額已滿'));
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(MakeupSheet, { props: { onClose: () => {}, leaveRequest: LEAVE_REQUEST } });
 
@@ -88,7 +89,7 @@ describe('MakeupSheet — 確認預約(POST /leave-requests/{id}/makeup)', () =>
 		await fireEvent.change(select, { target: { value: 's1' } });
 		await fireEvent.click(screen.getByText('確認預約'));
 
-		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '預約補課失敗', expect.any(String)));
+		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('error', '預約補課失敗', '該場次名額已滿'));
 		expect(screen.queryByText('補課預約成功')).toBeNull();
 	});
 });
