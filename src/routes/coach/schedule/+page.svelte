@@ -15,6 +15,7 @@
   import type { SchedCat, SchedVenue, SchedCourse } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import ScheduleGrid from '$lib/coach/components/ScheduleGrid.svelte';
   import ScheduleMonth from '$lib/coach/components/ScheduleMonth.svelte';
   import CoachDropdown from '$lib/coach/components/CoachDropdown.svelte';
@@ -28,22 +29,13 @@
   } from '$lib/coach/schedule-dates';
 
   let courses: SchedCourse[] = [];
-  let errorTitle = '載入失敗';
-  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
 
   const gate = createLoadGate({
     fetch: getSchedule,
     onData: (d) => { courses = d.courses; },
     onError: (e) => {
-      // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
-      // 整支模組換成只有 getSchedule 的假模組，import 進來的 class 會是 undefined。
-      if (e instanceof Error && e.name === 'CoachNotFoundError') {
-        errorTitle = '此帳號未綁定教練檔案';
-        errorBody = '請聯繫系統管理員協助設定教練檔案。';
-      } else {
-        errorTitle = '載入失敗';
-        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-      }
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {

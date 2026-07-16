@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, type CoachSettingsData } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
@@ -30,22 +31,13 @@
   let activeTab = 'profile';
 
   let data: CoachSettingsData | null = null;
-  let errorTitle = '載入失敗';
-  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
 
   const gate = createLoadGate({
     fetch: getSettings,
     onData: (d) => { data = d; },
     onError: (e) => {
-      // e.name(非 instanceof CoachNotFoundError)—— 頁面測試把 $lib/coach/api
-      // 整支模組換成只有 getSettings 的假模組，import 進來的 class 會是 undefined。
-      if (e instanceof Error && e.name === 'CoachNotFoundError') {
-        errorTitle = '此帳號未綁定教練檔案';
-        errorBody = '請聯繫系統管理員協助設定教練檔案。';
-      } else {
-        errorTitle = '載入失敗';
-        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-      }
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {

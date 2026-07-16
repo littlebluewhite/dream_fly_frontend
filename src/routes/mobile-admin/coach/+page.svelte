@@ -20,24 +20,17 @@
   import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getCoachHome, CoachNotFoundError, type MCoachHomeData } from '$lib/mobile-admin/api';
+  import { getCoachHome, coachLoadErrorCopy, GENERIC_LOAD_ERROR, type MCoachHomeData } from '$lib/mobile-admin/api';
   import type { IconName } from '$lib/icon-registry';
 
   let data: MCoachHomeData | null = null;
-  let errorTitle = '載入失敗';
-  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
 
   const gate = createLoadGate({
     fetch: getCoachHome,
     onData: (d) => { data = d; },
     onError: (e) => {
-      if (e instanceof CoachNotFoundError || (e instanceof Error && e.name === 'CoachNotFoundError')) {
-        errorTitle = '此帳號未綁定教練檔案';
-        errorBody = '請聯繫系統管理員協助設定教練檔案。';
-      } else {
-        errorTitle = '載入失敗';
-        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-      }
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {

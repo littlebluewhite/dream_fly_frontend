@@ -70,6 +70,7 @@ import {
 } from './data';
 
 export { CoachNotFoundError };
+export { coachLoadErrorCopy, GENERIC_LOAD_ERROR, type LoadErrorCopy } from '$lib/coach/load-error-copy';
 export type {
 	CourseWriteBody,
 	CreateMemberBody,

@@ -12,6 +12,7 @@
   import { goto } from '$app/navigation';
   import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
   import { toasts } from '$lib/coach/stores';
   import { ApiError } from '$lib/api/client';
@@ -25,8 +26,7 @@
   import type { IconName } from '$lib/icon-registry';
 
   let data: CoachDashboardData | null = null;
-  let errorTitle = '載入失敗';
-  let errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
 
   const gate = createLoadGate({
     fetch: getDashboard,
@@ -35,16 +35,7 @@
       void hydrateClockState(d.coach.id);
     },
     onError: (e) => {
-      // 用 e.name 而非 instanceof CoachNotFoundError —— 頁面測試把 $lib/coach/api
-      // 整支模組換成只有 getDashboard 的假模組，import 進來的 class 會是
-      // undefined，instanceof undefined 會直接拋錯。
-      if (e instanceof Error && e.name === 'CoachNotFoundError') {
-        errorTitle = '此帳號未綁定教練檔案';
-        errorBody = '請聯繫系統管理員協助設定教練檔案。';
-      } else {
-        errorTitle = '載入失敗';
-        errorBody = '連線發生問題，無法取得最新資料，請稍後再試。';
-      }
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {
