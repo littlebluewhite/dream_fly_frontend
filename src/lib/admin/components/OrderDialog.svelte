@@ -16,7 +16,7 @@
    * both actions are callbacks the page wires to the real PATCH call. */
   import { Dialog, Select, Button } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { legalNextStatuses } from './orders-filter';
 

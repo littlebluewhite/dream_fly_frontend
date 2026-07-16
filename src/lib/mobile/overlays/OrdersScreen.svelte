@@ -13,7 +13,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { fmtNT } from '$lib/mobile/data';
+  import { fmtNT } from '$lib/format';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type MobileAccountData } from '$lib/mobile/api';
   import type { ComponentProps } from 'svelte';

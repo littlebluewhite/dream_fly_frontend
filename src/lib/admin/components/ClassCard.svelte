@@ -8,7 +8,7 @@
    * onEdit. */
   import { Card, Button, IconButton, Icon, ProgressBar } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { toasts as toastStore } from '$lib/admin/stores';
   import type { ClassRow } from '$lib/admin/data';
   import type { IconName } from '$lib/icon-registry';

@@ -28,7 +28,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, getMembers, getTodaySessions, getRecentActivity, type ReportsData } from '$lib/admin/api';
   import type { MemberAccount, TodayClass, Activity } from '$lib/admin/data';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
 
   let reports: ReportsData | null = null;
   let members: MemberAccount[] = [];

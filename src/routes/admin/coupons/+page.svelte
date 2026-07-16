@@ -19,7 +19,7 @@
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
   import CouponCreateDialog from '$lib/admin/components/CouponCreateDialog.svelte';
   import { buildCreateCouponBody, buildUpdateCouponBody } from '$lib/admin/components/coupon-request';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { getCoupons, createCoupon, updateCoupon, deleteCoupon, type Coupon } from '$lib/admin/api';

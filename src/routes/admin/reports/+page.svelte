@@ -17,7 +17,8 @@
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/admin/api';
-  import { fmtNT, fmtPct } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
+  import { fmtPct } from '$lib/admin/format';
   import { deltaPct, topCoursesFrom } from '$lib/admin/report-math';
 
   import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';

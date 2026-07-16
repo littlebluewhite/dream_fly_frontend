@@ -3,7 +3,8 @@ import { render, fireEvent } from '@testing-library/svelte';
 import OrdersPage from './+page.svelte';
 import { getOpsCollections } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, opsHydrated } from '$lib/mobile-admin/stores';
-import { CLASSES, MEMBERS, COACHES, ORDERS, fmtNT } from '$lib/mobile-admin/data';
+import { fmtNT } from '$lib/format';
+import { CLASSES, MEMBERS, COACHES, ORDERS } from '$lib/mobile-admin/data';
 import type { OrderRow } from '$lib/mobile-admin/data';
 
 vi.mock('$lib/mobile-admin/api', () => ({ getOpsCollections: vi.fn() }));

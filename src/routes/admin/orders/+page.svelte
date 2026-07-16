@@ -23,7 +23,7 @@
   import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { countByStatus, paidRevenue, applyStatusChange } from '$lib/admin/components/orders-filter';
   import { getOrders, updateOrderStatus } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';

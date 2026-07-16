@@ -7,8 +7,6 @@
 
 export type Tone = [string, string];
 
-export const fmtNT = (n: number): string => 'NT$' + n.toLocaleString('en-US');
-
 /* ---- single-source domain seed ----
  * The ops-pair shared seed (coaches / classes / members / orders + venues /
  * tickets / activity + reports) lives in `$lib/domain`. Mobile re-exports the

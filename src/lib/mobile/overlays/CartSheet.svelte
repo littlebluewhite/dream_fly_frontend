@@ -20,7 +20,8 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount } from 'svelte';
   import { cart, toasts, placeOrder } from '$lib/mobile/stores';
-  import { fmtNT, ME } from '$lib/mobile/data';
+  import { fmtNT } from '$lib/format';
+  import { ME } from '$lib/mobile/data';
   import { checkoutMath } from '$lib/checkout-math';
   import { points, refreshPoints } from '$lib/member/stores';
   import { validateCoupon, orderErrorMessage } from '$lib/member/checkout';

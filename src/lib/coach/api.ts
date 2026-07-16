@@ -11,6 +11,7 @@
  * import 進來的 class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號
  * 未綁定教練檔案」。 */
 import { api } from '$lib/api/client';
+import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime } from '$lib/api/wire';
@@ -158,12 +159,6 @@ interface ApiCoachReports {
 	attendance_rate_30d: number | null;
 }
 
-/** attendance_rate_30d 為 null(無出勤資料，裁決 3)時顯示「尚無資料」，不是 0%(0% 會
- *  誤導成「有資料、出席率為零」)；否則四捨五入為整數百分比。 */
-function formatAttendanceRate(rate: number | null): string {
-	return rate == null ? '尚無資料' : `${Math.round(rate * 100)}%`;
-}
-
 /** 首頁 KPI 卡數字(待點名/出席率/待回覆)原為頁面硬編字串,一併移入接縫。 */
 export interface CoachDashboardData {
 	coach: Coach;
@@ -192,7 +187,9 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 		todayClasses,
 		conversations: CONVERSATIONS, // getMessages 領域，仍為 mock
 		pendingClasses: `${reports.pending_attendance} 班`,
-		attendanceRate: formatAttendanceRate(reports.attendance_rate_30d),
+		// attendance_rate_30d 為 null(無出勤資料，裁決 3)時顯示「尚無資料」，不是 0%
+		// (0% 會誤導成「有資料、出席率為零」)。
+		attendanceRate: fmtRatio(reports.attendance_rate_30d, '尚無資料'),
 		pendingReplies: `${reports.unread_messages} 則`
 	};
 };

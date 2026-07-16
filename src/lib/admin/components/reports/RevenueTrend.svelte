@@ -7,7 +7,7 @@
    * 12 筆時 0/0 產生 NaN 高度——total/max 皆出自 report-math.ts revenueTrendVM()
    * (Round 2 C3,行動版 ReportsScreen 同源)。 */
   import { Card } from '$lib/components/ui';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { revenueTrendVM } from '$lib/admin/report-math';
   import type { TrendBar } from '$lib/admin/data';
 

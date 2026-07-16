@@ -8,7 +8,7 @@
    * 關閉 secondary that calls onClose. */
   import { Dialog, Icon, ProgressBar } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import type { ClassRow } from '$lib/admin/data';
   import type { IconName } from '$lib/icon-registry';
 

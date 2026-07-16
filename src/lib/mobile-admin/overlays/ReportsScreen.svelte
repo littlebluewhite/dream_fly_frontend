@@ -30,7 +30,9 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, type ReportsData } from '$lib/mobile-admin/api';
   import { ntd } from '$lib/public/adapters';
-  import { fmtNT, fmtPct } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
+  // fmtPct 跨 surface 自 admin 表面模組直取——依 ADR 0009,純函式直取不經 seam。
+  import { fmtPct } from '$lib/admin/format';
   import {
     deltaPct,
     pctShares,

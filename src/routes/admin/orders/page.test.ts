@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import type { Order } from '$lib/admin/data';
 import { search, toasts } from '$lib/admin/stores';
-import { fmtNT } from '$lib/admin/format';
+import { fmtNT } from '$lib/format';
 import { countByStatus, paidRevenue } from '$lib/admin/components/orders-filter';
 import { getOrders, updateOrderStatus } from '$lib/admin/api';
 import { ApiError } from '$lib/api/client';

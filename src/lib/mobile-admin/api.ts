@@ -53,9 +53,9 @@ import {
 	type CreateReportCardBody
 } from '$lib/coach/api';
 import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
+import { fmtNT } from '$lib/format';
 import {
 	PROFILES,
-	fmtNT,
 	type Profile,
 	type Coach,
 	type Venue,

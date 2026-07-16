@@ -10,8 +10,6 @@
  * (a) 畫面仍在讀的 mock(ANNOUNCE、COACH_REPLIES — 對應桌面版同樣是 mock，見各自
  * 的 P2 註解)、查表、或 `$lib/domain/member-app` 轉出的活值/活型別。 */
 
-export const fmtNT = (n: number): string => 'NT$' + n.toLocaleString('en-US');
-
 /** Tone tuple — [semantic tone key, Traditional-Chinese label]. */
 export type Tone = [string, string];
 

@@ -11,7 +11,8 @@
   import { Card } from '$lib/components/ui';
   import type { AdminIncomeSourceRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
-  import { fmtNT, fmtPct } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
+  import { fmtPct } from '$lib/admin/format';
   import { incomeSourcesVM, revenueSourceLabel } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminIncomeSourceRow[] } = $props();

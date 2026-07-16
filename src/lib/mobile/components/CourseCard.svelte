@@ -6,7 +6,8 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import LevelBadge from './LevelBadge.svelte';
-  import { fmtNT, type Course } from '$lib/mobile/data';
+  import { fmtNT } from '$lib/format';
+  import type { Course } from '$lib/mobile/data';
 
   export let c: Course;
   export let onOpen: () => void;

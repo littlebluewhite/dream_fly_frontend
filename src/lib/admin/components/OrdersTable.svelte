@@ -12,7 +12,7 @@
   import OrderDialog from './OrderDialog.svelte';
   import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
   import { search } from '$lib/admin/stores';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { filterOrders, countByStatus, type OrderStatusFilter } from './orders-filter';
 
   // The orders page owns the mutable order state (so the summary KPIs and this

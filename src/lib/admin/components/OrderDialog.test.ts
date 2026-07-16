@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import OrderDialog from './OrderDialog.svelte';
 import type { Order } from '$lib/admin/data';
-import { fmtNT } from '$lib/admin/format';
+import { fmtNT } from '$lib/format';
 
 /* OrderDialog — order detail modal (admin.jsx OrderDialog). A centered amount +
  * status badge over a 2-col field grid (id/member/item/campus/discount/method/

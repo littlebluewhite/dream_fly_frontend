@@ -10,7 +10,8 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import { cart, toasts } from '$lib/mobile/stores';
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
-  import { fmtNT, type Course } from '$lib/mobile/data';
+  import { fmtNT } from '$lib/format';
+  import type { Course } from '$lib/mobile/data';
   import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;

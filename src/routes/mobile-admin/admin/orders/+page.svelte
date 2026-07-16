@@ -19,7 +19,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, adminNotifs, adminUnreadCount, toasts, orders, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
-  import { fmtNT } from '$lib/mobile-admin/data';
+  import { fmtNT } from '$lib/format';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
   import { countByStatus, paidRevenue, filterOrders, type OrderStatusFilter } from '$lib/admin/components/orders-filter';

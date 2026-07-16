@@ -13,7 +13,7 @@
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints, type PaymentMethod } from '$lib/member/stores';
-  import { fmtNT } from '$lib/member/format';
+  import { fmtNT } from '$lib/format';
   import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
 

@@ -8,7 +8,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { overlay, toasts } from '$lib/mobile-admin/stores';
-  import { STATUS_TONE, fmtNT, type ClassRow } from '$lib/mobile-admin/data';
+  import { fmtNT } from '$lib/format';
+  import { STATUS_TONE, type ClassRow } from '$lib/mobile-admin/data';
   import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;

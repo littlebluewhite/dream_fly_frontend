@@ -9,7 +9,8 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
-  import { TICKETS, TICKET_TYPE, fmtNT } from '$lib/mobile-admin/data';
+  import { fmtNT } from '$lib/format';
+  import { TICKETS, TICKET_TYPE } from '$lib/mobile-admin/data';
 
   export let onBack: () => void;
 

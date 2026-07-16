@@ -12,7 +12,7 @@
   import { Card, Icon } from '$lib/components/ui';
   import type { AdminRevenueBreakdownRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { REVENUE_SOURCE_LABEL, breakdownTotalCents } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminRevenueBreakdownRow[] } = $props();

@@ -27,7 +27,7 @@
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { TICKET_TYPES, type Ticket } from '$lib/admin/data';
-  import { fmtNT } from '$lib/admin/format';
+  import { fmtNT } from '$lib/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
   import { getTickets, createProduct, updateProduct, type ProductWriteBody } from '$lib/admin/api';
   import { toCents } from '$lib/public/adapters';

@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import TicketsPage from './+page.svelte';
 import { TICKETS } from '$lib/domain/tickets';
 import { TICKET_TYPE } from '$lib/admin/data';
-import { fmtNT } from '$lib/admin/format';
+import { fmtNT } from '$lib/format';
 import { soldPct } from '$lib/admin/tickets-util';
 import { getTickets, createProduct, updateProduct } from '$lib/admin/api';
 import { toasts } from '$lib/admin/stores';

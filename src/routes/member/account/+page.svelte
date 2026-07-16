@@ -5,7 +5,7 @@
    * ProfileEditDialog. Data + primitives come from the shared foundation. */
   import { onMount } from 'svelte';
   import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
-  import { fmtNT } from '$lib/member/format';
+  import { fmtNT } from '$lib/format';
   import { points, subscriptions, toasts } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';

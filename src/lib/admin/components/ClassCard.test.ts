@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import ClassCard from './ClassCard.svelte';
 import type { ClassRow } from '$lib/admin/data';
-import { fmtNT } from '$lib/admin/format';
+import { fmtNT } from '$lib/format';
 
 /* ClassCard — one班級 card (admin.jsx ClassCard): level + status badges, name,
  * coach/time/room rows, an 報名人數 fill bar and the formatted季費. We assert the

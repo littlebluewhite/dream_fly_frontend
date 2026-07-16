@@ -9,7 +9,8 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
-  import { fmtNT, type OrderRow } from '$lib/mobile-admin/data';
+  import { fmtNT } from '$lib/format';
+  import type { OrderRow } from '$lib/mobile-admin/data';
   import { updateOrderStatus } from '$lib/mobile-admin/api';
   import { apiErrorText } from '$lib/api/error-text';
   import { orderStatusBadge } from '$lib/api/wire';
