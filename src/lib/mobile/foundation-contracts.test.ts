@@ -89,6 +89,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 	// 同行／其後的真違規 import 一併吞掉（靜默假陰性）。模板字面值視為不透明跨度
 	// 即可（specifier 本身的引號屬於 import 語法，match 起點在跨度外，不受影響）。
 	const stripCommentsPreserveStrings = (src: string): { code: string; stringSpans: [number, number][] } => {
+		// codex R3b′：CRLF 先正規化成 LF——否則合法的「\ + CRLF」字串行接續會被
+		// escape 分支吃掉 \+CR 後、裸 LF 觸發單行封頂誤斷成幻影（真字串內文的
+		// import 字樣反而現形＝誤報）。「\ + LF」接續由既有 escape 分支自然吸收；
+		// 跨度與比對都在正規化後的輸出上，內部一致。
+		src = src.replace(/\r\n/g, '\n');
 		let code = '';
 		const stringSpans: [number, number][] = [];
 		let i = 0;
@@ -167,7 +172,9 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			"const u = 'https://a.b'; const m = import('$lib/member/stores');",
 			"const a = '/*'; import('$lib/member/stores'); const b = '*/';",
 			// R3 走查：regex 字面值裡的引號不得開出跨行幻影字串跨度、吞掉下一行的違規 import（引號字串單行封頂）
-			"const re = /['\"]/;\nimport { x } from '$lib/member/stores';"
+			"const re = /['\"]/;\nimport { x } from '$lib/member/stores';",
+			// codex R3b′：雙引號版幻影同樣要被封頂（殺「只封單引號」突變體）
+			'const re = /["]/;\nimport { x } from "$lib/member/stores";'
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
@@ -176,7 +183,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			'const s = "$lib/member/stores";',
 			// codex R3：字串裡的 import(...) 字樣不是 import；相對形須「解析後」落在 src/lib/member 才算（殺路徑段天真比對）
 			'const snippet = \'import("$lib/member/stores")\';',
-			"import { x } from './member/util';"
+			"import { x } from './member/util';",
+			// codex R3b′：真字串邊界的三種合法形——跳脫引號、跨行模板、\ + CRLF 行接續——內文的 import 字樣都不得誤中
+			"const s = 'don\\'t import(\"$lib/member/stores\")';",
+			'const t = `\nimport("$lib/member/stores")\n`;',
+			"const s = 'x\\\r\nimport(\"$lib/member/stores\")';"
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
