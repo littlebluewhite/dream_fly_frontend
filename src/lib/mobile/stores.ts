@@ -40,6 +40,14 @@ export type MobilePushId = 'courseDetail' | 'schedule' | 'report' | 'points' | '
 export type MobileSheetId = 'course' | 'cart' | 'leave' | 'makeup' | 'contact' | 'editProfile';
 export const overlay = createOverlay<MobilePushId, MobileSheetId>();
 
+/* ---------- 請假/補課表單機（卡 2：desktop/mobile 雙生收斂的 surface seam） ---------- */
+// LeaveSheet/MakeupSheet 的表單機制（場次三態/守衛/trim）與桌面 LeaveDialog/
+// MakeupDialog 共用同一份 $lib/member/leave-form 雙工廠——mobile 元件一律經這裡
+// 取用（同 createOverlay 的 re-export 慣例）。deps（getCourseSessions/
+// createLeaveRequest/bookMakeup）本卡仍直取 $lib/member/stores（sheet 測試
+// vi.mock 該路徑作佈線證明，mock 路徑不變）；存量收編另卡處理。
+export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
+
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** A full course (spots 0) never enters the paid cart — add() just reports
  *  'waitlisted'; the caller is expected to call joinWaitlist() itself (C8,

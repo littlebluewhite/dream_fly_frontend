@@ -7,7 +7,10 @@ import { toasts } from '$lib/mobile/stores';
 /* Task 19：MakeupSheet 從「MAKEUP_SLOTS 課程層級 mock + 本地 isDone 假成功」改真
  * 後端，且改吃 leaveRequest prop(不是 course)——同桌面 Task 11 的既有裁決：
  * 補課預約是針對一張已核准請假申請的動作,見 $lib/member/components/
- * MakeupDialog.svelte。之前這個元件沒有既有測試，這裡是新增覆蓋。 */
+ * MakeupDialog.svelte。之前這個元件沒有既有測試，這裡是新增覆蓋。
+ * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;工廠經 $lib/mobile/
+ * stores 取真實作、deps 仍 mock $lib/member/stores(佈線證明,路徑不變)。這裡
+ * 保留元件端佈線,並釘住 mobile 版成功 toast body 字面(與桌面 MakeupDialog 分歧)。 */
 vi.mock('$lib/member/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/member/stores')>();
 	return { ...actual, getCourseSessions: vi.fn(), bookMakeup: vi.fn() };
@@ -59,6 +62,21 @@ describe('MakeupSheet — 確認預約(POST /leave-requests/{id}/makeup)', () =>
 
 		await vi.waitFor(() => expect(bookMakeup).toHaveBeenCalledWith('lr1', 's1'));
 		expect(await screen.findByText('補課預約成功')).toBeInTheDocument();
+	});
+
+	it('成功 toast body 的 mobile 字面釘:只有補課時間、無 course_name 前綴(與桌面 MakeupDialog 的 body 分歧,兩面各釘各的)', async () => {
+		vi.mocked(bookMakeup).mockResolvedValue({
+			...LEAVE_REQUEST, makeup_session_id: 's1', makeup_session_date: '2026-07-10', makeup_start_time: '19:00:00'
+		});
+		// mockClear:toasts.notify 的 spy 跨 it 不重置,先清空,這條釘才只驗本 it 的呼叫。
+		const notifySpy = vi.spyOn(toasts, 'notify').mockClear();
+		render(MakeupSheet, { props: { onClose: () => {}, leaveRequest: LEAVE_REQUEST } });
+
+		const select = await screen.findByLabelText('補課場次', { exact: false });
+		await fireEvent.change(select, { target: { value: 's1' } });
+		await fireEvent.click(screen.getByText('確認預約'));
+
+		await vi.waitFor(() => expect(notifySpy).toHaveBeenCalledWith('success', '補課已預約', '2026-07-10 (五) 19:00'));
 	});
 
 	it('失敗時顯示錯誤 toast，不切到成功畫面', async () => {

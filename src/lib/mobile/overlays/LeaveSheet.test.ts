@@ -8,7 +8,9 @@ import type { MyCourse } from '$lib/mobile/data';
 /* Task 19：LeaveSheet 從「COURSE_SESSIONS mock 查表 + 本地 isDone 假成功」改真
  * 後端 —— 開啟時打 GET /courses/{course_id}/sessions、送出打 POST
  * /leave-requests(復用桌面 Task 11 seam，見 $lib/member/stores.ts)。之前這個
- * 元件沒有既有測試(純 mock、無網路互動)，這裡是新增覆蓋，非「更新既有測試」。 */
+ * 元件沒有既有測試(純 mock、無網路互動)，這裡是新增覆蓋，非「更新既有測試」。
+ * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;工廠經 $lib/mobile/
+ * stores 取真實作、deps 仍 mock $lib/member/stores(佈線證明,路徑不變)。 */
 vi.mock('$lib/member/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/member/stores')>();
 	return { ...actual, getCourseSessions: vi.fn(), createLeaveRequest: vi.fn() };
