@@ -14,8 +14,8 @@
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
+  import { createClockController } from '$lib/coach/clock-controller';
   import { toasts } from '$lib/coach/stores';
-  import { ApiError } from '$lib/api/client';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
@@ -32,7 +32,7 @@
     fetch: getDashboard,
     onData: (d) => {
       data = d;
-      void hydrateClockState(d.coach.id);
+      void clock.hydrate(d.coach.id);
     },
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
@@ -42,58 +42,43 @@
     gate.load();
   });
 
-  /* ── 上班/下班打卡 —— 進頁面時以 isClockedIn()(最新一筆 clock-record)做開機狀態
-   * 查詢，之後為本地樂觀狀態；clockIn 409(已在上班中)/clockOut 404(尚未上班)時，
-   * 用回應校正回正確的本地狀態，不只是顯示錯誤。 ── */
+  /* ── 上班/下班打卡 —— 開機狀態查詢(hydrate)/409-404 校正/mutation-wins 守衛的
+   * 編排都在 clock-controller(deps 注入,可無渲染單測);頁面退化為單一快照解構 +
+   * outcome → toast 文案的薄 adapter。 ── */
+  const clock = createClockController({ clockIn, clockOut, isClockedIn });
   let clockedIn = false;
   let clocking = false;
-  let clockTouched = false; // 手動打卡後,開機查詢的過期結果不得覆寫(mutation wins)
-
-  /** 開機打卡狀態查詢:最佳努力(isClockedIn 失敗一律回 false,不影響頁面)。若使用者
-   *  在查詢往返期間已手動打卡,以手動結果為準——同 mobile-admin hydrate guard 的
-   *  「mutation 永遠贏過 in-flight fetch」原則(docs/architecture.md)。 */
-  async function hydrateClockState(coachId: string) {
-    const active = await isClockedIn(coachId);
-    if (!clockTouched) clockedIn = active;
-  }
+  $: ({ clockedIn, clocking } = $clock);
 
   async function onClockIn() {
     if (!data) return;
-    clockTouched = true;
-    clocking = true;
-    try {
-      await clockIn(data.coach.id);
-      clockedIn = true;
-      toasts.notify('success', '上班打卡成功', '祝你有美好的一天！');
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        clockedIn = true;
+    const outcome = await clock.clockIn(data.coach.id);
+    switch (outcome.kind) {
+      case 'clockedIn':
+        toasts.notify('success', '上班打卡成功', '祝你有美好的一天！');
+        break;
+      case 'alreadyClockedIn':
         toasts.notify('error', '已在上班中', '你目前已有進行中的打卡紀錄，無需重複打卡。');
-      } else {
+        break;
+      case 'failed':
         toasts.notify('error', '打卡失敗', '連線發生問題，請稍後再試。');
-      }
-    } finally {
-      clocking = false;
+        break;
     }
   }
 
   async function onClockOut() {
     if (!data) return;
-    clockTouched = true;
-    clocking = true;
-    try {
-      await clockOut(data.coach.id);
-      clockedIn = false;
-      toasts.notify('success', '下班打卡成功', '辛苦了，路上小心！');
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 404) {
-        clockedIn = false;
+    const outcome = await clock.clockOut(data.coach.id);
+    switch (outcome.kind) {
+      case 'clockedOut':
+        toasts.notify('success', '下班打卡成功', '辛苦了，路上小心！');
+        break;
+      case 'notClockedIn':
         toasts.notify('error', '尚未上班', '目前沒有進行中的打卡紀錄。');
-      } else {
+        break;
+      case 'failed':
         toasts.notify('error', '打卡失敗', '連線發生問題，請稍後再試。');
-      }
-    } finally {
-      clocking = false;
+        break;
     }
   }
 
