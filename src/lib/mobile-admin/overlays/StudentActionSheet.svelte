@@ -22,7 +22,8 @@
     type CreateReportCardBody
   } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
-  import type { Student } from '$lib/coach/data';
+  // 卡 3：Student 型別改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
+  import type { Student } from '$lib/mobile-admin/data';
 
   export let onClose: () => void;
   export let student: Student | null = null;
