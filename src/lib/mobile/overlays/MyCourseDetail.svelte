@@ -36,7 +36,7 @@
     type LeaveRequest
   } from '$lib/member/stores';
   import { getEnrolmentAttendance } from '$lib/mobile/api';
-  import { formatSessionDateTime } from '$lib/member/session-format';
+  import { formatSessionDateTime } from '$lib/domain/session-format';
   import { createLoadGate } from '$lib/load-gate';
   import { ATT_STATE, LEAVE_STATUS, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
   import type { IconName } from '$lib/icon-registry';

@@ -10,7 +10,7 @@
   import { Button, Select, Icon, Skeleton, ErrorState, EmptyState } from '$lib/components/ui';
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { sessionOptions, formatSessionDateTime } from '$lib/member/session-format';
+  import { sessionOptions, formatSessionDateTime } from '$lib/domain/session-format';
   import { createMakeupBookingForm } from '$lib/member/leave-form';
   import {
     getCourseSessions,

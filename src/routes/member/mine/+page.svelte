@@ -15,7 +15,7 @@
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
   import { ATT_STATE, LEVEL_TONE, LEAVE_STATUS } from '$lib/member/data';
   import type { AttRecord } from '$lib/member/data';
-  import { formatSessionDateTime } from '$lib/member/session-format';
+  import { formatSessionDateTime } from '$lib/domain/session-format';
   import {
     toasts,
     waitlist,

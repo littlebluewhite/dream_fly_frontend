@@ -19,7 +19,7 @@
   import Textarea from '$lib/components/ui/Textarea.svelte';
   import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
   import { toasts, createLeaveRequestForm } from '$lib/mobile/stores';
-  import { sessionOptions } from '$lib/member/session-format';
+  import { sessionOptions } from '$lib/domain/session-format';
   import { getCourseSessions, createLeaveRequest, leaveRequestErrorMessage, type CourseSession } from '$lib/member/stores';
   import type { MyCourse } from '$lib/mobile/data';
 

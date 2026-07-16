@@ -12,7 +12,7 @@
   import FormModal from './FormModal.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import NoteBox from './NoteBox.svelte';
-  import { sessionOptions } from '$lib/member/session-format';
+  import { sessionOptions } from '$lib/domain/session-format';
   import { createLeaveRequestForm } from '$lib/member/leave-form';
   import {
     getCourseSessions,

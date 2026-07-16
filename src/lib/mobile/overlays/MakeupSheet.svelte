@@ -17,7 +17,7 @@
   import Select from '$lib/components/ui/Select.svelte';
   import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
   import { toasts, createMakeupBookingForm } from '$lib/mobile/stores';
-  import { sessionOptions, formatSessionDateTime } from '$lib/member/session-format';
+  import { sessionOptions, formatSessionDateTime } from '$lib/domain/session-format';
   import {
     getCourseSessions,
     bookMakeup,
