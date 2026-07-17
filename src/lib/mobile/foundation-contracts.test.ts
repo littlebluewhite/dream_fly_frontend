@@ -99,9 +99,42 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 		src = src.replace(/\r\n?/g, '\n');
 		let code = '';
 		const stringSpans: [number, number][] = [];
+		// codex R4b：模板堆疊機。前一版 interpolation 用裸大括號配對，interpolation
+		// 字串裡的 { 會抬高深度使配對「晚收束」——模板閉合反引號被當內文吞掉，模板
+		// 之後的頂層真違規 import 一路被掩蓋到下一個反引號（靜默漏報，R4 引入的回歸）。
+		// 堆疊機讓 interpolation 內文沿用與頂層完全相同的字串／註解／巢狀模板規則。
+		// frame＝一層開著的模板：spanStart ≥ 0 表 quasi 模式（目前 quasi 跨度起點），
+		// spanStart = -1 表 interpolation 模式（braceDepth 追蹤配對中的大括號）。
+		const frames: { spanStart: number; braceDepth: number }[] = [];
 		let i = 0;
 		while (i < src.length) {
+			const frame = frames[frames.length - 1];
 			const ch = src[i];
+			if (frame !== undefined && frame.spanStart >= 0) {
+				// quasi 模式：不透明文字，只認閉合反引號、${、escape
+				if (ch === '`') {
+					code += ch;
+					i++;
+					stringSpans.push([frame.spanStart, code.length]);
+					frames.pop();
+				} else if (ch === '$' && src[i + 1] === '{') {
+					// ${...} interpolation 是可執行程式碼——quasi 跨度到此收束，回到
+					// code 模式照常掃描（codex R4；R4b 改堆疊機）
+					stringSpans.push([frame.spanStart, code.length]);
+					frame.spanStart = -1;
+					frame.braceDepth = 0;
+					code += '${';
+					i += 2;
+				} else if (ch === '\\') {
+					code += ch + (src[i + 1] ?? '');
+					i += 2;
+				} else {
+					code += ch;
+					i++;
+				}
+				continue;
+			}
+			// code 模式（頂層或 interpolation 內文，規則完全相同）
 			if (ch === '/' && src[i + 1] === '/') {
 				// codex R4：U+2028/2029 也終結行註解（ECMA LineTerminator；\r 已正規化）——
 				// 但不進下方單行封頂：ES2019 起兩者在字串字面值內合法，封頂認它們會誤殺真字串
@@ -110,8 +143,12 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				i += 2;
 				while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
 				i += 2;
-			} else if (ch === "'" || ch === '"' || ch === '`') {
-				let start = code.length;
+			} else if (ch === '`') {
+				frames.push({ spanStart: code.length, braceDepth: 0 });
+				code += ch;
+				i++;
+			} else if (ch === "'" || ch === '"') {
+				const start = code.length;
 				code += ch;
 				i++;
 				let closed = false;
@@ -122,25 +159,8 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 					}
 					// 引號字串單行封頂：JS 的 '/" 字串不能跨原始換行——掃到換行即為幻影
 					// 開頭（regex 字面值內的引號、.svelte markup 的撇號），中止且不記跨度，
-					// 讓後續行照常掃描（模板字面值豁免，合法跨行）。
-					if (ch !== '`' && src[i] === '\n') break;
-					// codex R4：模板的 ${...} interpolation 是可執行程式碼——quasi 跨度到此
-					// 收束，interpolation 內文以大括號配對掃過（其內的字串／註解／巢狀模板
-					// 不遞迴處理，屬複合罕見形，兩向殘餘見下方註記③），之後回到 quasi 跨度。
-					if (ch === '`' && src[i] === '$' && src[i + 1] === '{') {
-						stringSpans.push([start, code.length]);
-						code += '${';
-						i += 2;
-						let depth = 1;
-						while (i < src.length && depth > 0) {
-							if (src[i] === '{') depth++;
-							else if (src[i] === '}') depth--;
-							code += src[i];
-							i++;
-						}
-						start = code.length;
-						continue;
-					}
+					// 讓後續行照常掃描（模板走上面的堆疊機分支，合法跨行）。
+					if (src[i] === '\n') break;
 					if (src[i] === '\\') {
 						code += src[i] + (src[i + 1] ?? '');
 						i += 2;
@@ -157,9 +177,22 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘（均屬蓄意混淆而非
 				// 意外漂移，對 tripwire 不成比例）：①同行內「含引號的 regex 字面值＋違規
 				// import」（需完整 regex 語彙分析；跨行形已由單行封頂涵蓋）；②specifier 以
-				// unicode escape 拼寫路徑字元（需完整反跳脫器）；③interpolation 內文
-				// 的字串／註解／巢狀模板不遞迴——字串內的 import 字樣會誤報（loud），
-				// 字串內的大括號則使配對提早收束、同模板其後內容落回 quasi 跨度（漏報向）。
+				// unicode escape 拼寫路徑字元（需完整反跳脫器）。
+			} else if (frame !== undefined && ch === '{') {
+				frame.braceDepth++;
+				code += ch;
+				i++;
+			} else if (frame !== undefined && ch === '}') {
+				if (frame.braceDepth === 0) {
+					// interpolation 收束——回到 quasi 模式，跨度自 } 之後起算
+					code += ch;
+					i++;
+					frame.spanStart = code.length;
+				} else {
+					frame.braceDepth--;
+					code += ch;
+					i++;
+				}
 			} else {
 				code += ch;
 				i++;
@@ -211,7 +244,16 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// codex R4：specifier 內的「\ + 換行」行接續在執行期黏合為零字元——分類須用煮熟值
 			"const m = import('$lib/mem\\\r\nber/stores');",
 			// codex R4：模板 ${...} interpolation 是可執行程式碼——其內的 import() 不得被 quasi 跨度掩蓋
-			'const t = `x${import("$lib/member/stores")}y`;'
+			'const t = `x${import("$lib/member/stores")}y`;',
+			// codex R4b：interpolation 字串裡的 { 不得使配對晚收束——否則模板閉合反引號被吞，
+			// 模板「之後」的頂層真違規一路被掩蓋到下一個反引號
+			"function f() {\n\tconst t = `${'{'}`;\n}\nimport('$lib/member/stores');\nconst u = `x`;",
+			// codex R4b：U+2029 終結註解與 U+2028 同款（殺「只擋 U+2028」突變體）
+			"// note\u2029import('$lib/member/stores');",
+			// codex R4b：specifier 內「\ + U+2028」行接續同樣要煮熟（殺「只煮 \n」突變體）
+			"const m = import('$lib/mem\\\u2028ber/stores');",
+			// codex R4b：第二個 interpolation 也要照常掃描（殺「只開放第一個」突變體）
+			'const t = `a${1}b${import("$lib/member/stores")}c`;'
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
@@ -228,7 +270,12 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// codex R4：U+2028 自 ES2019 起在字串字面值內合法——封頂不得認它為換行（字串內文照常受跨度保護）
 			"const s = 'a\u2028import(\"$lib/member/stores\")';",
 			// codex R4：quasi 文字仍不透明——模板帶 interpolation 時不得整段解除保護
-			'const t = `import("$lib/member/stores") ${1}`;'
+			'const t = `import("$lib/member/stores") ${1}`;',
+			// codex R4b：interpolation 收束後的「後綴 quasi」也要恢復不透明（殺「開放後不復歸」突變體）
+			'const t = `x${1} import("$lib/member/stores") y`;',
+			// codex R4b：interpolation 內的字串是字串——其內文的 import 字樣不得誤中（堆疊機在
+			// interpolation 內沿用與頂層相同的字串跨度規則）
+			"const t = `${ 'import(\"$lib/member/stores\")' }`;"
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
