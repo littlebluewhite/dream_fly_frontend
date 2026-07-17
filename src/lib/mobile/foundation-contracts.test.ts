@@ -105,7 +105,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 		// 堆疊機讓 interpolation 內文沿用與頂層完全相同的字串／註解／巢狀模板規則。
 		// frame＝一層開著的模板：spanStart ≥ 0 表 quasi 模式（目前 quasi 跨度起點），
 		// spanStart = -1 表 interpolation 模式（braceDepth 追蹤配對中的大括號）。
-		const frames: { spanStart: number; braceDepth: number }[] = [];
+		// codex R4c：quasi 跨度掛起於 frame（pending），閉合反引號 pop 時才沖入
+		// stringSpans——與引號字串「未閉合不記跨度」同紀律。否則幻影反引號（regex
+		// 內）開的模板到 EOF 未閉合時，字串裡的 ${ 已提交跨度、其前被消費的真
+		// import 遭靜默濾除（前版未閉合不記跨度、該形抓得到＝回歸窗）。
+		const frames: { spanStart: number; braceDepth: number; pending: [number, number][] }[] = [];
 		let i = 0;
 		while (i < src.length) {
 			const frame = frames[frames.length - 1];
@@ -115,12 +119,13 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				if (ch === '`') {
 					code += ch;
 					i++;
-					stringSpans.push([frame.spanStart, code.length]);
+					frame.pending.push([frame.spanStart, code.length]);
+					stringSpans.push(...frame.pending);
 					frames.pop();
 				} else if (ch === '$' && src[i + 1] === '{') {
 					// ${...} interpolation 是可執行程式碼——quasi 跨度到此收束，回到
 					// code 模式照常掃描（codex R4；R4b 改堆疊機）
-					stringSpans.push([frame.spanStart, code.length]);
+					frame.pending.push([frame.spanStart, code.length]);
 					frame.spanStart = -1;
 					frame.braceDepth = 0;
 					code += '${';
@@ -144,7 +149,7 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
 				i += 2;
 			} else if (ch === '`') {
-				frames.push({ spanStart: code.length, braceDepth: 0 });
+				frames.push({ spanStart: code.length, braceDepth: 0, pending: [] });
 				code += ch;
 				i++;
 			} else if (ch === "'" || ch === '"') {
@@ -175,9 +180,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 					stringSpans.push([start, code.length]);
 				}
 				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘（均屬蓄意混淆而非
-				// 意外漂移，對 tripwire 不成比例）：①同行內「含引號的 regex 字面值＋違規
-				// import」（需完整 regex 語彙分析；跨行形已由單行封頂涵蓋）；②specifier 以
-				// unicode escape 拼寫路徑字元（需完整反跳脫器）。
+				// 意外漂移，對 tripwire 不成比例）：①regex 字面值需完整語彙分析——引號形
+				// 同行殘餘（跨行已由單行封頂涵蓋）；反引號形開幻影模板（模板合法跨行、無
+				// 封頂可用），未閉合到 EOF 由 pending 丟棄兜底，但若後方恰有真反引號配對
+				// 閉合，其間內容仍被當 quasi 掩蓋；②specifier 以 unicode escape 拼寫路徑
+				// 字元（需完整反跳脫器）。
 			} else if (frame !== undefined && ch === '{') {
 				frame.braceDepth++;
 				code += ch;
@@ -253,7 +260,18 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// codex R4b：specifier 內「\ + U+2028」行接續同樣要煮熟（殺「只煮 \n」突變體）
 			"const m = import('$lib/mem\\\u2028ber/stores');",
 			// codex R4b：第二個 interpolation 也要照常掃描（殺「只開放第一個」突變體）
-			'const t = `a${1}b${import("$lib/member/stores")}c`;'
+			'const t = `a${1}b${import("$lib/member/stores")}c`;',
+			// codex R4c：interpolation 內裸大括號（物件字面值）要正確配對——殺「每個 } 都
+			// 復歸 quasi」突變體（該突變體會把同段其後的 import 當 quasi 掩蓋）
+			'const t = `${ fn({a: 1}) + import("$lib/member/stores") }`;',
+			// codex R4c：巢狀模板 pop 後外層 frame 必須還在——殺「單一可變 frame」突變體
+			// （該突變體在內層模板閉合時清空 frame，外層閉合反引號反開幻影模板，掩蓋其後頂層 import）
+			'const t = `${ `x` }`;\nimport("$lib/member/stores");\nconst u = `y`;',
+			// codex R4c：幻影反引號（regex 內）開的模板到 EOF 未閉合——quasi 跨度不得提前
+			// 生效（跨度掛起於 frame、閉合才沖入），否則字串裡的 ${ 提交跨度、真 import 被濾
+			"const re = /`/; import { x } from '$lib/member/stores'; const s = 'x${y}';",
+			// codex R4c：specifier 內「\ + U+2029」行接續同樣要煮熟（殺「只煮 \n 與 U+2028」突變體）
+			"const m = import('$lib/mem\\\u2029ber/stores');"
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
@@ -275,7 +293,9 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			'const t = `x${1} import("$lib/member/stores") y`;',
 			// codex R4b：interpolation 內的字串是字串——其內文的 import 字樣不得誤中（堆疊機在
 			// interpolation 內沿用與頂層相同的字串跨度規則）
-			"const t = `${ 'import(\"$lib/member/stores\")' }`;"
+			"const t = `${ 'import(\"$lib/member/stores\")' }`;",
+			// codex R4c：\${ 是跳脫的字面文字、非 interpolation——其後的 import 字樣仍屬 quasi 不透明
+			'const t = `a\\${import("$lib/member/stores")}b`;'
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
