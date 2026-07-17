@@ -86,27 +86,32 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 	// 掃描器本身由下面的 fixture 自證 it 把關（掃描器退化成空集合時自證 it 先紅，
 	// 兩條契約 it 不會靜默假綠）。
 	// codex R3：剝註解必須字串感知——正規式版把字串裡的 // 或 /* 當註解起點，會把
-	// 同行／其後的真違規 import 一併吞掉（靜默假陰性）。模板字面值視為不透明跨度
-	// 即可（specifier 本身的引號屬於 import 語法，match 起點在跨度外，不受影響）。
+	// 同行／其後的真違規 import 一併吞掉（靜默假陰性）。模板的 quasi 文字視為不透明
+	// 跨度（specifier 本身的引號屬於 import 語法，match 起點在跨度外，不受影響）；
+	// ${...} interpolation 是可執行程式碼，照常掃描（codex R4）。
 	const stripCommentsPreserveStrings = (src: string): { code: string; stringSpans: [number, number][] } => {
 		// codex R3b′：CRLF 先正規化成 LF——否則合法的「\ + CRLF」字串行接續會被
 		// escape 分支吃掉 \+CR 後、裸 LF 觸發單行封頂誤斷成幻影（真字串內文的
 		// import 字樣反而現形＝誤報）。「\ + LF」接續由既有 escape 分支自然吸收；
 		// 跨度與比對都在正規化後的輸出上，內部一致。
-		src = src.replace(/\r\n/g, '\n');
+		// codex R4：孤立 \r 同樣是行終結（ECMA LineTerminator）——一併正規化，否則
+		// // 註解吞過 \r、幻影跨度跨過 \r，其後的真違規 import 被靜默放行。
+		src = src.replace(/\r\n?/g, '\n');
 		let code = '';
 		const stringSpans: [number, number][] = [];
 		let i = 0;
 		while (i < src.length) {
 			const ch = src[i];
 			if (ch === '/' && src[i + 1] === '/') {
-				while (i < src.length && src[i] !== '\n') i++;
+				// codex R4：U+2028/2029 也終結行註解（ECMA LineTerminator；\r 已正規化）——
+				// 但不進下方單行封頂：ES2019 起兩者在字串字面值內合法，封頂認它們會誤殺真字串
+				while (i < src.length && src[i] !== '\n' && src[i] !== '\u2028' && src[i] !== '\u2029') i++;
 			} else if (ch === '/' && src[i + 1] === '*') {
 				i += 2;
 				while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
 				i += 2;
 			} else if (ch === "'" || ch === '"' || ch === '`') {
-				const start = code.length;
+				let start = code.length;
 				code += ch;
 				i++;
 				let closed = false;
@@ -119,6 +124,23 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 					// 開頭（regex 字面值內的引號、.svelte markup 的撇號），中止且不記跨度，
 					// 讓後續行照常掃描（模板字面值豁免，合法跨行）。
 					if (ch !== '`' && src[i] === '\n') break;
+					// codex R4：模板的 ${...} interpolation 是可執行程式碼——quasi 跨度到此
+					// 收束，interpolation 內文以大括號配對掃過（其內的字串／註解／巢狀模板
+					// 不遞迴處理，屬複合罕見形，兩向殘餘見下方註記③），之後回到 quasi 跨度。
+					if (ch === '`' && src[i] === '$' && src[i + 1] === '{') {
+						stringSpans.push([start, code.length]);
+						code += '${';
+						i += 2;
+						let depth = 1;
+						while (i < src.length && depth > 0) {
+							if (src[i] === '{') depth++;
+							else if (src[i] === '}') depth--;
+							code += src[i];
+							i++;
+						}
+						start = code.length;
+						continue;
+					}
 					if (src[i] === '\\') {
 						code += src[i] + (src[i + 1] ?? '');
 						i += 2;
@@ -132,9 +154,12 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 					i++;
 					stringSpans.push([start, code.length]);
 				}
-				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘：同一行內
-				// 「含引號的 regex 字面值＋違規 import」的組合不在守備範圍（跨行形已由
-				// 單行封頂涵蓋；同行形需完整 regex 語彙分析，對 tripwire 不成比例）。
+				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘（均屬蓄意混淆而非
+				// 意外漂移，對 tripwire 不成比例）：①同行內「含引號的 regex 字面值＋違規
+				// import」（需完整 regex 語彙分析；跨行形已由單行封頂涵蓋）；②specifier 以
+				// unicode escape 拼寫路徑字元（需完整反跳脫器）；③interpolation 內文
+				// 的字串／註解／巢狀模板不遞迴——字串內的 import 字樣會誤報（loud），
+				// 字串內的大括號則使配對提早收束、同模板其後內容落回 quasi 跨度（漏報向）。
 			} else {
 				code += ch;
 				i++;
@@ -149,7 +174,10 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				const at = m.index ?? 0;
 				return !stringSpans.some(([s, e]) => at >= s && at < e);
 			})
-			.map((m) => m[1]);
+			// codex R4：分類用煮熟值——「\ + 行終結」的行接續在執行期黏合為零字元，
+			// specifier 原始拼寫先去接續再判 member reach（unicode escape 拼寫屬蓄意
+			// 混淆，見殘餘註記）
+			.map((m) => m[1].replace(/\\[\n\u2028\u2029]/g, ''));
 	};
 	const MEMBER_DIR = r('src/lib/member');
 	const isMemberReach = (file: string, spec: string): boolean => {
@@ -174,7 +202,16 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// R3 走查：regex 字面值裡的引號不得開出跨行幻影字串跨度、吞掉下一行的違規 import（引號字串單行封頂）
 			"const re = /['\"]/;\nimport { x } from '$lib/member/stores';",
 			// codex R3b′：雙引號版幻影同樣要被封頂（殺「只封單引號」突變體）
-			'const re = /["]/;\nimport { x } from "$lib/member/stores";'
+			'const re = /["]/;\nimport { x } from "$lib/member/stores";',
+			// codex R4：孤立 \r 也是 JS 行終結——註解與幻影跨度都必須止於它，否則其後的真違規被吞
+			"// note\rimport('$lib/member/stores');",
+			'const re = /["]/;\rimport { x } from "$lib/member/stores";',
+			// codex R4：U+2028/2029 亦終結 // 註解——註解後的真違規 import 照常執行，不得被吞
+			"// note\u2028import('$lib/member/stores');",
+			// codex R4：specifier 內的「\ + 換行」行接續在執行期黏合為零字元——分類須用煮熟值
+			"const m = import('$lib/mem\\\r\nber/stores');",
+			// codex R4：模板 ${...} interpolation 是可執行程式碼——其內的 import() 不得被 quasi 跨度掩蓋
+			'const t = `x${import("$lib/member/stores")}y`;'
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
@@ -187,7 +224,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// codex R3b′：真字串邊界的三種合法形——跳脫引號、跨行模板、\ + CRLF 行接續——內文的 import 字樣都不得誤中
 			"const s = 'don\\'t import(\"$lib/member/stores\")';",
 			'const t = `\nimport("$lib/member/stores")\n`;',
-			"const s = 'x\\\r\nimport(\"$lib/member/stores\")';"
+			"const s = 'x\\\r\nimport(\"$lib/member/stores\")';",
+			// codex R4：U+2028 自 ES2019 起在字串字面值內合法——封頂不得認它為換行（字串內文照常受跨度保護）
+			"const s = 'a\u2028import(\"$lib/member/stores\")';",
+			// codex R4：quasi 文字仍不透明——模板帶 interpolation 時不得整段解除保護
+			'const t = `import("$lib/member/stores") ${1}`;'
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
