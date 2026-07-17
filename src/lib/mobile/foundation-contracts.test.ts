@@ -181,10 +181,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 				}
 				// 未閉合（跨行／至檔尾）＝非真字串：不記跨度。已知殘餘（均屬蓄意混淆而非
 				// 意外漂移，對 tripwire 不成比例）：①regex 字面值需完整語彙分析——引號形
-				// 同行殘餘（跨行已由單行封頂涵蓋）；反引號形開幻影模板（模板合法跨行、無
-				// 封頂可用），未閉合到 EOF 由 pending 丟棄兜底，但若後方恰有真反引號配對
-				// 閉合，其間內容仍被當 quasi 掩蓋；②specifier 以 unicode escape 拼寫路徑
-				// 字元（需完整反跳脫器）。
+				// 同行殘餘（跨 \n 已由單行封頂涵蓋；U+2028/2029 刻意不觸發封頂，跨此二
+				// 分隔符的引號配對仍可掩蓋）；反引號形開幻影模板（模板合法跨行、無封頂
+				// 可用），未閉合到 EOF 由 pending 丟棄兜底（丟棄使幻影 quasi 吞過的真字串
+				// ／註解內文現形＝誤報向），若後方恰有真反引號配對閉合，其間內容仍被當
+				// quasi 掩蓋；②specifier 以 unicode escape 拼寫路徑字元（需完整反跳脫器）。
 			} else if (frame !== undefined && ch === '{') {
 				frame.braceDepth++;
 				code += ch;
@@ -271,7 +272,11 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// 生效（跨度掛起於 frame、閉合才沖入），否則字串裡的 ${ 提交跨度、真 import 被濾
 			"const re = /`/; import { x } from '$lib/member/stores'; const s = 'x${y}';",
 			// codex R4c：specifier 內「\ + U+2029」行接續同樣要煮熟（殺「只煮 \n 與 U+2028」突變體）
-			"const m = import('$lib/mem\\\u2029ber/stores');"
+			"const m = import('$lib/mem\\\u2029ber/stores');",
+			// codex R4d：pending 屬於各自的 frame——內層真模板閉合只沖入「自己的」跨度，
+			// 不得把外層未閉合幻影的掛起跨度一併沖入（否則幻影 quasi 吞過的真 import
+			// 被跨度掩蓋；殺「pending 全 frame 共用」突變體）
+			"const re = /`/; import { x } from '$lib/member/stores'; const s = 'a${ `t` }';"
 		];
 		const NEGATIVE = [
 			"import { x } from '$lib/membership/stores';",
@@ -295,7 +300,10 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			// interpolation 內沿用與頂層相同的字串跨度規則）
 			"const t = `${ 'import(\"$lib/member/stores\")' }`;",
 			// codex R4c：\${ 是跳脫的字面文字、非 interpolation——其後的 import 字樣仍屬 quasi 不透明
-			'const t = `a\\${import("$lib/member/stores")}b`;'
+			'const t = `a\\${import("$lib/member/stores")}b`;',
+			// codex R4d：外層幻影未閉合不連坐「已閉合的內層模板」——內層 quasi 的 import
+			// 字樣仍受自己已沖入的跨度保護（殺「外層未閉合即丟棄內層跨度」突變體）
+			"const re = /`/; const s = 'a${ `import(\"$lib/member/stores\")` }';"
 		];
 		for (const src of POSITIVE)
 			expect(importSpecifiers(src).some((s) => isMemberReach(fakeFile, s)), `應命中：${src}`).toBe(true);
