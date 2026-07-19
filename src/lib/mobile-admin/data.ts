@@ -17,8 +17,14 @@ export type Tone = [string, string];
 
 // Pure pass-throughs — re-export domain's value + type verbatim.
 export { COACHES, type Coach } from '$lib/domain/coaches';
-export { VENUES, type Venue } from '$lib/domain/venues';
-export { TICKETS, type Ticket } from '$lib/domain/tickets';
+// C4：VENUES/TICKETS 值退役——場館(VenuesScreen)/票券(TicketsScreen)兩個 push screen 已
+// 改接真 GET /venues、GET /products(見 $lib/mobile-admin/api 的 getVenues/getTickets 薄
+// 委派 re-export)，唯一消費者改吃 payload、兩份示範陣列無 production 引用。依 ADR 0010 §2
+// 值/型別分家「只砍值、留 interface」——Venue/Ticket 型別仍替 api.ts MoreData(:61-62)與兩個
+// screen 的本地 working copy 背書，改型別轉出保留；domain/venues.ts、domain/tickets.ts 的
+// VENUES/TICKETS seed 本身不動(admin 頁測試的 canonical fixture)。
+export type { Venue } from '$lib/domain/venues';
+export type { Ticket } from '$lib/domain/tickets';
 // Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(見
 // $lib/mobile-admin/api 的 getReports() 零映射 re-export)——domain/reports.ts 的
 // 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
@@ -178,12 +184,11 @@ export interface TodayRow {
 }
 // Task P4-F3：TODAY mock 退役(F11 已把 mobile-admin getAdminHome() 的今日課表改讀真
 // GET /sessions/today admin 分支——見 $lib/mobile-admin/api getAdminHome()，唯一消費者
-// 早已改吃 payload，此常數自 F11 起無 production 引用)。TodayRow 型別(下方 COACH_TODAY
-// 與 api.ts 的映射函式仍在用)維持不動。
-export const COACH_TODAY: TodayRow[] = [
-	{ time: '17:00', name: '競技體操 選手班', room: 'A 訓練館', count: 12, tone: 'success', label: '進行中', taken: true },
-	{ time: '19:00', name: '競技啦啦隊 進階班', room: 'A 訓練館', count: 11, tone: 'warning', label: '即將開始', taken: false }
-];
+// 早已改吃 payload，此常數自 F11 起無 production 引用)。C4：COACH_TODAY 示範陣列同步
+// 退役——getCoachHome() 自 Task 19 起改讀真 getDashboard() 的今日課表，grep 實證零
+// production 消費者(page.test.ts 用自帶 inline fixture)。TodayRow 型別維持不動——
+// api.ts 的 mapTodayClassToRow()/mapAdminTodayRow() 仍以它為回傳型別(:136-139,233-235)，
+// coach/page.test.ts 亦以它標註 inline fixture。
 
 /* ---- Attendance roster — 競技啦啦隊 進階班 ---- */
 export interface RosterEntry {
@@ -279,12 +284,12 @@ export const STATUS_TONE: Record<string, string> = STATUS_TONE_BASE;
 // getReports() payload；見 $lib/mobile-admin/api 的 getReports() 與 report-math.ts)。
 
 /* ===== 場館管理 data ===== */
-// `Venue` + `VENUES` are re-exported from `$lib/domain/venues` (top of file).
+// `Venue` 型別自 `$lib/domain/venues` 轉出(檔頭)；`VENUES` 值已 C4 退役(見檔頭註記)。
 // 批次 1 W2a：改純註記 re-assert 自 $lib/domain/venues；canonical 標籤同步改為
 // 「可預約」，取代本檔舊值「可使用」——兩者原意相同、字面各自維護導致靜默發散，
 // 見 ADR 0013。
 export const VENUE_STATUS: Record<string, Tone> = VENUE_STATUS_BASE;
 
 /* ===== 票券管理 data ===== */
-// `Ticket` + `TICKETS` are re-exported from `$lib/domain/tickets` (top of file).
+// `Ticket` 型別自 `$lib/domain/tickets` 轉出(檔頭)；`TICKETS` 值已 C4 退役(見檔頭註記)。
 export const TICKET_TYPE: Record<string, Tone> = TICKET_TYPE_BASE;

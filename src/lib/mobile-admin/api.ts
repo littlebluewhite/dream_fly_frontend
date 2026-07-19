@@ -94,6 +94,14 @@ export { getSettings, putSettings };
 // getAdminHome() 下方已用別名 adminGetReports 內部呼叫同一支函式取兩項首頁 KPI；
 // 這裡另外以 getReports 之名重新匯出供 ReportsScreen.svelte 使用。
 export const getReports = adminGetReports;
+// getVenues/getTickets(GET /venues、GET /products，皆公開端點，C4)——場館管理
+// (VenuesScreen.svelte)/票券管理(TicketsScreen.svelte)兩個 push screen 各自非同步消費
+// 真資料的薄委派 re-export(同 getReports 零映射慣例；兩支桌面 seam 已於檔頭 import 供
+// getMore() 使用，這裡另以 getVenues/getTickets 之名重新匯出供兩個 screen 呼叫)。
+// getTickets 沿用桌面第 1 頁口徑(呼叫端不帶 page，吃後端預設 per_page=20，與「更多」
+// 樞紐 getMore() 一致)——行動版兩畫面皆無 PaginationBar，超過一頁如實只顯示第一頁。
+export const getVenues = adminGetVenues;
+export const getTickets = adminGetTickets;
 // createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
 // 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
 // 假裝有接這個功能。
@@ -149,8 +157,10 @@ export interface MCoachHomeData {
 /** 教練 · 工作台首頁 — 復用桌面 getDashboard()(Task 19：GET /users/me + /coaches
  *  組出教練檔案、GET /sessions/today 今日課表、GET /reports/coach 待點名/待回覆
  *  KPI)，一次拿到 hero 用的真實教練身分 + 今日課表 + 兩個真實 KPI 數字。conversations
- *  (訊息預覽)桌面自己也仍是 mock(見 coach/api.ts getDashboard() 註解)，本頁不需要
- *  它，直接丟棄。找不到教練檔案時拋出 CoachNotFoundError，呼叫端(coach/+page.svelte)
+ *  (訊息預覽)自 C2 起改為 getDashboard() 內部 best-effort 真抓(GET /conversations/me)，
+ *  本頁(教練首頁 hero)不消費它、直接丟棄——等同每次多付一次隨即丟棄的
+ *  GET /conversations/me；權衡後接受(不為省這一次請求而讓 getCoachHome 另闢一條不含
+ *  對話的抓取路徑)。找不到教練檔案時拋出 CoachNotFoundError，呼叫端(coach/+page.svelte)
  *  依 e.name 判斷改顯示「此帳號未綁定教練檔案」。 */
 export const getCoachHome = async (): Promise<MCoachHomeData> => {
 	const d = await coachGetDashboard();

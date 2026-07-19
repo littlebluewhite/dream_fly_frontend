@@ -54,7 +54,9 @@ import {
 	getOpsCollections,
 	getMessages,
 	getSettings,
-	putSettings
+	putSettings,
+	getVenues,
+	getTickets
 } from './api';
 import { PROFILES } from './data';
 
@@ -271,5 +273,21 @@ describe('getSettings / putSettings — 零映射 re-export（Task F9：GET/PUT 
 
 		expect(await putSettings(body)).toBe(payload);
 		expect(adminApi.putSettings).toHaveBeenCalledWith(body);
+	});
+});
+
+describe('getVenues / getTickets — 薄委派 re-export（C4：GET /venues、GET /products，場館/票券 push screen 消費）', () => {
+	it('getVenues 直接委派給桌面 admin/api.ts 的 getVenues verbatim', async () => {
+		const payload = { venues: [{ id: 'v1', slug: 'v-1', name: '場地甲', type: '', equip: [], status: 'available' }] };
+		vi.mocked(adminApi.getVenues).mockResolvedValue(payload as never);
+		expect(await getVenues()).toBe(payload);
+	});
+
+	it('getTickets 直接委派給桌面 admin/api.ts 的 getTickets，分頁參數原樣傳遞 verbatim', async () => {
+		const payload = { tickets: [{ id: 't1', name: '票券甲' }], total: 1, page: 2, perPage: 20 };
+		vi.mocked(adminApi.getTickets).mockResolvedValue(payload as never);
+
+		expect(await getTickets(2)).toBe(payload);
+		expect(adminApi.getTickets).toHaveBeenCalledWith(2);
 	});
 });
