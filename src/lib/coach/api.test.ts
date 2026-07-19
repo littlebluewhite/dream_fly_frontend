@@ -28,7 +28,7 @@ import {
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
-import { TODAY_LABEL, CONVERSATIONS } from './data';
+import { TODAY_LABEL } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -118,7 +118,10 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 					'GET /users/me': ME,
 					'GET /coaches': [MY_COACH, OTHER_COACH],
 					'GET /sessions/today': SESSIONS_TODAY,
-					'GET /reports/coach': REPORTS
+					'GET /reports/coach': REPORTS,
+					'GET /conversations/me': [
+						{ id: 'cv1', peer_id: 'up1', peer_name: '王小明', last_message_body: '老師您好', last_message_at: '2026-07-05T09:42:00Z', unread_count: 2 }
+					]
 				})
 			);
 
@@ -130,7 +133,10 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 			]);
 			expect(d.coach).toEqual(MAPPED_COACH);
 			expect(d.todayLabel).toBe(TODAY_LABEL);
-			expect(d.conversations).toEqual(CONVERSATIONS);
+			// conversations 由 getDashboard() 併入真 getConversations() —— mapConversation 映射結果。
+			expect(d.conversations).toEqual([
+				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 2, preview: '老師您好', sla: '', slaTone: 'muted' }
+			]);
 			expect(d.pendingClasses).toBe('1 班');
 			expect(d.attendanceRate).toBe('80%');
 			expect(d.pendingReplies).toBe('3 則');
@@ -145,12 +151,17 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 				'GET /users/me': ME,
 				'GET /coaches': [MY_COACH, OTHER_COACH],
 				'GET /sessions/today': [],
-				'GET /reports/coach': { ...REPORTS, attendance_rate_30d: null }
+				'GET /reports/coach': { ...REPORTS, attendance_rate_30d: null },
+				'GET /conversations/me': [
+					{ id: 'cv1', peer_id: 'up1', peer_name: '王小明', last_message_body: '老師您好', last_message_at: '2026-07-05T09:42:00Z', unread_count: 2 }
+				]
 			})
 		);
 
 		const d = await getDashboard();
 		expect(d.attendanceRate).toBe('尚無資料');
+		// 非空斷言把 best-effort .catch 的「漏 route → 空陣列」分支釘住(否則漏補 route 也會綠)。
+		expect(d.conversations).toHaveLength(1);
 	});
 
 	it('空域(今日無場次、待點名/未讀訊息皆 0)時 pendingClasses/pendingReplies 為「0 班」「0 則」，不是 500', async () => {
@@ -165,7 +176,11 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 					unread_messages: 0,
 					student_count: 0,
 					attendance_rate_30d: null
-				}
+				},
+				// 今日無場次不代表沒有對話串——給一筆真對話，把 best-effort 空陣列分支釘住。
+				'GET /conversations/me': [
+					{ id: 'cv1', peer_id: 'up1', peer_name: '林小美', last_message_body: '謝謝老師', last_message_at: '2026-07-04T08:00:00Z', unread_count: 0 }
+				]
 			})
 		);
 
@@ -174,6 +189,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 		expect(d.pendingClasses).toBe('0 班');
 		expect(d.pendingReplies).toBe('0 則');
 		expect(d.attendanceRate).toBe('尚無資料');
+		expect(d.conversations).toHaveLength(1);
 	});
 
 	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError(不會先打 GET /reports/coach)', async () => {
@@ -181,6 +197,27 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
 		await expect(getDashboard()).rejects.toThrow(CoachNotFoundError);
+	});
+
+	it('GET /conversations/me 失敗時 conversations 降級為空陣列，KPI/今日課程照常(best-effort)', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME,
+				'GET /coaches': [MY_COACH, OTHER_COACH],
+				'GET /sessions/today': SESSIONS_TODAY,
+				'GET /reports/coach': REPORTS,
+				'GET /conversations/me': new Error('boom')
+			})
+		);
+
+		const d = await getDashboard();
+
+		expect(d.conversations).toEqual([]);
+		expect(d.todayClasses).toHaveLength(2);
+		expect(d.pendingClasses).toBe('1 班');
+		expect(d.attendanceRate).toBe('80%');
+		expect(d.pendingReplies).toBe('3 則');
 	});
 });
 

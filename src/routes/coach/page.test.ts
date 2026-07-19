@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CoachHomePage from './+page.svelte';
-import { COACH, TODAY_LABEL, CONVERSATIONS } from '$lib/coach/data';
-import type { TodayClass } from '$lib/coach/data';
+import { COACH, TODAY_LABEL } from '$lib/coach/data';
+import type { TodayClass, Conversation } from '$lib/coach/data';
 import { getDashboard } from '$lib/coach/api';
 import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
 import { toasts } from '$lib/coach/stores';
@@ -17,12 +17,19 @@ vi.mock('$lib/coach/clock', () => ({ clockIn: vi.fn(), clockOut: vi.fn(), isCloc
  * payload — fixture 刻意用與 seed 不同的數字/日期標籤,證明頁面讀 payload 而非
  * 殘留硬編(todayLabel 也相異化,審查回修 Minor)。
  *
- * Task 1(C2 死種子退役):coach/data.ts 的 TODAY_CLASSES(值)已退役——改為檔內
- * inline fixture(3 筆)。 */
+ * Task 1(C2 死種子退役):coach/data.ts 的 TODAY_CLASSES/CONVERSATIONS(值)已退役——
+ * 改為檔內 inline fixture(今日課程 3 筆、對話 4 筆;對話用真接縫 mapConversation 形狀
+ * ——kind「會員」,證明頁面讀 payload 而非殘留 seed)。 */
 const TODAY_CLASSES: TodayClass[] = [
 	{ id: 'tc1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '主場館 A 教室', count: 12, level: '入門', cat: '體操', status: 'done' },
 	{ id: 'tc2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '主場館 B 教室', count: 8, level: '基礎', cat: '體操', status: 'live' },
 	{ id: 'tc3', start: '11:45', end: '12:45', name: '幼兒體操啟蒙班', room: '主場館 A 教室', count: 10, level: '啟蒙', cat: '體操', status: 'soon' }
+];
+const CONVERSATIONS: Conversation[] = [
+	{ id: 'cv1', name: '張大文', initial: '張', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 3, preview: '教練這週六可以加練嗎？', sla: '', slaTone: 'muted' },
+	{ id: 'cv2', name: '劉品妍', initial: '劉', color: '#0066CC', kind: '會員', time: '2026-07-05 09:20', badge: 0, preview: '謝謝老師的指導！', sla: '', slaTone: 'muted' },
+	{ id: 'cv3', name: '周宜蓁', initial: '周', color: '#0066CC', kind: '會員', time: '2026-07-04 18:05', badge: 1, preview: '想請問補課的時間', sla: '', slaTone: 'muted' },
+	{ id: 'cv4', name: '鄭凱文', initial: '鄭', color: '#0066CC', kind: '會員', time: '2026-07-04 12:30', badge: 0, preview: '孩子明天想請假一次', sla: '', slaTone: 'muted' }
 ];
 const FIXTURE = {
 	coach: COACH,
@@ -92,6 +99,13 @@ describe('/coach (+page) — 儀表板首頁', () => {
 		for (const m of CONVERSATIONS.slice(0, 3)) expect(txt).toContain(m.name);
 		// the 4th+ conversation should not appear in the 最新訊息 panel.
 		if (CONVERSATIONS.length > 3) expect(txt).not.toContain(CONVERSATIONS[3].preview);
+	});
+
+	it('沒有對話時,最新訊息面板顯示「尚無訊息」空狀態', async () => {
+		vi.mocked(getDashboard).mockResolvedValue({ ...FIXTURE, conversations: [] });
+		const { container, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+		expect(container.textContent ?? '').toContain('尚無訊息');
 	});
 
 	it('the 本週待辦 checklist toggles a todo item', async () => {

@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-	CONVERSATIONS,
 	NOTIFS,
 	CLASS_STATUS,
 	LEVEL_TINT,
@@ -14,7 +13,6 @@ import {
 describe('coach data — shape', () => {
 	it('has the expected collection lengths', () => {
 		expect(SCHED_HOURS).toHaveLength(8);
-		expect(CONVERSATIONS).toHaveLength(6);
 		expect(NOTIFS).toHaveLength(4);
 	});
 });
@@ -40,10 +38,5 @@ describe('coach data — referential integrity (live lookup tables)', () => {
 	it('every SchedCat value resolves in CAT_COLOR', () => {
 		const cats: SchedCat[] = ['體操', '啦啦隊', '跑酷'];
 		for (const c of cats) expect(CAT_COLOR[c]).toBeDefined();
-	});
-
-	it('every CONVERSATIONS.slaTone is a valid tone', () => {
-		const valid = new Set(['warning', 'muted', 'error', 'success']);
-		for (const c of CONVERSATIONS) expect(valid.has(c.slaTone)).toBe(true);
 	});
 });

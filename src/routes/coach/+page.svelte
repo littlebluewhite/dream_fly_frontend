@@ -331,6 +331,8 @@
                 >{m.preview}</span>
               </span>
             </button>
+          {:else}
+            <div style="color:var(--df-text-muted);font-size:13px;text-align:center;padding:8px 0">尚無訊息</div>
           {/each}
         </div>
       </PanelCard>

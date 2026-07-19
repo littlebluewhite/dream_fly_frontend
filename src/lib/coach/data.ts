@@ -13,13 +13,13 @@
  *   (admin/coach/member) share one label set.
  *
  * Task 1(C2 死種子退役):本檔案現況是「活查表 + 活種子 + 型別」混合,不再是
- * mock-only。NOTIFS 是 Topbar 直接消費的活種子,TODAY_LABEL/CONVERSATIONS 是
+ * mock-only。NOTIFS 是 Topbar 直接消費的活種子,TODAY_LABEL 是
  * coach/api.ts 消費的活種子(COACH 消費者見其宣告旁的漂移註記——W4 起
  * Topbar/Sidebar 已改讀 authStore,不再直接消費 COACH);CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
  * CAT_COLOR 是頁面與元件消費的活查表;其餘示範資料(TODAY_CLASSES/STUDENTS/
  * SCHED_DAYS/SCHED_COURSES/ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES/THREAD/
- * SHARED_FILES)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
- * getSchedule()/getAttendance()/getThread() 等真後端接縫,經確認無 runtime
+ * SHARED_FILES/CONVERSATIONS)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
+ * getSchedule()/getAttendance()/getThread()/getConversations() 等真後端接縫,經確認無 runtime
  * 消費者後已退役——interface 仍供頁面與 api.ts 的型別標註使用,除 SharedFile
  * (零型別消費者,隨值一併退役)外全數保留。 */
 import type { Level } from '$lib/domain/course-level';
@@ -225,14 +225,10 @@ export interface AttClassFull extends AttClass {
 }
 
 /* ──────────────── messages (訊息中心) ──────────────── */
-export const CONVERSATIONS: Conversation[] = [
-	{ id: 'v1', name: '王媽媽', initial: '王', color: '#0066CC', kind: '家長', time: '09:42', badge: 2, preview: '老師您好，小明明天的課可以調整時間嗎？', urgent: true, sla: '30 分內需回覆', slaTone: 'warning' },
-	{ id: 'v2', name: '競技選手班 群組', initial: '群', color: '#8B5CF6', kind: '群組', time: '09:20', badge: 5, preview: '請問週六加課的場地確定了嗎？', sla: '今日內回覆', slaTone: 'muted' },
-	{ id: 'v3', name: '林同學', initial: '林', color: '#10B981', kind: '學員', time: '08:55', badge: 1, preview: '教練我這週想請假，需要補課嗎？', sla: '2 小時內回覆', slaTone: 'muted' },
-	{ id: 'v4', name: '黃媽媽', initial: '黃', color: '#F59E0B', kind: '家長', time: '昨天', preview: '孩子在課堂上跌倒，想了解處理狀況…', urgent: true, sla: '已逾時 1.5h', slaTone: 'error' },
-	{ id: 'v5', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '家長', time: '昨天', preview: '謝謝老師這學期的細心指導！', sla: '已回覆', slaTone: 'success' },
-	{ id: 'v6', name: '吳媽媽', initial: '吳', color: '#0EA5E9', kind: '家長', time: '週一', preview: '收到，謝謝您。', sla: '已回覆', slaTone: 'success' }
-];
+// Task 1(C2 死種子退役):CONVERSATIONS(訊息中心 6 筆示範資料)已退役——首頁最新訊息
+// 面板改由 getDashboard() 併入的真 getConversations() 接縫供資料,這份 mock 已無
+// runtime 消費者。Conversation interface 與 SlaTone 仍供 mapConversation 與頁面的
+// 型別標註使用,保留。
 
 // Task 1(C2 死種子退役):THREAD/SHARED_FILES(訊息串示範資料,王媽媽 thread)已
 // 退役——訊息中心頁改走 getThread() 真後端接縫,這兩份 mock 已無 runtime 消費者。

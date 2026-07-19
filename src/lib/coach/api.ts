@@ -16,7 +16,7 @@ import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime } from '$lib/api/wire';
 import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
-import { TODAY_LABEL, CONVERSATIONS } from './data';
+import { TODAY_LABEL } from './data';
 import type {
 	Coach,
 	TodayClass,
@@ -164,6 +164,8 @@ export interface CoachDashboardData {
 	coach: Coach;
 	todayLabel: string;
 	todayClasses: TodayClass[];
+	/** best-effort：由 getDashboard() 併入真 getConversations()；訊息中心暫時失敗時
+	 *  降級為空陣列(頁面顯示「尚無訊息」)，不連累 KPI/今日課程等主資料。 */
 	conversations: Conversation[];
 	pendingClasses: string;
 	attendanceRate: string;
@@ -177,15 +179,24 @@ export interface CoachDashboardData {
  *  不強塞新卡片。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
 	const { user, coach } = await requireMyCoach();
-	const [todayClasses, reports] = await Promise.all([
+	const [todayClasses, reports, conversations] = await Promise.all([
 		myTodayClasses(),
-		api<ApiCoachReports>('/reports/coach')
+		api<ApiCoachReports>('/reports/coach'),
+		// conversations 為 best-effort：訊息中心暫時失敗只降級為空陣列，不讓非核心的
+		// 最新訊息面板擋住整頁 KPI/今日課程(同 member/api.ts hydrateSessionStores 的
+		// best-effort 語意——主資料 fail-hard、順手資料失敗只記錄)。
+		getConversations()
+			.then((c) => c.conversations)
+			.catch((e): Conversation[] => {
+				console.error('getDashboard: 訊息中心載入失敗', e);
+				return [];
+			})
 	]);
 	return {
 		coach: mapCoach(user, coach),
 		todayLabel: TODAY_LABEL,
 		todayClasses,
-		conversations: CONVERSATIONS, // getMessages 領域，仍為 mock
+		conversations,
 		pendingClasses: `${reports.pending_attendance} 班`,
 		// attendance_rate_30d 為 null(無出勤資料，裁決 3)時顯示「尚無資料」，不是 0%
 		// (0% 會誤導成「有資料、出席率為零」)。
