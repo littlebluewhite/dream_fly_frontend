@@ -1,10 +1,11 @@
 import { writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
+import { createHydrationGate } from '$lib/hydration-gate';
 
 /* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
  * 取代原本掛在 cart 底下、隨 dreamfly_cart_v3 一起存進 localStorage 的
  * `waitlist: string[]`——truth 改成 server（GET /waitlist/me），跟 subscriptions
- * /points 同一種「per-session 快取」模式：refreshWaitlist() 整包 hydrate；
+ * /points 同一種「per-session 快取」模式：hydrateWaitlist() 整包 hydrate；
  * joinWaitlist()/cancelWaitlist() 呼叫 API 成功後直接更新 store（不重新整包
  * fetch，省一次 GET）。cart.addItem 仍會把額滿課程擋在付費購物車外（回傳
  * 'waitlisted'），但不再自己寫入任何本地清單——呼叫端（courses 頁的
@@ -31,11 +32,22 @@ function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
 
 /** GET /waitlist/me — 純陣列、新到舊，含已取消的歷史紀錄。只留 status='waiting'
  *  （同 refreshSubscriptions 對 expired/cancelled 的處理慣例——已取消的候補不
- *  算「候補中」，不該顯示在會員中心的候補清單）。 */
-export async function refreshWaitlist(): Promise<void> {
-  const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
-  waitlist.set(list.filter((w) => w.status === 'waiting').map(toWaitlistEntry));
-}
+ *  算「候補中」，不該顯示在會員中心的候補清單）。C1 改用共用的
+ *  createHydrationGate 收斂水合協定（guard 短路 + post-await re-check + mutator
+ *  翻旗，見 $lib/hydration-gate 的協定說明）：per-session 只抓一次；fetch 飛行中
+ *  發生 mutation（join/cancel 直寫 store + markMutated）則 mutation 勝出、整包
+ *  放棄過期回應——修掉「水合前的本地寫入被姍姍來遲的首次水合覆蓋」的 race。
+ *  gate.refresh 不匯出——候補域沒有「無視守衛強制重抓」的消費者（YAGNI，同
+ *  notifications 先例；courses 頁有本地 store 狀態 + 後端 409 擋重複候補雙保險）。 */
+const gate = createHydrationGate<WaitlistEntry[]>({
+  fetch: async () => {
+    const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
+    return list.filter((w) => w.status === 'waiting').map(toWaitlistEntry);
+  },
+  apply: (list) => waitlist.set(list)
+});
+export const waitlistHydrated = gate.hydrated;
+export const hydrateWaitlist = gate.hydrate;
 
 /** POST /waitlist（帶 course_id）。成功即代表已加入候補：把後端回傳的新 entry
  *  直接塞進 store 最前面（同 GET /waitlist/me 的新到舊排序），不用整包重新
@@ -48,6 +60,7 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
   });
   const entry = toWaitlistEntry(res);
   waitlist.update((list) => [entry, ...list]);
+  gate.markMutated(); // 讓 in-flight 的 hydrateWaitlist()（若有）不拿舊清單蓋掉這筆 prepend
   return entry;
 }
 
@@ -56,6 +69,7 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
 export async function cancelWaitlist(id: string): Promise<void> {
   await api(`/waitlist/${id}`, { method: 'DELETE' });
   waitlist.update((list) => list.filter((w) => w.id !== id));
+  gate.markMutated();
 }
 
 /** POST /waitlist 409 的繁中文案。後端訊息逐字對照 waitlist service 原始碼

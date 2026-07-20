@@ -22,11 +22,13 @@
 export { createCart, cart, cartCount } from './cart';
 export type { AddResult } from './cart';
 
-export { waitlist, refreshWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './waitlist';
+export { waitlist, waitlistHydrated, hydrateWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './waitlist';
 export type { WaitlistEntry } from './waitlist';
 
 export {
   leaveRequests,
+  leaveRequestsHydrated,
+  hydrateLeaveRequests,
   refreshLeaveRequests,
   createLeaveRequest,
   cancelLeaveRequest,

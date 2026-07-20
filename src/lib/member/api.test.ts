@@ -9,7 +9,7 @@ import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, saveBirthDate, getCourses, getPoints, getNotifications } from './api';
 import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
-import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, leaveRequests } from './stores';
+import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, waitlistHydrated, leaveRequests, leaveRequestsHydrated } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -47,7 +47,9 @@ beforeEach(() => {
   notifications.set([]);
   notificationsHydrated.set(false);
   waitlist.set([]);
+  waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 getMine 的旁路 hydrate 短路
   leaveRequests.set([]);
+  leaveRequestsHydrated.set(false);
 });
 
 describe('getDashboard', () => {
@@ -415,7 +417,7 @@ describe('getMine', () => {
     expect(d.courses[0].schedule).toBe('');
   });
 
-  it('順手 hydrate waitlist/leaveRequests store（候補只留 status=waiting，同 refreshWaitlist 語意；請假映射丟棄 decided_at）', async () => {
+  it('順手 hydrate waitlist/leaveRequests store（候補只留 status=waiting，同 hydrateWaitlist 語意；請假映射丟棄 decided_at）', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],

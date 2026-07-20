@@ -11,7 +11,7 @@ import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$li
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import { refreshPoints, refreshSubscriptions, refreshNotifications, refreshWaitlist, refreshLeaveRequests, points } from './stores';
+import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
 import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, ApiNotification } from './data';
 
@@ -273,7 +273,7 @@ export interface MineData {
 export const getMine = async (): Promise<MineData> => {
   const [active] = await Promise.all([
     activeEnrolments(),
-    hydrateSessionStores('getMine', [['候補清單', refreshWaitlist], ['我的請假', refreshLeaveRequests]])
+    hydrateSessionStores('getMine', [['候補清單', hydrateWaitlist], ['我的請假', hydrateLeaveRequests]])
   ]);
   const courses: EnrolledCourse[] = active.map((e) => ({
     id: e.id,

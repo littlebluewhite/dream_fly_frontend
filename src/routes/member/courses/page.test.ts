@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { cart, toasts, waitlist } from '$lib/member/stores';
+import { cart, toasts, waitlist, waitlistHydrated } from '$lib/member/stores';
 import { getCourses } from '$lib/member/api';
 import { api, ApiError } from '$lib/api/client';
 
@@ -64,6 +64,7 @@ beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(apiRouter());
 	waitlist.set([]);
+	waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓進頁的 hydrateWaitlist 短路
 });
 
 afterEach(() => {

@@ -9,7 +9,7 @@
   import type { CatalogCourse } from '$lib/public/adapters';
   import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type CoursesData } from '$lib/member/api';
-  import { cart, search, toasts, waitlist, refreshWaitlist, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
+  import { cart, search, toasts, waitlist, hydrateWaitlist, joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/stores';
 
   let tab = 'all';
   let filter = '全部';
@@ -24,7 +24,7 @@
     gate.load();
     // best-effort：候補狀態只影響「候補」按鈕要不要顯示已候補，失敗就先當作
     // 尚未候補，仍可手動點擊候補（後端 409 會擋掉真的重複）。
-    void refreshWaitlist().catch(() => {});
+    void hydrateWaitlist().catch(() => {});
   });
 
   $: waitlistedIds = new Set($waitlist.map((w) => w.course_id));

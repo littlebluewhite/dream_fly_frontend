@@ -21,7 +21,8 @@
  * onData/onError。
  */
 import { onDestroy } from 'svelte';
-import { writable, get, type Writable } from 'svelte/store';
+import { writable, type Writable } from 'svelte/store';
+import { createHydrationCore } from './hydration-gate';
 
 export type LoadPhase = 'loading' | 'error' | 'ready';
 
@@ -35,9 +36,11 @@ interface LoadGateBaseOptions<T> {
 }
 
 /** hydrate 選項:把「共享 store 的水合協定」(guard 短路 + post-await re-check +
- *  mutator 翻旗,語意同 $lib/hydration-gate 的 createHydrationGate)收進 load-gate
- *  本身,取代呼叫端手焊的 skip+onData 組合。與 onData 型別層互斥,見下方
- *  LoadGateOptions。 */
+ *  mutator 翻旗)收進 load-gate 本身,取代呼叫端手焊的 skip+onData 組合。三個
+ *  決策點(guarded/mutationWins/commit)委派給 $lib/hydration-gate 的
+ *  createHydrationCore——協定詞彙與文件單一住所(C1);load-gate 特有的
+ *  generation/destroyed 重查(F1/F5 重入語意)留在本檔,不進 core。與 onData
+ *  型別層互斥,見下方 LoadGateOptions。 */
 export interface LoadGateHydrateOptions<T> {
 	/** 是否已水合的旗標;與 mutator 共用同一個 writable(mutator 直接對它
 	 *  set(true),同 hydration-gate.ts 的 markMutated() 語意)。 */
@@ -78,6 +81,9 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	const { subscribe, set } = writable<LoadPhase>(phase);
 	let generation = 0;
 	let destroyed = false;
+	// 水合協定決策點(guard 短路/mutation 勝出/翻旗)——與 createHydrationGate 共用
+	// 同一顆 core(C1),機制單一來源;無 hydrate 選項時為 null,走 onData 分支。
+	const core = options.hydrate ? createHydrationCore(options.hydrate.flag) : null;
 
 	function setPhase(p: LoadPhase): void {
 		phase = p;
@@ -96,14 +102,14 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	 *  回應在自己的旗標重查時誤判 mutation 勝出,把真正的新資料丟棄。 */
 	function applyLoaded(data: T, gen: number): void {
 		const hydrate = options.hydrate;
-		if (!hydrate) {
+		if (!hydrate || !core) {
 			options.onData?.(data);
 			return;
 		}
-		if (get(hydrate.flag)) return; // mutation 勝出,不覆寫、不翻旗
+		if (core.mutationWins()) return; // mutation 勝出,不覆寫、不翻旗
 		hydrate.into(data);
 		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
-		hydrate.flag.set(true);
+		core.commit();
 	}
 
 	/** refresh()/silentRefresh() 共用的資料套用:無條件套用,不做旗標重查(後發先至
@@ -114,16 +120,16 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	 *  load() 不短路、發第二次 fetch、generation++;舊一輪隨後的翻旗會讓新一輪的回應
 	 *  在 applyLoaded 的旗標重查誤判 mutation 勝出而丟棄新資料。into() 之後重查
 	 *  generation,不符即不翻旗(翻旗交給新一輪)。「無條件」指不做 mutation 旗標
-	 *  重查(不看 get(flag)),gen 檢查是重入取代的另一維度,into 照常套用。 */
+	 *  重查(不呼叫 core.mutationWins()),gen 檢查是重入取代的另一維度,into 照常套用。 */
 	function applyRefreshed(data: T, gen: number): void {
 		const hydrate = options.hydrate;
-		if (!hydrate) {
+		if (!hydrate || !core) {
 			options.onData?.(data);
 			return;
 		}
 		hydrate.into(data);
 		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
-		hydrate.flag.set(true);
+		core.commit();
 	}
 
 	async function run(
@@ -148,7 +154,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	}
 
 	async function load(): Promise<void> {
-		if (options.hydrate && get(options.hydrate.flag)) {
+		if (core?.guarded()) {
 			// 已水合 → 短路,不發 fetch(guard 短路只擋 load(),見下方 refresh())。
 			setPhase('ready');
 			return;

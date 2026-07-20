@@ -1,8 +1,9 @@
 /* Dream Fly — member 請假/補課「真 API」網路層單測（Task 11；integration-contract.md
  * §3.20 Leave Requests + §3.18 GET /courses/{id}/sessions）。
  *
- * 覆蓋 stores.ts 新增的請假網路層：getCourseSessions / refreshLeaveRequests /
- * createLeaveRequest / cancelLeaveRequest / bookMakeup / leaveRequestErrorMessage。
+ * 覆蓋 stores.ts 新增的請假網路層：getCourseSessions / hydrateLeaveRequests /
+ * refreshLeaveRequests / createLeaveRequest / cancelLeaveRequest / bookMakeup /
+ * leaveRequestErrorMessage。
  * 只替換 $lib/api/client 的 api()，ApiError 用回真實類別（同 checkout-api.test.ts
  * 慣例）。呼叫序列（path/method/body）是核心斷言,不是只驗證最終 store 狀態。 */
 
@@ -11,7 +12,9 @@ import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import {
   leaveRequests,
+  leaveRequestsHydrated,
   getCourseSessions,
+  hydrateLeaveRequests,
   refreshLeaveRequests,
   createLeaveRequest,
   cancelLeaveRequest,
@@ -23,6 +26,16 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
+
+/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers
+ *  （手法同 checkout-api.test.ts / load-gate.test.ts 的 createDeferred）。 */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 /** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時一律丟錯
  *  （同 checkout-api.test.ts 慣例——呼叫到沒被交代的端點應該讓測試失敗）。 */
@@ -58,6 +71,49 @@ const API_LR_APPROVED = {
 beforeEach(() => {
   vi.mocked(api).mockReset();
   leaveRequests.set([]);
+  leaveRequestsHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 hydrateLeaveRequests 短路
+});
+
+/* C1：水合改走 createHydrationGate（guard 短路 + post-await re-check + mutator
+ * 翻旗，同 checkout-api.test.ts 的 refreshNotifications/hydrateWaitlist 協定）。 */
+describe('hydrateLeaveRequests — GET /leave-requests/me（guard 短路 + mutation 勝出）', () => {
+  it('hydrates the store from the API response，並把 leaveRequestsHydrated 翻 true', async () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING, API_LR_APPROVED] }));
+
+    await hydrateLeaveRequests();
+
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-1', 'lr-2']);
+    expect(get(leaveRequestsHydrated)).toBe(true);
+  });
+
+  it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 create/cancel 直寫的狀態', async () => {
+    leaveRequestsHydrated.set(true);
+    leaveRequests.set([API_LR_APPROVED as never]); // 哨兵
+    vi.mocked(api).mockImplementation(fakeRouter({})); // 任何呼叫都會丟錯
+
+    await hydrateLeaveRequests();
+
+    expect(api).not.toHaveBeenCalled();
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']); // 未被覆寫
+  });
+
+  it('race 釘:hydrate in-flight 期間 cancelLeaveRequest() → resolve 舊 pending 清單 → 該筆仍是 cancelled、不被姍姍來遲的舊清單蓋回', async () => {
+    leaveRequests.set([API_LR_PENDING as never]); // 本地已有 lr-1(pending)
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /leave-requests/me': deferred.promise,
+      'DELETE /leave-requests/lr-1': undefined
+    }));
+
+    const p = hydrateLeaveRequests(); // 通過 guard(旗標 false),GET /leave-requests/me 掛起中
+    await cancelLeaveRequest('lr-1'); // 飛行中 mutation:lr-1 → cancelled + markMutated 翻旗
+
+    deferred.resolve([API_LR_PENDING]); // 姍姍來遲的舊清單:lr-1 仍是 pending
+    await p;
+
+    expect(get(leaveRequests).find((r) => r.id === 'lr-1')?.status).toBe('cancelled');
+    expect(get(leaveRequestsHydrated)).toBe(true);
+  });
 });
 
 describe('refreshLeaveRequests — GET /leave-requests/me', () => {
@@ -76,6 +132,16 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
       created_at: '2026-07-01T00:00:00Z'
     });
     expect(list[1].id).toBe('lr-2');
+  });
+
+  it('旗標 true 仍真抓:refresh 無視 guard（MyCourseDetail 開詳情「刷新最新」語意，= gate.refresh）', async () => {
+    leaveRequestsHydrated.set(true);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_APPROVED] }));
+
+    await refreshLeaveRequests();
+
+    expect(api).toHaveBeenCalledWith('/leave-requests/me');
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']);
   });
 });
 

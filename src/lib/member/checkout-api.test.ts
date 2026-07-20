@@ -20,11 +20,12 @@ import {
   notifications,
   notificationsHydrated,
   waitlist,
+  waitlistHydrated,
   placeOrder,
   refreshSubscriptions,
   refreshPoints,
   refreshNotifications,
-  refreshWaitlist,
+  hydrateWaitlist,
   joinWaitlist,
   cancelWaitlist,
   joinWaitlistErrorMessage
@@ -85,6 +86,7 @@ beforeEach(() => {
   localStorage.clear();
   cart.clear();
   waitlist.set([]);
+  waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 hydrateWaitlist 短路
   subscriptions.set([]);
   points.set(0);
   pointsLedger.set([]);
@@ -483,21 +485,24 @@ describe('refreshNotifications(Task 17)', () => {
 });
 
 /* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
- * 覆蓋 stores.ts 新增的 refreshWaitlist / joinWaitlist / cancelWaitlist 網路層，
+ * 覆蓋 stores.ts 新增的 hydrateWaitlist / joinWaitlist / cancelWaitlist 網路層，
  * 與 joinWaitlistErrorMessage 這個純函式（同 checkout.ts 的 orderErrorMessage
- * 慣例：只對後端已知的單一 409 原因給專屬文案，其餘落回通用 fallback）。 */
-describe('refreshWaitlist', () => {
-  it('GET /waitlist/me → 只留 status=waiting，映射成 WaitlistEntry（id/course_id/course_name）', async () => {
+ * 慣例：只對後端已知的單一 409 原因給專屬文案，其餘落回通用 fallback）。
+ * C1：水合改走 createHydrationGate（同上方 refreshNotifications 三 it 的協定），
+ * 補 guard 短路 + race 釘。 */
+describe('hydrateWaitlist', () => {
+  it('GET /waitlist/me → 只留 status=waiting，映射成 WaitlistEntry（id/course_id/course_name），並把 waitlistHydrated 翻 true', async () => {
     vi.mocked(api).mockResolvedValue([
       { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-01T00:00:00Z' },
       { id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
     ]);
 
-    await refreshWaitlist();
+    await hydrateWaitlist();
 
     expect(api).toHaveBeenCalledWith('/waitlist/me');
     // cancelled 的歷史紀錄不算「候補中」— 同 refreshSubscriptions 對 expired/cancelled 的處理慣例。
     expect(get(waitlist)).toEqual([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);
+    expect(get(waitlistHydrated)).toBe(true);
   });
 
   it('全部都是 cancelled → waitlist 清空', async () => {
@@ -505,9 +510,42 @@ describe('refreshWaitlist', () => {
       { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A', status: 'cancelled', created_at: '2026-06-01T00:00:00Z' }
     ]);
 
-    await refreshWaitlist();
+    await hydrateWaitlist();
 
     expect(get(waitlist)).toEqual([]);
+  });
+
+  it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 join/cancel 直寫的狀態（同 refreshNotifications 的守衛）', async () => {
+    waitlistHydrated.set(true);
+    const sentinel = [{ id: 'wl-s', course_id: 'course-uuid-7', course_name: '哨兵課程' }];
+    waitlist.set(sentinel);
+    vi.mocked(api).mockResolvedValue([
+      { id: 'wl-x', course_id: 'course-uuid-6', course_name: '不該出現', status: 'waiting', created_at: '2026-07-04T00:00:00Z' }
+    ]);
+
+    await hydrateWaitlist();
+
+    expect(api).not.toHaveBeenCalled();
+    expect(get(waitlist)).toEqual(sentinel); // 未被覆寫
+  });
+
+  it('race 釘:hydrate in-flight 期間 joinWaitlist() prepend → resolve 舊清單 → prepend 存活、姍姍來遲的舊清單不蓋回（mutation 勝出，整包放棄過期回應）', async () => {
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /waitlist/me': deferred.promise,
+      'POST /waitlist': { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' }
+    }));
+
+    const p = hydrateWaitlist(); // 通過 guard(旗標 false),GET /waitlist/me 掛起中
+    const entry = await joinWaitlist('course-uuid-9'); // 飛行中 mutation:直寫 prepend + markMutated 翻旗
+
+    deferred.resolve([
+      { id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+    ]);
+    await p;
+
+    expect(get(waitlist)).toEqual([entry]);
+    expect(get(waitlistHydrated)).toBe(true);
   });
 });
 

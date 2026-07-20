@@ -12,11 +12,41 @@
  * 首次水合覆蓋（mobile-admin 的 C1 regression 即此類 bug）。refresh() 略過 guard、
  * 無條件重抓，供使用者明確要求的「重新整理」與失敗重試共用。
  *
+ * C1（架構深化 R5）：協定的三個決策點抽成 HydrationCore（見下方介面註解），
+ * createHydrationGate 與 load-gate.ts 的 hydrate 選項共用同一顆 core——協定詞彙
+ * 與文件自此單一住所。load-gate 委派的是「決策點」而不是整個 createHydrationGate：
+ * 它的 F1 重入語意要求 into() 之後、翻旗之前重查 generation（見 load-gate.ts 的
+ * applyLoaded 註解），而 createHydrationGate.hydrate() 無此環節，整體委派會破壞
+ * 該語意。
+ *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
  * fetch rejection 一律原樣拋出、不在此攔截——呼叫端的 load-gate 接手轉 error 態。
  */
 import { writable, get, type Writable } from 'svelte/store';
+
+/** 水合協定的三個決策點（C1）。詞彙對照：
+ *  - guarded()：進場 guard——已水合就短路、不發 fetch。
+ *  - mutationWins()：fetch resolve 後的 re-check——in-flight 期間旗標被翻 true
+ *    （mutation 發生）即 mutation 勝出，放棄套用剛抓回的資料。
+ *  - commit()：套用完成（或 mutator 直寫）後翻旗，宣告水合真相成立。
+ *  guarded/mutationWins 目前機制相同（都讀旗標），但語意是協定裡兩個不同的
+ *  決策點——分開命名讓呼叫端的意圖可讀、協定文件可逐點對照。 */
+export interface HydrationCore {
+	guarded(): boolean;
+	mutationWins(): boolean;
+	commit(): void;
+}
+
+/** 以呼叫端提供的旗標建 core——createHydrationGate 自建旗標；load-gate 的 hydrate
+ *  選項則傳入頁面共用的旗標（mutator 直接對它 set(true)）。 */
+export function createHydrationCore(hydrated: Writable<boolean>): HydrationCore {
+	return {
+		guarded: () => get(hydrated),
+		mutationWins: () => get(hydrated),
+		commit: () => hydrated.set(true)
+	};
+}
 
 export interface HydrationGateOptions<T> {
 	/** 主要抓取函式 */
@@ -36,24 +66,25 @@ export interface HydrationGate {
 
 export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
 	const hydrated = writable(false);
+	const core = createHydrationCore(hydrated);
 
 	async function hydrate(): Promise<void> {
-		if (get(hydrated)) return;
+		if (core.guarded()) return;
 		const data = await opts.fetch();
-		if (get(hydrated)) return; // mutation 發生於 in-flight 期間 — mutation 勝出，放棄覆寫
+		if (core.mutationWins()) return; // mutation 發生於 in-flight 期間 — mutation 勝出，放棄覆寫
 		opts.apply(data);
-		hydrated.set(true);
+		core.commit();
 	}
 
 	async function refresh(): Promise<void> {
 		// 一律真抓，無視 guard——守衛短路後的重新整理／重試仍要重抓。
 		const data = await opts.fetch();
 		opts.apply(data);
-		hydrated.set(true);
+		core.commit();
 	}
 
 	function markMutated(): void {
-		hydrated.set(true);
+		core.commit();
 	}
 
 	return { hydrated, hydrate, refresh, markMutated };
