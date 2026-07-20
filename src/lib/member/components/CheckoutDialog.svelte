@@ -16,6 +16,7 @@
   import { fmtNT } from '$lib/format';
   import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
+  import { createCheckoutController } from '$lib/member/checkout-controller';
 
   // 付款方式(Round 4 Task P4-F4;integration-contract.md §1.8/§3.10)——單選、
   // 純資料欄位。目前仍是模擬金流,選擇不影響任何真金流 UI 或下單流程,只決定
@@ -28,41 +29,35 @@
     { value: 'cash', label: '現場付款' }
   ];
 
+  /* ── 付款狀態機（step/paying/paid、idempotencyKey 生命週期、閉→開邊沿偵測、
+   * 防重複扣款守衛）在 checkout-controller（deps 注入，可無渲染單測）；本元件退化
+   * 為快照解構鏡射 + 表單/預覽輸入 + outcome → toast 文案的薄 adapter。 ── */
+  const checkout = createCheckoutController({ placeOrder });
   let step = 0;
+  let paying = false;
+  // paid：付款時的成交快照（金額/點數以 API 的 OrderResponse 為準，非本地試算），
+  // 購物車清空後成功步仍照快照顯示；付款前的預覽（下方 m）才是本地計算。
+  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
+  $: ({ step, paying, paid } = $checkout);
+
+  // 表單/預覽輸入是預覽關注，留元件；confirmPay 時以引數傳入（呼叫瞬間讀取一次）。
   let code = '';
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
   let paymentMethod: PaymentMethod = 'credit_card';
-  let paying = false;
-  // 每次結帳流程（dialog 開啟）產生一次、重試沿用同一把，讓後端能辨識重放而不
-  // 重複扣款/建立報名訂閱（integration-contract.md §1.7）。
-  let idempotencyKey = crypto.randomUUID();
-  // Amounts + cart composition snapshotted at payment time so the success step
-  // keeps showing them after the cart is cleared. Now sourced straight from the
-  // API's OrderResponse, not local math — only the pre-payment preview (m,
-  // below) stays local.
-  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
 
-  // Reset state whenever the dialog transitions closed → open — EXCEPT while a
-  // payment is in flight（`!paying` 守衛）：付款請求發出後若 dialog 被外力關閉
-  // 再重開（close() 本身已擋，但 checkoutOpen 是公開 store，外部也能翻），重置
-  // 會蓋掉 paying 並換發新 idempotencyKey，使用者再按一次付款就會用「不同的
-  // key」開出第二張真訂單 —— 同一筆意圖被收兩次錢。守住不重置，重開時延續同
-  // 一個 in-flight 結帳流程（按鈕仍鎖在處理中、key 不變），promise 落定後才
-  // 允許下一次 open-transition 重置。
-  let wasOpen = false;
+  // dialog 閉→開邊沿的重置佈線：controller 收付款生命週期（step 歸 0、成交快照歸零、
+  // idempotencyKey 換發；付款飛行中不重置——見 checkout-controller 檔頭），元件收
+  // 表單重置與開啟即水合。反應塊只讀 $checkoutOpen、不讀 $checkout，無自迴圈。
   $: {
-    const open = $checkoutOpen;
-    if (open && !wasOpen && !paying) {
-      step = 0;
+    const outcome = checkout.setOpen($checkoutOpen);
+    if (outcome.kind === 'freshCheckout') {
       code = '';
       coupon = null;
       codeErr = '';
       usePoints = false;
       paymentMethod = 'credit_card';
-      idempotencyKey = crypto.randomUUID();
-      paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
       // 開啟即水合「已持有訂閱」與「點數餘額」：chargeableLines 的持有判斷與
       // 折抵預覽的可用點數都必須來自後端（本地 points 種子是 0 的 fail-safe，
       // 訂閱殘值可能過期）。best-effort——失敗（未登入、離線）就沿用本地現值，
@@ -70,7 +65,6 @@
       void refreshSubscriptions().catch(() => {});
       void refreshPoints().catch(() => {});
     }
-    wasOpen = open;
   }
 
   $: items = $cart;
@@ -104,35 +98,24 @@
   // Commit the order when the user confirms payment (step 1 → 2), NOT on the
   // final 完成 button — otherwise closing the success step via X/overlay/Escape
   // would leave the cart and points uncommitted while the UI says 已付款.
-  // placeOrder 打真實 POST /orders（mock payment：成功即付款完成）；任何失敗
-  // 都不會清空本地購物車，只顯示錯誤 toast，讓使用者可以直接重試（沿用同一把
-  // idempotencyKey，不會重複扣款/建立報名訂閱）。
+  // 送單機器（placeOrder 打真實 POST /orders、任何失敗不清購物車、重試沿用同一把
+  // idempotencyKey）在 controller；這裡把表單值在呼叫瞬間讀一次傳入，並把 outcome
+  // 轉 toast 文案。alreadyPaying／nothingChargeable 是按鈕 disabled 之外的第二道
+  // 防線，靜默返回。
   async function confirmPay() {
-    // paying：避免連點造成 syncCartToServer 競態；chargeable 空（全數已持有）：
-    // 沒有可計費項目就不該送單（後端會回 400 cart is empty）——按鈕已 disabled，
-    // 這裡是第二道防線。
-    if (paying || chargeable.length === 0) return;
-    paying = true;
-    try {
-      const confirmation = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod);
-      const hasCourse = confirmation.hasCourse;
-      const hasPass = confirmation.hasPass;
-      paid = {
-        total: confirmation.total,
-        earned: confirmation.earned,
-        ptRedeem: confirmation.ptRedeem,
-        hasCourse,
-        hasPass,
-        orderNumber: confirmation.orderNumber
-      };
-      const redeemNote = paid.ptRedeem > 0 ? '，使用 ' + paid.ptRedeem + ' 點折抵' : '';
-      if (hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。');
-      else           toasts.notify('success', '訂閱開通', '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + paid.earned + ' 點回饋。');
-      step = 2;
-    } catch (err) {
-      toasts.notify('error', '結帳失敗', orderErrorMessage(err));
-    } finally {
-      paying = false;
+    const outcome = await checkout.confirmPay({
+      coupon: coupon?.code ?? '',
+      usePoints,
+      paymentMethod,
+      hasChargeable: chargeable.length > 0
+    });
+    if (outcome.kind === 'orderPlaced') {
+      const done = outcome.paid;
+      const redeemNote = done.ptRedeem > 0 ? '，使用 ' + done.ptRedeem + ' 點折抵' : '';
+      if (done.hasCourse) toasts.notify('success', '報名完成', '課程已加入你的日程' + (done.hasPass ? '，方案使用權已啟用' : '') + redeemNote + '，獲得 ' + done.earned + ' 點回饋。');
+      else                toasts.notify('success', '訂閱開通', '方案已開通,使用權已啟用' + redeemNote + '，獲得 ' + done.earned + ' 點回饋。');
+    } else if (outcome.kind === 'orderFailed') {
+      toasts.notify('error', '結帳失敗', orderErrorMessage(outcome.error));
     }
   }
   function onKey(e: KeyboardEvent) {
@@ -242,10 +225,10 @@
           <span class="total-n">{fmtNT(step === 2 ? paid.total : m.total)}</span>
         </div>
         {#if step === 0}
-          <Button variant="primary" disabled={items.length === 0} on:click={() => (step = 1)}>前往付款 <Icon name="arrow-right" size={16} /></Button>
+          <Button variant="primary" disabled={items.length === 0} on:click={checkout.toPayment}>前往付款 <Icon name="arrow-right" size={16} /></Button>
         {:else if step === 1}
           <div class="foot-actions">
-            <Button variant="secondary" disabled={paying} on:click={() => (step = 0)}>返回</Button>
+            <Button variant="secondary" disabled={paying} on:click={checkout.backToCart}>返回</Button>
             <Button variant="primary" disabled={paying || chargeable.length === 0} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
           </div>
         {:else}
