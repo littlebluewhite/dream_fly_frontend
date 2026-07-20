@@ -204,6 +204,28 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     expect(api).toHaveBeenCalledWith('/leave-requests/me');
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']);
   });
+
+  it('P1′ 在飛作廢釘:refresh in-flight 期間登出 → 姍姍來遲的回應整包作廢(不套用、不 commit)', async () => {
+    /* refreshLeaveRequests 無視 guard 且無條件套用——登出重置後若讓在飛回應落地,
+     * A 的假單會復活並 commit true,B 帳號的 hydrate 被 guarded() 短路(F1 的邊沿
+     * 重置只清「已落地」的狀態,關不住在飛窗口)。 */
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /leave-requests/me': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p = refreshLeaveRequests(); // A 的 GET 掛起中
+    await authStore.logout(); // 在飛期間登出
+
+    deferred.resolve([API_LR_PENDING]);
+    await expect(p).rejects.toThrow(); // 過期 fetch 作廢
+
+    expect(get(leaveRequests)).toEqual([]); // A 的假單沒有復活
+    expect(get(leaveRequestsHydrated)).toBe(false); // B 的 hydrate 不會被短路
+  });
 });
 
 describe('createLeaveRequest — POST /leave-requests', () => {
@@ -245,6 +267,46 @@ describe('createLeaveRequest — POST /leave-requests', () => {
       fakeRouter({ 'POST /leave-requests': new ApiError(409, '此場次已有請假紀錄') })
     );
     await expect(createLeaveRequest('sess-1')).rejects.toThrow('此場次已有請假紀錄');
+  });
+
+  it('P1′ 在飛作廢釘:POST in-flight 期間登出 → 回應到達後棄寫(不 prepend、不翻旗),A 的假單不落在 B 的 store', async () => {
+    const deferred = createDeferred<unknown>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'POST /leave-requests': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p = createLeaveRequest('sess-1', '生病'); // A 的 POST 掛起中
+    await authStore.logout();
+
+    deferred.resolve(API_LR_PENDING);
+    const result = await p; // server 端已成立,回傳值照舊(呼叫端元件已隨登出卸載,無害)
+
+    expect(result.id).toBe('lr-1');
+    expect(get(leaveRequests)).toEqual([]); // 棄寫:A 的假單不落地
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗:B 的 hydrate 照常真抓
+  });
+
+  it('P2′ 可重試釘:和解重抓失敗 → 旗標翻回 false 留下重試路徑,下一次 hydrate 重新真抓完整清單', async () => {
+    /* 舊法失敗吞掉、旗標停在 true:store 只有直寫那筆卻被永久當成完整快照,之後所有
+     * hydrate 都被短路——F2 原 bug 在一次暫時性 GET 失敗後原地復活(waitlist 尤甚:
+     * 無外部 refresh 兜底)。 */
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /leave-requests': API_LR_PENDING,
+      'GET /leave-requests/me': () => (++gets === 1 ? new Error('和解重抓網路失敗') : [API_LR_PENDING, API_LR_APPROVED])
+    }));
+
+    await createLeaveRequest('sess-1', '生病');
+    await settleReconcile();
+
+    expect(get(leaveRequestsHydrated)).toBe(false); // 失敗不佯裝完整——可重試
+
+    await hydrateLeaveRequests(); // 重試(例:下次進 mine 頁)
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-1', 'lr-2']);
+    expect(get(leaveRequestsHydrated)).toBe(true);
   });
 });
 
