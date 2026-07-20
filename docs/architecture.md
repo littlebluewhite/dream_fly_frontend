@@ -206,9 +206,11 @@ and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Since 2026-07-08 that branching is itself
 usually collapsed into a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` /
 `slot="error"` with `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never
-`load()`), consumed at 53 of those call sites (45 route pages + 7 mobile/mobile-admin overlay screens,
-plus in-card attendance-history gates on the member 我的課程 page and mobile's `MyCourseDetail`, which
-override `slot="error"` with a bare `ErrorState` because they already sit inside a `Card`) —
+`load()`), consumed at 55 call sites (46 uses across 45 route pages — the member 我的課程 page carries a second,
+in-card attendance-history gate — plus 9 mobile/mobile-admin overlay screens since R5 C4 wired
+VenuesScreen/TicketsScreen, mobile's `MyCourseDetail` among them with its own in-card attendance gate;
+the two in-card gates override `slot="error"` with a bare `ErrorState` because they already sit inside
+a `Card`) —
 `ScheduleCalendar` keeps its bespoke inline template outside the wrapper. Data that already lives in a store
 (member/mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind
 a `*Hydrated` guard (`notificationsHydrated`, `notifsHydrated`, `opsHydrated`, `messagesHydrated`), with
