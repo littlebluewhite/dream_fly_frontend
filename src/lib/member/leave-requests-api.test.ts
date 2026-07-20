@@ -73,6 +73,13 @@ const AUTH_RES = {
   }
 };
 
+/** P1″ A→B 直接換帳號釘用:identity(user.id)相異的第二個帳號。 */
+const AUTH_RES_B = {
+  access_token: 'at-f1b',
+  refresh_token: 'rt-f1b',
+  user: { ...AUTH_RES.user, id: 'u-f2', email: 'b@dreamfly.test', name: '乙' }
+};
+
 const API_LR_PENDING = {
   id: 'lr-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班',
   session_id: 'sess-1', session_date: '2026-07-10', start_time: '19:00:00',
@@ -226,6 +233,29 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     expect(get(leaveRequests)).toEqual([]); // A 的假單沒有復活
     expect(get(leaveRequestsHydrated)).toBe(false); // B 的 hydrate 不會被短路
   });
+
+  it('P1″ 換帳號釘:A 已水合後 B 直接登入(無登出)→ identity 變更即清 store/旗標,B hydrate 真抓 B 的清單', async () => {
+    /* 「登入→登出」布林邊沿看不見 A→B 直接換帳號(loggedIn 恆 true)——identity 鍵
+     * (member.id)才看得見。 */
+    let logins = 0;
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+      'GET /leave-requests/me': () => (++gets === 1 ? [API_LR_PENDING] : [API_LR_APPROVED])
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await refreshLeaveRequests();
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-1']);
+
+    await authStore.login('b@dreamfly.test', 'pw'); // B 直接登入,無登出邊沿
+
+    expect(get(leaveRequests)).toEqual([]); // A 的假單即刻清空
+    expect(get(leaveRequestsHydrated)).toBe(false);
+
+    await hydrateLeaveRequests(); // B 真抓
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']); // 不是 A 的殘留
+  });
 });
 
 describe('createLeaveRequest — POST /leave-requests', () => {
@@ -308,6 +338,36 @@ describe('createLeaveRequest — POST /leave-requests', () => {
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-1', 'lr-2']);
     expect(get(leaveRequestsHydrated)).toBe(true);
   });
+
+  it('P2′ 併發釘:兩支未水合 mutation 併發 → 各自排隊和解、序列化執行(前和解未 settle 後和解不起跑),晚快照最後套用', async () => {
+    /* leave 的和解鏈是獨立實作(與 waitlist 手工鏡射)——單側漏修不會被 waitlist 的釘
+     * 抓到,故鏡射一支非 vacuous 序列化釘(帳本閉合輪 codex Standards P2)。 */
+    const post1 = createDeferred<unknown>();
+    const post2 = createDeferred<unknown>();
+    const r1 = createDeferred<unknown[]>();
+    const API_LR_3 = { ...API_LR_APPROVED, id: 'lr-3', session_id: 'sess-3' };
+    let posts = 0;
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /leave-requests': () => (++posts === 1 ? post1.promise : post2.promise),
+      'GET /leave-requests/me': () => (++gets === 1 ? r1.promise : [API_LR_3, API_LR_PENDING, API_LR_APPROVED])
+    }));
+
+    const p1 = createLeaveRequest('sess-1', '生病');
+    const p2 = createLeaveRequest('sess-3'); // 兩支都在旗標 false 時進場
+    post1.resolve(API_LR_PENDING);
+    post2.resolve(API_LR_3);
+    await Promise.all([p1, p2]);
+    await settleReconcile();
+
+    expect(gets).toBe(1); // 序列化:首和解仍在飛,次和解不得起跑
+    r1.resolve([API_LR_PENDING]); // 舊快照(漏第二筆)先套用
+    await settleReconcile();
+
+    expect(gets).toBe(2); // 首和解 settle 後,次和解才起跑
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-3', 'lr-1', 'lr-2']); // 完整快照最後套用,第二筆存活
+    expect(get(leaveRequestsHydrated)).toBe(true);
+  });
 });
 
 describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
@@ -372,6 +432,30 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     });
     expect(result.makeup_session_id).toBe('sess-9');
     expect(get(leaveRequests)[0].makeup_session_date).toBe('2026-07-20');
+  });
+
+  it('P1″ 在飛作廢釘:makeup POST in-flight 期間登出 → 回應到達後棄寫(不動 store、不翻旗)', async () => {
+    /* join/create/cancel 已各有一釘;bookMakeup 的「map 取代 + 回傳」形另釘一支,防兩檔
+     * 五支 mutator 手工鏡射時單側漏修(帳本閉合輪 codex Standards P2)。 */
+    const updated = { ...API_LR_APPROVED, makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00' };
+    const deferred = createDeferred<unknown>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'POST /leave-requests/lr-2/makeup': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    leaveRequests.set([API_LR_APPROVED as never]);
+    const p = bookMakeup('lr-2', 'sess-9'); // A 的 POST 掛起中
+    await authStore.logout(); // 邊沿重置已清 store
+
+    deferred.resolve(updated);
+    const result = await p; // server 端已成立,回傳值照舊
+
+    expect(result.makeup_session_id).toBe('sess-9');
+    expect(get(leaveRequests)).toEqual([]); // 棄寫:不對(已清空的)store 做 map 寫回
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('propagates 409 (該場次名額已滿) unhandled', async () => {

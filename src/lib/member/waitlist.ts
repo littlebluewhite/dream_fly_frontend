@@ -66,12 +66,16 @@ export const hydrateWaitlist = gate.hydrate;
  * per-session 快取為前存同病，不在本修範圍（見 ADR 0016）。 */
 let sessionEpoch = 0;
 let lastIdentity: string | null = null;
+// 宣告在 subscribe 之前：restored session 下 subscribe 的立即回呼就會走 identity
+// 變更分支，若鏈還在 TDZ 會炸 module-load。
+let reconcileChain: Promise<void> = Promise.resolve();
 authStore.subscribe(({ loggedIn, member }) => {
   const identity = loggedIn ? (member?.id ?? '') : null;
   if (identity !== lastIdentity) {
     sessionEpoch += 1;
     waitlist.set([]);
     gate.hydrated.set(false);
+    reconcileChain = Promise.resolve(); // 舊 session 卡死的和解不得堵住新 session 的鏈
   }
   lastIdentity = identity;
 });
@@ -83,15 +87,19 @@ authStore.subscribe(({ loggedIn, member }) => {
  *   見 ADR 0016 known-latent）。
  * - 可重試：和解失敗把旗標翻回 false（僅限同 epoch——跨登出的失敗交給 session
  *   重置），下一次 hydrate 重新真抓；不再吞錯佯裝完整（store 只有直寫那筆卻永久
- *   短路 hydrate ＝ F2 原 bug 在一次暫時性 GET 失敗後復活）。 */
-let reconcileChain: Promise<void> = Promise.resolve();
+ *   短路 hydrate ＝ F2 原 bug 在一次暫時性 GET 失敗後復活）。失敗翻回 false 不會
+ *   拆掉 in-flight hydrate 的 mutation-wins——gate 的 markMutated 帶單調世代
+ *   （見 hydration-gate.ts）。
+ * - 幽靈取消：排隊當下的 session 若在起跑前已結束（epoch 變了），callback 直接
+ *   跳過——否則舊 session 排的和解會以新 session 的 epoch 發出非預期 refresh。 */
 function queueReconcile(): void {
   const epoch = sessionEpoch;
-  reconcileChain = reconcileChain.then(() =>
-    gate.refresh().catch(() => {
+  reconcileChain = reconcileChain.then(() => {
+    if (epoch !== sessionEpoch) return; // 幽靈和解：排隊時的 session 已結束
+    return gate.refresh().catch(() => {
       if (epoch === sessionEpoch) gate.hydrated.set(false);
-    })
-  );
+    });
+  });
 }
 
 /** POST /waitlist（帶 course_id）。成功即代表已加入候補：把後端回傳的新 entry
@@ -112,9 +120,12 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
   });
   const entry = toWaitlistEntry(res);
   if (epoch !== sessionEpoch) return entry; // server 端已成立；本地棄寫（呼叫端元件已隨登出卸載）
+  // 寫回時重查完整度：進場後旗標可能被「和解失敗」翻回 false（進場快照已失真）——
+  // 此時不再排和解的話，markMutated 會把不完整 store 再度標成完整（帳本閉合輪 P2）。
+  const stillIncomplete = !get(gate.hydrated);
   waitlist.update((list) => [entry, ...list]);
   gate.markMutated(); // commit：讓 in-flight 的 hydrateWaitlist()（若有）mutationWins、不拿舊清單蓋掉這筆 prepend
-  if (!wasHydrated) queueReconcile();
+  if (!wasHydrated || stillIncomplete) queueReconcile();
   return entry;
 }
 
@@ -125,9 +136,10 @@ export async function cancelWaitlist(id: string): Promise<void> {
   const epoch = sessionEpoch;
   await api(`/waitlist/${id}`, { method: 'DELETE' });
   if (epoch !== sessionEpoch) return; // P1′ 同 joinWaitlist：跨登出/換帳號棄寫
+  const stillIncomplete = !get(gate.hydrated); // 同 joinWaitlist：寫回時重查完整度
   waitlist.update((list) => list.filter((w) => w.id !== id));
   gate.markMutated();
-  if (!wasHydrated) queueReconcile();
+  if (!wasHydrated || stillIncomplete) queueReconcile();
 }
 
 /** POST /waitlist 409 的繁中文案。後端訊息逐字對照 waitlist service 原始碼

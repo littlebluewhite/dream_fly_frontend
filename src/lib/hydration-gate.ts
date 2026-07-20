@@ -67,11 +67,18 @@ export interface HydrationGate {
 export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
 	const hydrated = writable(false);
 	const core = createHydrationCore(hydrated);
+	// 帳本閉合輪：markMutated 帶單調世代，與「完整度」旗標分離。旗標可被呼叫端翻回
+	// false（如 waitlist/leave 的和解重抓失敗留可重試路徑）——若 mutation-wins 只讀
+	// 旗標當下值，翻回 false 等於拆掉 in-flight hydrate 的武裝，舊快照落地、直寫列
+	// 蒸發。世代只增不減，hydrate 進場時捕捉、resolve 後比對，不受旗標之後的起落影響。
+	let mutationGen = 0;
 
 	async function hydrate(): Promise<void> {
 		if (core.guarded()) return;
+		const gen = mutationGen;
 		const data = await opts.fetch();
-		if (core.mutationWins()) return; // mutation 發生於 in-flight 期間 — mutation 勝出，放棄覆寫
+		// 世代變（markMutated）或旗標被直接翻 true（呼叫端慣例，見檔頭）都算 mutation 勝出。
+		if (gen !== mutationGen || core.mutationWins()) return;
 		opts.apply(data);
 		core.commit();
 	}
@@ -84,6 +91,7 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	}
 
 	function markMutated(): void {
+		mutationGen += 1;
 		core.commit();
 	}
 

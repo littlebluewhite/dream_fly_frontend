@@ -98,27 +98,33 @@ export const refreshLeaveRequests = gate.refresh;
  * 同名區塊與 ADR 0016）。 */
 let sessionEpoch = 0;
 let lastIdentity: string | null = null;
+// 宣告在 subscribe 之前：restored session 下 subscribe 的立即回呼就會走 identity
+// 變更分支，若鏈還在 TDZ 會炸 module-load。
+let reconcileChain: Promise<void> = Promise.resolve();
 authStore.subscribe(({ loggedIn, member }) => {
   const identity = loggedIn ? (member?.id ?? '') : null;
   if (identity !== lastIdentity) {
     sessionEpoch += 1;
     leaveRequests.set([]);
     gate.hydrated.set(false);
+    reconcileChain = Promise.resolve(); // 舊 session 卡死的和解不得堵住新 session 的鏈
   }
   lastIdentity = identity;
 });
 
-/* F2′（帳本閉合輪）：和解重抓改「序列化 + 失敗可重試」——序列化消滅「舊快照晚到、
- * 倒序覆寫新 mutation」的窗口；失敗把旗標翻回 false（僅限同 epoch）留下重試路徑，
- * 不再吞錯佯裝完整。機制與取捨詳見 waitlist.ts 的 F2′ 區塊與 ADR 0016。 */
-let reconcileChain: Promise<void> = Promise.resolve();
+/* F2′（帳本閉合輪）：和解重抓改「序列化 + 失敗可重試 + 幽靈取消」——序列化消滅
+ * 「舊快照晚到、倒序覆寫新 mutation」的窗口；失敗把旗標翻回 false（僅限同 epoch）
+ * 留下重試路徑，不再吞錯佯裝完整（mutation-wins 不因此拆除——gate 的 markMutated
+ * 帶單調世代）；排隊的 callback 起跑前核對 epoch，舊 session 的和解不得在新 session
+ * 發出幽靈 refresh。機制與取捨詳見 waitlist.ts 的 F2′ 區塊與 ADR 0016。 */
 function queueReconcile(): void {
   const epoch = sessionEpoch;
-  reconcileChain = reconcileChain.then(() =>
-    gate.refresh().catch(() => {
+  reconcileChain = reconcileChain.then(() => {
+    if (epoch !== sessionEpoch) return; // 幽靈和解：排隊時的 session 已結束
+    return gate.refresh().catch(() => {
       if (epoch === sessionEpoch) gate.hydrated.set(false);
-    })
-  );
+    });
+  });
 }
 
 /** POST /leave-requests（帶 session_id + 選填 reason）。reason 空字串/未提供時省略
@@ -140,9 +146,12 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
   const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
   const entry = toLeaveRequest(res);
   if (epoch !== sessionEpoch) return entry; // server 端已成立；本地棄寫（呼叫端元件已隨登出卸載）
+  // 寫回時重查完整度：進場後旗標可能被「和解失敗」翻回 false（進場快照已失真）——
+  // 此時不再排和解的話，markMutated 會把不完整 store 再度標成完整（帳本閉合輪 P2）。
+  const stillIncomplete = !get(gate.hydrated);
   leaveRequests.update((list) => [entry, ...list]);
   gate.markMutated(); // commit：讓 in-flight 的 hydrateLeaveRequests()（若有）mutationWins、不拿舊清單蓋掉這筆直寫
-  if (!wasHydrated) queueReconcile();
+  if (!wasHydrated || stillIncomplete) queueReconcile();
   return entry;
 }
 
@@ -155,9 +164,10 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
   const epoch = sessionEpoch;
   await api(`/leave-requests/${id}`, { method: 'DELETE' });
   if (epoch !== sessionEpoch) return; // P1′ 同 createLeaveRequest：跨登出/換帳號棄寫
+  const stillIncomplete = !get(gate.hydrated); // 同 createLeaveRequest：寫回時重查完整度
   leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)));
   gate.markMutated();
-  if (!wasHydrated) queueReconcile();
+  if (!wasHydrated || stillIncomplete) queueReconcile();
 }
 
 /** POST /leave-requests/{id}/makeup（帶欲預約的補課場次 session_id）。成功回應含
@@ -173,9 +183,10 @@ export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRe
   });
   const entry = toLeaveRequest(res);
   if (epoch !== sessionEpoch) return entry; // P1′ 同 createLeaveRequest：跨登出/換帳號棄寫
+  const stillIncomplete = !get(gate.hydrated); // 同 createLeaveRequest：寫回時重查完整度
   leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)));
   gate.markMutated();
-  if (!wasHydrated) queueReconcile();
+  if (!wasHydrated || stillIncomplete) queueReconcile();
   return entry;
 }
 

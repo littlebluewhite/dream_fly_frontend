@@ -33,6 +33,25 @@ describe('createHydrationGate', () => {
 		expect(get(gate.hydrated)).toBe(true); // mutation 的旗子保留,沒被覆寫或重置
 	});
 
+	it('世代競態(帳本閉合輪):markMutated 後旗標被外部翻回 false(和解失敗可重試縫)——in-flight hydrate 仍須放棄套用,不得拿舊快照蓋掉 mutation', async () => {
+		/* 單靠旗標當 mutation-wins 訊號的破洞:waitlist/leave 的和解重抓失敗會把旗標翻回
+		 * false(留重試路徑),等於拆掉 in-flight hydrate 的 mutation-wins——舊快照落地,
+		 * 直寫列蒸發。markMutated 因此帶單調世代:世代變了就放棄,不看旗標當下值。 */
+		const d = createDeferred<{ v: number }>();
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch: () => d.promise, apply });
+
+		const hydratePromise = gate.hydrate(); // in-flight
+		gate.markMutated(); // mutation 發生
+		gate.hydrated.set(false); // 和解失敗把旗標翻回 false(可重試)——不可因此拆掉 mutation-wins
+
+		d.resolve({ v: 1 });
+		await hydratePromise;
+
+		expect(apply).not.toHaveBeenCalled(); // 舊快照仍被放棄(看世代,不看旗標)
+		expect(get(gate.hydrated)).toBe(false); // 不 commit——可重試路徑保持開啟
+	});
+
 	it('guard:hydrated 已 true 時 hydrate() 不呼叫 fetch', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const apply = vi.fn();
