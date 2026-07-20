@@ -67,7 +67,31 @@ gate 採用測試**都留**:前者釘的是 load-gate 特有交織(phase 收斂/
 真正重疊僅 2 條且觀察面不同(load-gate 觀察 phase 與旗標,採用測試觀察 store 內容與 API 呼叫)。
 未來審查請勿以「重複」為由提整併——兩處變紅的原因空間不同。
 
+## 附記:同輪 C5——CheckoutDialog 付款 controller(ADR 0012 第五例)與 ADR 0008 重裁
+
+- 抽 `member/checkout-controller.ts`(`createCheckoutController`):付款生命週期(`step`/`paying`/
+  `paid` snapshot + `idempotencyKey`)進 controller;表單/預覽輸入(`code`/`coupon`/`usePoints`/
+  `paymentMethod`)留元件、confirmPay 時以引數傳入;deps 只有 `placeOrder` 一支(0012 判準②最緊形)。
+  `setOpen` 邊沿偵測回 `freshCheckout | resumedInFlight | noop`;confirmPay 回 kind-tagged outcome
+  (`orderPlaced`/`orderFailed`/`alreadyPaying`/`nothingChargeable`,原始拋出物透傳,判準④),
+  六句 toast 文案全留頁面。key 生命週期:建構/freshCheckout 換發、失敗重試沿用。
+- **非 twin**:mobile CartSheet 付款流結構不同(`mobile/stores.ts` placeOrder 佈線),不做跨
+  surface 抽象。
+- **ADR 0015 劃界**:0015 否決的是 admin 四對話框**跨元件**共用 reset helper;本案是單頁
+  controller、reset 佈線仍本元件私有——不牴觸該裁決。
+- **ADR 0003 劃界**:controller 零業務規則,抽的是付款安全機(防重複扣款),結算仍 per-surface。
+- **ADR 0008 §「有意識保留」取代裁決**:0008 當年裁定 CheckoutDialog 防重複扣款不抽成純模組
+  (理由:收益低於搬動既有測試覆蓋的 churn)。本輪重裁三依據:(a) 0012 四判準已滿足;(b) 使用者
+  已裁決 race render its 瘦身,churn 前提不再成立;(c) 抽取 commit 以 13 個 render its 一字不動
+  原封全綠證明搬動零 churn。0008 該節已補日期化 cross-ref。
+- 等價與覆蓋:兩顆 commit(c1 抽取+render 原封綠;c2 render 瘦身——race 機器面歸 controller
+  單元 its,render 留「飛行中 Escape 關不掉」「重開顯示處理中」兩個顯示面),覆蓋零淨減、淨增
+  2 條(失敗重試同 key、resumedInFlight 機器面——render 從未斷言過的)。
+
 ## 關聯 ADR
 
-- **`docs/adr/0008`**:load-gate hydrate 選項的誕生地;本篇決定一把它的三決策點委派回單一 core。
+- **`docs/adr/0008`**:load-gate hydrate 選項的誕生地;本篇決定一把它的三決策點委派回單一 core;
+  其 §「有意識保留」由本篇附記取代(該節留日期化 cross-ref)。
+- **`docs/adr/0012`**:單頁 controller 判準;本篇附記之 C5 為第五例。
 - **`docs/adr/0014`** §5:本篇決定二回應的「另案」出處。
+- **`docs/adr/0015`**:對話框 reset 分散裁決;與 C5 的劃界見附記。

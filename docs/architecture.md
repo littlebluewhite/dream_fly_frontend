@@ -339,6 +339,15 @@ that `docs/adr/0011` already rejected.
   wins) live inside, returning `kind`-tagged outcomes so all six toast strings stay on the page — this
   reverses the `docs/adr/0013` note that had declined the extraction; `docs/adr/0014` records the
   re-adjudication.
+- **`src/lib/member/checkout-controller.ts`**'s `createCheckoutController` (2026-07-20, R5 C5) is the
+  fifth: CheckoutDialog's payment lifecycle as a three-field snapshot store (`step`/`paying`/`paid`)
+  with `placeOrder` as the single injected dep. The idempotency-key lifecycle (fresh key per checkout
+  open, same key across a failed retry — the double-charge safety machine), `setOpen` edge detection
+  (`freshCheckout | resumedInFlight | noop`) and the paying guard live inside, returning `kind`-tagged
+  outcomes (`orderPlaced`/`orderFailed`/`alreadyPaying`/`nothingChargeable`, original throwable passed
+  through) so toast text and all form/preview state stay on the component — this supersedes
+  `docs/adr/0008`'s "keep the double-charge guard in the dialog" note; `docs/adr/0016` records the
+  re-adjudication.
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
