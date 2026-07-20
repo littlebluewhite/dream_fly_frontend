@@ -89,7 +89,8 @@ export type { LeaveRequest, CourseSession } from '$lib/member/stores';
 export { validateCoupon, orderErrorMessage, chargeableLines } from '$lib/member/checkout';
 // C6:CartSheet 過濾可計費項目時，chargeableLines 的第二參數是「已持有訂閱」清單——
 // subscriptions store 經 seam 收編（源 $lib/member/stores，foundation-contracts 白名單
-// 既有）。mobile 無方案購買動線、subscriptions 恆空（SUBS_SEED 為 []），此過濾今日
+// 既有）。mobile 購物車只產 course（cart.add 只收 Course；帳戶頁 getAccount() 副作用
+// 仍可能水合 subscriptions，不可視為恆空），此過濾今日
 // 恆 no-op;收進 seam 是為了讓型別強制的「預覽 ≡ 請款」在 mobile 也一體成立。
 export { subscriptions } from '$lib/member/stores';
 

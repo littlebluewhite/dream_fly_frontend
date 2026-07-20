@@ -18,8 +18,8 @@
  *
  * deps 注入只有 placeOrder 一支（confirmPay 的唯一效應）；開啟即水合的
  * refreshSubscriptions/refreshPoints 屬 open-reset 時刻的元件佈線，不入 deps。member
- * 專屬、非 twin：mobile 的 placeOrder（mobile/stores.ts）每次呼叫預設換發新 key，
- * CartSheet 無「重試沿用同一把」的對話框狀態機。無 svelte 元件相依、建構零 dep 呼叫
+ * 專屬、非 twin：mobile 的 key 是 CartSheet 掛載時產一把、重試沿用（mount 級生命週期，
+ * OverlayHost 每次開啟即重掛），無本檔「開啟邊沿換發／飛行中 resumed」的對話框狀態機。無 svelte 元件相依、建構零 dep 呼叫
  * （SSR 安全）。本抽取取代 ADR 0008 §「有意識保留：CheckoutDialog 的防重複扣款不抽成
  * 純模組」的當時裁決（Round 5；render 測試原封全綠 = 搬動零 churn 的證明）。 */
 import { writable, type Readable } from 'svelte/store';

@@ -101,4 +101,5 @@ _Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib
 **可計費行 (ChargeableLine)**:
 可進「結帳」金額計算與請款的購物車項目;唯一產地 `member/checkout.ts` 的 `chargeableLines()`
 (濾除已訂閱方案後打上 brand),`checkoutMath` 與 `submitOrder` 兩終點只收此型別。
-_Avoid_: 未過濾清單直餵 checkoutMath/submitOrder(編譯期擋);唯一產地之外自行 `as` 斷言打 brand
+_Avoid_: 未過濾清單直餵 checkoutMath/submitOrder(編譯期擋);production 檔於唯一產地之外自行
+`as` 斷言打 brand(測試 fixture 的檔內 helper cast 屬受核可例外,見 `checkout-math.test.ts` 檔頭)

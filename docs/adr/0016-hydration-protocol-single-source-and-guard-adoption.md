@@ -38,7 +38,7 @@ caller 佈線(全部落在 store/api 接縫,頁面模板零改動):
 | `member/courses` onMount | 換 `hydrateWaitlist().catch(() => {})` |
 | `MyCourseDetail` onMount | 名稱與呼叫零變動——`refreshLeaveRequests` 綁定改指 gate.refresh(「開詳情刷新最新」語意保留) |
 | mobile 委派 | 隨 getMine 自動獲得 guard,零改動 |
-| 5 支 mutators(join/cancel waitlist、create/cancel leave、bookMakeup) | 維持直寫 + store 寫入後補 `gate.markMutated()` |
+| 5 支 mutators(join/cancel waitlist、create/cancel leave、bookMakeup) | 維持直寫 + store 寫入後補 `gate.markMutated()`(未水合時尾隨和解 refresh,見「對抗審後補強」) |
 
 匯出面:
 
@@ -53,12 +53,23 @@ caller 佈線(全部落在 store/api 接縫,頁面模板零改動):
 
 ## 兩筆 known-latent(刻意取捨,落字防未來審查誤判)
 
-1. **新鮮度回歸**:採 guard 後 waitlist/leave 每 session 只抓一次;admin 側變化在 mine/courses
-   重訪不再自動反映(leave 有 MyCourseDetail 的 refresh 兜底;waitlist 無)。notifications 既有
-   同款取捨,非本案新發明。
+1. **新鮮度回歸**:採 guard 後 waitlist/leave 每**登入** session 只抓一次(登出即重置,見
+   「對抗審後補強」);admin 側變化在 mine/courses 重訪不再自動反映(leave 有 MyCourseDetail 的
+   refresh 兜底;waitlist 無)。notifications 既有同款取捨,非本案新發明。
 2. **殘留 refresh race**:`gate.refresh` 刻意無 mutation-wins(「無條件真抓」語意連動通知頁與
    load-gate 正典)——MyCourseDetail refresh 窗口內取消請假仍可能被舊回應蓋回。範圍已從「所有
    水合路徑」縮到「顯式 refresh 窗口」;不擴 refresh 語意。
+
+## 對抗審後補強(2026-07-20 同日,codex 1×P1+1×P2)
+
+- **登出重置(P1 修)**:兩 store 於模組頂層訂閱 authStore,「登入→登出」邊沿清空 store 並把旗標
+  歸 false——SPA 登出走 `authStore.logout() + goto`(無整頁重載),模組級旗標跨帳號存活,無此
+  重置則 guard 讓下一個帳號短路讀到前帳號的候補/請假。notifications/points/subscriptions 的
+  同型缺口為前存(guard 採用早於本輪),不在本輪寫入集,另卡追蹤。
+- **水合前 mutation 和解重抓(P2 修)**:五支 mutators 寫入前捕捉 `wasHydrated`;未水合(含
+  hydrate 在飛)時的 mutation 於 `markMutated()` 後尾隨 `gate.refresh()` 和解——單發 POST 回應
+  只是局部快照,旗標若就此短路,server 上既有列永不補回(同一旗標身兼 mutation epoch 與資料
+  完整度的代價)。和解 refresh 的競態窗口與 known-latent 2 同族,不擴 refresh 語意。
 
 ## 協定測試維持兩份(防整併)
 
@@ -85,8 +96,10 @@ gate 採用測試**都留**:前者釘的是 load-gate 特有交織(phase 收斂/
   已裁決 race render its 瘦身,churn 前提不再成立;(c) 抽取 commit 以 13 個 render its 一字不動
   原封全綠證明搬動零 churn。0008 該節已補日期化 cross-ref。
 - 等價與覆蓋:兩顆 commit(c1 抽取+render 原封綠;c2 render 瘦身——race 機器面歸 controller
-  單元 its,render 留「飛行中 Escape 關不掉」「重開顯示處理中」兩個顯示面),覆蓋零淨減、淨增
-  2 條(失敗重試同 key、resumedInFlight 機器面——render 從未斷言過的)。
+  單元 its,render 留「飛行中 Escape 關不掉」「重開顯示處理中」兩個顯示面)。斷言面帳面零淨減、
+  淨增 2 條(失敗重試同 key、resumedInFlight 機器面——render 從未斷言過的);讓渡一條**跨層組合
+  路徑**(重開後 resolve 真單至成功畫面的 render 全鏈——機器分件由單元 its、成功畫面由既有
+  payThrough render its 各自覆蓋,組合本身不再有單一測試;對抗審記錄在案,屬瘦身裁決的已知代價)。
 
 ## 關聯 ADR
 

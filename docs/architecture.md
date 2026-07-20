@@ -139,8 +139,9 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   mobile stores — both thin adapters since 2026-07-08 over the shared wire orchestration
   `src/lib/checkout-order.ts`'s `submitOrder()`, see `docs/adr/0003`'s appendix — since 2026-07-13
   mobile's cart itself is typed as the shared `CartItem` (`$lib/cart-item`, see above) rather than a
-  surface-local `CartInput`/`CartLine` pair, so `placeOrder()` passes `get(cart)` straight to
-  `submitOrder()` with no projection step; the former `toOrderItem` adapter is gone); the
+  surface-local `CartInput`/`CartLine` pair, and since 2026-07-20 (R5 C6) `placeOrder()` passes
+  `chargeableLines(get(cart), get(subscriptions))` — the branded chargeable filter, a no-op for
+  today's course-only mobile carts — to `submitOrder()`; the former `toOrderItem` adapter is gone); the
   backend creates both artifacts atomically in one transaction. A `type: 'course'` line becomes a real 報名
   (enrolment row); the member's weekly schedule is real too, hydrated from `GET /schedule/me`
   (`member/api.ts`'s `getSchedule()`, derived from the member's active enrolments, see `docs/adr/0006`);
