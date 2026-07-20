@@ -9,7 +9,7 @@ import { fmtRatio } from '$lib/format';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
+import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
@@ -362,7 +362,7 @@ type ApiOrderListResponse = ApiPage<'orders', ApiOrderSummary>;
  *  mapAdminOrder 共用同一份措辭，見 public/adapters.ts)。 */
 function mapOrder(o: ApiOrderSummary): Order {
   return {
-    id: o.order_number,
+    id: orderIdentity(o).display,
     item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
     amount: ntd(o.total_cents),
     status: orderStatusBadge(o.status),

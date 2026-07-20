@@ -198,6 +198,15 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 
 });
 
+describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 pin）', () => {
+	it('ORDERS[0]（amount 4800）→ tax 229 / net 4571', () => {
+		expect(ORDERS[0].amount).toBe(4800);
+		expect(ORDERS[0].tax).toBe(229);
+		expect(ORDERS[0].net).toBe(4571);
+		expect(ORDERS[0].net + ORDERS[0].tax).toBe(ORDERS[0].amount);
+	});
+});
+
 describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
 	it('messages 保留同步 seed(不因獨立水合而清空);messagesHydrated 起始為 false', () => {
 		expect(get(messages)).toEqual(MESSAGES);

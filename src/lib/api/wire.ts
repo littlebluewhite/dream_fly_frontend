@@ -7,6 +7,11 @@
  * 建立單一來源；後續任務（乙線）會把 8 個檔案改為 import 這裡——本檔落地後即
  * 凍結為唯讀契約，既有重複點的改線不在本檔異動範圍內。
  *
+ * 2026-07 依同判準增收：訂單雙身分協定與 5% 內含稅顯示反推（orderIdentity /
+ * taxFromGross，見下方訂單知識區）。「凍結」指當年批次的任務邊界、非永久禁令——
+ * 此二支同為 ≥2 surface（admin/member/mobile-admin）逐字共用的後端 wire 知識，
+ * 符合 ADR 0007 收斂判準；既有匯出一字不動，只增不改。
+ *
  * 收錄原則：≥2 個 surface 共用的後端 wire 知識才收；UI 目標型別一律不收（結算
  * per-surface，ADR 0003 精神）。
  *
@@ -39,6 +44,27 @@ export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
  *  顯式放寬 cast 是必要的：strict 下以任意 string 索引 Record<OrderStatus,…> 會使 check 紅。 */
 export const orderStatusBadge = (s: string): [Tone, string] =>
   (ORDER_STATUS as Record<string, [Tone, string] | undefined>)[s] ?? ['neutral', s];
+
+/* ── 訂單雙身分協定 + 內含稅顯示反推（2026-07 增收）─────────────────────────
+ * admin/member/mobile-admin 三處先前各自散記的兩件訂單 wire 知識，收成單點。 */
+
+/** 訂單雙身分：後端同一筆訂單有兩個識別欄——`order_number` 是給人看的單號（UI 沿用
+ *  的顯示 `id` 欄），`id` 才是打 `PATCH /orders/{id}/status` 要用的真 uuid。單點此協定，
+ *  三個 surface 不再各自記憶「哪個欄位餵哪條路徑」。四處 wire interface（admin
+ *  ApiAdminOrder、member ApiOrderSummary、checkout ApiOrder、PATCH 回應
+ *  ApiOrderStatusResponse）皆必填 `order_number: string`、無 fallback。註：mobile-admin
+ *  的 mock ORDERS 用自參照（orderId = 顯示 id）不走此協定；checkout-order.ts 的
+ *  `orderNumber` 為具名欄位、無混用風險，亦不經此。 */
+export const orderIdentity = (o: { id: string; order_number: string }): { display: string; uuid: string } =>
+  ({ display: o.order_number, uuid: o.id });
+
+/** 5% 內含稅顯示反推：`tax = round(amount − amount ÷ 1.05)`、`net = amount − tax`。
+ *  單位跟隨傳入值（兩呼叫端皆已是 NT$ 整數；cents 邊界的 `ntd`/`toCents` 依 ADR 0007
+ *  留在 public/adapters.ts）。這是顯示端推導、非後端欄位（後端訂單無稅額/未稅欄，P2）。 */
+export const taxFromGross = (amount: number): { tax: number; net: number } => {
+  const tax = Math.round(amount - amount / 1.05);
+  return { tax, net: amount - tax };
+};
 
 /** 後端清單信封：{ [K]: T[], total, page, per_page }。
  *  mapped type，不能被 interface extends——消費端一律用 type alias。 */

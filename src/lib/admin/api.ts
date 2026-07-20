@@ -8,7 +8,7 @@ import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, isoDateTime, pageMeta } from '$lib/api/wire';
+import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross } from '$lib/api/wire';
 import type { ApiPage, Tone } from '$lib/api/wire';
 import { deriveSessionStatus } from '$lib/coach/api';
 import type { TodayStatus } from '$lib/coach/data';
@@ -181,10 +181,11 @@ type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
  *  維持既有 UI 不變)。 */
 function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 	const amount = ntd(o.total_cents);
-	const tax = Math.round(amount - amount / 1.05);
+	const { tax, net } = taxFromGross(amount);
+	const { display, uuid } = orderIdentity(o);
 	return {
-		id: o.order_number,
-		orderId: o.id,
+		id: display,
+		orderId: uuid,
 		member: o.user_name,
 		initial: initialOf(o.user_name),
 		color: MEMBER_COLORS[i % MEMBER_COLORS.length], // P2: 後端無代表色欄位
@@ -198,7 +199,7 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		handler: '—', // P2: 後端無經手人／客服歸屬欄位
 		campus: '—', // P2: 訂單無分校欄位(courses/venues 目前也無分校維度)
 		tax,
-		net: amount - tax,
+		net,
 		paidAt: o.status === 'pending' ? '—（待付款）' : o.created_at.slice(0, 10),
 		taxId: '—' // P2: 後端無統一編號欄位
 	};

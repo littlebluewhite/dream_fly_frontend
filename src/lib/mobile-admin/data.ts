@@ -48,6 +48,7 @@ import { CAMPUSES } from '$lib/domain/shared';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
 import { TICKET_TYPE as TICKET_TYPE_BASE } from '$lib/domain/tickets';
 import type { OrderStatus } from '$lib/api/wire';
+import { taxFromGross } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE, type Level } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 
@@ -161,15 +162,18 @@ export interface OrderRow {
 	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
 	orderId: string;
 }
-export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => ({
-	...o,
-	campus: CAMPUSES[i % CAMPUSES.length],
-	tax: Math.round(o.amount - o.amount / 1.05),
-	net: o.amount - Math.round(o.amount - o.amount / 1.05),
-	paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
-	taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
-	orderId: o.id
-}));
+export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => {
+	const { tax, net } = taxFromGross(o.amount);
+	return {
+		...o,
+		campus: CAMPUSES[i % CAMPUSES.length],
+		tax,
+		net,
+		paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
+		taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
+		orderId: o.id
+	};
+});
 
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {

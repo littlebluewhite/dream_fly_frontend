@@ -286,7 +286,7 @@ describe('getOrders — GET /orders（admin）', () => {
 		expect(d.perPage).toBe(20);
 	});
 
-	it('由 amount 反推 5% 內含稅：net + tax === amount', async () => {
+	it('由 amount 反推 5% 內含稅：480000 分 → amount 4800 / tax 229 / net 4571（站點級 pin）', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /orders?page=1': {
@@ -301,6 +301,9 @@ describe('getOrders — GET /orders（admin）', () => {
 		const d = await getOrders();
 
 		const o = d.orders[0];
+		expect(o.amount).toBe(4800);
+		expect(o.tax).toBe(229);
+		expect(o.net).toBe(4571);
 		expect(o.net + o.tax).toBe(o.amount);
 	});
 

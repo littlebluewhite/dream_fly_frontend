@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderStatusBadge, pageMeta, initialOf, isoDateTime, ageRange } from './wire';
+import { orderStatusBadge, pageMeta, initialOf, isoDateTime, ageRange, orderIdentity, taxFromGross } from './wire';
 import type { ApiPage } from './wire';
 
 /* Expected [tone, label] pairs are copied verbatim from the current
@@ -71,5 +71,31 @@ describe('ageRange', () => {
 
   it('shows an empty string when both bounds are null', () => {
     expect(ageRange(null, null)).toBe('');
+  });
+});
+
+describe('orderIdentity', () => {
+  it('maps { id, order_number } to { display: order_number, uuid: id } — the dual-identity contract', () => {
+    expect(orderIdentity({ id: 'uuid-abc', order_number: 'DF-24061' })).toEqual({
+      display: 'DF-24061',
+      uuid: 'uuid-abc'
+    });
+  });
+});
+
+describe('taxFromGross', () => {
+  it('derives 5% inclusive tax: 4800 → { tax: 229, net: 4571 }', () => {
+    expect(taxFromGross(4800)).toEqual({ tax: 229, net: 4571 });
+  });
+
+  it('net + tax always reconstitutes the gross amount', () => {
+    for (const amount of [600, 2800, 3200, 4800, 6200, 12345]) {
+      const { tax, net } = taxFromGross(amount);
+      expect(net + tax).toBe(amount);
+    }
+  });
+
+  it('returns { tax: 0, net: 0 } for a zero amount', () => {
+    expect(taxFromGross(0)).toEqual({ tax: 0, net: 0 });
   });
 });
