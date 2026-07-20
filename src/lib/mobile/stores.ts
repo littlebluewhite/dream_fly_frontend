@@ -23,7 +23,8 @@ import { createToasts } from '$lib/stores/toasts';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
-import { refreshPoints } from '$lib/member/stores';
+import { refreshPoints, subscriptions } from '$lib/member/stores';
+import { chargeableLines } from '$lib/member/checkout';
 import { courseToCartItem, type CartItem } from '$lib/cart-item';
 import { ME, NOTIFS_SEED, type NotifItem, type Course } from './data';
 
@@ -82,8 +83,15 @@ export {
 	getCourseSessions
 } from '$lib/member/stores';
 export type { LeaveRequest, CourseSession } from '$lib/member/stores';
-// 結帳輔助（CartSheet 的優惠碼驗證與錯誤文案映射）——同上，經 seam 收編。
-export { validateCoupon, orderErrorMessage } from '$lib/member/checkout';
+// 結帳輔助（CartSheet 的優惠碼驗證與錯誤文案映射）——同上，經 seam 收編。C6 起
+// 再收編 chargeableLines:CartSheet 的可計費預覽（見該檔 $: chargeable）與 placeOrder
+// 的請款（見下方）同吃這個唯一 brand 產地，型別強制「預覽 ≡ 請款」。
+export { validateCoupon, orderErrorMessage, chargeableLines } from '$lib/member/checkout';
+// C6:CartSheet 過濾可計費項目時，chargeableLines 的第二參數是「已持有訂閱」清單——
+// subscriptions store 經 seam 收編（源 $lib/member/stores，foundation-contracts 白名單
+// 既有）。mobile 無方案購買動線、subscriptions 恆空（SUBS_SEED 為 []），此過濾今日
+// 恆 no-op;收進 seam 是為了讓型別強制的「預覽 ≡ 請款」在 mobile 也一體成立。
+export { subscriptions } from '$lib/member/stores';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** A full course (spots 0) never enters the paid cart — add() just reports
@@ -151,17 +159,20 @@ export const cartTotal = derived(cart, ($c) => cartCount($c));
  *  轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。
  *  paymentMethod(Round 4 Task P4-F4):mobile 不做付款方式選擇 UI(計畫裁決)，
  *  呼叫端一律沿用預設 credit_card。
- *  K5-b:購物車本身已是 CartItem[](見上 cart 段)，直接把 get(cart) 傳給
- *  submitOrder——mobile 只有課程來源(沒有方案購買動線)，不需要桌面
- *  chargeableLines 的「已持有 pass 跳過」過濾(那個過濾對 type:'course' 恆是
- *  no-op)，原本焊在這裡的 toOrderItem 投影 adapter 已整顆刪除。 */
+ *  C6(反轉 K5-b):submitOrder 的 lines 收窄為 ChargeableLine[](可計費約束 brand，
+ *  見 $lib/cart-item)，唯一產地是 chargeableLines()。K5-b 曾裁定 mobile「不需要
+ *  過濾、直傳 get(cart)」——理由是 course-only 購物車的過濾恆 no-op;C6 反轉這個
+ *  決定，改讓型別強制過濾:預覽(CartSheet 的 checkoutMath)與請款(此處 submitOrder)
+ *  兩個終點同吃 chargeableLines 的輸出，「預覽合計 ≡ 實際請款」不再靠呼叫端記憶、
+ *  而是編譯期保證。對今日 course-only 購物車行為零變動(空訂閱、course 恆保留)，
+ *  未來若方案購買動線上架，過濾已就位、自動安全。 */
 export async function placeOrder(
 	coupon: string,
 	usePoints: boolean,
 	idempotencyKey: string = crypto.randomUUID(),
 	paymentMethod: PaymentMethod = 'credit_card'
 ): Promise<OrderConfirmation> {
-	return submitOrder(get(cart), {
+	return submitOrder(chargeableLines(get(cart), get(subscriptions)), {
 		coupon,
 		usePoints,
 		paymentMethod,

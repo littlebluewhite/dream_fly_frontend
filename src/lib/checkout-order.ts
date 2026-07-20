@@ -13,7 +13,7 @@
 
 import { api } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
-import type { CartItem } from '$lib/cart-item';
+import type { CartItem, ChargeableLine } from '$lib/cart-item';
 
 /** 付款方式（Round 4 Task P4-B1；integration-contract.md §1.8/§3.10）值域——純應用層
  *  值域，非 DB enum。不帶時後端預設 credit_card；帶入值域外字串回 422。目前仍是
@@ -80,9 +80,13 @@ export interface OrderConfirmation {
  *  idempotencyKey 未指定時每次呼叫各自產生一把新 uuid；同一次結帳流程重試時，
  *  呼叫端需自行保留並重複傳入同一把 key，後端才會辨識為重放、回傳原訂單而不
  *  重複扣款/建立報名訂閱。任何失敗（syncCartToServer 或 POST /orders）一律原樣
- *  拋出、不呼叫 afterOrder、不清購物車，讓呼叫端顯示錯誤並可安全重試。 */
+ *  拋出、不呼叫 afterOrder、不清購物車，讓呼叫端顯示錯誤並可安全重試。
+ *
+ *  lines 型別為 `ChargeableLine[]`（見 $lib/cart-item）:只有經 chargeableLines()
+ *  過濾後的「可計費項目」能送進來——與預覽（checkoutMath）同一產地，型別強制
+ *  「預覽合計 ≡ 實際請款」，未過濾的整車無法直接請款。 */
 export async function submitOrder(
-  lines: CartItem[],
+  lines: ChargeableLine[],
   opts: {
     coupon: string;
     usePoints: boolean;

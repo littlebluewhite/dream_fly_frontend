@@ -13,6 +13,12 @@ import { api, ApiError } from '$lib/api/client';
 import { submitOrder } from './checkout-order';
 import type { ApiOrder } from './checkout-order';
 import type { CartItem } from '$lib/cart-item';
+// submitOrder 的 lines 收窄為 ChargeableLine[]（可計費約束 brand）。fixtures 改用真
+// producer chargeableLines(items, []) 打上 brand（空訂閱 → 不濾任何項，course/pass
+// 原樣保留），比檔內 cast 更貼近 production:CartSheet/desktop 都是經這個唯一產地
+// 把行送進 submitOrder。這是 lib-root 測試（不受 mobile seam 掃描約束），直取 member
+// 的 pure producer 屬佈線證明手段。
+import { chargeableLines } from '$lib/member/checkout';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -72,7 +78,7 @@ describe('submitOrder — 全序列成功', () => {
     const afterOrder = vi.fn(() => [refreshA(), refreshB()]);
     const clearCart = vi.fn();
 
-    const confirmation = await submitOrder([COURSE_ITEM, PASS_ITEM], {
+    const confirmation = await submitOrder(chargeableLines([COURSE_ITEM, PASS_ITEM], []), {
       coupon: 'DREAMFLY100',
       usePoints: false,
       idempotencyKey: 'key-abc',
@@ -115,7 +121,7 @@ describe('submitOrder — 全序列成功', () => {
   it('coupon 空字串 → coupon_code 整個欄位省略（不是送空字串）；payment_method 未指定時預設 credit_card', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
 
-    await submitOrder([PASS_ITEM], { coupon: '', usePoints: true, idempotencyKey: 'key-xyz' });
+    await submitOrder(chargeableLines([PASS_ITEM], []), { coupon: '', usePoints: true, idempotencyKey: 'key-xyz' });
 
     expect(api).toHaveBeenCalledWith('/orders', {
       method: 'POST',
@@ -127,7 +133,7 @@ describe('submitOrder — 全序列成功', () => {
   it('paymentMethod 指定 line_pay → POST /orders body 帶 payment_method: line_pay（Round 4 P4-B1 值域穿透縫層）', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
 
-    await submitOrder([PASS_ITEM], { coupon: '', usePoints: false, paymentMethod: 'line_pay', idempotencyKey: 'key-lp' });
+    await submitOrder(chargeableLines([PASS_ITEM], []), { coupon: '', usePoints: false, paymentMethod: 'line_pay', idempotencyKey: 'key-lp' });
 
     expect(api).toHaveBeenCalledWith('/orders', {
       method: 'POST',
@@ -144,7 +150,7 @@ describe('submitOrder — 失敗路徑', () => {
     const clearCart = vi.fn();
 
     await expect(
-      submitOrder([COURSE_ITEM], { coupon: '', usePoints: false, afterOrder, clearCart })
+      submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false, afterOrder, clearCart })
     ).rejects.toBeInstanceOf(ApiError);
 
     expect(afterOrder).not.toHaveBeenCalled();
@@ -155,7 +161,7 @@ describe('submitOrder — 失敗路徑', () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /cart': new ApiError(500, 'internal error') }));
     const clearCart = vi.fn();
 
-    await expect(submitOrder([COURSE_ITEM], { coupon: '', usePoints: false, clearCart })).rejects.toBeInstanceOf(
+    await expect(submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false, clearCart })).rejects.toBeInstanceOf(
       ApiError
     );
 
@@ -175,7 +181,7 @@ describe('submitOrder — afterOrder 部分失敗', () => {
     const clearCart = vi.fn();
     const afterOrder = vi.fn(() => [Promise.resolve(undefined), Promise.reject(new Error('refresh failed'))]);
 
-    const confirmation = await submitOrder([COURSE_ITEM], { coupon: '', usePoints: false, afterOrder, clearCart });
+    const confirmation = await submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false, afterOrder, clearCart });
 
     expect(confirmation.orderNumber).toBe('DF-20260704ABCD1234');
     expect(clearCart).toHaveBeenCalledTimes(1);
@@ -188,7 +194,7 @@ describe('submitOrder — idempotencyKey', () => {
   it('省略 idempotencyKey → 自產 uuid 格式的 key', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
 
-    await submitOrder([COURSE_ITEM], { coupon: '', usePoints: false });
+    await submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false });
 
     const ordersCall = vi
       .mocked(api)
@@ -196,4 +202,14 @@ describe('submitOrder — idempotencyKey', () => {
     const init = ordersCall?.[1] as { headers: Record<string, string> };
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
+});
+
+// 可計費約束的編譯期反例（成對；同 checkout-math.test.ts 與 load-gate.test.ts 先例）——
+// 未經 chargeableLines 過濾的裸 CartItem[] 不得直接進 submitOrder:lines 必須是已濾過
+// 的 ChargeableLine[]（「預覽合計 ≡ 實際請款」）。雙向性由 tsc 保證:若步驟 4 悄悄把
+// submitOrder 放寬回收 CartItem[]，下面那行的型別錯誤會消失、@ts-expect-error 變成
+// unused directive → `npm run check` 轉紅。這條只驗型別、不執行（it.skip）。
+it.skip('型別:未經 chargeableLines 的裸 CartItem[] 不得直接進 submitOrder（可計費約束）', () => {
+  // @ts-expect-error 裸 CartItem[] 缺 ChargeableLine brand，唯一產地是 chargeableLines()
+  void submitOrder([COURSE_ITEM], { coupon: '', usePoints: false });
 });

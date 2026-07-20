@@ -21,7 +21,8 @@
   import { onMount } from 'svelte';
   // 卡 3：points/refreshPoints（member/stores）與 validateCoupon/orderErrorMessage
   // （member/checkout）改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
-  import { cart, toasts, placeOrder, points, refreshPoints, validateCoupon, orderErrorMessage } from '$lib/mobile/stores';
+  // C6：再取用 subscriptions/chargeableLines（同經 seam），供可計費預覽過濾。
+  import { cart, toasts, placeOrder, points, refreshPoints, validateCoupon, orderErrorMessage, subscriptions, chargeableLines } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import { ME } from '$lib/mobile/data';
   import { checkoutMath } from '$lib/checkout-math';
@@ -49,7 +50,16 @@
     void refreshPoints().catch(() => {});
   });
 
-  $: m = checkoutMath($cart, coupon, $points, usePoints);
+  // C6：預覽金額只算「可計費項目」——chargeableLines 濾掉已持有的 pass，與請款
+  // （placeOrder → submitOrder）同一產地，型別強制「預覽合計 ≡ 實際請款」。下方
+  // 明細列表（{#each $cart}）仍照舊渲染整車，對照 desktop CheckoutDialog 同款:
+  // 使用者看得到自己加了什麼，只是合計不把已持有的 pass 重複計費。
+  // 刻意不在 onMount 加 refreshSubscriptions():mobile 沒有方案購買動線，
+  // subscriptions 恆空（SUBS_SEED 為 []），此過濾今日對 course-only 購物車恆
+  // no-op;未來方案動線上架時，在上方 onMount 補一次 refreshSubscriptions() 水合
+  // 即可（座標留此，desktop CheckoutDialog 開啟即水合訂閱是既有先例）。
+  $: chargeable = chargeableLines($cart, $subscriptions);
+  $: m = checkoutMath(chargeable, coupon, $points, usePoints);
 
   async function applyCode() {
     if (!code.trim()) return; // 空輸入按「套用」不顯示錯誤（同桌面 CheckoutDialog 的決策）

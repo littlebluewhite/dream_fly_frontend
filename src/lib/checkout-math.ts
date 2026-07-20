@@ -7,6 +7,10 @@
  * 查表版的 lookupCoupon()（CartSheet 是它最後一個呼叫端，已隨 Task 19 收尾改真
  * API，見該檔案）。 */
 
+// type-only import:brand 型別編譯後零 runtime 邊（verbatimModuleSyntax 下必須
+// `import type`），checkout-math 對 lib-root cart-item 只取型別、不開值依賴。
+import type { ChargeableLine } from '$lib/cart-item';
+
 export interface CartMathLine {
   price: number;
   qty: number;
@@ -18,9 +22,15 @@ export function subtotalOf(items: CartMathLine[]): number {
 }
 
 /** 結帳金額拆解。優惠碼折抵不超過小計；點數折抵不超過「優惠碼後金額」與可用點數；
- *  最終金額不為負；回饋點數＝最終金額的 5%（四捨五入）。 */
+ *  最終金額不為負；回饋點數＝最終金額的 5%（四捨五入）。
+ *
+ *  items 收窄為 `ChargeableLine[]`（見 $lib/cart-item）:「預覽金額只能算在可計費
+ *  項目上」這條契約由輸入型別直接強制，不再是散文約定——`ChargeableLine` 的唯一
+ *  產地是 chargeableLines()（member/checkout），呼叫端無從把未過濾的整車直接餵進
+ *  來，預覽因此與請款（submitOrder）恆同源。內部小計仍走 subtotalOf（收較寬的
+ *  CartMathLine[]，ChargeableLine 結構相容），計算本身只讀 price/qty、不變。 */
 export function checkoutMath(
-  items: CartMathLine[],
+  items: ChargeableLine[],
   coupon: { off: number } | null,
   points: number,
   usePoints: boolean
