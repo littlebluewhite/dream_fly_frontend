@@ -176,7 +176,8 @@ export interface CoachDashboardData {
  *  待點名/學員出席率/待回覆訊息 3 個原 P2 佔位欄位改讀 pending_attendance/
  *  attendance_rate_30d/unread_messages(§3.24)；today_sessions/student_count 這支端點
  *  也有回，但目前頁面沒有對應顯示欄位(today 課程數已由 todayClasses.length 呈現)，
- *  不強塞新卡片。 */
+ *  不強塞新卡片。conversations 由 getConversations() best-effort 併入(降級語意見
+ *  下方行內註解)。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
 	const { user, coach } = await requireMyCoach();
 	const [todayClasses, reports, conversations] = await Promise.all([

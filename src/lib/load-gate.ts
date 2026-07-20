@@ -96,7 +96,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	 *  onData 語意。
 	 *
 	 *  F1(codex B0 r1):into() 通常寫共享 writable,其 subscriber 可能同步重入
-	 *  gate.load()(generation++、發第二次 fetch)。into() 返回後、flag.set(true) 之前
+	 *  gate.load()(generation++、發第二次 fetch)。into() 返回後、core.commit() 之前
 	 *  重查 generation——不符(或已 destroy)代表已被重入的新一輪取代,直接 return、
 	 *  不翻旗(翻旗交給新一輪自己的 applyLoaded 呼叫);否則舊一輪的翻旗會讓新一輪的
 	 *  回應在自己的旗標重查時誤判 mutation 勝出,把真正的新資料丟棄。 */

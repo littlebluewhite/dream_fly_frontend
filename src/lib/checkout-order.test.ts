@@ -18,6 +18,8 @@ import type { CartItem } from '$lib/cart-item';
 // 原樣保留），比檔內 cast 更貼近 production:CartSheet/desktop 都是經這個唯一產地
 // 把行送進 submitOrder。這是 lib-root 測試（不受 mobile seam 掃描約束），直取 member
 // 的 pure producer 屬佈線證明手段。
+// 覆蓋缺口明錄:「已持有 pass 被濾掉」的 runtime 濾除案例由 member/checkout.test.ts 覆蓋;
+// mobile runtime 不可建構(cart.add 只收 Course),故本檔 fixtures 一律空訂閱、不假造濾除情境。
 import { chargeableLines } from '$lib/member/checkout';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
