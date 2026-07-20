@@ -167,6 +167,11 @@ module-context 的 `NOTIFS`,下述)。
 元件直接消費的活種子」這句消費者說明,已同步改寫:NOTIFS 仍是 Topbar 直接消費、`TODAY_LABEL`/
 `CONVERSATIONS` 仍是 `coach/api.ts` 消費,`COACH` 改指向宣告旁新補的漂移註記。
 
+> **2026-07-20(R5 C2)退役註記**:上句「`CONVERSATIONS` 仍是 `coach/api.ts` 消費」自本日起不再
+> 成立——`getDashboard()` 已併入真 `getConversations()`(best-effort,失敗降級空陣列),
+> `CONVERSATIONS` seed 依慣例於 `coach/data.ts` 原位退役;`Conversation` 型別與 `SlaTone` 仍為
+> 活型別(真映射的型別消費者)。歷史裁決原文不改寫。
+
 **§2 補充(批次 1 codex 審查記帳)**:`CoachAvatar.svelte` 的 `initial` prop 有一個預設值
 `COACH.initial`(`export let initial: string = COACH.initial;`),原本是給「不需要承接特定教練資料」
 的殼層呼叫端撐著(呼叫時不傳 `initial`)。W4 把 coach `Sidebar.svelte` 的兩個 `<CoachAvatar>` 呼叫

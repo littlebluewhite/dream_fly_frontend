@@ -109,7 +109,14 @@ let `src/lib/mobile/foundation-contracts.test.ts` retire its icon-registry-compl
 overlay-map-completeness source scans — both were a strict subset of what `check` now catches; the
 file's remaining contracts are route inventory (a deleted route only 404s at navigation time), CSS
 safety (two regression regexes `check` can't reach), and — since 2026-07-16 — the mobile
-seam-consolidation source scan plus the `mobile/stores.ts` member-source allowlist (`docs/adr/0014`). See `docs/adr/0012` for the full K6 rationale,
+seam-consolidation source scan plus the `mobile/stores.ts` member-source allowlist (`docs/adr/0014`). Since
+2026-07-20 (R5 C3) the scanner machinery itself — `walk`, the comment/string/template-aware
+import-specifier extraction, and the reach predicate, six codex hardening rounds deep — lives in the
+first-class test-support module `src/lib/testing/import-scan.ts` with its 39 self-proving fixtures moved
+verbatim to `import-scan.test.ts`; the contract file consumes the module's three exports and keeps a
+four-line smoke canary (one positive, one negative form) so a dead scanner still trips locally, while a
+dogfood contract inside `import-scan.test.ts` pins that no production file under `src/lib`/`src/routes`
+imports `$lib/testing`. See `docs/adr/0012` for the full K6 rationale,
 including a type-assertion lesson from the same batch.
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
@@ -179,7 +186,11 @@ from wire instead of holding a verbatim copy, and its two dynamic badge lookups 
 `orderStatusBadge` fallback — which left a re-exported `ORDER_STATUS` table consumer-less, so it
 was dropped; since 2026-07-16 it also re-exports `LEVEL_TINT` and the `Student` type from
 `$lib/coach/data` — coach stays the single source — for mobile-admin's two coach-side consumers,
-`docs/adr/0014`). Error-toast plumbing is single-sourced the same way:
+`docs/adr/0014`; since 2026-07-20 — R5 C7 — wire also owns two pieces of order knowledge as zero-import
+pure helpers: `orderIdentity`, the dual-identity protocol picking the display `order_number` vs the real
+uuid for `PATCH /orders/{id}/status`, and `taxFromGross`, the 5% tax-inclusive display derivation
+`round(amount - amount/1.05)` whose unit follows the caller — consumed by admin's `mapAdminOrder`,
+member's `mapOrder` and mobile-admin's ORDERS builder). Error-toast plumbing is single-sourced the same way:
 `src/lib/api/error-text.ts`'s `apiErrorMessage` (pass-through) and `apiErrorText` (status-table, never
 leaks the backend message) replaced 22 per-page inline mappers — 12 are table-form, each call site
 keeping its own 1-4-line entity text table; the other 10 are pass-through, delegating outright
@@ -206,7 +217,10 @@ mechanism and ownership differ by surface. Member/mobile notifications are page-
 the page's own `createLoadGate` call carries a `hydrate: { flag, into }` option instead of hand-rolled
 `skip`+`onData` — `flag` is the `*Hydrated` writable, `into` performs the store write, and the guard
 short-circuit / post-await mutation-wins re-check / flag-flip that used to be hand-rolled at the page now
-live inside `load()`/`refresh()`/`silentRefresh()` themselves (`docs/adr/0008`). The gate's own
+live inside `load()`/`refresh()`/`silentRefresh()` themselves (`docs/adr/0008`; since 2026-07-20 those
+three decision points — guard short-circuit, mutation-wins re-check, flag-flip — delegate to the shared
+`HydrationCore` in `src/lib/hydration-gate.ts`, one home for the protocol's vocabulary, while the gate's
+reentry bookkeeping stays put — `docs/adr/0016`). The gate's own
 `generation`/`destroyed` bookkeeping (no page-local flag needed any more) still discards a response that
 resolves after the page unmounts (member's read-state *mutations* —
 `markRead`/`markAllRead`, optimistic update + PATCH + `markMutated()` — live in `member/notifications.ts`
@@ -227,7 +241,13 @@ protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate
 `hydrateOps`/`hydrateMessages` build on; since 2026-07-11 `member/notifications.ts` is the factory's
 second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
 own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
-unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Separately, member's
+unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Since 2026-07-20 (R5 C1,
+`docs/adr/0016`) member's 候補 waitlist and 請假 leave-requests stores adopt the same factory —
+`hydrateWaitlist`/`hydrateLeaveRequests` *are* gate.hydrate behind `waitlistHydrated`/
+`leaveRequestsHydrated`, their five mutators keep writing directly and flip `markMutated()`,
+`refreshWaitlist` is deleted outright (YAGNI, the notifications precedent) while `refreshLeaveRequests`
+keeps its name as gate.refresh for `MyCourseDetail`'s open-refresh — accepting once-per-session
+freshness, with the explicit-refresh window's missing mutation-wins re-check recorded as known-latent. Separately, member's
 `getDashboard()`/`getAccount()`/`getMine()` getters (`member/api.ts`) also opportunistically hydrate
 session-scoped stores (points/notifications/subscriptions; `getMine()` — the third adopter, 2026-07-16 —
 候補 waitlist + 請假 leave-requests) as a side effect, behind a private, named

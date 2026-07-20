@@ -91,3 +91,14 @@ _Avoid_: 手抄 *Hydrated 旗標協定
 admin 這類 Tone 型別相容的 facade 直接活 re-export;mobile-admin/member/mobile 這類自帶較嚴格或
 不同形狀 `Tone` 型別的 facade,改以自身型別對同一參照純註記收窄(零 `as` 斷言,見 `docs/adr/0013`)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)
+
+**匯入掃描器 (Import Scan)**:
+原始碼層 import 掃描的 test-support 模組;單一來源 `$lib/testing/import-scan.ts`(`walk`/
+`importSpecifiers`/`makeReachPredicate` 三支,字串/註解/模板感知、六輪 codex 硬化),供接縫契約
+測試掃 production 檔(見 `docs/adr/0014` §1 與 R5 C3 升格)。
+_Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib/testing`(dogfood 契約會紅)
+
+**可計費行 (ChargeableLine)**:
+可進「結帳」金額計算與請款的購物車項目;唯一產地 `member/checkout.ts` 的 `chargeableLines()`
+(濾除已訂閱方案後打上 brand),`checkoutMath` 與 `submitOrder` 兩終點只收此型別。
+_Avoid_: 未過濾清單直餵 checkoutMath/submitOrder(編譯期擋);唯一產地之外自行 `as` 斷言打 brand

@@ -154,7 +154,7 @@ surface（member/staff）共用同一套 API：
 | --- | --- | --- |
 | `mobile-admin` 身分小卡 | `src/lib/mobile-admin/data.ts`（`PROFILES`） | 僅 admin 首頁 hero 仍顯示硬編姓名（陳怡君）；coach 首頁已於 Round 3 改接真實身分，不再共用這份 mock |
 | `mobile-admin` 列表僅第 1 頁 | `src/lib/mobile-admin/api.ts`（`getOpsCollections()`） | 學員/班級/訂單皆只抓分頁第 1 頁，因行動版無 `PaginationBar`；誠實不完整，非假資料 |
-| `mobile-admin` 場館／票券管理 | `src/lib/mobile-admin/overlays/VenuesScreen.svelte`／`TicketsScreen.svelte` | desktop 側已接真寫入（見上）；mobile-admin 側維持唯讀展示（場館——Task F4 決定不擴大範圍去加行動版寫入 UI）；票券沿用靜態 `TICKETS` seed，「編輯」仍顯示「（示範）」toast，「新增」則誠實導引使用者去桌面版操作，不是假裝成功 |
+| `mobile-admin` 場館／票券管理 | `src/lib/mobile-admin/overlays/VenuesScreen.svelte`／`TicketsScreen.svelte` | **讀取側已接真**（2026-07-20 R5 C4：兩 screen 經 `getVenues`/`getTickets` 薄委派讀真 `GET /venues`、`GET /products` 第 1 頁，`createLoadGate` 三態；靜態 `VENUES`/`TICKETS` seed 依 ADR 0010 值/型別分離退役）；**寫入側 demo 邊界不變**——場館維持唯讀展示（Task F4 決定不擴大範圍去加行動版寫入 UI），票券「編輯」仍顯示「（示範）」toast，「新增」則誠實導引使用者去桌面版操作，不是假裝成功 |
 | `mobile` 帳戶設定「儲存變更」／桌面會員帳戶頁個人資料 | `src/lib/mobile/overlays/SettingsScreen.svelte`／`src/routes/member/account/+page.svelte` | 姓名/電話/家長聯絡人等欄位兩側都仍是本地端編輯、無可寫後端欄位；桌面生日已真 `PATCH /users/me { birth_date }`（Task P4-F4），mobile 尚未跟進生日欄位；mobile 的通知偏好/深色模式四個開關已真（Task F10，不在此列） |
 | admin 登入裝置清單 | `src/routes/admin/settings/+page.svelte`（`LOGINS`） | 契約 §3.25 開頭明文排除（需 session 管理，另案處理），維持純本地 mock，非本輪遺漏 |
 
@@ -162,6 +162,11 @@ surface（member/staff）共用同一套 API：
 因無後端來源而隱藏，非造假）——都是「後端尚無端點」「契約明文排除」或「純裝飾」的誠實缺口。逐項核對
 後，Round 3 結束時列出的九項殘餘僅剩上表五項，其中兩項（場館／票券、系統設定）是原本殘餘的窄化描述
 而非新發現的缺口。
+
+> **2026-07-20（R5 架構深化）增補**：coach 儀表板「最新訊息」預覽先前由 `getDashboard()` 夾帶
+> mock `CONVERSATIONS` seed 回傳——真 payload 的型別掩護了 mock 欄位，屬未列入上表的縫隙，本輪已
+> 補正（`coach/api.ts` 併真 `getConversations()`，best-effort 失敗降級空陣列不擋主資料；R5 C2）。
+> 上表「場館／票券」條目的讀取側同輪接真，詳該列現況欄。
 
 ### 6. Round 3 接線範圍：7 個新後端子系統 + admin 使用者 + 5 級課程分級
 
