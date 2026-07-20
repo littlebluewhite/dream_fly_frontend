@@ -173,8 +173,8 @@ type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
 /** `AdminOrderSummary` → 既有 Order 形狀，讓 OrdersTable/OrderDialog 樣板不用改。
  *  AdminOrderSummary 沒有發票/經手人/分校欄位 —— 誠實給預設值(P2，各欄位見
  *  行內註解)；item 現由 items 摘要組成(orderItemsSummary，與 member/api.ts
- *  mapOrder 共用同一份措辭)；tax/net 由 amount 反推 5% 內含稅(沿用既有 data.ts
- *  ORDERS 的算法，非後端資料)；status 直接沿用後端 6 態原值(pending/paid/
+ *  mapOrder 共用同一份措辭)；tax/net 由 amount 反推 5% 內含稅(wire.ts 的
+ *  taxFromGross，非後端資料)；status 直接沿用後端 6 態原值(pending/paid/
  *  processing/completed/cancelled/refunded)，中文標籤由 ORDER_STATUS 查表
  *  (已於 data.ts 擴充至 6 態)。orderId 是真實後端 UUID（`o.id`）——Task 8 piece 2
  *  的 PATCH /orders/{id}/status 要用這個，`id` 欄位其實是 order_number（顯示用，
