@@ -16,12 +16,15 @@ vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 
 const UUID_A = 'a1b2c3d4-0000-4000-8000-000000000001';
 const UUID_B = 'a1b2c3d4-0000-4000-8000-000000000002';
+const UUID_C = 'a1b2c3d4-0000-4000-8000-000000000003';
 const PAYLOAD: { tickets: Ticket[]; total: number; page: number; perPage: number } = {
 	tickets: [
 		{ id: UUID_A, name: 'Alpha 測試月票', type: 'membership', price: 3000, sold: 10, quota: 50, color: '#123456', icon: 'calendar-days', desc: '測試說明甲' },
-		{ id: UUID_B, name: 'Beta 測試體驗券', type: 'ticket', price: 500, sold: 4, quota: null, color: '#654321', icon: 'sparkles', desc: '測試說明乙' }
+		{ id: UUID_B, name: 'Beta 測試體驗券', type: 'ticket', price: 500, sold: 4, quota: null, color: '#654321', icon: 'sparkles', desc: '測試說明乙' },
+		// quota 0（後端可回的合法值,≠ null 的「不限」）——F4 釘 soldPct 的零值防呆。
+		{ id: UUID_C, name: 'Gamma 測試預售票', type: 'ticket', price: 800, sold: 7, quota: 0, color: '#0EA5E9', icon: 'trophy', desc: '測試說明丙' }
 	],
-	total: 2,
+	total: 3,
 	page: 1,
 	perPage: 20
 };
@@ -50,10 +53,10 @@ describe('TicketsScreen — ready(接真 payload)', () => {
 		const { container, findByText } = render(TicketsScreen, { props: { onBack: () => {} } });
 		await findByText('Alpha 測試月票');
 		const txt = container.textContent ?? '';
-		const totalSold = PAYLOAD.tickets.reduce((s, t) => s + t.sold, 0); // 14
-		const revenue = PAYLOAD.tickets.reduce((s, t) => s + t.sold * t.price, 0); // 32,000
-		expect(txt).toContain(fmtNT(revenue)); // NT$32,000
-		expect(txt).toContain('共售出 ' + totalSold + ' 張'); // 共售出 14 張票券
+		const totalSold = PAYLOAD.tickets.reduce((s, t) => s + t.sold, 0); // 10+4+7 = 21
+		const revenue = PAYLOAD.tickets.reduce((s, t) => s + t.sold * t.price, 0); // 37,600
+		expect(txt).toContain(fmtNT(revenue)); // NT$37,600
+		expect(txt).toContain('共售出 ' + totalSold + ' 張'); // 共售出 21 張票券
 	});
 
 	it('每張票券名稱/類型 Badge/售價讀 payload，UUID id 不出現於版面', async () => {
@@ -76,5 +79,15 @@ describe('TicketsScreen — ready(接真 payload)', () => {
 		expect(txt).toContain('已售 10 / 50 張'); // Alpha quota 50
 		expect(txt).toContain('20%'); // 10/50
 		expect(txt).toContain('已售 4 / 不限 張'); // Beta quota null → 不限
+	});
+
+	it('F4:quota 0 → soldPct 零值防呆,顯示 0%、版面無 NaN/Infinity(重用桌面 admin tickets-util)', async () => {
+		const { container, findByText } = render(TicketsScreen, { props: { onBack: () => {} } });
+		await findByText('Alpha 測試月票');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('已售 7 / 0 張'); // quota 0 ≠ null:照實顯示 0,不是「不限」
+		expect(txt).toMatch(/\b0%/); // Gamma 的獨立 0%(\b 擋掉 Alpha「20%」的子字串矇混)
+		expect(txt).not.toContain('NaN'); // 舊算式 quota 0 → sold/0 = Infinity;0/0 → NaN
+		expect(txt).not.toContain('Infinity');
 	});
 });

@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
+import { authStore } from '$lib/stores/authStore';
 import {
   leaveRequests,
   leaveRequestsHydrated,
@@ -38,19 +39,39 @@ function createDeferred<T>() {
 }
 
 /** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時一律丟錯
- *  （同 checkout-api.test.ts 慣例——呼叫到沒被交代的端點應該讓測試失敗）。 */
+ *  （同 checkout-api.test.ts 慣例——呼叫到沒被交代的端點應該讓測試失敗）。
+ *  覆寫值可以是函式（每次呼叫求值）——F2 race 釘的兩段式 GET 用它模擬真 server
+ *  「首呼舊清單、次呼完整清單」。 */
 function fakeRouter(overrides: Record<string, unknown>) {
   return vi.fn(async (path: string, init: RequestInit = {}) => {
     const method = (init.method ?? 'GET').toString().toUpperCase();
     const key = `${method} ${path}`;
     if (key in overrides) {
-      const value = overrides[key];
+      const raw = overrides[key];
+      const value = typeof raw === 'function' ? raw() : raw;
       if (value instanceof Error) throw value;
       return value;
     }
     throw new Error(`unexpected api call: ${key}`);
   });
 }
+
+/** F2 和解重抓（mutator 尾隨的 void gate.refresh()）是 fire-and-forget——
+ *  macrotask 跳一拍，讓其 fetch → apply 鏈完整收束後再斷言。 */
+function settleReconcile() {
+  return new Promise<void>((r) => setTimeout(r, 0));
+}
+
+/** F1 用最小 AuthResponse——authStore.login() 走真實 applySession
+ *  （setTokens + 登入態），登出邊沿才有得測。 */
+const AUTH_RES = {
+  access_token: 'at-f1',
+  refresh_token: 'rt-f1',
+  user: {
+    id: 'u-f1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false,
+    avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member']
+  }
+};
 
 const API_LR_PENDING = {
   id: 'lr-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班',
@@ -97,22 +118,62 @@ describe('hydrateLeaveRequests — GET /leave-requests/me（guard 短路 + mutat
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']); // 未被覆寫
   });
 
-  it('race 釘:hydrate in-flight 期間 cancelLeaveRequest() → resolve 舊 pending 清單 → 該筆仍是 cancelled、不被姍姍來遲的舊清單蓋回', async () => {
+  it('race 釘（F2 後語意）:hydrate in-flight 期間 cancelLeaveRequest() → 舊回應被丟棄（mutationWins）＋和解重抓收斂完整清單——取消不被蓋回、server 既有列不再永久失蹤', async () => {
+    /* F2 語意差:C1 原釘只驗「丟棄舊回應」——cancel 的 markMutated(commit) 讓
+     * guarded() 從此短路,server 上本地未見的其他假單（lr-2）永不補回（F2 的 bug
+     * 本體）。現在 cancel 發現寫入當下未水合（旗標 false）→ 尾隨 gate.refresh()
+     * 和解重抓:GET 改兩段式模擬真 server——首呼（hydrate）回舊 pending 清單、
+     * 次呼（和解重抓;DELETE 已先完成）回完整清單（lr-1 已 cancelled + lr-2）。
+     * 原釘的「取消不被蓋回」精神保留,由「丟棄舊回應」＋「和解重抓」共同保證。 */
     leaveRequests.set([API_LR_PENDING as never]); // 本地已有 lr-1(pending)
     const deferred = createDeferred<unknown[]>();
+    let leaveGets = 0;
     vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /leave-requests/me': deferred.promise,
+      'GET /leave-requests/me': () => {
+        leaveGets += 1;
+        return leaveGets === 1 ? deferred.promise : [{ ...API_LR_PENDING, status: 'cancelled' }, API_LR_APPROVED];
+      },
       'DELETE /leave-requests/lr-1': undefined
     }));
 
-    const p = hydrateLeaveRequests(); // 通過 guard(旗標 false),GET /leave-requests/me 掛起中
-    await cancelLeaveRequest('lr-1'); // 飛行中 mutation:lr-1 → cancelled + markMutated 翻旗
+    const p = hydrateLeaveRequests(); // 通過 guarded()(旗標 false),GET /leave-requests/me 首呼掛起中
+    await cancelLeaveRequest('lr-1'); // 飛行中 mutation:lr-1 → cancelled + markMutated(commit) + 和解重抓
 
     deferred.resolve([API_LR_PENDING]); // 姍姍來遲的舊清單:lr-1 仍是 pending
-    await p;
+    await p; // mutationWins:過期回應整包丟棄
+    await settleReconcile();
 
-    expect(get(leaveRequests).find((r) => r.id === 'lr-1')?.status).toBe('cancelled');
+    expect(leaveGets).toBe(2); // 和解重抓真的發生
+    expect(get(leaveRequests).map((r) => [r.id, r.status])).toEqual([
+      ['lr-1', 'cancelled'], // 原釘精神:取消不被舊清單蓋回
+      ['lr-2', 'approved'] // 和解重抓補回本地沒有的既有列
+    ]);
     expect(get(leaveRequestsHydrated)).toBe(true);
+  });
+
+  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + store 清空,下一個帳號 hydrate 重新真抓', async () => {
+    /* SPA 登出（authStore.logout() + goto）沒有整頁重載,模組單例的 gate 旗標若不
+     * 重置,B 帳號登入後 hydrateLeaveRequests() 被 guarded() 短路——直接看到 A 的假單。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /leave-requests/me': [API_LR_PENDING]
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw'); // 帳號 A 登入
+    await hydrateLeaveRequests();
+    expect(get(leaveRequests)).toHaveLength(1);
+    expect(get(leaveRequestsHydrated)).toBe(true);
+
+    await authStore.logout(); // 「登入 → 登出」邊沿
+
+    expect(get(leaveRequestsHydrated)).toBe(false); // 旗標重置,guarded() 不再短路
+    expect(get(leaveRequests)).toEqual([]); // A 的假單不留給 B
+
+    const gets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/leave-requests/me').length;
+    const before = gets();
+    await hydrateLeaveRequests(); // 帳號 B 再水合 → 真的重新 fetch
+    expect(gets()).toBe(before + 1);
   });
 });
 
@@ -208,6 +269,30 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
 
     await expect(cancelLeaveRequest('lr-1')).rejects.toThrow('僅待審核假單可取消');
     expect(get(leaveRequests)[0].status).toBe('pending');
+  });
+
+  it('F2 完整性釘:未 hydrate 直接 cancelLeaveRequest → 和解重抓收斂為完整 server 清單(含本地沒有的既有列),旗標 true,之後 hydrate 被 guarded() 短路', async () => {
+    /* 寫入當下旗標 false（從未 hydrate）→ 本地只有直寫的 lr-1,server 上的 lr-2
+     * 缺席;而 markMutated 的 commit 會讓 guarded() 從此短路——沒有和解重抓,
+     * 既有列永不補回。 */
+    leaveRequests.set([API_LR_PENDING as never]); // 本地僅 lr-1（例如上個畫面直寫）
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'DELETE /leave-requests/lr-1': undefined,
+      'GET /leave-requests/me': [{ ...API_LR_PENDING, status: 'cancelled' }, API_LR_APPROVED]
+    }));
+
+    await cancelLeaveRequest('lr-1');
+    await settleReconcile();
+
+    expect(get(leaveRequests).map((r) => [r.id, r.status])).toEqual([
+      ['lr-1', 'cancelled'],
+      ['lr-2', 'approved']
+    ]);
+    expect(get(leaveRequestsHydrated)).toBe(true);
+
+    const calls = vi.mocked(api).mock.calls.length;
+    await hydrateLeaveRequests(); // 和解重抓後水合真相已成立——guarded() 短路,不再重覆真抓
+    expect(vi.mocked(api).mock.calls.length).toBe(calls);
   });
 });
 

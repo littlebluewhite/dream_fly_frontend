@@ -1,6 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createHydrationGate } from '$lib/hydration-gate';
+import { authStore } from '$lib/stores/authStore';
 
 /* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
  * 取代原本掛在 cart 底下、隨 dreamfly_cart_v3 一起存進 localStorage 的
@@ -37,8 +38,9 @@ function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
  *  翻旗，見 $lib/hydration-gate 的協定說明）：per-session 只抓一次；fetch 飛行中
  *  發生 mutation（join/cancel 直寫 store + markMutated）則 mutation 勝出、整包
  *  放棄過期回應——修掉「水合前的本地寫入被姍姍來遲的首次水合覆蓋」的 race。
- *  gate.refresh 不匯出——候補域沒有「無視守衛強制重抓」的消費者（YAGNI，同
- *  notifications 先例；courses 頁有本地 store 狀態 + 後端 409 擋重複候補雙保險）。 */
+ *  gate.refresh 不匯出——候補域沒有「無視守衛強制重抓」的外部消費者（YAGNI，同
+ *  notifications 先例；courses 頁有本地 store 狀態 + 後端 409 擋重複候補雙保險），
+ *  模組內僅 F2 和解重抓（見 joinWaitlist）呼叫它。 */
 const gate = createHydrationGate<WaitlistEntry[]>({
   fetch: async () => {
     const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
@@ -48,6 +50,22 @@ const gate = createHydrationGate<WaitlistEntry[]>({
 });
 export const waitlistHydrated = gate.hydrated;
 export const hydrateWaitlist = gate.hydrate;
+
+/* F1（架構深化 R5 終審）：SPA 登出（authStore.logout() + goto，無整頁重載）不會
+ * 重建模組單例——gate 旗標留在 true，下一個帳號登入後 hydrateWaitlist() 被
+ * guarded() 短路，直接看到前帳號的候補清單（跨登入洩漏；C1 引入 guard 前每次
+ * 無條件重抓、無此問題）。訂閱 authStore，在「登入 → 登出」邊沿清 store + 旗標
+ * 翻回 false，讓下一個帳號的 hydrate 重新真抓。只認邊沿：subscribe 的立即回呼
+ * 與重複登出不動作。notifications 等其他 per-session 快取為前存同病，不在本修
+ * 範圍（見 ADR 0016）。 */
+let wasLoggedIn = false;
+authStore.subscribe(({ loggedIn }) => {
+  if (wasLoggedIn && !loggedIn) {
+    waitlist.set([]);
+    gate.hydrated.set(false);
+  }
+  wasLoggedIn = loggedIn;
+});
 
 /** POST /waitlist（帶 course_id）。成功即代表已加入候補：把後端回傳的新 entry
  *  直接塞進 store 最前面（同 GET /waitlist/me 的新到舊排序），不用整包重新
@@ -59,8 +77,17 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
     body: JSON.stringify({ course_id: courseId })
   });
   const entry = toWaitlistEntry(res);
+  // F2（架構深化 R5 終審）：寫入前捕捉水合狀態。旗標 commit（下行 markMutated）後
+  // guarded() 從此短路——若寫入當下尚未水合（完全沒 hydrate 過、或首次 hydrate 仍
+  // 在飛，其回應會被 mutationWins 丟棄），store 只有這筆直寫、server 上既有列將永
+  // 不補回。所以 !wasHydrated 時尾隨一次 gate.refresh() 和解重抓：無視守衛真抓完
+  // 整清單（POST 已先完成，server 回應必含新列）。fire-and-forget、失敗吞掉（同
+  // authStore.logout 的 revoke 慣例）；和解窗口內 refresh 與併發 mutation 的覆寫
+  // race 屬 ADR 0016 已載 known-latent。
+  const wasHydrated = get(gate.hydrated);
   waitlist.update((list) => [entry, ...list]);
-  gate.markMutated(); // 讓 in-flight 的 hydrateWaitlist()（若有）不拿舊清單蓋掉這筆 prepend
+  gate.markMutated(); // commit：讓 in-flight 的 hydrateWaitlist()（若有）mutationWins、不拿舊清單蓋掉這筆 prepend
+  if (!wasHydrated) void gate.refresh().catch(() => {});
   return entry;
 }
 
@@ -68,8 +95,10 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
  *  慣例，api() 對 204 回傳 undefined，見 client.ts）。成功後從 store 移除該筆。 */
 export async function cancelWaitlist(id: string): Promise<void> {
   await api(`/waitlist/${id}`, { method: 'DELETE' });
+  const wasHydrated = get(gate.hydrated); // F2 同 joinWaitlist：水合前 mutation 要和解重抓
   waitlist.update((list) => list.filter((w) => w.id !== id));
   gate.markMutated();
+  if (!wasHydrated) void gate.refresh().catch(() => {});
 }
 
 /** POST /waitlist 409 的繁中文案。後端訊息逐字對照 waitlist service 原始碼

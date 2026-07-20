@@ -21,6 +21,7 @@
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { fmtNT } from '$lib/format';
+  import { soldPct } from '$lib/admin/tickets-util'; // F4：quota 0/null → 0，防 NaN/Infinity（重用桌面 admin 既有 helper）
   import { getTickets } from '$lib/mobile-admin/api';
   import { TICKET_TYPE, type Ticket } from '$lib/mobile-admin/data';
 
@@ -78,7 +79,7 @@
           {@const tone = TICKET_TYPE[t.type][0] as BadgeTone}
           {@const label = TICKET_TYPE[t.type][1]}
           {@const quota = t.quota}
-          {@const pct = quota == null ? 0 : Math.round((t.sold / quota) * 100)}
+          {@const pct = soldPct(t.sold, quota)}
           <div
             style="background:#fff; border:1px solid var(--df-border); border-radius:16px;
               box-shadow:var(--df-shadow-card); padding:16px;"

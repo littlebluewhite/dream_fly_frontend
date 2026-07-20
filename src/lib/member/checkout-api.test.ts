@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
+import { authStore } from '$lib/stores/authStore';
 import { syncCartToServer } from '$lib/checkout-order';
 import type { ApiOrder } from '$lib/checkout-order';
 import {
@@ -56,13 +57,16 @@ const SAMPLE_ORDER: ApiOrder = {
 
 /** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時 DELETE /cart 與
  *  POST /cart/items 預設回 undefined（204/成功 upsert），其餘一律丟錯──呼叫到
- *  沒被交代的端點應該讓測試失敗，而不是悄悄回傳 undefined 蓋掉斷言。 */
+ *  沒被交代的端點應該讓測試失敗，而不是悄悄回傳 undefined 蓋掉斷言。
+ *  覆寫值可以是函式（每次呼叫求值）——F2 race 釘的兩段式 GET 用它模擬真 server
+ *  「首呼舊清單、次呼完整清單」。 */
 function fakeRouter(overrides: Record<string, unknown>) {
   return vi.fn(async (path: string, init: RequestInit = {}) => {
     const method = (init.method ?? 'GET').toString().toUpperCase();
     const key = `${method} ${path}`;
     if (key in overrides) {
-      const value = overrides[key];
+      const raw = overrides[key];
+      const value = typeof raw === 'function' ? raw() : raw;
       if (value instanceof Error) throw value;
       return value;
     }
@@ -81,6 +85,23 @@ function createDeferred<T>() {
   });
   return { promise, resolve };
 }
+
+/** F2 和解重抓（mutator 尾隨的 void gate.refresh()）是 fire-and-forget——
+ *  macrotask 跳一拍，讓其 fetch → apply 鏈完整收束後再斷言。 */
+function settleReconcile() {
+  return new Promise<void>((r) => setTimeout(r, 0));
+}
+
+/** F1 用最小 AuthResponse——authStore.login() 走真實 applySession
+ *  （setTokens + 登入態），登出邊沿才有得測。 */
+const AUTH_RES = {
+  access_token: 'at-f1',
+  refresh_token: 'rt-f1',
+  user: {
+    id: 'u-f1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false,
+    avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member']
+  }
+};
 
 beforeEach(() => {
   localStorage.clear();
@@ -529,23 +550,66 @@ describe('hydrateWaitlist', () => {
     expect(get(waitlist)).toEqual(sentinel); // 未被覆寫
   });
 
-  it('race 釘:hydrate in-flight 期間 joinWaitlist() prepend → resolve 舊清單 → prepend 存活、姍姍來遲的舊清單不蓋回（mutation 勝出，整包放棄過期回應）', async () => {
+  it('race 釘（F2 後語意）:hydrate in-flight 期間 joinWaitlist() → 舊回應被丟棄（mutationWins）＋和解重抓收斂完整清單——新列存活、server 既有列不再永久失蹤', async () => {
+    /* F2 語意差:C1 原釘只驗「丟棄舊回應」——最終 store 只剩 prepend 那一筆,而
+     * markMutated 的 commit 讓 guarded() 從此短路,server 上既有列永不補回（F2 的
+     * bug 本體）。現在 join 發現寫入當下未水合（旗標 false）→ 尾隨 gate.refresh()
+     * 和解重抓:GET 改兩段式模擬真 server——首呼（hydrate）回舊清單、次呼（和解
+     * 重抓;POST 已先完成）回含新列的完整清單。原釘的「prepend 新列存活」精神保留,
+     * 由「丟棄舊回應」＋「和解重抓」共同保證。 */
+    const API_WL_OLD = { id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' };
+    const API_WL_NEW = { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
     const deferred = createDeferred<unknown[]>();
+    let waitlistGets = 0;
     vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /waitlist/me': deferred.promise,
-      'POST /waitlist': { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' }
+      'GET /waitlist/me': () => {
+        waitlistGets += 1;
+        return waitlistGets === 1 ? deferred.promise : [API_WL_NEW, API_WL_OLD];
+      },
+      'POST /waitlist': API_WL_NEW
     }));
 
-    const p = hydrateWaitlist(); // 通過 guard(旗標 false),GET /waitlist/me 掛起中
-    const entry = await joinWaitlist('course-uuid-9'); // 飛行中 mutation:直寫 prepend + markMutated 翻旗
+    const p = hydrateWaitlist(); // 通過 guarded()(旗標 false),GET /waitlist/me 首呼掛起中
+    const entry = await joinWaitlist('course-uuid-9'); // 飛行中 mutation:直寫 prepend + markMutated(commit) + 和解重抓
 
-    deferred.resolve([
-      { id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+    deferred.resolve([API_WL_OLD]); // 姍姍來遲的舊清單(不含新列)
+    await p; // mutationWins:過期回應整包丟棄
+    await settleReconcile();
+
+    expect(waitlistGets).toBe(2); // 和解重抓真的發生
+    expect(get(waitlist)).toEqual([
+      { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A' },
+      { id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程' }
     ]);
-    await p;
-
-    expect(get(waitlist)).toEqual([entry]);
+    expect(get(waitlist)[0]).toEqual(entry); // 原釘精神:prepend 的新列存活
     expect(get(waitlistHydrated)).toBe(true);
+  });
+
+  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + store 清空,下一個帳號 hydrate 重新真抓', async () => {
+    /* SPA 登出（authStore.logout() + goto）沒有整頁重載,模組單例的 gate 旗標若不
+     * 重置,B 帳號登入後 hydrateWaitlist() 被 guarded() 短路——直接看到 A 的候補。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /waitlist/me': [
+        { id: 'wl-a', course_id: 'course-uuid-9', course_name: 'A 的候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+      ]
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw'); // 帳號 A 登入
+    await hydrateWaitlist();
+    expect(get(waitlist)).toHaveLength(1);
+    expect(get(waitlistHydrated)).toBe(true);
+
+    await authStore.logout(); // 「登入 → 登出」邊沿
+
+    expect(get(waitlistHydrated)).toBe(false); // 旗標重置,guarded() 不再短路
+    expect(get(waitlist)).toEqual([]); // A 的候補不留給 B
+
+    const gets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/waitlist/me').length;
+    const before = gets();
+    await hydrateWaitlist(); // 帳號 B 再水合 → 真的重新 fetch
+    expect(gets()).toBe(before + 1);
   });
 });
 
@@ -574,6 +638,32 @@ describe('joinWaitlist', () => {
 
     await expect(joinWaitlist('course-uuid-9')).rejects.toBeInstanceOf(ApiError);
     expect(get(waitlist)).toEqual([]);
+  });
+
+  it('F2 完整性釘:未 hydrate 直接 joinWaitlist → 和解重抓收斂為完整 server 清單(含既有列),旗標 true,之後 hydrate 被 guarded() 短路', async () => {
+    /* 寫入當下旗標 false（從未 hydrate）→ 本地只有直寫那筆,server 既有列缺席;
+     * 而 markMutated 的 commit 會讓 guarded() 從此短路——沒有和解重抓,既有列
+     * 永不補回。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /waitlist': { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' },
+      'GET /waitlist/me': [
+        { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' },
+        { id: 'wl-old', course_id: 'course-uuid-1', course_name: '既有候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+      ]
+    }));
+
+    await joinWaitlist('course-uuid-9');
+    await settleReconcile();
+
+    expect(get(waitlist)).toEqual([
+      { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A' },
+      { id: 'wl-old', course_id: 'course-uuid-1', course_name: '既有候補課程' }
+    ]);
+    expect(get(waitlistHydrated)).toBe(true);
+
+    const calls = vi.mocked(api).mock.calls.length;
+    await hydrateWaitlist(); // 和解重抓後水合真相已成立——guarded() 短路,不再重覆真抓
+    expect(vi.mocked(api).mock.calls.length).toBe(calls);
   });
 });
 

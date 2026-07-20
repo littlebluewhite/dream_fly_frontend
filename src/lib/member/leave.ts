@@ -1,6 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createHydrationGate } from '$lib/hydration-gate';
+import { authStore } from '$lib/stores/authStore';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
  * 全新 UI 流（repo 原無請假 UI，比照 Round 1 打卡 UI 先例：新寫網路層，不是替換
@@ -83,6 +84,20 @@ export const hydrateLeaveRequests = gate.hydrate;
  *  known-latent，不在本輪擴語意。 */
 export const refreshLeaveRequests = gate.refresh;
 
+/* F1（架構深化 R5 終審）：同 waitlist.ts——SPA 登出（authStore.logout() + goto）
+ * 沒有整頁重載，模組單例的 gate 旗標跨帳號存活，下一個帳號的
+ * hydrateLeaveRequests() 會被 guarded() 短路、直接看到前帳號的假單。訂閱
+ * authStore，在「登入 → 登出」邊沿清 store + 旗標翻回 false，讓下一個帳號的
+ * hydrate 重新真抓（只認邊沿；subscribe 的立即回呼與重複登出不動作）。 */
+let wasLoggedIn = false;
+authStore.subscribe(({ loggedIn }) => {
+  if (wasLoggedIn && !loggedIn) {
+    leaveRequests.set([]);
+    gate.hydrated.set(false);
+  }
+  wasLoggedIn = loggedIn;
+});
+
 /** POST /leave-requests（帶 session_id + 選填 reason）。reason 空字串/未提供時省略
  *  該欄位（同 CouponCreateDialog 對選填 expires_at 的省略慣例），對應後端 Option
  *  語意。成功把新假單塞進 store 最前面（同 GET /leave-requests/me 的新到舊排序），
@@ -94,8 +109,16 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
   if (reason) body.reason = reason;
   const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
   const entry = toLeaveRequest(res);
+  // F2（架構深化 R5 終審）：寫入前捕捉水合狀態——旗標 commit（下行 markMutated）後
+  // guarded() 從此短路；若寫入當下尚未水合（完全沒 hydrate 過、或首次 hydrate 仍
+  // 在飛，其回應會被 mutationWins 丟棄），store 只有本地直寫、server 上既有假單永
+  // 不補回。所以 !wasHydrated 時尾隨 gate.refresh() 和解重抓（無視守衛真抓完整清
+  // 單；POST 已先完成，回應必含新列）。fire-and-forget、失敗吞掉；和解窗口的
+  // refresh race 屬 ADR 0016 已載 known-latent。cancel／bookMakeup 同式。
+  const wasHydrated = get(gate.hydrated);
   leaveRequests.update((list) => [entry, ...list]);
-  gate.markMutated(); // 讓 in-flight 的 hydrateLeaveRequests()（若有）不拿舊清單蓋掉這筆直寫
+  gate.markMutated(); // commit：讓 in-flight 的 hydrateLeaveRequests()（若有）mutationWins、不拿舊清單蓋掉這筆直寫
+  if (!wasHydrated) void gate.refresh().catch(() => {});
   return entry;
 }
 
@@ -105,8 +128,10 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
  *  從 store 過濾移除(對比 cancelWaitlist：候補只認 waiting，取消後從清單消失)。 */
 export async function cancelLeaveRequest(id: string): Promise<void> {
   await api(`/leave-requests/${id}`, { method: 'DELETE' });
+  const wasHydrated = get(gate.hydrated); // F2 同 createLeaveRequest：水合前 mutation 要和解重抓
   leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)));
   gate.markMutated();
+  if (!wasHydrated) void gate.refresh().catch(() => {});
 }
 
 /** POST /leave-requests/{id}/makeup（帶欲預約的補課場次 session_id）。成功回應含
@@ -119,8 +144,10 @@ export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRe
     body: JSON.stringify({ session_id: sessionId })
   });
   const entry = toLeaveRequest(res);
+  const wasHydrated = get(gate.hydrated); // F2 同 createLeaveRequest：水合前 mutation 要和解重抓
   leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)));
   gate.markMutated();
+  if (!wasHydrated) void gate.refresh().catch(() => {});
   return entry;
 }
 

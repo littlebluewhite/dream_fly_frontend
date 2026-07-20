@@ -106,6 +106,9 @@ describe('匯入掃描器（Import Scan）', () => {
 			.map(r)
 			.flatMap(walk)
 			.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte'));
+		// F3 tripwire：walk() 死亡（→ []）時 offenders 對空集合 vacuous pass——先釘掃描
+		// 檔數下限。此釘殺 `walk → []` 突變（鬆釘防機器死亡，非精確計數；現況約 370 檔）。
+		expect(productionFiles.length).toBeGreaterThan(100);
 		const offenders = productionFiles
 			.filter((f) => importSpecifiers(readFileSync(f, 'utf8')).some((s) => reachesTesting(f, s)))
 			.map((f) => f.replace(ROOT + '/', ''));

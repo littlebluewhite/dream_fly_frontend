@@ -76,6 +76,13 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 		expect(importSpecifiers("import { x } from '$lib/membership/stores';").some((s) => isMemberReach(r('src/lib/mobile/x.ts'), s))).toBe(false);
 	});
 
+	// F3 tripwire：walk() 若死亡（突變成 return []），surfaceFiles 空集合會讓下方
+	// offenders 斷言 vacuous pass——非空下限釘住「掃描真的有掃到檔案」。此釘殺
+	// `walk → []` 突變（鬆釘防機器死亡，非精確計數；現況約 89 檔）。
+	it('掃描檔案集非空釘：surface production 檔數下限', () => {
+		expect(surfaceFiles.length).toBeGreaterThan(20);
+	});
+
 	it('src/lib/mobile + src/routes/mobile 中，seam 四檔之外零 $lib/member import（含動態/side-effect/相對形）', () => {
 		const offenders = surfaceFiles
 			.filter((f) => MOBILE_DIRS.some((d) => f.startsWith(d)))
