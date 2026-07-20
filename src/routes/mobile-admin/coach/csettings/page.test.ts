@@ -7,7 +7,11 @@ vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
 	return { ...actual, getCsettings: vi.fn(), saveSettings: vi.fn() };
 });
-vi.mock('$lib/stores/authStore', () => ({ authStore: { logout: vi.fn().mockResolvedValue(undefined) } }));
+vi.mock('$lib/stores/authStore', () => ({
+	// subscribe 防禦性提供:member/waitlist+leave 於模組頂層訂閱 authStore(登出重置),
+	// 若未來本頁的 import 圖間接載入該深模組,缺 subscribe 會炸 module-load。
+	authStore: { logout: vi.fn().mockResolvedValue(undefined), subscribe: vi.fn(() => () => {}) }
+}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 // 與桌面 PROFILES.coach mock(林雅婷)刻意不同的真實教練 fixture，證明頁面讀
