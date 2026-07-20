@@ -93,11 +93,28 @@ caller 佈線(全部落在 store/api 接縫,頁面模板零改動):
   (先進先出——晚出發的和解快照必然較新且最後套用)。
 - **和解失敗可重試(P2 修)**:原 fire-and-forget 失敗吞掉、旗標卡 true——部分快照永久誤標完整,
   waitlist 又無外部 refresh,F2 原 bug 在一次暫時性 GET 失敗後復活。改:失敗把旗標翻回 false
-  (僅限同 epoch,跨登出的失敗交給 session 重置),留下 hydrate 重試路徑。「單旗標身兼 mutation
-  epoch 與資料完整度」的結構性代價仍在(拆雙旗標另案),此修是最小可重試化。
+  (僅限同 epoch,跨登出的失敗交給 session 重置),留下 hydrate 重試路徑。
 
 七支回歸釘(waitlist 4 + leave 3)先紅後綠,涵蓋:hydrate/refresh/POST 在飛期間登出的作廢、
 併發雙 mutation 的雙和解與序列化、和解失敗的旗標回退與重試。
+
+### 二段(同輪 codex 複審 4×P2,commit `2674c23`)
+
+「可重試翻回 false」與「單旗標身兼 mutation-wins 訊號」相撞——形狀修正,拆開兩個語意:
+
+- **mutation 世代與完整度分離**:`createHydrationGate` 的 `markMutated()` 帶單調
+  `mutationGen`,hydrate 進場捕捉、resolve 後比對——世代變或旗標被直接翻 true 都算 mutation
+  勝出;旗標之後被「和解失敗可重試」翻回 false 不再拆掉 in-flight hydrate 的武裝(否則舊快照
+  落地、直寫列蒸發)。介面零變動;`HydrationCore`/load-gate 委派不動(load-gate 頁面以「直接
+  翻旗」為 mutation 訊號的慣例保留,gate 的 mutationWins 為「世代變 OR 旗標真」)。
+- **寫回時重查完整度**:mutator 進場快照 `wasHydrated` 可能在 POST 飛行中失真(和解失敗把旗標
+  翻回 false)——寫回時發現旗標已 false 就重新排和解,不把不完整 store 再標成完整。
+- **和解鏈 session 化**:排隊的 callback 起跑前核對排隊當下 epoch(舊 session 的幽靈和解不得在
+  新 session 發出非預期 refresh);identity 變更時重置鏈(舊 session 卡死的和解不堵住新帳號)。
+
+再 +10 釘:gate 世代釘、勝出/完整度分離釘、再排和解釘、幽靈和解釘、卡鏈釘(TDD 先紅後綠)、
+A→B 直接換帳號釘 ×2、cancel/bookMakeup 棄寫釘 ×2、leave 序列化鏡射釘;序列化釘去 vacuous 化
+(首和解掛起時斷言次和解未起跑,拿掉串行鏈必紅)。
 
 ## 協定測試維持兩份(防整併)
 
