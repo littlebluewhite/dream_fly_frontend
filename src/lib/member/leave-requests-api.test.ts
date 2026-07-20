@@ -368,6 +368,95 @@ describe('createLeaveRequest — POST /leave-requests', () => {
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-3', 'lr-1', 'lr-2']); // 完整快照最後套用,第二筆存活
     expect(get(leaveRequestsHydrated)).toBe(true);
   });
+
+  it('P2″ 再排和解釘:和解失敗翻回 false 後,進場時自以為已水合的 mutation 於寫回時發現旗標已 false → 重新排和解,不把不完整 store 再標成完整', async () => {
+    /* leave 的 stillIncomplete 重查是與 waitlist 分開的手工鏡射——單側漏修不會被
+     * waitlist 的釘抓到,故鏡射(帳本閉合輪終段 codex Standards P2)。 */
+    const API_LR_3 = { ...API_LR_APPROVED, id: 'lr-3', session_id: 'sess-3' };
+    let rejectR1!: (e: Error) => void;
+    const r1 = new Promise<unknown[]>((_, rej) => { rejectR1 = rej; });
+    const post2 = createDeferred<unknown>();
+    let posts = 0;
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /leave-requests': () => (++posts === 1 ? API_LR_PENDING : post2.promise),
+      'GET /leave-requests/me': () => (++gets === 1 ? r1 : [API_LR_3, API_LR_PENDING, API_LR_APPROVED])
+    }));
+
+    await createLeaveRequest('sess-1', '生病'); // M1:未水合 → markMutated + 排 R1
+    await settleReconcile(); // R1 的 GET 出發(掛起中)
+    const p2 = createLeaveRequest('sess-3'); // M2 進場:旗標 true(R1 尚未失敗)
+    rejectR1(new Error('和解重抓網路失敗')); // R1 失敗 → 旗標翻回 false
+    await settleReconcile();
+    expect(get(leaveRequestsHydrated)).toBe(false);
+
+    post2.resolve(API_LR_3); // M2 寫回:發現旗標已 false → 必須再排 R2
+    await p2;
+    await settleReconcile();
+
+    expect(gets).toBe(2); // R2 真的排了
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-3', 'lr-1', 'lr-2']);
+    expect(get(leaveRequestsHydrated)).toBe(true); // 完整之後才重新標完整
+  });
+
+  it('P2″ 幽靈和解釘:登出時「已排隊、尚未起跑」的和解 callback 不得在下一個 session 起跑', async () => {
+    const post1 = createDeferred<unknown>();
+    const post2 = createDeferred<unknown>();
+    const r1 = createDeferred<unknown[]>();
+    const API_LR_3 = { ...API_LR_APPROVED, id: 'lr-3', session_id: 'sess-3' };
+    let posts = 0;
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'POST /leave-requests': () => (++posts === 1 ? post1.promise : post2.promise),
+      'GET /leave-requests/me': () => { ++gets; return gets === 1 ? r1.promise : [API_LR_PENDING]; }
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p1 = createLeaveRequest('sess-1', '生病');
+    const p2 = createLeaveRequest('sess-3'); // R1 起跑(掛起)、R2 排隊
+    post1.resolve(API_LR_PENDING);
+    post2.resolve(API_LR_3);
+    await Promise.all([p1, p2]);
+    await settleReconcile();
+    expect(gets).toBe(1); // R1 在飛,R2 尚未起跑
+
+    await authStore.logout(); // session 結束
+    r1.resolve([API_LR_PENDING]); // R1 的舊 session 回應此刻才到
+    await settleReconcile();
+
+    expect(gets).toBe(1); // R2 沒有以新 session 起跑——幽靈和解不存在
+    expect(get(leaveRequests)).toEqual([]);
+    expect(get(leaveRequestsHydrated)).toBe(false);
+  });
+
+  it('P2″ 卡鏈釘:上一個 session 卡死的和解不得堵住下一個帳號的和解鏈', async () => {
+    const API_LR_B = { ...API_LR_APPROVED, id: 'lr-b', session_id: 'sess-b' };
+    let logins = 0;
+    let posts = 0;
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+      'POST /auth/logout': undefined,
+      'POST /leave-requests': () => (++posts === 1 ? API_LR_PENDING : API_LR_B),
+      'GET /leave-requests/me': () => (++gets === 1 ? new Promise(() => {}) : [API_LR_B, API_LR_APPROVED]) // R1 永不 settle
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await createLeaveRequest('sess-1', '生病'); // A:R1 起跑 → 永掛
+    await settleReconcile();
+    expect(gets).toBe(1);
+
+    await authStore.logout();
+    await authStore.login('b@dreamfly.test', 'pw'); // 換帳號 → 鏈重置
+    await createLeaveRequest('sess-b'); // B 的未水合 mutation → 排 B 的和解
+    await settleReconcile();
+
+    expect(gets).toBe(2); // B 的和解沒有堵在 A 的殭屍後面
+    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-b', 'lr-2']); // B 收斂到完整清單
+    expect(get(leaveRequestsHydrated)).toBe(true);
+  });
 });
 
 describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
