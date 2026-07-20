@@ -58,18 +58,46 @@ caller 佈線(全部落在 store/api 接縫,頁面模板零改動):
    refresh 兜底;waitlist 無)。notifications 既有同款取捨,非本案新發明。
 2. **殘留 refresh race**:`gate.refresh` 刻意無 mutation-wins(「無條件真抓」語意連動通知頁與
    load-gate 正典)——MyCourseDetail refresh 窗口內取消請假仍可能被舊回應蓋回。範圍已從「所有
-   水合路徑」縮到「顯式 refresh 窗口」;不擴 refresh 語意。
+   水合路徑」縮到「refresh 類無條件套用的窗口」——含顯式 refresh 與 mutator 和解重抓兩處
+   (帳本閉合輪修正:原「僅顯式 refresh 窗口」的說法漏了和解重抓;和解已序列化,倒序覆寫窗口
+   消滅,殘留為「和解/顯式 refresh 快照 vs 後續其他 mutation」一族);不擴 refresh 語意。
 
 ## 對抗審後補強(2026-07-20 同日,codex 1×P1+1×P2)
 
 - **登出重置(P1 修)**:兩 store 於模組頂層訂閱 authStore,「登入→登出」邊沿清空 store 並把旗標
   歸 false——SPA 登出走 `authStore.logout() + goto`(無整頁重載),模組級旗標跨帳號存活,無此
   重置則 guard 讓下一個帳號短路讀到前帳號的候補/請假。notifications/points/subscriptions 的
-  同型缺口為前存(guard 採用早於本輪),不在本輪寫入集,另卡追蹤。
+  同型缺口為前存(guard 採用早於本輪),不在本輪寫入集,另卡追蹤。(帳本閉合輪已把布林邊沿
+  升級為 identity 鍵 + session epoch,見下節。)
 - **水合前 mutation 和解重抓(P2 修)**:五支 mutators 寫入前捕捉 `wasHydrated`;未水合(含
   hydrate 在飛)時的 mutation 於 `markMutated()` 後尾隨 `gate.refresh()` 和解——單發 POST 回應
   只是局部快照,旗標若就此短路,server 上既有列永不補回(同一旗標身兼 mutation epoch 與資料
-  完整度的代價)。和解 refresh 的競態窗口與 known-latent 2 同族,不擴 refresh 語意。
+  完整度的代價)。和解 refresh 的競態窗口與 known-latent 2 同族,不擴 refresh 語意。(帳本閉合
+  輪已把捕捉點移到進場、和解改序列化 + 失敗可重試,見下節。)
+
+## 帳本閉合輪補強(2026-07-20 同日,codex 對修正鏈複審 1×P1+2×P2)
+
+對「對抗審後補強」修正 commit(`c6d98f7`)本身的 codex 複審,揪出三個殘留窗口,同日修正
+(commit `e5eb6dd`):
+
+- **在飛寫回作廢(P1 修)**:F1 的「登入→登出」布林邊沿只重置**已落地**的狀態——登出前已出發
+  的 GET/POST 在重置之後才 resolve,寫回會讓前帳號資料復活並 commit true(重置後旗標 false,
+  mutationWins 不擋),下一帳號 hydrate 被短路;且布林邊沿看不見「A→B 直接換帳號」。升級:
+  identity 鍵(`member.id`)+ `sessionEpoch`——identity 一變就 epoch+1 並清 store/旗標;fetcher
+  與五支 mutators 的跨 await 寫回一律核對出發時 epoch,過期作廢(fetcher throw → gate 不 apply
+  不 commit;mutator 棄寫但仍回傳 server 物件,型別面不變。server 端狀態不受影響——作廢的只是
+  本地快取寫回)。
+- **和解序列化(P2 修)**:`wasHydrated` 原在 POST await 之後捕捉——第一支 mutation
+  `markMutated()` 翻旗後,併發的第二支誤以為已水合、不排自己的和解;唯一快照若漏第二筆
+  (GET 與第二支 POST 的 server 端 race)即倒序覆寫。改進場捕捉 + `queueReconcile()` 序列化鏈
+  (先進先出——晚出發的和解快照必然較新且最後套用)。
+- **和解失敗可重試(P2 修)**:原 fire-and-forget 失敗吞掉、旗標卡 true——部分快照永久誤標完整,
+  waitlist 又無外部 refresh,F2 原 bug 在一次暫時性 GET 失敗後復活。改:失敗把旗標翻回 false
+  (僅限同 epoch,跨登出的失敗交給 session 重置),留下 hydrate 重試路徑。「單旗標身兼 mutation
+  epoch 與資料完整度」的結構性代價仍在(拆雙旗標另案),此修是最小可重試化。
+
+七支回歸釘(waitlist 4 + leave 3)先紅後綠,涵蓋:hydrate/refresh/POST 在飛期間登出的作廢、
+併發雙 mutation 的雙和解與序列化、和解失敗的旗標回退與重試。
 
 ## 協定測試維持兩份(防整併)
 
