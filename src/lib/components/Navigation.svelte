@@ -76,7 +76,7 @@
         {#if item.hasDropdown}
           <button
             class="nav-link nav-button"
-            class:active={currentPath.startsWith(item.label === '場館介紹' ? '/venues' : item.label === '教練介紹' ? '/coaches' : '/courses')}
+            class:active={!!item.basePath && currentPath.startsWith(item.basePath)}
             class:menu-open={openMenuIndex === index}
             on:click={() => handleNavItemClick(item, index)}
             aria-expanded={openMenuIndex === index}

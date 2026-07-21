@@ -45,7 +45,7 @@
   <div
     bind:this={megaMenuElement}
     class="mega-menu"
-    class:venues={navItem.label === '場館介紹'}
+    class:venues={navItem.basePath === '/venues'}
     role="menu"
     aria-label="{navItem.label} menu"
   >

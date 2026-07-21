@@ -6,6 +6,8 @@ export interface NavItem {
   icon?: IconName;
   hasDropdown?: boolean;
   categories?: NavCategory[];
+  /** dropdown 父項的路由前綴,供 active 高亮判斷;不同 label 各自對應唯一值(invariant 由 navigationConfig.test.ts 契約測試釘住) */
+  basePath?: string;
 }
 
 export interface NavCategory {
@@ -27,6 +29,7 @@ export const navigationConfig: NavItem[] = [
   {
     label: '場館介紹',
     hasDropdown: true,
+    basePath: '/venues',
     categories: [
       {
         title: '訓練設施',
@@ -69,6 +72,7 @@ export const navigationConfig: NavItem[] = [
   {
     label: '教練介紹',
     hasDropdown: true,
+    basePath: '/coaches',
     categories: [
       {
         title: '專業教練團隊',
@@ -85,6 +89,7 @@ export const navigationConfig: NavItem[] = [
   {
     label: '課程介紹',
     hasDropdown: true,
+    basePath: '/courses',
     categories: [
       {
         title: '四大核心課程',
