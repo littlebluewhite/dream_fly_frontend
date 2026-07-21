@@ -111,6 +111,21 @@ describe('member Google 登入 callback — state 驗證 + token exchange', () =
     expect(get(isLoggedIn)).toBe(false);
   });
 
+  it('?error= param: also clears the stashed oauth state — the one-time-use consume happens before the ?error= branch is even checked, not just on the success/mismatch paths', async () => {
+    sessionStorage.setItem(STATE_KEY, 'good-state');
+    mockUrl = new URL('http://localhost/member/login/google?error=access_denied&state=good-state');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(Callback);
+
+    await vi.waitFor(() =>
+      expect(screen.getByText('Google 登入已取消或失敗，請重新嘗試')).toBeInTheDocument()
+    );
+
+    expect(sessionStorage.getItem(STATE_KEY)).toBeNull();
+  });
+
   it('backend rejects the code (e.g. expired/invalid): shows a Traditional-Chinese error and leaves the session unchanged', async () => {
     sessionStorage.setItem(STATE_KEY, 'good-state');
     mockUrl = new URL('http://localhost/member/login/google?code=auth-code-1&state=good-state');
