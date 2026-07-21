@@ -32,6 +32,7 @@ import {
   joinWaitlistErrorMessage
 } from './stores';
 import type { CartItem } from '$lib/cart-item';
+import { NOTIFS_SEED } from './data';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -487,6 +488,56 @@ describe('refreshNotifications(Task 17)', () => {
 
     expect(get(notifications)).toEqual(sentinel); // 過期回應未覆寫 mutation 勝出的結果
     expect(get(notificationsHydrated)).toBe(true);
+  });
+
+  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + 通知重置為 seed,下一個帳號 refresh 重新真抓', async () => {
+    /* C1 抬升:notificationsHydrated 原本跨帳號存活(真缺陷)——SPA 登出無整頁重載,
+     * B 帳號的 getDashboard → refreshNotifications 被 guarded() 短路,直接讀到 A 的通知。
+     * 改走 createSessionGate 後 identity 變更即 reset(旗標 false + 通知回 seed)。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /notifications': [
+        { id: 'na', type: 'system', title: 'A 的通知', message: '', is_read: false, metadata: null, created_at: '2026-07-01T00:00:00Z' }
+      ]
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await refreshNotifications();
+    expect(get(notifications).map((n) => n.id)).toEqual(['na']);
+    expect(get(notificationsHydrated)).toBe(true);
+
+    await authStore.logout(); // 「登入 → 登出」邊沿
+
+    expect(get(notificationsHydrated)).toBe(false); // 旗標重置,guarded() 不再短路
+    expect(get(notifications)).toEqual(NOTIFS_SEED); // A 的通知不留給 B,重置為 seed(boot 態)
+    expect(get(notifications)[0]).not.toBe(NOTIFS_SEED[0]); // clone,非共享參照
+
+    const gets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/notifications').length;
+    const before = gets();
+    await refreshNotifications(); // 帳號 B 再水合 → 真的重新 fetch
+    expect(gets()).toBe(before + 1);
+  });
+
+  it('P1′ 在飛作廢釘:refresh in-flight 期間登出 → 姍姍來遲的回應整包作廢(不套用、不 commit),B 不繼承 A 的通知', async () => {
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /notifications': () => deferred.promise
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p = refreshNotifications(); // A 的 GET 掛起中
+    await authStore.logout(); // 在飛期間登出
+
+    deferred.resolve([
+      { id: 'na', type: 'system', title: 'A 的通知', message: '', is_read: false, metadata: null, created_at: '2026-07-01T00:00:00Z' }
+    ]);
+    await expect(p).rejects.toThrow(); // 過期 fetch 作廢(gate 不套用、不 commit)
+
+    expect(get(notifications)).toEqual(NOTIFS_SEED); // A 的通知沒有落地(維持 logout reset 的 seed)
+    expect(get(notificationsHydrated)).toBe(false); // B 的 refresh 不會被短路
   });
 });
 
