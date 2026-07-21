@@ -21,6 +21,7 @@ import { writable, derived, get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createToasts } from '$lib/stores/toasts';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
+import { onSessionReset } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints, subscriptions } from '$lib/member/stores';
@@ -231,6 +232,17 @@ export const notifs = {
 	}
 };
 export const unread = derived(notifs, ($n) => unreadCount($n));
+/** C1(架構深化 R7)抬升:notifsHydrated 原本跨帳號存活是真缺陷(同 member notifications
+ *  前例)——SPA 登出無整頁重載,B 帳號重訪通知頁被 load-gate 判「已水合」而不重抓,直接
+ *  讀到 A 的已讀狀態/通知。onSessionReset 在 identity 變更時重置為 boot 態:notifsBase
+ *  歸 NOTIFS_SEED clone(badge teaser 保留)、notifsHydrated 翻 false(下次進頁重抓真資料)。
+ *  旗標維持 plain Writable(通知頁 createLoadGate 的 hydrate:{flag} 接線不動);「set()
+ *  不繞這層」註解仍為真——reset 走的是 notifsBase 同一個公開 setter。gate 所有權(旗標)
+ *  留在本檔,故用 onSessionReset(門 c)而非 createSessionGate。 */
+onSessionReset(() => {
+	notifsBase.set(NOTIFS_SEED.map((n) => ({ ...n })));
+	notifsHydrated.set(false);
+});
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);

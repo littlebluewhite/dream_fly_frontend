@@ -20,6 +20,9 @@ import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
 import * as mobileStores from './stores';
 import * as memberStores from '$lib/member/stores';
 import * as memberCheckout from '$lib/member/checkout';
+// C1(onSessionReset 抬升)跨帳號 session 重置釘:用真 authStore.login/logout 驅動 identity。
+import { authStore } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
 // 在 TS strict 下無法編譯——換成回傳完整 Course 的 builder（同
@@ -265,6 +268,54 @@ describe('notifs singleton — 已讀落庫(W1:PATCH /notifications/{id}/read)',
 
 		expect(api).not.toHaveBeenCalled();
 		expect(result).toBe('ok');
+	});
+});
+
+describe('notifs singleton — 跨帳號 session 重置(C1:onSessionReset 抬升)', () => {
+	// notifsHydrated 原本跨帳號存活是真缺陷:SPA 登出無整頁重載,B 帳號重訪通知頁被
+	// load-gate 判「已水合」而讀到 A 的已讀/通知。onSessionReset(見 stores.ts notifs 段後)
+	// 在 identity 變更時重置為 boot 態。用真 authStore 驅動,auth 端點經 fakeRouter。
+	const AUTH_RES = {
+		access_token: 'at-m', refresh_token: 'rt-m',
+		user: { id: 'u-m1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false, avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member'] }
+	};
+	const AUTH_RES_B = { ...AUTH_RES, access_token: 'at-mb', refresh_token: 'rt-mb', user: { ...AUTH_RES.user, id: 'u-m2', email: 'b@dreamfly.test', name: '乙' } };
+
+	beforeEach(async () => {
+		vi.mocked(api).mockReset();
+		vi.mocked(api).mockResolvedValue(undefined); // logout best-effort revoke .catch 安全
+		await authStore.logout(); // 每個 it 從登出態起跑:立即回呼身分 null == baseline,不誤觸
+		notifs.set(NOTIFS_SEED.map((n) => ({ ...n })));
+		notifsHydrated.set(false);
+	});
+
+	it('F1 跨登入洩漏釘:hydrate + 已讀後登出 → notifsHydrated 翻 false + notifs 重置為 seed,B 不繼承 A 的已讀', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		// 模擬通知頁 load-gate 水合 + 已讀 mutation。
+		notifs.set([{ id: 'a1', cat: 'system', icon: 'bell', tone: 'info', title: 'A 的通知', body: '', time: '剛才', read: true }]);
+		notifsHydrated.set(true);
+
+		await authStore.logout(); // 「登入 → 登出」邊沿
+
+		expect(get(notifsHydrated)).toBe(false); // 旗標重置,重訪不會被判「已水合」而讀到 A 的
+		expect(get(notifs)).toEqual(NOTIFS_SEED); // A 的已讀不留給 B,重置為 seed(boot 態)
+		expect(get(notifs)[0]).not.toBe(NOTIFS_SEED[0]); // clone,非共享參照
+	});
+
+	it('P1″ 換帳號釘:A hydrate 後 B 直接登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知', async () => {
+		let logins = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		notifs.set([{ id: 'a1', cat: 'system', icon: 'bell', tone: 'info', title: 'A 的通知', body: '', time: '剛才', read: true }]);
+		notifsHydrated.set(true);
+
+		await authStore.login('b@dreamfly.test', 'pw'); // B 直接登入,無登出邊沿
+
+		expect(get(notifsHydrated)).toBe(false);
+		expect(get(notifs)).toEqual(NOTIFS_SEED); // A 的通知即刻清空為 seed
 	});
 });
 
