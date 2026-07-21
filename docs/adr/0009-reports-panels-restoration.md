@@ -35,7 +35,7 @@ P4-B4b 人流擴充 `GET /reports/admin` 的聚合欄位後），前端得以把
 
 **`RevenueTrend.svelte` 既不在上述還原清單、也不在上面的刻意不還原清單**：它自 Task 15（`689769a`）
 起就不曾被移除——`689769a` 那批刪除對它只是局部編輯（改吃 `getReports()` 的真實月營收資料），非本輪
-還原範圍。它現與上述 13 個還原面板並列渲染在報表頁（`routes/admin/reports/+page.svelte:120`），頁面
+還原範圍。它現與上述 13 個還原面板並列渲染在報表頁（`routes/admin/reports/+page.svelte:115`），頁面
 實際圖表面板因此共 **14 個**（13 還原 + `RevenueTrend`）+ 6 卡 KPI band——本節與本 ADR 標題的「13 個
 面板」僅指本輪還原範圍，不是頁面圖表面板的總數。
 
@@ -81,7 +81,7 @@ export function deltaPct(current: number | null, last: number | null): number | 
 
 ### 4. `report-math.ts`：零外部依賴的純函式 + 查表層
 
-新增 `src/lib/admin/report-math.ts`，收斂本輪還原面板共同需要的數字運算與中文標籤查表：
+新增 `src/lib/admin/report-math.ts`，收斂本輪還原面板共同需要的數字運算、中文標籤查表，與 KPI 卡識別查表：
 
 - **純數字運算**：`deltaPct`（環比 %）、`pctShares`（佔比陣列，合計 ≤0 時全部回 0 不除以零）、
   `normalizeBars`（長條圖高度正規化，全 0 或空陣列時全部回 0）、`topCoursesFrom`（既有
@@ -92,6 +92,9 @@ export function deltaPct(current: number | null, last: number | null): number | 
   `REVENUE_SOURCE_LABEL`（6 個 canonical 收入來源桶）、`PAYMENT_METHOD_LABEL` + 容錯版
   `paymentMethodLabel()`（查無 key 原字串穿透，不丟例外）、`WEEKDAY_LABEL`（`0=週日..6=週六`）、
   `AGE_BUCKET_LABEL`、`ATTENDANCE_BUCKET_LABEL`。
+- **報表 KPI band 卡識別查表**：`REPORT_KPI_CARDS`——桌面 `ReportKpi`／mobile-admin `KpiCard`
+  共用的卡片識別四欄（icon/label/tint/color）單源查表；`value`/`delta` 的 per-surface 接線不變，
+  不收進這張表（見 §2 note）。
 
 比照 `$lib/checkout-math.ts` 的既有慣例：全部零外部依賴，只吃/吐最小必要形狀；型別與 `admin/api.ts`
 的 wire/FE 型別各自獨立宣告（不共用同一份），換取 `report-math.test.ts` 可以直接用字面量測邊界

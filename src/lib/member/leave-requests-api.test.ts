@@ -262,10 +262,15 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     expect(list.find((r) => r.id === 'lr-2')?.status).toBe('approved'); // untouched
   });
 
-  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地(mutator 回傳值本為 void,只斷言不寫回)', async () => {
+  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地,同 id canary 原封不動(mutator 回傳值本為 void,只斷言不寫回)', async () => {
     /* 薄 happy-path 釘只證明「cancel 成功時原地標記 cancelled」，證明不了
      * cancelLeaveRequest 仍委派 gate.mutate——理由同 createLeaveRequest 上方的
-     * P1′(mutator)釘。 */
+     * P1′(mutator)釘。不可證偽補強(帳本閉合輪 R3):登出後 store 已被 reset 清空,
+     * 若直接斷言 toEqual([]),繞過 gate.mutate、直接 await api 後 map 空陣列的壞
+     * 實作一樣得 []——斷言恆真、抓不到退化。改在登出後、resolve 前植入一筆「B
+     * session 的 canary」,id 與在飛 cancel 的目標同(lr-1,模擬 B 剛好也載入了同
+     * id 資料);正確實作核對 epoch 後棄寫、canary 原封不動,壞實作的 map 會把它的
+     * status 改成 cancelled。 */
     const deferred = createDeferred<undefined>();
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /auth/login': AUTH_RES,
@@ -281,10 +286,13 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     const p = cancelLeaveRequest('lr-1'); // A 的 DELETE 掛起中
     await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
 
+    const canary = { ...API_LR_APPROVED, id: 'lr-1' }; // B session 的資料(同 id)——正確實作應保它不動
+    leaveRequests.set([canary as never]);
+
     deferred.resolve(undefined);
     await p;
 
-    expect(get(leaveRequests)).toEqual([]); // 棄寫:不對(已清空的)store 做 patch-in-place 寫回——維持 reset 後狀態
+    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.mutate 直寫會被 map 改掉 status → 紅
     expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
   });
 
@@ -339,9 +347,14 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     expect(get(leaveRequests)[0].makeup_session_date).toBe('2026-07-20');
   });
 
-  it('P1′(mutator):makeup 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
+  it('P1′(mutator):makeup 在飛登出 → 棄寫不落地,同 id canary 原封不動,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
     /* 薄 happy-path 釘只證明「makeup 成功時原地取代」，證明不了 bookMakeup 仍委派
-     * gate.mutate——理由同 createLeaveRequest 上方的 P1′(mutator)釘。 */
+     * gate.mutate——理由同 createLeaveRequest 上方的 P1′(mutator)釘。不可證偽補強
+     * (帳本閉合輪 R3):登出後 store 已被 reset 清空,若直接斷言 toEqual([]),繞過
+     * gate.mutate、直接 await api 後 map 空陣列的壞實作一樣得 []——斷言恆真、抓不
+     * 到退化。改在登出後、resolve 前植入一筆「B session 的 canary」,id 與在飛
+     * makeup 的目標同(lr-2,模擬 B 剛好也載入了同 id 資料);正確實作核對 epoch 後
+     * 棄寫、canary 原封不動,壞實作的 map 會把它整筆取代成 server 回應。 */
     const updated = { ...API_LR_APPROVED, makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00' };
     const deferred = createDeferred<unknown>();
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -358,11 +371,14 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     const p = bookMakeup('lr-2', 'sess-9'); // A 的 POST 掛起中
     await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
 
+    const canary = { ...API_LR_PENDING, id: 'lr-2' }; // B session 的資料(同 id)——正確實作應保它不動
+    leaveRequests.set([canary as never]);
+
     deferred.resolve(updated);
     const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
 
     expect(result.makeup_session_id).toBe('sess-9');
-    expect(get(leaveRequests)).toEqual([]); // 棄寫:不對(已清空的)store 做 map 取代寫回——維持 reset 後狀態
+    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.mutate 直寫會被 map 整筆取代 → 紅
     expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
   });
 

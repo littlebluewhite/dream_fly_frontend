@@ -795,9 +795,14 @@ describe('cancelWaitlist', () => {
     expect(get(waitlist)).toEqual([{ id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' }]);
   });
 
-  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地(mutator 回傳值本為 void,只斷言不寫回)', async () => {
+  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地,同 id canary 原封不動(mutator 回傳值本為 void,只斷言不寫回)', async () => {
     /* 薄 happy-path 釘只證明「cancel 成功時從 store 移除」，證明不了 cancelWaitlist
-     * 仍委派 gate.mutate——理由同 joinWaitlist 上方的 P1′(mutator)釘。 */
+     * 仍委派 gate.mutate——理由同 joinWaitlist 上方的 P1′(mutator)釘。不可證偽補強
+     * (帳本閉合輪 R3):登出後 store 已被 reset 清空,若直接斷言 toEqual([]),繞過
+     * gate.mutate、直接 await api 後 filter 空陣列的壞實作一樣得 []——斷言恆真、
+     * 抓不到退化。改在登出後、resolve 前植入一筆「B session 的 canary」,id 與在飛
+     * cancel 的目標同(wl-1,模擬 B 剛好也載入了同 id 資料);正確實作核對 epoch 後
+     * 棄寫、canary 原封不動,壞實作的 filter 會把它濾掉。 */
     const deferred = createDeferred<undefined>();
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /auth/login': AUTH_RES,
@@ -815,10 +820,13 @@ describe('cancelWaitlist', () => {
     const p = cancelWaitlist('wl-1'); // A 的 DELETE 掛起中
     await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
 
+    const canary = { id: 'wl-1', course_id: 'course-uuid-1', course_name: 'B 的候補課程' };
+    waitlist.set([canary]); // B session 的資料(同 id)——正確實作應保它不動
+
     deferred.resolve(undefined);
     await p;
 
-    expect(get(waitlist)).toEqual([]); // 棄寫:不對(已清空的)store 做 filter 寫回——維持 reset 後狀態
+    expect(get(waitlist)).toEqual([canary]); // canary 原封不動:繞過 gate.mutate 直寫會被 filter 濾掉 → 紅
     expect(get(waitlistHydrated)).toBe(false); // 不 markMutated
   });
 
