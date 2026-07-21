@@ -19,7 +19,7 @@
   import { getReports, type ReportsData } from '$lib/admin/api';
   import { fmtNT } from '$lib/format';
   import { fmtPct } from '$lib/admin/format';
-  import { deltaPct, topCoursesFrom } from '$lib/admin/report-math';
+  import { deltaPct, topCoursesFrom, REPORT_KPI_CARDS } from '$lib/admin/report-math';
 
   import ReportKpi from '$lib/admin/components/reports/ReportKpi.svelte';
   import RevenueBreakdown from '$lib/admin/components/reports/RevenueBreakdown.svelte';
@@ -78,52 +78,34 @@
 
       <div class="kpi-grid">
         <ReportKpi
-          icon="dollar-sign"
-          label="本月營收"
+          {...REPORT_KPI_CARDS.revenue}
           value={fmtNT(data.revenue.thisMonth)}
           delta={deltaPct(data.revenue.thisMonth, data.revenue.lastMonth)}
-          tint="#0066CC14"
-          color="var(--df-primary)"
         />
         <ReportKpi
-          icon="user-plus"
-          label="本月新會員"
+          {...REPORT_KPI_CARDS.newMembers}
           value="{data.kpis.newMembers.thisMonth} 位"
           delta={deltaPct(data.kpis.newMembers.thisMonth, data.kpis.newMembers.lastMonth)}
-          tint="#F59E0B14"
-          color="#F59E0B"
         />
         <ReportKpi
-          icon="book-open"
-          label="本月新報名"
+          {...REPORT_KPI_CARDS.newEnrolments}
           value="{data.kpis.newEnrolments.thisMonth} 筆"
           delta={deltaPct(data.kpis.newEnrolments.thisMonth, data.kpis.newEnrolments.lastMonth)}
-          tint="#10B98114"
-          color="#10B981"
         />
         <ReportKpi
-          icon="receipt"
-          label="本月訂單數"
+          {...REPORT_KPI_CARDS.paidOrdersCount}
           value="{data.kpis.paidOrdersCount.thisMonth} 筆"
           delta={deltaPct(data.kpis.paidOrdersCount.thisMonth, data.kpis.paidOrdersCount.lastMonth)}
-          tint="#8B5CF614"
-          color="#8B5CF6"
         />
         <ReportKpi
-          icon="calendar-check"
-          label="本月出席率"
+          {...REPORT_KPI_CARDS.attendanceRate}
           value={fmtPct(data.kpis.attendanceRate.thisMonth)}
           delta={deltaPct(data.kpis.attendanceRate.thisMonth, data.kpis.attendanceRate.lastMonth)}
-          tint="#10B98114"
-          color="#10B981"
         />
         <ReportKpi
-          icon="repeat"
-          label="會員留存率"
+          {...REPORT_KPI_CARDS.retention}
           value={fmtPct(data.retention.at(-1)?.rate ?? null)}
           delta={null}
-          tint="#0EA5E914"
-          color="#0EA5E9"
         />
       </div>
 

@@ -56,7 +56,8 @@
     paymentMethodLabel,
     WEEKDAY_LABEL,
     AGE_BUCKET_LABEL,
-    ATTENDANCE_BUCKET_LABEL
+    ATTENDANCE_BUCKET_LABEL,
+    REPORT_KPI_CARDS
   } from '$lib/admin/report-math';
   // conic-gradient 累計色標——直接共用桌面 reports/donut.ts 的 donutStops()(Round 2
   // C3:純邏輯跨 surface 單源,同 classes 頁 import course-request.ts 先例;per-surface
@@ -78,15 +79,6 @@
   const now = new Date();
   const monthSub = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 · 營運數據`;
 
-  /** 環比 delta → KpiCard 用的顯示字串 + 顏色方向。null(分母不成立/無資料)→ 回傳空
-   *  字串——KpiCard 既有「delta 空字串則不渲染 chip」的契約(桌面 ReportKpi 對 null
-   *  顯示「—」中性 pill，行動版沿用 KpiCard 既有的省略慣例，不新增中性態)。 */
-  function deltaDisplay(current: number | null, last: number | null): { delta: string; up: boolean } {
-    const pct = deltaPct(current, last);
-    if (pct == null) return { delta: '', up: false };
-    return { delta: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, up: pct >= 0 };
-  }
-
   /* 開放集合(教練/場館/付款方式人數或種類不定)的循環色盤——沿用桌面 CoachPerf/
    * VenueUsage/PaymentSplit 的既定色系(呈現層，無資料源可依附)。 */
   const COACH_PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
@@ -99,12 +91,6 @@
   const ATT_BUCKET_COLOR: Record<'gte_95' | '85_94' | '75_84' | 'lt_75', string> = {
     gte_95: 'var(--df-success)', '85_94': 'var(--df-primary)', '75_84': '#0EA5E9', lt_75: 'var(--df-warning)'
   };
-
-  $: kpiRevenue = deltaDisplay(data?.revenue.thisMonth ?? null, data?.revenue.lastMonth ?? null);
-  $: kpiNewMembers = deltaDisplay(data?.kpis.newMembers.thisMonth ?? null, data?.kpis.newMembers.lastMonth ?? null);
-  $: kpiNewEnrolments = deltaDisplay(data?.kpis.newEnrolments.thisMonth ?? null, data?.kpis.newEnrolments.lastMonth ?? null);
-  $: kpiOrders = deltaDisplay(data?.kpis.paidOrdersCount.thisMonth ?? null, data?.kpis.paidOrdersCount.lastMonth ?? null);
-  $: kpiAttendance = deltaDisplay(data?.kpis.attendanceRate.thisMonth ?? null, data?.kpis.attendanceRate.lastMonth ?? null);
 
   $: trend = data?.revenue.trend ?? [];
   $: trendHeights = normalizeBars(trend.map((d) => d.h), 108);
@@ -199,12 +185,12 @@
       <div style="padding:16px; display:flex; flex-direction:column; gap:16px;">
         <!-- KPI grid -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
-          <KpiCard icon="dollar-sign" label="本月營收" value={fmtNT(data.revenue.thisMonth)} delta={kpiRevenue.delta} up={kpiRevenue.up} tint="#0066CC14" color="var(--df-primary)" />
-          <KpiCard icon="user-plus" label="本月新會員" value="{data.kpis.newMembers.thisMonth} 位" delta={kpiNewMembers.delta} up={kpiNewMembers.up} tint="#F59E0B14" color="#F59E0B" />
-          <KpiCard icon="book-open" label="本月新報名" value="{data.kpis.newEnrolments.thisMonth} 筆" delta={kpiNewEnrolments.delta} up={kpiNewEnrolments.up} tint="#10B98114" color="#10B981" />
-          <KpiCard icon="receipt" label="本月訂單數" value="{data.kpis.paidOrdersCount.thisMonth} 筆" delta={kpiOrders.delta} up={kpiOrders.up} tint="#8B5CF614" color="#8B5CF6" />
-          <KpiCard icon="calendar-check" label="本月出席率" value={fmtPct(data.kpis.attendanceRate.thisMonth)} delta={kpiAttendance.delta} up={kpiAttendance.up} tint="#10B98114" color="#10B981" />
-          <KpiCard icon="repeat" label="會員留存率" value={fmtPct(data.retention.at(-1)?.rate ?? null)} delta="" up={false} tint="#0EA5E914" color="#0EA5E9" />
+          <KpiCard {...REPORT_KPI_CARDS.revenue} value={fmtNT(data.revenue.thisMonth)} delta={deltaPct(data.revenue.thisMonth, data.revenue.lastMonth)} />
+          <KpiCard {...REPORT_KPI_CARDS.newMembers} value="{data.kpis.newMembers.thisMonth} 位" delta={deltaPct(data.kpis.newMembers.thisMonth, data.kpis.newMembers.lastMonth)} />
+          <KpiCard {...REPORT_KPI_CARDS.newEnrolments} value="{data.kpis.newEnrolments.thisMonth} 筆" delta={deltaPct(data.kpis.newEnrolments.thisMonth, data.kpis.newEnrolments.lastMonth)} />
+          <KpiCard {...REPORT_KPI_CARDS.paidOrdersCount} value="{data.kpis.paidOrdersCount.thisMonth} 筆" delta={deltaPct(data.kpis.paidOrdersCount.thisMonth, data.kpis.paidOrdersCount.lastMonth)} />
+          <KpiCard {...REPORT_KPI_CARDS.attendanceRate} value={fmtPct(data.kpis.attendanceRate.thisMonth)} delta={deltaPct(data.kpis.attendanceRate.thisMonth, data.kpis.attendanceRate.lastMonth)} />
+          <KpiCard {...REPORT_KPI_CARDS.retention} value={fmtPct(data.retention.at(-1)?.rate ?? null)} delta={null} />
         </div>
 
         <!-- revenue-source breakdown -->

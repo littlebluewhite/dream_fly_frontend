@@ -264,3 +264,21 @@ export const ATTENDANCE_BUCKET_LABEL: Record<'gte_95' | '85_94' | '75_84' | 'lt_
 	'75_84': '75–84%',
 	lt_75: '低於 75%'
 };
+
+/* ═════════════════════════ KPI 卡識別四欄(單源) ═════════════════════════ */
+
+/** 報表 KPI band 6 卡的識別四欄(icon/label/tint/color)單源——桌面 ReportKpi
+ *  (admin/reports/+page.svelte)與 mobile-admin KpiCard(ReportsScreen.svelte)原本
+ *  各自手抄同一份六張卡的識別資料，在此上收共用。value/delta 兩者仍是 per-surface
+ *  接線，不收進本表(ADR 0009 §2：KPI 卡 value 因單位混雜維持頁面組字串，delta 由
+ *  呼叫端傳 deltaPct() 算出的數字、格式化下沉各元件內部)——本表只管兩邊逐字相同的
+ *  識別資料。零 import 憲章維持(icon 為字面量字串，呼叫端既有 `icon: IconName`
+ *  prop 型別把關，本檔無需 import IconName)。 */
+export const REPORT_KPI_CARDS = {
+	revenue: { icon: 'dollar-sign', label: '本月營收', tint: '#0066CC14', color: 'var(--df-primary)' },
+	newMembers: { icon: 'user-plus', label: '本月新會員', tint: '#F59E0B14', color: '#F59E0B' },
+	newEnrolments: { icon: 'book-open', label: '本月新報名', tint: '#10B98114', color: '#10B981' },
+	paidOrdersCount: { icon: 'receipt', label: '本月訂單數', tint: '#8B5CF614', color: '#8B5CF6' },
+	attendanceRate: { icon: 'calendar-check', label: '本月出席率', tint: '#10B98114', color: '#10B981' },
+	retention: { icon: 'repeat', label: '會員留存率', tint: '#0EA5E914', color: '#0EA5E9' }
+} as const;

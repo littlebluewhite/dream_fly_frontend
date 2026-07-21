@@ -26,7 +26,8 @@ import {
 	paymentMethodLabel,
 	WEEKDAY_LABEL,
 	AGE_BUCKET_LABEL,
-	ATTENDANCE_BUCKET_LABEL
+	ATTENDANCE_BUCKET_LABEL,
+	REPORT_KPI_CARDS
 } from './report-math';
 
 describe('deltaPct — 環比 %', () => {
@@ -497,5 +498,18 @@ describe('ATTENDANCE_BUCKET_LABEL — 出席率分布桶對照', () => {
 		expect(ATTENDANCE_BUCKET_LABEL['85_94']).toBe('85–94%');
 		expect(ATTENDANCE_BUCKET_LABEL['75_84']).toBe('75–84%');
 		expect(ATTENDANCE_BUCKET_LABEL.lt_75).toBe('低於 75%');
+	});
+});
+
+describe('REPORT_KPI_CARDS — KPI 卡識別四欄單源(Task C5，桌面 ReportKpi／mobile-admin KpiCard 共用)', () => {
+	it('6 鍵 × {icon,label,tint,color} 逐字 pin', () => {
+		expect(REPORT_KPI_CARDS).toEqual({
+			revenue: { icon: 'dollar-sign', label: '本月營收', tint: '#0066CC14', color: 'var(--df-primary)' },
+			newMembers: { icon: 'user-plus', label: '本月新會員', tint: '#F59E0B14', color: '#F59E0B' },
+			newEnrolments: { icon: 'book-open', label: '本月新報名', tint: '#10B98114', color: '#10B981' },
+			paidOrdersCount: { icon: 'receipt', label: '本月訂單數', tint: '#8B5CF614', color: '#8B5CF6' },
+			attendanceRate: { icon: 'calendar-check', label: '本月出席率', tint: '#10B98114', color: '#10B981' },
+			retention: { icon: 'repeat', label: '會員留存率', tint: '#0EA5E914', color: '#0EA5E9' }
+		});
 	});
 });
