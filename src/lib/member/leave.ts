@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
-import { api, ApiError } from '$lib/api/client';
+import { api } from '$lib/api/client';
+import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
@@ -139,10 +140,11 @@ export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRe
  *  「場次已開始，無法請假」「此場次已有請假紀錄」「該場次名額已滿」）——跟
  *  orderErrorMessage/joinWaitlistErrorMessage 需要子字串對照英文訊息不同,這裡
  *  直接透傳即可,也天然涵蓋同一 status 底下的多種原因(例如 makeup 的 409 有三種
- *  可能：非 approved／已預約過／名額已滿)。建立/取消/預約補課共用同一份文案邏輯。 */
+ *  可能：非 approved／已預約過／名額已滿)。建立/取消/預約補課共用同一份文案邏輯。
+ *  D-2（架構深化 R7 順風車）：透傳邏輯與 $lib/api/error-text 的 apiErrorMessage 逐字
+ *  相同（ApiError 透傳 message、否則連線 fallback），改委派單源、匯出名保留。 */
 export function leaveRequestErrorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
-  return '連線發生問題，請稍後再試。';
+  return apiErrorMessage(err);
 }
 
 /* ---- Course sessions（GET /courses/{id}/sessions，供請假/補課選場次；

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
-import { api, ApiError } from '$lib/api/client';
+import { api } from '$lib/api/client';
+import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionRefresher } from '$lib/session-gate';
 import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from './data';
 
@@ -99,8 +100,8 @@ export async function redeemReward(rewardId: string): Promise<ApiRedeemResult> {
 
 /** POST /rewards/{id}/redeem 的錯誤文案。後端訊息本身就是繁中契約原文（404
  *  「獎勵不存在」；409「已兌換完畢」庫存售罄 / 「點數不足」餘額不足）——比照
- *  leaveRequestErrorMessage 直通即可，不需要子字串對照表。 */
+ *  leaveRequestErrorMessage 直通即可，不需要子字串對照表。
+ *  D-2（架構深化 R7 順風車）：透傳邏輯與 apiErrorMessage 逐字相同，改委派單源、匯出名保留。 */
 export function redeemRewardErrorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
-  return '連線發生問題，請稍後再試。';
+  return apiErrorMessage(err);
 }
