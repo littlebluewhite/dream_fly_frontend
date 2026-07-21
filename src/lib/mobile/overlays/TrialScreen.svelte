@@ -34,13 +34,28 @@
   ];
   const TRIAL_AGES = ['3–5 歲', '6–9 歲', '10–12 歲', '13–16 歲', '16 歲以上'];
   type Day = { d: string; w: string; full: string };
-  const TRIAL_DAYS: Day[] = [
-    { d: '06/14', w: '六', full: '2026/06/14 (六)' },
-    { d: '06/15', w: '日', full: '2026/06/15 (日)' },
-    { d: '06/18', w: '三', full: '2026/06/18 (三)' },
-    { d: '06/21', w: '六', full: '2026/06/21 (六)' },
-    { d: '06/22', w: '日', full: '2026/06/22 (日)' }
-  ];
+  // 動態產生未來日期，維持「六/日/三」節奏：以嚴格晚於今日的下一個週六為基準，
+  // 依序取「當週六、隔天週日、+3 天週三、再 +3 天週六、隔天週日」，格式沿用既有
+  // YYYY/MM/DD (週) 字串。TRIAL_SLOTS 時段無對應後端端點，仍硬編（見 ADR 0006）。
+  const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+  function pad2(n: number): string {
+    return String(n).padStart(2, '0');
+  }
+  function addDays(base: Date, days: number): Date {
+    const d = new Date(base);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+  function toTrialDay(date: Date): Day {
+    const y = date.getFullYear();
+    const m = pad2(date.getMonth() + 1);
+    const dd = pad2(date.getDate());
+    const w = WEEKDAY_LABELS[date.getDay()];
+    return { d: `${m}/${dd}`, w, full: `${y}/${m}/${dd} (${w})` };
+  }
+  const today = new Date();
+  const nextSat = addDays(today, ((6 - today.getDay() + 7) % 7) || 7);
+  const TRIAL_DAYS: Day[] = [0, 1, 4, 7, 8].map((n) => toTrialDay(addDays(nextSat, n)));
   type Slot = { id: string; time: string; coach: string; room: string; spots: number };
   const TRIAL_SLOTS: Slot[] = [
     { id: 't1', time: '10:00–11:15', coach: '黃詩涵', room: 'A 訓練館', spots: 3 },

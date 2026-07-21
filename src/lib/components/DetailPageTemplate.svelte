@@ -35,6 +35,7 @@
   <section class="description-section">
     <div class="container content-container">
       <div class="description">
+        <!-- 僅餵靜態內容；餵後端內容前需 sanitize -->
         {@html description}
       </div>
     </div>

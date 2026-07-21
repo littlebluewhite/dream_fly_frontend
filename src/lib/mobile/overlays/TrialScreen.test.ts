@@ -24,13 +24,29 @@ beforeEach(() => {
 	vi.mocked(toasts.notify).mockReset();
 });
 
-/** 走完 step 0(課程+年齡)、step 1(日期+時段)，停在 step 2(聯絡資料)。 */
+// TrialScreen 的 TRIAL_DAYS 改為動態產生（維持「六/日/三」節奏，見
+// TrialScreen.svelte）——這裡把「今日」釘死在一個已知的週一（2026/07/20），
+// 相對這個固定基準推算出的第一個日期是 2026/07/25(六)，斷言相對這個固定基準，
+// 不再釘絕對字面。
+const TRIAL_TODAY = new Date(2026, 6, 20, 9, 0, 0);
+const TRIAL_FIRST_DAY = { d: '07/25', full: '2026/07/25 (六)' };
+
+/** 走完 step 0(課程+年齡)、step 1(日期+時段)，停在 step 2(聯絡資料)。render()
+ *  前用 vi.setSystemTime 固定「今日」，讓元件內動態產生的 TRIAL_DAYS 可預期——
+ *  只釘 Date，不呼叫 useFakeTimers()，setTimeout 仍走真實時鐘，才不會跟下面
+ *  waitFor/findByText 這類仰賴真實計時器 polling 的斷言打架。TRIAL_DAYS 在
+ *  render 當下就已算好，之後立刻 useRealTimers() 還原不影響後續流程。 */
 async function goToContactStep() {
-	render(TrialScreen, { props: { onBack: () => {} } });
+	vi.setSystemTime(TRIAL_TODAY);
+	try {
+		render(TrialScreen, { props: { onBack: () => {} } });
+	} finally {
+		vi.useRealTimers();
+	}
 	await fireEvent.click(screen.getByText('幼兒體操'));
 	await fireEvent.click(screen.getByRole('button', { name: '3–5 歲' }));
 	await fireEvent.click(screen.getByText('下一步'));
-	await fireEvent.click(screen.getByText('06/14'));
+	await fireEvent.click(screen.getByText(TRIAL_FIRST_DAY.d));
 	await fireEvent.click(screen.getByText('10:00–11:15'));
 	await fireEvent.click(screen.getByText('下一步'));
 }
@@ -62,7 +78,7 @@ describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task 
 		expect(submitTrialInquiry).toHaveBeenCalledWith({
 			category: '幼兒體操',
 			studentAge: '3–5 歲',
-			preferredDay: '2026/06/14 (六)',
+			preferredDay: TRIAL_FIRST_DAY.full,
 			preferredSlot: '10:00–11:15',
 			parentName: '王先生',
 			parentPhone: '0987-654-321',
@@ -87,5 +103,32 @@ describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task 
 		await vi.waitFor(() => expect(toasts.notify).toHaveBeenCalledWith('error', '送出失敗', '連線逾時'));
 		expect(screen.queryByText('試上預約已送出！')).toBeNull();
 		expect(btn).not.toBeDisabled();
+	});
+
+	it('今日恰為週六時首日跳到下週六(嚴格未來語意)', async () => {
+		// 2026/07/25 為週六(getDay()===6)。TrialScreen.svelte 的 nextSat 計算式
+		// `((6 - today.getDay() + 7) % 7) || 7` 在今日恰為週六時餘數算出 0,
+		// 需靠 `|| 7` 落回下週六——若日後誤刪/誤改 `|| 7`,今日會被誤判為首個
+		// 可選週六,首日會少跳一週。
+		vi.setSystemTime(new Date(2026, 6, 25, 9, 0, 0));
+		try {
+			render(TrialScreen, { props: { onBack: () => {} } });
+		} finally {
+			vi.useRealTimers();
+		}
+
+		await fireEvent.click(screen.getByText('幼兒體操'));
+		await fireEvent.click(screen.getByRole('button', { name: '3–5 歲' }));
+		await fireEvent.click(screen.getByText('下一步'));
+
+		expect(screen.getByText('08/01')).toBeInTheDocument();
+		expect(screen.queryByText('07/25')).toBeNull();
+
+		await fireEvent.click(screen.getByText('08/01'));
+		await fireEvent.click(screen.getByText('10:00–11:15'));
+		await fireEvent.click(screen.getByText('下一步'));
+
+		expect(screen.getByText(/2026\/08\/01 \(六\)/)).toBeInTheDocument();
+		expect(screen.queryByText(/2026\/07\/25 \(六\)/)).toBeNull();
 	});
 });
