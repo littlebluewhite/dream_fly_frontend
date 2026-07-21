@@ -6,6 +6,7 @@ import { cart, toasts } from '$lib/mobile/stores';
 import type { Course } from '$lib/mobile/data';
 import { getCourses } from '$lib/mobile/api';
 import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/mobile/api', () => ({ getCourses: vi.fn() }));
 // C8（Round 2 批次甲）：候補按鈕現在打真實 POST /waitlist（見 $lib/member/waitlist
@@ -24,32 +25,23 @@ const CATALOG: Course[] = [
 	{ id: '5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', icon: 'flame', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '在安全環境中學習翻越、落地與移動技巧，建立空間判斷與身體控制。', spots: 0 }
 ];
 
-/** 極小 fake router（同 checkout-api.test.ts / routes/member/courses/page.test.ts
- *  慣例）：預設 POST /waitlist 回一個成功 join，讓不關心候補 API 細節的既有測試
- *  不用逐一配置 mock 也能跑完整個 join 流程。 */
-function apiRouter(overrides: Record<string, unknown> = {}) {
-	return vi.fn(async (path: string, init: RequestInit = {}) => {
-		const method = (init.method ?? 'GET').toString().toUpperCase();
-		const key = `${method} ${path}`;
-		if (key in overrides) {
-			const value = overrides[key];
-			if (value instanceof Error) throw value;
-			return value;
-		}
-		if (path === '/waitlist' && method === 'POST') {
-			const body = JSON.parse((init.body as string) ?? '{}') as { course_id?: string };
-			const course = CATALOG.find((c) => c.id === body.course_id);
-			return { id: 'wl-' + body.course_id, course_id: body.course_id, course_name: course?.name ?? '課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
-		}
-		throw new Error(`unexpected api call: ${key}`);
-	});
-}
+/** Waitlist defaults for the shared fakeRouter（同 checkout-api.test.ts /
+ *  routes/member/courses/page.test.ts 慣例）：預設 POST /waitlist 回一個成功
+ *  join，讓不關心候補 API 細節的既有測試不用逐一配置 mock 也能跑完整個 join
+ *  流程。 */
+const WAITLIST_DEFAULTS: Record<string, unknown> = {
+	'POST /waitlist': (init: RequestInit) => {
+		const body = JSON.parse((init.body as string) ?? '{}') as { course_id?: string };
+		const course = CATALOG.find((c) => c.id === body.course_id);
+		return { id: 'wl-' + body.course_id, course_id: body.course_id, course_name: course?.name ?? '課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
+	}
+};
 
 beforeEach(() => {
 	vi.mocked(getCourses).mockReset();
 	vi.mocked(getCourses).mockResolvedValue({ catalog: CATALOG });
 	vi.mocked(api).mockReset();
-	vi.mocked(api).mockImplementation(apiRouter());
+	vi.mocked(api).mockImplementation(fakeRouter({}, WAITLIST_DEFAULTS));
 	// toasts 是 auto-dismiss 的 singleton — 前一個測試的 toast 會殘留到下一個測試,
 	// 清掉才能對「某 toast 不得出現」做可靠斷言(同 routes/member/notifications/
 	// page.test.ts 的既有慣例)。
@@ -94,7 +86,7 @@ describe('課程介紹 — 候補守門（codex P2 regression；C8 改接真 POS
 	});
 
 	it('重複候補（後端 409 "already on waitlist"）→ 顯示「加入候補失敗」與專屬繁中文案，不顯示「已加入候補」', async () => {
-		vi.mocked(api).mockImplementation(apiRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }));
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }, WAITLIST_DEFAULTS));
 
 		render(Page);
 		await fireEvent.click(await screen.findByText('候補'));

@@ -21,6 +21,7 @@ import type { CartItem } from '$lib/cart-item';
 // 覆蓋缺口明錄:「已持有 pass 被濾掉」的 runtime 濾除案例由 member/checkout.test.ts 覆蓋;
 // mobile runtime 不可建構(cart.add 只收 Course),故本檔 fixtures 一律空訂閱、不假造濾除情境。
 import { chargeableLines } from '$lib/member/checkout';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -49,24 +50,10 @@ const SAMPLE_ORDER: ApiOrder = {
   ]
 };
 
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時 DELETE /cart 與
- *  POST /cart/items 預設回 undefined（204/成功 upsert），其餘一律丟錯──呼叫到
- *  沒被交代的端點應該讓測試失敗，而不是悄悄回傳 undefined 蓋掉斷言。抄自
- *  member/checkout-api.test.ts。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    if (path === '/cart' && method === 'DELETE') return undefined;
-    if (path === '/cart/items' && method === 'POST') return undefined;
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
+/** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined（204/成功
+ *  upsert）——沿用原本 fakeRouter 內建的 cart fallback，經由 defaults 表傳入共用
+ *  fakeRouter。 */
+const CART_DEFAULTS: Record<string, unknown> = { 'DELETE /cart': undefined, 'POST /cart/items': undefined };
 
 beforeEach(() => {
   vi.mocked(api).mockReset();
@@ -74,7 +61,7 @@ beforeEach(() => {
 
 describe('submitOrder — 全序列成功', () => {
   it('sync → POST /orders 帶 Idempotency-Key → afterOrder 全 settle → clearCart → OrderConfirmation 各欄位正確', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
     const refreshA = vi.fn().mockResolvedValue(undefined);
     const refreshB = vi.fn().mockResolvedValue(undefined);
     const afterOrder = vi.fn(() => [refreshA(), refreshB()]);
@@ -121,7 +108,7 @@ describe('submitOrder — 全序列成功', () => {
   });
 
   it('coupon 空字串 → coupon_code 整個欄位省略（不是送空字串）；payment_method 未指定時預設 credit_card', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
 
     await submitOrder(chargeableLines([PASS_ITEM], []), { coupon: '', usePoints: true, idempotencyKey: 'key-xyz' });
 
@@ -133,7 +120,7 @@ describe('submitOrder — 全序列成功', () => {
   });
 
   it('paymentMethod 指定 line_pay → POST /orders body 帶 payment_method: line_pay（Round 4 P4-B1 值域穿透縫層）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
 
     await submitOrder(chargeableLines([PASS_ITEM], []), { coupon: '', usePoints: false, paymentMethod: 'line_pay', idempotencyKey: 'key-lp' });
 
@@ -147,7 +134,7 @@ describe('submitOrder — 全序列成功', () => {
 
 describe('submitOrder — 失敗路徑', () => {
   it('POST /orders 失敗 → 錯誤原樣拋出；afterOrder 與 clearCart 都不被呼叫', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(409, 'course is full') }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(409, 'course is full') }, CART_DEFAULTS));
     const afterOrder = vi.fn(() => [Promise.resolve(undefined)]);
     const clearCart = vi.fn();
 
@@ -160,7 +147,7 @@ describe('submitOrder — 失敗路徑', () => {
   });
 
   it('syncCartToServer 失敗（DELETE /cart 出錯）→ 原樣拋出，不進下一步（不呼叫 POST /orders）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /cart': new ApiError(500, 'internal error') }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /cart': new ApiError(500, 'internal error') }, CART_DEFAULTS));
     const clearCart = vi.fn();
 
     await expect(submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false, clearCart })).rejects.toBeInstanceOf(
@@ -179,7 +166,7 @@ describe('submitOrder — afterOrder 部分失敗', () => {
 
   it('afterOrder 其中一個 promise reject：仍回傳確認、clearCart 仍被呼叫、console.error 被呼叫', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
     const clearCart = vi.fn();
     const afterOrder = vi.fn(() => [Promise.resolve(undefined), Promise.reject(new Error('refresh failed'))]);
 
@@ -194,7 +181,7 @@ describe('submitOrder — afterOrder 部分失敗', () => {
 
 describe('submitOrder — idempotencyKey', () => {
   it('省略 idempotencyKey → 自產 uuid 格式的 key', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
 
     await submitOrder(chargeableLines([COURSE_ITEM], []), { coupon: '', usePoints: false });
 

@@ -11,6 +11,7 @@ import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, waitlistHydrated, leaveRequests, leaveRequestsHydrated } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -21,21 +22,6 @@ vi.mock('$lib/public/api', () => ({
   listCourses: vi.fn(),
   listCoaches: vi.fn()
 }));
-
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未交代的端點一律丟錯，
- *  讓漏掉某支 mock 的測試直接失敗而不是悄悄回傳 undefined(同 checkout-api.test.ts)。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
 
 beforeEach(() => {
   vi.mocked(api).mockReset();

@@ -6,6 +6,7 @@ import { get } from 'svelte/store';
 import { waitlist, leaveRequests, toasts, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/member/api', () => ({ getMine: vi.fn(), getEnrolmentAttendance: vi.fn() }));
 // 只替換 api()，ApiError 用回真實類別。卡 6 後頁面只剩單一 getMine() 接縫——
@@ -18,22 +19,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
-
-/** 依 "METHOD path" 路由回應的 fake router（同 leave-requests-api.test.ts 慣例）。
- *  未覆寫的路徑一律丟錯——呼叫到沒被交代的端點應該讓測試失敗，而不是悄悄回傳
- *  undefined 蓋掉斷言。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
 
 // Task 1(C2 死種子退役):member/data.ts 的 MY_COURSES(值)已退役——改為檔內 inline
 // fixture(2 筆,沿用真實種子 k1/k6 的欄位值;下方多處斷言依賴 index 0/1 各自的

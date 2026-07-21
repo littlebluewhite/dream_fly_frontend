@@ -102,10 +102,11 @@ describe('匯入掃描器（Import Scan）', () => {
 
 	it('dogfood 契約：production 原始碼（src/lib ＋ src/routes）零 import $lib/testing', () => {
 		const reachesTesting = makeReachPredicate('$lib/testing', r('src/lib/testing'));
+		// $lib/testing 本身是測試支援模組、非 production——比照排除自身(分類修正 + 預防未來 testing 內部互 import 被自己的 dogfood 誤判)。
 		const productionFiles = ['src/lib', 'src/routes']
 			.map(r)
 			.flatMap(walk)
-			.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte'));
+			.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte') && !f.startsWith(r('src/lib/testing') + '/'));
 		// F3 tripwire：walk() 死亡（→ []）時 offenders 對空集合 vacuous pass——先釘掃描
 		// 檔數下限。此釘殺 `walk → []` 突變（鬆釘防機器死亡，非精確計數；現況約 370 檔）。
 		expect(productionFiles.length).toBeGreaterThan(100);

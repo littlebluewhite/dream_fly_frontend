@@ -15,17 +15,8 @@ vi.mock('$app/stores', () => ({
 vi.mock('$app/environment', () => ({ browser: true }));
 
 vi.mock('$lib/stores/authStore', async () => {
-  const { writable, derived } = await import('svelte/store');
-  const state = writable({ loggedIn: false, member: null, roles: [] as string[] });
-  return {
-    authStore: {
-      subscribe: state.subscribe,
-      login: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
-      logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
-      hydrate: vi.fn(async () => {})
-    },
-    isLoggedIn: derived(state, ($s) => $s.loggedIn)
-  };
+  const { makeAuthMockA } = await import('$lib/testing/auth-mock');
+  return makeAuthMockA();
 });
 
 import { authStore } from '$lib/stores/authStore';

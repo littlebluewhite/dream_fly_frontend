@@ -10,26 +10,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from './stores';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
-
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時一律丟錯
- *  （同 leave-requests-api.test.ts 慣例——呼叫到沒被交代的端點應該讓測試失敗）。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
 
 beforeEach(() => {
   vi.mocked(api).mockReset();

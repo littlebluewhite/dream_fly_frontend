@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { readable } from 'svelte/store';
 import Sidebar from './Sidebar.svelte';
 import { authStore } from '$lib/stores/authStore';
+import { FIXTURE_MEMBER, type TestAuthStore } from '$lib/testing/auth-mock';
 
 // Sidebar 讀 $page.url.pathname 判斷 nav active 狀態、點擊呼叫 goto()。
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -16,36 +17,10 @@ vi.mock('$app/stores', () => ({
  * 不同:那邊 login 只塞 member: null(只測 fallback),本檔要驗證真姓名衍生出的
  * 「王教練」「王小明 教練」等文字,故補一個 __set 供測試直接指定登入態的 fixture
  * member 物件。 */
-type MockMember = {
-  id: string;
-  name: string;
-  initial: string;
-  since: string;
-  points: number;
-  color: string;
-  age: number;
-};
-type MockAuthState = { loggedIn: boolean; member: MockMember | null; roles: string[] };
-
 vi.mock('$lib/stores/authStore', async () => {
-  const { writable } = await import('svelte/store');
-  const state = writable<MockAuthState>({ loggedIn: false, member: null, roles: [] });
-  return {
-    authStore: { subscribe: state.subscribe, __set: state.set }
-  };
+  const { makeAuthMockB } = await import('$lib/testing/auth-mock');
+  return makeAuthMockB();
 });
-
-type TestAuthStore = typeof authStore & { __set: (s: MockAuthState) => void };
-
-const FIXTURE_MEMBER: MockMember = {
-  id: 'u1',
-  name: '王小明',
-  initial: '王',
-  since: '2024-01-01',
-  points: 0,
-  color: 'var(--df-primary)',
-  age: 0
-};
 
 beforeEach(() => {
   (authStore as TestAuthStore).__set({ loggedIn: false, member: null, roles: [] });

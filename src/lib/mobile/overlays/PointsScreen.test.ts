@@ -6,6 +6,7 @@ import { points, pointsLedger } from '$lib/member/stores';
 import { toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import PointsScreen from './PointsScreen.svelte';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 /* Task 19：PointsScreen 改真後端 —— 兌換品項復用桌面 getPoints()(Task 14 rewards
  * seam)；餘額/明細/兌換動作改讀 $lib/member/stores 的真 points/pointsLedger/
@@ -18,19 +19,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
-
-function fakeRouter(overrides: Record<string, unknown>) {
-	return vi.fn(async (path: string, init: RequestInit = {}) => {
-		const method = (init.method ?? 'GET').toString().toUpperCase();
-		const key = `${method} ${path}`;
-		if (key in overrides) {
-			const value = overrides[key];
-			if (value instanceof Error) throw value;
-			return value;
-		}
-		throw new Error(`unexpected api call: ${key}`);
-	});
-}
 
 const REWARD_AFFORDABLE: Reward = { id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', pointsCost: 100, stock: null };
 const REWARD_SOLDOUT: Reward = { id: 'rw-2', name: '限量托特包', description: '夢飛限定托特包，數量有限。', pointsCost: 50, stock: 0 };

@@ -29,26 +29,12 @@ import {
 } from './api';
 import { api } from '$lib/api/client';
 import { TODAY_LABEL } from './data';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
-
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未交代的端點一律丟錯，讓漏掉
- *  某支 mock 的測試直接失敗而不是悄悄回傳 undefined(同 admin/member api.test.ts)。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-	return vi.fn(async (path: string, init: RequestInit = {}) => {
-		const method = (init.method ?? 'GET').toString().toUpperCase();
-		const key = `${method} ${path}`;
-		if (key in overrides) {
-			const value = overrides[key];
-			if (value instanceof Error) throw value;
-			return value;
-		}
-		throw new Error(`unexpected api call: ${key}`);
-	});
-}
 
 const ME = {
 	id: 'u1',

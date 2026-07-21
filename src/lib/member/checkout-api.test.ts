@@ -32,6 +32,7 @@ import {
   joinWaitlistErrorMessage
 } from './stores';
 import type { CartItem } from '$lib/cart-item';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -55,26 +56,10 @@ const SAMPLE_ORDER: ApiOrder = {
   items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: 'course-uuid-9', quantity: 1, unit_price_cents: 480000 }]
 };
 
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時 DELETE /cart 與
- *  POST /cart/items 預設回 undefined（204/成功 upsert），其餘一律丟錯──呼叫到
- *  沒被交代的端點應該讓測試失敗，而不是悄悄回傳 undefined 蓋掉斷言。
- *  覆寫值可以是函式（每次呼叫求值）——F2 race 釘的兩段式 GET 用它模擬真 server
- *  「首呼舊清單、次呼完整清單」。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const raw = overrides[key];
-      const value = typeof raw === 'function' ? raw() : raw;
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    if (path === '/cart' && method === 'DELETE') return undefined;
-    if (path === '/cart/items' && method === 'POST') return undefined;
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
+/** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined（204/成功
+ *  upsert）——沿用原本 fakeRouter 內建的 cart fallback，經由 defaults 表傳入共用
+ *  fakeRouter。 */
+const CART_DEFAULTS: Record<string, unknown> = { 'DELETE /cart': undefined, 'POST /cart/items': undefined };
 
 /** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers
  *  （手法同 load-gate.test.ts 開頭的 createDeferred）。 */
@@ -125,7 +110,7 @@ beforeEach(() => {
 
 describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
   it('DELETE /cart 後逐項 POST /cart/items；課程一律夾 quantity=1，方案照本地 qty', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}));
+    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
 
     await syncCartToServer([{ ...COURSE_ITEM, qty: 3 }, PASS_ITEM]);
 
@@ -142,7 +127,7 @@ describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
   });
 
   it('空購物車 → 只呼叫 DELETE /cart，沒有任何 POST', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}));
+    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
 
     await syncCartToServer([]);
 
@@ -151,7 +136,7 @@ describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
   });
 
   it('方案 qty > 1 時照實際 qty 送出（夾 1 只套用在課程）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}));
+    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
 
     await syncCartToServer([{ ...PASS_ITEM, qty: 2 }]);
 
@@ -172,7 +157,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
         'POST /orders': SAMPLE_ORDER,
         'GET /subscriptions/me': [],
         'GET /points/me': { balance: 235 }
-      })
+      }, CART_DEFAULTS)
     );
 
     const order = await placeOrder('DREAMFLY100', false, 'key-abc');
@@ -211,7 +196,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
         'POST /orders': SAMPLE_ORDER,
         'GET /subscriptions/me': [],
         'GET /points/me': { balance: 0, ledger: [] }
-      })
+      }, CART_DEFAULTS)
     );
 
     await placeOrder('', false, 'key-own');
@@ -228,7 +213,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
   it('coupon 空字串 → coupon_code 整個欄位省略（不是送空字串）', async () => {
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
     );
 
     await placeOrder('', true, 'key-xyz');
@@ -243,7 +228,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
   it('payment_method 預設 credit_card——呼叫端未指定第 4 個參數時', async () => {
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
     );
 
     await placeOrder('', false, 'key-default-pm');
@@ -255,7 +240,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
   it('選了 line_pay → payment_method 送 line_pay', async () => {
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
     );
 
     await placeOrder('', false, 'key-line-pay', 'line_pay');
@@ -267,7 +252,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
   it('未指定 idempotencyKey → 自動產生 uuid 格式的 key', async () => {
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } })
+      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
     );
 
     await placeOrder('', false);
@@ -312,7 +297,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
         'POST /orders': SAMPLE_ORDER,
         'GET /subscriptions/me': new ApiError(500, 'internal error'), // hydrate 失敗
         'GET /points/me': { balance: 235 }
-      })
+      }, CART_DEFAULTS)
     );
 
     const order = await placeOrder('', false); // 不 reject — 訂單本身已成功
@@ -326,7 +311,7 @@ describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）
 describe('placeOrder — 失敗路徑', () => {
   it('POST /orders 409（滿班）→ 錯誤原樣拋出；本地購物車不清空；不 hydrate subscriptions/points', async () => {
     cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(409, 'course is full') }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(409, 'course is full') }, CART_DEFAULTS));
 
     let caught: unknown;
     try {
@@ -344,7 +329,7 @@ describe('placeOrder — 失敗路徑', () => {
 
   it('POST /orders 400（優惠碼無效）→ 錯誤原樣拋出；本地購物車不清空', async () => {
     cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(400, 'invalid coupon') }));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(400, 'invalid coupon') }, CART_DEFAULTS));
 
     await expect(placeOrder('BADCODE', false)).rejects.toMatchObject({ status: 400 });
     expect(get(cart)).toHaveLength(1);
@@ -574,7 +559,7 @@ describe('hydrateWaitlist', () => {
         return waitlistGets === 1 ? deferred.promise : [API_WL_NEW, API_WL_OLD];
       },
       'POST /waitlist': API_WL_NEW
-    }));
+    }, CART_DEFAULTS));
 
     const p = hydrateWaitlist(); // 通過 guarded()(旗標 false),GET /waitlist/me 首呼掛起中
     const entry = await joinWaitlist('course-uuid-9'); // 飛行中 mutation:直寫 prepend + markMutated(commit) + 和解重抓
@@ -601,7 +586,7 @@ describe('hydrateWaitlist', () => {
       'GET /waitlist/me': [
         { id: 'wl-a', course_id: 'course-uuid-9', course_name: 'A 的候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
       ]
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw'); // 帳號 A 登入
     await hydrateWaitlist();
@@ -628,7 +613,7 @@ describe('hydrateWaitlist', () => {
       'POST /auth/login': AUTH_RES,
       'POST /auth/logout': undefined,
       'GET /waitlist/me': () => deferred.promise
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     const p = hydrateWaitlist(); // A 的 GET 掛起中
@@ -653,7 +638,7 @@ describe('hydrateWaitlist', () => {
       'GET /waitlist/me': () => (++gets === 1
         ? [{ id: 'wl-a', course_id: 'course-uuid-9', course_name: 'A 的候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }]
         : [{ id: 'wl-b', course_id: 'course-uuid-8', course_name: 'B 的候補課程', status: 'waiting', created_at: '2026-07-02T00:00:00Z' }])
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     await hydrateWaitlist();
@@ -706,7 +691,7 @@ describe('joinWaitlist', () => {
         { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' },
         { id: 'wl-old', course_id: 'course-uuid-1', course_name: '既有候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
       ]
-    }));
+    }, CART_DEFAULTS));
 
     await joinWaitlist('course-uuid-9');
     await settleReconcile();
@@ -728,7 +713,7 @@ describe('joinWaitlist', () => {
       'POST /auth/login': AUTH_RES,
       'POST /auth/logout': undefined,
       'POST /waitlist': () => deferred.promise
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     const p = joinWaitlist('course-uuid-9'); // A 的 POST 掛起中
@@ -758,7 +743,7 @@ describe('joinWaitlist', () => {
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /waitlist': () => (++posts === 1 ? post1.promise : post2.promise),
       'GET /waitlist/me': () => (++gets === 1 ? r1.promise : [API_WL_2, API_WL_1]) // 首快照掛起且漏第二筆(server 端 race),次快照完整
-    }));
+    }, CART_DEFAULTS));
 
     const p1 = joinWaitlist('course-uuid-1');
     const p2 = joinWaitlist('course-uuid-2'); // 兩支都在旗標 false 時進場
@@ -794,7 +779,7 @@ describe('joinWaitlist', () => {
         return [API_WL_NEW, API_WL_OLD]; // 重試:完整清單
       },
       'POST /waitlist': API_WL_NEW
-    }));
+    }, CART_DEFAULTS));
 
     const p = hydrateWaitlist(); // H 在飛(旗標 false、世代未變)
     await joinWaitlist('course-uuid-9'); // 直寫 + markMutated(世代+1) + 排和解
@@ -825,7 +810,7 @@ describe('joinWaitlist', () => {
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /waitlist': () => (++posts === 1 ? API_WL_1 : post2.promise),
       'GET /waitlist/me': () => (++gets === 1 ? r1 : [API_WL_2, API_WL_1])
-    }));
+    }, CART_DEFAULTS));
 
     await joinWaitlist('course-uuid-1'); // M1:未水合 → markMutated + 排 R1
     await settleReconcile(); // R1 的 GET 出發(掛起中)
@@ -859,7 +844,7 @@ describe('joinWaitlist', () => {
       'POST /auth/logout': undefined,
       'POST /waitlist': () => (++posts === 1 ? post1.promise : post2.promise),
       'GET /waitlist/me': () => { ++gets; return gets === 1 ? r1.promise : [API_WL_2, API_WL_1]; }
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     const p1 = joinWaitlist('course-uuid-1');
@@ -894,7 +879,7 @@ describe('joinWaitlist', () => {
       'POST /auth/logout': undefined,
       'POST /waitlist': () => (++posts === 1 ? API_WL_A : API_WL_B),
       'GET /waitlist/me': () => (++gets === 1 ? new Promise(() => {}) : [API_WL_B, API_WL_B_OLD]) // R1 永不 settle
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     await joinWaitlist('course-uuid-1'); // A:R1 起跑 → 永掛
@@ -923,7 +908,7 @@ describe('joinWaitlist', () => {
             { id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z' },
             { id: 'wl-old', course_id: 'course-uuid-1', course_name: '既有候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
           ])
-    }));
+    }, CART_DEFAULTS));
 
     await joinWaitlist('course-uuid-9');
     await settleReconcile();
@@ -969,7 +954,7 @@ describe('cancelWaitlist', () => {
       'POST /auth/login': AUTH_RES,
       'POST /auth/logout': undefined,
       'DELETE /waitlist/wl-1': () => deferred.promise
-    }));
+    }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
     waitlist.set([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);

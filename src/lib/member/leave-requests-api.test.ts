@@ -11,6 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
 import {
   leaveRequests,
   leaveRequestsHydrated,
@@ -36,24 +37,6 @@ function createDeferred<T>() {
     resolve = res;
   });
   return { promise, resolve };
-}
-
-/** 極小 fake router：依 "METHOD path" key 回應覆寫值；未覆寫時一律丟錯
- *  （同 checkout-api.test.ts 慣例——呼叫到沒被交代的端點應該讓測試失敗）。
- *  覆寫值可以是函式（每次呼叫求值）——F2 race 釘的兩段式 GET 用它模擬真 server
- *  「首呼舊清單、次呼完整清單」。 */
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const raw = overrides[key];
-      const value = typeof raw === 'function' ? raw() : raw;
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
 }
 
 /** F2 和解重抓（mutator 尾隨的 void gate.refresh()）是 fire-and-forget——

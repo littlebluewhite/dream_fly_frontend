@@ -4,6 +4,7 @@ import { get } from 'svelte/store';
 import MakeupDialog from './MakeupDialog.svelte';
 import { toasts, leaveRequests, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 /* 預約補課 dialog（Task 11；integration-contract.md §3.20 + §3.18）—— 現在是針對
  * 「一張已核准且尚未補課的請假申請」開啟的動作（不再是課程層級的一般動作），
@@ -45,19 +46,6 @@ const UPDATED = {
   makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00',
   decided_at: '2026-06-26T00:00:00Z', created_at: '2026-06-25T00:00:00Z'
 };
-
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
 
 beforeEach(() => {
   vi.mocked(api).mockReset();

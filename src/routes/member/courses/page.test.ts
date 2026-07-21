@@ -5,6 +5,7 @@ import Page from './+page.svelte';
 import { cart, toasts, waitlist, waitlistHydrated } from '$lib/member/stores';
 import { getCourses } from '$lib/member/api';
 import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/member/api', () => ({ getCourses: vi.fn() }));
 // 只替換 api()，ApiError 用回真實類別（addToCart 的 joinWaitlistErrorMessage 靠
@@ -34,35 +35,25 @@ const OPEN = CATALOG.find((c) => c.spots > 0)!; // course-1 幼兒體操 啟蒙�
 // below to be unambiguous; assert that here so the fixture can't drift silently.
 const fullCount = CATALOG.filter((c) => c.spots === 0).length;
 
-/** Tiny fake router for the `api` client mock (same convention as
+/** Waitlist defaults for the shared fakeRouter (same convention as
  *  checkout-api.test.ts's fakeRouter): defaults GET /waitlist/me to an empty
  *  candidate list and POST /waitlist to a successful join echoing back the
  *  requested course_id, so tests that don't care about the waitlist API's
  *  exact shape still get a working join flow without configuring it. */
-function apiRouter(overrides: Record<string, unknown> = {}) {
-	return vi.fn(async (path: string, init: RequestInit = {}) => {
-		const method = (init.method ?? 'GET').toString().toUpperCase();
-		const key = `${method} ${path}`;
-		if (key in overrides) {
-			const value = overrides[key];
-			if (value instanceof Error) throw value;
-			return value;
-		}
-		if (path === '/waitlist/me' && method === 'GET') return [];
-		if (path === '/waitlist' && method === 'POST') {
-			const body = JSON.parse((init.body as string) ?? '{}') as { course_id?: string };
-			const course = CATALOG.find((c) => c.id === body.course_id);
-			return { id: 'wl-' + body.course_id, course_id: body.course_id, course_name: course?.name ?? '課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
-		}
-		throw new Error(`unexpected api call: ${key}`);
-	});
-}
+const WAITLIST_DEFAULTS: Record<string, unknown> = {
+	'GET /waitlist/me': [],
+	'POST /waitlist': (init: RequestInit) => {
+		const body = JSON.parse((init.body as string) ?? '{}') as { course_id?: string };
+		const course = CATALOG.find((c) => c.id === body.course_id);
+		return { id: 'wl-' + body.course_id, course_id: body.course_id, course_name: course?.name ?? '課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
+	}
+};
 
 beforeEach(() => {
 	vi.mocked(getCourses).mockReset();
 	vi.mocked(getCourses).mockResolvedValue({ catalog: CATALOG });
 	vi.mocked(api).mockReset();
-	vi.mocked(api).mockImplementation(apiRouter());
+	vi.mocked(api).mockImplementation(fakeRouter({}, WAITLIST_DEFAULTS));
 	waitlist.set([]);
 	waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓進頁的 hydrateWaitlist 短路
 });
@@ -116,11 +107,11 @@ describe('課程介紹 — addToCart branches on the store AddResult (waitlist g
 describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補 409）', () => {
 	it('已經候補過的滿班課程進頁即水合為「已候補」，按鈕停用且不再重複打 POST /waitlist', async () => {
 		vi.mocked(api).mockImplementation(
-			apiRouter({
+			fakeRouter({
 				'GET /waitlist/me': [
 					{ id: 'wl-1', course_id: FULL.id, course_name: FULL.name, status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
 				]
-			})
+			}, WAITLIST_DEFAULTS)
 		);
 
 		const { container } = render(Page);
@@ -133,7 +124,7 @@ describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補
 
 	it('重複候補（後端 409 "already on waitlist"）→ 顯示「加入候補失敗」與專屬繁中文案，不顯示「已加入候補」', async () => {
 		vi.mocked(api).mockImplementation(
-			apiRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') })
+			fakeRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }, WAITLIST_DEFAULTS)
 		);
 
 		const { container } = render(Page);

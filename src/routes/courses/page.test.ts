@@ -26,18 +26,8 @@ vi.mock('$lib/member/stores', async (importOriginal) => {
 // logged-in/out UI state (same fake as CartDropdown.test.ts — auth mechanics
 // themselves are covered in src/lib/stores/authStore.test.ts).
 vi.mock('$lib/stores/authStore', async () => {
-	const { writable, derived } = await import('svelte/store');
-	const state = writable({ loggedIn: false, member: null, roles: [] as string[] });
-	return {
-		authStore: {
-			subscribe: state.subscribe,
-			login: vi.fn(async () => state.set({ loggedIn: true, member: null, roles: ['member'] })),
-			register: vi.fn(async () => {}),
-			logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
-			hydrate: vi.fn(async () => {})
-		},
-		isLoggedIn: derived(state, ($s) => $s.loggedIn)
-	};
+	const { makeAuthMockA } = await import('$lib/testing/auth-mock');
+	return makeAuthMockA();
 });
 
 const COURSE: ApiCourse = {

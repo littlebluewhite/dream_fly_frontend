@@ -4,6 +4,7 @@ import ReportCardDialog from './ReportCardDialog.svelte';
 import { toasts } from '$lib/coach/stores';
 import { api, ApiError } from '$lib/api/client';
 import type { Student } from '$lib/coach/data';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 /* 寫評語 dialog（Task 13 續；POST /report-cards，見 integration-contract.md §3.22）——
  * 只 mock $lib/api/client 的 api()，讓 $lib/coach/api 的 createReportCard 走真實
@@ -31,19 +32,6 @@ const TWO_COURSES: Student = {
   ],
   level: '中階', skill: '後空翻', pct: 72, att: 95
 };
-
-function fakeRouter(overrides: Record<string, unknown>) {
-  return vi.fn(async (path: string, init: RequestInit = {}) => {
-    const method = (init.method ?? 'GET').toString().toUpperCase();
-    const key = `${method} ${path}`;
-    if (key in overrides) {
-      const value = overrides[key];
-      if (value instanceof Error) throw value;
-      return value;
-    }
-    throw new Error(`unexpected api call: ${key}`);
-  });
-}
 
 const CREATED = {
   id: 'rc1', course_id: 'c-jr-b', course_name: '兒童體操初階 B 班',

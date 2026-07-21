@@ -11,18 +11,13 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
 vi.mock('$lib/stores/authStore', async () => {
-	const { writable, derived } = await import('svelte/store');
-	const state = writable({ loggedIn: false, member: null, roles: [] as string[] });
-	return {
-		authStore: { subscribe: state.subscribe, __set: state.set },
-		isLoggedIn: derived(state, ($s) => $s.loggedIn)
-	};
+	const { makeAuthMockB } = await import('$lib/testing/auth-mock');
+	return makeAuthMockB({ withIsLoggedIn: true });
 });
 
 import { authStore } from '$lib/stores/authStore';
+import type { TestAuthStore } from '$lib/testing/auth-mock';
 import Page from './+page.svelte';
-
-type TestAuthStore = typeof authStore & { __set: (s: { loggedIn: boolean; member: null; roles: string[] }) => void };
 
 beforeEach(() => {
 	(authStore as TestAuthStore).__set({ loggedIn: false, member: null, roles: [] });
