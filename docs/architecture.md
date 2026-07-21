@@ -117,7 +117,13 @@ verbatim to `import-scan.test.ts`; the contract file consumes the module's three
 four-line smoke canary (one positive, one negative form) so a dead scanner still trips locally, while a
 dogfood contract inside `import-scan.test.ts` pins that no production file under `src/lib`/`src/routes`
 imports `$lib/testing`. See `docs/adr/0012` for the full K6 rationale,
-including a type-assertion lesson from the same batch.
+including a type-assertion lesson from the same batch. Since 2026-07-22 (R7 C2) `src/lib/testing/`
+gained two more first-class residents alongside `import-scan.ts` — `fake-router.ts`
+(`fakeRouter(overrides, defaults?)`, a fetch-path lookup stub with fn-eval support) and
+`auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical `vi.mock('$lib/stores/authStore')`
+factories) — collapsing 29 test files' hand-rolled copies of the same two fixtures onto one source
+each; the dogfood contract's production-file scan excludes `src/lib/testing/` itself (it's the
+module being scanned *for*, not a production consumer).
 
 ## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
 
@@ -156,6 +162,10 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   member/mine card shows.
 - **Staff role switch:** `lib/staff/roles.ts` maps admin↔coach and remembers the last role in
   `df_staff_last_role` — a local UI convenience, independent of the real role check at staff login.
+- **Google OAuth callback is one shared component:** `lib/components/GoogleCallbackCard.svelte`
+  (2026-07-22, R7 C7) takes `successPath`/`loginPath` props; `member`'s and `mobile`'s
+  `/login/google` routes are both ten-line shells over it. `staff`/`mobile-admin` still have no
+  Google option (`docs/adr/0006`).
 
 Known, deferred caveat (ADR 0001): persisted stores read `localStorage` at module-init, which can cause a
 hydration flicker on a hard reload of a logged-in SSR page. Intentional follow-up, not a regression.
@@ -245,12 +255,17 @@ protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate
 second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
 own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
 unchanged), retiring the last hand-carried copy of the guard/re-check protocol. Since 2026-07-20 (R5 C1,
-`docs/adr/0016`) member's 候補 waitlist and 請假 leave-requests stores adopt the same factory —
-`hydrateWaitlist`/`hydrateLeaveRequests` *are* gate.hydrate behind `waitlistHydrated`/
-`leaveRequestsHydrated`, their five mutators keep writing directly and flip `markMutated()`,
-`refreshWaitlist` is deleted outright (YAGNI, the notifications precedent) while `refreshLeaveRequests`
-keeps its name as gate.refresh for `MyCourseDetail`'s open-refresh — accepting once-per-session
-freshness, with the explicit-refresh window's missing mutation-wins re-check recorded as known-latent. Separately, member's
+`docs/adr/0016`) member's 候補 waitlist and 請假 leave-requests stores adopted `createHydrationGate`
+directly, each hand-rolling a byte-identical session-identity epoch/reconcile-chain skeleton beside it.
+Since 2026-07-22 (R7 C1, `docs/adr/0017`) waitlist, leave, *and* notifications all sit on the
+session-identity-aware factories in `src/lib/session-gate.ts` instead — see the dedicated section
+below; `hydrateWaitlist`/`hydrateLeaveRequests`/`refreshNotifications` *are* `gate.hydrate` behind
+`waitlistHydrated`/`leaveRequestsHydrated`/`notificationsHydrated`, and the five hand-copied mutator
+skeletons collapse into one `gate.mutate()`. `refreshWaitlist` is still deleted outright (YAGNI, the
+notifications precedent); `refreshLeaveRequests` still keeps its name as `gate.refresh` for
+`MyCourseDetail`'s open-refresh — accepting once-per-session freshness, now with in-flight
+cross-login responses discarded too, but still without a mutation-wins re-check on that
+explicit-refresh window, recorded as known-latent (`docs/adr/0016`, unaffected by the R7 change). Separately, member's
 `getDashboard()`/`getAccount()`/`getMine()` getters (`member/api.ts`) also opportunistically hydrate
 session-scoped stores (points/notifications/subscriptions; `getMine()` — the third adopter, 2026-07-16 —
 候補 waitlist + 請假 leave-requests) as a side effect, behind a private, named
@@ -295,12 +310,17 @@ than one place, independent of any single page's own load-gate?
   therefore owns a full `createHydrationGate` instance, and the page's
   `createLoadGate({ hydrate: { flag, into } })` reads/writes that *same* `gate.hydrated` writable rather
   than declaring its own.
-- **mobile notifications — one entry point, a plain flag suffices**: nothing outside the notifications
-  page hydrates `notifs`, so there's no second trigger to coordinate with. `notifsHydrated` stays a plain
-  `writable(false)` wired straight into the page's `createLoadGate({ hydrate })` option; its mutators
-  (`markRead`/`markAllRead`, since 2026-07-14 real `PATCH /notifications/{id}/read` calls — see
-  `docs/adr/0013`) flip it by hand instead of calling a `markMutated()` on a gate instance that would
-  otherwise just wrap the same one assignment.
+- **mobile notifications — one entry point, a plain flag suffices for hydration, not for session
+  identity**: nothing outside the notifications page hydrates `notifs`, so there's no second
+  *hydration* trigger to coordinate with. `notifsHydrated` stays a plain `writable(false)` wired
+  straight into the page's `createLoadGate({ hydrate })` option; its mutators (`markRead`/
+  `markAllRead`, since 2026-07-14 real `PATCH /notifications/{id}/read` calls — see `docs/adr/0013`)
+  flip it by hand instead of calling a `markMutated()` on a gate instance that would otherwise just
+  wrap the same one assignment. That simplicity only covers the hydration axis, though: a plain flag
+  has no way of knowing when the logged-in identity changes, so since 2026-07-22 (R7 C1,
+  `docs/adr/0017`) the flag's *session* axis is supplied separately by `onSessionReset` — the third
+  factory in `src/lib/session-gate.ts` — which resets both `notifsBase` and `notifsHydrated` to boot
+  state on identity change while leaving gate ownership with the caller.
 - **mobile-admin ops/messages — store-owned, multiple mutators**: `hydrateOps`/`hydrateMessages` (and
   their `refresh*` counterparts) live in `stores.ts`, not the page — the page's gate calls them directly
   as its `fetch`/`refresh`. Several mutators (`markOrderPaid`/`markMessageRead`) can flip the guard, and
@@ -310,6 +330,50 @@ than one place, independent of any single page's own load-gate?
 Rule of thumb: reach for the standalone `createHydrationGate` when a store's hydration can be triggered
 from more than one place (another getter, another mutator, another page); a lone page with a lone mutator
 can wire a plain writable straight into `load-gate.ts`'s `hydrate` option instead.
+
+## Session gate: session-identity-aware resets on top of the hydration gate
+
+`createHydrationGate`/`createLoadGate`'s guard/mutation-wins protocol (above) knows nothing about
+*who* is logged in — it only tracks whether a store has been hydrated at all. Six member/mobile
+domain stores each handled "the logged-in identity changed" differently: waitlist/leave (adopting
+`createHydrationGate` per `docs/adr/0016`, R5) each hand-rolled a byte-identical session-epoch/
+reconcile-chain skeleton on top of it; member notifications' and mobile's notification flags survived
+a logout unchanged (a real cross-login leak — SPA logout has no full page reload, so the next
+account's first hydrate was guard-short-circuited into reading the previous account's data); points/
+subscriptions had no session awareness at all (unconditional refetch, but nothing reset them on
+identity change, and an in-flight refetch spanning the switch would land unconditionally).
+
+`src/lib/session-gate.ts` (2026-07-22, R7 C1, `docs/adr/0017`) is the single source, three factories
+sitting between `authStore` and the domain stores:
+
+- **`createSessionGate<T>({ fetch, apply, reset })`** — waitlist / leave / member notifications.
+  Builds a `HydrationGate` (via `createHydrationGate`) plus `mutate(request, writeBack)`, which
+  absorbs what used to be five hand-copied mutator skeletons: snapshot hydration state + epoch before
+  `await`, discard an epoch-stale write-back (result still returned — the server-side effect already
+  happened), re-check completeness on write-back (a prior reconcile may have flipped the flag back to
+  `false`), `markMutated()`, then conditionally queue a serialized, retryable reconciliation refetch.
+- **`createSessionRefresher<T>({ fetch, apply, reset })`** — points / subscriptions. Keeps their
+  pre-existing unconditional-refetch semantics (no guard) but adds identity-change reset and *silent*
+  in-flight cross-login discard (`return`, not `throw` — throwing would inject a new "switched
+  accounts" failure mode into `redeemReward`'s and `placeOrder`'s existing rejection chains).
+- **`onSessionReset(reset)`** — mobile notifs. Gate ownership (the plain `notifsHydrated` writable)
+  stays with the caller; this factory only calls `reset` on identity change.
+
+Each factory call opens its own `authStore` subscription (six module-level subscriptions total, same
+shape as before) rather than sharing a registry. Session-gate is deliberately *not* folded into
+`hydration-gate.ts` itself: that module is consumed by ~49 pages across every surface including
+`staff`/`mobile-admin`, whose identity source isn't member's `authStore` — folding member-auth
+awareness into the repo's widest shared seam would be a wrong-direction dependency.
+
+This closed two real cross-login leaks (notifications, mobile notifs) and the points/subscriptions
+residual window that `docs/adr/0016` had flagged as "not in this round's write set, tracked
+separately." One known-latent gap remains, symmetric across `member`'s notifications page and
+mobile's notifications screen: each page's own `createLoadGate({ fetch: getNotifications, hydrate })`
+calls the raw API getter directly rather than the store's own `gate.hydrate`/`gate.refresh`, so it
+isn't wrapped by session-gate's epoch check — staying on the page while an identity switch happens
+mid-flight can still let a stale response land after the store's reset. See `docs/adr/0017` for the
+full analysis (why the guard-short-circuit and navigate-away cases are already safe, and why only
+that narrow window remains open).
 
 ## Single-page controllers, orchestrators, and twin modules (coach, admin, member)
 
@@ -358,12 +422,26 @@ page: `member/leave-form.ts` (the 請假/補課 form machines behind `LeaveDialo
 mobile's `LeaveSheet`/`MakeupSheet`) and `member/cancel-leave.ts` (the shared cancel-leave busy guard
 behind member/mine and mobile's `MyCourseDetail`). Gate wiring, error mappers, and toast copy stay at
 each call site — `docs/adr/0012`'s criterion ① is relaxed for exactly this class by `docs/adr/0014`.
+Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)` pushes the
+pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store, shared by
+*four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a desktop↔mobile
+pair. It collapses what used to be a byte-identical `submit()` skeleton (re-entrancy guard → optional
+empty-fields check → clear error, lock → login → resolve a role-based redirect target → navigate →
+catch → unlock) into
+one module; each page keeps its own `let busy`/`let error` locals and markup unchanged, wiring them
+through the `LoginSubmitIO` callbacks.
 
 ## Testing
 
 Vitest + `@testing-library/svelte` (jsdom, setup in `src/vitest-setup.ts`), with co-located `*.test.ts`.
 The *convention* — extract pure logic into a sibling `.ts` so it's testable without rendering — is a
-coding standard; see the `coding-standards` skill → `references/frontend.md`.
+coding standard; see the `coding-standards` skill → `references/frontend.md`. Not every `.ts` has a
+same-named `.test.ts`, though: since R7 C1 (`docs/adr/0017`) `member/waitlist.ts`, `leave.ts`,
+`points.ts`, and `subscriptions.ts` have no sibling test file of their own — their mutator/adapter
+pins live in the topic-named `checkout-api.test.ts` and `leave-requests-api.test.ts` instead (a
+pre-existing pattern), while the shared session-identity protocol itself (guard, epoch, reconcile
+chain) is tested exactly once, generically, in lib-root's `session-gate.test.ts`. "Co-located" above
+means co-located with the API surface a test exercises, not a strict 1:1 file-name mirror.
 
 ## Mobile surfaces use an overlay host, not nested routes
 

@@ -157,11 +157,13 @@ surface（member/staff）共用同一套 API：
 | `mobile-admin` 場館／票券管理 | `src/lib/mobile-admin/overlays/VenuesScreen.svelte`／`TicketsScreen.svelte` | **讀取側已接真**（2026-07-20 R5 C4：兩 screen 經 `getVenues`/`getTickets` 薄委派讀真 `GET /venues`、`GET /products` 第 1 頁，`createLoadGate` 三態；靜態 `VENUES`/`TICKETS` seed 依 ADR 0010 值/型別分離退役）；**寫入側 demo 邊界不變**——場館維持唯讀展示（Task F4 決定不擴大範圍去加行動版寫入 UI），票券「編輯」仍顯示「（示範）」toast，「新增」則誠實導引使用者去桌面版操作，不是假裝成功 |
 | `mobile` 帳戶設定「儲存變更」／桌面會員帳戶頁個人資料 | `src/lib/mobile/overlays/SettingsScreen.svelte`／`src/routes/member/account/+page.svelte` | 姓名/電話/家長聯絡人等欄位兩側都仍是本地端編輯、無可寫後端欄位；桌面生日已真 `PATCH /users/me { birth_date }`（Task P4-F4），mobile 尚未跟進生日欄位；mobile 的通知偏好/深色模式四個開關已真（Task F10，不在此列） |
 | admin 登入裝置清單 | `src/routes/admin/settings/+page.svelte`（`LOGINS`） | 契約 §3.25 開頭明文排除（需 session 管理，另案處理），維持純本地 mock，非本輪遺漏 |
+| `mobile` 試上預約時段選項 | `src/lib/mobile/overlays/TrialScreen.svelte`（`TRIAL_SLOTS`） | 可選日期（`TRIAL_DAYS`）已於 2026-07-22 R7 架構深化改為以今日為基準動態產生（觀察收編，非後端變更）；可選「時段」清單（`TRIAL_SLOTS`）仍為前端硬編字面量，無對應後端端點（P2） |
 
 以上殘餘跟既有殘餘同一等級（例如 admin 學員表仍只顯示後端有提供的 7 個真欄位，其餘約 13 個概念欄位
 因無後端來源而隱藏，非造假）——都是「後端尚無端點」「契約明文排除」或「純裝飾」的誠實缺口。逐項核對
-後，Round 3 結束時列出的九項殘餘僅剩上表五項，其中兩項（場館／票券、系統設定）是原本殘餘的窄化描述
-而非新發現的缺口。
+後，Round 3 結束時列出的九項殘餘僅剩上表前五項，其中兩項（場館／票券、系統設定）是原本殘餘的窄化
+描述而非新發現的缺口；第六項（`mobile` 試上預約時段選項）是 2026-07-22 R7 架構深化新增的觀察收編
+發現，不屬於這九項的血緣。
 
 > **2026-07-20（R5 架構深化）增補**：coach 儀表板「最新訊息」預覽先前由 `getDashboard()` 夾帶
 > mock `CONVERSATIONS` seed 回傳——真 payload 的型別掩護了 mock 欄位，屬未列入上表的縫隙，本輪已

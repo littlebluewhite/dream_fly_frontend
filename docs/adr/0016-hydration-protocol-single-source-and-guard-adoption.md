@@ -116,6 +116,32 @@ caller 佈線(全部落在 store/api 接縫,頁面模板零改動):
 A→B 直接換帳號釘 ×2、cancel/bookMakeup 棄寫釘 ×2、leave 序列化鏡射釘;序列化釘去 vacuous 化
 (首和解掛起時斷言次和解未起跑,拿掉串行鏈必紅)。
 
+## 由 ADR 0017 取代(2026-07-22,架構深化 R7 C1)
+
+`src/lib/session-gate.ts`(`docs/adr/0017`)把本篇「決定二」表格(:41)描述的「5 支
+mutators……維持直寫 + store 寫入後補 `gate.markMutated()`」,與「帳本閉合輪補強」/「二段」
+兩節手焊在 `waitlist.ts`/`leave.ts` 模組頂層的 identity 鍵/`sessionEpoch`/序列化和解鏈骨架
+(:87「identity 鍵(`member.id`)+ `sessionEpoch`……fetcher 與五支 mutators 的跨 await 寫回
+一律核對出發時 epoch」一段起,含其後「和解序列化」「和解失敗可重試」與「二段」的世代/完整度
+分離、寫回時重查完整度、和解鏈 session 化),整段收進 `createSessionGate` 的 `mutate()`——
+兩份手焊骨架(waitlist/leave 位元組級雙生)自此由單一工廠吸收,不再各自維護。
+
+以下明確**不受**取代影響、仍然有效:
+
+- **決定一(HydrationCore 三決策點)**:`session-gate.ts` 建於 `createHydrationGate` 之上,
+  guarded/mutationWins/commit 三決策點的委派關係不變。
+- **「兩筆 known-latent」第 2 則(殘留 refresh race)**:`gate.refresh` 依然刻意無
+  mutation-wins,`MyCourseDetail` 顯式 refresh 窗口內的取消請假仍可能被舊回應蓋回——本輪只給
+  `refresh()` 加上 P1′ 在飛跨登入作廢(見 `session-gate.ts` 的 `wrappedFetch`),未擴大
+  mutation-wins 語意,這則 known-latent 原樣保留。
+
+以下 known-open 病灶自本輪**關閉**:「對抗審後補強」節記錄的「notifications/points/
+subscriptions 的同型缺口為前存……不在本輪寫入集,另卡追蹤」——這三者由 `docs/adr/0017` 全數
+收掉(notifications 抬升為 `createSessionGate`,修正真缺陷:跨登入的旗標存活導致 guard 短路
+讀到前帳號資料;points/subscriptions 抬升為 `createSessionRefresher`,修正殘影窗口:identity
+變更清空 + 在飛換帳寫回靜默丟棄),不再是「另卡追蹤」的開放項;mobile notifs 雖未列名在該句
+原文,但同根因、同輪由 `onSessionReset` 一併修正。
+
 ## 協定測試維持兩份(防整併)
 
 `load-gate.test.ts` 的 hydrate describe 與 `checkout-api.test.ts`/`leave-requests-api.test.ts` 的
@@ -153,3 +179,6 @@ gate 採用測試**都留**:前者釘的是 load-gate 特有交織(phase 收斂/
 - **`docs/adr/0012`**:單頁 controller 判準;本篇附記之 C5 為第五例。
 - **`docs/adr/0014`** §5:本篇決定二回應的「另案」出處。
 - **`docs/adr/0015`**:對話框 reset 分散裁決;與 C5 的劃界見附記。
+- **`docs/adr/0017`**:「決定二」五 mutator 骨架與「帳本閉合輪補強」/「二段」節手焊的
+  identity/epoch/和解機制,由其 session-gate 工廠取代;取代範圍與仍然有效的部分見新增節
+  「由 ADR 0017 取代」。

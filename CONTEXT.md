@@ -84,6 +84,14 @@ _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合
 `src/lib/hydration-gate.ts` 的 `createHydrationGate`(見 `docs/adr/0008` 註記)。
 _Avoid_: 手抄 *Hydrated 旗標協定
 
+**session 閘門 (Session Gate)**:
+domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
+來源 `src/lib/session-gate.ts` 三門——`createSessionGate`(完整水合閘門 + identity 重置 + epoch
+核對 fetch + `mutate()`,供 waitlist/請假/會員通知)、`createSessionRefresher`(無條件重抓 + 在
+飛換帳靜默丟棄,供點數/訂閱)、`onSessionReset`(僅重置,閘門所有權留呼叫端,供 mobile 通知)
+(見 `docs/adr/0017`)。
+_Avoid_: 手抄 epoch/訂閱重置/和解鏈(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活
+
 **顯示查表 (Display Lookup)**:
 狀態/類型 → tone/label(部分為純 tone,狀態字面本身即顯示標籤)對照表;單一來源集中在 `$lib/domain`
 各 entity 檔(`members.ts`/`venues.ts`/`tickets.ts`/`classes.ts`/`course-level.ts`)與
