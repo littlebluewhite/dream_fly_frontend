@@ -1,7 +1,6 @@
-import { writable, get } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
-import { createHydrationGate } from '$lib/hydration-gate';
-import { authStore } from '$lib/stores/authStore';
+import { createSessionGate } from '$lib/session-gate';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
  * 全新 UI 流（repo 原無請假 UI，比照 Round 1 打卡 UI 先例：新寫網路層，不是替換
@@ -62,132 +61,77 @@ function toLeaveRequest(r: ApiLeaveRequest): LeaveRequest {
 
 export const leaveRequests = writable<LeaveRequest[]>([]);
 
-/** GET /leave-requests/me — 純陣列、不分頁、新到舊，原樣沿用後端排序。C1 改用
- *  共用的 createHydrationGate 收斂水合協定（guard 短路 + post-await re-check +
- *  mutator 翻旗，見 $lib/hydration-gate 的協定說明）：hydrateLeaveRequests()
- *  per-session 只抓一次；fetch 飛行中發生 mutation（create/cancel/bookMakeup
- *  直寫 store + markMutated）則 mutation 勝出、整包放棄過期回應——修掉「水合前
- *  的本地寫入被姍姍來遲的首次水合覆蓋」的 race。 */
-const gate = createHydrationGate<LeaveRequest[]>({
+/** GET /leave-requests/me — 純陣列、不分頁、新到舊，原樣沿用後端排序。C1（架構深化
+ *  R7）改用共用的 createSessionGate 收斂整套 session 水合協定:guard 短路 + post-await
+ *  re-check + mutator 翻旗 + identity 重置 + epoch 核對 fetch + 序列化可重試和解鏈——
+ *  原本焊在本檔的 sessionEpoch/reconcileChain/authStore.subscribe 骨架(與 waitlist.ts
+ *  位元組級雙生)全數吸收進工廠(見 $lib/session-gate 的協定說明)。fetch 是純域 fetch:
+ *  P1′ 的 epoch 核對由工廠外包。 */
+const gate = createSessionGate<LeaveRequest[]>({
   fetch: async () => {
-    const epoch = sessionEpoch;
     const list = await api<ApiLeaveRequest[]>('/leave-requests/me');
-    // P1′：回應落地前核對 epoch——跨登出/換帳號的在飛回應整包作廢（throw 讓 gate
-    // 既不 apply 也不 commit，見 hydration-gate 檔頭「fetch rejection 原樣拋出」）。
-    if (epoch !== sessionEpoch) throw new Error('stale session: leave-requests 回應跨登出/換帳號，作廢');
     return list.map(toLeaveRequest);
   },
-  apply: (list) => leaveRequests.set(list)
+  apply: (list) => leaveRequests.set(list),
+  reset: () => leaveRequests.set([]) // boot 態 = 空
 });
 export const leaveRequestsHydrated = gate.hydrated;
 export const hydrateLeaveRequests = gate.hydrate;
 /** 保名 = gate.refresh：無視守衛、一律真抓——MyCourseDetail 開課程詳情要「刷新
  *  最新請假狀態」的既有語意（mobile stores 的 re-export 與 identity pin 均繫於
- *  此名）。注意 refresh 無 mutation-wins re-check（同 load-gate applyRefreshed
- *  的「無條件」刻意設計）——refresh 飛行窗口內的併發取消仍可能被蓋回，
- *  known-latent，不在本輪擴語意。 */
+ *  此名）。走工廠的 wrappedFetch,故一併獲得 P1′ 在飛作廢(跨登出/換帳號的在飛
+ *  refresh 回應整包作廢);但無 mutation-wins re-check(同 load-gate applyRefreshed
+ *  的「無條件」刻意設計)——refresh 飛行窗口內的併發取消仍可能被蓋回,known-latent,
+ *  不在本輪擴語意。 */
 export const refreshLeaveRequests = gate.refresh;
-
-/* F1′（架構深化 R5 終審 F1 + 帳本閉合輪升級）：同 waitlist.ts——SPA 登出
- * （authStore.logout() + goto）沒有整頁重載，模組單例的 gate 旗標若跨帳號存活，
- * 下一個帳號的 hydrateLeaveRequests() 被 guarded() 短路、直接看到前帳號的假單。
- * F1 原修的「登入 → 登出」布林邊沿只重置「已落地」的狀態，關不住 (1)「A→B 直接
- * 換帳號」與 (2) 登出前已出發、重置後才 resolve 的在飛 GET/POST 寫回。升級為
- * identity 鍵（member.id）+ session epoch：identity 一變就 epoch+1 並清 store/
- * 旗標；所有跨 await 的寫回都核對出發時的 epoch，過期即作廢（詳見 waitlist.ts
- * 同名區塊與 ADR 0016）。 */
-let sessionEpoch = 0;
-let lastIdentity: string | null = null;
-// 宣告在 subscribe 之前：restored session 下 subscribe 的立即回呼就會走 identity
-// 變更分支，若鏈還在 TDZ 會炸 module-load。
-let reconcileChain: Promise<void> = Promise.resolve();
-authStore.subscribe(({ loggedIn, member }) => {
-  const identity = loggedIn ? (member?.id ?? '') : null;
-  if (identity !== lastIdentity) {
-    sessionEpoch += 1;
-    leaveRequests.set([]);
-    gate.hydrated.set(false);
-    reconcileChain = Promise.resolve(); // 舊 session 卡死的和解不得堵住新 session 的鏈
-  }
-  lastIdentity = identity;
-});
-
-/* F2′（帳本閉合輪）：和解重抓改「序列化 + 失敗可重試 + 幽靈取消」——序列化消滅
- * 「舊快照晚到、倒序覆寫新 mutation」的窗口；失敗把旗標翻回 false（僅限同 epoch）
- * 留下重試路徑，不再吞錯佯裝完整（mutation-wins 不因此拆除——gate 的 markMutated
- * 帶單調世代）；排隊的 callback 起跑前核對 epoch，舊 session 的和解不得在新 session
- * 發出幽靈 refresh。機制與取捨詳見 waitlist.ts 的 F2′ 區塊與 ADR 0016。 */
-function queueReconcile(): void {
-  const epoch = sessionEpoch;
-  reconcileChain = reconcileChain.then(() => {
-    if (epoch !== sessionEpoch) return; // 幽靈和解：排隊時的 session 已結束
-    return gate.refresh().catch(() => {
-      if (epoch === sessionEpoch) gate.hydrated.set(false);
-    });
-  });
-}
 
 /** POST /leave-requests（帶 session_id + 選填 reason）。reason 空字串/未提供時省略
  *  該欄位（同 CouponCreateDialog 對選填 expires_at 的省略慣例），對應後端 Option
  *  語意。成功把新假單塞進 store 最前面（同 GET /leave-requests/me 的新到舊排序），
  *  不用整包重新 hydrate。404（未報名此課程/場次不存在）/422（場次已開始）/409
  *  （已有請假紀錄）原樣拋出，不吞——呼叫端用 leaveRequestErrorMessage() 轉繁中文案
- *  （這個模組後端本身就已回繁中，見該函式註解）。 */
+ *  （這個模組後端本身就已回繁中，見該函式註解）。API→domain 映射(toLeaveRequest)在
+ *  request closure 內完成,故 gate.mutate 的 R = LeaveRequest、匯出回傳型別成立;進場
+ *  快照/epoch 作廢/寫回重查完整度/和解重抓全由工廠處理(見 $lib/session-gate)。 */
 export async function createLeaveRequest(sessionId: string, reason?: string): Promise<LeaveRequest> {
-  // F2′：進場（POST 之前）捕捉水合狀態——旗標 commit（markMutated）後 guarded() 從此
-  // 短路；若寫入當下尚未水合，store 只有本地直寫、server 上既有假單將永不補回，所以
-  // !wasHydrated 時排一次和解重抓（POST 已先完成，快照必含新列）。捕捉點必須在 await
-  // 之前：await 之後才捕捉，會讓「第一支 mutation 已 markMutated」誤導併發的第二支
-  // 以為已水合、不排自己的和解（帳本閉合輪 P2）。cancel／bookMakeup 同式。
-  const wasHydrated = get(gate.hydrated);
-  const epoch = sessionEpoch; // P1′：寫回前核對——跨登出/換帳號即棄寫
-  const body: { session_id: string; reason?: string } = { session_id: sessionId };
-  if (reason) body.reason = reason;
-  const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
-  const entry = toLeaveRequest(res);
-  if (epoch !== sessionEpoch) return entry; // server 端已成立；本地棄寫（呼叫端元件已隨登出卸載）
-  // 寫回時重查完整度：進場後旗標可能被「和解失敗」翻回 false（進場快照已失真）——
-  // 此時不再排和解的話，markMutated 會把不完整 store 再度標成完整（帳本閉合輪 P2）。
-  const stillIncomplete = !get(gate.hydrated);
-  leaveRequests.update((list) => [entry, ...list]);
-  gate.markMutated(); // commit：讓 in-flight 的 hydrateLeaveRequests()（若有）mutationWins、不拿舊清單蓋掉這筆直寫
-  if (!wasHydrated || stillIncomplete) queueReconcile();
-  return entry;
+  return gate.mutate(
+    async () => {
+      const body: { session_id: string; reason?: string } = { session_id: sessionId };
+      if (reason) body.reason = reason;
+      const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
+      return toLeaveRequest(res);
+    },
+    (entry) => leaveRequests.update((list) => [entry, ...list])
+  );
 }
 
 /** DELETE /leave-requests/{id} → 204 No Content。僅 pending 假單可取消(409 否則)；
  *  取消不是刪除——後端把狀態改成 cancelled，「我的請假」清單仍要看得到歷史紀錄
  *  （同 Order 清單保留 cancelled 訂單的慣例），所以這裡是原地更新 status，不是
- *  從 store 過濾移除(對比 cancelWaitlist：候補只認 waiting，取消後從清單消失)。 */
+ *  從 store 過濾移除(對比 cancelWaitlist：候補只認 waiting，取消後從清單消失)。
+ *  patch-in-place 用參數 id（不是回應），故 writeBack 忽略 result。 */
 export async function cancelLeaveRequest(id: string): Promise<void> {
-  const wasHydrated = get(gate.hydrated); // F2′ 同 createLeaveRequest：進場捕捉，水合前 mutation 要和解重抓
-  const epoch = sessionEpoch;
-  await api(`/leave-requests/${id}`, { method: 'DELETE' });
-  if (epoch !== sessionEpoch) return; // P1′ 同 createLeaveRequest：跨登出/換帳號棄寫
-  const stillIncomplete = !get(gate.hydrated); // 同 createLeaveRequest：寫回時重查完整度
-  leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)));
-  gate.markMutated();
-  if (!wasHydrated || stillIncomplete) queueReconcile();
+  await gate.mutate(
+    () => api(`/leave-requests/${id}`, { method: 'DELETE' }),
+    () => leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)))
+  );
 }
 
 /** POST /leave-requests/{id}/makeup（帶欲預約的補課場次 session_id）。成功回應含
  *  補上的 makeup_session_id/date/time，直接取代 store 裡對應的那筆（伺服器為準，
  *  不用整包重新 hydrate）。409（非 approved／已預約過／名額已滿）/422（跨課程／
- *  已開始）原樣拋出。 */
+ *  已開始）原樣拋出。replace 用參數 id 定位 + 回應 entry 取代。 */
 export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRequest> {
-  const wasHydrated = get(gate.hydrated); // F2′ 同 createLeaveRequest：進場捕捉，水合前 mutation 要和解重抓
-  const epoch = sessionEpoch;
-  const res = await api<ApiLeaveRequest>(`/leave-requests/${id}/makeup`, {
-    method: 'POST',
-    body: JSON.stringify({ session_id: sessionId })
-  });
-  const entry = toLeaveRequest(res);
-  if (epoch !== sessionEpoch) return entry; // P1′ 同 createLeaveRequest：跨登出/換帳號棄寫
-  const stillIncomplete = !get(gate.hydrated); // 同 createLeaveRequest：寫回時重查完整度
-  leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)));
-  gate.markMutated();
-  if (!wasHydrated || stillIncomplete) queueReconcile();
-  return entry;
+  return gate.mutate(
+    async () => {
+      const res = await api<ApiLeaveRequest>(`/leave-requests/${id}/makeup`, {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId })
+      });
+      return toLeaveRequest(res);
+    },
+    (entry) => leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)))
+  );
 }
 
 /** leave 模組的後端錯誤字串本身就是繁中，逐字對照 integration-contract.md §3.20
