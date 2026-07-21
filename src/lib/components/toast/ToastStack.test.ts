@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import ToastStack, { TONE_ICONS } from './ToastStack.svelte';
+import ToastStack, { TONE_ICONS, TONE_BARS } from './ToastStack.svelte';
 import { createToasts } from '$lib/stores/toasts';
 
 afterEach(() => {
@@ -17,6 +17,18 @@ describe('ToastStack tone → icon map', () => {
       warning: 'triangle-alert',
       error: 'circle-x',
       accent: 'star'
+    });
+  });
+
+  // ToastStackMobile imports TONE_BARS from this module context too (single
+  // source for both renderers), so this pin covers it as well.
+  it('maps every tone to its DS bar color token', () => {
+    expect(TONE_BARS).toEqual({
+      success: 'var(--df-success)',
+      info: 'var(--df-info)',
+      warning: 'var(--df-warning)',
+      error: 'var(--df-error)',
+      accent: 'var(--df-accent)'
     });
   });
 });

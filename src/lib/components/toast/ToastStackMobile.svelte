@@ -1,28 +1,13 @@
 <script lang="ts">
   /* Toast host for mobile/mobile-admin surfaces. Dark background (`--df-ink`),
    * positioned above tab bar at bottom:96px. Inline styles — no scoped CSS.
-   * Icon names: success→circle-check / info→info / warning→triangle-alert /
-   * error→circle-x / accent→star. */
-  import type { ToastTone, createToasts } from '$lib/stores/toasts';
+   * Tone → icon/bar-color mapping is single-sourced from ToastStack.svelte's
+   * module context (TONE_ICONS / TONE_BARS), imported below. */
+  import type { createToasts } from '$lib/stores/toasts';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import type { IconName } from '$lib/icon-registry';
+  import { TONE_ICONS, TONE_BARS } from './ToastStack.svelte';
 
   export let toasts: ReturnType<typeof createToasts>;
-
-  const ICONS: Record<ToastTone, IconName> = {
-    success: 'circle-check',
-    info: 'info',
-    warning: 'triangle-alert',
-    error: 'circle-x',
-    accent: 'star'
-  };
-  const TINT: Record<ToastTone, string> = {
-    success: 'var(--df-success)',
-    info: 'var(--df-info)',
-    warning: 'var(--df-warning)',
-    error: 'var(--df-error)',
-    accent: 'var(--df-accent)'
-  };
 </script>
 
 <div
@@ -37,7 +22,7 @@
       role="status"
     >
       <span style="margin-top:1px; display:flex; flex:none;">
-        <Icon name={ICONS[t.tone] || 'info'} size={19} color={TINT[t.tone] || '#fff'} />
+        <Icon name={TONE_ICONS[t.tone] || 'info'} size={19} color={TONE_BARS[t.tone] || '#fff'} />
       </span>
       <div style="min-width:0;">
         <div style="font-size:14px; font-weight:700;">{t.title}</div>
