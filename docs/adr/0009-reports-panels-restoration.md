@@ -99,6 +99,11 @@ export function deltaPct(current: number | null, last: number | null): number | 
 **顯示**格式化（`NT$`/`%` 字串）刻意不放這裡——那是 `ntd()`/`fmtNT()`/`fmtPct()` 的職責；本檔只做
 「數字→數字」的運算與「wire 桶 key → 中文標籤」查表兩件事。
 
+2026-07（架構深化 R7 C5）增收 `REPORT_KPI_CARDS`——報表 KPI band 6 卡的識別四欄（icon/label/
+tint/color）單源查表，收斂桌面 `ReportKpi` 與 mobile-admin `KpiCard` 原本各自手抄的同一份卡片
+識別資料；§2 決定的 `value`/`delta` per-surface 接線不變，不收進這張表。本節「數字運算＋查表」
+的原始二分敘述，自此擴為三類。
+
 ### 5. mobile-admin `ReportsScreen` 同步接真，`domain/reports.ts` 舊 mock 模組隨之整個退役
 
 `mobile-admin/api.ts` 新增 `getReports()`（零映射 re-export 桌面 `admin/api.ts` 同名函式）；

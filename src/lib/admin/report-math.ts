@@ -7,8 +7,10 @@
  * (同 $lib/api/wire.ts「不 import 任何 $lib 模組」的最底層知識檔慣例)。
  *
  * cents/ratio 的顯示格式化(NT$/%字串)不在本檔——那是 ntd()/fmtNT()/fmtPct() 的
- * 職責(public/adapters.ts、admin/format.ts)；本檔只做「數字→數字」的環比/占比/
- * 正規化運算，和「wire 桶 key → 中文標籤(+色)」查表。 */
+ * 職責(public/adapters.ts、admin/format.ts)；本檔只做三件事：「數字→數字」的環比/
+ * 占比/正規化運算、「wire 桶 key → 中文標籤(+色)」查表，與 2026-07(架構深化 R7 C5)
+ * 增收的「報表 KPI band 6 卡識別四欄(icon/label/tint/color)」單源查表(見檔尾
+ * REPORT_KPI_CARDS 註記)。 */
 
 /* ═════════════════════════ 環比／占比／正規化(純數字運算) ═════════════════════════ */
 

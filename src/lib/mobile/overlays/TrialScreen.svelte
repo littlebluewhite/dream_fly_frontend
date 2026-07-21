@@ -18,6 +18,7 @@
   import { toasts, profile } from '$lib/mobile/stores';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
+  import { buildTrialDays, type TrialDay } from './trial-dates';
   import { stepValid, buildTrialInquiry } from './trialValidation';
   import type { IconName } from '$lib/icon-registry';
 
@@ -33,29 +34,10 @@
     { key: '跑酷', label: '跑酷 Parkour', icon: 'flame', age: '12 歲以上' }
   ];
   const TRIAL_AGES = ['3–5 歲', '6–9 歲', '10–12 歲', '13–16 歲', '16 歲以上'];
-  type Day = { d: string; w: string; full: string };
-  // 動態產生未來日期，維持「六/日/三」節奏：以嚴格晚於今日的下一個週六為基準，
-  // 依序取「當週六、隔天週日、+3 天週三、再 +3 天週六、隔天週日」，格式沿用既有
-  // YYYY/MM/DD (週) 字串。TRIAL_SLOTS 時段無對應後端端點，仍硬編（見 ADR 0006）。
-  const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
-  function pad2(n: number): string {
-    return String(n).padStart(2, '0');
-  }
-  function addDays(base: Date, days: number): Date {
-    const d = new Date(base);
-    d.setDate(d.getDate() + days);
-    return d;
-  }
-  function toTrialDay(date: Date): Day {
-    const y = date.getFullYear();
-    const m = pad2(date.getMonth() + 1);
-    const dd = pad2(date.getDate());
-    const w = WEEKDAY_LABELS[date.getDay()];
-    return { d: `${m}/${dd}`, w, full: `${y}/${m}/${dd} (${w})` };
-  }
-  const today = new Date();
-  const nextSat = addDays(today, ((6 - today.getDay() + 7) % 7) || 7);
-  const TRIAL_DAYS: Day[] = [0, 1, 4, 7, 8].map((n) => toTrialDay(addDays(nextSat, n)));
+  // TRIAL_DAYS 動態產生政策(pad2/addDays/toTrialDay/buildTrialDays)抽至同層
+  // trial-dates.ts(零 svelte 依賴純函式，2026-07-22 架構深化 R7)；TRIAL_SLOTS
+  // 時段無對應後端端點，仍硬編（見 ADR 0006）。
+  const TRIAL_DAYS: TrialDay[] = buildTrialDays();
   type Slot = { id: string; time: string; coach: string; room: string; spots: number };
   const TRIAL_SLOTS: Slot[] = [
     { id: 't1', time: '10:00–11:15', coach: '黃詩涵', room: 'A 訓練館', spots: 3 },
@@ -75,7 +57,8 @@
   let note = '';
   let submitting = false;
   let bodyEl: HTMLDivElement;
-  const ticket = 'TR-26' + Math.floor(Math.random() * 900 + 100);
+  // 前綴年份跟隨當下年度後 2 碼，跨年自動更新，不需每年手動改字面量。
+  const ticket = 'TR-' + String(new Date().getFullYear()).slice(-2) + Math.floor(Math.random() * 900 + 100);
 
   const trInputStyle =
     'flex:1; border:none; background:transparent; outline:none; font-size:15px; color:var(--df-text-dark); font-family:var(--df-font-body); height:100%; min-width:0;';
