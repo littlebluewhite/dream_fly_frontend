@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
+import { createSessionRefresher } from '$lib/session-gate';
 import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from './data';
 
 /* ---- Points ----
@@ -50,17 +51,28 @@ function describeLedgerReason(reason: string, delta: number): { type: LedgerType
  *  ledger（Task 17 接線）用 date 的 YYYY/MM/DD 切法而非 ISO 切法，是因為
  *  points 頁的「本月累積」依 `date.startsWith(當月 YYYY/MM prefix)` 篩選
  *  （見 points/+page.svelte），格式依賴仍在 —— 換成 ISO 會讓那段篩選永遠不
- *  match、悄悄把統計歸零。 */
-export async function refreshPoints(): Promise<void> {
-  const data = await api<ApiPointsMe>('/points/me');
-  points.set(data.balance);
-  pointsLedger.set(
-    data.ledger.map((l) => {
-      const { type, desc } = describeLedgerReason(l.reason, l.delta);
-      return { id: l.id, date: l.created_at.slice(0, 10).replace(/-/g, '/'), desc, type, delta: l.delta };
-    })
-  );
-}
+ *  match、悄悄把統計歸零。
+ *  C1（架構深化 R7）抬升為 createSessionRefresher:保留「無條件重抓」語意(getDashboard/
+ *  getAccount/getPoints 進頁 + CheckoutDialog/CartSheet 每次開啟 + placeOrder afterOrder
+ *  都依賴每次真抓,不套 guard),只加 identity 清空(reset:歸 boot 態)+ 在飛換帳「靜默
+ *  丟棄」(不 throw——redeemReward/placeOrder 會傳播 rejection,不得新增換帳失敗模式)。
+ *  修殘影窗口(換帳後 A 的餘額殘留),呼叫端語意不變。 */
+export const refreshPoints = createSessionRefresher<ApiPointsMe>({
+  fetch: () => api<ApiPointsMe>('/points/me'),
+  apply: (data) => {
+    points.set(data.balance);
+    pointsLedger.set(
+      data.ledger.map((l) => {
+        const { type, desc } = describeLedgerReason(l.reason, l.delta);
+        return { id: l.id, date: l.created_at.slice(0, 10).replace(/-/g, '/'), desc, type, delta: l.delta };
+      })
+    );
+  },
+  reset: () => {
+    points.set(0);
+    pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e }))); // boot 態 = seed clone
+  }
+});
 
 /* ---- Rewards（點數兌換）— Task 14（feat/backend-integration round 3）----
  * integration-contract.md §3.23：兌換品項目錄（GET /rewards）由 member/api.ts 的

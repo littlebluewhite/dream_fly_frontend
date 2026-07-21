@@ -32,7 +32,7 @@ import {
   joinWaitlistErrorMessage
 } from './stores';
 import type { CartItem } from '$lib/cart-item';
-import { NOTIFS_SEED } from './data';
+import { NOTIFS_SEED, POINTS_LEDGER } from './data';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -441,6 +441,47 @@ describe('refreshPoints', () => {
     expect(get(pointsLedger)).toEqual([
       { id: 'l5', date: '2026/07/06', desc: '兌換點數獎勵', type: 'redeem', delta: -100 }
     ]);
+  });
+
+  it('F1 跨登入洩漏釘:refreshPoints 後登出 → points/ledger 重置為 boot 態(0 / POINTS_LEDGER seed),換帳不殘留 A 的餘額', async () => {
+    /* C1 抬升:points 原本全無守衛,換帳後 A 的餘額殘留(殘影窗口)。createSessionRefresher
+     * 的 reset 在 identity 變更時把 points/ledger 歸 boot 態。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /points/me': { balance: 777, ledger: [{ id: 'la', delta: 777, balance_after: 777, reason: 'checkout_earn', order_id: null, created_at: '2026-07-01T00:00:00Z' }] }
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await refreshPoints();
+    expect(get(points)).toBe(777);
+    expect(get(pointsLedger)).toHaveLength(1);
+
+    await authStore.logout();
+
+    expect(get(points)).toBe(0); // 重置為 boot 態
+    expect(get(pointsLedger)).toEqual(POINTS_LEDGER); // 重置為 seed(non-empty boot 態)
+    expect(get(pointsLedger)[0]).not.toBe(POINTS_LEDGER[0]); // clone,非共享參照
+  });
+
+  it('P1′ 在飛作廢釘:refreshPoints in-flight 期間登出 → 回應靜默丟棄(不套用、不 throw),不新增換帳失敗模式', async () => {
+    /* refresher 的在飛作廢必須靜默 return(不 throw)——redeemReward await refreshPoints、
+     * placeOrder afterOrder 會傳播 rejection,若換帳改 throw 等於新增失敗模式。 */
+    const deferred = createDeferred<{ balance: number; ledger: unknown[] }>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /points/me': () => deferred.promise
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p = refreshPoints(); // A 的 GET 掛起中
+    await authStore.logout(); // 在飛換帳
+
+    deferred.resolve({ balance: 777, ledger: [] });
+    await expect(p).resolves.toBeUndefined(); // 靜默:resolve、不 throw
+
+    expect(get(points)).toBe(0); // A 的餘額沒套用(維持 logout reset 的 boot 態)
   });
 });
 
