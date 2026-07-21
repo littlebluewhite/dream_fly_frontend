@@ -382,6 +382,46 @@ describe('refreshSubscriptions', () => {
 
     expect(get(subscriptions)).toEqual([]);
   });
+
+  it('F1 跨登入洩漏釘:refreshSubscriptions 後登出 → subscriptions 重置為空(boot 態),換帳不殘留 A 的訂閱', async () => {
+    /* C1 抬升:subscriptions 原本全無守衛,換帳後 A 的訂閱殘留。createSessionRefresher
+     * 的 reset 在 identity 變更時把 subscriptions 歸 boot 態(空)。 */
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /subscriptions/me': [
+        { id: 'sub-a', product_id: 'prod-a', product_name: '方案A', status: 'active', started_at: '2026-06-01T00:00:00Z', expires_at: null, total_sessions: null, remaining_sessions: null, price_cents: 300000 }
+      ]
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await refreshSubscriptions();
+    expect(get(subscriptions)).toHaveLength(1);
+
+    await authStore.logout();
+
+    expect(get(subscriptions)).toEqual([]); // A 的訂閱不留給 B(boot 態空)
+  });
+
+  it('P1′ 在飛作廢釘:refreshSubscriptions in-flight 期間登出 → 回應靜默丟棄(不套用、不 throw)', async () => {
+    const deferred = createDeferred<unknown[]>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /subscriptions/me': () => deferred.promise
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    const p = refreshSubscriptions(); // A 的 GET 掛起中
+    await authStore.logout();
+
+    deferred.resolve([
+      { id: 'sub-a', product_id: 'prod-a', product_name: '方案A', status: 'active', started_at: '2026-06-01T00:00:00Z', expires_at: null, total_sessions: null, remaining_sessions: null, price_cents: 300000 }
+    ]);
+    await expect(p).resolves.toBeUndefined(); // 靜默:resolve、不 throw
+
+    expect(get(subscriptions)).toEqual([]); // A 的訂閱沒套用
+  });
 });
 
 describe('refreshPoints', () => {
