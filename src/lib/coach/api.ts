@@ -14,7 +14,7 @@ import { api } from '$lib/api/client';
 import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
-import { initialOf, BRAND_PRIMARY_HEX, isoDateTime } from '$lib/api/wire';
+import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
 import { TODAY_LABEL } from './data';
 import type {
@@ -92,7 +92,7 @@ function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
 		emergency: '', // P2: 後端無緊急聯絡人欄位
 		bio: coach.bio ?? '',
 		chips: coach.certifications,
-		registered: coach.created_at.slice(0, 10),
+		registered: isoDate(coach.created_at),
 		lastLogin: user.last_login ? isoDateTime(user.last_login) : ''
 	};
 }
@@ -132,8 +132,8 @@ export function deriveSessionStatus(startTime: string, endTime: string, now: Dat
 function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 	return {
 		id: s.id,
-		start: s.start_time.slice(0, 5),
-		end: s.end_time.slice(0, 5),
+		start: hhmm(s.start_time),
+		end: hhmm(s.end_time),
 		name: s.course_name,
 		room: '', // P2: TodaySessionResponse 無場地欄位
 		count: s.enrolled_count,
@@ -246,7 +246,7 @@ function mapAttendanceClass(s: ApiTodaySession, roster: ApiRosterEntry[], coachN
 	return {
 		id: s.id,
 		name: s.course_name,
-		time: `今日 ${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`,
+		time: `今日 ${hhmm(s.start_time)}–${hhmm(s.end_time)}`,
 		room: '', // P2: TodaySessionResponse 無場地欄位
 		coach: coachName,
 		roster: roster.map(mapRosterRow)
@@ -339,8 +339,8 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 			.filter((s) => s.is_available)
 			.map((s) => ({
 				day: DOW_TO_KEY[s.day_of_week],
-				start: s.start_time.slice(0, 5),
-				end: s.end_time.slice(0, 5),
+				start: hhmm(s.start_time),
+				end: hhmm(s.end_time),
 				name: '可授課時段', // P2: availability 端點無課程名稱欄位(非特定課程場次)
 				count: 0, // P2: 同上，無學員人數欄位
 				cat: '體操', // P2: 同上，無課程類別欄位

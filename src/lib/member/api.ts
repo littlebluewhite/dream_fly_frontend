@@ -9,7 +9,7 @@ import { fmtRatio } from '$lib/format';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity } from '$lib/api/wire';
+import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
 import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
@@ -230,8 +230,8 @@ const DOW_TO_SCHEDULE_DAY = [6, 0, 1, 2, 3, 4, 5];
 function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
   return {
     day: DOW_TO_SCHEDULE_DAY[e.day_of_week],
-    start: e.start_time.slice(0, 5),
-    end: e.end_time.slice(0, 5),
+    start: hhmm(e.start_time),
+    end: hhmm(e.end_time),
     name: e.course_name,
     room: e.venue ?? '', // P2: 無場地資料
     coach: e.coach_name ?? '', // 尚未指定教練
@@ -366,7 +366,7 @@ function mapOrder(o: ApiOrderSummary): Order {
     item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
     amount: ntd(o.total_cents),
     status: orderStatusBadge(o.status),
-    date: o.created_at.slice(0, 10)
+    date: isoDate(o.created_at)
   };
 }
 

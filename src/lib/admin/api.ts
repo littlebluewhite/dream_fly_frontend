@@ -8,7 +8,7 @@ import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross } from '$lib/api/wire';
+import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, Tone } from '$lib/api/wire';
 import { deriveSessionStatus } from '$lib/coach/api';
 import type { TodayStatus } from '$lib/coach/data';
@@ -193,14 +193,14 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		amount,
 		status: o.status,
 		method: '線上', // 後端目前僅有模擬付款，沒有真實付款方式欄位
-		date: o.created_at.slice(0, 10),
+		date: isoDate(o.created_at),
 		invoice: '—', // P2: 後端無發票號碼欄位
 		discount: o.coupon_code ?? '',
 		handler: '—', // P2: 後端無經手人／客服歸屬欄位
 		campus: '—', // P2: 訂單無分校欄位(courses/venues 目前也無分校維度)
 		tax,
 		net,
-		paidAt: o.status === 'pending' ? '—（待付款）' : o.created_at.slice(0, 10),
+		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
 		taxId: '—' // P2: 後端無統一編號欄位
 	};
 }
@@ -611,7 +611,7 @@ function mapTodaySession(s: ApiAdminTodaySession, now: Date): TodayClass {
 	const state = deriveSessionStatus(s.start_time, s.end_time, now);
 	const [tone, label] = TODAY_TONE_LABEL[state];
 	return {
-		time: s.start_time.slice(0, 5),
+		time: hhmm(s.start_time),
 		name: s.course_name,
 		coach: s.coach_name ?? '—',
 		room: s.venue ?? '—',
@@ -925,7 +925,7 @@ function mapCoupon(c: ApiCoupon): Coupon {
 		code: c.code,
 		discount: ntd(c.discount_cents),
 		active: c.is_active,
-		expiresAt: c.expires_at ? c.expires_at.slice(0, 10) : '—'
+		expiresAt: c.expires_at ? isoDate(c.expires_at) : '—'
 	};
 }
 

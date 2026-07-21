@@ -81,7 +81,7 @@ export type { Activity } from '$lib/domain/activity';
 import type { ClassBase } from '$lib/domain/classes';
 import type { MemberBase } from '$lib/domain/members';
 import type { OrderBase } from '$lib/domain/orders';
-import { initialOf } from '$lib/api/wire';
+import { initialOf, isoDate } from '$lib/api/wire';
 // Task 1(C2 死種子退役):tierOf 轉出與其唯一消費者一併退役(唯一消費者是
 // data.test.ts 自己的直接單元測試,無 production 呼叫端)——`$lib/domain/shared`
 // 本體的 tierOf 定義同批移除,CAMPUSES 是這裡唯一還在用的值,但也僅供已退役的
@@ -147,7 +147,7 @@ export function mapMemberAccount(u: ApiUserAccount): MemberAccount {
 		name: u.name,
 		initial: initialOf(u.name),
 		phone: u.phone ?? '',
-		joined: u.created_at.slice(0, 10),
+		joined: isoDate(u.created_at),
 		status: u.is_active ? 'active' : 'inactive',
 		points: u.points_balance
 	};

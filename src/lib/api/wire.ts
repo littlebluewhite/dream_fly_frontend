@@ -12,6 +12,10 @@
  * 此二支同為 ≥2 surface（admin/member/mobile-admin）逐字共用的後端 wire 知識，
  * 符合 ADR 0007 收斂判準；既有匯出一字不動，只增不改。
  *
+ * 2026-07 另依同判準增收：isoDate/hhmm 兩個顯示原子（isoDateTime 旁），收斂
+ * admin/member/coach/mobile 四 surface 共 10 消費檔 20 處（21 刀）裸
+ * `.slice(0, 10)`/`.slice(0, 5)` 日期/時間顯示切片——輸出字串逐字節相同，行為恆等。
+ *
  * 收錄原則：≥2 個 surface 共用的後端 wire 知識才收；UI 目標型別一律不收（結算
  * per-surface，ADR 0003 精神）。
  *
@@ -107,6 +111,10 @@ export const initialOf = (name: string): string => name.charAt(0) || '?';
 
 /** ISO 時間字串 → 'YYYY-MM-DD HH:mm'（顯示用途）。 */
 export const isoDateTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
+/** ISO 日期（時間）字串 → 'YYYY-MM-DD'（顯示用途；isoDateTime 的日期截斷版）。 */
+export const isoDate = (iso: string): string => iso.slice(0, 10);
+/** time-only 欄位 'HH:MM(:SS)' → 'HH:MM'（顯示用途；完整 ISO 走 isoDate/isoDateTime）。 */
+export const hhmm = (t: string): string => t.slice(0, 5);
 
 /** 品牌主色（後端未給色時的預設頭像色）。 */
 export const BRAND_PRIMARY_HEX = '#0066CC';

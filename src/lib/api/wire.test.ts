@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderStatusBadge, pageMeta, initialOf, isoDateTime, ageRange, orderIdentity, taxFromGross } from './wire';
+import { orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross } from './wire';
 import type { ApiPage } from './wire';
 
 /* Expected [tone, label] pairs are copied verbatim from the current
@@ -53,6 +53,18 @@ describe('initialOf', () => {
 describe('isoDateTime', () => {
   it("formats an ISO datetime string to 'YYYY-MM-DD HH:mm'", () => {
     expect(isoDateTime('2026-07-07T14:30:00')).toBe('2026-07-07 14:30');
+  });
+});
+
+describe('isoDate', () => {
+  it("formats an ISO date(time) string to 'YYYY-MM-DD'", () => {
+    expect(isoDate('2026-07-07T14:30:00')).toBe('2026-07-07');
+  });
+});
+
+describe('hhmm', () => {
+  it("formats a time-only 'HH:MM:SS' field to 'HH:MM'", () => {
+    expect(hhmm('14:30:00')).toBe('14:30');
   });
 });
 

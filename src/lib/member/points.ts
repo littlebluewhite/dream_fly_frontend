@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
+import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
 import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from './data';
 
@@ -65,7 +66,7 @@ export const refreshPoints = createSessionRefresher<ApiPointsMe>({
     pointsLedger.set(
       data.ledger.map((l) => {
         const { type, desc } = describeLedgerReason(l.reason, l.delta);
-        return { id: l.id, date: l.created_at.slice(0, 10).replace(/-/g, '/'), desc, type, delta: l.delta };
+        return { id: l.id, date: isoDate(l.created_at).replace(/-/g, '/'), desc, type, delta: l.delta };
       })
     );
   },

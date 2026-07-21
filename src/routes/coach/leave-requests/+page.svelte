@@ -11,6 +11,7 @@
   import type { CoachLeaveRequest } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
   import { apiErrorMessage } from '$lib/api/error-text';
+  import { hhmm } from '$lib/api/wire';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -87,7 +88,7 @@
             <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:600;color:var(--df-text-dark)">{r.user_name} · {r.course_name}</div>
               <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">
-                {r.session_date} {r.start_time.slice(0, 5)}{#if r.reason} · {r.reason}{/if}
+                {r.session_date} {hhmm(r.start_time)}{#if r.reason} · {r.reason}{/if}
               </div>
             </div>
             <button

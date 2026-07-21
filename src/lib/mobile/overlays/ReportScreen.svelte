@@ -17,6 +17,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
+  import { isoDate } from '$lib/api/wire';
   import { getReports, type ReportsData } from '$lib/mobile/api';
 
   export let onBack: () => void;
@@ -89,7 +90,7 @@
                 </div>
                 <p style="margin:0 0 10px; font-size:13.5px; color:var(--df-text-dark); line-height:1.65;">{r.comment ?? '教練尚未留下評語。'}</p>
                 <div style="font-size:11.5px; color:var(--df-text-muted); font-family:var(--df-font-mono); border-top:1px solid var(--df-border); padding-top:9px;">
-                  {r.issuerName} 教練 · {r.createdAt.slice(0, 10)}
+                  {r.issuerName} 教練 · {isoDate(r.createdAt)}
                 </div>
               </Card>
             {/each}

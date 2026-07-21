@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { api } from '$lib/api/client';
+import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
 import { ntd } from '$lib/public/adapters';
 import { SUBS_SEED, type Subscription } from './data';
@@ -37,15 +38,14 @@ export interface ApiSubscription {
  *  有一段既有邏輯依賴這個格式，見 refreshPoints 的註解(points.ts)。） */
 /** C1（架構深化 R7）抬升為 createSessionRefresher:同 refreshPoints——保留「無條件重抓」
  *  語意(getAccount 進頁 + placeOrder afterOrder 依賴,不套 guard),只加 identity 清空
- *  (reset 歸 boot 態空)+ 在飛換帳靜默丟棄(不 throw)。mapper 內 started_at.slice(0,10)
- *  日期切法保持現狀搬運(C4 之後才換 wire helper)。 */
+ *  (reset 歸 boot 態空)+ 在飛換帳靜默丟棄(不 throw)。 */
 export const refreshSubscriptions = createSessionRefresher<ApiSubscription[]>({
   fetch: () => api<ApiSubscription[]>('/subscriptions/me'),
   apply: (list) =>
     subscriptions.set(
       list
         .filter((s) => s.status === 'active')
-        .map((s) => ({ id: s.product_id, name: s.product_name, since: s.started_at.slice(0, 10), price: ntd(s.price_cents) }))
+        .map((s) => ({ id: s.product_id, name: s.product_name, since: isoDate(s.started_at), price: ntd(s.price_cents) }))
     ),
   reset: () => subscriptions.set([]) // boot 態 = 空(SUBS_SEED = [])
 });

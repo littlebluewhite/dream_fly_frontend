@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
+  import { isoDate } from '$lib/api/wire';
   import { getReports, type ReportsData } from '$lib/member/api';
   import { fmtRate } from '$lib/member/format';
 
@@ -99,7 +100,7 @@
                   {r.comment ?? '教練尚未留下評語。'}
                 </p>
                 <div style="font-size:12px;color:var(--df-text-muted);font-family:var(--df-font-mono);border-top:1px solid var(--df-border);padding-top:10px">
-                  {r.issuerName} 教練 · {r.createdAt.slice(0, 10)}
+                  {r.issuerName} 教練 · {isoDate(r.createdAt)}
                 </div>
               </div>
             </Card>
