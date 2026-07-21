@@ -193,6 +193,33 @@ describe('createLeaveRequest — POST /leave-requests', () => {
     expect(get(leaveRequests)).toEqual([result]);
   });
 
+  it('P1′(mutator):create 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
+    /* 薄 happy-path 釘只證明「create 成功時 prepend」，證明不了 createLeaveRequest 仍
+     * 委派 gate.mutate——若被誤改成「直接 await api + store 直寫」，這條釘與
+     * session-gate.test 的泛型 mutate 釘會兩邊皆綠，但跨帳號資料仍會落地。 */
+    const deferred = createDeferred<unknown>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /leave-requests/me': [API_LR_APPROVED],
+      'POST /leave-requests': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await hydrateLeaveRequests(); // A 已水合,store 非空
+    expect(get(leaveRequests)).toHaveLength(1);
+
+    const p = createLeaveRequest('sess-1', '生病'); // A 的 POST 掛起中
+    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
+
+    deferred.resolve(API_LR_PENDING);
+    const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
+
+    expect(result.id).toBe('lr-1');
+    expect(get(leaveRequests)).toEqual([]); // 棄寫:新單不落地,舊單也沒有復活——維持 reset 後狀態
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
+  });
+
   it('omits reason from the body when not provided (contract: reason? 選填)', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /leave-requests': API_LR_PENDING }));
 
@@ -233,6 +260,32 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     const list = get(leaveRequests);
     expect(list.find((r) => r.id === 'lr-1')?.status).toBe('cancelled');
     expect(list.find((r) => r.id === 'lr-2')?.status).toBe('approved'); // untouched
+  });
+
+  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地(mutator 回傳值本為 void,只斷言不寫回)', async () => {
+    /* 薄 happy-path 釘只證明「cancel 成功時原地標記 cancelled」，證明不了
+     * cancelLeaveRequest 仍委派 gate.mutate——理由同 createLeaveRequest 上方的
+     * P1′(mutator)釘。 */
+    const deferred = createDeferred<undefined>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /leave-requests/me': [API_LR_PENDING],
+      'DELETE /leave-requests/lr-1': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await hydrateLeaveRequests(); // A 已水合,store 含 lr-1(pending)
+    expect(get(leaveRequests)).toHaveLength(1);
+
+    const p = cancelLeaveRequest('lr-1'); // A 的 DELETE 掛起中
+    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
+
+    deferred.resolve(undefined);
+    await p;
+
+    expect(get(leaveRequests)).toEqual([]); // 棄寫:不對(已清空的)store 做 patch-in-place 寫回——維持 reset 後狀態
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
   });
 
   it('leaves the store untouched when the DELETE call fails', async () => {
@@ -284,6 +337,33 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     });
     expect(result.makeup_session_id).toBe('sess-9');
     expect(get(leaveRequests)[0].makeup_session_date).toBe('2026-07-20');
+  });
+
+  it('P1′(mutator):makeup 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
+    /* 薄 happy-path 釘只證明「makeup 成功時原地取代」，證明不了 bookMakeup 仍委派
+     * gate.mutate——理由同 createLeaveRequest 上方的 P1′(mutator)釘。 */
+    const updated = { ...API_LR_APPROVED, makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00' };
+    const deferred = createDeferred<unknown>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /leave-requests/me': [API_LR_APPROVED],
+      'POST /leave-requests/lr-2/makeup': () => deferred.promise
+    }));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await hydrateLeaveRequests(); // A 已水合,store 含 lr-2(approved)
+    expect(get(leaveRequests)).toHaveLength(1);
+
+    const p = bookMakeup('lr-2', 'sess-9'); // A 的 POST 掛起中
+    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
+
+    deferred.resolve(updated);
+    const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
+
+    expect(result.makeup_session_id).toBe('sess-9');
+    expect(get(leaveRequests)).toEqual([]); // 棄寫:不對(已清空的)store 做 map 取代寫回——維持 reset 後狀態
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
   });
 
   it('propagates 409 (該場次名額已滿) unhandled', async () => {

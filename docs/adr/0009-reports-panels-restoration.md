@@ -97,12 +97,11 @@ export function deltaPct(current: number | null, last: number | null): number | 
 的 wire/FE 型別各自獨立宣告（不共用同一份），換取 `report-math.test.ts` 可以直接用字面量測邊界
 （null/0/空陣列/除以零等），不需要 mock `admin/api.ts` 的任何型別、也不受它改版牽動。cents/ratio 的
 **顯示**格式化（`NT$`/`%` 字串）刻意不放這裡——那是 `ntd()`/`fmtNT()`/`fmtPct()` 的職責；本檔只做
-「數字→數字」的運算與「wire 桶 key → 中文標籤」查表兩件事。
+三件事：「數字→數字」的運算、「wire 桶 key → 中文標籤」查表，與「報表 KPI band 6 卡識別四欄
+（icon/label/tint/color）」單源查表（`REPORT_KPI_CARDS`）。
 
-2026-07（架構深化 R7 C5）增收 `REPORT_KPI_CARDS`——報表 KPI band 6 卡的識別四欄（icon/label/
-tint/color）單源查表，收斂桌面 `ReportKpi` 與 mobile-admin `KpiCard` 原本各自手抄的同一份卡片
-識別資料；§2 決定的 `value`/`delta` per-surface 接線不變，不收進這張表。本節「數字運算＋查表」
-的原始二分敘述，自此擴為三類。
+`REPORT_KPI_CARDS`（2026-07，架構深化 R7 C5 增收）收斂桌面 `ReportKpi` 與 mobile-admin `KpiCard`
+原本各自手抄的同一份卡片識別資料；§2 決定的 `value`/`delta` per-surface 接線不變，不收進這張表。
 
 ### 5. mobile-admin `ReportsScreen` 同步接真，`domain/reports.ts` 舊 mock 模組隨之整個退役
 

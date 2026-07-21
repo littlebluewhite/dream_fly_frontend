@@ -717,6 +717,35 @@ describe('joinWaitlist', () => {
     ]);
   });
 
+  it('P1′(mutator):join 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
+    /* 薄 happy-path 釘只證明「join 成功時 prepend」，證明不了 joinWaitlist 仍委派
+     * gate.mutate——若被誤改成「直接 await api + store 直寫」，這條釘與
+     * session-gate.test 的泛型 mutate 釘會兩邊皆綠，但跨帳號資料仍會落地。 */
+    const deferred = createDeferred<unknown>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /waitlist/me': [
+        { id: 'wl-existing', course_id: 'course-uuid-1', course_name: 'A 既有候補課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+      ],
+      'POST /waitlist': () => deferred.promise
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await hydrateWaitlist(); // A 已水合,store 非空
+    expect(get(waitlist)).toHaveLength(1);
+
+    const p = joinWaitlist('course-uuid-9'); // A 的 POST 掛起中
+    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
+
+    deferred.resolve({ id: 'wl-a', course_id: 'course-uuid-9', course_name: 'A 的候補課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' });
+    const entry = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
+
+    expect(entry.id).toBe('wl-a');
+    expect(get(waitlist)).toEqual([]); // 棄寫:新列不落地,舊列也沒有復活——維持 reset 後狀態
+    expect(get(waitlistHydrated)).toBe(false); // 不 markMutated——B 的 hydrate 照常真抓
+  });
+
   it('後端 409（重複候補）原樣拋出，不寫入 store', async () => {
     vi.mocked(api).mockRejectedValue(new ApiError(409, 'already on waitlist'));
 
@@ -764,6 +793,33 @@ describe('cancelWaitlist', () => {
 
     expect(api).toHaveBeenCalledWith('/waitlist/wl-1', { method: 'DELETE' });
     expect(get(waitlist)).toEqual([{ id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' }]);
+  });
+
+  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地(mutator 回傳值本為 void,只斷言不寫回)', async () => {
+    /* 薄 happy-path 釘只證明「cancel 成功時從 store 移除」，證明不了 cancelWaitlist
+     * 仍委派 gate.mutate——理由同 joinWaitlist 上方的 P1′(mutator)釘。 */
+    const deferred = createDeferred<undefined>();
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': AUTH_RES,
+      'POST /auth/logout': undefined,
+      'GET /waitlist/me': [
+        { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
+      ],
+      'DELETE /waitlist/wl-1': () => deferred.promise
+    }, CART_DEFAULTS));
+
+    await authStore.login('a@dreamfly.test', 'pw');
+    await hydrateWaitlist(); // A 已水合,store 含 wl-1
+    expect(get(waitlist)).toHaveLength(1);
+
+    const p = cancelWaitlist('wl-1'); // A 的 DELETE 掛起中
+    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
+
+    deferred.resolve(undefined);
+    await p;
+
+    expect(get(waitlist)).toEqual([]); // 棄寫:不對(已清空的)store 做 filter 寫回——維持 reset 後狀態
+    expect(get(waitlistHydrated)).toBe(false); // 不 markMutated
   });
 
   it('失敗時原樣拋出，store 不變', async () => {
