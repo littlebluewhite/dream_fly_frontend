@@ -626,8 +626,9 @@ describe('refreshNotifications(Task 17)', () => {
  * 覆蓋 stores.ts 新增的 hydrateWaitlist / joinWaitlist / cancelWaitlist 網路層，
  * 與 joinWaitlistErrorMessage 這個純函式（同 checkout.ts 的 orderErrorMessage
  * 慣例：只對後端已知的單一 409 原因給專屬文案，其餘落回通用 fallback）。
- * C1：水合改走 createHydrationGate（同上方 refreshNotifications 三 it 的協定），
- * 補 guard 短路 + race 釘。 */
+ * C1（架構深化 R7）：水合改走 createSessionGate（同上方 refreshNotifications 的
+ * session 協定 its）；泛型深層協定已移入 session-gate.test，本檔僅留薄 adapter 釘
+ * （guard 短路 + F1 跨登入 + 每 mutator happy-path + F2 完整性）。 */
 describe('hydrateWaitlist', () => {
   it('GET /waitlist/me → 只留 status=waiting，映射成 WaitlistEntry（id/course_id/course_name），並把 waitlistHydrated 翻 true', async () => {
     vi.mocked(api).mockResolvedValue([
