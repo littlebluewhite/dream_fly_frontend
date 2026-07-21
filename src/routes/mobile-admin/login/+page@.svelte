@@ -12,6 +12,7 @@
   import { authStore } from '$lib/stores/authStore';
   import { staffPortals, wantsBlockedNotice } from '$lib/staff/roles';
   import { adminPath } from '$lib/mobile-admin/nav';
+  import { submitLogin } from '$lib/login-submit';
   import '$lib/styles/mobile-frame.css';
 
   let account = '';
@@ -28,27 +29,19 @@
   }
 
   async function submit() {
-    if (busy) return;
-    if (!account.trim() || !pw.trim()) {
-      error = '請輸入帳號與密碼';
-      return;
-    }
-    error = '';
-    busy = true;
-    try {
-      await authStore.login(account, pw);
-      const target = staffPortals($authStore.roles)[0];
-      if (!target) {
-        await authStore.logout();
-        error = '此帳號無後台權限';
-        return;
-      }
-      goto(adminPath(target, target === 'admin' ? 'home' : 'today'));
-    } catch {
-      error = 'Email 或密碼錯誤';
-    } finally {
-      busy = false;
-    }
+    await submitLogin({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      fields: [account, pw],
+      login: () => authStore.login(account, pw),
+      resolveTarget: () => {
+        const target = staffPortals($authStore.roles)[0];
+        return target ? adminPath(target, target === 'admin' ? 'home' : 'today') : null;
+      },
+      onNoAccess: () => authStore.logout(),
+      navigate: goto
+    });
   }
 
   function onKey(e: KeyboardEvent) {

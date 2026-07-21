@@ -10,6 +10,7 @@
   import { Button, Checkbox, Icon } from '$lib/components/ui';
   import { authStore } from '$lib/stores/authStore';
   import { staffPortals, wantsBlockedNotice, ROLE_HOME } from '$lib/staff/roles';
+  import { submitLogin } from '$lib/login-submit';
 
   let account = '';
   let pw = '';
@@ -30,27 +31,19 @@
   }
 
   async function submit() {
-    if (busy) return;
-    if (!account.trim() || !pw.trim()) {
-      error = '請輸入帳號與密碼';
-      return;
-    }
-    error = '';
-    busy = true;
-    try {
-      await authStore.login(account, pw);
-      const target = staffPortals($authStore.roles)[0];
-      if (!target) {
-        await authStore.logout();
-        error = '此帳號無後台權限';
-        return;
-      }
-      goto(ROLE_HOME[target]);
-    } catch {
-      error = 'Email 或密碼錯誤';
-    } finally {
-      busy = false;
-    }
+    await submitLogin({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      fields: [account, pw],
+      login: () => authStore.login(account, pw),
+      resolveTarget: () => {
+        const target = staffPortals($authStore.roles)[0];
+        return target ? ROLE_HOME[target] : null;
+      },
+      onNoAccess: () => authStore.logout(),
+      navigate: goto
+    });
   }
 
   function onKey(e: KeyboardEvent) {

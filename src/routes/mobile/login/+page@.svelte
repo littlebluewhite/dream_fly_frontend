@@ -19,6 +19,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { authStore } from '$lib/stores/authStore';
+  import { submitLogin } from '$lib/login-submit';
   // 卡 3：google-oauth 效應模組改經 $lib/mobile/auth 接縫取用（實作單源仍在
   // $lib/member/google-oauth，零複製轉手）。
   import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/mobile/auth';
@@ -42,17 +43,14 @@
   ];
 
   async function submit() {
-    if (busy) return;
-    error = '';
-    busy = true;
-    try {
-      await authStore.login(email, password);
-      goto('/mobile');
-    } catch {
-      error = 'Email 或密碼錯誤';
-    } finally {
-      busy = false;
-    }
+    await submitLogin({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      login: () => authStore.login(email, password),
+      resolveTarget: () => '/mobile',
+      navigate: goto
+    });
   }
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter') submit();

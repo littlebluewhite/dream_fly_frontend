@@ -20,6 +20,7 @@
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
   import { safeRedirect } from '$lib/checkout-gate';
+  import { submitLogin } from '$lib/login-submit';
   import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
 
   const googleEnabled = isGoogleLoginEnabled();
@@ -40,17 +41,14 @@
   let pwFocus = false;
 
   async function submit() {
-    if (busy) return;
-    error = '';
-    busy = true;
-    try {
-      await authStore.login(email, pw);
-      goto(safeRedirect($page.url.searchParams.get('redirect')));
-    } catch {
-      error = 'Email 或密碼錯誤';
-    } finally {
-      busy = false;
-    }
+    await submitLogin({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      login: () => authStore.login(email, pw),
+      resolveTarget: () => safeRedirect($page.url.searchParams.get('redirect')),
+      navigate: goto
+    });
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') submit();
