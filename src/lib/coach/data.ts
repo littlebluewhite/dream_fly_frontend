@@ -24,9 +24,14 @@
  * (零型別消費者,隨值一併退役)外全數保留。 */
 import type { Level } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
+import { SESSION_STATUS } from '$lib/domain/sessions';
+import type { TodayStatus } from '$lib/domain/sessions';
 
 /* ──────────────── unions ──────────────── */
-export type TodayStatus = 'done' | 'live' | 'soon' | 'wait';
+// TodayStatus 自本檔升遷至 $lib/domain/sessions(C4：admin/coach/mobile-admin 共用
+// 查表鍵單源收斂)，這裡改 type re-export，呼叫端(coach/api.ts、頁面、components)
+// 的 import 路徑不動。
+export type { TodayStatus };
 export type StudentLevel = '啟蒙' | '初階' | '中階' | '選手';
 export type SchedCat = '體操' | '啦啦隊' | '跑酷';
 export type SchedVenue = '主場館' | '競技訓練館' | '副館';
@@ -185,11 +190,13 @@ export const TODAY_LABEL = '2026年5月30日 星期六';
 // Task 1(C2 死種子退役):TODAY_CLASSES(今日課程 5 堂示範資料)已退役——首頁/今日課程
 // 頁改走 getDashboard()/getToday() 真後端接縫,這份 mock 已無 runtime 消費者。
 // TodayClass interface 仍供頁面與 api.ts 的型別標註使用,保留。
+// C4：色彩(bg/fg){label,bg,fg}形狀留本檔(TodayClassCard/ClassRow/today 頁三消費端
+// 零改動)，但 label 改由單源 SESSION_STATUS[k][1] 合成，不再各自維護一份文案。
 export const CLASS_STATUS: Record<TodayStatus, { label: string; bg: string; fg: string }> = {
-	done: { label: '已結束', bg: '#F1F5F9', fg: '#475569' },
-	live: { label: '上課中', bg: 'var(--df-success-bg)', fg: 'var(--df-success-strong)' },
-	soon: { label: '即將開始', bg: 'var(--df-warning-bg)', fg: '#92400E' },
-	wait: { label: '尚未開始', bg: 'var(--df-primary-bg)', fg: 'var(--df-primary-dark)' }
+	done: { label: SESSION_STATUS.done[1], bg: '#F1F5F9', fg: '#475569' },
+	live: { label: SESSION_STATUS.live[1], bg: 'var(--df-success-bg)', fg: 'var(--df-success-strong)' },
+	soon: { label: SESSION_STATUS.soon[1], bg: 'var(--df-warning-bg)', fg: '#92400E' },
+	wait: { label: SESSION_STATUS.wait[1], bg: 'var(--df-primary-bg)', fg: 'var(--df-primary-dark)' }
 };
 
 /* ──────────────── my students (我的學員) ──────────────── */

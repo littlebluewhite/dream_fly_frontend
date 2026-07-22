@@ -28,6 +28,7 @@ import {
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
+import { deriveSessionStatus as domainDeriveSessionStatus } from '$lib/domain/sessions';
 import { TODAY_LABEL } from './data';
 import { fakeRouter } from '$lib/testing/fake-router';
 
@@ -244,25 +245,12 @@ describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabe
 	});
 });
 
-describe('deriveSessionStatus — §3.18 裁決 2(場次時間為牆鐘語意，本地直接比較，不做時區換算)', () => {
-	it('now < start_time → wait', () => {
-		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 8, 59, 59))).toBe('wait');
-	});
-
-	it('now === start_time(邊界)→ live', () => {
-		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 9, 0, 0))).toBe('live');
-	});
-
-	it('start_time < now < end_time → live', () => {
-		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 9, 30, 0))).toBe('live');
-	});
-
-	it('now === end_time(邊界，已結束)→ done', () => {
-		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 10, 0, 0))).toBe('done');
-	});
-
-	it('now > end_time → done', () => {
-		expect(deriveSessionStatus('09:00:00', '10:00:00', new Date(2026, 6, 4, 10, 0, 1))).toBe('done');
+/* C4：牆鐘語意 5 例已搬到 $lib/domain/sessions.test.ts(deriveSessionStatus 本體與
+ * wallClockTime 私有輔助函式一併移入該檔，語意零改)——這裡只留一條 re-export 參照
+ * pin，確認 coach/api.ts 的 export 是同一個函式物件、不是重新實作的複本。 */
+describe('deriveSessionStatus — re-export pin(完整牆鐘語意測試見 domain/sessions.test.ts)', () => {
+	it('coach/api.ts 匯出的 deriveSessionStatus 與 $lib/domain/sessions 是同一函式參照', () => {
+		expect(deriveSessionStatus).toBe(domainDeriveSessionStatus);
 	});
 });
 

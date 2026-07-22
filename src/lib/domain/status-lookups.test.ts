@@ -12,12 +12,19 @@
  * 3. key-count canary：防漏鍵/多鍵。
  *
  * LEVEL_TONE 的 facade toBe/字面不變量留在 course-level.test.ts(單獨擴充，含
- * member/mobile 兩發留給 W2b)。 */
+ * member/mobile 兩發留給 W2b)。
+ *
+ * SESSION_STATUS(C4)只補層 2/3——admin/coach/mobile-admin 三處都是「查表結果
+ * 內部組裝成各自形狀」的消費方式(mapTodaySession()/mapTodayClassToRow() 組出
+ * TodayClass/TodayRow、coach/data.ts CLASS_STATUS 另組 {label,bg,fg})，沒有一處
+ * 是單純轉出同一個查表物件的 facade，故無層 1 wiring check 可補(同 LEVEL_TONE
+ * 的例外，理由不同：LEVEL_TONE 另檔測，SESSION_STATUS 是無 facade 可測)。 */
 import { describe, it, expect } from 'vitest';
 import { MEMBER_STATUS, MEMBER_ACCOUNT_STATUS } from './members';
 import { VENUE_STATUS } from './venues';
 import { TICKET_TYPE } from './tickets';
 import { STATUS_TONE } from './classes';
+import { SESSION_STATUS } from './sessions';
 import * as AdminData from '$lib/admin/data';
 import * as MobileAdminData from '$lib/mobile-admin/data';
 
@@ -81,12 +88,25 @@ describe('literal table invariants (independent of the facades)', () => {
 		});
 	});
 
+	it('SESSION_STATUS matches the known 4-state literal (尚未開始/上課中/已結束/即將開始)', () => {
+		expect(SESSION_STATUS).toEqual({
+			wait: ['neutral', '尚未開始'],
+			live: ['success', '上課中'],
+			done: ['neutral', '已結束'],
+			soon: ['warning', '即將開始']
+		});
+	});
+
 	it('同名異義守衛：MEMBER_STATUS.active(在學中)與 MEMBER_ACCOUNT_STATUS.active(啟用中)標籤不相等', () => {
 		expect(MEMBER_STATUS.active[1]).not.toBe(MEMBER_ACCOUNT_STATUS.active[1]);
 	});
 
 	it('canonical 守衛：VENUE_STATUS.available 標籤是「可預約」，不是 mobile-admin 舊值「可使用」', () => {
 		expect(VENUE_STATUS.available[1]).toBe('可預約');
+	});
+
+	it('canonical 守衛：SESSION_STATUS.live 標籤是「上課中」，不是 admin 舊值「進行中」', () => {
+		expect(SESSION_STATUS.live[1]).toBe('上課中');
 	});
 });
 
@@ -97,4 +117,5 @@ describe('key counts', () => {
 	it('VENUE_STATUS has 2 keys', () => expect(Object.keys(VENUE_STATUS)).toHaveLength(2));
 	it('TICKET_TYPE has 3 keys', () => expect(Object.keys(TICKET_TYPE)).toHaveLength(3));
 	it('STATUS_TONE has 3 keys', () => expect(Object.keys(STATUS_TONE)).toHaveLength(3));
+	it('SESSION_STATUS has 4 keys', () => expect(Object.keys(SESSION_STATUS)).toHaveLength(4));
 });

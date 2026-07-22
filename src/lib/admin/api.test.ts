@@ -34,7 +34,7 @@ import {
 	putSettings
 } from './api';
 import { api, ApiError } from '$lib/api/client';
-import { deriveSessionStatus } from '$lib/coach/api';
+import { deriveSessionStatus } from '$lib/domain/sessions';
 import { mapMemberAccount } from './data';
 import { ORDER_STATUS } from './data';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -46,9 +46,10 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 // deriveSessionStatus 預設沿用真實實作(其餘既有測試靠 vi.setSystemTime 驅動真實時間
 // 比較邏輯)——只有下面「soon 分支」測試會用 mockReturnValueOnce 強制覆寫一次，驗證
-// TODAY_TONE_LABEL 已補齊的第 4 值查表分支(Important #2(b) 終審修正)。
-vi.mock('$lib/coach/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/coach/api')>();
+// SESSION_STATUS 已補齊的第 4 值查表分支(Important #2(b) 終審修正；C4 起查表單源
+// 收斂至 $lib/domain/sessions，mock 路徑同步改)。
+vi.mock('$lib/domain/sessions', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/domain/sessions')>();
 	return { ...actual, deriveSessionStatus: vi.fn(actual.deriveSessionStatus) };
 });
 
@@ -1201,7 +1202,7 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 
 			expect(api).toHaveBeenCalledWith('/sessions/today');
 			expect(d.sessions).toEqual([
-				{ time: '09:00', name: '兒童體操 初階班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live', tone: 'success', label: '進行中' }
+				{ time: '09:00', name: '兒童體操 初階班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live', tone: 'success', label: '上課中' }
 			]);
 		} finally {
 			vi.useRealTimers();
@@ -1226,7 +1227,7 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 		expect(d.sessions[0].room).toBe('—');
 	});
 
-	it('state 推導(復用 coach/api.ts deriveSessionStatus)：now < start_time → wait/尚未開始', async () => {
+	it('state 推導(復用 $lib/domain/sessions 的 deriveSessionStatus)：now < start_time → wait/尚未開始', async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date(2026, 6, 10, 7, 0, 0));
 		try {
@@ -1273,9 +1274,9 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 	/* Important #2(b)(終審)：deriveSessionStatus 宣告的回傳型別 TodayStatus 是 4 值
 	 * 聯集(soon 是現行實作推導不到、但型別上合法的第 4 值)。之前 mapTodaySession 把
 	 * 回傳值窄化 cast 成 'wait'|'live'|'done' 3 態去查一張只有 3 個 key 的表——查表
-	 * 一旦真的遇到 soon 就會 destructure 到 undefined 而炸掉。TODAY_TONE_LABEL 現已
-	 * 補齊 soon 分支、移除窄化 cast，這裡用 mock 強制 deriveSessionStatus 回傳 soon
-	 * 驗證查表能正確降級，不會炸。 */
+	 * 一旦真的遇到 soon 就會 destructure 到 undefined 而炸掉。SESSION_STATUS(C4 起
+	 * 單源收斂至 $lib/domain/sessions)現已補齊 soon 分支、移除窄化 cast，這裡用
+	 * mock 強制 deriveSessionStatus 回傳 soon 驗證查表能正確降級，不會炸。 */
 	it('state 推導：deriveSessionStatus 回傳 soon(現行實作不會產生，但型別合法的第 4 態)時查表仍有對應 tone/label，不會炸掉', async () => {
 		vi.mocked(deriveSessionStatus).mockReturnValueOnce('soon');
 		vi.mocked(api).mockImplementation(

@@ -53,6 +53,8 @@ import {
 	type CreateReportCardBody
 } from '$lib/coach/api';
 import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
+import { SESSION_STATUS } from '$lib/domain/sessions';
+import type { Tone } from '$lib/api/wire';
 import { fmtNT } from '$lib/format';
 import {
 	PROFILES,
@@ -71,6 +73,14 @@ import {
 
 export { CoachNotFoundError };
 export { coachLoadErrorCopy, GENERIC_LOAD_ERROR, type LoadErrorCopy } from '$lib/coach/load-error-copy';
+// saveNewCoach/saveCoachEdit(新增/編輯教練兩階段 async 編排器，K4/C3)——CoachesScreen.svelte
+// 復用桌面 admin/coaches/+page.svelte 同一套無狀態純函式，取代原本 inline 重抄的兩步序列
+// （見 CoachesScreen.svelte 檔頭註解）。
+export { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
+// C3(A3 並行任務跨任務凍結契約)：createSettingsForm/SettingsDraft 由並行任務建立中的
+// $lib/admin/settings-form 供給，這裡預埋 re-export——本檔自檢時此行可能報「找不到
+// 模組」，屬預期，待該模組併入後由主 agent 權威閘裁決。
+export { createSettingsForm, type SettingsDraft } from '$lib/admin/settings-form';
 export type {
 	CourseWriteBody,
 	CreateMemberBody,
@@ -130,19 +140,17 @@ export const getMore = async (): Promise<MoreData> => {
 	return { profiles: PROFILES, coaches, venues, tickets };
 };
 
-/** TodaySessionResponse 的 4 態狀態 → 行動版今日課表卡的 tone/label。同桌面
- *  coach/data.ts 的 CLASS_STATUS 標籤（done→已結束、live→上課中、soon→即將開始、
- *  wait→尚未開始）。既有的 taken(是否已點名)欄位無對應真實訊號可推導——
- *  TodaySessionResponse 不含「本場次是否已完成點名」旗標，一律不設(undefined)，
- *  讓畫面固定顯示「點名」動作按鈕，不假裝知道点名是否已完成。 */
-const TODAY_STATUS_LABEL: Record<string, [string, string]> = {
-	done: ['neutral', '已結束'],
-	live: ['success', '上課中'],
-	soon: ['warning', '即將開始'],
-	wait: ['neutral', '尚未開始']
-};
+/** TodaySessionResponse 的 4 態狀態 → 行動版今日課表卡的 tone/label。單源改查
+ *  $lib/domain/sessions 的 SESSION_STATUS（admin/coach/mobile-admin 三處原本各自
+ *  手抄一份查表，已隨 C4 收斂；標籤沿用原本這裡就已經是 canonical 的字面——
+ *  done→已結束、live→上課中、soon→即將開始、wait→尚未開始）。t.status 是後端 wire
+ *  給的鬆散 string(非 TodayStatus 窄型別)，故沿用既有的 ?? ['neutral', ''] fallback
+ *  （查無對應鍵時不顯示語意，行為保真，不因單源收斂而改變）。既有的 taken(是否已
+ *  點名)欄位無對應真實訊號可推導——TodaySessionResponse 不含「本場次是否已完成
+ *  點名」旗標，一律不設(undefined)，讓畫面固定顯示「點名」動作按鈕，不假裝知道
+ *  点名是否已完成。 */
 function mapTodayClassToRow(t: { start: string; name: string; room: string; count: number; status: string }): TodayRow {
-	const [tone, label] = TODAY_STATUS_LABEL[t.status] ?? ['neutral', ''];
+	const [tone, label] = (SESSION_STATUS as Record<string, [Tone, string] | undefined>)[t.status] ?? ['neutral', ''];
 	return { time: t.start, name: t.name, room: t.room, count: t.count, tone, label };
 }
 

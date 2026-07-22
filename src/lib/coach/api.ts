@@ -16,11 +16,11 @@ import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
+import { deriveSessionStatus } from '$lib/domain/sessions';
 import { TODAY_LABEL } from './data';
 import type {
 	Coach,
 	TodayClass,
-	TodayStatus,
 	Conversation,
 	AttClassFull,
 	AttRow,
@@ -110,21 +110,10 @@ interface ApiTodaySession {
 	enrolled_count: number;
 }
 
-/** now 轉為本地牆鐘 "HH:MM:SS"，供與 start_time/end_time 直接字典序比較(§3.18 裁決 2：
- *  場次時間為牆鐘語意，前端以本地時間直接比較，不做時區換算)。 */
-function wallClockTime(now: Date): string {
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-}
-
-/** 場次狀態推導：now < start_time → 'wait'；start_time ≤ now < end_time → 'live'；
- *  now ≥ end_time → 'done'。now 由呼叫端傳入的純函式，不吃系統時鐘，獨立可測。 */
-export function deriveSessionStatus(startTime: string, endTime: string, now: Date): TodayStatus {
-	const wall = wallClockTime(now);
-	if (wall < startTime) return 'wait';
-	if (wall < endTime) return 'live';
-	return 'done';
-}
+/** 場次狀態推導 + 牆鐘比較邏輯已搬到 $lib/domain/sessions.ts（admin/coach/mobile-admin
+ *  三處原本各自手抄一份 status/tone/label 查表，C4 單源收斂）——這裡留活 re-export，
+ *  下方 mapTodayClass()、呼叫端與測試 mock 路徑不動。 */
+export { deriveSessionStatus };
 
 /** TodaySessionResponse → 既有 TodayClass 形狀。room/level/cat 無對應欄位(場次回應不含
  *  場地/課程等級/課程分類)，一律誠實給預設值(P2)；count 用 enrolled_count；status 由

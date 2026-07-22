@@ -6,18 +6,24 @@
    *
    * Task F5：新增/編輯改接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
    * routes/admin/coaches/+page.svelte 的兩步流程（先建 user 帳號、再綁 coach）與
-   * 錯誤訊息設計，經 $lib/mobile-admin/api 薄層重用同一組
-   * createCoach/updateCoach/createMember/updateMember。寫入成功後 refreshOps()
-   * 整包重抓 members/classes/coaches/orders 四個 store（同
-   * routes/mobile-admin/admin/members/+page.svelte 慣例），取代舊有的本地
-   * saveCoach() 假寫入。
+   * 錯誤訊息設計。寫入成功後 refreshOps() 整包重抓 members/classes/coaches/orders
+   * 四個 store（同 routes/mobile-admin/admin/members/+page.svelte 慣例），取代
+   * 舊有的本地 saveCoach() 假寫入。
+   *
+   * C3：兩步序列本身（API 呼叫順序、outcome 判別聯集）已收進
+   * $lib/admin/components/coach-save.ts 的 saveNewCoach/saveCoachEdit——同桌面
+   * admin/coaches/+page.svelte 復用的同一套無狀態純函式（K4），本頁不再 inline
+   * 重抄一份兩步序列，只剩「呼叫 saveNewCoach/saveCoachEdit → 依 outcome.kind
+   * 翻譯 toast」。
    *
    * 本頁沿用既有的「儲存即關閉 sheet、成功/失敗 toast 非同步顯示」慣例（同
    * MemberForm 對照的 members/+page.svelte handleSave），跟桌面「失敗時保留對話框
    * 供重試」的慣例不同——故第二步（教練綁定）失敗時，本頁不提供「同一個 sheet
-   * 工作階段內重試」的機制（sheet 已經關閉），錯誤 toast 改為建議至「學員管理」頁
-   * 確認帳號、或重新執行一次新增教練（換一個 email）。同桌面一樣不做自動回滾
-   * （後端沒有複合建立端點，也沒有刪除使用者的端點可呼叫）。 */
+   * 工作階段內重試」的機制（sheet 已經關閉）：outcome.coachBindFailed 攜帶的
+   * pendingUserId 因此刻意丟棄（桌面版存回哨兵供同一對話框工作階段內重試，本頁
+   * 沒有這個工作階段可以重試），錯誤 toast 改為建議至「學員管理」頁確認帳號、或
+   * 重新執行一次新增教練（換一個 email）。同桌面一樣不做自動回滾（後端沒有複合
+   * 建立端點，也沒有刪除使用者的端點可呼叫）。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -31,8 +37,9 @@
     updateCoach,
     createMember,
     updateMember,
-    type CoachFormValues,
-    type CoachWriteBody
+    saveNewCoach,
+    saveCoachEdit,
+    type CoachFormValues
   } from '$lib/mobile-admin/api';
   import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
 
@@ -50,49 +57,44 @@
     422: '輸入資料不符規則，請確認後再試。'
   };
 
-  function coachBody(v: CoachFormValues): CoachWriteBody {
-    return { title: v.title, specialties: v.tags, is_active: v.isActive };
-  }
-
   async function createAndRefresh(v: CoachFormValues) {
-    let userId: string;
-    try {
-      userId = (await createMember({ email: v.email, name: v.name, password: v.password })).id;
-    } catch (e) {
-      toasts.notify('error', '新增失敗', apiErrorMessage(e));
-      return;
+    const outcome = await saveNewCoach(v, null, { createMember, createCoach });
+    switch (outcome.kind) {
+      case 'userCreateFailed':
+        toasts.notify('error', '新增失敗', apiErrorMessage(outcome.error));
+        return;
+      case 'coachBindFailed':
+        // outcome.pendingUserId 刻意丟棄——見檔頭註解：本頁「儲存即關 sheet」，沒有
+        // 同一個 sheet 工作階段內重試第二步的機制，不像桌面存回哨兵。
+        toasts.notify(
+          'error',
+          '教練綁定失敗',
+          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新新增一次教練。`
+        );
+        return;
+      case 'created':
+        toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
+        await refreshOps();
     }
-    try {
-      await createCoach({ user_id: userId, ...coachBody(v) });
-    } catch (e) {
-      toasts.notify(
-        'error',
-        '教練綁定失敗',
-        `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(e, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新新增一次教練。`
-      );
-      return;
-    }
-    toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
-    await refreshOps();
   }
 
   async function updateAndRefresh(coach: Coach, v: CoachFormValues) {
-    if (v.name.trim() !== coach.name) {
-      try {
-        await updateMember(coach.userId, { name: v.name.trim() });
-      } catch (e) {
-        toasts.notify('error', '儲存失敗', apiErrorMessage(e));
+    const outcome = await saveCoachEdit(
+      v,
+      { id: coach.id, userId: coach.userId, name: coach.name },
+      { updateMember, updateCoach }
+    );
+    switch (outcome.kind) {
+      case 'nameUpdateFailed':
+        toasts.notify('error', '儲存失敗', apiErrorMessage(outcome.error));
         return;
-      }
+      case 'coachUpdateFailed':
+        toasts.notify('error', '儲存失敗', apiErrorText(outcome.error, COACH_ERROR_TEXT));
+        return;
+      case 'saved':
+        toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
+        await refreshOps();
     }
-    try {
-      await updateCoach(coach.id, coachBody(v));
-    } catch (e) {
-      toasts.notify('error', '儲存失敗', apiErrorText(e, COACH_ERROR_TEXT));
-      return;
-    }
-    toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
-    await refreshOps();
   }
 
   function handleSave(v: CoachFormValues, isNew: boolean, coach?: Coach): Promise<void> {

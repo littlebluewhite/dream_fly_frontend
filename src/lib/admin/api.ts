@@ -9,9 +9,8 @@ import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api'
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, Tone } from '$lib/api/wire';
-import { deriveSessionStatus } from '$lib/coach/api';
-import type { TodayStatus } from '$lib/coach/data';
+import type { ApiPage } from '$lib/api/wire';
+import { deriveSessionStatus, SESSION_STATUS } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 import type {
 	Ticket,
@@ -587,29 +586,21 @@ interface ApiAdminTodaySession {
 	venue: string | null;
 }
 
-/** 狀態 → [tone, label]（沿用桌面既有 TODAY mock 對這幾態的既有配色/文案慣例）。
- *  deriveSessionStatus(下方復用 coach/api.ts 既有實作，不重寫時間比較邏輯)依目前時間
- *  只會推導 wait/live/done 3 態，但其宣告的回傳型別 TodayStatus(coach/data.ts)是 4 值
- *  聯集——soon 是目前推導不到、但型別上合法的第 4 值。查表補齊 soon 分支(標籤/語意
- *  沿用 coach/data.ts CLASS_STATUS.soon 的「即將開始」暖色調)取代原本窄化到 3 態的
- *  cast，讓 state 能直接查表、不需要窄化 cast 掩蓋兩者落差——查表若真的漏了某個
- *  TodayStatus 值，現在是編譯期錯誤，不是等真資料哪天推導出第 4 態才在這裡
- *  destructure 到 undefined 而炸掉(TodayState(見 data.ts)另外多出的 prep(備課中)
- *  緩衝態不屬於 TodayStatus，這裡不涉及)。 */
-const TODAY_TONE_LABEL: Record<TodayStatus, [Tone, string]> = {
-	wait: ['neutral', '尚未開始'],
-	live: ['success', '進行中'],
-	done: ['neutral', '已結束'],
-	soon: ['warning', '即將開始']
-};
-
 /** TodaySessionResponse(admin 分支)→ 既有 TodayClass 形狀。coach_name(Round 4 Task B8
  *  新增)為 null 表示課程尚未指定教練；venue(同批新增)為 null 表示場次反推不到對應
- *  slot——兩者皆顯示「—」。state 由 deriveSessionStatus 依目前時間推導，tone/label
- *  查上表。 */
+ *  slot——兩者皆顯示「—」。state 由 deriveSessionStatus 依目前時間推導；tone/label
+ *  改查 $lib/domain/sessions 的 SESSION_STATUS（C4：admin/coach/mobile-admin 三處
+ *  原本各自手抄一份查表，已單源收斂——live 的正字標籤「上課中」取代這裡舊值
+ *  「進行中」，語意相同、字面各自維護導致的靜默發散，隨此次收斂統一）。
+ *  deriveSessionStatus 依目前時間只會推導 wait/live/done 3 態，但 SESSION_STATUS
+ *  四鍵齊全（soon 是型別上合法、目前推導不到的第 4 值），state 能直接查表、不需要
+ *  窄化 cast 掩蓋兩者落差——查表若真的漏了某個 TodayStatus 值，現在是編譯期錯誤，
+ *  不是等真資料哪天推導出第 4 態才在這裡 destructure 到 undefined 而炸掉
+ *  (TodayState(見 data.ts)另外多出的 prep(備課中)緩衝態不屬於 TodayStatus，這裡
+ *  不涉及)。 */
 function mapTodaySession(s: ApiAdminTodaySession, now: Date): TodayClass {
 	const state = deriveSessionStatus(s.start_time, s.end_time, now);
-	const [tone, label] = TODAY_TONE_LABEL[state];
+	const [tone, label] = SESSION_STATUS[state];
 	return {
 		time: hhmm(s.start_time),
 		name: s.course_name,
