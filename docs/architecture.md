@@ -81,8 +81,11 @@ Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and
 mostly as verbatim pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE`
 arrays and layers its own derived fields on top via `.map` builders, while `member`/`mobile` re-export
 the same domain value under an `as` assertion to their own stricter local type (same reference, no
-transformation); `coach` has no persona mapping into the shared seed, so it doesn't consume `lib/domain/`
-at all. Because a facade could silently drop a re-exported *type* without vitest noticing (type-only
+transformation); `coach` has no persona mapping into this shared ops-pair/member-app seed, so it stays
+outside the four-facade group above — though since 2026-07-23 (R8 C4) it's no longer true that `coach`
+doesn't consume `lib/domain/` at all: `coach/data.ts` and `coach/api.ts` both import directly from
+`domain/sessions.ts` (the display-lookup single source described just above) for `SESSION_STATUS` and
+`deriveSessionStatus` respectively. Because a facade could silently drop a re-exported *type* without vitest noticing (type-only
 imports erase at transpile time), `src/lib/mobile/data.test.ts` binds each of its re-exported types to a
 live value so a dropped export fails `npm run check` to compile, not just at runtime — the only facade
 left needing this guard now that member-app.ts holds 12 constants; admin's former dedicated
@@ -428,9 +431,11 @@ that `docs/adr/0011` already rejected.
 - **`src/lib/coach/messages-controller.ts`**'s `createMessagesController` (2026-07-23, R8 C1) is the
   sixth: `coach/messages/+page.svelte`'s conversation-thread orchestration as a single
   `MessagesViewState` snapshot store, with `getThread`/`markRead`/`sendMessage`/`getStudents`/
-  `createConversation` injected as deps. `selectThread` layers an incrementing-token stale-guard (the
-  same shape as `attendance-controller`'s save-token guard) over its dual best-effort
-  `getThread`+`markRead` fetch; `send`'s stale-response guard instead re-checks a captured
+  `createConversation` injected as deps. `selectThread` returns two independent promises rather than a
+  single outcome — `threadReady` layers an incrementing-token stale-guard (the same shape as
+  `attendance-controller`'s save-token guard) over the `getThread` fetch, while `badgeCleared`
+  (`markRead`) is deliberately unguarded and never blocks on `threadReady`, so a stuck read-receipt call
+  can't delay the thread-loaded/failed toast; `send`'s stale-response guard instead re-checks a captured
   `conversationId` snapshot; `confirmCompose`'s `creating` guard mirrors `checkout-controller`'s
   `alreadyPaying`. `closeCompose()` — not in the original card scope — was added when wiring surfaced a
   latent bug: once `composeOpen` moved into the controller's snapshot, assigning it directly from the

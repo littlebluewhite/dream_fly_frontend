@@ -25,6 +25,7 @@ session 就回退成未讀。本 ADR 記錄三者的收斂決定、判準,以及
 | `TICKET_TYPE` | `domain/tickets.ts` | admin(活 re-export)、mobile-admin(re-assert) |
 | `STATUS_TONE`(課程招生狀態) | `domain/classes.ts` | admin(活 re-export)、mobile-admin(re-assert) |
 | `LEVEL_TONE`(5 級課程分級) | `domain/course-level.ts` | admin(活 re-export),mobile-admin/member/mobile(皆純註記 re-assert,各自收窄回自身型別),`CourseCard.svelte`(公開行銷頁,直接展開) |
+| `SESSION_STATUS`(今日場次狀態,R8 C4 增補) | `domain/sessions.ts` | admin(`api.ts` 直接 import,`mapTodaySession` 內部計算 tone/label,不 re-export)、coach(`data.ts` 直接 import,`CLASS_STATUS` 合成 label,tone/色彩自留)、mobile-admin(`api.ts` 直接 import,寬鍵 fallback) |
 | `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` | `domain/member-app.ts` | member(活 re-export,`TIME_ROWS` 亦同)、mobile(`WEEK`/`COACH_REPLIES` 活 re-export、`NOTIF_CATS` 純註記收窄、`TIME_ROWS` 不轉出) |
 
 **宣告形與不 `readonly` 理由**:五個 entity 查表檔(members/venues/tickets/classes/course-level)
