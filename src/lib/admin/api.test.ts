@@ -1,5 +1,6 @@
 /* Dream Fly — admin/api.ts 單測(Task 18：venues/tickets/orders/classes/coaches 換真
- * API；members 新增 getMembers() seam；getReports 仍為 mock)。
+ * API；members 新增 getMembers() seam；getReports 型別/mapper/測試自 C5(第八輪架構
+ * 深化，見 docs/adr/0018)起遷至 reports-api.ts/reports-api.test.ts，本檔不再涵蓋)。
  *
  * 只 mock $lib/api/client 的 api() —— listCourses/listCoaches/listVenues/listProducts
  * (Task 14 public seam) 一律用真實實作，這樣才是「後端形狀進、UI 形狀出」的端對端

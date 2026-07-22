@@ -127,3 +127,14 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
   (單頁 controller 清單 3→4)。
 - **`docs/adr/0013`**:§4 取代其打卡「未抽」紀錄;其顯示查表三形由 §1 的 `LEAVE_STATUS` 延伸
   (member-app 常數 11→12),`readonly`/satisfies 宣告紀律照舊並補記 tone 字面聯集陷阱。
+
+## 增補(2026-07-23,架構深化 R8 C2+C3)
+
+- **§2 雙生核可類新例**:`src/lib/admin/settings-form.ts`(`createSettingsForm`)收斂桌面
+  `admin/settings/+page.svelte` 與 `mobile-admin/overlays/AdminSettingsScreen.svelte` 逐字
+  重複的草稿狀態機/save() 組裝,三條件核對與「單工廠不拆 createFormCore/guardedSubmit」的
+  裁決見 `docs/adr/0018`。
+- **§3 re-export 家族新增一員**:`admin/components/coach-save.ts` 的 `saveNewCoach`/
+  `saveCoachEdit`(K4/`docs/adr/0012`)現由 `mobile-admin/api.ts` 同款零映射 re-export 供
+  `CoachesScreen.svelte` 消費——與本節既有的 `coachLoadErrorCopy` 經同一 barrel 供 mobile-admin
+  兩頁取用同一手法;`pendingUserId` 哨兵在此消費端刻意丟棄的行為裁決見 `docs/adr/0018`。

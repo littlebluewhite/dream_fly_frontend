@@ -94,7 +94,7 @@ _Avoid_: 手抄 epoch/訂閱重置/和解鏈(單一來源之外的複本)、`*Hy
 
 **顯示查表 (Display Lookup)**:
 狀態/類型 → tone/label(部分為純 tone,狀態字面本身即顯示標籤)對照表;單一來源集中在 `$lib/domain`
-各 entity 檔(`members.ts`/`venues.ts`/`tickets.ts`/`classes.ts`/`course-level.ts`)與
+各 entity 檔(`members.ts`/`venues.ts`/`tickets.ts`/`classes.ts`/`course-level.ts`/`sessions.ts`)與
 `member-app.ts`(member/mobile 雙生的查表與成對常數)。facade 端依自身型別需要收斂為兩形之一:
 admin 這類 Tone 型別相容的 facade 直接活 re-export;mobile-admin/member/mobile 這類自帶較嚴格或
 不同形狀 `Tone` 型別的 facade,改以自身型別對同一參照純註記收窄(零 `as` 斷言,見 `docs/adr/0013`)。

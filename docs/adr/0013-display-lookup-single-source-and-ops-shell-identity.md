@@ -271,3 +271,13 @@ mutator(`markRead`/`markAllRead`)現在除了翻旗還會真的打 `PATCH`。`me
   本輪所有新查表宣告皆遵循,W2a 實測「寬 `Record` 承接窄 `Record`」未觸發 `TS2322`,計劃預告的
   單參照 `as` fallback 全程未動用;K7「保守版、更徹底的替代設計刻意遞延」的裁決風格,與本輪 §3
   選擇案甲、否決案乙的取捨同出一轍。
+
+## 增補(2026-07-23,架構深化 R8 C4):domain/sessions.ts 是顯示查表第六個 entity 檔
+
+`src/lib/domain/sessions.ts`(`SESSION_STATUS`/`TodayStatus`/`deriveSessionStatus`)收斂
+admin/coach/mobile-admin 三處原本各自手抄的今日場次狀態查表,加入 §1 開頭表格所列
+venues/tickets/members/classes/course-level 五個既有 entity 檔之列,成為第六個。canonical 標籤
+裁決(`live` = 「上課中」,取 coach/mobile-admin 既有多數字面,admin 舊值「進行中」改字,手法
+同上文 `VENUE_STATUS.available`「可預約」canonical 化先例)與三個消費端各自維持不同承接形
+(coach 留活 re-export 且 `CLASS_STATUS` 保自己的 `{label,bg,fg}` 合成形、admin 直接 import、
+mobile-admin 保留既有寬鍵 fallback)的完整裁決過程,記於 `docs/adr/0018`。

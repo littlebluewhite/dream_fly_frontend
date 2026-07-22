@@ -209,9 +209,11 @@ export interface TodayClass {
 }
 // Task F11：TODAY live-mock 退役(唯一消費者 TodayPanel 改吃 props；真資料見 admin/api.ts
 // 的 getTodaySessions()，對應 GET /sessions/today admin 分支，integration-contract.md
-// §3.18)。TodayState 5 態聯集維持不窄化——真資料的 deriveSessionStatus()(coach/api.ts
-// 復用)只會推導 wait/live/done 3 態，'prep'/'soon' 兩個緩衝態不會再被產生，但保留超集
-// 型別可讓真資料的 3 態直接指派、不需額外 cast。
+// §3.18)。TodayState 5 態聯集維持不窄化——真資料的 deriveSessionStatus()(單源於
+// $lib/domain/sessions.ts，C4 起 admin/api.ts 與 coach/api.ts 皆直接 import，不再是
+// admin 借道 coach/api.ts 復用，見 docs/adr/0018)只會推導 wait/live/done 3 態，
+// 'prep'/'soon' 兩個緩衝態不會再被產生，但保留超集型別可讓真資料的 3 態直接指派、
+// 不需額外 cast。
 
 /* ───────────────────────── activity / venues / tickets ─────────────────────────
  * `Activity`/`Coach`/`Venue`/`Ticket` 皆為 type-only re-export(值定義已全數退役——

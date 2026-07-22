@@ -30,7 +30,11 @@ Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mob
 one exception to the single-file pattern: it's a pure barrel re-exporting 8 concern modules that live
 alongside it (`cart.ts`, `waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `checkout-sync.ts`,
 `notifications.ts`, `ui.ts`) — new store/function additions go in the owning module, never in the barrel
-file itself. Cross-surface shared code lives in: lib-root single-file pure modules
+file itself. `admin/api.ts` picked up a narrower version of the same shape on 2026-07-23 (R8 C5): its
+Reports group (`GET /reports/admin` types/mappers/`getReports`, 336 lines) moved out to
+`admin/reports-api.ts`, with `admin/api.ts` re-exporting it name-by-name so its 42 existing consumers —
+`mobile-admin/api.ts`'s own re-export of `getReports` included — stay untouched; the file's other groups
+(Settings, Courses) weren't preemptively split (`docs/adr/0018`). Cross-surface shared code lives in: lib-root single-file pure modules
 (`checkout-math.ts`/`checkout-gate.ts`/`checkout-order.ts`/`load-gate.ts`/`hydration-gate.ts`, joined
 2026-07-11 by `cart-item.ts` — the `CartItem` types + `courseToCartItem`/`passToCartItem` adapters lifted
 out of `member/data.ts` so member/mobile/public routes stop reaching into a surface facade for them, and
@@ -66,7 +70,13 @@ four more member↔mobile display constants (`WEEK`/`TIME_ROWS`/`COACH_REPLIES`/
 on 2026-07-16 (count 12), consumed by `member`'s and `mobile`'s `data.ts` as pure-annotation narrowing
 re-asserts, and the same batch moved `session-format.ts` — pure per-session display derivation — from
 `member/` into `domain/`, imported directly by its six member/mobile consumers with no facade hop
-(`docs/adr/0014`).
+(`docs/adr/0014`). Since 2026-07-23 (R8 C4) a sixth per-entity display lookup joined the
+venues/tickets/members/classes/course-level family: `domain/sessions.ts`'s `SESSION_STATUS` (plus the
+`TodayStatus` union and `deriveSessionStatus`, moved verbatim from `coach/api.ts`), collapsing three
+hand-copied today's-session-status tables (`coach`'s `CLASS_STATUS` label, `admin`'s and
+`mobile-admin`'s own today-status label tables) — the canonical `live` label is `coach`'s and
+`mobile-admin`'s pre-existing `上課中`, so `admin`'s former `進行中` is the one that changed
+(`docs/adr/0018`).
 Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
 mostly as verbatim pass-through re-exports; where shapes diverge, the ops pair imports the `*_BASE`
 arrays and layers its own derived fields on top via `.map` builders, while `member`/`mobile` re-export
@@ -415,6 +425,19 @@ that `docs/adr/0011` already rejected.
   through) so toast text and all form/preview state stay on the component — this supersedes
   `docs/adr/0008`'s "keep the double-charge guard in the dialog" note; `docs/adr/0016` records the
   re-adjudication.
+- **`src/lib/coach/messages-controller.ts`**'s `createMessagesController` (2026-07-23, R8 C1) is the
+  sixth: `coach/messages/+page.svelte`'s conversation-thread orchestration as a single
+  `MessagesViewState` snapshot store, with `getThread`/`markRead`/`sendMessage`/`getStudents`/
+  `createConversation` injected as deps. `selectThread` layers an incrementing-token stale-guard (the
+  same shape as `attendance-controller`'s save-token guard) over its dual best-effort
+  `getThread`+`markRead` fetch; `send`'s stale-response guard instead re-checks a captured
+  `conversationId` snapshot; `confirmCompose`'s `creating` guard mirrors `checkout-controller`'s
+  `alreadyPaying`. `closeCompose()` — not in the original card scope — was added when wiring surfaced a
+  latent bug: once `composeOpen` moved into the controller's snapshot, assigning it directly from the
+  page (the old `Dialog onClose` idiom) only touched the page's destructured mirror, which the
+  controller's next `publish()` would overwrite back to `true`. Toast text, the conversations list and
+  its gate, and the tab×search filtering (still `conversations-filter.ts`, K3) stay on the page;
+  `docs/adr/0018` records the criterion walkthrough.
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
@@ -422,12 +445,16 @@ page: `member/leave-form.ts` (the 請假/補課 form machines behind `LeaveDialo
 mobile's `LeaveSheet`/`MakeupSheet`) and `member/cancel-leave.ts` (the shared cancel-leave busy guard
 behind member/mine and mobile's `MyCourseDetail`). Gate wiring, error mappers, and toast copy stay at
 each call site — `docs/adr/0012`'s criterion ① is relaxed for exactly this class by `docs/adr/0014`.
-Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)` pushes the
-pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store, shared by
-*four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a desktop↔mobile
-pair. It collapses what used to be a byte-identical `submit()` skeleton (re-entrancy guard → optional
-empty-fields check → clear error, lock → login → resolve a role-based redirect target → navigate →
-catch → unlock) into
+Since 2026-07-23 (R8 C2) `admin/settings-form.ts`'s `createSettingsForm` joins this class too — the
+admin desktop settings page and mobile-admin's `AdminSettingsScreen` share one factory for their
+byte-identical 10-field draft-flattening/assembly orchestration, deliberately *not* split into a
+leave-form-style shared core plus two wrapper factories since there's only one outcome domain to serve
+(`docs/adr/0018`). Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
+pushes the pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store,
+shared by *four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a
+desktop↔mobile pair. It collapses what used to be a byte-identical `submit()` skeleton (re-entrancy
+guard → optional empty-fields check → clear error, lock → login → resolve a role-based redirect target
+→ navigate → catch → unlock) into
 one module; each page keeps its own `let busy`/`let error` locals and markup unchanged, wiring them
 through the `LoginSubmitIO` callbacks.
 
