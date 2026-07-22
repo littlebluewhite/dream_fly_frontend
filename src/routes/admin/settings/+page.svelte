@@ -14,7 +14,12 @@
    * 會變成謊言——真正持久化只發生在按下「儲存變更」的那一刻)。
    *
    * 「登入裝置清單」不在本任務範圍(契約 §3.25 開頭：需 session 管理，另案處理)，
-   * 維持現狀——LOGINS 仍是純本地 mock，最小 diff。 */
+   * 維持現狀——LOGINS 仍是純本地 mock，最小 diff。
+   *
+   * 卡 C2：草稿狀態機（10 欄 + saving 旗標 + save() 的 SettingsWriteBody 組裝）
+   * 收斂進 $lib/admin/settings-form 的 createSettingsForm（與 mobile-admin
+   * AdminSettingsScreen 共用同一份機制，0014 §2 雙生核可類）；403 文案/成功
+   * toast/gate.silentRefresh() 仍逐字留在本檔。 */
   import { onMount } from 'svelte';
   import { Card, Input, Select, Switch, Button, Badge, Icon, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
@@ -22,42 +27,22 @@
   import PasswordDialog from '$lib/admin/components/PasswordDialog.svelte';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getSettings, putSettings, type SettingsWriteBody } from '$lib/admin/api';
+  import { getSettings, putSettings } from '$lib/admin/api';
+  import { createSettingsForm } from '$lib/admin/settings-form';
   import { apiErrorText } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
 
-  let name = '';
-  let phone = '';
-  let address = '';
-  let defaultRatio = '1:6';
-  let maxClassSizeLabel = '12 人'; // Select 顯示字串；save() 時轉回數字，見 labelToMaxClassSize
-  let email = true;
-  let sms = false;
-  let lowAtt = true;
-  let autoWait = true;
-  let twoFA = true;
   let pwOpen = false;
-  let saving = false;
 
   const MAX_CLASS_SIZE_OPTIONS = ['8 人', '10 人', '12 人'];
-  const DEFAULT_MAX_CLASS_SIZE = 12;
-  const maxClassSizeToLabel = (n: number) => `${n} 人`;
-  const labelToMaxClassSize = (label: string) => parseInt(label, 10) || DEFAULT_MAX_CLASS_SIZE;
+
+  // getSettings 不進 deps——資料由下方 gate 的 onData 呼叫 form.applyData(d) 餵入。
+  const form = createSettingsForm({ putSettings });
+  const { draft, saving } = form;
 
   const gate = createLoadGate({
     fetch: getSettings,
-    onData: (d) => {
-      name = d.studioProfile.name;
-      phone = d.studioProfile.phone;
-      address = d.studioProfile.address;
-      defaultRatio = d.studioProfile.defaultRatio;
-      maxClassSizeLabel = maxClassSizeToLabel(d.studioProfile.maxClassSize);
-      email = d.notificationFlags.email;
-      sms = d.notificationFlags.sms;
-      lowAtt = d.notificationFlags.lowAtt;
-      autoWait = d.notificationFlags.autoWait;
-      twoFA = d.security.twoFA;
-    }
+    onData: (d) => form.applyData(d)
   });
   onMount(() => {
     gate.load();
@@ -67,30 +52,19 @@
     return apiErrorText(e, { 403: '沒有權限執行此操作。' });
   }
 
-  async function save() {
-    if (saving) return;
-    saving = true;
-    const body: SettingsWriteBody = {
-      studio_profile: {
-        name,
-        phone,
-        address,
-        default_ratio: defaultRatio,
-        max_class_size: labelToMaxClassSize(maxClassSizeLabel)
-      },
-      notification_flags: { email, sms, lowAtt, autoWait },
-      security: { twoFA }
-    };
-    try {
-      await putSettings(body);
-    } catch (e) {
-      toasts.notify('error', '儲存失敗', settingsErrorMessage(e));
-      saving = false;
-      return;
+  async function save(): Promise<void> {
+    const outcome = await form.save();
+    switch (outcome.kind) {
+      case 'alreadySaving':
+        return;
+      case 'failed':
+        toasts.notify('error', '儲存失敗', settingsErrorMessage(outcome.error));
+        return;
+      case 'saved':
+        toasts.notify('success', '已儲存', '系統設定已更新。');
+        await gate.silentRefresh();
+        return;
     }
-    toasts.notify('success', '已儲存', '系統設定已更新。');
-    await gate.silentRefresh();
-    saving = false;
   }
 
   const LOGINS: { icon: IconName; device: string; place: string; time: string; now: boolean }[] = [
@@ -122,11 +96,11 @@
       <h3 class="sec-title">場館資訊</h3>
       <p class="sec-sub">顯示於官網與報名通知</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <Input label="場館名稱" bind:value={name} />
-        <Input label="聯絡電話" bind:value={phone} />
-        <Input label="地址" bind:value={address} style="grid-column:span 2" />
-        <Select label="預設師生比" bind:value={defaultRatio} options={['1:4', '1:6', '1:8']} />
-        <Select label="每班人數上限" bind:value={maxClassSizeLabel} options={MAX_CLASS_SIZE_OPTIONS} />
+        <Input label="場館名稱" bind:value={$draft.name} />
+        <Input label="聯絡電話" bind:value={$draft.phone} />
+        <Input label="地址" bind:value={$draft.address} style="grid-column:span 2" />
+        <Select label="預設師生比" bind:value={$draft.defaultRatio} options={['1:4', '1:6', '1:8']} />
+        <Select label="每班人數上限" bind:value={$draft.maxClassSizeLabel} options={MAX_CLASS_SIZE_OPTIONS} />
       </div>
     </Card>
 
@@ -134,19 +108,19 @@
     <Card padding={24}>
       <h3 class="sec-title" style="margin-bottom:12px">通知與自動化</h3>
       <SettingsRow label="Email 通知" desc="報名、繳費與請假以 Email 通知家長">
-        <Switch bind:checked={email} />
+        <Switch bind:checked={$draft.email} />
       </SettingsRow>
       <SettingsRow label="簡訊提醒" desc="課前一日發送簡訊提醒（需加購點數）">
-        <Switch bind:checked={sms} />
+        <Switch bind:checked={$draft.sms} />
       </SettingsRow>
       <SettingsRow label="出席偏低警示" desc="學員出席率低於 75% 時通知管理員">
-        <Switch bind:checked={lowAtt} />
+        <Switch bind:checked={$draft.lowAtt} />
       </SettingsRow>
       <SettingsRow label="自動候補遞補" desc="額滿班級有人退出時自動通知候補學員">
-        <Switch bind:checked={autoWait} />
+        <Switch bind:checked={$draft.autoWait} />
       </SettingsRow>
       <div style="display:flex;justify-content:flex-end;margin-top:18px">
-        <Button variant="primary" disabled={saving} on:click={save}>
+        <Button variant="primary" disabled={$saving} on:click={save}>
           <Icon name="check" size={16} />
           儲存變更
         </Button>
@@ -161,9 +135,9 @@
       </SettingsRow>
       <SettingsRow
         label="雙重驗證（2FA）"
-        desc={twoFA ? '已啟用 · 登入時需輸入動態驗證碼' : '建議啟用以提升帳號安全'}
+        desc={$draft.twoFA ? '已啟用 · 登入時需輸入動態驗證碼' : '建議啟用以提升帳號安全'}
       >
-        <Switch bind:checked={twoFA} />
+        <Switch bind:checked={$draft.twoFA} />
       </SettingsRow>
 
       <div style="margin-top:18px">

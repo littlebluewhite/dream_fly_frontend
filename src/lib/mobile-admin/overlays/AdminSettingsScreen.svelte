@@ -9,7 +9,13 @@
    * 不需要 $lib/mobile-admin/stores.ts 那套給 members/classes/coaches/orders 用的
    * 跨畫面集合水合機制)。單一「儲存變更」全量送出三組 key，理由同桌面版
    * +page.svelte(admin/api.ts SettingsWriteBody 附註)。「登入裝置清單」不在本任務
-   * 範圍——桌面版才有這個區塊，行動版原本就沒有，維持現狀。 */
+   * 範圍——桌面版才有這個區塊，行動版原本就沒有，維持現狀。
+   *
+   * 卡 C2：草稿狀態機（10 欄 + saving 旗標 + save() 的 SettingsWriteBody 組裝）
+   * 收斂進 $lib/admin/settings-form 的 createSettingsForm，經 $lib/mobile-admin/api
+   * 零映射 re-export 取用（與桌面 +page.svelte 共用同一份機制，0014 §2 雙生核可
+   * 類）；403 文案（SETTINGS_ERROR_TEXT）/成功 toast/gate.silentRefresh() 仍逐字
+   * 留在本檔。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -20,43 +26,21 @@
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getSettings, putSettings, type SettingsWriteBody } from '$lib/mobile-admin/api';
+  import { getSettings, putSettings, createSettingsForm } from '$lib/mobile-admin/api';
   import { apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;
 
-  let name = '';
-  let phone = '';
-  let address = '';
-  let defaultRatio = '1:6';
-  let maxClassSizeLabel = '12 人'; // Select 顯示字串；save() 時轉回數字
-  let email = true;
-  let sms = false;
-  let lowAtt = true;
-  let autoWait = true;
-  let twoFA = true;
-  let saving = false;
-
   const RATIO_OPTIONS = ['1:4', '1:6', '1:8'];
   const MAX_CLASS_SIZE_OPTIONS = ['8 人', '10 人', '12 人'];
-  const DEFAULT_MAX_CLASS_SIZE = 12;
-  const maxClassSizeToLabel = (n: number) => `${n} 人`;
-  const labelToMaxClassSize = (label: string) => parseInt(label, 10) || DEFAULT_MAX_CLASS_SIZE;
+
+  // getSettings 不進 deps——資料由下方 gate 的 onData 呼叫 form.applyData(d) 餵入。
+  const form = createSettingsForm({ putSettings });
+  const { draft, saving } = form;
 
   const gate = createLoadGate({
     fetch: getSettings,
-    onData: (d) => {
-      name = d.studioProfile.name;
-      phone = d.studioProfile.phone;
-      address = d.studioProfile.address;
-      defaultRatio = d.studioProfile.defaultRatio;
-      maxClassSizeLabel = maxClassSizeToLabel(d.studioProfile.maxClassSize);
-      email = d.notificationFlags.email;
-      sms = d.notificationFlags.sms;
-      lowAtt = d.notificationFlags.lowAtt;
-      autoWait = d.notificationFlags.autoWait;
-      twoFA = d.security.twoFA;
-    }
+    onData: (d) => form.applyData(d)
   });
   onMount(() => {
     gate.load();
@@ -65,30 +49,19 @@
   // PUT /settings:403 無權限 → 繁中文案查表(apiErrorText)，其餘通用訊息。
   const SETTINGS_ERROR_TEXT: Record<number, string> = { 403: '沒有權限執行此操作。' };
 
-  async function save() {
-    if (saving) return;
-    saving = true;
-    const body: SettingsWriteBody = {
-      studio_profile: {
-        name,
-        phone,
-        address,
-        default_ratio: defaultRatio,
-        max_class_size: labelToMaxClassSize(maxClassSizeLabel)
-      },
-      notification_flags: { email, sms, lowAtt, autoWait },
-      security: { twoFA }
-    };
-    try {
-      await putSettings(body);
-    } catch (e) {
-      toasts.notify('error', '儲存失敗', apiErrorText(e, SETTINGS_ERROR_TEXT));
-      saving = false;
-      return;
+  async function save(): Promise<void> {
+    const outcome = await form.save();
+    switch (outcome.kind) {
+      case 'alreadySaving':
+        return;
+      case 'failed':
+        toasts.notify('error', '儲存失敗', apiErrorText(outcome.error, SETTINGS_ERROR_TEXT));
+        return;
+      case 'saved':
+        toasts.notify('success', '已儲存', '系統設定已更新。');
+        await gate.silentRefresh();
+        return;
     }
-    toasts.notify('success', '已儲存', '系統設定已更新。');
-    await gate.silentRefresh();
-    saving = false;
   }
 </script>
 
@@ -112,7 +85,7 @@
             <div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">場館名稱</div>
               <input
-                bind:value={name}
+                bind:value={$draft.name}
                 style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
                   border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
                   outline:none; box-sizing:border-box;"
@@ -121,7 +94,7 @@
             <div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">聯絡電話</div>
               <input
-                bind:value={phone}
+                bind:value={$draft.phone}
                 style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
                   border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
                   outline:none; box-sizing:border-box;"
@@ -130,7 +103,7 @@
             <div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">地址</div>
               <input
-                bind:value={address}
+                bind:value={$draft.address}
                 style="width:100%; height:44px; padding:0 13px; border:1.5px solid var(--df-border-strong);
                   border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
                   outline:none; box-sizing:border-box;"
@@ -140,7 +113,7 @@
               <div>
                 <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">預設師生比</div>
                 <select
-                  bind:value={defaultRatio}
+                  bind:value={$draft.defaultRatio}
                   style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
                     border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
                     outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
@@ -151,7 +124,7 @@
               <div>
                 <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">每班人數上限</div>
                 <select
-                  bind:value={maxClassSizeLabel}
+                  bind:value={$draft.maxClassSizeLabel}
                   style="width:100%; height:44px; padding:0 11px; border:1.5px solid var(--df-border-strong);
                     border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark);
                     outline:none; box-sizing:border-box; background:#fff; appearance:none; -webkit-appearance:none;"
@@ -175,7 +148,7 @@
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">報名、繳費與請假通知家長</div>
               </div>
             </div>
-            <div style="flex:none;"><Switch bind:checked={email} /></div>
+            <div style="flex:none;"><Switch bind:checked={$draft.email} /></div>
           </div>
           <div
             style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
@@ -188,7 +161,7 @@
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">課前一日發送簡訊（需點數）</div>
               </div>
             </div>
-            <div style="flex:none;"><Switch bind:checked={sms} /></div>
+            <div style="flex:none;"><Switch bind:checked={$draft.sms} /></div>
           </div>
           <div
             style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;
@@ -201,7 +174,7 @@
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">出席率低於 75% 通知管理員</div>
               </div>
             </div>
-            <div style="flex:none;"><Switch bind:checked={lowAtt} /></div>
+            <div style="flex:none;"><Switch bind:checked={$draft.lowAtt} /></div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; padding:13px 16px;">
             <div style="display:flex; align-items:center; gap:12px; min-width:0;">
@@ -211,7 +184,7 @@
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">額滿班級退出時通知候補</div>
               </div>
             </div>
-            <div style="flex:none;"><Switch bind:checked={autoWait} /></div>
+            <div style="flex:none;"><Switch bind:checked={$draft.autoWait} /></div>
           </div>
         </Panel>
 
@@ -237,11 +210,11 @@
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px; line-height:1.4;">登入時需動態驗證碼</div>
               </div>
             </div>
-            <div style="flex:none;"><Switch bind:checked={twoFA} /></div>
+            <div style="flex:none;"><Switch bind:checked={$draft.twoFA} /></div>
           </div>
         </Panel>
 
-        <Button variant="primary" fullWidth disabled={saving} on:click={save}>
+        <Button variant="primary" fullWidth disabled={$saving} on:click={save}>
           <Icon name="check" size={16} style="margin-right:6px;" />儲存變更
         </Button>
         <div style="height:8px;"></div>

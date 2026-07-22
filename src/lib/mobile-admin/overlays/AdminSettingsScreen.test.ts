@@ -13,7 +13,11 @@ vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 
 /* 系統設定 push screen — Task F9：GET/PUT /settings 接真(復用桌面 admin/api.ts，見
  * $lib/mobile-admin/api 零映射 re-export)。刻意與前端預設值相異的 fixture，證明畫面
- * 讀的是 getSettings() payload 而非退回本地預設(同桌面 page.test.ts 慣例)。 */
+ * 讀的是 getSettings() payload 而非退回本地預設(同桌面 page.test.ts 慣例)。
+ * 卡 C2：草稿狀態機的單元覆蓋移至 $lib/admin/settings-form.test.ts；這裡保留畫面端
+ * 佈線證明——三態、PUT 全量送出、403 錯誤 toast 映射、成功 toast + 靜默刷新。
+ * createSettingsForm 經 $lib/mobile-admin/api 零映射 re-export 取用，下方既有的
+ * importOriginal+spread vi.mock 寫法會自動吃到，不需為它另外客製 mock。 */
 const FIXTURE = {
 	studioProfile: {
 		name: '測試體操館',

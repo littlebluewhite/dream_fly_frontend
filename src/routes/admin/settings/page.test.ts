@@ -10,7 +10,10 @@ vi.mock('$lib/admin/api', () => ({ getSettings: vi.fn(), putSettings: vi.fn() })
 
 /* 系統設定 page (admin.jsx SettingsView): 場館資訊 / 通知與自動化 / 帳號與安全 cards.
  * Task F9：GET/PUT /settings 接真——刻意與前端預設值相異的 fixture，證明頁面讀的是
- * getSettings() payload 而非退回本地預設(同 coach/settings 頁 FIXTURE_COACH 慣例)。 */
+ * getSettings() payload 而非退回本地預設(同 coach/settings 頁 FIXTURE_COACH 慣例)。
+ * 卡 C2：草稿狀態機（applyData 攤平/save 的三組 key 組裝/saving 守衛）的單元覆蓋
+ * 移至 $lib/admin/settings-form.test.ts；這裡保留頁面端佈線證明——三態、PUT 全量
+ * 送出、403 錯誤 toast 映射、成功 toast + 靜默刷新。 */
 const FIXTURE = {
 	studioProfile: {
 		name: '測試體操館',
