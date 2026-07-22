@@ -12,10 +12,14 @@
    *   本頁退化為薄 adapter：解構 controller 快照、事件轉呼 controller 方法、把
    *   outcome 翻成 toast 文案。badge 清零與傳送後的 convos 預覽/時間更新作用在
    *   convos(非 controller 狀態)，故由頁面依 outcome 欄位/呼叫當下捕捉的 id 自行套用。
-   * - selectAndSync()：頁面對 ctrl.selectThread() 的統一入口，四個呼叫點共用：初始
-   *   選取(gate onData)、點擊列(handleSelect)、tab×搜尋造成的選取回退(pickSelection
-   *   reactive)、撰寫新對話成功後(handleConfirmCompose)。目標 id 與目前選取相同時
-   *   不重複觸發(同 Svelte reassignment 對未變值不重新觸發下游 reactive 的語意)。
+   * - selectAndSync()：頁面對 ctrl.selectThread() 的統一入口，三個呼叫點共用：
+   *   pickSelection reactive（同時扛下初始選取——見 gate onData 附註——與 tab×搜尋
+   *   造成的選取回退，兩者本質是同一件事：把 sel 修正成「目前過濾條件下」合法的
+   *   對話）、點擊列(handleSelect)、撰寫新對話成功後(handleConfirmCompose)。目標 id
+   *   與目前選取相同時不重複觸發(同 Svelte reassignment 對未變值不重新觸發下游
+   *   reactive 的語意)。gate onData 刻意不再手動選第一筆（codex R4 P2 回歸修復：
+   *   getConversations() 飛行期間使用者已輸入搜尋字時，選未過濾的第一筆會對「其實
+   *   已被濾掉」的對話誤發 markRead，見 onData 附註）。
    *   ctrl.selectThread() 回傳 threadReady/badgeCleared 兩條互不等待的 promise(非單一
    *   outcome)——分開掛 .then，任一方卡住或永不落定都不拖住另一方(codex 全輪審查 P2
    *   回歸修復：先前誤用單一 await 合併兩者，markRead 卡住會連帶拖住失敗 toast)。
@@ -68,8 +72,13 @@
     fetch: getConversations,
     onData: (d) => {
       convos = [...d.conversations];
-      const first = d.conversations[0]?.id;
-      if (first) selectAndSync(first);
+      // 初選刻意不在此手動觸發（codex R4 P2 回歸修復）：若在 getConversations() 飛行
+      // 期間使用者已輸入搜尋字，這裡若直接選未過濾的 d.conversations[0]，會在下方
+      // reactive pickSelection 區塊來得及以目前的 tab/search 修正選取之前，就先對
+      // 「其實已被搜尋字篩掉、使用者根本沒看到」的那筆對話發出 getThread + markRead——
+      // markRead 刻意不做 stale-guard（見 selectAndSync 附註），該對話會被永久標記
+      // 已讀。全權交給下方 pickSelection reactive 區塊處理（它吃的是已套用 tab/search
+      // 的 list，天然不會選到被濾掉的列）。
     }
   });
   onMount(() => {
@@ -107,9 +116,12 @@
 
   $: list = filterConversations(convos, { tab, query: $search });
 
-  /* selection guard: if current sel falls out of filtered list, auto-select first.
-   * pickSelection 是冪等的回退函式；fallback 與現行 sel 相同時 selectAndSync 內建
-   * 不重複觸發(同 Svelte legacy 對未變值 reassignment 不重新觸發下游 reactive 的語意)。 */
+  /* selection guard: if current sel falls out of filtered list, auto-select first;
+   * 這也是「初始選取」的唯一入口(sel 初始為 null，同樣落在「不合法 → 回退清單首筆」
+   * 這條路徑，見 gate onData 附註——刻意不在 onData 另外手動選第一筆，才能保證選取
+   * 一律吃到當下的 tab/search 過濾結果，不會誤選被濾掉的列)。pickSelection 是冪等的
+   * 回退函式；fallback 與現行 sel 相同時 selectAndSync 內建不重複觸發(同 Svelte
+   * legacy 對未變值 reassignment 不重新觸發下游 reactive 的語意)。 */
   $: {
     const fallback = pickSelection(list, sel);
     if (fallback) selectAndSync(fallback);

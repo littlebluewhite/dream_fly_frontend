@@ -109,6 +109,28 @@ describe('/coach/messages — 對話串（getThread）+ 開啟即已讀（markRe
 		expect(getThread).toHaveBeenCalledWith('c1');
 	});
 
+	it('getConversations 飛行期間輸入搜尋字 → resolve 後選中的是過濾後清單首筆，被濾掉的第一筆不會被誤發 getThread/markRead(codex R4 P2 回歸)', async () => {
+		let resolveConversations!: (v: { conversations: typeof CONVOS }) => void;
+		const pending = new Promise<{ conversations: typeof CONVOS }>((res) => {
+			resolveConversations = res;
+		});
+		vi.mocked(getConversations).mockReturnValue(pending);
+
+		render(MessagesPage); // gate 進入 loading，getConversations() 已呼叫但尚未 resolve
+
+		search.set('陳爸爸'); // 使用者在飛行期間輸入搜尋字——只匹配 c2(陳爸爸)，c1(王媽媽)會被濾掉
+
+		resolveConversations({ conversations: CONVOS });
+		await new Promise((r) => setTimeout(r, 0)); // 讓 promise 微任務鏈與 Svelte reactivity flush 完整跑完
+
+		await waitFor(() => expect(getThread).toHaveBeenCalledWith('c2'));
+		expect(markRead).toHaveBeenCalledWith('c2');
+		// 舊碼（onData 手動選未過濾的 d.conversations[0]）會在此處對被濾掉的 c1 誤發
+		// getThread/markRead——c1 從未被使用者看見卻被永久標記已讀。
+		expect(getThread).not.toHaveBeenCalledWith('c1');
+		expect(markRead).not.toHaveBeenCalledWith('c1');
+	});
+
 	it('開啟對話串即呼叫 markRead(id)', async () => {
 		render(MessagesPage);
 		await waitFor(() => expect(markRead).toHaveBeenCalledWith('c1'));
