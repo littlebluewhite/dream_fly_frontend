@@ -23,7 +23,13 @@ vi.mock('$lib/coach/api', () => ({
  * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約依據）。
  * - 撰寫新對話：picker 名冊來自 getStudents()(GET /coaches/me/students，Task 10 已接真)，
  *   確認即 createConversation(user_id, name)(POST /conversations，get-or-create)——回傳
- *   既有對話 id 時選中既有列不重複插入；全新對話插入清單並選中。 */
+ *   既有對話 id 時選中既有列不重複插入；全新對話插入清單並選中。
+ *
+ * Round 8 C1：對話串編排（stale-guard、樂觀附加）收進 $lib/coach/messages-controller.ts
+ * 後，原本靠 render 之舞驗證的「快速切換對話時較舊回應不覆蓋當前對話」「送出失敗還原
+ * 輸入框」「送出中途切換對話」三段測試已搬到 messages-controller.test.ts 的無渲染單測
+ * （更快、更直接斷言 outcome/thread 快照）。本檔留下的仍是渲染必要的斷言：清單/三態/
+ * compose 佈線、以及 outcome→toast 文案映射。 */
 
 const CONVOS = [
 	{
@@ -126,29 +132,6 @@ describe('/coach/messages — 對話串（getThread）+ 開啟即已讀（markRe
 		expect(markRead).toHaveBeenCalledWith('c2');
 	});
 
-	it('快速切換對話時，較舊對話延遲回來的回應不會覆蓋目前選取對話的訊息（避免顯示錯誤對話串）', async () => {
-		let resolveC1: (v: { messages: typeof THREAD_C1; total: number }) => void;
-		const c1Pending = new Promise<{ messages: typeof THREAD_C1; total: number }>((res) => { resolveC1 = res; });
-		vi.mocked(getThread).mockReturnValueOnce(c1Pending);
-
-		const { findByText, queryByText } = render(MessagesPage);
-		// c1 的 getThread 尚未 resolve（thread 仍在載入中）。
-
-		vi.mocked(getThread).mockResolvedValueOnce({
-			messages: [{ who: 'them', text: '謝謝老師', time: '2026-07-04 10:00' }],
-			total: 1
-		});
-		await fireEvent.click(await findByText('陳爸爸')); // 切到 c2，c2 的 getThread 立即 resolve
-		await findByText('謝謝老師');
-
-		// c1 的請求這時才慢慢回來——不應覆蓋目前已切到的 c2 對話串。
-		resolveC1!({ messages: THREAD_C1, total: 2 });
-		await new Promise((r) => setTimeout(r, 0)); // 讓 promise 微任務鏈與 Svelte reactivity flush 完整跑完
-
-		expect(queryByText('教練好！想請問小明最近的狀況')).not.toBeInTheDocument();
-		expect(await findByText('謝謝老師')).toBeInTheDocument();
-	});
-
 	it('對話尚無訊息時顯示「尚無訊息」空狀態', async () => {
 		vi.mocked(getThread).mockResolvedValue({ messages: [], total: 0 });
 		const { findByText } = render(MessagesPage);
@@ -177,7 +160,7 @@ describe('/coach/messages — 傳送（sendMessage）', () => {
 		expect(matches.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('送出失敗時還原輸入框內容並提示錯誤 toast', async () => {
+	it('送出失敗時提示錯誤 toast（outcome→toast 映射；stale-guard/輸入框還原已搬至 messages-controller.test.ts）', async () => {
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		vi.mocked(sendMessage).mockRejectedValue(new ApiError(422, '訊息長度需介於 1 到 2000 字'));
 		const { findByText, getByPlaceholderText } = render(MessagesPage);
@@ -190,35 +173,6 @@ describe('/coach/messages — 傳送（sendMessage）', () => {
 		await waitFor(() => {
 			expect(notifySpy).toHaveBeenCalledWith('error', '傳送失敗', '訊息長度需介於 1 到 2000 字');
 		});
-		await waitFor(() => expect(input.value).toBe('好的'));
-	});
-
-	it('送出後若使用者已切到另一個對話，遲來的回應不會附加到目前的對話串（且不覆蓋新對話的輸入框）', async () => {
-		let resolveSend: (v: { who: 'me'; text: string; time: string }) => void;
-		const sendPending = new Promise<{ who: 'me'; text: string; time: string }>((res) => { resolveSend = res; });
-		vi.mocked(sendMessage).mockReturnValueOnce(sendPending);
-
-		const { findByText, getByPlaceholderText, queryAllByText } = render(MessagesPage);
-		await findByText('教練好！想請問小明最近的狀況');
-
-		const input = getByPlaceholderText('輸入訊息…') as HTMLInputElement;
-		await fireEvent.input(input, { target: { value: '好的' } });
-		await fireEvent.keyDown(input, { key: 'Enter' }); // c1 送出中，尚未 resolve
-
-		vi.mocked(getThread).mockResolvedValueOnce({
-			messages: [{ who: 'them', text: '謝謝老師', time: '2026-07-04 10:00' }],
-			total: 1
-		});
-		await fireEvent.click(await findByText('陳爸爸')); // 切到 c2
-		await findByText('謝謝老師');
-
-		// c1 的送出回應這時才回來——列表中 c1 的 preview 更新為「好的」是正確行為(那則
-		// 訊息確實送達 c1)，但不應被附加成目前顯示中的 c2 對話串的訊息泡泡。
-		resolveSend!({ who: 'me', text: '好的', time: '2026-07-05 09:20' });
-		await new Promise((r) => setTimeout(r, 0)); // 讓 promise 微任務鏈與 Svelte reactivity flush 完整跑完
-
-		expect(queryAllByText('好的')).toHaveLength(1); // 僅 c1 列表 preview，非目前對話串的泡泡
-		expect(input.value).toBe(''); // c2 的輸入框不應被 c1 的失敗/成功回應影響
 	});
 });
 

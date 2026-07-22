@@ -4,25 +4,27 @@
    * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root.
    *
    * Task 12：接真對話 API（$lib/coach/api，見 integration-contract.md §3.21）。
-   * - 清單：getConversations()(GET /conversations/me)，onMount 載入，phase 三態閘門。
-   * - 串：選定對話(sel)變動時 loadThread() 呼叫 getThread(id)(GET .../messages) +
-   *   markRead(id)(PATCH .../read)——兩者各自 best-effort、互不阻塞；markRead 成功後
-   *   本地把該對話 badge 清零(避免已讀後徽章卡在舊數字)。thread=null 代表載入中，
-   *   `[]` 代表已載入但無訊息，兩者分開渲染避免誤判空狀態。
-   * - 傳送：sendMessage(id, body)(POST .../messages)，回應直接附加到本地 thread(同
-   *   saveAttendance 用 mutation 回應同步本地狀態的慣例)，失敗則還原輸入框內容並
-   *   toast 錯誤。
+   * - 清單：getConversations()(GET /conversations/me)，onMount 載入，phase 三態閘門，
+   *   convos/gate 留頁面(Round 8 C1 判準：清單非「單一對話串」編排的一部分)。
+   * - 串的載入(stale-guard)、傳送(樂觀附加)、撰寫新對話三部曲(compose 生命週期、
+   *   creating 守衛)已收進 $lib/coach/messages-controller.ts(Round 8 C1，自本頁抽出，
+   *   仿 attendance-controller 的單一快照 store + clock-controller 的 outcome 形)——
+   *   本頁退化為薄 adapter：解構 controller 快照、事件轉呼 controller 方法、把
+   *   outcome 翻成 toast 文案。badge 清零與傳送後的 convos 預覽/時間更新作用在
+   *   convos(非 controller 狀態)，故由頁面依 outcome 欄位/呼叫當下捕捉的 id 自行套用。
+   * - selectAndSync()：頁面對 ctrl.selectThread() 的統一入口，四個呼叫點共用：初始
+   *   選取(gate onData)、點擊列(handleSelect)、tab×搜尋造成的選取回退(pickSelection
+   *   reactive)、撰寫新對話成功後(handleConfirmCompose)。目標 id 與目前選取相同時
+   *   不重複觸發(同 Svelte reassignment 對未變值不重新觸發下游 reactive 的語意)。
    * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約§3.21 明文）。
    * - 撰寫新對話：picker 名冊來自 getStudents()(GET /coaches/me/students，Task 10
-   *   已接真——取代原 MSG_DIRECTORY 虛構名單)，確認即 createConversation(user_id,
-   *   name)(POST /conversations，get-or-create，§3.21)。回傳 id 已在清單中(既有對話)
-   *   就選中既有列不重複插入；全新對話插入清單頂端並選中(伺服器排序把尚無訊息的
-   *   對話排最後，本地置頂是「剛發起」的工作階段 UX，下次整頁載入回歸伺服器排序)。
-   *   失敗(422「僅支援教練與會員間的對話」等)以 ApiError.message 繁中 toast 提示，
-   *   對話框保持開啟供改選。
+   *   已接真)，確認即 createConversation(user_id, name)(POST /conversations，
+   *   get-or-create，§3.21)——controller 只回傳建立結果，插入/選取的
+   *   applyCreatedConversation() 呼叫留頁面(convos 非 controller 狀態；回傳 id 已在
+   *   清單中就選中既有列不重複插入，全新對話插入頂端並選中)。失敗(422「僅支援教練
+   *   與會員間的對話」等)以 ApiError.message 繁中 toast 提示，對話框保持開啟供改選。
    * - 過濾清單(tab×搜尋)、選取回退 guard、confirmCompose 的插入/reset 四欄指令邏輯
-   *   已收進純模組 $lib/coach/conversations-filter.ts(Round 3 K3)——本頁保留 store
-   *   解構、stale-response guard 與 loadThread/markRead 等副作用。 */
+   *   留在純模組 $lib/coach/conversations-filter.ts(Round 3 K3)不動。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
@@ -36,60 +38,54 @@
   import { filterConversations, pickSelection, applyCreatedConversation } from '$lib/coach/conversations-filter';
   import { createLoadGate } from '$lib/load-gate';
   import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
+  import { createMessagesController } from '$lib/coach/messages-controller';
   import { apiErrorMessage } from '$lib/api/error-text';
   import { toasts, search } from '$lib/coach/stores';
   import type { IconName } from '$lib/icon-registry';
 
-  /* ── state (legacy, no runes) ── */
+  const ctrl = createMessagesController({ getThread, sendMessage, markRead, getStudents, createConversation });
+
+  /* ── convos 清單 state(legacy, no runes)——非 controller 收編範圍 ── */
   let convos: Conversation[] = [];
   let tab = '全部';
-  let sel: string | null = null;
   let reply = '';
+
+  /* ── controller 單一快照 store 解構鏡射(creating 純供內部 guard 用，頁面未渲染，
+   *  不落地成頁面變數) ── */
+  let sel: string | null = null;
   // null = 該對話串載入中；[] = 已載入但尚無訊息。
   let thread: ThreadMsg[] | null = null;
+  let composeOpen = false;
+  let composePhase: 'loading' | 'error' | 'ready' = 'loading';
+  let recipients: Student[] = [];
+  let composePick: Student | null = null;
+  $: ({ sel, thread, composeOpen, composePhase, recipients, composePick } = $ctrl);
 
   const gate = createLoadGate({
     fetch: getConversations,
     onData: (d) => {
       convos = [...d.conversations];
-      sel = d.conversations[0]?.id ?? null;
+      const first = d.conversations[0]?.id;
+      if (first) void selectAndSync(first);
     }
   });
   onMount(() => {
     gate.load();
   });
 
-  /** 選定對話變動時載入其對話串並標記已讀。
-   *
-   *  `sel === conversationId` 重新檢查：快速連續切換對話時，較舊對話的請求可能比
-   *  新選取對話的請求更晚回來(網路先後順序不保證)——套用回應前先確認使用者這時
-   *  還停留在同一個對話，避免舊回應蓋掉目前正在看的對話串。 */
-  function loadThread(conversationId: string) {
-    thread = null;
-    getThread(conversationId)
-      .then((d) => {
-        if (sel === conversationId) thread = d.messages;
-      })
-      .catch(() => {
-        if (sel === conversationId) {
-          thread = [];
-          toasts.notify('error', '載入訊息失敗', '請稍後再試。');
-        }
-      });
-    markRead(conversationId)
-      .then(() => {
-        convos = convos.map((c) => (c.id === conversationId ? { ...c, badge: 0 } : c));
-      })
-      .catch(() => {}); // best-effort：已讀標記失敗不影響訊息顯示(同 auth logout 的 fire-and-forget revoke 慣例)
+  /** ctrl.selectThread() 的頁面統一入口：outcome→toast(getThread 失敗) + badgeCleared
+   *  →convos 徽章清零(convos 非 controller 狀態，副作用留頁面套用)。已選中同一對話
+   *  則不重複觸發。四個呼叫點見檔頭附註。 */
+  async function selectAndSync(id: string): Promise<void> {
+    if (id === $ctrl.sel) return;
+    const outcome = await ctrl.selectThread(id);
+    if (outcome.kind === 'threadLoadFailed') {
+      toasts.notify('error', '載入訊息失敗', '請稍後再試。');
+    }
+    if (outcome.badgeCleared) {
+      convos = convos.map((c) => (c.id === id ? { ...c, badge: 0 } : c));
+    }
   }
-  $: if (sel) loadThread(sel);
-
-  /* compose dialog（撰寫新對話）*/
-  let composeOpen = false;
-  let composePhase: 'loading' | 'error' | 'ready' = 'loading';
-  let recipients: Student[] = [];
-  let composePick: Student | null = null;
-  let creating = false;
 
   const tabs = [
     { k: '全部', label: '全部' },
@@ -104,75 +100,51 @@
   $: list = filterConversations(convos, { tab, query: $search });
 
   /* selection guard: if current sel falls out of filtered list, auto-select first.
-   * pickSelection 是冪等的回退函式，primitive 自指一輪即穩——Svelte legacy 反應式
-   * 下的既有慣例。 */
-  $: sel = pickSelection(list, sel);
+   * pickSelection 是冪等的回退函式；fallback 與現行 sel 相同時 selectAndSync 內建
+   * 不重複觸發(同 Svelte legacy 對未變值 reassignment 不重新觸發下游 reactive 的語意)。 */
+  $: {
+    const fallback = pickSelection(list, sel);
+    if (fallback) void selectAndSync(fallback);
+  }
 
   $: cur = convos.find((c) => c.id === sel) || convos[0];
 
   function handleSelect(e: CustomEvent<string>) {
-    sel = e.detail;
+    void selectAndSync(e.detail);
   }
 
-  /** conversationId 在送出當下(sel 目前指向的對話)被捕捉為區域變數；await 期間使用者
-   *  可能已切到另一個對話(sel 改變)——套用回應/還原輸入框前皆以 `sel === conversationId`
-   *  重新檢查，避免遲來的回應附加到「現在正在看」的另一個對話串，或覆蓋另一個對話
-   *  已經在輸入的內容(同 loadThread 的過期回應防護)。convos 的 preview 更新則不受此
-   *  限制——不論目前選取哪個對話，那筆訊息確實已送達 conversationId 對應的對話。 */
+  /** conversationId 在送出當下(呼叫瞬間的 $ctrl.sel)被捕捉為區域變數；await 期間
+   *  使用者可能已切到另一個對話——thread 附加的過期回應防護已內部化在 controller 的
+   *  send()。還原輸入框內容仍需頁面重新比對 $ctrl.sel(reply 非 controller 狀態，避免
+   *  覆蓋使用者已切到的另一個對話的輸入框)；convos 的 preview 更新不受此限制——不論
+   *  目前選取哪個對話，那筆訊息確實已送達 conversationId 對應的對話。 */
   async function handleSend(e: CustomEvent<string>) {
     const text = e.detail;
-    const conversationId = sel;
-    if (!conversationId) return;
-    try {
-      const msg = await sendMessage(conversationId, text);
-      if (sel === conversationId) thread = [...(thread ?? []), msg];
-      convos = convos.map((c) => (c.id === conversationId ? { ...c, preview: text, time: msg.time } : c));
-    } catch (err) {
-      if (sel === conversationId) reply = text; // 送出失敗，還原輸入框內容，避免使用者遺失已輸入文字
-      toasts.notify('error', '傳送失敗', apiErrorMessage(err));
+    const conversationId = $ctrl.sel;
+    const outcome = await ctrl.send(text);
+    if (outcome.kind === 'sendFailed') {
+      if ($ctrl.sel === conversationId) reply = outcome.text; // 還原輸入框內容，避免使用者遺失已輸入文字
+      toasts.notify('error', '傳送失敗', apiErrorMessage(outcome.error));
+    } else {
+      convos = convos.map((c) => (c.id === conversationId ? { ...c, preview: text, time: outcome.msg.time } : c));
     }
   }
 
-  /** 每次開啟都重新拉 getStudents() 名冊——失敗後關閉重開即重試，不需要另外的重試按鈕。 */
-  function openCompose() {
-    composePick = null;
-    composeOpen = true;
-    composePhase = 'loading';
-    getStudents()
-      .then((d) => {
-        recipients = d.students;
-        composePhase = 'ready';
-      })
-      .catch(() => {
-        composePhase = 'error';
-      });
-  }
-
-  /** POST /conversations（get-or-create）。插入/選取與 tab、search 重置的指令邏輯已
-   *  收進 applyCreatedConversation()（$lib/coach/conversations-filter.ts，Round 3
-   *  K3）——回傳 id 已在清單中就選中既有列（保留其 badge/preview，不用 create 回應
-   *  的貧乏映射覆蓋）；全新對話插入頂端並選中——選中觸發 loadThread 載入串（既有
-   *  對話載出歷史訊息、全新對話顯示「尚無訊息」空狀態）。失敗以 ApiError.message
-   *  繁中 toast 提示（§3.21 的 422 等後端本身回繁中訊息，同 decideLeaveRequest 直接
-   *  透傳慣例），對話框保持開啟供改選。 */
-  async function confirmCompose() {
-    if (!composePick || creating) return;
-    const r = composePick;
-    creating = true;
-    try {
-      const convo = await createConversation(r.user_id, r.name);
-      const result = applyCreatedConversation(convos, convo);
+  /** confirmCompose 成功後的插入/選取指令邏輯(applyCreatedConversation，Round 3
+   *  K3)——convos 非 controller 狀態，留頁面自行呼叫並觸發 selectAndSync。 */
+  async function handleConfirmCompose() {
+    const outcome = await ctrl.confirmCompose();
+    if (outcome.kind === 'conversationCreated') {
+      const result = applyCreatedConversation(convos, outcome.conversation);
       convos = result.convos;
       tab = result.tab;
       search.set(result.search);
-      sel = result.sel;
-      composeOpen = false;
-      composePick = null;
-    } catch (err) {
-      toasts.notify('error', '建立對話失敗', apiErrorMessage(err));
-    } finally {
-      creating = false;
+      void selectAndSync(result.sel);
+    } else if (outcome.kind === 'createFailed') {
+      toasts.notify('error', '建立對話失敗', apiErrorMessage(outcome.error));
     }
+    // alreadyCreating：靜默不做事(creating 守衛或尚未選取收件人)，同 checkout-controller
+    // 的 alreadyPaying 先例。
   }
 </script>
 
@@ -198,7 +170,7 @@
             variant="soft"
             size="sm"
             aria-label="撰寫"
-            on:click={openCompose}
+            on:click={ctrl.openCompose}
           >
             <Icon name="pen-line" size={16} color="var(--df-primary)" />
           </IconButton>
@@ -334,9 +306,9 @@
 <Dialog
   open={composeOpen}
   title="撰寫新訊息"
-  onClose={() => (composeOpen = false)}
-  primaryAction={{ label: '建立對話', onClick: confirmCompose }}
-  secondaryAction={{ label: '取消', onClick: () => (composeOpen = false) }}
+  onClose={ctrl.closeCompose}
+  primaryAction={{ label: '建立對話', onClick: handleConfirmCompose }}
+  secondaryAction={{ label: '取消', onClick: ctrl.closeCompose }}
 >
   {#if composePhase === 'loading'}
     <div style="padding:20px 0;text-align:center;font-size:13px;color:var(--df-text-muted)">載入學員名單中…</div>
@@ -351,7 +323,7 @@
         {@const on = composePick?.user_id === r.user_id}
         <button
           type="button"
-          on:click={() => (composePick = r)}
+          on:click={() => ctrl.pickRecipient(r)}
           style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1.5px solid {on
             ? 'var(--df-primary)'
             : 'var(--df-border)'};background:{on
