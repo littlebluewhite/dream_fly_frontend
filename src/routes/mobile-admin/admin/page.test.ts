@@ -13,8 +13,12 @@ const FIXTURE_PROFILES: Record<'admin' | 'coach', Profile> = {
 	admin: { name: '測試管理員', initial: '測', role: '測試角色', desc: '', color: '#000', id: 'T-1' },
 	coach: { name: '測試教練', initial: '測', role: '測試教練職稱', desc: '', color: '#000', id: 'T-2' }
 };
+// label 用 C4 正字「上課中」(SESSION_STATUS.live[1])——舊字面「進行中」是 admin 桌面
+// 已淘汰的舊值，fixture 沿用舊字面會遮蔽 +page.svelte 的 liveNow 比對回歸(該比對值
+// 若跟著改回硬編舊字面，這裡改用舊 fixture 也測不出來，見下方「進行中課堂橫幅」測試
+// 的斷言強化)。
 const FIXTURE_TODAY: TodayRow[] = [
-	{ time: '08:00', name: '測試進行中班', coach: '測試教練甲', room: '測試教室', count: 5, tone: 'success', label: '進行中' },
+	{ time: '08:00', name: '測試進行中班', coach: '測試教練甲', room: '測試教室', count: 5, tone: 'success', label: '上課中' },
 	{ time: '10:00', name: '測試備課班', coach: '測試教練乙', room: '測試教室2', count: 3, tone: 'info', label: '備課中' }
 ];
 const FIXTURE_ACTIVITY: ActivityRow[] = [
@@ -59,8 +63,12 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 
 	it('render 今日課表與進行中課堂橫幅(皆讀 payload 的 today)', async () => {
 		const { findAllByText, findByText } = render(AdminHomePage);
-		// 進行中的班級同時出現在「進行中課堂」橫幅與「今日課表」清單。
+		// 進行中的班級同時出現在「進行中課堂」橫幅與「今日課表」清單——但班名本身在
+		// 「今日課表」清單一律會出現(不論是否 live)，只斷言班名出現無法證明橫幅真的
+		// 渲染了；改斷言橫幅自己的靜態標題文字「● 進行中課堂」(只在 {#if liveNow} 為
+		// true 時才會出現)，這才是可證偽的橫幅渲染檢查。
 		expect((await findAllByText('測試進行中班')).length).toBeGreaterThan(0);
+		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 		expect(await findByText('測試備課班')).toBeInTheDocument();
 	});
 

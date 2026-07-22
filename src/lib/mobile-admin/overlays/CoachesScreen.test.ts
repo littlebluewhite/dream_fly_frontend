@@ -114,8 +114,12 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		await onSave(V);
 
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '教練綁定失敗' });
+		// 文案指引「換一個 email」——本頁沒有 pendingUserId 哨兵，若只說「重新新增一次
+		// 教練」不夠明確，使用者拿同一個 email 重試會在 createMember 撞 409(同
+		// ADR 0018 該段裁決文字；不可沿用桌面「重新點擊建立教練重試」的語意，桌面有
+		// 哨兵可以只補打第二步，本頁沒有)。
 		expect(get(toasts).at(-1)?.body).toBe(
-			'帳號「coach@test.com」已建立，但綁定教練身分失敗（找不到對應的使用者帳號。）。請至「學員管理」頁確認該帳號，或重新新增一次教練。'
+			'帳號「coach@test.com」已建立，但綁定教練身分失敗（找不到對應的使用者帳號。）。請至「學員管理」頁確認該帳號，或重新執行一次新增教練（換一個 email）。'
 		);
 		expect(createMember).toHaveBeenCalledTimes(1);
 		expect(createCoach).toHaveBeenCalledTimes(1);

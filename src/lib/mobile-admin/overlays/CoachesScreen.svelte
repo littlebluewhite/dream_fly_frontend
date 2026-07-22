@@ -65,11 +65,15 @@
         return;
       case 'coachBindFailed':
         // outcome.pendingUserId 刻意丟棄——見檔頭註解：本頁「儲存即關 sheet」，沒有
-        // 同一個 sheet 工作階段內重試第二步的機制，不像桌面存回哨兵。
+        // 同一個 sheet 工作階段內重試第二步的機制，不像桌面存回哨兵。文案因此不能
+        // 沿用桌面「可重新點擊建立教練重試綁定」（那句話預設有哨兵可以跳過
+        // createMember、只補打 createCoach）——本頁重新整個跑一次一定會用同一個
+        // email 重打 createMember，會撞 409。指引改為「換一個 email」，同 ADR 0018
+        // 該段裁決文字。
         toasts.notify(
           'error',
           '教練綁定失敗',
-          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新新增一次教練。`
+          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新執行一次新增教練（換一個 email）。`
         );
         return;
       case 'created':

@@ -26,6 +26,7 @@
   import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
+  import { SESSION_STATUS } from '$lib/domain/sessions';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -41,7 +42,10 @@
   $: today = data?.today ?? [];
   $: activity = data?.activity ?? [];
   $: pending = $orders.filter((o) => o.status === 'pending').length;
-  $: liveNow = today.find((t) => t.label === '進行中');
+  // C4：label 正字單源自 $lib/domain/sessions 的 SESSION_STATUS（live→「上課中」），
+  // 不再硬編字面比對——admin 桌面的 live 標籤已隨單源收斂從「進行中」改「上課中」，
+  // 這裡的比對值必須跟著同一個來源走，否則兩邊字面一旦再分歧，這裡會又悄悄失效。
+  $: liveNow = today.find((t) => t.label === SESSION_STATUS.live[1]);
 
   const go = (id: string) => goto(adminPath('admin', id));
   function openNotif() {

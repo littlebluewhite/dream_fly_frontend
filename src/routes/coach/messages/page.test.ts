@@ -26,10 +26,14 @@ vi.mock('$lib/coach/api', () => ({
  *   既有對話 id 時選中既有列不重複插入；全新對話插入清單並選中。
  *
  * Round 8 C1：對話串編排（stale-guard、樂觀附加）收進 $lib/coach/messages-controller.ts
- * 後，原本靠 render 之舞驗證的「快速切換對話時較舊回應不覆蓋當前對話」「送出失敗還原
- * 輸入框」「送出中途切換對話」三段測試已搬到 messages-controller.test.ts 的無渲染單測
- * （更快、更直接斷言 outcome/thread 快照）。本檔留下的仍是渲染必要的斷言：清單/三態/
- * compose 佈線、以及 outcome→toast 文案映射。 */
+ * 後，原本靠 render 之舞驗證的「快速切換對話時較舊回應不覆蓋當前對話」「送出中途切換
+ * 對話」兩段測試已搬到 messages-controller.test.ts 的無渲染單測（更快、更直接斷言
+ * outcome/thread 快照）。「送出失敗還原輸入框」這段行為本身**搬不走**——reply 是頁面
+ * 本地狀態（非 controller 收編範圍），controller 測試只驗得到 sendFailed outcome 有
+ * 沒有攜帶正確的 text，驗不到頁面 `reply = outcome.text` 這行接線本身是否真的寫對
+ * （codex 對抗審 P3：先前誤把這段也算進「已搬走」，導致這行接線一度可以被刪掉、
+ * 套件仍全綠），故仍以獨立測試留在本檔下方覆蓋。本檔留下的仍是渲染必要的斷言：
+ * 清單/三態/compose 佈線、outcome→toast 文案映射、以及這條 reply 接線本身。 */
 
 const CONVOS = [
 	{
@@ -160,7 +164,7 @@ describe('/coach/messages — 傳送（sendMessage）', () => {
 		expect(matches.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it('送出失敗時提示錯誤 toast（outcome→toast 映射；stale-guard/輸入框還原已搬至 messages-controller.test.ts）', async () => {
+	it('送出失敗時提示錯誤 toast（outcome→toast 映射；stale-guard 已搬至 messages-controller.test.ts，輸入框還原見下一條）', async () => {
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		vi.mocked(sendMessage).mockRejectedValue(new ApiError(422, '訊息長度需介於 1 到 2000 字'));
 		const { findByText, getByPlaceholderText } = render(MessagesPage);
@@ -173,6 +177,18 @@ describe('/coach/messages — 傳送（sendMessage）', () => {
 		await waitFor(() => {
 			expect(notifySpy).toHaveBeenCalledWith('error', '傳送失敗', '訊息長度需介於 1 到 2000 字');
 		});
+	});
+
+	it('送出失敗時還原輸入框內容(reply 接線，避免使用者遺失已輸入文字)', async () => {
+		vi.mocked(sendMessage).mockRejectedValue(new ApiError(422, '訊息長度需介於 1 到 2000 字'));
+		const { findByText, getByPlaceholderText } = render(MessagesPage);
+		await findByText('教練好！想請問小明最近的狀況');
+
+		const input = getByPlaceholderText('輸入訊息…') as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: '好的' } });
+		await fireEvent.keyDown(input, { key: 'Enter' }); // MessageComposer 送出當下先清空 input
+
+		await waitFor(() => expect(input.value).toBe('好的')); // 失敗後頁面把 reply 還原回原文字
 	});
 });
 
