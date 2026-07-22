@@ -10,14 +10,21 @@
  * 不收：對話清單（convos）與其 gate（getConversations 留頁面）、tab×搜尋過濾與選取
  * 回退（conversations-filter.ts 純函式，留頁面呼叫）、toast 文案（頁面據 outcome 翻譯）。
  * badge 清零與傳送後的 convos 預覽/時間更新都作用在 convos（頁面狀態，非本 controller
- * 收編範圍）——故以 outcome 欄位（badgeCleared）或頁面自行以呼叫當下捕捉的 id 交還
- * 頁面套用，而非由 controller 直接改寫 convos。
+ * 收編範圍）——故以 selectThread() 回傳的 badgeCleared promise 或頁面自行以呼叫當下
+ * 捕捉的 id 交還頁面套用，而非由 controller 直接改寫 convos。
  *
  * selectThread 的 stale-guard 仿 attendance-controller 的 save-token guard：遞增序號
  * token，getThread 的 resolve/reject 皆驗 token===seq，不符即丟棄過期回應（不寫
  * thread）——避免快速切換對話時，較舊對話延遲回來的回應覆蓋目前選取對話的訊息。
  * markRead 的 badge 副作用不受此 guard 限制（逐字複刻頁面現行行為：badgeCleared 只看
  * markRead 本身成功與否，與目前是否還停留在該對話無關）。
+ *
+ * selectThread 回傳 threadReady/badgeCleared 兩條「各自獨立、互不等待」的 promise
+ * （而非單一 outcome）——曾誤用 Promise.all 合併成一顆 outcome，導致 markRead 卡住/
+ * 永不落定時連帶拖住 threadReady，使失敗 toast 或已載入狀態遲遲無法呈現、或 getThread
+ * 卡住時連帶拖住徽章清零（codex 全輪審查 P2 回歸；本檔 messages-controller.test.ts 的
+ * 「threadReady 與 badgeCleared 互不阻塞」一組測試即為此問題的可證偽回歸測試）。逐字
+ * 複刻重構前頁面 getThread/markRead 兩條 promise chain 各自完成、互不阻塞的行為。
  *
  * send 的過期回應防護沿用頁面現行 `sel === conversationId` 快照比對（非 token 機制，
  * 與 selectThread 分開）：送出當下捕捉 conversationId，await 期間使用者可能已切到
@@ -54,14 +61,22 @@ export interface MessagesControllerDeps {
 	createConversation: (userId: string, peerName: string) => Promise<Conversation>;
 }
 
-/** badgeCleared：markRead(id) 是否成功——頁面據此把 convos 中該對話的 badge 清零（convos
- *  非 controller 狀態，清零副作用留頁面套用）。stale 只描述 getThread 這支回應是否過期
- *  被丟棄（thread 未變動）；badgeCleared 與 thread 是否過期無關，逐字複刻頁面現行
- *  markRead handler 不檢查 sel 的行為（見檔頭）。 */
+/** stale 只描述 getThread 這支回應是否過期被丟棄（thread 未變動）——與 markRead 的
+ *  badgeCleared（見 SelectThreadHandles）完全無關，兩者是彼此獨立落定的兩條通道。 */
 export type SelectThreadOutcome =
-	| { kind: 'threadLoaded'; badgeCleared: boolean }
-	| { kind: 'threadLoadFailed'; badgeCleared: boolean }
-	| { kind: 'stale'; badgeCleared: boolean };
+	| { kind: 'threadLoaded' }
+	| { kind: 'threadLoadFailed' }
+	| { kind: 'stale' };
+
+/** selectThread() 的回傳形：threadReady 決定 thread 顯示/失敗 toast 的時機，badgeCleared
+ *  （markRead(id) 是否成功）決定 convos 中該對話 badge 是否清零（convos 非 controller
+ *  狀態，清零動作留頁面套用）——兩者刻意分成兩條 promise、不用 Promise.all 合併，任一方
+ *  卡住或永不落定都不影響另一方落定（見檔頭 P2 回歸修復附註）。badgeCleared 不受
+ *  stale-guard 限制，逐字複刻頁面現行 markRead handler 不檢查 sel 的行為。 */
+export interface SelectThreadHandles {
+	threadReady: Promise<SelectThreadOutcome>;
+	badgeCleared: Promise<boolean>;
+}
 
 /** sendFailed 攜 text（原輸入內容）供頁面還原輸入框——是否真的還原、convos 預覽是否
  *  更新，皆由頁面比對呼叫當下捕捉的 conversationId 與現在的 sel 決定（同 loadThread
@@ -80,7 +95,7 @@ export type ConfirmComposeOutcome =
 	| { kind: 'alreadyCreating' };
 
 export interface MessagesController extends Readable<MessagesViewState> {
-	selectThread(id: string): Promise<SelectThreadOutcome>;
+	selectThread(id: string): SelectThreadHandles;
 	send(text: string): Promise<SendOutcome>;
 	openCompose(): void;
 	/** 取消/關閉撰寫對話框（Dialog 的 onClose、遮罩點擊、Esc、「取消」次要按鈕共用）——
@@ -110,37 +125,37 @@ export function createMessagesController(deps: MessagesControllerDeps): Messages
 	const store = writable<MessagesViewState>(viewState());
 	const publish = (): void => store.set(viewState());
 
-	async function selectThread(id: string): Promise<SelectThreadOutcome> {
+	function selectThread(id: string): SelectThreadHandles {
 		sel = id;
 		thread = null;
 		publish();
 		const token = ++seq;
 
-		const threadResult: Promise<'loaded' | 'failed' | 'stale'> = deps.getThread(id).then(
+		// threadReady：不 await、不與 badgeCleared 用 Promise.all 合併——markRead 卡住
+		// 或永不落定都不能拖住這裡的落定（見檔頭 P2 回歸修復附註）。
+		const threadReady: Promise<SelectThreadOutcome> = deps.getThread(id).then(
 			(d) => {
-				if (token !== seq) return 'stale';
+				if (token !== seq) return { kind: 'stale' };
 				thread = d.messages;
 				publish();
-				return 'loaded';
+				return { kind: 'threadLoaded' };
 			},
 			() => {
-				if (token !== seq) return 'stale';
+				if (token !== seq) return { kind: 'stale' };
 				thread = [];
 				publish();
-				return 'failed';
+				return { kind: 'threadLoadFailed' };
 			}
 		);
 		// best-effort：已讀標記失敗不影響訊息顯示（同 auth logout 的 fire-and-forget
-		// revoke 慣例）——不檢查 token，逐字複刻頁面現行 markRead handler 行為。
+		// revoke 慣例）——不檢查 token，逐字複刻頁面現行 markRead handler 行為；也不與
+		// threadReady 互相等待，getThread 卡住不能拖住這裡的落定。
 		const badgeCleared: Promise<boolean> = deps.markRead(id).then(
 			() => true,
 			() => false
 		);
 
-		const [result, cleared] = await Promise.all([threadResult, badgeCleared]);
-		if (result === 'loaded') return { kind: 'threadLoaded', badgeCleared: cleared };
-		if (result === 'failed') return { kind: 'threadLoadFailed', badgeCleared: cleared };
-		return { kind: 'stale', badgeCleared: cleared };
+		return { threadReady, badgeCleared };
 	}
 
 	/** conversationId 在送出當下（呼叫瞬間的 sel）被捕捉為區域變數；await 期間使用者

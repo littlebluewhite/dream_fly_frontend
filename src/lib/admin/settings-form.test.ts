@@ -8,7 +8,12 @@ import type { SettingsData, SettingsWriteBody } from './api';
  * 失敗不清 draft），deps 全注入 mock、無渲染；兩畫面端的 403 文案映射
  * （settingsErrorMessage/SETTINGS_ERROR_TEXT）+ 成功 toast + gate.silentRefresh()
  * 佈線仍由各自的 render 套件把關（+page.svelte / AdminSettingsScreen.svelte 的
- * page.test.ts），兩層各測各的：這裡只斷言 failed outcome 攜帶「原始拋出物」。 */
+ * page.test.ts），兩層各測各的：這裡只斷言 failed outcome 攜帶「原始拋出物」。
+ *
+ * P2 回歸修復（codex 全輪審查）：saved outcome 攜帶 release()，saving 鎖延伸至
+ * 呼叫端的 post-save 同步完成為止（見 settings-form.ts 模組頂部附註）；下方
+ * 「saving 守衛」與「鎖延伸至 post-save 同步」兩個 describe 區塊涵蓋這個修法的
+ * 可證偽回歸測試。 */
 
 const FIXTURE: SettingsData = {
 	studioProfile: {
@@ -102,7 +107,7 @@ describe('createSettingsForm — save() 守衛與 outcome', () => {
 		deps.putSettings.mockResolvedValue(FIXTURE);
 
 		const outcome = await form.save();
-		expect(outcome).toEqual({ kind: 'saved' });
+		expect(outcome).toEqual({ kind: 'saved', release: expect.any(Function) });
 		expect(deps.putSettings).toHaveBeenCalledWith({
 			studio_profile: {
 				name: '改名體操館',
@@ -116,7 +121,7 @@ describe('createSettingsForm — save() 守衛與 outcome', () => {
 		});
 	});
 
-	it('saving 守衛：in-flight 期間再呼叫 save() 回 alreadySaving，deps 只被呼叫一次；resolve 後旗標復位', async () => {
+	it('saving 守衛：in-flight 期間再呼叫 save() 回 alreadySaving，deps 只被呼叫一次；PUT resolve 後鎖仍持有，release() 後才復位', async () => {
 		const d = deferred<SettingsData>();
 		deps.putSettings.mockReturnValue(d.promise);
 
@@ -126,8 +131,36 @@ describe('createSettingsForm — save() 守衛與 outcome', () => {
 		expect(deps.putSettings).toHaveBeenCalledTimes(1);
 
 		d.resolve(FIXTURE);
-		expect(await first).toEqual({ kind: 'saved' });
+		const outcome = await first;
+		expect(outcome).toEqual({ kind: 'saved', release: expect.any(Function) });
+		expect(get(form.saving)).toBe(true); // PUT 已成功，但鎖延伸至呼叫端的 post-save 同步完成為止（P2 回歸修復）
+		if (outcome.kind === 'saved') outcome.release();
+		expect(get(form.saving)).toBe(false); // release() 呼叫後才復位
+	});
+
+	it('鎖延伸至 post-save 同步（P2 回歸修復）：PUT 成功後、release() 呼叫前，saving 仍為 true 且第二次 save() 不發第二個 PUT', async () => {
+		deps.putSettings.mockResolvedValue(FIXTURE);
+
+		const outcome = await form.save();
+		expect(outcome.kind).toBe('saved');
+		expect(get(form.saving)).toBe(true); // 鎖延伸涵蓋呼叫端尚未完成的 post-save 同步（如 gate.silentRefresh()）
+
+		expect(await form.save()).toEqual({ kind: 'alreadySaving' }); // 第二次呼叫被擋，不發第二個 PUT
+		expect(deps.putSettings).toHaveBeenCalledTimes(1); // 仍只有第一次的那一發
+
+		if (outcome.kind === 'saved') outcome.release(); // 呼叫端完成 post-save 同步後親自釋放
 		expect(get(form.saving)).toBe(false);
+	});
+
+	it('release() 未被呼叫時鎖持續持有（顯式契約，非自動遺忘）：接連多次 save() 皆回 alreadySaving', async () => {
+		deps.putSettings.mockResolvedValue(FIXTURE);
+		const outcome = await form.save();
+		expect(outcome.kind).toBe('saved');
+
+		expect(await form.save()).toEqual({ kind: 'alreadySaving' });
+		expect(await form.save()).toEqual({ kind: 'alreadySaving' });
+		expect(deps.putSettings).toHaveBeenCalledTimes(1);
+		expect(get(form.saving)).toBe(true);
 	});
 
 	it('失敗不清 draft：deps reject → {kind:failed,error} 攜帶原始拋出物，draft 維持編輯值、saving 復位', async () => {

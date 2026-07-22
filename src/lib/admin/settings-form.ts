@@ -16,7 +16,17 @@
  * SettingsWriteBody 附註）收進本模組——是兩畫面除渲染外唯一的逐字重複。403 文案
  * 映射（桌面 settingsErrorMessage / 行動 SETTINGS_ERROR_TEXT 表）、成功 toast、
  * gate.silentRefresh() 呼叫時機不收進來，逐字留在各畫面（同 leave-form 錯誤透傳、
- * 不做翻譯的慣例：failed outcome 攜帶原始拋出物）。 */
+ * 不做翻譯的慣例：failed outcome 攜帶原始拋出物）。
+ *
+ * P2 回歸修復（codex 全輪審查）：重構前兩畫面的 saving 鎖一路保持到
+ * `await gate.silentRefresh()` 完成才復位；初版把解鎖放在 save() 的 finally，PUT
+ * 一 resolve 就解鎖，此時呼叫端的 silentRefresh() 還在飛——「儲存變更」按鈕提早
+ * 恢復可點，若使用者這時再按一次，第二次 save() 不會被 in-flight 守衛擋下，可能
+ * 兩個 PUT 交錯、第一次的 silentRefresh 覆寫第二次剛送出的 draft。修法：saved
+ * outcome 額外攜帶 release() —— 呼叫端必須在自己的 post-save 同步（如
+ * gate.silentRefresh()）完成後親自呼叫它，saving 才真正復位；在此之前鎖持續
+ * 擋下後續 save()。failed 路徑不受影響（呼叫端不會在失敗後 silentRefresh，原本
+ * 就立即解鎖）。 */
 import { get, writable, type Readable, type Writable } from 'svelte/store';
 import type { SettingsData, SettingsWriteBody } from './api';
 
@@ -57,8 +67,14 @@ const INITIAL_DRAFT: SettingsDraft = {
 
 /** save() 的結果——領域 kind（非通用 ok/error，同 leave-form ADR 0012 判準③）；
  *  failed 攜帶原始拋出物，繁中文案由呼叫端各自映射（ADR 0011）；alreadySaving 是
- *  in-flight 守衛擋下時的明確 kind（非 leave-form 的靜默 null）。 */
-export type SettingsFormOutcome = { kind: 'saved' } | { kind: 'failed'; error: unknown } | { kind: 'alreadySaving' };
+ *  in-flight 守衛擋下時的明確 kind（非 leave-form 的靜默 null）。saved 攜帶
+ *  release()：PUT 成功後 saving 鎖不會自動釋放，呼叫端必須在自己的 post-save
+ *  同步（如 gate.silentRefresh()）完成後呼叫它，鎖才復位（見上方 P2 回歸修復
+ *  附註）——忘記呼叫等同鎖永久卡住，是刻意的顯式契約而非隱性副作用。 */
+export type SettingsFormOutcome =
+	| { kind: 'saved'; release: () => void }
+	| { kind: 'failed'; error: unknown }
+	| { kind: 'alreadySaving' };
 
 export interface SettingsFormDeps {
 	/** 簽名對齊 admin/api.ts 的 putSettings（PUT /settings，內部已 wrap
@@ -73,7 +89,8 @@ export interface SettingsForm {
 	applyData(d: SettingsData): void;
 	/** in-flight 中再呼叫 → { kind: 'alreadySaving' }；否則組裝 SettingsWriteBody
 	 *  全量送出三組 key，deps 拋錯原樣捕捉為 { kind: 'failed', error }（失敗不清
-	 *  draft，讓使用者已編輯的欄位留在畫面上重試）。 */
+	 *  draft，讓使用者已編輯的欄位留在畫面上重試，且立即解鎖）。成功時 saving 鎖
+	 *  持續持有，呼叫端須在完成自己的 post-save 同步後呼叫 outcome.release()。 */
 	save(): Promise<SettingsFormOutcome>;
 }
 
@@ -100,26 +117,27 @@ export function createSettingsForm(deps: SettingsFormDeps): SettingsForm {
 	async function save(): Promise<SettingsFormOutcome> {
 		if (get(savingStore)) return { kind: 'alreadySaving' };
 		savingStore.set(true);
+		const d = get(draft);
+		const body: SettingsWriteBody = {
+			studio_profile: {
+				name: d.name,
+				phone: d.phone,
+				address: d.address,
+				default_ratio: d.defaultRatio,
+				max_class_size: labelToMaxClassSize(d.maxClassSizeLabel)
+			},
+			notification_flags: { email: d.email, sms: d.sms, lowAtt: d.lowAtt, autoWait: d.autoWait },
+			security: { twoFA: d.twoFA }
+		};
 		try {
-			const d = get(draft);
-			const body: SettingsWriteBody = {
-				studio_profile: {
-					name: d.name,
-					phone: d.phone,
-					address: d.address,
-					default_ratio: d.defaultRatio,
-					max_class_size: labelToMaxClassSize(d.maxClassSizeLabel)
-				},
-				notification_flags: { email: d.email, sms: d.sms, lowAtt: d.lowAtt, autoWait: d.autoWait },
-				security: { twoFA: d.twoFA }
-			};
 			await deps.putSettings(body);
-			return { kind: 'saved' };
 		} catch (error) {
+			savingStore.set(false); // 失敗立即解鎖——呼叫端不會在失敗後做 post-save 同步
 			return { kind: 'failed', error };
-		} finally {
-			savingStore.set(false);
 		}
+		// 成功後鎖不自動釋放：呼叫端的 post-save 同步（如 gate.silentRefresh()）仍在飛，
+		// 提早解鎖會讓「儲存變更」按鈕提早恢復可點，見上方 P2 回歸修復附註。
+		return { kind: 'saved', release: () => savingStore.set(false) };
 	}
 
 	return { draft, saving, applyData, save };

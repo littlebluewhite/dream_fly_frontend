@@ -16,6 +16,9 @@
    *   選取(gate onData)、點擊列(handleSelect)、tab×搜尋造成的選取回退(pickSelection
    *   reactive)、撰寫新對話成功後(handleConfirmCompose)。目標 id 與目前選取相同時
    *   不重複觸發(同 Svelte reassignment 對未變值不重新觸發下游 reactive 的語意)。
+   *   ctrl.selectThread() 回傳 threadReady/badgeCleared 兩條互不等待的 promise(非單一
+   *   outcome)——分開掛 .then，任一方卡住或永不落定都不拖住另一方(codex 全輪審查 P2
+   *   回歸修復：先前誤用單一 await 合併兩者，markRead 卡住會連帶拖住失敗 toast)。
    * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約§3.21 明文）。
    * - 撰寫新對話：picker 名冊來自 getStudents()(GET /coaches/me/students，Task 10
    *   已接真)，確認即 createConversation(user_id, name)(POST /conversations，
@@ -66,25 +69,30 @@
     onData: (d) => {
       convos = [...d.conversations];
       const first = d.conversations[0]?.id;
-      if (first) void selectAndSync(first);
+      if (first) selectAndSync(first);
     }
   });
   onMount(() => {
     gate.load();
   });
 
-  /** ctrl.selectThread() 的頁面統一入口：outcome→toast(getThread 失敗) + badgeCleared
-   *  →convos 徽章清零(convos 非 controller 狀態，副作用留頁面套用)。已選中同一對話
+  /** ctrl.selectThread() 的頁面統一入口：threadReady→toast(getThread 失敗)、
+   *  badgeCleared→convos 徽章清零(convos 非 controller 狀態，副作用留頁面套用)——兩條
+   *  各自掛 .then，互不等待(任一方卡住不拖住另一方，見上方檔頭附註)。已選中同一對話
    *  則不重複觸發。四個呼叫點見檔頭附註。 */
-  async function selectAndSync(id: string): Promise<void> {
+  function selectAndSync(id: string): void {
     if (id === $ctrl.sel) return;
-    const outcome = await ctrl.selectThread(id);
-    if (outcome.kind === 'threadLoadFailed') {
-      toasts.notify('error', '載入訊息失敗', '請稍後再試。');
-    }
-    if (outcome.badgeCleared) {
-      convos = convos.map((c) => (c.id === id ? { ...c, badge: 0 } : c));
-    }
+    const { threadReady, badgeCleared } = ctrl.selectThread(id);
+    threadReady.then((outcome) => {
+      if (outcome.kind === 'threadLoadFailed') {
+        toasts.notify('error', '載入訊息失敗', '請稍後再試。');
+      }
+    });
+    badgeCleared.then((cleared) => {
+      if (cleared) {
+        convos = convos.map((c) => (c.id === id ? { ...c, badge: 0 } : c));
+      }
+    });
   }
 
   const tabs = [
@@ -104,13 +112,13 @@
    * 不重複觸發(同 Svelte legacy 對未變值 reassignment 不重新觸發下游 reactive 的語意)。 */
   $: {
     const fallback = pickSelection(list, sel);
-    if (fallback) void selectAndSync(fallback);
+    if (fallback) selectAndSync(fallback);
   }
 
   $: cur = convos.find((c) => c.id === sel) || convos[0];
 
   function handleSelect(e: CustomEvent<string>) {
-    void selectAndSync(e.detail);
+    selectAndSync(e.detail);
   }
 
   /** conversationId 在送出當下(呼叫瞬間的 $ctrl.sel)被捕捉為區域變數；await 期間
@@ -139,7 +147,7 @@
       convos = result.convos;
       tab = result.tab;
       search.set(result.search);
-      void selectAndSync(result.sel);
+      selectAndSync(result.sel);
     } else if (outcome.kind === 'createFailed') {
       toasts.notify('error', '建立對話失敗', apiErrorMessage(outcome.error));
     }

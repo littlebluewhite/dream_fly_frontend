@@ -60,6 +60,7 @@
       case 'saved':
         toasts.notify('success', '已儲存', '系統設定已更新。');
         await gate.silentRefresh();
+        outcome.release(); // saving 鎖延伸至此——同步完成才放行下一次儲存
         return;
     }
   }
