@@ -151,3 +151,25 @@ codex 以 TypeScript compiler API 實證：整陣列/物件的 `as X[]` 斷言**
 回傳值）；把水合搬到呼叫端顯式觸發，等同同時改變兩個頁面的初始化序列與呼叫端契約，風險與
 範圍超出「幫兩段重複的三行 allSettled 佈線取名字」這張卡的邊界。K7 本輪僅做保守具名化，
 不變更任一呼叫端的行為或時序。
+
+## 增補（2026-07-22，架構深化 R7 C8）：login-submit 的跨 surface 編排裁決
+
+`src/lib/login-submit.ts`（`submitLogin`，member/mobile/mobile-admin/staff 四份 login 頁共用）
+形式上撞本 ADR 判準①（呼叫端恆為 1 頁）與②（零行為選項——它帶 `fields?`/`onNoAccess?` 兩個
+選配），亦不落入 `docs/adr/0014` §2 的「雙生收斂核可類」（該類要求編排逐字重複、零行為旗標；
+staff 系兩頁多一道空欄守衛，非逐字）。明文裁決如下，不視為 `docs/adr/0011` 已否決 factory
+的重演：
+
+1. **家族歸屬不同**：本 ADR 判準管的是「單頁窄域 controller」——嵌在單一頁面 load-gate 佈線
+   之下的領域編排；login-submit 屬 lib-root 跨 surface 純編排家族（`checkout-gate`/`load-gate`/
+   `hydration-gate` 同列）。login 是四個 surface 共有的同一領域動作，不是某一頁的領域。
+2. **與被否決 factory 的距離**：`docs/adr/0011` 否決 list-page factory 的理由是異質呼叫端
+   （分頁/全量、dialog/sheet、樂觀/refetch、單列/批次）逼出行為選項、介面複雜度逼近實作。
+   login 四頁的 submit 是同構九步骨架，分歧恰兩點且是 surface 真實需求差（staff 系才有空欄
+   守衛與無後台權限分支），四個呼叫端只行使兩種選配組合（member/mobile 皆不傳；mobile-admin/
+   staff 皆傳）——選項空間未爆炸，deletion test 通過（刪掉模組，~45 行骨架 ×4 原地回歸）。
+3. **選配的形狀**：`fields` 傳的是欄位值（資料）而非 `mode` 類枚舉；`onNoAccess` 是效應注入
+   （與 `login`/`navigate` 同類 deps）。「未提供＝不啟用守衛」是行為保真約束（member/mobile
+   不得偷加空欄守衛），不是 factory 為吸收異質性硬造的開關。
+4. **滑坡界線**：出現第 5 個呼叫端、第 3 個選配、或任一選配長成枚舉旗標時，重新對本節與
+   `docs/adr/0011` 審視；屆時偏向拆分而非加選項。

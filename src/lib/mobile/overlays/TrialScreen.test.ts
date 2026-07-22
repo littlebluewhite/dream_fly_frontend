@@ -131,4 +131,20 @@ describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task 
 		expect(screen.getByText(/2026\/08\/01 \(六\)/)).toBeInTheDocument();
 		expect(screen.queryByText(/2026\/07\/25 \(六\)/)).toBeNull();
 	});
+
+	it('step 3 預約單號 TR- 前綴跟隨固定「今日」年度後 2 碼(動態年，防回退硬編字面)', async () => {
+		vi.mocked(submitTrialInquiry).mockResolvedValue({} as never);
+		await goToContactStep();
+
+		await fireEvent.input(screen.getByPlaceholderText('請輸入姓名'), { target: { value: '王先生' } });
+		await fireEvent.input(screen.getByPlaceholderText('0912-345-678'), { target: { value: '0987-654-321' } });
+		await fireEvent.input(screen.getByPlaceholderText('孩子的姓名或暱稱'), { target: { value: '小恩' } });
+		await fireEvent.click(screen.getByText('送出預約').closest('button')!);
+		await screen.findByText('試上預約已送出！');
+
+		// ticket 於 render 當下生成，goToContactStep 已把「今日」釘在 2026 →
+		// 單號恆為 TR-26 + 3 碼亂數。若 TrialScreen.svelte 的 ticket 生成回退成
+		// 硬編年份字面(如 'TR-25…')，此釘立即變紅。
+		expect(screen.getByText(/TR-26\d{3}/)).toBeInTheDocument();
+	});
 });
