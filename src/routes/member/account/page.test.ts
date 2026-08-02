@@ -5,7 +5,8 @@ import Page from './+page.svelte';
 import { subscriptions, toasts } from '$lib/member/stores';
 import { getAccount, saveBirthDate } from '$lib/member/api';
 import type { AccountData } from '$lib/member/api';
-import { ME, type Order } from '$lib/member/data';
+import type { Order } from '$lib/member/data';
+import { ME } from '$lib/domain/member-app';
 
 vi.mock('$lib/member/api', () => ({ getAccount: vi.fn(), saveBirthDate: vi.fn() }));
 

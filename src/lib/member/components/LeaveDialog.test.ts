@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import LeaveDialog from './LeaveDialog.svelte';
 import { toasts, leaveRequests } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
-import type { EnrolledCourse } from '$lib/member/data';
+import type { EnrolledCourse } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 /* 請假申請 dialog（Task 11；integration-contract.md §3.20 + §3.18）—— 開啟時打

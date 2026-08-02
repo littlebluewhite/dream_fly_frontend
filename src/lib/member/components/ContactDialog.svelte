@@ -5,7 +5,7 @@
    * the prototype's ContactDialog (client/components.jsx). */
   import { tick } from 'svelte';
   import { Avatar, IconButton, Icon } from '$lib/components/ui';
-  import { CONTACT_THREAD, COACH_REPLIES, type EnrolledCourse, type ChatMessage } from '$lib/member/data';
+  import { CONTACT_THREAD, COACH_REPLIES, type EnrolledCourse, type ChatMessage } from '$lib/domain/member-app';
 
   export let open = false;
   export let course: EnrolledCourse | null = null;

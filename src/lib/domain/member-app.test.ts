@@ -18,7 +18,14 @@
  * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的常數,
  * 現為 12 個(卡 3 升遷 LEAVE_STATUS 後 11→12)。
  * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
- * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。 */
+ * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。
+ *
+ * C4 批2(facade 純轉手退役):member facade 對 ME/STATS/SKILLS/CONTACT_THREAD/
+ * POINTS_LEDGER/WEEK/TIME_ROWS/COACH_REPLIES/NOTIF_CATS 的純轉手匯出退役,消費端
+ * 改直取 $lib/domain/member-app——第 1 層 wiring check 的 toBe 釘同步減少,只留
+ * UPCOMING/NOTIFS_SEED(facade 側仍是純註記收窄同參照,攜帶本檔型別事實;
+ * LEAVE_STATUS 另有專屬 it,見下)。第 2、3 層是「domain 自身」的獨立不變量,與
+ * facade 現況無關,不受影響、全數保留。 */
 import { describe, it, expect } from 'vitest';
 import * as MemberData from '$lib/member/data';
 import * as MobileData from '$lib/mobile/data';
@@ -40,17 +47,8 @@ import {
 /* ── 1. wiring check:member facade 與 domain 同參照(toBe,非值比對) ── */
 describe('member facade re-exports domain/member-app by reference (single source)', () => {
 	it('every shared constant is the SAME array/object as domain (toBe, not a copy)', () => {
-		expect(MemberData.ME).toBe(ME);
-		expect(MemberData.STATS).toBe(STATS);
-		expect(MemberData.SKILLS).toBe(SKILLS);
 		expect(MemberData.UPCOMING).toBe(UPCOMING);
-		expect(MemberData.CONTACT_THREAD).toBe(CONTACT_THREAD);
 		expect(MemberData.NOTIFS_SEED).toBe(NOTIFS_SEED);
-		expect(MemberData.POINTS_LEDGER).toBe(POINTS_LEDGER);
-		expect(MemberData.WEEK).toBe(WEEK);
-		expect(MemberData.TIME_ROWS).toBe(TIME_ROWS);
-		expect(MemberData.COACH_REPLIES).toBe(COACH_REPLIES);
-		expect(MemberData.NOTIF_CATS).toBe(NOTIF_CATS);
 	});
 	// 卡 3:LEAVE_STATUS 兩側 facade 都是「純註記收窄同一參照」形(member 收窄回
 	// [Tone, string]、mobile 收窄回自家 tuple Tone)——雙釘防任何一側改成字面重建。

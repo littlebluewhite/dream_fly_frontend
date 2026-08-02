@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { getPoints, type Reward } from '$lib/member/api';
-import { POINTS_LEDGER } from '$lib/member/data';
+import { POINTS_LEDGER } from '$lib/domain/member-app';
 import { points, pointsLedger, toasts } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { subscriptions, points, pointsLedger } from './stores';
-import { ME, POINTS_LEDGER } from './data';
+import { ME, POINTS_LEDGER } from '$lib/domain/member-app';
 
 // The singleton subscriptions persist to localStorage; reset it (and storage)
 // between tests.

@@ -6,7 +6,8 @@
    * primitives come from the shared foundation. */
   import { onMount } from 'svelte';
   import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
-  import { WEEK, TIME_ROWS, type ScheduleBlock } from '$lib/member/data';
+  import type { ScheduleBlock } from '$lib/member/data';
+  import { WEEK, TIME_ROWS } from '$lib/domain/member-app';
   import { toasts } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ScheduleData } from '$lib/member/api';

@@ -3,7 +3,7 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
-import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from './data';
+import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from '$lib/domain/member-app';
 
 /* ---- Points ----
  * 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由

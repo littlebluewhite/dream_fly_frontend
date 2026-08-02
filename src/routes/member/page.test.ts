@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { getDashboard } from '$lib/member/api';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from '$lib/member/data';
+import { UPCOMING, ANNOUNCE } from '$lib/member/data';
+import { ME, STATS, SKILLS } from '$lib/domain/member-app';
 import Page from './+page.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));

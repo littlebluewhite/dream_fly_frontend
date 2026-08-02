@@ -10,7 +10,8 @@ import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance,
 import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, waitlistHydrated, leaveRequests, leaveRequestsHydrated } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE } from './data';
+import { UPCOMING, ANNOUNCE } from './data';
+import { ME, STATS, SKILLS } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {

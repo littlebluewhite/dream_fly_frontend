@@ -12,8 +12,10 @@ import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
-import { ME, STATS, SKILLS, UPCOMING, ANNOUNCE, mapNotification } from './data';
-import type { Member, Stat, Skill, UpcomingClass, Announcement, EnrolledCourse, AttRecord, ScheduleBlock, Order, Notification, ApiNotification } from './data';
+import { UPCOMING, ANNOUNCE, mapNotification } from './data';
+import type { UpcomingClass, Announcement, ScheduleBlock, Order, Notification, ApiNotification } from './data';
+import { ME, STATS, SKILLS } from '$lib/domain/member-app';
+import type { Member, Stat, Skill, EnrolledCourse, AttRecord } from '$lib/domain/member-app';
 
 /** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
 const me = (): Member => ME;

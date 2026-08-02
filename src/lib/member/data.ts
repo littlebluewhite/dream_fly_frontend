@@ -6,39 +6,30 @@
 
 /** Semantic tone shared with the Badge / ProgressBar primitives. */
 import type { Tone } from '$lib/api/wire';
-export type { Tone } from '$lib/api/wire';
-// compat shim:目前無下游消費者;保留本 facade 的 Tone 匯出路徑(見 ADR 0007)
 
 /* ---- single-source domain seed ----
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
- * `$lib/domain/member-app`；這裡 pass-through 值 + 型別(無本地用途者)，或匯入基底
- * 值後斷言回本檔案自己的型別(status/tone 欄位 member 用嚴格 Tone、domain 存寬鬆
- * string)。member 的公開 API 不變。ANNOUNCE 因兩側有一則公告的 bg 色不同，留在本
- * 檔案原地(見下方),未搬進 domain。 */
-export { ME, type Member } from '$lib/domain/member-app';
-export { STATS, type Stat } from '$lib/domain/member-app';
-export { SKILLS, type Skill } from '$lib/domain/member-app';
-// MY_COURSES(值)不在此列——Task 1(C2 死種子退役)確認這份 facade 再匯出已無
-// runtime 消費者(我的課程頁走真實 getMine())後移除；EnrolledCourse interface
-// 仍供 LeaveDialog 等元件的型別標註使用，繼續轉出。
-export type { EnrolledCourse } from '$lib/domain/member-app';
-// ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
-// (member/api.ts 的 getEnrolmentAttendance())，這份 mock 已無 runtime 消費者。
-export type { AttRecord } from '$lib/domain/member-app';
+ * `$lib/domain/member-app`。ANNOUNCE 因兩側有一則公告的 bg 色不同，留在本檔案原地
+ * (見下方),未搬進 domain。 */
+// C4 批2(facade 純轉手退役):ME/type Member、STATS/type Stat、SKILLS/type Skill、
+// EnrolledCourse、AttRecord、CONTACT_THREAD/type ChatMessage、POINTS_LEDGER/type
+// LedgerEntry、WEEK、TIME_ROWS、COACH_REPLIES、NOTIF_CATS(下方「Notification
+// center」段落)十一組 domain/member-app 純轉手匯出——不攜帶本檔型別事實、不做值
+// 變形——整批退役;消費端改直取 $lib/domain/member-app 同名同型符號(本批兩側符號
+// 名一致,無改名,故無 import-site alias)。LedgerType 型別本檔仍在內部使用(PT_TYPE
+// 下方),保留 import、拿掉對外轉出。UPCOMING/NOTIFS_SEED/LEAVE_STATUS 不在此列——
+// 三者匯入基底值後純註記收窄回本檔案自己較嚴格的型別(status/tone 欄位 member 用
+// 嚴格 Tone、domain 存寬鬆 string),攜帶本檔型別事實,繼續保留。
 // CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
 // getCourses()，回傳 $lib/public/adapters 的 CatalogCourse，非這份 domain mock），這份
 // facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體的
 // CATALOG/CatalogCourse 隨後也經 Task 1(C2 死種子退役)確認無任何消費者後整段移除。
 // MAKEUP_SLOTS 不在此列——Task 1(C2 死種子退役)確認這份 facade 再匯出已無 runtime
 // 消費者後移除；MakeupSlot interface 本身也已無消費者，domain 本體一併整段退役。
-export { CONTACT_THREAD, type ChatMessage } from '$lib/domain/member-app';
 // REWARDS/Reward 不在此列——Task 14 把 member 的兌換品項目錄換成真 GET /rewards
 // (integration-contract.md §3.23，見 member/api.ts 的 Reward/mapReward)；domain 的
 // mock 常數僅供 mobile 的 PointsScreen 消費(Task 19)，故不再從這個 facade 轉出。
-export { POINTS_LEDGER, type LedgerEntry } from '$lib/domain/member-app';
-// LedgerType is also referenced locally (PT_TYPE below), so import it as well as re-export it.
 import { type LedgerType } from '$lib/domain/member-app';
-export type { LedgerType };
 // status/tone-typed rows: domain stores the loose (string) shape; import the base
 // value here and assert it back to this file's own stricter local interface
 // (declared at its original spot below) where the const is (re-)declared.
@@ -143,12 +134,9 @@ export const LEAVE_STATUS: Record<string, [Tone, string]> = LEAVE_STATUS_BASE;
 // 等消費端索引值是 string）。
 export const LEVEL_TONE: Record<string, Tone> = LEVEL_TONE_BASE;
 
-/* Weekly schedule grid — member's classes */
-export { WEEK } from '$lib/domain/member-app';
 // SCHEDULE（值）不在此列——Task 1（C2 死種子退役）確認課表頁走真實 getSchedule()
 // 後，這份 mock 已無 runtime 消費者，隨 domain/member-app.ts 本體的 SCHEDULE 一併
 // 退役。ScheduleBlock interface（見上）仍供 +page.svelte 型別標註使用，不受影響。
-export { TIME_ROWS } from '$lib/domain/member-app';
 
 /* Announcements (場館公告) — kept local: mobile's 3rd item has a different `bg`. */
 export const ANNOUNCE: Announcement[] = [
@@ -161,17 +149,12 @@ export const ANNOUNCE: Announcement[] = [
 // getAccount()，經 mapOrder 映射回上方的 Order interface；interface 本身保留供該映射
 // 使用），這份 mock 值已無 runtime 消費者(Task 11 P2 清理)。
 
-/* Canned coach replies for the contact thread (聯絡教練 / 訊息 — 罐頭回覆;
- * CONTACT_THREAD 本體在 $lib/domain/member-app) */
-export { COACH_REPLIES } from '$lib/domain/member-app';
-
 /* Notification center (通知中心) — tone is Tone-typed here。T12 codex 終審修正:
  * 原整陣列 `as Notification[]` 會把所有欄位(含 icon: IconName)一併豁免型別檢查
  * ——domain 宣告改以 satisfies 保留 tone/icon 字面型別(見該檔宣告處註解)後,
  * 這裡用純型別註記把「同一個參照」(單源契約,domain/member-app.test.ts 以 toBe
  * 釘住——不能重建陣列)逐元素實檢收窄回本檔的嚴格 Tone,零斷言。 */
 export const NOTIFS_SEED: Notification[] = NOTIFS_SEED_BASE;
-export { NOTIF_CATS } from '$lib/domain/member-app';
 export const NOTIF_TONE_BG: Record<string, string> = {
   primary: 'var(--df-primary-bg)',
   info: 'var(--df-info-bg)',

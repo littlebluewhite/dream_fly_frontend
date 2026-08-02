@@ -32,7 +32,8 @@ import {
   joinWaitlistErrorMessage
 } from './stores';
 import type { CartItem } from '$lib/cart-item';
-import { NOTIFS_SEED, POINTS_LEDGER } from './data';
+import { NOTIFS_SEED } from './data';
+import { POINTS_LEDGER } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {

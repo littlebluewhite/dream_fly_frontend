@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import ContactDialog from './ContactDialog.svelte';
-import { CONTACT_THREAD } from '$lib/member/data';
-import type { EnrolledCourse } from '$lib/member/data';
+import { CONTACT_THREAD } from '$lib/domain/member-app';
+import type { EnrolledCourse } from '$lib/domain/member-app';
 
 /* 聯絡教練 (Contact coach) — a local mock chat thread, reset each time the
  * dialog transitions to open (FE#19 scan target: found with the same

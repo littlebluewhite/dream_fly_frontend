@@ -21,7 +21,7 @@
     toasts,
     type CourseSession
   } from '$lib/member/stores';
-  import type { EnrolledCourse } from '$lib/member/data';
+  import type { EnrolledCourse } from '$lib/domain/member-app';
 
   export let open = false;
   export let course: EnrolledCourse | null = null;

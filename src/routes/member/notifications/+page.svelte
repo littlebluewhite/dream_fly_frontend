@@ -6,7 +6,8 @@
    * it), so all mutations go through the store rather than a local copy. */
   import { onMount } from 'svelte';
   import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState, LoadGate } from '$lib/components/ui';
-  import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
+  import { NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
+  import { NOTIF_CATS } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
   import { notifications, notificationsPageEntry, markRead, markAllRead, toasts } from '$lib/member/stores';
 

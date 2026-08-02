@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import CheckoutDialog from './CheckoutDialog.svelte';
 import { cart, subscriptions, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-import { POINTS_LEDGER, ME } from '$lib/member/data';
+import { POINTS_LEDGER, ME } from '$lib/domain/member-app';
 import { passToCartItem } from '$lib/cart-item';
 import { fmtNT } from '$lib/format';
 import { api, ApiError } from '$lib/api/client';

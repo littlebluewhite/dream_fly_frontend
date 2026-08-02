@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { getMine, getEnrolmentAttendance } from '$lib/member/api';
-import type { AttRecord, EnrolledCourse } from '$lib/member/data';
+import type { AttRecord, EnrolledCourse } from '$lib/domain/member-app';
 import { get } from 'svelte/store';
 import { waitlist, leaveRequests, toasts, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
