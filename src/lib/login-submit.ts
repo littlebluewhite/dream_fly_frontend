@@ -19,7 +19,15 @@
  * `!account.trim() || !pw.trim()` 逐字等價。
  *
  * 零 $app import——沿用 checkout-gate/load-gate/hydration-gate 的純編排慣例,
- * plain vitest 用 spy 測,不需要 Testing Library / SvelteKit 的 mock 機制。 */
+ * plain vitest 用 spy 測,不需要 Testing Library / SvelteKit 的 mock 機制。
+ *
+ * 同檔另收 member register / reset-password / forgot-password 三頁的 submit
+ * 骨架(submitRegister/submitPasswordReset/submitForgot):三頁原本各自手寫同
+ * 款「busy 守衛 → 清錯/上鎖 → await → 成功副作用 → catch → finally 解鎖」骨
+ * 架,比照 submitLogin 收進本模組、各自持窄 IO 介面——刻意不抽私有共用核心、
+ * 不做泛化 submitAuthAction,四函式的成功副作用與 catch 策略互異(register
+ * 恆有目標、reset 不導航不登入、forgot 靜默吞錯做 anti-enumeration),硬共用
+ * 只會把各自的 order[] 時序契約藏進參數化路徑。 */
 
 export const EMPTY_FIELDS_ERROR = '請輸入帳號與密碼';
 export const BAD_CREDENTIALS_ERROR = 'Email 或密碼錯誤';
@@ -61,5 +69,83 @@ export async function submitLogin(io: LoginSubmitIO): Promise<void> {
     io.setError(BAD_CREDENTIALS_ERROR);
   } finally {
     io.setBusy(false);
+  }
+}
+
+export const REGISTER_FAILED_ERROR = '註冊失敗，請確認資料或稍後再試';
+export const RESET_LINK_INVALID_ERROR = '重設連結無效或已過期，請重新申請';
+
+export interface RegisterSubmitIO {
+  busy(): boolean;
+  setBusy(b: boolean): void;
+  setError(msg: string): void;
+  /** 頁面接 authStore.register(name, email, pw)。 */
+  register(): Promise<void>;
+  /** 恆有目標(頁面接 safeRedirect(?redirect)),無 submitLogin 那款 no-access 分支。 */
+  resolveTarget(): string;
+  /** finally 解鎖「前」呼叫,與 submitLogin 同款時序契約。 */
+  navigate(target: string): void;
+}
+
+export async function submitRegister(io: RegisterSubmitIO): Promise<void> {
+  if (io.busy()) return; // 再入守衛:上一次提交仍在進行中
+  io.setError('');
+  io.setBusy(true);
+  try {
+    await io.register();
+    io.navigate(io.resolveTarget());
+  } catch {
+    io.setError(REGISTER_FAILED_ERROR);
+  } finally {
+    io.setBusy(false);
+  }
+}
+
+export interface PasswordResetSubmitIO {
+  busy(): boolean;
+  setBusy(b: boolean): void;
+  setError(msg: string): void;
+  /** falsy(null 或空字串)→ 未清錯、未上鎖直接短路,對應現行 `busy || !token`。 */
+  token: string | null;
+  /** 收守衛窄化後的非空 token(守衛與 payload 單源,不重讀一次可能已變動的欄位)。 */
+  reset(token: string): Promise<void>;
+  /** done = true;不導航、不登入——後端已撤銷該帳號全部 refresh token。 */
+  onSuccess(): void;
+}
+
+export async function submitPasswordReset(io: PasswordResetSubmitIO): Promise<void> {
+  const token = io.token; // 單源讀取:守衛判斷與後續 payload 共用同一次讀值
+  if (io.busy() || !token) return;
+  io.setError('');
+  io.setBusy(true);
+  try {
+    await io.reset(token);
+    io.onSuccess();
+  } catch {
+    io.setError(RESET_LINK_INVALID_ERROR);
+  } finally {
+    io.setBusy(false);
+  }
+}
+
+export interface ForgotSubmitIO {
+  busy(): boolean;
+  setBusy(b: boolean): void;
+  request(): Promise<void>;
+  /** finally、解鎖「後」呼叫,成敗皆呼叫。 */
+  onSettled(): void;
+  // 刻意無 setError —— anti-enumeration 靜默 catch 由型別結構保證,呼叫端無從誤設錯誤文案。
+}
+
+export async function submitForgot(io: ForgotSubmitIO): Promise<void> {
+  if (io.busy()) return; // 再入守衛
+  io.setBusy(true);
+  try {
+    await io.request();
+  } catch {
+    // Anti-enumeration:靜默吞錯,不設任何錯誤文案——成功/失敗兩條路徑對外觀察不到差異。
+  } finally {
+    io.setBusy(false);
+    io.onSettled();
   }
 }

@@ -8,6 +8,7 @@
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/authStore';
   import { safeRedirect } from '$lib/checkout-gate';
+  import { submitRegister } from '$lib/login-submit';
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -26,17 +27,14 @@
   let pwFocus = false;
 
   async function submit() {
-    if (busy) return;
-    error = '';
-    busy = true;
-    try {
-      await authStore.register(name, email, pw);
-      goto(safeRedirect($page.url.searchParams.get('redirect')));
-    } catch {
-      error = '註冊失敗，請確認資料或稍後再試';
-    } finally {
-      busy = false;
-    }
+    await submitRegister({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      register: () => authStore.register(name, email, pw),
+      resolveTarget: () => safeRedirect($page.url.searchParams.get('redirect')),
+      navigate: goto
+    });
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') submit();

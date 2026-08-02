@@ -109,6 +109,25 @@ describe('member register — auth + redirect', () => {
     expect(goto).not.toHaveBeenCalled();
     expect(get(isLoggedIn)).toBe(false);
   });
+
+  it('rejects a hostile //-prefixed redirect and falls back to /member (open-redirect guard)', async () => {
+    mockUrl = new URL(
+      'http://localhost/member/register?redirect=' + encodeURIComponent('//evil.com')
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER }))
+    );
+    render(Register);
+
+    await fireEvent.input(screen.getByLabelText('姓名'), { target: { value: '陳小華' } });
+    await fireEvent.input(screen.getByLabelText('電子信箱'), { target: { value: 'a@test.com' } });
+    await fireEvent.input(screen.getByLabelText('密碼'), { target: { value: 'password123' } });
+    await fireEvent.click(screen.getByText('註冊'));
+    await vi.waitFor(() => expect(goto).toHaveBeenCalled());
+
+    expect(goto).toHaveBeenCalledWith('/member');
+  });
 });
 
 describe('member forgot-password — anti-enumeration', () => {

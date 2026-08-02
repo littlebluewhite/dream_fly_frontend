@@ -11,6 +11,7 @@
   import { Button, Icon } from '$lib/components/ui';
   import { page } from '$app/stores';
   import { api } from '$lib/api/client';
+  import { submitPasswordReset } from '$lib/login-submit';
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -25,21 +26,20 @@
   let done = false;
 
   async function submit() {
-    if (busy || !token) return;
-    error = '';
-    busy = true;
-    try {
-      await api('/auth/password/reset', {
-        method: 'POST',
-        body: JSON.stringify({ token, new_password: pw }),
-        auth: false
-      });
-      done = true;
-    } catch {
-      error = '重設連結無效或已過期，請重新申請';
-    } finally {
-      busy = false;
-    }
+    await submitPasswordReset({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      setError: (msg) => (error = msg),
+      token,
+      reset: async (t) => {
+        await api('/auth/password/reset', {
+          method: 'POST',
+          body: JSON.stringify({ token: t, new_password: pw }),
+          auth: false
+        });
+      },
+      onSuccess: () => (done = true)
+    });
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') submit();

@@ -9,6 +9,7 @@
    * branch (see docs/api/integration-contract.md §3.1). */
   import { Button, Icon } from '$lib/components/ui';
   import { api } from '$lib/api/client';
+  import { submitForgot } from '$lib/login-submit';
 
   /* full-bleed gym photography under a navy gradient (DS hero pattern) */
   const HERO_IMG =
@@ -19,20 +20,18 @@
   let submitted = false;
 
   async function submit() {
-    if (busy) return;
-    busy = true;
-    try {
-      await api('/auth/password/forgot', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-        auth: false
-      });
-    } catch {
-      // Anti-enumeration: show the same neutral message no matter the outcome.
-    } finally {
-      busy = false;
-      submitted = true;
-    }
+    await submitForgot({
+      busy: () => busy,
+      setBusy: (b) => (busy = b),
+      request: async () => {
+        await api('/auth/password/forgot', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+          auth: false
+        });
+      },
+      onSettled: () => (submitted = true)
+    });
   }
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter') submit();
