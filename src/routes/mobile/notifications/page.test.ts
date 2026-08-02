@@ -4,14 +4,19 @@ import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { getNotifications } from '$lib/mobile/api';
 import { api } from '$lib/api/client';
-import { notifs, notifsHydrated, toasts } from '$lib/mobile/stores';
+import { notifs, notifsHydrated } from '$lib/mobile/notifications';
+import { toasts } from '$lib/mobile/stores';
+import { authStore } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
 import { NOTIFS_SEED } from '$lib/mobile/data';
 import type { NotifItem } from '$lib/mobile/data';
 import Page from './+page.svelte';
 
+// C3:頁面改吃 notifsPageEntry,其 fetch 仍是閘門包住的 $lib/mobile/api 的
+// getNotifications(只多一層 epoch 核對),故這支 mock 照樣攔得到。
 vi.mock('$lib/mobile/api', () => ({ getNotifications: vi.fn() }));
-// W1:notifs.markRead/markAllRead 現在會送 PATCH 落庫(見 $lib/mobile/stores.ts)——
-// 只替換 $lib/api/client 的 api(),spread 保留其餘 export(同 member 前例)。
+// W1:notifs.markRead/markAllRead 現在會送 PATCH 落庫(見 $lib/mobile/notifications.ts)
+// ——只替換 $lib/api/client 的 api(),spread 保留其餘 export(同 member 前例)。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -122,6 +127,35 @@ describe('mobile/notifications 頁', () => {
 
 		// The shared store must NOT have been clobbered — sentinel must still be there.
 		expect(get(notifs)).toEqual(sentinel);
+	});
+
+	// C3 在飛換帳釘(關閉 ADR 0017 的 epoch 殘窗):頁面改吃 notifsPageEntry 之前,
+	// load-gate 的 fetch 是 raw getter——跨登出的在飛回應會被無條件寫進共享 notifs
+	// store(B 帳號直接看到 A 的通知)並收斂為 ready。現在 fetch 帶 epoch 核對,
+	// 過期即 throw,頁面落 error 態、store 不被覆寫。
+	it('在飛換帳釘:pending fetch 期間登出 → 舊帳號回應作廢(頁面轉 ErrorState),共享 notifs store 不被 stale 資料覆寫', async () => {
+		const AUTH_RES = {
+			access_token: 'at-p', refresh_token: 'rt-p',
+			user: { id: 'u-p1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false, avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member'] }
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
+		await authStore.login('a@dreamfly.test', 'pw');
+
+		let resolveA!: (value: NotifItem[]) => void;
+		vi.mocked(getNotifications).mockReturnValueOnce(
+			new Promise<NotifItem[]>((r) => { resolveA = r; })
+		);
+		render(Page); // A 的 fetch 掛起中(phase=loading)
+
+		await authStore.logout(); // 在飛期間登出 → 閘門 epoch+1、reset 把 store 歸 boot seed
+
+		resolveA([
+			{ id: 'a-only', cat: 'system', icon: 'bell', tone: 'info', title: 'A 帳號的通知', body: '', time: '剛才', read: true }
+		]);
+
+		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
+		expect(screen.queryByText('A 帳號的通知')).toBeNull();
+		expect(get(notifs)).toEqual(NOTIFS_SEED); // 舊帳號資料沒有寫進共享 store
 	});
 
 	it('分類清單為空時顯示 MEmpty,不留白', async () => {

@@ -5,12 +5,17 @@
  * leave 手抄了完整的 epoch/身分重置/序列化和解鏈骨架(位元組級雙生);notifications/
  * mobile-notifs 的 hydrated 旗標跨帳號存活(真缺陷:SPA 登出無整頁重載,B 帳號被
  * guarded() 短路、直接讀到 A 的資料);points/subscriptions 全無守衛。本模組把前二
- * 「吸收」成單源、把後四「抬升」到同一套守衛之下,提供三門工廠:
+ * 「吸收」成單源、把後四「抬升」到同一套守衛之下,提供兩門工廠:
  *   - createSessionGate     完整 session gate(gate + 身分重置 + 序列化可重試和解鏈
- *                           + epoch 核對 fetch)—— waitlist / leave / member notifications
+ *                           + epoch 核對 fetch + 頁面進場包 pageEntry())——
+ *                           waitlist / leave / member notifications / mobile notifs
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
  *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions
- *   - onSessionReset        外部旗標重置(gate 所有權留呼叫端)—— mobile notifs
+ *
+ * C3(架構深化 R9)兩處變更:①新增 pageEntry(),關閉 ADR 0017 明載的 known-latent
+ * 殘窗(通知**頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對);
+ * ②門 (c) `onSessionReset` 退役 —— 其唯一消費者 mobile notifs 已改建完整 gate
+ * (見 $lib/mobile/notifications.ts),三門收斂為兩門。
  *
  * 座落位置:authStore 與 domain store 之間。刻意**不**深化 hydration-gate——後者被
  * ~49 頁全 surface 的 load-gate 消費(含 staff 面,其 identity 源非 member authStore),
@@ -27,6 +32,7 @@
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/authStore';
 import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
+import type { LoadGateHydrateOptions } from './load-gate'; // type-only:零 runtime 邊
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
@@ -67,7 +73,18 @@ export interface SessionGateOptions<T> {
 }
 
 /**
- * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated)再加 mutate。
+ * 頁面進場包(C3):頁面建 load-gate 所需的兩件東西一次吐齊 —— fetch 是**帶 epoch
+ * 核對**的那一支(不是呼叫端的 raw getter),hydrate 是閘門自己的旗標 + apply。
+ * 頁面寫 `createLoadGate({ ...gate.pageEntry() })` 即可,不再有機會繞過核對。
+ */
+export interface PageEntry<T> {
+	fetch: () => Promise<T>;
+	hydrate: LoadGateHydrateOptions<T>;
+}
+
+/**
+ * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated)再加 mutate
+ * 與 pageEntry。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
  *   進場快照(await 之前捕捉 wasHydrated + epoch)→ await request → epoch 丟棄(過期即
  *   棄寫,結果仍回傳:server 端事實已成立)→ 寫回時重查完整度(stillIncomplete)→
@@ -75,15 +92,20 @@ export interface SessionGateOptions<T> {
  * 樂觀 mutator(notifications markRead/markAllRead:先寫後 await、失敗不還原)刻意
  * 不走 mutate(),繼續直接呼叫 markMutated()——故 markMutated 留在 interface。
  */
-export interface SessionGate extends HydrationGate {
+export interface SessionGate<T> extends HydrationGate {
 	mutate<R>(request: () => Promise<R>, writeBack: (result: R) => void): Promise<R>;
+	/** 頁面進場包;語意與成環證明見 PageEntry 與 createSessionGate 的 pageEntry 註解。 */
+	pageEntry(): PageEntry<T>;
 }
 
 /**
  * 建立完整 session gate。**內部建構順序為契約**(單一稽核點,構造性消滅 TDZ/未初始化
  * 風險):
- *   1) createHydrationGate 先建 —— wrappedFetch 內對 core.epoch() 是 closure 前向
- *      參照,fetch 只在 hydrate/refresh 時才被呼叫,屆時 core 已就緒。
+ *   0) epochFetch 抽名宣告 —— 純 const 宣告、零呼叫,對 core 與 1) 相同是 closure
+ *      前向參照。抽名是為了讓 pageEntry() 能把**同一支**核對過的 fetch 交給頁面的
+ *      load-gate(不是複製第二份判斷)。
+ *   1) createHydrationGate 先建 —— fetch(= epochFetch)內對 core.epoch() 是 closure
+ *      前向參照,fetch 只在 hydrate/refresh 時才被呼叫,屆時 core 已就緒。
  *   2) reconcileChain 宣告。
  *   3) createSessionCore 訂閱 —— restored session 的立即回呼在此觸 onChange,而
  *      onChange 讀 gate 與 reconcileChain,兩者至此都已存在。順序若倒過來(先訂閱),
@@ -93,21 +115,20 @@ export interface SessionGate extends HydrationGate {
  * onChange = opts.reset() + gate.hydrated.set(false) + reconcileChain 重置(舊 session
  * 卡死的和解不得堵住新 session 的鏈)。
  */
-export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
-	// 1) gate 先建。wrappedFetch 對 core 的前向參照見上方契約說明。
-	const gate = createHydrationGate<T>({
-		fetch: async () => {
-			const epoch = core.epoch();
-			const data = await opts.fetch();
-			// P1′:回應落地前核對 epoch —— 跨登出/換帳號的在飛回應整包作廢(throw 讓 gate
-			// 既不 apply 也不 commit,見 hydration-gate 檔頭「fetch rejection 原樣拋出」)。
-			// refresh 也走這條 wrappedFetch,故 gate.refresh 匯出者(leave 的 refreshLeaveRequests)
-			// 一併獲得在飛作廢語意。
-			if (epoch !== core.epoch()) throw new Error('stale session: 回應跨登出/換帳號,作廢');
-			return data;
-		},
-		apply: opts.apply
-	});
+export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T> {
+	// 0) epochFetch 抽名。對 core 的前向參照見上方契約說明。
+	const epochFetch = async (): Promise<T> => {
+		const epoch = core.epoch();
+		const data = await opts.fetch();
+		// P1′:回應落地前核對 epoch —— 跨登出/換帳號的在飛回應整包作廢(throw 讓 gate
+		// 既不 apply 也不 commit,見 hydration-gate 檔頭「fetch rejection 原樣拋出」)。
+		// refresh 也走這條 fetch,故 gate.refresh 匯出者(leave 的 refreshLeaveRequests)
+		// 與 pageEntry() 交給頁面 load-gate 的那一支,一併獲得在飛作廢語意。
+		if (epoch !== core.epoch()) throw new Error('stale session: 回應跨登出/換帳號,作廢');
+		return data;
+	};
+	// 1) gate 先建。
+	const gate = createHydrationGate<T>({ fetch: epochFetch, apply: opts.apply });
 	// 2) reconcileChain 宣告。
 	let reconcileChain: Promise<void> = Promise.resolve();
 	// 3) core 訂閱。立即回呼(restored session)在此觸 onChange;gate 與 chain 已存在。
@@ -155,7 +176,20 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 		return result;
 	}
 
-	return { ...gate, mutate };
+	/**
+	 * 頁面進場包(C3,關閉 ADR 0017 的 known-latent 殘窗)。零新程式路徑——只是把既有
+	 * 的 epochFetch 與既有的 hydrated/apply 包成 load-gate 認得的形狀:
+	 *   - stale(跨登出/換帳)→ epochFetch throw → load-gate 既有 error 態;
+	 *   - 使用者按 retry → load-gate 的 refresh 回落同一支 epochFetch → 新 epoch 下成功。
+	 * 換帳當下 identity 重置(onChange)已同步清 store,新帳號永不見舊帳號資料。
+	 * flag 是閘門自己的 hydrated **同一實例**、into 是 opts.apply **同一函式**——頁面
+	 * 與 store 模組共用同一顆守衛,不是複本。
+	 */
+	function pageEntry(): PageEntry<T> {
+		return { fetch: epochFetch, hydrate: { flag: gate.hydrated, into: opts.apply } };
+	}
+
+	return { ...gate, mutate, pageEntry };
 }
 
 /**
@@ -179,16 +213,4 @@ export function createSessionRefresher<T>(opts: {
 		if (epoch !== core.epoch()) return; // 在飛換帳:靜默丟棄(不套用、不 throw)
 		opts.apply(data);
 	};
-}
-
-/**
- * 門 (c) 外部旗標重置 —— mobile notifs。
- *
- * gate 所有權留呼叫端(mobile 的 notifsHydrated 必須維持 plain Writable<boolean>,通知
- * 頁 createLoadGate 的 `hydrate:{flag}` 接線依賴它)。本門只做一件事:identity 變更時
- * 呼叫 reset(把旗標翻回 false + 重置 store 到 boot seed)。「set() 不繞這層」的載重約束
- * 仍為真——reset 走的是同一個公開 setter,水合本身由通知頁的 load-gate 自己翻旗。
- */
-export function onSessionReset(reset: () => void): void {
-	createSessionCore(reset);
 }

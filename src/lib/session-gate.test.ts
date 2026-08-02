@@ -1,8 +1,9 @@
-/* Dream Fly — session-gate 三門工廠家族單測(架構深化 R7 C1)。
+/* Dream Fly — session-gate 兩門工廠家族單測(架構深化 R7 C1;R9 C3 起門 (c)
+ * onSessionReset 退役,pageEntry 進場包入列)。
  *
  * 泛型 session 協定的**單源**測試:F1 登出重置 / P1′ 在飛作廢 / P1″ A→B 直換 /
  * mutate 在飛丟棄 / 訪客·restored 開機觸發次數 / F2 序列化可重試和解鏈家族 /
- * refresher 無條件套用 + 靜默丟棄 / onSessionReset。六個 domain store 各自只留薄
+ * refresher 無條件套用 + 靜默丟棄 / pageEntry 進場包。六個 domain store 各自只留薄
  * adapter 釘(證明本 store 已註冊 + endpoint/writeBack 接對),不再逐檔手抄整套協定
  * 鏡射(原 checkout-api/leave-requests-api 兩檔的深層鏡射家族已移入本檔)。
  *
@@ -14,7 +15,8 @@ import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { createSessionGate, createSessionRefresher, onSessionReset } from './session-gate';
+import { createLoadGate, type LoadPhase } from './load-gate';
+import { createSessionGate, createSessionRefresher } from './session-gate';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -369,27 +371,87 @@ describe('createSessionRefresher — 無條件重抓 + 身分感知', () => {
 	});
 });
 
-describe('onSessionReset — 外部旗標重置', () => {
-	it('觸發:identity 變更 → reset 被呼叫', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
-		const reset = vi.fn();
-		onSessionReset(reset);
+describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的 epoch 殘窗)', () => {
+	// 殘窗原文:通知**頁**的 load-gate 直接把 raw getter 當 fetch,繞過 epoch 核對——
+	// 跨登出/換帳的在飛回應會被 load-gate 無條件套用進共享 store。pageEntry() 把
+	// 「核對過的 fetch + 閘門自己的 hydrate 選項」整包吐給頁面,頁面沒有機會拿到 raw getter。
 
-		await authStore.login('a@dreamfly.test', 'pw');
-		expect(reset).toHaveBeenCalledTimes(1);
-		await authStore.logout();
-		expect(reset).toHaveBeenCalledTimes(2);
+	it('hydrate.flag 是 gate.hydrated 同一實例、hydrate.into 是 opts.apply 同一函式(頁面與 store 共用同一顆守衛,不是複本)', () => {
+		const store = writable<Item[]>([]);
+		const apply = (d: Item[]) => store.set(d);
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply, reset: () => store.set([]) });
+
+		const entry = gate.pageEntry();
+
+		expect(entry.hydrate.flag).toBe(gate.hydrated);
+		expect(entry.hydrate.into).toBe(apply);
 	});
 
-	it('同 identity 重發不觸發:member.id 不變(同帳號再登入)→ reset 不重複觸發', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES }));
-		const reset = vi.fn();
-		onSessionReset(reset);
+	it('fetch 只回傳資料、不自行 apply(寫入是 load-gate hydrate 的事,翻旗也是)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': [{ id: 'x' }] }));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await expect(gate.pageEntry().fetch()).resolves.toEqual([{ id: 'x' }]);
+
+		expect(get(store)).toEqual([]); // 沒有寫回共享 store
+		expect(get(gate.hydrated)).toBe(false); // 也沒有翻旗
+	});
+
+	it('stale:fetch 在飛期間登出 → rejects(頁面 load-gate 據此收 error 態,不套用舊帳號資料)', async () => {
+		const d = createDeferred<Item[]>();
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => d.promise, apply: (data) => store.set(data), reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		expect(reset).toHaveBeenCalledTimes(1);
+		const p = gate.pageEntry().fetch();
+		await authStore.logout(); // 在飛期間登出 → epoch+1
 
-		await authStore.login('a@dreamfly.test', 'pw'); // 同一帳號再登入 → identity 不變
-		expect(reset).toHaveBeenCalledTimes(1); // 不重複觸發
+		d.resolve([{ id: 'a-item' }]);
+		await expect(p).rejects.toThrow('stale session: 回應跨登出/換帳號,作廢');
+
+		expect(get(store)).toEqual([]); // A 的資料沒有復活
+	});
+
+	it('retry:stale reject 後,同一支 fetch 在新 epoch 下成功(load-gate 的 refresh 回落同一支,零新程式路徑)', async () => {
+		const d = createDeferred<Item[]>();
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'POST /auth/login': AUTH_RES,
+			'POST /auth/logout': undefined,
+			'GET /list': () => (++gets === 1 ? d.promise : [{ id: 'fresh' }])
+		}));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (x) => store.set(x), reset: () => store.set([]) });
+		const entry = gate.pageEntry(); // 頁面手上就這一支,retry 也是它
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		const p = entry.fetch();
+		await authStore.logout();
+		d.resolve([{ id: 'stale' }]);
+		await expect(p).rejects.toThrow();
+
+		await expect(entry.fetch()).resolves.toEqual([{ id: 'fresh' }]); // 新 epoch 下重試成功
+	});
+
+	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': [{ id: 'x' }] }));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		const page = createLoadGate({ ...gate.pageEntry() });
+		const phases: LoadPhase[] = [];
+		const unsub = page.subscribe((p) => phases.push(p));
+
+		await page.load();
+
+		expect(phases[0]).toBe('loading');
+		expect(phases[phases.length - 1]).toBe('ready');
+		expect(get(store)).toEqual([{ id: 'x' }]); // hydrate.into 寫回的是同一顆共享 store
+		expect(get(gate.hydrated)).toBe(true); // load-gate 的 commit 翻的正是閘門同一顆旗標
+
+		unsub();
+		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy
 	});
 });

@@ -5,13 +5,13 @@
    * notifs.markAllRead 依回傳值分流 toast、MEmpty fallback。
    * Legacy Svelte（無 runes）、繁體中文文案。
    *
-   * 資料改由 getNotifications()(API 接縫)非同步水合共享 notifs store
+   * 資料改由通知模組的 session 閘門非同步水合共享 notifs store
    * (member notifications 範本同款):createLoadGate($lib/load-gate)取代手寫
-   * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、notifsHydrated
+   * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、閘門旗標
    * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試
    * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 現已落庫 PATCH
-   * /notifications/{id}/read(W1,失敗不還原;細節見 $lib/mobile/stores.ts 的
-   * notifs wrapper 註解),頁面只依 markAllRead 回傳值('ok'|'partial')分流
+   * /notifications/{id}/read(W1,失敗不還原;細節見 $lib/mobile/notifications.ts
+   * 的 notifs wrapper 註解),頁面只依 markAllRead 回傳值('ok'|'partial')分流
    * toast 文案。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -21,21 +21,16 @@
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
   import { createLoadGate } from '$lib/load-gate';
-  import { getNotifications } from '$lib/mobile/api';
-  import { notifs, notifsHydrated, unread, toasts } from '$lib/mobile/stores';
+  import { notifs, notifsPageEntry, unread } from '$lib/mobile/notifications';
+  import { toasts } from '$lib/mobile/stores';
 
   let cat = 'all';
 
-  // 水合協定改走 load-gate 的 hydrate 選項:guard 短路、post-await 重查(mutation
-  // 勝出時放棄覆寫)、成功後翻旗都收進 gate 內部(同 $lib/hydration-gate 語意),
-  // 頁面不再手焊 skip/onData。
-  const gate = createLoadGate({
-    fetch: getNotifications,
-    hydrate: {
-      flag: notifsHydrated,
-      into: (d) => notifs.set(d)
-    }
-  });
+  // C3:整包進場改吃 session 閘門的 pageEntry()——fetch 是帶 epoch 核對的那一支
+  // (跨登出/換帳的在飛回應會 throw,由本頁 error 態接住、retry 走 gate.refresh
+  // 回落同一支),hydrate 是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
+  // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)仍全在 load-gate 內部。
+  const gate = createLoadGate({ ...notifsPageEntry });
   onMount(() => {
     gate.load();
   });

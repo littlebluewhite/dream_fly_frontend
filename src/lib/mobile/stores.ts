@@ -9,8 +9,8 @@
  *
  * Task 19：登入守門與 auth 狀態改用真實 `$lib/stores/authStore`(見
  * routes/mobile/+layout.svelte + guard.ts)——這個檔案不再有本地的 demo
- * `session` gate 旗標。`notifs`/`notifsHydrated` 由 `$lib/mobile/api.ts` 的
- * getNotifications() 水合真資料(同 member notifications 前例)。`cart` 改吃
+ * `session` gate 旗標。通知段(`notifs`/`unread`/已讀 mutation/session 閘門)C3
+ * 起搬出成葉模組 `$lib/mobile/notifications.ts`(理由見下方該段註解)。`cart` 改吃
  * lib-root 共用工廠 $lib/cart(C2:與 member 側同一份實作，不再是平行 store；
  * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
  * CartSheet 的結帳流程本身已改真下單，
@@ -18,18 +18,15 @@
  * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律
  * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
 
-import { writable, derived, get } from 'svelte/store';
-import { api } from '$lib/api/client';
+import { writable, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { createReadState, unreadCount } from '$lib/stores/read-state';
-import { onSessionReset } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints, subscriptions } from '$lib/member/stores';
 import { chargeableLines } from '$lib/member/checkout';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
-import { ME, NOTIFS_SEED, type NotifItem, type Course } from './data';
+import { ME, type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 // C5:factory 單源於 components/mobile/overlay.ts(與 mobile-admin 共用複本合併
@@ -151,64 +148,11 @@ export async function placeOrder(
 }
 
 /* ---------- Notification centre ---------- */
-// C6:read-flag store 委派共用的 createReadState(見 $lib/stores/read-state,
-// mobile 現形即標準極性,行為 1:1)。createNotifs 保留舊名(委派 alias),既有
-// 呼叫端(本檔案 notifs 單例、stores.test.ts 既有測試)零變動。
-export const createNotifs = createReadState;
-export { unreadCount };
-// 同步 seed(createNotifs 內部 clone;與 member notifications 前例同型):badge
-// (unread,TabBar/首頁鈴鐺都讀)一開始就有值。首次造訪通知頁時經 getNotifications()
-// 接縫水合覆寫一次(見該頁 load()/refresh());notifsHydrated 是 load-once 守衛,
-// 防止重訪重抓覆寫已讀狀態。
-const notifsBase = createNotifs<NotifItem>(NOTIFS_SEED);
-export const notifsHydrated = writable(false);
-/** K2-c 協定補完:markRead/markAllRead 原本完全沒有翻旗協定,mutation 後
- *  notifsHydrated 仍是 false,重訪通知頁會被 load-gate 判定「尚未水合」而整包
- *  重抓、覆寫掉這裡的已讀 mutation。包裝函式在呼叫共用邏輯後翻
- *  notifsHydrated.set(true),對齊 member 的 markMutated 協定(見
- *  $lib/member/notifications.ts)。set() 不繞這層——水合本身由通知頁的
- *  load-gate hydrate 選項在 into() 之後自己翻旗,不需要這裡重覆翻。
- *  W1:markRead/markAllRead 原本只翻本地旗、不打後端,重新整理或新 session 會
- *  讓已讀狀態回退成未讀(使用者可見 bug)。現在樂觀更新本地 store 後改送 PATCH
- *  /notifications/{id}/read 落庫;失敗只記錄錯誤、不還原本地狀態(不閃爍原則,
- *  同 $lib/member/notifications.ts 的 markRead/markAllRead 一致)。點擊已讀項
- *  仍會重送 PATCH——端點冪等(同 member 沒有另外擋),不為此加 guard。 */
-export const notifs = {
-	subscribe: notifsBase.subscribe,
-	set: notifsBase.set,
-	async markRead(id: string): Promise<void> {
-		notifsBase.markRead(id); // 樂觀更新
-		notifsHydrated.set(true); // 翻旗(≡ markMutated)
-		try {
-			await api(`/notifications/${id}/read`, { method: 'PATCH' });
-		} catch (err) {
-			console.error('Failed to mark notification as read:', err); // 不還原(member 不閃爍原則)
-		}
-	},
-	async markAllRead(): Promise<'ok' | 'partial'> {
-		const unreadIds = get(notifsBase).filter((n) => !n.read).map((n) => n.id); // 必須在 markAllRead() 前捕捉
-		notifsBase.markAllRead();
-		notifsHydrated.set(true);
-		const results = await Promise.allSettled(
-			unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
-		);
-		const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-		failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
-		return failures.length > 0 ? 'partial' : 'ok';
-	}
-};
-export const unread = derived(notifs, ($n) => unreadCount($n));
-/** C1(架構深化 R7)抬升:notifsHydrated 原本跨帳號存活是真缺陷(同 member notifications
- *  前例)——SPA 登出無整頁重載,B 帳號重訪通知頁被 load-gate 判「已水合」而不重抓,直接
- *  讀到 A 的已讀狀態/通知。onSessionReset 在 identity 變更時重置為 boot 態:notifsBase
- *  歸 NOTIFS_SEED clone(badge teaser 保留)、notifsHydrated 翻 false(下次進頁重抓真資料)。
- *  旗標維持 plain Writable(通知頁 createLoadGate 的 hydrate:{flag} 接線不動);「set()
- *  不繞這層」註解仍為真——reset 走的是 notifsBase 同一個公開 setter。gate 所有權(旗標)
- *  留在本檔,故用 onSessionReset(門 c)而非 createSessionGate。 */
-onSessionReset(() => {
-	notifsBase.set(NOTIFS_SEED.map((n) => ({ ...n })));
-	notifsHydrated.set(false);
-});
+// C3(架構深化 R9):整段搬出成葉模組 $lib/mobile/notifications.ts——通知段改建
+// createSessionGate 後需要 ./api 的 getNotifications,而 ./api 反過來 import 本檔的
+// PREFS_DEFAULT,留在這裡即 stores ⇄ api 成環。**本檔刻意不 re-export 該模組**
+// (re-export 會讓 api → stores → notifications → api 繞回成環),消費端直接
+// import '$lib/mobile/notifications';與其他 member 側收編走 barrel 的慣例刻意不對稱。
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);

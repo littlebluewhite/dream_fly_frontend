@@ -5,7 +5,10 @@ import { getHome } from '$lib/mobile/api';
 import { ANNOUNCE } from '$lib/mobile/data';
 import type { Course, MyCourse } from '$lib/mobile/data';
 
-vi.mock('$lib/mobile/api', () => ({ getHome: vi.fn() }));
+// C3:本頁的鈴鐺角標(unread)改自葉模組 $lib/mobile/notifications 取用,該模組在
+// 模組層就把 ./api 的 getNotifications 綁進通知閘門——工廠式 mock 必須連它一起交代,
+// 否則 binding 讀取時炸「No export is defined」。本頁不觸發通知抓取,給空實作即可。
+vi.mock('$lib/mobile/api', () => ({ getHome: vi.fn(), getNotifications: vi.fn() }));
 
 // Task 1(C2 死種子退役):mobile/data.ts 的 CATALOG/MY_COURSES(值)已退役——本檔案
 // 每個 it() 大多用自己的「相異 fixture」覆寫 getHome() 回應(證明資料來自接縫而非

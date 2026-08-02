@@ -21,8 +21,10 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  無整頁重載,B 帳號的 getDashboard 觸發的 refreshNotifications 被 guarded() 短路,直接
  *  讀到 A 的通知。改走 createSessionGate 後,identity 變更即 reset(旗標翻 false + 通知
  *  重置為 seed)、換帳後重抓真資料;reset 用 NOTIFS_SEED clone(boot 態,badge teaser 保留,
- *  restored session 開機立即回呼值冪等)。殘留 known-latent(通知**頁**的 load-gate 入口
- *  仍無 identity epoch;之後記 ADR 0017,不在本輪)。 */
+ *  restored session 開機立即回呼值冪等)。
+ *  C3(架構深化 R9)補完 ADR 0017 記下的 known-latent 殘窗:通知**頁**的 load-gate
+ *  入口原本直接拿 api.ts 的 getNotifications 當 fetch、繞過 epoch 核對,現改吃下方
+ *  notificationsPageEntry(同一顆閘門吐出的進場包)。 */
 const gate = createSessionGate<Notification[]>({
   fetch: async () => {
     const list = await api<ApiNotification[]>('/notifications');
@@ -38,6 +40,8 @@ const gate = createSessionGate<Notification[]>({
 // gate.hydrated(hydration-gate.ts 的介面明文：呼叫端可直接讀寫，非唯讀投影)。
 export const notificationsHydrated = gate.hydrated;
 export const refreshNotifications = gate.hydrate;
+/** 通知頁的 load-gate 進場包(fetch 帶 epoch 核對 + hydrate 選項),頁面 spread 使用。 */
+export const notificationsPageEntry = gate.pageEntry();
 
 /** 已讀 mutation(自 routes/member/notifications/+page.svelte 搬遷，C1)——樂觀更新
  *  本地 store，再送 PATCH 到後端；失敗只記錄錯誤、不還原(避免使用者感覺「點了又

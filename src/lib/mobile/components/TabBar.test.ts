@@ -3,13 +3,13 @@ import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import MobileTabBar from './TabBar.svelte';
 import { TABS, mobilePath } from '$lib/mobile/nav';
-import { notifs, unread } from '$lib/mobile/stores';
+import { notifs, unread } from '$lib/mobile/notifications';
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile') })
 }));
 // W1:notifs.markAllRead()(見下方 :72)現在會送 PATCH 落庫(見 $lib/mobile/
-// stores.ts)——這裡純粹隔離掉真正的 fetch,不驗證落庫本身,斷言零變更。
+// notifications.ts)——這裡純粹隔離掉真正的 fetch,不驗證落庫本身,斷言零變更。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };

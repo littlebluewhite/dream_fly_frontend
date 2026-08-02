@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
-import { notifications, notificationsHydrated, markRead, markAllRead } from './notifications';
+import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead } from './notifications';
 import { NOTIFS_SEED } from './data';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -87,5 +87,16 @@ describe('markAllRead', () => {
     await markAllRead();
 
     expect(get(notificationsHydrated)).toBe(true);
+  });
+});
+
+describe('notificationsPageEntry(C3 接線釘)', () => {
+  // 進場包本身的語意(epoch 核對 fetch、stale reject、retry、spread 進 load-gate)
+  // 由 session-gate.test.ts 的 pageEntry describe 單源覆蓋——這裡只釘「通知頁拿到的
+  // 是本模組這顆閘門」:旗標同實例(接錯閘門會讓頁面的 load-once 守衛失聯)、fetch
+  // 是可呼叫的函式。
+  it('hydrate.flag 與 notificationsHydrated 同一實例、fetch 為函式', () => {
+    expect(notificationsPageEntry.hydrate.flag).toBe(notificationsHydrated);
+    expect(typeof notificationsPageEntry.fetch).toBe('function');
   });
 });

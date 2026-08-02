@@ -8,21 +8,15 @@
   import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState, LoadGate } from '$lib/components/ui';
   import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { createLoadGate } from '$lib/load-gate';
-  import { getNotifications } from '$lib/member/api';
-  import { notifications, notificationsHydrated, markRead, markAllRead, toasts } from '$lib/member/stores';
+  import { notifications, notificationsPageEntry, markRead, markAllRead, toasts } from '$lib/member/stores';
 
   let cat = 'all';
 
-  // 水合協定改走 load-gate 的 hydrate 選項:guard 短路、post-await 重查(mutation
-  // 勝出時放棄覆寫)、成功後翻旗都收進 gate 內部(同 $lib/hydration-gate 語意),
-  // 頁面不再手焊 skip/onData。
-  const gate = createLoadGate({
-    fetch: getNotifications,
-    hydrate: {
-      flag: notificationsHydrated,
-      into: (d) => notifications.set(d)
-    }
-  });
+  // C3:整包進場改吃 session 閘門的 pageEntry()——fetch 是帶 epoch 核對的那一支
+  // (跨登出/換帳的在飛回應會 throw,由本頁 error 態接住、retry 走 gate.refresh
+  // 回落同一支),hydrate 是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
+  // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)仍全在 load-gate 內部。
+  const gate = createLoadGate({ ...notificationsPageEntry });
   onMount(() => {
     gate.load();
   });

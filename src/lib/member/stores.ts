@@ -47,6 +47,6 @@ export type { ApiSubscription } from './subscriptions';
 export { placeOrder } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
-export { notifications, unreadCount, notificationsHydrated, refreshNotifications, markRead, markAllRead } from './notifications';
+export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, refreshNotifications, markRead, markAllRead } from './notifications';
 
 export { checkoutOpen, search, toasts } from './ui';
