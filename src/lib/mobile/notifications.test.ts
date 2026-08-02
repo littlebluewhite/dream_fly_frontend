@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { notifs, notifsHydrated } from './notifications';
-import { NOTIFS_SEED, type NotifItem } from './data';
+import { NOTIFS_SEED, type Notification as NotifItem } from '$lib/domain/member-app';
 // C1(session 重置抬升)跨帳號 session 重置釘:用真 authStore.login/logout 驅動 identity。
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';

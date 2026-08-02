@@ -15,7 +15,7 @@ import { api } from '$lib/api/client';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import { createSessionGate } from '$lib/session-gate';
 import { getNotifications } from './api';
-import { NOTIFS_SEED, type NotifItem } from './data';
+import { NOTIFS_SEED, type Notification as NotifItem } from '$lib/domain/member-app';
 
 // C6:read-flag store 委派共用的 createReadState(見 $lib/stores/read-state,
 // mobile 現形即標準極性,行為 1:1)。createNotifs 保留舊名(委派 alias),既有

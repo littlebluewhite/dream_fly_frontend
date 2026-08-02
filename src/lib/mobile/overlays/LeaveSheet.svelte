@@ -22,7 +22,7 @@
   import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
   import { toasts, createLeaveRequestForm, getCourseSessions, createLeaveRequest, leaveRequestErrorMessage, type CourseSession } from '$lib/mobile/stores';
   import { sessionOptions } from '$lib/domain/session-format';
-  import type { MyCourse } from '$lib/mobile/data';
+  import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
   export let onClose: () => void;
   export let course: MyCourse | null = null;

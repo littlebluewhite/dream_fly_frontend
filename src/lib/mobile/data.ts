@@ -6,47 +6,23 @@
  * (b) 已無 production 消費者、僅供既有測試當 fixture 用的舊 mock(如 CATALOG)。
  * 經逐一確認 runtime 消費者後，(b) 類整批退役(STATS/SKILLS/SCHEDULE/ORDERS/
  * MAKEUP_SLOTS/REWARDS/REPORTS/UPCOMING/MY_COURSES/POINTS_LEDGER/CERTS 的轉出行、
- * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。現存常數皆為
- * (a) 畫面仍在讀的 mock(ANNOUNCE、COACH_REPLIES — 對應桌面版同樣是 mock，見各自
- * 的 P2 註解)、查表、或 `$lib/domain/member-app` 轉出的活值/活型別。 */
+ * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。C4 批1(facade
+ * 純轉手退役)接續移除本檔對 domain/member-app 的純轉手值/型別轉出，消費端改直取
+ * 單源。現存常數皆為 (a) 畫面仍在讀的本地 mock(ANNOUNCE — 對應桌面版同樣是
+ * mock，見 P2 註解)、查表，或對 domain 值純註記收窄的 LEAVE_STATUS/LEVEL_TONE。 */
 
 /** Tone tuple — [semantic tone key, Traditional-Chinese label]. */
 export type Tone = [string, string];
 
-/* ---- single-source domain seed ----
- * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
- * `$lib/domain/member-app`；這裡 pass-through 值 + 型別(名稱不同時用
- * `export type { X as Y }` 別名)。mobile 的公開 API 不變。ANNOUNCE 因兩側有一則
- * 公告的 bg 色不同，留在本檔案原地(見下方),未搬進 domain。
- *
- * Task 1(C2 死種子退役)：STATS/SKILLS/SCHEDULE/ORDERS/MAKEUP_SLOTS/REWARDS/
- * REPORTS/UPCOMING 的轉出(值+型別)經確認這個 facade 本身無 runtime 消費者(mobile
- * 頁面走真後端接縫，或如 STATS/SKILLS 一樣只有桌面 member/api.ts 在用)後移除。
- * MY_COURSES/POINTS_LEDGER/CERTS 只刪值(仍有測試以外的型別消費者用得到別名型
- * 別)：MyCourse/PointsEntry/Cert 型別中，MyCourse 供多個 overlay 元件消費而保留，
- * PointsEntry/Cert 一併確認無型別消費者後隨值整組退役。 */
-export { ME, type Member } from '$lib/domain/member-app';
-// STATS/SKILLS(值+型別)不在此列——Task 1 確認這份 facade 的轉出無 runtime 消費者
-// (僅桌面 member/api.ts 消費自己那份 member/data.ts 轉出)後移除。
-// ATT_HISTORY 不在此列——Task F7 出勤明細改走真 GET /enrolments/{id}/attendance
-// (MyCourseDetail.svelte 經 mobile/api.ts 轉發桌面 member/api.ts 的 getEnrolmentAttendance())，
-// 這份 mock 已無 runtime 消費者。
-export type { AttRecord } from '$lib/domain/member-app';
-// SCHEDULE/ORDERS/MAKEUP_SLOTS/REWARDS/REPORTS(值+型別)不在此列——mobile/api.ts
-// 直接從 domain 匯入 ScheduleBlock/Order 型別(不經這個 facade)，Reward 型別另有
-// member/api.ts 的真實版本；四者的轉出本身皆無 runtime 消費者，Task 1 確認後移除。
-// Named differently on this side than in domain/member — preserve mobile's own names.
-// UPCOMING/Upcoming 不在此列——Task 1 確認無 runtime 消費者(含測試)後移除。
-export type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
-export { CONTACT_THREAD } from '$lib/domain/member-app';
-export type { ChatMessage as ThreadMsg } from '$lib/domain/member-app';
-export { NOTIFS_SEED } from '$lib/domain/member-app';
-export type { Notification as NotifItem } from '$lib/domain/member-app';
-// POINTS_LEDGER/PointsEntry、CERTS/Cert 不在此列——Task 1 確認兩者的轉出(值+型別)
-// 皆無 runtime 消費者後移除；domain 本體的 Certificate/CERTS 隨後也整段退役。
+// C4 批1(facade 純轉手退役):ME/type Member、AttRecord、EnrolledCourse as
+// MyCourse、CONTACT_THREAD、ChatMessage as ThreadMsg、NOTIFS_SEED、Notification
+// as NotifItem、WEEK、COACH_REPLIES、NOTIF_CATS(下方「Notification center」段落)
+// 十組 domain/member-app 純轉手匯出——不攜帶本檔型別事實、不做值變形——整批退役;
+// 消費端改直取 $lib/domain/member-app 同名同型符號(改名一律 import-site alias)。
+// ANNOUNCE 因兩側有一則公告的 bg 色不同,留在本檔案原地(見下方),未搬進 domain。
 import type { CatalogCourse } from '$lib/public/adapters';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
-import { NOTIF_CATS as NOTIF_CATS_BASE, LEAVE_STATUS as LEAVE_STATUS_BASE } from '$lib/domain/member-app';
+import { LEAVE_STATUS as LEAVE_STATUS_BASE } from '$lib/domain/member-app';
 import type { IconName } from '$lib/icon-registry';
 
 /* ---- Attendance history (active course) ----
@@ -78,9 +54,8 @@ export interface Course extends CatalogCourse {
 // 等消費端吃鬆散 string）。
 export const LEVEL_TONE: Record<string, string> = LEVEL_TONE_BASE;
 
-/* ---- Weekly schedule grid ---- */
-export { WEEK } from '$lib/domain/member-app';
-// TIME_ROWS 不在此列——mobile 側零消費者，死出口不留（ADR 0010 精神）。
+// TIME_ROWS 不在此列——mobile 側零消費者，死出口不留（ADR 0010 精神）。WEEK 已隨 C4
+// 批1(見上方)退役,消費端改直取 $lib/domain/member-app。
 
 /* ---- Announcements (home) — kept local: member's 3rd item has a different `bg`. ---- */
 export interface Announce {
@@ -98,12 +73,8 @@ export const ANNOUNCE: Announce[] = [
 ];
 
 /* ---- Notification center (通知中心) ---- */
-export const NOTIF_CATS: Tone[] = NOTIF_CATS_BASE;
 export const NOTIF_TONE_BG: Record<string, string> = { primary: 'var(--df-primary-bg)', info: 'var(--df-info-bg)', success: 'var(--df-success-bg)', warning: 'var(--df-warning-bg)', accent: '#FFF8DB' };
 export const NOTIF_TONE_FG: Record<string, string> = { primary: 'var(--df-primary)', info: 'var(--df-info)', success: 'var(--df-success)', warning: 'var(--df-warning)', accent: 'var(--df-accent-dark)' };
 
 /* ---- Member points (點數明細與兌換) ---- */
 export const PT_TYPE: Record<string, Tone> = { earn: ['success', '獲得'], redeem: ['primary', '折抵'], expire: ['neutral', '到期'] };
-
-/* ---- Canned coach replies (聯絡教練 / 訊息 — 罐頭回覆;CONTACT_THREAD 本體在 $lib/domain/member-app) ---- */
-export { COACH_REPLIES } from '$lib/domain/member-app';

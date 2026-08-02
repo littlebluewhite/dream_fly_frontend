@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getHome } from '$lib/mobile/api';
 import { ANNOUNCE } from '$lib/mobile/data';
-import type { Course, MyCourse } from '$lib/mobile/data';
+import type { Course } from '$lib/mobile/data';
+import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
 // C3:本頁的鈴鐺角標(unread)改自葉模組 $lib/mobile/notifications 取用,該模組在
 // 模組層就把 ./api 的 getNotifications 綁進通知閘門——工廠式 mock 必須連它一起交代,

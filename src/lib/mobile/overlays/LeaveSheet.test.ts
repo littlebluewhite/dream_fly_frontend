@@ -4,7 +4,7 @@ import LeaveSheet from './LeaveSheet.svelte';
 import { getCourseSessions, createLeaveRequest } from '$lib/member/stores';
 import { ApiError } from '$lib/api/client';
 import { toasts } from '$lib/mobile/stores';
-import type { MyCourse } from '$lib/mobile/data';
+import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
 /* Task 19：LeaveSheet 從「COURSE_SESSIONS mock 查表 + 本地 isDone 假成功」改真
  * 後端 —— 開啟時打 GET /courses/{course_id}/sessions、送出打 POST

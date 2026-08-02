@@ -19,7 +19,8 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
-  import { NOTIF_CATS, NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
+  import { NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
+  import { NOTIF_CATS } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
   import { notifs, notifsPageEntry, unread } from '$lib/mobile/notifications';
   import { toasts } from '$lib/mobile/stores';

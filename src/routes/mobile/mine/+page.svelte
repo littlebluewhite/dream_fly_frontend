@@ -20,7 +20,7 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { overlay } from '$lib/mobile/stores';
-  import { WEEK, type MyCourse } from '$lib/mobile/data';
+  import { WEEK, type EnrolledCourse as MyCourse } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
   import { getMine, type MineData } from '$lib/mobile/api';
   import { fmtRatio } from '$lib/format';

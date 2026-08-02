@@ -43,7 +43,8 @@
   import { getEnrolmentAttendance } from '$lib/mobile/api';
   import { formatSessionDateTime } from '$lib/domain/session-format';
   import { createLoadGate } from '$lib/load-gate';
-  import { ATT_STATE, LEAVE_STATUS, LEVEL_TONE, type MyCourse, type AttRecord } from '$lib/mobile/data';
+  import { ATT_STATE, LEAVE_STATUS, LEVEL_TONE } from '$lib/mobile/data';
+  import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
   import type { IconName } from '$lib/icon-registry';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';

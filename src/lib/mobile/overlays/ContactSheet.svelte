@@ -5,7 +5,7 @@
   import { tick } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { CONTACT_THREAD, COACH_REPLIES, type ThreadMsg, type MyCourse } from '$lib/mobile/data';
+  import { CONTACT_THREAD, COACH_REPLIES, type ChatMessage as ThreadMsg, type EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
   export let onClose: () => void;
   export let course: MyCourse | null = null;

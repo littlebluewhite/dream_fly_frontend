@@ -26,7 +26,8 @@ import { refreshPoints, subscriptions } from '$lib/member/stores';
 import { chargeableLines } from '$lib/member/checkout';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
-import { ME, type Course } from './data';
+import { ME } from '$lib/domain/member-app';
+import { type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 // C5:factory 單源於 components/mobile/overlay.ts(與 mobile-admin 共用複本合併

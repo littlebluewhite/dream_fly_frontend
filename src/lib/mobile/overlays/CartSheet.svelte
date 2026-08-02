@@ -24,7 +24,7 @@
   // C6：再取用 subscriptions/chargeableLines（同經 seam），供可計費預覽過濾。
   import { cart, toasts, placeOrder, points, refreshPoints, validateCoupon, orderErrorMessage, subscriptions, chargeableLines } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
-  import { ME } from '$lib/mobile/data';
+  import { ME } from '$lib/domain/member-app';
   import { checkoutMath } from '$lib/checkout-math';
 
   export let onClose: () => void;

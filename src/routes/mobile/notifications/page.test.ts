@@ -8,8 +8,7 @@ import { notifs, notifsHydrated } from '$lib/mobile/notifications';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { NOTIFS_SEED } from '$lib/mobile/data';
-import type { NotifItem } from '$lib/mobile/data';
+import { NOTIFS_SEED, type Notification as NotifItem } from '$lib/domain/member-app';
 import Page from './+page.svelte';
 
 // C3:頁面改吃 notifsPageEntry,其 fetch 仍是閘門包住的 $lib/mobile/api 的

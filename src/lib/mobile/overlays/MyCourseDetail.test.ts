@@ -6,7 +6,7 @@ import { overlay, toasts } from '$lib/mobile/stores';
 import { leaveRequests, refreshLeaveRequests, cancelLeaveRequest, type LeaveRequest } from '$lib/member/stores';
 import { ApiError } from '$lib/api/client';
 import { getEnrolmentAttendance } from '$lib/mobile/api';
-import type { MyCourse, AttRecord } from '$lib/mobile/data';
+import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
  * (真後端的補課預約是針對一張已核准請假申請的動作，見 MakeupSheet)，改為

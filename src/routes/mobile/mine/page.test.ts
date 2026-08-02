@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getMine } from '$lib/mobile/api';
-import type { MyCourse } from '$lib/mobile/data';
+import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
 vi.mock('$lib/mobile/api', () => ({ getMine: vi.fn() }));
 
