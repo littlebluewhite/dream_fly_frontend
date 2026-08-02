@@ -13,7 +13,7 @@
    * The pencil fires onEdit(coach); 課表 emits the same info toast the source does. */
   import { Avatar, Card, Button, IconButton, Icon, Tag } from '$lib/components/ui';
   import { toasts } from '$lib/admin/stores';
-  import type { Coach } from '$lib/admin/data';
+  import type { Coach } from '$lib/domain/coaches';
 
   export let coach: Coach;
   export let onEdit: (coach: Coach) => void = () => {};

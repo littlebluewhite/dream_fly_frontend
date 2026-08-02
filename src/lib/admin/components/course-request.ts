@@ -1,8 +1,12 @@
 /* Dream Fly — 管理後台 · ClassRow → POST/PATCH /courses body 組裝（Task 8 piece 1）。
  * 純函式，供 classes/+page.svelte 儲存課程時使用；反向對照 admin/api.ts 唯讀映射用到
  * 的三個小函式（COURSE_LEVEL_TO_CLASS_LEVEL / splitSchedule / ageRange）。 */
-import type { ClassRow, Level, Coach } from '$lib/admin/data';
-import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+// C4 批4:Level/Coach 改直取對應 $lib/domain 各 entity 檔(原經 $lib/admin/data 純
+// 轉手,零附加型別事實);ClassRow 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留
+// 原處。Level 與既有 COURSE_LEVEL_LABEL 同源,合併進同一行 import。
+import type { ClassRow } from '$lib/admin/data';
+import { COURSE_LEVEL_LABEL, type Level } from '$lib/domain/course-level';
+import type { Coach } from '$lib/domain/coaches';
 import { toCents } from '$lib/public/adapters';
 import type { CourseWriteBody } from '$lib/admin/api';
 

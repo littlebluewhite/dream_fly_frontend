@@ -26,7 +26,10 @@
   import TicketEditDialog from '$lib/admin/components/TicketEditDialog.svelte';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
-  import { TICKET_TYPES, type Ticket } from '$lib/admin/data';
+  // C4 批4:Ticket 改直取 $lib/domain/tickets(原經 $lib/admin/data 純轉手);
+  // TICKET_TYPES 是 admin/data.ts 本檔真內容(Select 選項排序陣列),續留原處。
+  import type { Ticket } from '$lib/domain/tickets';
+  import { TICKET_TYPES } from '$lib/admin/data';
   import { fmtNT } from '$lib/format';
   import { soldPct, ticketTone } from '$lib/admin/tickets-util';
   import { getTickets, createProduct, updateProduct, type ProductWriteBody } from '$lib/admin/api';

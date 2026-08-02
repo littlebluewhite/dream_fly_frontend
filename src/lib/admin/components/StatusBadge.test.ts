@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import StatusBadge from './StatusBadge.svelte';
-import type { TicketType } from '$lib/admin/data';
+import type { TicketType } from '$lib/domain/tickets';
 
 /* StatusBadge maps a (kind, value) pair onto the shared Badge, resolving tone +
- * label from the frozen $lib/admin/data status maps and applying the per-kind
- * dot/solid the admin prototype uses. Badge renders the dot as a `.dot` span and
- * a solid pill as a `.solid` class on the `.badge` span — assertions target both. */
+ * label from the frozen status maps (單源 $lib/domain 各 entity 檔，PAY_STATUS 仍留
+ * $lib/admin/data，見 StatusBadge.svelte 匯入區) and applying the per-kind dot/solid
+ * the admin prototype uses. Badge renders the dot as a `.dot` span and a solid
+ * pill as a `.solid` class on the `.badge` span — assertions target both. */
 describe('StatusBadge', () => {
 	const dot = (c: HTMLElement) => c.querySelector('.badge .dot');
 	const isSolid = (c: HTMLElement) => c.querySelector('.badge')?.classList.contains('solid');

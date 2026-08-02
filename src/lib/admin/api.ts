@@ -12,20 +12,18 @@ import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross
 import type { ApiPage } from '$lib/api/wire';
 import { deriveSessionStatus, SESSION_STATUS } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
-import type {
-	Ticket,
-	TicketType,
-	ClassRow,
-	ClassStatus,
-	Coach,
-	Venue,
-	Order,
-	OrderStatus,
-	MemberAccount,
-	ApiUserAccount,
-	TodayClass,
-	Activity
-} from './data';
+// C4 批4(facade 純轉手退役):Ticket/TicketType/ClassStatus/Coach/Venue/
+// OrderStatus/Activity 七個型別改直取對應 $lib/domain 各 entity 檔 / $lib/api/wire
+// (原經 ./data 純轉手,零附加型別事實);ClassRow/Order/MemberAccount/
+// ApiUserAccount/TodayClass 是 admin/data.ts 本檔真內容(.map 衍生形狀 / GET 映射
+// 形狀),續留原處。
+import type { ClassRow, Order, MemberAccount, ApiUserAccount, TodayClass } from './data';
+import type { Ticket, TicketType } from '$lib/domain/tickets';
+import type { ClassStatus } from '$lib/domain/classes';
+import type { Coach } from '$lib/domain/coaches';
+import type { Venue } from '$lib/domain/venues';
+import type { OrderStatus } from '$lib/api/wire';
+import type { Activity } from '$lib/domain/activity';
 import type { IconName } from '$lib/icon-registry';
 
 /* ═════════════════════════ 場館（GET /venues，公開端點，復用 Task 14 public seam） ═════════════════════════ */

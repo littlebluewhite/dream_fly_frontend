@@ -17,7 +17,10 @@
   import { Dialog, Select, Button } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
   import { fmtNT } from '$lib/format';
-  import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
+  // C4 批4:ORDER_STATUS/OrderStatus 改直取 $lib/api/wire(原經 $lib/admin/data 純
+  // 轉手);Order 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
+  import { ORDER_STATUS, type OrderStatus } from '$lib/api/wire';
+  import type { Order } from '$lib/admin/data';
   import { legalNextStatuses } from './orders-filter';
 
   export let order: Order | null = null;

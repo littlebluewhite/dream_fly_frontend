@@ -10,7 +10,7 @@
    * longer imports the (now-retired) admin/data.ts ACTIVITY mock. */
   import { Card, Icon } from '$lib/components/ui';
   import PanelHead from './PanelHead.svelte';
-  import type { Activity } from '$lib/admin/data';
+  import type { Activity } from '$lib/domain/activity';
 
   let { activity }: { activity: Activity[] } = $props();
 </script>

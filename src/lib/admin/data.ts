@@ -4,32 +4,21 @@
  * immutable `.map((x,i) => ({...x, derived}))` so the exported arrays are fully
  * materialised and strictly typed (a missing derivation is a compile error). */
 
-/* ───────────────────────── unions ───────────────────────── */
+/* ───────────────────────── unions ─────────────────────────
+ * C4 批4(facade 純轉手退役):本節原本轉出的 Tone/OrderStatus/ORDER_STATUS(→
+ * $lib/api/wire)、LEVELS/Level/LEVEL_TONE(→ $lib/domain/course-level)、
+ * MEMBER_STATUS/MemberStatus/MEMBER_ACCOUNT_STATUS(→ $lib/domain/members)、
+ * VENUE_STATUS(→ $lib/domain/venues)、TICKET_TYPE(→ $lib/domain/tickets)、
+ * STATUS_TONE(→ $lib/domain/classes)——重驗皆為零附加型別事實的純轉手,已退役,
+ * 消費端改直取各 canonical 源。Tone/MemberAccountStatus/VenueStatus/TicketType/
+ * ClassStatus 五個型別本檔內部仍用(下方 PAY_STATUS/MemberAccount/VENUE_STATUSES/
+ * TICKET_TYPES/CLASS_STATUS 的型別標註),依 ADR 0010「刪 export 留 import」處置,
+ * 只拿掉對外轉出。 */
 import type { Tone } from '$lib/api/wire';
-export type { Tone, OrderStatus } from '$lib/api/wire';
-// 活 facade:StatusBadge/OrdersTable/orders-filter 等經本檔取得 Tone/OrderStatus/ORDER_STATUS(來源=$lib/api/wire,見 ADR 0007)
-import { LEVELS, type Level } from '$lib/domain/course-level';
-export { LEVELS };
-export type { Level };
-// 活 facade:course-request.ts/ClassEditDialog.svelte/StatusBadge.svelte 等經本檔取得 LEVELS/Level(來源=$lib/domain/course-level,FE#17)
-export { LEVEL_TONE } from '$lib/domain/course-level';
-// 活 facade:StatusBadge.svelte 經本檔取得 LEVEL_TONE(來源=$lib/domain/course-level,批次 1 W2a)
 import type { MemberAccountStatus } from '$lib/domain/members';
-export { MEMBER_STATUS, MEMBER_ACCOUNT_STATUS } from '$lib/domain/members';
-export type { MemberStatus, MemberAccountStatus } from '$lib/domain/members';
-// 活 facade:StatusBadge.svelte/admin/api.ts/member-account-filter.ts 等經本檔取得 MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/MemberStatus/MemberAccountStatus(來源=$lib/domain/members,批次 1 W2a)
 import type { VenueStatus } from '$lib/domain/venues';
-export { VENUE_STATUS } from '$lib/domain/venues';
-export type { VenueStatus } from '$lib/domain/venues';
-// 活 facade:VenueEditDialog.svelte/StatusBadge.svelte 等經本檔取得 VENUE_STATUS/VenueStatus(來源=$lib/domain/venues,批次 1 W2a)
 import type { TicketType } from '$lib/domain/tickets';
-export { TICKET_TYPE } from '$lib/domain/tickets';
-export type { TicketType } from '$lib/domain/tickets';
-// 活 facade:TicketEditDialog.svelte/admin/api.ts/StatusBadge(.test).ts 等經本檔取得 TICKET_TYPE/TicketType(來源=$lib/domain/tickets,批次 1 W2a)
 import type { ClassStatus } from '$lib/domain/classes';
-export { STATUS_TONE } from '$lib/domain/classes';
-export type { ClassStatus } from '$lib/domain/classes';
-// 活 facade:StatusBadge.svelte/admin/api.ts 等經本檔取得 STATUS_TONE/ClassStatus(來源=$lib/domain/classes,批次 1 W2a)
 
 export type PayStatus = 'paid' | 'due' | 'trial';
 export type AttMark = 'p' | 'a' | 'l' | 'v';
@@ -42,9 +31,12 @@ export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
  * is exactly one copy of every value. Admin's public API is unchanged. */
 
 // Pure pass-throughs (no local use) — re-export domain's value + type verbatim.
-// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,coaches 頁接真後端後值消費者萎縮至僅
-// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
-export type { Coach } from '$lib/domain/coaches';
+// C4 批4:Coach/Venue/Ticket/Activity 四個型別轉出退役(消費端改直取
+// $lib/domain/coaches、$lib/domain/venues、$lib/domain/tickets、
+// $lib/domain/activity)——為原本散落本節四處的 ADR 0010 §4 漂移註記(Coach/Venue/
+// Ticket:值先於型別退役,值定義刪除當時型別轉出續留)與 Task F11 註記(Activity:
+// 唯一消費者 ActivityPanel 早改吃 props,型別轉出當時保留作為其 props 形狀來源)
+// 收尾——重驗這四個型別轉出本身也是零附加型別事實的純轉手,一併退役。
 
 /** CoachEditDialog（新增/編輯共用一個對話框，Task F5）的 onSave 輸出形狀——UI 端草稿,
  *  不是 wire body。呼叫端(routes/admin/coaches/+page.svelte)依新增/編輯模式，各自把
@@ -60,16 +52,6 @@ export interface CoachFormValues {
 	tags: string[];
 	isActive: boolean;
 }
-// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,venues 頁接真後端後值消費者萎縮至僅
-// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
-export type { Venue } from '$lib/domain/venues';
-// ADR 0010 §4 漂移註記:值轉出當時「仍是活值」,tickets 頁接真後端後值消費者萎縮至僅
-// 測試,依同 ADR §1 重驗、§2 值/型別分家退役——值定義刪除,型別轉出續留。
-export type { Ticket } from '$lib/domain/tickets';
-// Task F11：ACTIVITY live-mock 退役(唯一消費者 ActivityPanel 改吃 props；真資料見
-// admin/api.ts 的 getRecentActivity()，對應 GET /reports/admin/activity，integration-
-// contract.md §3.24)。型別仍為 ActivityPanel props 的形狀來源，保留 re-export。
-export type { Activity } from '$lib/domain/activity';
 // Task 15: admin's report analytics (getReports()) now maps GET /reports/admin
 // (integration-contract.md §3.24) instead of this mock seed — the re-export of
 // domain/reports.ts's 13 arrays/types was dropped here (nothing in admin/ imports
@@ -171,14 +153,14 @@ export interface Order extends OrderBase {
 
 /* ───────────────────────── status maps (shapes differ!) ───────────────────────── */
 // MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/VENUE_STATUS/TICKET_TYPE/STATUS_TONE/LEVEL_TONE
-// 六張表已隨批次 1 W2a 單源收斂移至 $lib/domain（見檔頭 unions 區塊的 re-export），
-// 本檔不再本地宣告，只留下面兩張沒有搬遷的表。
+// 六張表已隨批次 1 W2a 單源收斂移至 $lib/domain；C4 批4 進一步把檔頭 unions 區塊
+// 轉出這六張表的 export 一併退役（消費端改直取 domain/wire），本檔不再本地宣告、
+// 也不再轉出這六張表，只留下面兩張沒有搬遷的表。
 export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
 	paid: ['success', '已繳清'],
 	due: ['warning', '待續費'],
 	trial: ['info', '體驗中']
 };
-export { ORDER_STATUS } from '$lib/api/wire';
 /** ⚠ raw hex colour + label (NOT a Tone) — used for the 6-dot attendance strip. */
 export const ATT_MARK: Record<AttMark, [string, string]> = {
 	p: ['#10B981', '出'],
@@ -214,11 +196,6 @@ export interface TodayClass {
 // admin 借道 coach/api.ts 復用，見 docs/adr/0018)只會推導 wait/live/done 3 態，
 // 'prep'/'soon' 兩個緩衝態不會再被產生，但保留超集型別可讓真資料的 3 態直接指派、
 // 不需額外 cast。
-
-/* ───────────────────────── activity / venues / tickets ─────────────────────────
- * `Activity`/`Coach`/`Venue`/`Ticket` 皆為 type-only re-export(值定義已全數退役——
- * Activity 見 Task F11 note above,Coach/Venue/Ticket 見各自 export type 行旁的
- * ADR 0010 §4 漂移註記)。 */
 
 /* ═════════════════════════ 報表分析 ═════════════════════════
  * Task 15: getReports() now maps real GET /reports/admin data (revenue/members/

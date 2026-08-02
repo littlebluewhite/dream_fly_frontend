@@ -28,7 +28,7 @@
   import VenueEditDialog from '$lib/admin/components/VenueEditDialog.svelte';
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import type { Venue } from '$lib/admin/data';
+  import type { Venue } from '$lib/domain/venues';
   import { getVenues, createVenue, updateVenue, type VenueWriteBody } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';
 

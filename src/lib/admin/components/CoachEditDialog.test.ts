@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import CoachEditDialog from './CoachEditDialog.svelte';
-import { COACHES } from '$lib/domain/coaches';
-import type { Coach } from '$lib/admin/data';
+import { COACHES, type Coach } from '$lib/domain/coaches';
 
 /* CoachEditDialog — 編輯/新增共用一個對話框(Task F5 欄位收斂)。編輯模式收
  * name/title/tags/isActive，儲存時組出 CoachFormValues 交給 onSave；新增模式

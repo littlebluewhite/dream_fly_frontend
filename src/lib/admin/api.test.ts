@@ -36,7 +36,7 @@ import {
 import { api, ApiError } from '$lib/api/client';
 import { deriveSessionStatus } from '$lib/domain/sessions';
 import { mapMemberAccount } from './data';
-import { ORDER_STATUS } from './data';
+import { ORDER_STATUS } from '$lib/api/wire';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {

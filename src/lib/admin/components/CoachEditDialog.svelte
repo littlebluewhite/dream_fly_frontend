@@ -22,7 +22,10 @@
    * API、不丟 toast」慣例。 */
   import { Input, Switch } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import type { Coach, CoachFormValues } from '$lib/admin/data';
+  // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
+  // CoachFormValues 是 admin/data.ts 本檔真內容(草稿形狀),續留原處。
+  import type { Coach } from '$lib/domain/coaches';
+  import type { CoachFormValues } from '$lib/admin/data';
 
   export let coach: Coach | null = null;
   export let open = false;

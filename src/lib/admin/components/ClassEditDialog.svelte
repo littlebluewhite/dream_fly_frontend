@@ -14,7 +14,12 @@
    * durationMinutes；一律隨 onSave 的第二個參數送出。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { LEVELS, CATS, CLASS_STATUS, type ClassRow, type Coach } from '$lib/admin/data';
+  // C4 批4(facade 純轉手退役):LEVELS/Coach 改直取對應 $lib/domain 各 entity 檔
+  // (原經 $lib/admin/data 純轉手,零附加型別事實);CATS/CLASS_STATUS/ClassRow 是
+  // admin/data.ts 本檔真內容,續留原處。
+  import { LEVELS } from '$lib/domain/course-level';
+  import type { Coach } from '$lib/domain/coaches';
+  import { CATS, CLASS_STATUS, type ClassRow } from '$lib/admin/data';
 
   export let klass: ClassRow | null = null;
   export let open = false;

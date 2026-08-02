@@ -39,7 +39,10 @@
   import CoachEditDialog from '$lib/admin/components/CoachEditDialog.svelte';
   import { Button, Icon, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
-  import type { Coach, CoachFormValues } from '$lib/admin/data';
+  // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
+  // CoachFormValues 是 admin/data.ts 本檔真內容(草稿形狀),續留原處。
+  import type { Coach } from '$lib/domain/coaches';
+  import type { CoachFormValues } from '$lib/admin/data';
   import { search, toasts } from '$lib/admin/stores';
   import { getCoaches, createCoach, updateCoach, createMember, updateMember } from '$lib/admin/api';
   import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';

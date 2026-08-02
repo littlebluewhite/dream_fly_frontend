@@ -12,8 +12,8 @@
    * page 在 API 呼叫結束後決定並顯示（同 Task 8 piece 1 的 ClassEditDialog）。
    *
    * 票券類型 Select 現在編輯真實 product_type 三值（ticket/membership/course_package，
-   * 見 admin/data.ts 的 TICKET_TYPE/TICKET_TYPES）——不再是虛構的 pass/trial/event
-   * 分組，移除了無後端來源的「體驗票」選項。
+   * 見 $lib/domain/tickets 的 TICKET_TYPE、admin/data.ts 的 TICKET_TYPES）——不再是
+   * 虛構的 pass/trial/event 分組，移除了無後端來源的「體驗票」選項。
    *
    * Quota semantics: 配額 is number | null where null = 不限 (unlimited, the common case
    * for non-merchandise tickets — see ProductResponse.quota). A blank field means 不限 →
@@ -22,7 +22,10 @@
    * NaN% (ProgressBar.svelte:15 divides by max), so an explicit 0/NaN floors at 1. */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { TICKET_TYPES, TICKET_TYPE, type Ticket } from '$lib/admin/data';
+  // C4 批4:TICKET_TYPE/Ticket 改直取 $lib/domain/tickets(原經 $lib/admin/data 純
+  // 轉手);TICKET_TYPES 是 admin/data.ts 本檔真內容(Select 選項排序陣列),續留原處。
+  import { TICKET_TYPE, type Ticket } from '$lib/domain/tickets';
+  import { TICKET_TYPES } from '$lib/admin/data';
 
   export let ticket: Ticket | null = null;
   export let open = false;

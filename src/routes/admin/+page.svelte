@@ -27,7 +27,10 @@
   import { toasts } from '$lib/admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getReports, getMembers, getTodaySessions, getRecentActivity, type ReportsData } from '$lib/admin/api';
-  import type { MemberAccount, TodayClass, Activity } from '$lib/admin/data';
+  // C4 批4:Activity 改直取 $lib/domain/activity(原經 $lib/admin/data 純轉手);
+  // MemberAccount/TodayClass 是 admin/data.ts 本檔真內容,續留原處。
+  import type { MemberAccount, TodayClass } from '$lib/admin/data';
+  import type { Activity } from '$lib/domain/activity';
   import { fmtNT } from '$lib/format';
 
   let reports: ReportsData | null = null;

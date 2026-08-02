@@ -28,7 +28,10 @@
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { buildCourseBody } from '$lib/admin/components/course-request';
   import { search, toasts } from '$lib/admin/stores';
-  import { CATS, type ClassRow, type Coach } from '$lib/admin/data';
+  // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
+  // CATS/ClassRow 是 admin/data.ts 本檔真內容,續留原處。
+  import { CATS, type ClassRow } from '$lib/admin/data';
+  import type { Coach } from '$lib/domain/coaches';
   import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';
 

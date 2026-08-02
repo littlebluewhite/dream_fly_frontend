@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 訂單與金流 — the orders table (admin.jsx OrdersView body). Status filter tabs
-   * (全部 + 待付款/已付款/處理中/已完成/已取消/已退款 — 中文標籤沿用 admin/data.ts 的
+   * (全部 + 待付款/已付款/處理中/已完成/已取消/已退款 — 中文標籤沿用 $lib/api/wire 的
    * ORDER_STATUS 查表，不另建第二份對照) over a table: 訂單編號 / 學員 (avatar+name) /
    * 項目 / 優惠 / 金額 (right, mono) / 付款方式 / 經手人 / 狀態 (order StatusBadge) / 時間.
    * Filtering lives in the pure filterOrders() (orders-filter.ts); the topbar
@@ -10,7 +10,10 @@
   import { Avatar, Card, Tabs } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
   import OrderDialog from './OrderDialog.svelte';
-  import { ORDER_STATUS, type Order, type OrderStatus } from '$lib/admin/data';
+  // C4 批4:ORDER_STATUS/OrderStatus 改直取 $lib/api/wire(原經 $lib/admin/data 純
+  // 轉手);Order 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
+  import { ORDER_STATUS, type OrderStatus } from '$lib/api/wire';
+  import type { Order } from '$lib/admin/data';
   import { search } from '$lib/admin/stores';
   import { fmtNT } from '$lib/format';
   import { filterOrders, countByStatus, type OrderStatusFilter } from './orders-filter';
@@ -25,7 +28,7 @@
   let tab: OrderStatusFilter = 'all';
   let active: Order | null = null;
 
-  // Canonical lifecycle order — matches ORDER_STATUS (admin/data.ts) and the
+  // Canonical lifecycle order — matches ORDER_STATUS ($lib/api/wire) and the
   // 6-value order status backend contract (§3.10).
   const STATUS_TABS: OrderStatus[] = [
     'pending',

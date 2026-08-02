@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import ActivityPanel from './ActivityPanel.svelte';
-import type { Activity } from '$lib/admin/data';
+import type { Activity } from '$lib/domain/activity';
 
 /* 最新動態 activity feed (admin.jsx ActivityPanel). Task F11: data is injected via
  * the `activity` prop (real GET /reports/admin/activity mapping, admin/api.ts

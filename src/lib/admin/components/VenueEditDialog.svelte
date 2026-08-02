@@ -22,7 +22,10 @@
    * 欄位名 f.type 不動(改名會漣漪到 Venue 型別與既有測試，不在本次範圍)。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  import { VENUE_STATUSES, VENUE_STATUS, type Venue } from '$lib/admin/data';
+  // C4 批4:VENUE_STATUS/Venue 改直取 $lib/domain/venues(原經 $lib/admin/data 純
+  // 轉手);VENUE_STATUSES 是 admin/data.ts 本檔真內容(Select 選項排序陣列),續留原處。
+  import { VENUE_STATUS, type Venue } from '$lib/domain/venues';
+  import { VENUE_STATUSES } from '$lib/admin/data';
 
   export let venue: Venue | null = null;
   export let open = false;

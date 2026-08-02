@@ -1,9 +1,11 @@
 /* src/lib/domain/status-lookups.test.ts — ops 顯示查表單一來源守衛(批次 1 W2a)
  *
- * admin 與 mobile-admin 是同一組維運資料的桌面/行動雙生，各自原本手抄一份狀態/類型
- * → tone/label 對照表，已隨單源收斂改為 re-export(admin)/純註記 re-assert
- * (mobile-admin)。本檔比照 member-app.test.ts 的三層守衛：
- * 1. wiring check(toBe)：admin/mobile-admin facade 匯出的每張表與 domain 是「同一個
+ * admin 與 mobile-admin 原是同一組維運資料的桌面/行動雙生，各自原本手抄一份狀態/
+ * 類型 → tone/label 對照表，批次 1 W2a 單源收斂後 admin 改為 re-export、
+ * mobile-admin 改為純註記 re-assert；C4 批4 進一步把 admin 的 re-export 退役
+ * (消費端改直取 $lib/domain 各 entity 檔)，本檔的 wiring check 因此只留
+ * mobile-admin 一側。本檔比照 member-app.test.ts 的三層守衛：
+ * 1. wiring check(toBe)：mobile-admin facade 匯出的每張表與 domain 是「同一個
  *    物件參照」——不是各自維護、恰好值相同的複本。
  * 2. 獨立字面不變量：對 domain 的表做 toEqual 快照(誤改 domain 值時這裡變紅)，另加
  *    兩類守衛——同名異義(MEMBER_STATUS.active 與 MEMBER_ACCOUNT_STATUS.active 鍵名
@@ -25,20 +27,9 @@ import { VENUE_STATUS } from './venues';
 import { TICKET_TYPE } from './tickets';
 import { STATUS_TONE } from './classes';
 import { SESSION_STATUS } from './sessions';
-import * as AdminData from '$lib/admin/data';
 import * as MobileAdminData from '$lib/mobile-admin/data';
 
 /* ── 1. wiring check：facade 與 domain 同參照(toBe，非值比對) ── */
-describe('admin facade re-exports domain status lookups by reference (single source)', () => {
-	it('every shared table is the SAME object as domain (toBe, not a copy) ×5', () => {
-		expect(AdminData.MEMBER_STATUS).toBe(MEMBER_STATUS);
-		expect(AdminData.MEMBER_ACCOUNT_STATUS).toBe(MEMBER_ACCOUNT_STATUS);
-		expect(AdminData.VENUE_STATUS).toBe(VENUE_STATUS);
-		expect(AdminData.TICKET_TYPE).toBe(TICKET_TYPE);
-		expect(AdminData.STATUS_TONE).toBe(STATUS_TONE);
-	});
-});
-
 describe('mobile-admin facade re-asserts domain status lookups by reference (single source)', () => {
 	it('every shared table is the SAME object as domain (toBe, not a copy) ×4', () => {
 		expect(MobileAdminData.MEMBER_ACCOUNT_STATUS).toBe(MEMBER_ACCOUNT_STATUS);

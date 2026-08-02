@@ -6,7 +6,10 @@
  * matches `o.id + o.member + o.item`). Kept here, unit-testable without
  * rendering, and imported by the orders page/table. */
 
-import type { Order, OrderStatus } from '$lib/admin/data';
+// C4 批4:OrderStatus 改直取 $lib/api/wire(原經 $lib/admin/data 純轉手);Order 是
+// admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
+import type { Order } from '$lib/admin/data';
+import type { OrderStatus } from '$lib/api/wire';
 
 /** Status tab/chip key. `all` = 全部; the rest mirror OrderStatus. */
 export type OrderStatusFilter = 'all' | OrderStatus;

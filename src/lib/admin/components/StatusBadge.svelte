@@ -8,25 +8,19 @@
 	 *  - classStatus            : plain pill, solid only when 額滿 (the ClassStatus
 	 *                             string is its own label) */
 	import { Badge } from '$lib/components/ui';
-	import {
-		MEMBER_STATUS,
-		MEMBER_ACCOUNT_STATUS,
-		PAY_STATUS,
-		ORDER_STATUS,
-		VENUE_STATUS,
-		TICKET_TYPE,
-		LEVEL_TONE,
-		STATUS_TONE,
-		type Tone,
-		type MemberStatus,
-		type MemberAccountStatus,
-		type PayStatus,
-		type OrderStatus,
-		type VenueStatus,
-		type TicketType,
-		type Level,
-		type ClassStatus
-	} from '$lib/admin/data';
+	// C4 批4(facade 純轉手退役):MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/VENUE_STATUS/
+	// TICKET_TYPE/LEVEL_TONE/STATUS_TONE 六張查表與 Tone/MemberStatus/OrderStatus/
+	// VenueStatus/TicketType/Level/ClassStatus 七個型別,改直取對應 $lib/domain 各
+	// entity 檔 / $lib/api/wire(原經 $lib/admin/data 純轉手,零附加型別事實)；
+	// PAY_STATUS/PayStatus 是 admin/data.ts 本檔真內容(無後端來源的體驗票查表),
+	// 續留原處。
+	import { MEMBER_STATUS, MEMBER_ACCOUNT_STATUS, type MemberStatus, type MemberAccountStatus } from '$lib/domain/members';
+	import { VENUE_STATUS, type VenueStatus } from '$lib/domain/venues';
+	import { TICKET_TYPE, type TicketType } from '$lib/domain/tickets';
+	import { LEVEL_TONE, type Level } from '$lib/domain/course-level';
+	import { STATUS_TONE, type ClassStatus } from '$lib/domain/classes';
+	import { ORDER_STATUS, type Tone, type OrderStatus } from '$lib/api/wire';
+	import { PAY_STATUS, type PayStatus } from '$lib/admin/data';
 
 	type Kind =
 		| 'member'

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody } from './course-request';
-import type { ClassRow, Coach } from '$lib/admin/data';
+import type { ClassRow } from '$lib/admin/data';
+import type { Coach } from '$lib/domain/coaches';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 
 /* course-request.ts — 純函式，組出 POST/PATCH /courses body（Task 8 piece 1）。

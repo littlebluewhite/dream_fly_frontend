@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { Order, OrderStatus } from '$lib/admin/data';
+import type { Order } from '$lib/admin/data';
+import type { OrderStatus } from '$lib/api/wire';
 import {
 	filterOrders,
 	countByStatus,

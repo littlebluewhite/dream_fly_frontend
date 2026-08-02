@@ -7,7 +7,11 @@
  * module now — the mock-backed members-filter.ts this once stayed separate from
  * is gone (the dashboard preview moved to real MemberAccount data too). */
 
-import type { MemberAccount, MemberAccountStatus } from '$lib/admin/data';
+// C4 批4:MemberAccountStatus 改直取 $lib/domain/members(admin/data.ts 對外
+// export 已退役,本檔內部另有 import type 保留供該檔自身型別標註使用);
+// MemberAccount 是 admin/data.ts 本檔真內容(GET /users 映射形狀),續留原處。
+import type { MemberAccount } from '$lib/admin/data';
+import type { MemberAccountStatus } from '$lib/domain/members';
 
 /** Status tab key. `all` = 全部; the rest mirror MemberAccountStatus. */
 export type MemberAccountStatusFilter = 'all' | MemberAccountStatus;
