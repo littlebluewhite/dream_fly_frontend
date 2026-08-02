@@ -144,6 +144,9 @@ subscriptions 的同型缺口為前存……不在本輪寫入集,另卡追蹤�
 
 ## 協定測試三層界線(防誤整併)
 
+> **2026-08-03 增補**:第 2 層現為**兩門**(`onSessionReset` 已退役),並新增 `pageEntry` describe;
+> 三層界線本身不變。見文末「增補(2026-08-03)」與 `docs/adr/0019`。
+
 測試拓樸自 2026-07-22(架構深化 R7,`docs/adr/0017`)起分三層,審查請勿以「重複」為由提整併——
 三層觀察面互斥,不是同一份協定測試留了兩份:
 
@@ -195,3 +198,23 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
 - **`docs/adr/0017`**:「決定二」五 mutator 骨架與「帳本閉合輪補強」/「二段」節手焊的
   identity/epoch/和解機制,由其 session-gate 工廠取代;取代範圍與仍然有效的部分見新增節
   「由 ADR 0017 取代」。
+
+## 增補(2026-08-03,架構深化 R9 C3):`onSessionReset` 已退役,現況兩門
+
+本篇兩處以現在式提到 `onSessionReset`,自 `docs/adr/0019` C3 落地後皆需以本節為準:
+
+1. **「以下 known-open 病灶自本輪關閉」段的末句**——「mobile notifs 雖未列名在該句原文,但同根因、
+   同輪由 `onSessionReset` 一併修正」:該修正的**事實**不變(mobile notifs 的跨登入洩漏確實在
+   `docs/adr/0017` 那一輪被關掉),改變的是修法的形狀。mobile notifs 已於 R9 C3 改建完整
+   `createSessionGate`(`src/lib/mobile/notifications.ts`),除了同樣的 identity 重置之外還多拿到
+   epoch 核對 fetch;`onSessionReset` 因此零 production 消費者、隨即退役,`src/lib/session-gate.ts`
+   現況是**兩門**工廠(`createSessionGate` / `createSessionRefresher`)。
+2. **「協定測試三層界線」第 2 層的門數**——原文列的是「`createSessionGate`/`createSessionRefresher`/
+   `onSessionReset` 三門工廠的協定機器面」,現況為兩門;`session-gate.test.ts` 的
+   `onSessionReset` describe 隨函式一併刪除,同批新增「pageEntry 頁面進場包」describe(5 支)。
+   **三層界線本身不變**,審查請勿仍以「重複」為由提整併:第 1 層(load-gate 特有交織)、第 2 層
+   (session-gate 通用協定,現兩門)、第 3 層(各 adapter 薄採用釘)的觀察面依舊互斥。
+
+「兩筆 known-latent」第 2 則(`gate.refresh` 無 mutation-wins 的殘留 refresh race)不受本輪影響、
+依然有效——C3 新增的 `pageEntry()` 只是把**同一支**已帶 epoch 核對的 fetch 交給頁面的 load-gate,
+未擴大 mutation-wins 語意。

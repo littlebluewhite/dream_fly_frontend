@@ -46,3 +46,19 @@ per-surface 結算的精神(兩 surface 不共用 store,各自決定要注入什
 
 `member/checkout.ts` 的純函式(`chargeableLines`／`validateCoupon`／`orderErrorMessage`)原地不動,
 未被本次收斂觸碰。
+
+## 附錄(2026-08-03):購物車**工廠**上移 lib-root 不違本 ADR
+
+架構深化 R9 C2(`docs/adr/0019`)把購物車工廠自 `src/lib/member/cart.ts` 整檔上移為 lib-root 單檔
+共用模組 `src/lib/cart.ts`(逐字搬遷,含 app-wide 持久化單例 `cart = createCart(true)` 與
+`cartCount`)。「為何不做單一跨 surface commit」一節第一點「兩 surface 不共用 store」提到的
+`member/stores.ts` 的 `cart`,自此是 barrel 對 `$lib/cart` 的一行轉出(五個混拿消費端零改動),
+工廠本體不再住在 member surface 底下。
+
+**這與上一節附錄「共用 wire orchestration ≠ 共用結算」是同一句式**:上移的是**工廠**(建立一顆
+購物車 store 的機制),不是結算、也不是 store 實例本身。`docs/adr/0019` C2 的裁決逐字如此——
+**共用 factory ≠ 共用 store 實例**:member/public 消費的是持久化單例(訪客→登入→結帳全程保留),
+mobile 在自家 seam 建自己的**非持久**實例、只對外露出四個成員(`subscribe`/`add`/`remove`/`clear`),
+`icon` 覆寫由 mobile 自組 `addItem` 輸入表達。該節第一點所護的事實(兩 surface 是不同的 store 實例
+與不同的資料模型)因此原樣成立,不因工廠同源而動搖;mobile 仍無 `Subscription`/`pointsLedger`,
+`placeOrder` 仍是各自注入的薄 adapter。

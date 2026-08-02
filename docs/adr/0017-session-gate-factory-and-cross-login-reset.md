@@ -31,6 +31,9 @@
 
 ## 決定:三門工廠,不深化 hydration-gate 本身
 
+> **2026-08-03 增補**:本節記的是 2026-07-22 當下的三門。門 (c) `onSessionReset` 已退役,現況為
+> **兩門**,`createSessionGate` 另增 `pageEntry()`——見文末「增補(2026-08-03)」與 `docs/adr/0019`。
+
 `src/lib/session-gate.ts` 提供三個工廠,座落在 authStore 與 domain store 之間:
 
 - **`createSessionGate<T>({ fetch, apply, reset })`** —— waitlist / leave / member notifications。
@@ -98,6 +101,10 @@ reset 值必須**冪等**:restored session 開機時,`createSessionCore` 的立�
 
 ## Known-latent(對稱列冊,非本輪修復範圍):通知頁/畫面自身的 load-gate 入口仍無 identity epoch
 
+> **2026-08-03 增補**:本節記錄的「唯一殘窗」**已關閉**——兩個通知頁改 spread `gate.pageEntry()`,
+> 結構上拿不到 raw getter;本節判準(不深化最寬 seam、epoch 知識留在 session-gate)未被推翻。
+> 見文末「增補(2026-08-03)」與 `docs/adr/0019`。
+
 `member/notifications/+page.svelte` 與 `mobile/notifications/+page.svelte` 各自的
 `createLoadGate({ fetch: getNotifications, hydrate: { flag, into } })` 呼叫,`fetch` 直接打
 `getNotifications()`(原始 API getter),**不經過** store 匯出的 `gate.hydrate`/`gate.refresh`
@@ -131,3 +138,46 @@ reset 值必須**冪等**:restored session 開機時,`createSessionCore` 的立�
   `createHydrationGate.refresh`,只新增 P1′ 在飛跨登入作廢,未新增 mutation-wins 重查。
   「登出重置(P1 修)」節記錄的「notifications/points/subscriptions 同型缺口,不在本輪寫入集,
   另卡追蹤」由本篇關閉,見上節。
+
+## 增補(2026-08-03,架構深化 R9 C3):known-latent 殘窗已關閉;三門收斂為兩門
+
+`docs/adr/0019` C3 落地後,本篇有兩節需以此為準。
+
+### 1. 「Known-latent」節的殘窗:**已關閉**
+
+該節記載的窄窗(使用者不離開通知頁、identity 卻在該頁自己觸發的 `getNotifications()` 在飛期間改變,
+未經 epoch 包裝的 raw fetch 仍可能在 store 已被重置之後才 resolve、把舊帳號資料寫回)已由
+`SessionGate<T>` 新增的 **`pageEntry(): PageEntry<T>`** 收口。
+
+**當時不修的判準沒有被推翻,而是被繞過**:該節與「決定:三門工廠,不深化 hydration-gate 本身」一節
+的共同理由是「不把 member-auth 維度打進 repo 裡最寬的共用 seam、epoch 知識留在 `session-gate.ts`」
+——這條原樣有效,`load-gate.ts` 至今不知道 epoch 是什麼,`LoadGateHydrateOptions` 也未被改成
+「接受 epoch 感知的 fetch」(該節末句預留的那個選項未被動用)。改變的只是**交付形狀**:閘門不再
+讓頁面自己去拿 raw getter,而是把「帶 epoch 核對的 fetch + hydrate 選項」整包吐出去,頁面寫
+`createLoadGate({ ...gate.pageEntry() })`。`session-gate.ts` 對 `load-gate` 的唯一新增依賴是
+`import type { LoadGateHydrateOptions }`——type-only,零 runtime 邊。
+
+**零新程式路徑**:stale → `epochFetch` throw → load-gate 既有的 catch → error 態 → 使用者按重試 →
+load-gate 的 `refresh()` 回落**同一支** `epochFetch` → 新 epoch 下成功。該節既已成立的兩點
+(「guard 短路主病已殺」「導頁路徑已覆蓋」)不受影響、依然是覆蓋這條窄窗的其餘兩面。實作上把原
+`wrappedFetch` 的 inline closure 抽名為 `epochFetch`(不是複製第二份判斷),故「內部建構順序為契約」
+一節補了第 0 步:`epochFetch` 的純 const 宣告排在 gate 之前,對 `core` 與原本相同是 closure 前向
+參照。member 與 mobile 兩個通知頁各有一支「在飛換帳」render 釘;把 `pageEntry()` 改回 raw fetch 會
+讓 4 支測試轉紅,可證偽性已實測。
+
+### 2. 門 (c) `onSessionReset` 已退役:三門 → **兩門**
+
+「決定:三門工廠」一節的第三項 `onSessionReset(reset)`(閘門所有權留呼叫端、工廠只做重置)與
+「修正兩個真缺陷」一節提到「mobile 的 `notifsHydrated` 抬升為 `onSessionReset`」的描述,記的是
+2026-07-22 當下的事實。該門唯一的消費者 mobile notifs 已於 R9 C3 改建完整 `createSessionGate`
+(整段自 `mobile/stores.ts` 搬出成葉模組 `src/lib/mobile/notifications.ts`,成環理由見
+`docs/adr/0019`),其 `notifsHydrated` 現在是閘門自己的 `hydrated` 同一實例、mutator 翻旗改走
+`gate.markMutated()`;`onSessionReset` 因此零 production 消費者,函式與 `session-gate.test.ts` 的
+對應 describe 一併刪除。
+
+**現況:兩門工廠**——`createSessionGate`(waitlist / leave / member notifications / **mobile
+notifs**)與 `createSessionRefresher`(points / subscriptions)。本篇其餘裁決全數不受影響:
+每次 factory call 各開一個獨立 `authStore` 訂閱、不共用 registry;`mutate()` 吸收五份手焊骨架的
+五個步驟;`reset` 值必須冪等(mobile notifs 的 reset 是 `NOTIFS_SEED` clone,正是這條規則的實例
+——badge teaser 不被自己的重置抹掉);以及「刻意不把 session 維度深化進 `hydration-gate.ts` 本身」
+的邊界。

@@ -17,6 +17,11 @@ session 就回退成未讀。本 ADR 記錄三者的收斂決定、判準,以及
 
 **表 → 檔對照**(查表現在唯一居住的檔案,及消費它的 facade):
 
+> **2026-08-03 增補**:下表「消費 facade」欄記的是 2026-07-14 落地當下的狀態。R9 C4 之後 admin 側
+> 的活 re-export 全數退役(消費端直取)、`WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 一列
+> member/mobile 兩側轉出亦全數退役——現況表與第一形絕跡的記帳見文末「增補(2026-08-03)」與
+> `docs/adr/0019`。查表的**單一來源歸屬**(左兩欄)不變。
+
 | 查表 | 域檔 | 消費 facade |
 | --- | --- | --- |
 | `MEMBER_STATUS`(出席率三態) | `domain/members.ts` | admin(活 re-export) |
@@ -282,3 +287,40 @@ venues/tickets/members/classes/course-level 五個既有 entity 檔之列,成為
 同上文 `VENUE_STATUS.available`「可預約」canonical 化先例)與三個消費端各自維持不同承接形
 (coach 留活 re-export 且 `CLASS_STATUS` 保自己的 `{label,bg,fg}` 合成形、admin 直接 import、
 mobile-admin 保留既有寬鍵 fallback)的完整裁決過程,記於 `docs/adr/0018`。
+
+## 增補(2026-08-03,架構深化 R9 C4):第一形(admin 活 re-export)的實例在倉內絕跡;§1 現況表補登
+
+`docs/adr/0019` 的 facade 純轉手退役以一條判準句掃過四個 surface 的 `data.ts`——「匯出行若不攜帶
+本檔型別事實、不做值變形,且來源是 `$lib/domain` 或 `$lib/api/wire` 的同名同型符號 → 退役」——而
+§1 的**第一形(admin 活 re-export)恰好就是這條判準句要退役的形狀**:admin 端本來就用 wire 的
+`Tone`,不需要收窄,那層轉手因此零型別事實可攜帶。批4 之後 admin 消費端(以
+`components/StatusBadge.svelte` 為最大宗,一支元件 13 個符號)一律直取 `$lib/domain/members`/
+`venues`/`tickets`/`classes`/`course-level` 與 `$lib/api/wire`。
+
+**消失的是第一形的實例,不是這條分類本身**。三形的判準原樣有效——若日後某個新 facade 的 `Tone`
+恰好與 wire 相容,0019 的判準句會直接判它「不必存在這層轉手」(而不是判它「該用第一形」);第二形
+(mobile-admin 純註記 re-assert)與第三形(member/mobile 以自身較嚴格型別純註記收窄)因為真的攜帶
+本檔型別事實,全數原樣保留、`toBe` 同參照守衛也全留。0019 同時把兩形的**鑑別法**落字:domain 端用
+`satisfies` 鎖字面(facade 端才是真收窄)vs domain 端顯式標註(facade 端零型別事實、屬第一形)。
+
+**§1 表格現況補登**(表格原文記的是 2026-07-14 W2a/W2b 落地當下的狀態,以下是 R9 C4 之後的實況;
+表格本身不改寫,以本節為準):
+
+| 查表 | 域檔 | 消費 facade(2026-08-03 現況) |
+| --- | --- | --- |
+| `MEMBER_STATUS` | `domain/members.ts` | admin **改直取**(原活 re-export) |
+| `MEMBER_ACCOUNT_STATUS` | `domain/members.ts` | admin **改直取**、mobile-admin(re-assert,不變) |
+| `VENUE_STATUS` | `domain/venues.ts` | admin **改直取**、mobile-admin(re-assert,不變) |
+| `TICKET_TYPE` | `domain/tickets.ts` | admin **改直取**、mobile-admin(re-assert,不變) |
+| `STATUS_TONE` | `domain/classes.ts` | admin **改直取**、mobile-admin(re-assert,不變) |
+| `LEVEL_TONE` | `domain/course-level.ts` | admin **改直取**;mobile-admin/member/mobile 純註記 re-assert(不變)、`CourseCard.svelte` 直接展開(不變) |
+| `SESSION_STATUS` | `domain/sessions.ts` | 三消費端皆為直接 import,本輪不受影響 |
+| `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` | `domain/member-app.ts` | **member 與 mobile 兩側的轉出全數退役**,四常數改由頁面/元件直取——`member/schedule` 頁(`WEEK`+`TIME_ROWS`)、`member/notifications` 頁與 mobile 通知頁(`NOTIF_CATS`)、`ContactDialog`/`ContactSheet`(`COACH_REPLIES`)、`ScheduleScreen` 與 mobile mine 頁(`WEEK`) |
+
+最後一列是本次一併補登的**已失準列**:原文「member(活 re-export,`TIME_ROWS` 亦同)、mobile
+(`WEEK`/`COACH_REPLIES` 活 re-export、`NOTIF_CATS` 純註記收窄、`TIME_ROWS` 不轉出)」自 C4 批1/批2
+起兩側皆不成立。其中 mobile 的 `NOTIF_CATS` 原被記為「純註記收窄」,C4 重驗後判定為**假收窄**——
+domain 端是顯式標註 `[string, string][]`,mobile 本地 `Tone = [string, string]` 與之結構恆等,
+`export const NOTIF_CATS: Tone[] = NOTIF_CATS_BASE;` 沒有附加任何型別事實,屬第一形,故一併退役
+(判定經 `npm run check` 對唯一消費檔改直取後零錯誤實測背書,非純推理)。`TIME_ROWS` 在 mobile 側
+「不轉出」的死出口裁決不受影響——它從來就沒有 mobile 消費者。

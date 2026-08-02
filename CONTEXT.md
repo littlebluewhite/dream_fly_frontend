@@ -86,19 +86,31 @@ _Avoid_: 手抄 *Hydrated 旗標協定
 
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
-來源 `src/lib/session-gate.ts` 三門——`createSessionGate`(完整水合閘門 + identity 重置 + epoch
-核對 fetch + `mutate()`,供 waitlist/請假/會員通知)、`createSessionRefresher`(無條件重抓 + 在
-飛換帳靜默丟棄,供點數/訂閱)、`onSessionReset`(僅重置,閘門所有權留呼叫端,供 mobile 通知)
-(見 `docs/adr/0017`)。
+來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(完整水合閘門 + identity 重置 + epoch
+核對 fetch + `mutate()` + 頁面進場包 `pageEntry()`,供 waitlist/請假/會員通知/行動版通知)、
+`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。原第三門 `onSessionReset`
+(僅重置、閘門所有權留呼叫端)已於 2026-08-03 隨其唯一消費者(行動版通知)改建完整閘門而退役
+(見 `docs/adr/0017` 增補與 `docs/adr/0019`)。
 _Avoid_: 手抄 epoch/訂閱重置/和解鏈(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活
+
+**頁面進場包 (Page Entry)**:
+session 閘門交給頁面載入閘門的成對進場物——`gate.pageEntry()` 回傳「帶 epoch 核對的 fetch +
+hydrate 選項」,頁面寫 `createLoadGate({ ...gate.pageEntry() })` 即可,結構上拿不到未經核對的 raw
+getter。`hydrate.flag` 是閘門自己的 `hydrated` 同一實例、`hydrate.into` 是同一支 apply,不是複本。
+跨登出/換帳的在飛回應會讓 fetch 拋出,落進 load-gate 既有的 error 態,使用者重試時回落同一支
+fetch(零新程式路徑;見 `docs/adr/0019`)。
+_Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)直入 load-gate
 
 **顯示查表 (Display Lookup)**:
 狀態/類型 → tone/label(部分為純 tone,狀態字面本身即顯示標籤)對照表;單一來源集中在 `$lib/domain`
 各 entity 檔(`members.ts`/`venues.ts`/`tickets.ts`/`classes.ts`/`course-level.ts`/`sessions.ts`)與
-`member-app.ts`(member/mobile 雙生的查表與成對常數)。facade 端依自身型別需要收斂為兩形之一:
-admin 這類 Tone 型別相容的 facade 直接活 re-export;mobile-admin/member/mobile 這類自帶較嚴格或
-不同形狀 `Tone` 型別的 facade,改以自身型別對同一參照純註記收窄(零 `as` 斷言,見 `docs/adr/0013`)。
-_Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)
+`member-app.ts`(member/mobile 雙生的查表與成對常數)。取用形只有兩種:facade 若**真的**攜帶本檔
+型別事實(以自身較嚴格或不同形狀的 `Tone` 對同一參照純註記收窄,零 `as` 斷言),消費端經該 facade
+取用——mobile-admin/member/mobile 屬此;facade 若只是同名同型轉手(admin 這類 `Tone` 與 wire 相容、
+無可收窄者),該層已於 2026-08-03 全數退役,消費端改**直取** `$lib/domain` 各 entity 檔或
+`$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
+_Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
+零型別事實的純轉手 re-export(假接縫——只換來一批逐符號同一性守護測試)
 
 **匯入掃描器 (Import Scan)**:
 原始碼層 import 掃描的 test-support 模組;單一來源 `$lib/testing/import-scan.ts`(`walk`/

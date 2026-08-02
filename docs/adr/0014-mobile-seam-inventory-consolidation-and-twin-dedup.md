@@ -138,3 +138,28 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
   `saveCoachEdit`(K4/`docs/adr/0012`)現由 `mobile-admin/api.ts` 同款零映射 re-export 供
   `CoachesScreen.svelte` 消費——與本節既有的 `coachLoadErrorCopy` 經同一 barrel 供 mobile-admin
   兩頁取用同一手法;`pendingUserId` 哨兵在此消費端刻意丟棄的行為裁決見 `docs/adr/0018`。
+
+## 增補(2026-08-03,架構深化 R9 C2+C4)
+
+- **§1 的 `LEVEL_TINT`/`Student` 邊界 seam 本輪重驗、原判維持**:`docs/adr/0019` C4 批3 以判準句
+  掃過 `mobile-admin/data.ts` 的每一行匯出,`export { LEVEL_TINT, type Student } from
+  '$lib/coach/data';` 落在保留側的第三款(「ADR 記名的邊界 seam」)——本節明載的理由(單複本無分歧、
+  搬進 domain 只是搬家、canonical 出處刻意留在 `coach/data.ts`)未因本輪而改變,該行連同其上方六行
+  解說註解**逐位元組未動**。同批的其他六個匯出(`COACHES`/`Coach`/`Venue`/`Ticket`/`ActivityRow`
+  與 `MemberAccountStatus`/`OrderStatus`)則因零附加型別事實而退役。兩者並置正是本節邊界的用意:
+  **經 facade 借道需要一個記名的理由,直取才是預設**;下次審查若看到 `LEVEL_TINT` 還在轉手,請先
+  回看本節與 0019 的判準句保留側,勿當成漏網的純轉手。`StudentLevel` 零 mobile-admin 消費者故不
+  轉出的死出口裁決同樣不變。
+- **§1 的 mobile 接縫不變量不受 C2/C4 影響**:C4 讓 mobile 的 overlay/頁面改直取
+  `$lib/domain/member-app`、C2 讓 mobile 的購物車改建於 lib-root 的 `$lib/cart` 之上——兩者都不是
+  `$lib/member` 直取,`foundation-contracts.test.ts` 的 reach 謂詞(只咬 `$lib/member`)因此不被
+  觸發,`MOBILE_SEAM_FILES` 四檔白名單與 `mobile/stores.ts` 的源路徑白名單皆**零改動**。
+  C3 新增的葉模組 `src/lib/mobile/notifications.ts` 同理:它 import 的是 `$lib/api/client`/
+  `$lib/stores/read-state`/`$lib/session-gate`/`$lib/domain/member-app` 與自家 `./api`,零
+  `$lib/member`,不需要進白名單(該檔為何是葉模組、為何 `stores.ts` 不得 re-export 它,見
+  `docs/adr/0019` C3 的成環證據)。
+- **§1「顯示查表過自家 seam」的邊界因此需要一句現況校正**:該裁決的原意是「跨 surface 取用
+  member 的東西要過 seam」,不是「所有顯示查表都必須經 `mobile/data.ts` 借道」。C4 之後,凡來源是
+  `$lib/domain` 的**純轉手**顯示常數(`WEEK`/`COACH_REPLIES`/`NOTIF_CATS` 等)一律由消費端直取
+  canonical 源;`mobile/data.ts` 留下的是真的攜帶本檔型別事實的收窄查表(`LEAVE_STATUS`/
+  `LEVEL_TONE`,0013 Form 3)與本地字面資料(`ATT_STATE`/`ANNOUNCE`/`NOTIF_TONE_BG`/`FG`/`PT_TYPE`)。

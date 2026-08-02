@@ -137,3 +137,38 @@ Round 2 收斂，決定記在這裡（ADR 0009 對這些點沉默，反轉的都
   記錄 C2（死種子退役）與上節的 C3 連帶；error-mapper 收斂（C4）、controller factory 否決、
   明文不收清單在 ADR 0011。其餘候選（`CartItem` 型別上移、wire 乙線、通知 gate 化、mobile
   候補接 seam、出席草稿 reducer）的落地紀錄在 `docs/architecture.md` 對應段落與各 commit。
+
+## 增補（2026-08-03）：值／型別分家的**記帳結案**
+
+第 2 節「只砍值、留 interface」留下的那批「值已死、型別仍在 facade 轉出鏈上」的漂移註記，自架構
+深化 R9 C4（`docs/adr/0019`）四批 facade 純轉手退役後**全數結清**。結清的方式不是重新評估「型別
+該不該留」——那條判準原樣有效（型別仍在替某處的標註背書就留），而是把**轉出這一層**拿掉：
+
+- `admin/data.ts` 對 `Coach`／`Venue`／`Ticket` 的型別轉出（第 4 節記錄的「值先退役、型別轉出續留」
+  三筆漂移），以及同區塊 Task F11 留下的 `Activity` 型別轉出（其唯一消費者 `ActivityPanel` 早已改吃
+  props），經 0019 判準句重驗皆為零附加型別事實的純轉手，已一併退役——消費端改直取
+  `$lib/domain/coaches`／`venues`／`tickets`／`activity`。四個型別本身仍然活著、仍在替 `admin/api.ts`
+  與各對話框元件的標註背書，只是不再需要繞經 facade 借道。
+- `mobile/data.ts` 的 `EnrolledCourse as MyCourse`／`ScheduleBlock`／`Order` 家族同理：第 2 節記載
+  「值死型別活」的那批型別別名，自 C4 批1 起由 overlay／頁面以 import-site alias 直取
+  `$lib/domain/member-app`（範式沿 `mobile/api.ts` 既有的 `EnrolledCourse as MyCourse` 寫法）。
+
+**第 1 節的方法論不因此鬆動**：「對每個候選符號重新 grep 全部消費者，不採信既有註解的斷言」在 C4
+四批裡逐批執行，而且真的攔到了落差——批3 的 `COACHES` 原被靜態量測為「test-only 消費」，重驗才發現
+`mobile-admin/stores.ts` 經相對路徑 `./data` 拿它當 `coaches` store 的同步種子值（生產消費者）。
+第 2 節同時新增一條姊妹處置：**「刪 export 留 import」**——當某個型別在 facade 本檔內部仍有標註
+消費者、對外卻已無人取用時，只刪那行 `export type {…} from`，檔頭的 `import type` 原樣保留
+（`export {X} from 'Y'` 語法本身不建立本檔可用的本地綁定，兩者互不相干）。C4 四批共 8 個型別採此
+處置：`member` 的 `LedgerType`，`mobile-admin` 的 `MemberAccountStatus`／`OrderStatus`，`admin` 的
+`Tone`／`MemberAccountStatus`／`VenueStatus`／`TicketType`／`ClassStatus`。
+
+**「同一個 domain 常數在不同 facade 呈現不同的匯出面，是設計使然」仍然成立**（「後果」節原文）——
+C4 之後這句話的含意更精確：差異不再來自「哪個 facade 順手轉出了什麼」，而只來自該 facade 是否真的
+攜帶本檔型別事實（`docs/adr/0013` 的 Form 2／3 收窄）、是否真的做值變形。純轉手不再是任何 facade
+的合法居民。
+
+**第 4 節與「後果」節提到的型別回歸守衛已完全退場**：兩處記載「現在唯一還需要這層保護的是
+`mobile/data.test.ts`」，指的是「把每個轉出型別綁定一個活值，讓漏轉型別在 `npm run check` 就編譯
+失敗」的技巧。那份檔案守的正是 mobile facade 的型別轉出，而型別轉出已於 C4 批1 全數退役——守衛
+失去守護對象，整檔（94 行）一併刪除，`admin` 的同款檔早在 ADR 0009 那輪就走過同一條路。技巧本身
+沒有錯，只是倉內不再有任何 facade 需要它；`docs/architecture.md` 的 domain 段同步改寫為現況。
