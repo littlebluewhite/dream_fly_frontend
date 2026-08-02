@@ -32,7 +32,9 @@ relabel 以最小代價達成誠實標示，符合「簡單優先、手術式修
 `checkout-order.ts`／`cart-item.ts`／`format.ts`／`load-gate.ts`／`hydration-gate.ts` 這一列。架構
 深化 R9 C2（`docs/adr/0019`）讓 `cart.ts` 加入同一格：購物車工廠自 `src/lib/member/cart.ts` 上移為
 `src/lib/cart.ts`，`/cart` 路由與 `lib/components/` 的 `Header`／`CartDropdown` 因此改為直取
-`$lib/cart`，不再經 member surface 的 barrel 借路。
+`$lib/cart`，不再經 member surface 的 barrel 借路；同屬公開 surface 的 `routes/courses/+page.svelte`
+與 `routes/tickets/+page.svelte` 則仍走 member barrel——它們在同一個 import 子句裡混拿
+`joinWaitlist`／`subscriptions` 這類 member 域符號，借道 barrel 才是零 churn 的取用形。
 
 這是本 ADR「刻意借用共用 shelf」原判準的**同向延伸**，不是新開先例：公開層需要的是一顆全域購物車
 （訪客可加購、跨登入保留，見 `docs/adr/0001`），而非 member surface 的私有狀態——符號住在 lib-root

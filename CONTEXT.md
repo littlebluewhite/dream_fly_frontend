@@ -106,9 +106,9 @@ _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)�
 各 entity 檔(`members.ts`/`venues.ts`/`tickets.ts`/`classes.ts`/`course-level.ts`/`sessions.ts`)與
 `member-app.ts`(member/mobile 雙生的查表與成對常數)。取用形只有兩種:facade 若**真的**攜帶本檔
 型別事實(以自身較嚴格或不同形狀的 `Tone` 對同一參照純註記收窄,零 `as` 斷言),消費端經該 facade
-取用——mobile-admin/member/mobile 屬此;facade 若只是同名同型轉手(admin 這類 `Tone` 與 wire 相容、
-無可收窄者),該層已於 2026-08-03 全數退役,消費端改**直取** `$lib/domain` 各 entity 檔或
-`$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
+取用——mobile-admin/member/mobile 屬此;facade 若只是同源且結構恆等的轉手(admin 這類 `Tone` 與 wire
+相容、無可收窄者;facade 端改過名的 alias 亦同),該層已於 2026-08-03 全數退役,消費端改**直取**
+`$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
 零型別事實的純轉手 re-export(假接縫——只換來一批逐符號同一性守護測試)
 

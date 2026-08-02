@@ -3,7 +3,8 @@
  * The prototype (app.jsx) kept tab / stack / sheet / cart / points / notifs /
  * toasts / prefs / profile in one React component. Rendered as real routes, the
  * bottom tabs are URLs but push-screens + sheets are overlay state, and the
- * cart / notifs / toasts / prefs / profile are shared stores that live here.
+ * cart / toasts / prefs / profile are shared stores that live here — notifs moved
+ * out to the `$lib/mobile/notifications` leaf module (C3; reason below).
  * Toasts come from the canonical shared store (`createToasts` imported from
  * `$lib/stores/toasts`); no local factory is defined or exported here.
  *

@@ -25,13 +25,14 @@ export type AttMark = 'p' | 'a' | 'l' | 'v';
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
- * The seed (coaches/classes/members/orders + venues/tickets/activity + reports)
- * lives in `$lib/domain`. Admin re-exports the pass-through datasets and imports
- * the base arrays + helpers that its `.map` enrichments (below) build on, so there
- * is exactly one copy of every value. Admin's public API is unchanged. */
+ * The seed (coaches/classes/members/orders + venues/tickets/activity) lives in
+ * `$lib/domain`. Admin re-exports none of it any more: C4 批4 (`docs/adr/0019`)
+ * retired every pass-through export from this file, so consumers import each
+ * canonical source directly. What stays here is admin's own content — local
+ * interfaces, local constants and the one real mapper (`mapMemberAccount`) —
+ * over the base types/helpers imported below. */
 
-// Pure pass-throughs (no local use) — re-export domain's value + type verbatim.
-// C4 批4:Coach/Venue/Ticket/Activity 四個型別轉出退役(消費端改直取
+// C4 批4(pass-through 退役):Coach/Venue/Ticket/Activity 四個型別轉出退役(消費端改直取
 // $lib/domain/coaches、$lib/domain/venues、$lib/domain/tickets、
 // $lib/domain/activity)——為原本散落本節四處的 ADR 0010 §4 漂移註記(Coach/Venue/
 // Ticket:值先於型別退役,值定義刪除當時型別轉出續留)與 Task F11 註記(Activity:

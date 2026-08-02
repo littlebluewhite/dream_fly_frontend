@@ -291,7 +291,8 @@ mobile-admin 保留既有寬鍵 fallback)的完整裁決過程,記於 `docs/adr/
 ## 增補(2026-08-03,架構深化 R9 C4):第一形(admin 活 re-export)的實例在倉內絕跡;§1 現況表補登
 
 `docs/adr/0019` 的 facade 純轉手退役以一條判準句掃過四個 surface 的 `data.ts`——「匯出行若不攜帶
-本檔型別事實、不做值變形,且來源是 `$lib/domain` 或 `$lib/api/wire` 的同名同型符號 → 退役」——而
+本檔型別事實、不做值變形,且來源是 `$lib/domain` 或 `$lib/api/wire` 的**同源且結構恆等**符號
+(含 facade 端改過名、退役後由 import-site alias 承接者)→ 退役」——而
 §1 的**第一形(admin 活 re-export)恰好就是這條判準句要退役的形狀**:admin 端本來就用 wire 的
 `Tone`,不需要收窄,那層轉手因此零型別事實可攜帶。批4 之後 admin 消費端(以
 `components/StatusBadge.svelte` 為最大宗,一支元件 13 個符號)一律直取 `$lib/domain/members`/

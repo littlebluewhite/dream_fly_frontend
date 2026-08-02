@@ -144,10 +144,12 @@ Round 2 收斂，決定記在這裡（ADR 0009 對這些點沉默，反轉的都
 深化 R9 C4（`docs/adr/0019`）四批 facade 純轉手退役後**全數結清**。結清的方式不是重新評估「型別
 該不該留」——那條判準原樣有效（型別仍在替某處的標註背書就留），而是把**轉出這一層**拿掉：
 
-- `admin/data.ts` 對 `Coach`／`Venue`／`Ticket` 的型別轉出（第 4 節記錄的「值先退役、型別轉出續留」
-  三筆漂移），以及同區塊 Task F11 留下的 `Activity` 型別轉出（其唯一消費者 `ActivityPanel` 早已改吃
-  props），經 0019 判準句重驗皆為零附加型別事實的純轉手，已一併退役——消費端改直取
-  `$lib/domain/coaches`／`venues`／`tickets`／`activity`。四個型別本身仍然活著、仍在替 `admin/api.ts`
+- `admin/data.ts` 對 `Coach`／`Venue`／`Ticket` 的型別轉出（掛在第 4 節「值先退役、型別轉出續留」
+  名下的三筆漂移；註記實體不在本篇 §4 內文，而是寫在退役前版本 `admin/data.ts` 的各匯出行旁，
+  已隨該批匯出一併移除，要翻請查 git history），以及同區塊 Task F11 留下的 `Activity` 型別轉出
+  （其唯一消費者 `ActivityPanel` 早已改吃 props），經 0019 判準句重驗皆為零附加型別事實的純轉手，
+  已一併退役——消費端改直取 `$lib/domain/coaches`／`venues`／`tickets`／`activity`。四個型別本身
+  仍然活著、仍在替 `admin/api.ts`
   與各對話框元件的標註背書，只是不再需要繞經 facade 借道。
 - `mobile/data.ts` 的 `EnrolledCourse as MyCourse`／`ScheduleBlock`／`Order` 家族同理：第 2 節記載
   「值死型別活」的那批型別別名，自 C4 批1 起由 overlay／頁面以 import-site alias 直取

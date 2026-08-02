@@ -15,7 +15,8 @@ export type Tone = [string, string];
  * tuple `Tone`, status maps and mobile-only data stay local; its public API
  * is unchanged. */
 
-// Pure pass-throughs — re-export domain's value + type verbatim.
+// 對 `$lib/domain` 的純轉手 re-export 已全數退役(C4 批3);本節其下唯一還在轉手的
+// 是來源為 coach surface 的邊界 seam(LEVEL_TINT/Student,見卡 3 段落與 ADR 0014 §1)。
 // C4 批3(facade 純轉手退役):COACHES(值，test-only 消費 + stores.ts/stores.test.ts
 // 內部種子值)/type Coach 退役——消費端改直取 $lib/domain/coaches。VENUES/TICKETS
 // 值早於本批已退役(見 api.ts getVenues/getTickets 薄委派 re-export；唯一消費者

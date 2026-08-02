@@ -19,9 +19,10 @@ import { NOTIFS_SEED, type Notification as NotifItem } from '$lib/domain/member-
 
 // C6:read-flag store 委派共用的 createReadState(見 $lib/stores/read-state,
 // mobile 現形即標準極性,行為 1:1)。createNotifs 保留舊名(委派 alias),既有
-// 呼叫端(本檔案 notifs 單例)零變動。
-export const createNotifs = createReadState;
-export { unreadCount };
+// 呼叫端(本檔案 notifs 單例)零變動。R9 終審:createNotifs 與 unreadCount 的
+// 對外轉出零消費者(工廠語意由 read-state.test.ts 覆蓋),依 ADR 0010「死值不留
+// 死出口」拿掉 export 修飾詞——兩個值本檔內部仍在用(見下方 notifsBase 與 unread)。
+const createNotifs = createReadState;
 // 同步 seed(createNotifs 內部 clone;與 member notifications 前例同型):badge
 // (unread,TabBar/首頁鈴鐺都讀)一開始就有值。首次造訪通知頁時經 notifsPageEntry
 // 水合覆寫一次(見該頁 load()/refresh());閘門旗標是 load-once 守衛,防止重訪重抓
@@ -39,7 +40,10 @@ const notifsBase = createNotifs<NotifItem>(NOTIFS_SEED);
  *  通知域沒有「無視守衛強制重抓」的模組層消費者(頁面重試走 load-gate 自己的
  *  refresh,見 pageEntry)。 */
 const gate = createSessionGate<NotifItem[]>({
-	fetch: getNotifications,
+	// 惰性綁定(`() => getNotifications()`,與 member 側 inline closure 同形):模組載入
+	// 期只捕捉呼叫點、不取值,測試以 vi.mock 工廠替換 `$lib/mobile/api` 時不會在本檔
+	// 求值瞬間炸「No export is defined」。
+	fetch: () => getNotifications(),
 	apply: (list) => notifsBase.set(list),
 	reset: () => notifsBase.set(NOTIFS_SEED.map((n) => ({ ...n }))) // boot 態 = seed clone(值冪等)
 });

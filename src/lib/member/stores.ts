@@ -10,7 +10,7 @@
  * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 8 個
  * 關切模組的 public exports（型別一律用 `export type`）。新增 store／函式請寫進
  * 歸屬模組，不要寫進這裡：
- *  - cart.ts            購物車 store + 持久化
+ *  - $lib/cart          購物車 store + 持久化（lib-root 共用模組，本 barrel 只轉手）
  *  - waitlist.ts        候補清單
  *  - leave.ts           請假 + 補課 + 課程場次
  *  - points.ts          點數 + 明細 + 兌換

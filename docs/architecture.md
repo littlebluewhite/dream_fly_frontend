@@ -171,9 +171,10 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   `cart = createCart(true)` (persisted to `dreamfly_cart_v3` — string uuid item ids deduped by
   `(type, id)`; no migration runs against the old `dreamfly_cart_v2` key, see `docs/adr/0006`) plus the
   `cartCount` badge derived. `lib/member/stores.ts` still re-exports `createCart`/`cart`/`cartCount`, now
-  as a pass-through of `$lib/cart`, so the five member call sites that pull `cart` alongside other member
-  symbols didn't change; the public chrome (`components/Header.svelte`, `components/CartDropdown.svelte`,
-  `routes/cart/+page.svelte`) imports `$lib/cart` directly. The old `member/cart.ts` was deleted rather
+  as a pass-through of `$lib/cart`, so the five call sites that mix `cart` with member-domain symbols
+  in one import clause didn't change; the public chrome (`components/Header.svelte`,
+  `components/CartDropdown.svelte`, `routes/cart/+page.svelte`) imports `$lib/cart` directly.
+  The old `member/cart.ts` was deleted rather
   than left as a shell — a shell that re-ran `createCart(true)` would produce a second persisting
   singleton double-writing `localStorage`. The `createCart(persist=false)` factory exists so tests get an
   isolated, non-persisting cart — and so does `mobile`, which builds its own non-persisting instance

@@ -37,8 +37,11 @@ factory」(寬介面、淺框架)與 `docs/adr/0018` C6(admin 三頁 CRUD 提交
 四函式各自持有窄 IO、名字直接說出自己服務哪一頁,是刻意的。
 
 **anti-enumeration 由型別結構保證。** `ForgotSubmitIO` **刻意沒有 `setError`**:忘記密碼的 catch
-必須靜默吞錯(成功與失敗兩條路徑對外不可分辨,否則洩漏帳號是否存在),這條語意不是靠註解或呼叫端
-自律,而是靠介面上根本不存在錯誤出口——呼叫端在編譯期就無從誤設錯誤文案。`submitPasswordReset`
+必須靜默吞錯(成功與失敗兩條路徑對外**無文案、無例外分支之別**,否則洩漏帳號是否存在),這條語意
+不是靠註解或呼叫端自律,而是靠介面上根本不存在錯誤出口——呼叫端在編譯期就無從誤設錯誤文案。
+這句宣稱到此為止,不含計時:`busy` 時長等於請求時長,計時側信道仍可分辨「快速拒絕」與「慢速成功」
+——那是分支前的既有頁面行為,C1 逐位保留、未加也未減。計時側信道的 enumeration 防護屬後端統一
+回應時間之職責;前端若要加固,可另設最小完成時間(本輪未做)。`submitPasswordReset`
 的 `token` 同理採單源讀取(`const token = io.token` 一次讀值,守衛判斷與後續 `reset(token)` 共用),
 讓 TypeScript 的窄化落在區域 `const` 上,不依賴「屬性存取窄化能否跨函式呼叫存續」這種模糊規則。
 
@@ -59,8 +62,8 @@ commit `81b1c1b`。購物車(購物車 / Cart)本來就是全域概念——訪�
 **逐字搬遷,一個位元組不改**:`createCart(persist = false)` 簽章、`dreamfly_cart_v3` storage key、
 module-init `loadCart`、課程 `qty` clamp、舊 `waitlist` 欄位忽略邏輯、`AddResult` 唯一宣告,連同
 app-wide 單例 `export const cart = createCart(true)` 與 `cartCount` derived 一併同檔上移。搬遷後以
-`diff` 與 git rename 偵測雙重確認 byte-identical(原檔三個 import 本就是 `$lib` 絕對路徑,連相對化
-調整都不需要)。
+`diff` 與 git rename 偵測雙重確認 byte-identical(原檔三個 import 無一為相對路徑——兩個 `$lib`
+絕對路徑加一個 `svelte/store` 套件裸規格,連相對化調整都不需要)。
 
 **裁決:共用 factory ≠ 共用 store 實例。** member/public 用的是持久化單例 `cart`(guest→login→
 checkout 全程保留),mobile 用的是自己的**非持久**實例——兩者共用同一個工廠,但絕不是同一顆 store。
@@ -127,15 +130,24 @@ production 消費者歸零。落地前後兩次 grep 重驗(含 `.svelte`)確認
 
 commits `ec1187f`(批1 mobile)/`ae7632f`(批2 member)/`89ad3f1`(批3 mobile-admin)/
 `5dd0cbb`(批4 admin)。四個 surface 的 `data.ts` facade 累積了大量「純轉手」匯出:不攜帶本檔型別
-事實、不做值變形,只是把 `$lib/domain`(或 `$lib/api/wire`)的同名同型符號再賣一次。這種假 seam
-本身沒有語意,卻逼出了一整套逐符號 `toBe` 同一性的守護測試稅——為了證明「facade 沒有偷偷複製一份」
-而存在的測試,只在 facade 真的攜帶型別事實時才有意義。
+事實、不做值變形,只是把 `$lib/domain`(或 `$lib/api/wire`)的**同源且結構恆等**符號再賣一次
+(facade 端改過名的也算——`EnrolledCourse as MyCourse` 這類,退役後由消費端以 import-site alias
+承接舊名)。這種假 seam 本身沒有語意,卻逼出了一整套逐符號 `toBe` 同一性的守護測試稅——為了證明
+「facade 沒有偷偷複製一份」而存在的測試,只在 facade 真的攜帶型別事實時才有意義。
 
 **判準句(每個匯出行逐條覆核,四批共用同一句):**
 
 > 匯出行若**不**攜帶本檔型別事實(收窄註記 / `as` 斷言 / 本地 interface)、**不**做值變形
-> (mapper / `.map` builder),且來源是 `$lib/domain` 或 `$lib/api/wire` 的同名同型符號 → 退役;
+> (mapper / `.map` builder),且來源是 `$lib/domain` 或 `$lib/api/wire` 的**同源且結構恆等**符號
+> (含 facade 端改過名者,退役後以 import-site alias 承接)→ 退役;
 > 凡 ADR 0013 Form 2/3 收窄、真變形、ADR 記名邊界 seam → 保留。
+
+**「結構恆等」的操作定義**:兩側宣告型別逐構造相同——facade 側沒有附加任何註記、`as` 斷言或
+變形;`any`、`readonly`、多載這類逐構造比對本身就有歧義的情況,一律回到「facade 側是否新增任何
+型別事實」這句裁決,有新增就保留。判準句刻意**不**寫「同名」:本輪退役的
+`EnrolledCourse as MyCourse`、`ChatMessage as ThreadMsg`、`Activity as ActivityRow` 三個 facade
+端改名的純轉手,照「同名」字面反而不符退役條件,但它們既同源又結構恆等,是不折不扣的假 seam
+——名字換了沒有讓那層轉手多帶一絲型別事實。
 
 四批範圍與結果:
 
@@ -160,8 +172,8 @@ mobile 本地 `Tone = [string, string]` 與之結構恆等,零型別事實被附
 `satisfies` 鎖住 tone 字面 union、不下顯式標註,facade 端以自己的型別重新宣告才真的改變了型別,保留。
 
 **鑑別法因此落字:分水嶺是「facade 宣告型別與 domain 宣告型別是否結構恆等」,不是 `satisfies`。**
-結構恆等 ⇒ 零型別事實被附加 ⇒ Form 1 假 seam ⇒ 退役;不恆等(facade 以本檔可見型別重新宣告,無論
-收窄或放寬)⇒ 真的攜帶本檔型別事實 ⇒ Form 2/3 ⇒ 保留。`satisfies` **只是** `domain/member-app.ts`
+結構恆等 → 零型別事實被附加 → Form 1 假 seam → 退役;不恆等(facade 以本檔可見型別重新宣告,無論
+收窄或放寬)→ 真的攜帶本檔型別事實 → Form 2/3 → 保留。`satisfies` **只是** `domain/member-app.ts`
 那套「寬鬆結構型別」章程(見 `docs/adr/0013`「member-app 章程部分重開原文」)下、讓 facade 得以零
 斷言收窄的手段,是該檔情境的線索,不是通用判別式——**倉內反例俯拾即是**:`domain/venues.ts` 的
 `VENUE_STATUS`、`domain/members.ts` 的 `MEMBER_ACCOUNT_STATUS`、`domain/tickets.ts` 的
@@ -181,9 +193,10 @@ mobile 本地 `Tone = [string, string]` 與之結構恆等,零型別事實被附
 **守護測試稅大部退場,留下的是 domain 本體契約。** 四批合計讓四個守護測試檔淨減 113 行(刪 130、
 增 17):`src/lib/mobile/data.test.ts` 94 行整檔退場(其 `LEAVE_STATUS` 字面契約另有
 `domain/member-app.test.ts` 的雙釘 + 獨立字面快照 + row-count canary 三層覆蓋,刪除零損失);
-`member-app.test.ts` 第 1 層 wiring check 減為只釘 `UPCOMING`/`NOTIFS_SEED`(facade 側仍是純註記
-收窄同參照);`status-lookups.test.ts` 刪掉整個 admin wiring describe、mobile-admin 三層守衛逐字
-未動;`course-level.test.ts` 刪兩發 admin 同一性釘,F_LEVELS / mobile-admin / member / mobile 四發
+`member-app.test.ts` 第 1 層 wiring check 減為只釘 `UPCOMING`(`as` 斷言真收窄)與 `NOTIFS_SEED`
+(純註記收窄),兩者都是 facade 側續存收窄的同參照;`status-lookups.test.ts` 刪掉整個 admin wiring
+describe、mobile-admin 三層守衛逐字未動;`course-level.test.ts` 刪兩發 admin 同一性釘,
+F_LEVELS / mobile-admin / member / mobile 四發
 全留。**留下的釘全是「domain 自身的獨立不變量」與「續存收窄的同參照證明」**——前者(字面快照、
 row-count canary)本來就與 facade 現況無關,後者才是這類釘真正該守的東西。
 
@@ -208,8 +221,9 @@ re-assert)與第三形(member/mobile 以自身較嚴格型別純註記收窄)。
   把葉模組再 re-export 回 `mobile/stores.ts`。
 - **`member/stores.ts` barrel 的檔頭仍寫「8 個關切模組」,但 `cart.ts` 已不在其列**:barrel 現在
   轉出的是 7 個同層關切模組 + 一個 lib-root 的 `$lib/cart`。這是 C2 的已知記帳,轉出面本身零變化。
-- **`src/lib/domain/member-app.test.ts` 檔頭有一句指向已刪除的 `src/lib/mobile/data.test.ts`**
-  (批1 遺留,批2 落地時記帳)。純註解陳舊,不影響任何斷言;留待未來任一 pass 觸碰該檔時順手修正。
+- **`src/lib/domain/member-app.test.ts` 檔頭原有一句指向已刪除的 `src/lib/mobile/data.test.ts`**
+  (批1 遺留,批2 落地時記帳)。純註解陳舊、不影響任何斷言,已於 R9 終審修波順手改為現況記載
+  (該檔隨批1 整檔退場,mobile 側僅存的 `LEAVE_STATUS` 同參照釘續存於本檔)。
 
 ## 測試守衛
 

@@ -1,11 +1,13 @@
 /* src/lib/domain/member-app.test.ts — member-app 單一來源 seed 守衛
  *
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生。本檔案分三層守衛:
- * 1. wiring check(toBe):member facade 匯出的每個共用常數與 domain 是「同一個
- *    物件參照」—— facade 是 live re-export / `as` 斷言(runtime 消失),不是複本。
+ * 1. wiring check(toBe):member facade 仍轉出的共用常數與 domain 是「同一個
+ *    物件參照」—— facade 側是純註記收窄(NOTIFS_SEED)或 `as` 斷言(UPCOMING),
+ *    兩者 runtime 都消失,不是複本。
  *    注意這一層抓不到「值被誤改」(兩邊永遠同參照),那是第 2、3 層的職責。
- *    (mobile facade 的同參照 + 型別匯出守衛在 src/lib/mobile/data.test.ts;
- *    LEAVE_STATUS 因兩側 facade 都是收窄 re-assert(卡 3),在本檔一併雙釘。)
+ *    (mobile facade 的同款守衛原在 src/lib/mobile/data.test.ts,該檔隨 C4 批1
+ *    純轉手退役整檔退場;LEAVE_STATUS 因兩側 facade 都是收窄 re-assert(卡 3),
+ *    在本檔一併雙釘,mobile 側僅存的同參照釘因此續存於此。)
  * 2. 獨立字面不變量:比照 src/lib/domain/data.test.ts 的慣例(獨立不變量,不拿
  *    下游 facade 對照),對 seed 關鍵欄位做字面快照(persona 王承恩 GY2024001、
  *    課名、教練名、金額……)—— 誤改 domain 值時這裡變紅。
@@ -23,7 +25,7 @@
  * C4 批2(facade 純轉手退役):member facade 對 ME/STATS/SKILLS/CONTACT_THREAD/
  * POINTS_LEDGER/WEEK/TIME_ROWS/COACH_REPLIES/NOTIF_CATS 的純轉手匯出退役,消費端
  * 改直取 $lib/domain/member-app——第 1 層 wiring check 的 toBe 釘同步減少,只留
- * UPCOMING/NOTIFS_SEED(facade 側仍是純註記收窄同參照,攜帶本檔型別事實;
+ * UPCOMING/NOTIFS_SEED(facade 側仍是續存收窄的同參照,攜帶本檔型別事實;
  * LEAVE_STATUS 另有專屬 it,見下)。第 2、3 層是「domain 自身」的獨立不變量,與
  * facade 現況無關,不受影響、全數保留。 */
 import { describe, it, expect } from 'vitest';

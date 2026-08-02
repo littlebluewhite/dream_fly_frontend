@@ -127,8 +127,9 @@ export interface MoreData {
 	tickets: Ticket[];
 }
 /** 更多(hub)— coaches/venues/tickets 復用桌面 admin seam(GET /coaches、/venues、
- *  /products，皆公開端點)真資料，三者互不相依，平行拉取(型別與 data.ts 的 Coach/
- *  Venue/Ticket 逐欄位相同，零映射)。
+ *  /products，皆公開端點)真資料，三者互不相依，平行拉取(型別即本檔頭直取
+ *  $lib/domain/coaches、venues、tickets 的 Coach/Venue/Ticket——C4 批3 之後 data.ts
+ *  不再持有這三型，零映射)。
  *  // P2: profiles(身分卡姓名/大頭貼/職稱)維持 mock——純顯示用 cosmetic 資料、非
  *  寫入路徑：admin 側沒有對應的「我的管理員檔案」seam，coach 側的真身分
  *  (coachGetSettings())在只有 admin 角色的帳號上可能查無教練資料(CoachNotFoundError)。
