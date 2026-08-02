@@ -5,7 +5,8 @@
    * 批次 1 W2a：MEMBER_STATUS 改名 MEMBER_ACCOUNT_STATUS（消同名異義，同桌面
    * admin/data.ts 命名）。 */
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { MEMBER_ACCOUNT_STATUS, type MemberAccountStatus } from '$lib/mobile-admin/data';
+  import { MEMBER_ACCOUNT_STATUS } from '$lib/mobile-admin/data';
+  import type { MemberAccountStatus } from '$lib/domain/members';
 
   export let s: string;
 

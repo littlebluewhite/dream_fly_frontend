@@ -4,8 +4,9 @@ import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
 import { getOpsCollections, createCourse, updateCourse } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, overlay, opsHydrated, toasts } from '$lib/mobile-admin/stores';
-import { CLASSES, MEMBERS, COACHES, ORDERS } from '$lib/mobile-admin/data';
+import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { ClassRow } from '$lib/mobile-admin/data';
+import { COACHES } from '$lib/domain/coaches';
 
 vi.mock('$lib/mobile-admin/api', () => ({
 	getOpsCollections: vi.fn(),

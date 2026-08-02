@@ -54,16 +54,19 @@ import {
 } from '$lib/coach/api';
 import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
 import { SESSION_STATUS } from '$lib/domain/sessions';
+// C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
+// $lib/domain 各 entity 檔(原經 ./data 純轉手,零附加型別事實)——ActivityRow 改名,
+// 用 import-site alias `Activity as ActivityRow` 保留本檔既有用名(:258)。
+import type { Coach } from '$lib/domain/coaches';
+import type { Venue } from '$lib/domain/venues';
+import type { Ticket } from '$lib/domain/tickets';
+import type { Activity as ActivityRow } from '$lib/domain/activity';
 import type { Tone } from '$lib/api/wire';
 import { fmtNT } from '$lib/format';
 import {
 	PROFILES,
 	type Profile,
-	type Coach,
-	type Venue,
-	type Ticket,
 	type TodayRow,
-	type ActivityRow,
 	type ClassRow,
 	type MemberRow,
 	type OrderRow,

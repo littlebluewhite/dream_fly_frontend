@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import VenuesScreen from './VenuesScreen.svelte';
 import { getVenues } from '$lib/mobile-admin/api';
-import type { Venue } from '$lib/mobile-admin/data';
+import type { Venue } from '$lib/domain/venues';
 
 /* 場館管理 push screen — C4：接真 GET /venues(復用桌面 admin/api.ts 的 getVenues()，見
  * $lib/mobile-admin/api 薄委派 re-export)。fixture 刻意異於 domain/venues.ts seed(場地

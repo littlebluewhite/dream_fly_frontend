@@ -4,8 +4,9 @@ import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
 import { getOpsCollections, createMember, updateMember } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, overlay, opsHydrated, toasts } from '$lib/mobile-admin/stores';
-import { CLASSES, MEMBERS, COACHES, ORDERS } from '$lib/mobile-admin/data';
+import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { MemberRow } from '$lib/mobile-admin/data';
+import { COACHES } from '$lib/domain/coaches';
 import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
 
 vi.mock('$lib/mobile-admin/api', () => ({

@@ -17,7 +17,11 @@ import { createHydrationGate } from '$lib/hydration-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import type { Role } from './nav';
-import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type Coach, type OrderRow, type MessageRow, type AdminNotif } from './data';
+// C4 批3(facade 純轉手退役):COACHES/type Coach 改直取 $lib/domain/coaches(原經
+// ./data 純轉手,零附加型別事實)——這裡是 coaches store 的同步種子值(見下方),
+// 非 test-only 消費。
+import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
+import { COACHES, type Coach } from '$lib/domain/coaches';
 import { getOpsCollections, getMessages, markRead } from './api';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------

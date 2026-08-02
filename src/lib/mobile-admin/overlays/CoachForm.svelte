@@ -24,7 +24,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import type { Coach } from '$lib/mobile-admin/data';
+  import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/mobile-admin/api';
 
   export let onClose: () => void;

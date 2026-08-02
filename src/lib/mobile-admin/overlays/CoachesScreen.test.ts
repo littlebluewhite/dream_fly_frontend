@@ -5,8 +5,8 @@ import CoachesScreen from './CoachesScreen.svelte';
 import { createMember, createCoach, updateMember, updateCoach, getOpsCollections } from '$lib/mobile-admin/api';
 import type { CoachFormValues } from '$lib/mobile-admin/api';
 import { overlay, coaches, toasts } from '$lib/mobile-admin/stores';
-import { COACHES } from '$lib/mobile-admin/data';
-import type { Coach } from '$lib/mobile-admin/data';
+import { COACHES } from '$lib/domain/coaches';
+import type { Coach } from '$lib/domain/coaches';
 import { ApiError } from '$lib/api/client';
 
 /* CoachesScreen.svelte — C3：教練管理 push screen 接上 $lib/admin/components/

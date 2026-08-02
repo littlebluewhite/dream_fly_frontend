@@ -24,7 +24,8 @@
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getVenues } from '$lib/mobile-admin/api';
-  import { VENUE_STATUS, type Venue } from '$lib/mobile-admin/data';
+  import { VENUE_STATUS } from '$lib/mobile-admin/data';
+  import type { Venue } from '$lib/domain/venues';
 
   export let onBack: () => void;
 

@@ -31,7 +31,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
   import { overlay, coaches as coachesStore, toasts, refreshOps } from '$lib/mobile-admin/stores';
-  import type { Coach } from '$lib/mobile-admin/data';
+  import type { Coach } from '$lib/domain/coaches';
   import {
     createCoach,
     updateCoach,

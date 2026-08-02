@@ -4,8 +4,9 @@ import OrdersPage from './+page.svelte';
 import { getOpsCollections } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, opsHydrated } from '$lib/mobile-admin/stores';
 import { fmtNT } from '$lib/format';
-import { CLASSES, MEMBERS, COACHES, ORDERS } from '$lib/mobile-admin/data';
+import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { OrderRow } from '$lib/mobile-admin/data';
+import { COACHES } from '$lib/domain/coaches';
 
 vi.mock('$lib/mobile-admin/api', () => ({ getOpsCollections: vi.fn() }));
 

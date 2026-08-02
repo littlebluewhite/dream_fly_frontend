@@ -9,29 +9,28 @@ export type Tone = [string, string];
 
 /* ---- single-source domain seed ----
  * The ops-pair shared seed (coaches / classes / members / orders + venues /
- * tickets / activity + reports) lives in `$lib/domain`. Mobile re-exports the
- * pass-through datasets and imports the base arrays + helpers its own `.map`
- * projections (below) build on, so there is exactly one copy of every value.
- * Mobile's own flat types, casts, tuple `Tone`, status maps and mobile-only
- * data stay local; its public API is unchanged. */
+ * tickets / activity + reports) lives in `$lib/domain`. Mobile imports the
+ * base arrays + helpers its own `.map` projections (below) build on, so
+ * there is exactly one copy of every value. Mobile's own flat types, casts,
+ * tuple `Tone`, status maps and mobile-only data stay local; its public API
+ * is unchanged. */
 
 // Pure pass-throughs — re-export domain's value + type verbatim.
-export { COACHES, type Coach } from '$lib/domain/coaches';
-// C4：VENUES/TICKETS 值退役——場館(VenuesScreen)/票券(TicketsScreen)兩個 push screen 已
-// 改接真 GET /venues、GET /products(見 $lib/mobile-admin/api 的 getVenues/getTickets 薄
-// 委派 re-export)，唯一消費者改吃 payload、兩份示範陣列無 production 引用。依 ADR 0010 §2
-// 值/型別分家「只砍值、留 interface」——Venue/Ticket 型別仍替 api.ts MoreData(:61-62)與兩個
-// screen 的本地 working copy 背書，改型別轉出保留；domain/venues.ts、domain/tickets.ts 的
-// VENUES/TICKETS seed 本身不動(admin 頁測試的 canonical fixture)。
-export type { Venue } from '$lib/domain/venues';
-export type { Ticket } from '$lib/domain/tickets';
+// C4 批3(facade 純轉手退役):COACHES(值，test-only 消費 + stores.ts/stores.test.ts
+// 內部種子值)/type Coach 退役——消費端改直取 $lib/domain/coaches。VENUES/TICKETS
+// 值早於本批已退役(見 api.ts getVenues/getTickets 薄委派 re-export；唯一消費者
+// VenuesScreen/TicketsScreen 改吃 payload)；本批複核 Venue/Ticket 型別轉出本身也是
+// 零附加型別事實的純轉手，一併退役，消費端(含 api.ts)改直取 $lib/domain/venues、
+// $lib/domain/tickets。domain/venues.ts、domain/tickets.ts 的 VENUES/TICKETS seed
+// 本身不動(admin 頁測試的 canonical fixture)。
 // Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(見
 // $lib/mobile-admin/api 的 getReports() 零映射 re-export)——domain/reports.ts 的
 // 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
 // 已無任何消費者，domain/reports.ts 本身隨此任務一併 `git rm`。
-export type { MemberAccountStatus } from '$lib/domain/members';
-// 批次 1 W2a：MemberAccountStatus 本地 union 改由 domain 轉出——`export type {…} from`
-// 不引入本地作用域，本檔 MemberRow.status 仍要用到這個型別，另見下面的 import type。
+// 批次 1 W2a：MemberAccountStatus 本地 union 改由 domain 轉出;C4 批3 複核零外部
+// 消費者(StatusBadgeM.svelte 改直取 $lib/domain/members),退役對外 export——
+// `export type {…} from` 不引入本地作用域,本檔 MemberRow.status 仍要用到這個
+// 型別,改由下面 base-array import 區塊的 import type 供本檔內部使用。
 // 卡 3：LEVEL_TINT 查表 + Student 型別經本 seam 轉手——單一複本留在
 // $lib/coach/data（單複本無分歧，搬 domain 只是搬家，ADR 0013 case-甲 同款否決），
 // mobile-admin 的學員頁/StudentActionSheet 一律經這裡取用，不再直取 coach surface
@@ -135,9 +134,9 @@ export const MEMBERS: MemberRow[] = MEMBERS_BASE.map((m) => ({
 }));
 
 /* ---- Orders / 訂單 ---- */
-// OrderStatus 單源改自 $lib/api/wire re-export(鏡射 admin/data.ts 先例，同 ADR 0007)——
-// 不再本地重宣告 6 態 union。
-export type { OrderStatus } from '$lib/api/wire';
+// OrderStatus 單源本就是 $lib/api/wire 的既有型別(鏡射 admin/data.ts 先例，同 ADR
+// 0007)，不再本地重宣告 6 態 union；import type 見檔頭 base-array 區塊。C4 批3
+// 複核零外部消費者，對外 export 退役，僅留本檔 OrderRow.status 內部使用。
 export interface OrderRow {
 	id: string;
 	member: string;
@@ -246,9 +245,9 @@ export const MESSAGES: MessageRow[] = [
 // Task P4-F3：ACTIVITY mock 退役(F11 已把 mobile-admin getAdminHome() 的最新動態改讀
 // 真 GET /reports/admin/activity——見 $lib/mobile-admin/api getAdminHome()，唯一消費者
 // 早已改吃 payload，此值與其 `Activity` 型別重新匯出自 F11 起無 production 引用)。
-// ActivityRow(下方 api.ts 仍在用的型別別名)只做型別匯入 + 更名，不再連帶匯出 mock 值。
-import type { Activity as ActivityRowType } from '$lib/domain/activity';
-export type ActivityRow = ActivityRowType;
+// C4 批3：ActivityRow 型別別名(零附加型別事實的純轉手改名)退役——api.ts 改直取
+// $lib/domain/activity 的 `Activity`，用 import-site alias `Activity as ActivityRow`
+// 保留本檔原名。
 
 /* ---- Notifications (mobile bell) ---- */
 export interface AdminNotif {
@@ -288,12 +287,14 @@ export const STATUS_TONE: Record<string, string> = STATUS_TONE_BASE;
 // getReports() payload；見 $lib/mobile-admin/api 的 getReports() 與 report-math.ts)。
 
 /* ===== 場館管理 data ===== */
-// `Venue` 型別自 `$lib/domain/venues` 轉出(檔頭)；`VENUES` 值已 C4 退役(見檔頭註記)。
+// `Venue` 型別已 C4 批3 退役(消費端改直取 `$lib/domain/venues`)；`VENUES` 值早於
+// 本批已退役(C4)。
 // 批次 1 W2a：改純註記 re-assert 自 $lib/domain/venues；canonical 標籤同步改為
 // 「可預約」，取代本檔舊值「可使用」——兩者原意相同、字面各自維護導致靜默發散，
 // 見 ADR 0013。
 export const VENUE_STATUS: Record<string, Tone> = VENUE_STATUS_BASE;
 
 /* ===== 票券管理 data ===== */
-// `Ticket` 型別自 `$lib/domain/tickets` 轉出(檔頭)；`TICKETS` 值已 C4 退役(見檔頭註記)。
+// `Ticket` 型別已 C4 批3 退役(消費端改直取 `$lib/domain/tickets`)；`TICKETS` 值早於
+// 本批已退役(C4)。
 export const TICKET_TYPE: Record<string, Tone> = TICKET_TYPE_BASE;

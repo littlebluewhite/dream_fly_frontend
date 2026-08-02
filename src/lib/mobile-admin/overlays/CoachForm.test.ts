@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import CoachForm from './CoachForm.svelte';
-import type { Coach } from '$lib/mobile-admin/data';
+import type { Coach } from '$lib/domain/coaches';
 
 /* Task F5：教練新增/編輯改接真 POST /coaches、PATCH /coaches/{id}（契約 §3.4，
  * 兩步流程的第二步）——這裡驗證新增/編輯兩種模式各自組出正確的 CoachFormValues

@@ -4,7 +4,8 @@ import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
 import { getAdminHome, createMember } from '$lib/mobile-admin/api';
 import { overlay, toasts } from '$lib/mobile-admin/stores';
-import type { Profile, TodayRow, ActivityRow } from '$lib/mobile-admin/data';
+import type { Profile, TodayRow } from '$lib/mobile-admin/data';
+import type { Activity as ActivityRow } from '$lib/domain/activity';
 import type { CreateMemberBody } from '$lib/mobile-admin/api';
 
 vi.mock('$lib/mobile-admin/api', () => ({ getAdminHome: vi.fn(), createMember: vi.fn() }));

@@ -23,7 +23,8 @@ import {
 	hydrateMessages,
 	refreshMessages
 } from './stores';
-import { MEMBERS, CLASSES, COACHES, ORDERS, MESSAGES } from './data';
+import { MEMBERS, CLASSES, ORDERS, MESSAGES } from './data';
+import { COACHES } from '$lib/domain/coaches';
 import { getOpsCollections, getMessages, markRead } from './api';
 
 // Task 20：getOpsCollections()/getMessages() 現委派桌面 admin/coach seams 真呼叫

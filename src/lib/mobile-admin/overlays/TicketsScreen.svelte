@@ -23,7 +23,8 @@
   import { fmtNT } from '$lib/format';
   import { soldPct } from '$lib/admin/tickets-util'; // F4：quota 0/null → 0，防 NaN/Infinity（重用桌面 admin 既有 helper）
   import { getTickets } from '$lib/mobile-admin/api';
-  import { TICKET_TYPE, type Ticket } from '$lib/mobile-admin/data';
+  import { TICKET_TYPE } from '$lib/mobile-admin/data';
+  import type { Ticket } from '$lib/domain/tickets';
 
   export let onBack: () => void;
 

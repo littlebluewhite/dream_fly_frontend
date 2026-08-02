@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import TicketsScreen from './TicketsScreen.svelte';
 import { getTickets } from '$lib/mobile-admin/api';
-import type { Ticket } from '$lib/mobile-admin/data';
+import type { Ticket } from '$lib/domain/tickets';
 import { fmtNT } from '$lib/format';
 
 /* 票券管理 push screen — C4：接真 GET /products(復用桌面 admin/api.ts 的 getTickets()，

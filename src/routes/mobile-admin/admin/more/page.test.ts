@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import MorePage from './+page.svelte';
 import { getMore } from '$lib/mobile-admin/api';
-import type { Profile, Coach, Venue, Ticket } from '$lib/mobile-admin/data';
+import type { Profile } from '$lib/mobile-admin/data';
+import type { Coach } from '$lib/domain/coaches';
+import type { Venue } from '$lib/domain/venues';
+import type { Ticket } from '$lib/domain/tickets';
 
 vi.mock('$lib/mobile-admin/api', () => ({ getMore: vi.fn() }));
 
