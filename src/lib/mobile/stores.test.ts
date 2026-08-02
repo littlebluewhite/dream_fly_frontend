@@ -3,9 +3,7 @@ import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import {
 	createOverlay,
-	createCart,
 	createNotifs,
-	cartCount,
 	unreadCount,
 	notifs,
 	notifsHydrated,
@@ -16,6 +14,7 @@ import {
 } from './stores';
 import { NOTIFS_SEED, type Course, type NotifItem } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
+import { cart as libCart } from '$lib/cart';
 // 卡 3 identity pins：以 namespace import 對照 seam 兩側的每個收編符號。
 import * as mobileStores from './stores';
 import * as memberStores from '$lib/member/stores';
@@ -83,53 +82,6 @@ describe('createOverlay', () => {
 		o.closeAll();
 		expect(get(o).stack).toHaveLength(0);
 		expect(get(o).sheet).toBe(null);
-	});
-});
-
-describe('cart', () => {
-	const course = courseFixture({ id: 'k1', name: '競技啦啦隊 進階班', price: 4800, spots: 1 });
-	it('adds a new course with qty 1', () => {
-		const c = createCart();
-		c.add(course);
-		expect(get(c)).toHaveLength(1);
-		// K5：購物車行收斂為 CartItem（單源於 courseToCartItem），不再是原課程
-		// 物件的原樣 spread——只斷言關鍵欄位透傳 + qty 鎖 1，不重建整個 CartItem
-		// 形狀（那是 cart-item.test.ts 的責任）。
-		expect(get(c)[0]).toMatchObject({ id: course.id, type: 'course', name: course.name, price: course.price, qty: 1 });
-	});
-	it('bumps (not increments) qty when the same course is added again — a course is an enrolment, not a quantity', () => {
-		const c = createCart();
-		expect(c.add(course)).toBe('added');
-		expect(c.add(course)).toBe('bumped');
-		expect(get(c)).toHaveLength(1);
-		expect(get(c)[0].qty).toBe(1);
-	});
-	it('removes a line and clears the whole cart', () => {
-		const c = createCart();
-		c.add(course);
-		c.add(courseFixture({ id: 'k6', name: '選手班', price: 6200, spots: 4 }));
-		c.remove('k1');
-		expect(get(c)).toHaveLength(1);
-		c.clear();
-		expect(get(c)).toHaveLength(0);
-	});
-	// K5-a 新增：icon 覆寫語意釘——courseToCartItem 對 CatalogCourse 消費端給的
-	// 是硬編預設 icon('sparkles')，add() 必須用課程自帶的 icon（來自 api.ts 的
-	// CATEGORY_ICON 薄映射，如「競技體操」→'medal'）覆寫掉它，購物車行才不會
-	// 全部顯示同一個 icon。fixture 刻意選 'medal'（≠ courseToCartItem 的預設
-	// 'sparkles'），避免巧合撞值造成假陽性。
-	it('add() 保留課程自帶 icon，不被 courseToCartItem 的預設 icon(sparkles)蓋掉——icon 覆寫語意釘', () => {
-		const c = createCart();
-		const medalCourse = courseFixture({ id: 'k-medal', cat: '競技體操', icon: 'medal' });
-		c.add(medalCourse);
-		expect(get(c)[0].icon).toBe('medal');
-	});
-});
-
-describe('cartCount', () => {
-	it('sums the quantities across lines', () => {
-		expect(cartCount([{ qty: 2 }, { qty: 3 }])).toBe(5);
-		expect(cartCount([])).toBe(0);
 	});
 });
 
@@ -319,27 +271,47 @@ describe('notifs singleton — 跨帳號 session 重置(C1:onSessionReset 抬升
 	});
 });
 
-describe('cart waitlist guard', () => {
-	const fullCourse = courseFixture({ id: 'k9', name: '額滿體操班', price: 5000, spots: 0 });
-	it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {
-		const c = createCart();
-		const r = c.add(fullCourse);
-		expect(r).toBe('waitlisted');
-		expect(get(c)).toHaveLength(0); // never enters the paid cart
+describe('mobile seam 收窄接線(C2：factory 上移 $lib/cart 後，mobile cart 收斂為 subscribe/add/remove/clear 四個成員)', () => {
+	// 工廠本體的 dedup/qty 鎖/waitlist guard 語意已由 lib/cart.test.ts 覆蓋——這裡
+	// 只驗 mobile 這層 adapter 的接線本身有沒有接對：icon 覆寫、委派到工廠、與
+	// $lib/cart 的持久化單例互不干擾。
+	beforeEach(() => {
+		localStorage.clear();
+		cart.clear();
+		libCart.clear();
 	});
 
-	it('adds a course that still has spots to the paid cart and returns "added"', () => {
-		const c = createCart();
-		const r = c.add(courseFixture({ id: 'k1', name: '競技啦啦隊 進階班', price: 4800, spots: 1 }));
-		expect(r).toBe('added');
-		expect(get(c)).toHaveLength(1);
+	// K5-a 前例延續：courseToCartItem 對 CatalogCourse 消費端給的是硬編預設 icon
+	// ('sparkles')，add() 必須用課程自帶的 icon（來自 api.ts 的 CATEGORY_ICON 薄
+	// 映射，如「競技體操」→'medal'）覆寫掉它，購物車行才不會全部顯示同一個 icon。
+	// fixture 刻意選 'medal'（≠ courseToCartItem 的預設 'sparkles'），避免巧合撞
+	// 值造成假陽性。
+	it('add() 保留課程自帶 icon，不被 courseToCartItem 的預設 icon(sparkles)蓋掉——icon 覆寫語意釘', () => {
+		const medalCourse = courseFixture({ id: 'k-medal', cat: '競技體操', icon: 'medal' });
+		cart.add(medalCourse);
+		expect(get(cart)[0].icon).toBe('medal');
 	});
 
-	it('reports "waitlisted" on every add of a full course — no local list to dedup; the caller\'s joinWaitlist() call now owns idempotency via the backend 409 (C8)', () => {
-		const c = createCart();
-		expect(c.add(fullCourse)).toBe('waitlisted');
-		expect(c.add(fullCourse)).toBe('waitlisted');
-		expect(get(c)).toHaveLength(0); // still never in the paid cart
+	it('add() 委派 $lib/cart 工廠：額滿課回 waitlisted、重複加入同一課程回 bumped（delegation smoke）', () => {
+		const full = courseFixture({ id: 'k-full', name: '額滿體操班', price: 5000, spots: 0 });
+		expect(cart.add(full)).toBe('waitlisted');
+		expect(get(cart)).toHaveLength(0); // never enters the paid cart
+
+		const normal = courseFixture({ id: 'k-normal', name: '競技啦啦隊 進階班', price: 4800, spots: 3 });
+		expect(cart.add(normal)).toBe('added');
+		expect(cart.add(normal)).toBe('bumped');
+		expect(get(cart)).toHaveLength(1);
+	});
+
+	// 實例分離釘：mobile 的 cart 只是拿了一個無 persist 的工廠實例，不是 $lib/cart
+	// 那個 persist:true 的 app-wide 單例本身——兩邊必須是完全獨立的 store，加進一邊
+	// 不會出現在另一邊。
+	it('mobile cart 與 $lib/cart 持久化單例是兩個獨立實例——加進一邊不會出現在另一邊', () => {
+		cart.add(courseFixture({ id: 'k-mobile-only', spots: 3 }));
+		expect(get(libCart).some((x) => x.id === 'k-mobile-only')).toBe(false);
+
+		libCart.addItem({ id: 'k-lib-only', type: 'course', name: '共用工廠課程', price: 100, icon: 'sparkles', spots: 3 });
+		expect(get(cart).some((x) => x.id === 'k-lib-only')).toBe(false);
 	});
 });
 

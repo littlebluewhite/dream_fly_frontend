@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { cart } from '$lib/member/stores';
+  import { cart } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
   import { subtotalOf } from '$lib/checkout-math';

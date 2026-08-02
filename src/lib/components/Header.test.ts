@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/svelte';
 import { readable } from 'svelte/store';
 import Header from './Header.svelte';
 import { authStore } from '$lib/stores/authStore';
-import { cart } from '$lib/member/stores';
+import { cart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
 import type { CatalogCourse } from '$lib/public/adapters';
 

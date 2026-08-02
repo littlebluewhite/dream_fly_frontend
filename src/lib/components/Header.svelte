@@ -4,7 +4,7 @@
   import CartDropdown from './CartDropdown.svelte';
   import NotificationsDropdown from './NotificationsDropdown.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { cartCount } from '$lib/member/stores';
+  import { cartCount } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { unreadCount } from '$lib/stores/notificationsStore';
 

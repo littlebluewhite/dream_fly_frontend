@@ -19,8 +19,8 @@
  *  - notifications.ts   通知中心
  *  - ui.ts              跨路由 UI 狀態（checkoutOpen/search/toasts） */
 
-export { createCart, cart, cartCount } from './cart';
-export type { AddResult } from './cart';
+export { createCart, cart, cartCount } from '$lib/cart';
+export type { AddResult } from '$lib/cart';
 
 export { waitlist, waitlistHydrated, hydrateWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './waitlist';
 export type { WaitlistEntry } from './waitlist';

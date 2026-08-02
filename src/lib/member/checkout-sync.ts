@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { chargeableLines } from './checkout';
-import { cart } from './cart';
+import { cart } from '$lib/cart';
 import { subscriptions, refreshSubscriptions } from './subscriptions';
 import { refreshPoints } from './points';
 

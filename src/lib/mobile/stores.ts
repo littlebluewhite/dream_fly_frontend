@@ -10,9 +10,10 @@
  * Task 19：登入守門與 auth 狀態改用真實 `$lib/stores/authStore`(見
  * routes/mobile/+layout.svelte + guard.ts)——這個檔案不再有本地的 demo
  * `session` gate 旗標。`notifs`/`notifsHydrated` 由 `$lib/mobile/api.ts` 的
- * getNotifications() 水合真資料(同 member notifications 前例)。`cart` 仍是
- * 本地端購物車 —— 一個與 member 平行的 store，尚未合併(P2，見
- * task-19-report.md 的顧慮)；但 CartSheet 的結帳流程本身已改真下單，
+ * getNotifications() 水合真資料(同 member notifications 前例)。`cart` 改吃
+ * lib-root 共用工廠 $lib/cart(C2:與 member 側同一份實作，不再是平行 store；
+ * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
+ * CartSheet 的結帳流程本身已改真下單，
  * `placeOrder()` 委派共用的 `submitOrder`(`$lib/checkout-order`，見下方該函式
  * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律
  * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
@@ -26,7 +27,8 @@ import { createOverlay } from '$lib/components/mobile/overlay';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints, subscriptions } from '$lib/member/stores';
 import { chargeableLines } from '$lib/member/checkout';
-import { courseToCartItem, type CartItem } from '$lib/cart-item';
+import { createCart } from '$lib/cart';
+import { courseToCartItem } from '$lib/cart-item';
 import { ME, NOTIFS_SEED, type NotifItem, type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
@@ -96,58 +98,22 @@ export { validateCoupon, orderErrorMessage, chargeableLines } from '$lib/member/
 export { subscriptions } from '$lib/member/stores';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
-/** A full course (spots 0) never enters the paid cart — add() just reports
- *  'waitlisted'; the caller is expected to call joinWaitlist() itself (C8,
- *  Round 2 批次甲：mobile 候補改接 server seam，mirrors member/cart.ts's addItem —
- *  see routes/member/courses/+page.svelte). A repeat add of a course already in
- *  the cart is a no-op that reports 'bumped' — a course is an enrolment, not a
- *  quantity, so it never accumulates qty (mirrors member cart's addItem; see
- *  CONTEXT.md 報名). There is no updateQty(): with courses as the only line
- *  type, an increment/decrement control would have nothing legitimate to do
- *  (matches member cart's course qty lock — see its updateQty doc). */
-export type AddResult = 'added' | 'bumped' | 'waitlisted';
-/** K5:自持的 CartInput/CartLine 一次性型別已退役，購物車行收斂為全站共用的
- *  `CartItem`（見 $lib/cart-item）——欄位對映單源於 courseToCartItem，這裡只做
- *  一件事：spread 後覆寫 icon，保留課程自帶 icon（來自 api.ts 的 CATEGORY_ICON
- *  薄映射）蓋過 courseToCartItem 對 CatalogCourse 消費端的硬編預設
- *  （'sparkles'）。去重鍵同步升級為 (type, id) 複合鍵，鏡射 member cart 的
- *  addItem 慣例；mobile 目前仍只有 course 一種來源，不開放 addItem（interface
- *  不膨脹）。 */
-export function createCart() {
-	const { subscribe, update, set } = writable<CartItem[]>([]);
-	return {
-		subscribe,
-		add(course: Course): AddResult {
-			if (course.spots === 0) {
-				return 'waitlisted';
-			}
-			const item: CartItem = { ...courseToCartItem(course), icon: course.icon };
-			let result: AddResult = 'added';
-			update((items) => {
-				const ex = items.find((c) => c.type === item.type && c.id === item.id);
-				if (ex) {
-					result = 'bumped';
-					return items; // qty 鎖 1 —— 課程是報名不是數量
-				}
-				return [...items, item];
-			});
-			return result;
-		},
-		remove(id: string) {
-			update((items) => items.filter((c) => c.id !== id));
-		},
-		clear() {
-			set([]);
-		}
-	};
-}
-export const cart = createCart();
-
-/** Total item count across cart lines. */
-export function cartCount(items: { qty: number }[]): number {
-	return items.reduce((s, c) => s + c.qty, 0);
-}
-export const cartTotal = derived(cart, ($c) => cartCount($c));
+/** C2(架構深化 R9)：工廠本體上移為 lib-root 共用模組 $lib/cart（member 側也
+ *  改吃同一份實作，dedup/qty 鎖/waitlist guard 語意單源）——這裡原本的行為孿生
+ *  （twin）退役。factory 不在此收窄：mobile 只是拿一個無 persist 的實例（=
+ *  現行為，不寫 localStorage），介面收斂為 subscribe/add/remove/clear 四個
+ *  成員，不膨脹。add() 仍是薄 adapter——把 mobile 的 Course 轉成 factory 認得
+ *  的 CartItemInput（經 courseToCartItem），並保留課程自帶 icon（來自 api.ts
+ *  的 CATEGORY_ICON 薄映射）覆寫掉 courseToCartItem 對公開課程消費端給的硬編
+ *  預設('sparkles')——這段覆寫邏輯 factory 不擁有，留在這層做。 */
+export type { AddResult } from '$lib/cart';
+const cartBase = createCart(); // 無 persist(= mobile 現行為)
+export const cart = { // 介面不膨脹:只出 4 個成員
+	subscribe: cartBase.subscribe,
+	add: (course: Course) => cartBase.addItem({ ...courseToCartItem(course), icon: course.icon }),
+	remove: cartBase.remove,
+	clear: cartBase.clear
+};
 
 /* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
  * C4 收斂：原本焊在這裡的「同步購物車 → POST /orders → 下單後刷新 → 清購物車」
