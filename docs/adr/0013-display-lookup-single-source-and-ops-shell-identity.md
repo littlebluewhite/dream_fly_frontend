@@ -300,8 +300,17 @@ mobile-admin 保留既有寬鍵 fallback)的完整裁決過程,記於 `docs/adr/
 **消失的是第一形的實例,不是這條分類本身**。三形的判準原樣有效——若日後某個新 facade 的 `Tone`
 恰好與 wire 相容,0019 的判準句會直接判它「不必存在這層轉手」(而不是判它「該用第一形」);第二形
 (mobile-admin 純註記 re-assert)與第三形(member/mobile 以自身較嚴格型別純註記收窄)因為真的攜帶
-本檔型別事實,全數原樣保留、`toBe` 同參照守衛也全留。0019 同時把兩形的**鑑別法**落字:domain 端用
-`satisfies` 鎖字面(facade 端才是真收窄)vs domain 端顯式標註(facade 端零型別事實、屬第一形)。
+本檔型別事實,全數原樣保留、`toBe` 同參照守衛也全留。0019 同時把兩形的**鑑別法**落字:分水嶺是
+**facade 宣告型別與 domain 宣告型別是否結構恆等**——結構恆等即零型別事實被附加,屬第一形;不恆等
+(facade 以本檔可見型別重新宣告,無論收窄或放寬)才是真的攜帶型別事實的第二/三形。§1 五個 entity
+查表(`VENUE_STATUS`/`MEMBER_ACCOUNT_STATUS`/`TICKET_TYPE`/`STATUS_TONE`/`LEVEL_TONE`)即為後者的
+實例:domain 端一律是顯式 `Record<窄鍵, 值>` 標註(見上文「宣告形與不 `readonly` 理由」),facade
+端改用本檔可見型別承接(組合依表而異,見上文第二形原文:鬆散 `string` 鍵配本檔 tuple `Tone`、保留
+具名 union 鍵、或 plain-tone `Record<string, string>`),兩者不恆等,故本輪全數保留。
+`member-app.ts` 那套以 `satisfies` 鎖字面、讓窄側 facade 零斷言收窄的手法(見上文「member-app 章程
+部分重開原文」)是**該檔寬鬆結構型別章程下的線索**,不是通用判別式——§1 這五張 entity 查表沒有
+一張用 `satisfies`,若照「`satisfies` vs 顯式標註」字面套會把它們全誤判成第一形,與上文 §1 Form 2
+的記載直接相反。
 
 **§1 表格現況補登**(表格原文記的是 2026-07-14 W2a/W2b 落地當下的狀態,以下是 R9 C4 之後的實況;
 表格本身不改寫,以本節為準):

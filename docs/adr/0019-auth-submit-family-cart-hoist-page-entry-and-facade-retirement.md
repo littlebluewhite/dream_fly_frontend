@@ -157,8 +157,26 @@ commits `ec1187f`(批1 mobile)/`ae7632f`(批2 member)/`89ad3f1`(批3 mobile-admi
 `domain/member-app.ts` 對它是**顯式標註** `[string, string][]`(不是靠 `satisfies` 保字面推斷),
 mobile 本地 `Tone = [string, string]` 與之結構恆等,零型別事實被附加——判定 Form 1、一併退役,並以
 `npm run check` 對唯一消費檔改直取後零錯誤實測背書。對照組是同檔的 `LEAVE_STATUS`:domain 端用
-`satisfies` 鎖住 tone 字面 union,facade 端才是真正的 widen/收窄,保留。**鑑別法**因此落字:
-domain 端 `satisfies` vs 顯式標註,是判斷 Form 2/3 真收窄與 Form 1 假 seam 的分水嶺。
+`satisfies` 鎖住 tone 字面 union、不下顯式標註,facade 端以自己的型別重新宣告才真的改變了型別,保留。
+
+**鑑別法因此落字:分水嶺是「facade 宣告型別與 domain 宣告型別是否結構恆等」,不是 `satisfies`。**
+結構恆等 ⇒ 零型別事實被附加 ⇒ Form 1 假 seam ⇒ 退役;不恆等(facade 以本檔可見型別重新宣告,無論
+收窄或放寬)⇒ 真的攜帶本檔型別事實 ⇒ Form 2/3 ⇒ 保留。`satisfies` **只是** `domain/member-app.ts`
+那套「寬鬆結構型別」章程(見 `docs/adr/0013`「member-app 章程部分重開原文」)下、讓 facade 得以零
+斷言收窄的手段,是該檔情境的線索,不是通用判別式——**倉內反例俯拾即是**:`domain/venues.ts` 的
+`VENUE_STATUS`、`domain/members.ts` 的 `MEMBER_ACCOUNT_STATUS`、`domain/tickets.ts` 的
+`TICKET_TYPE`、`domain/classes.ts` 的 `STATUS_TONE`、`domain/course-level.ts` 的 `LEVEL_TONE`
+五張表在 domain 端**全是顯式 `Record<窄鍵, 值>` 標註、零 `satisfies`**,而它們的 facade re-assert
+(mobile-admin 五張 Form 2、member/mobile 的 `LEVEL_TONE`)在本輪全數保留——因為 facade 端是以本檔
+可見型別重新宣告的(依表而異:鬆散 `string` 鍵配本檔 tuple `Tone`、保留具名 union 鍵、或 plain-tone
+`Record<string, string>`),與 domain 端的窄鍵配 wire `Tone` 都不結構恆等。若照「`satisfies` vs
+顯式標註」字面套,這五張會被誤判成假 seam,與上方保留欄直接相反。
+
+**這條鑑別法只裁「型別事實」這一項**,不取代判準句的其餘部分:值變形(`.map` 投影、
+`mapMemberAccount` 一類 mapper)與 ADR 記名的邊界 seam 各自獨立成立。`mobile-admin` 的
+`LEVEL_TINT`/`Student` 就是最好的提醒——它是零重新宣告的 `export {…} from`(結構當然恆等),卻**不**
+進退役側,因為判準句的前提「來源是 `$lib/domain` 或 `$lib/api/wire`」對它就不成立(來源是
+`$lib/coach/data`),且 `docs/adr/0014` §1 已記名它為邊界 seam。
 
 **守護測試稅大部退場,留下的是 domain 本體契約。** 四批合計讓四個守護測試檔淨減 113 行(刪 130、
 增 17):`src/lib/mobile/data.test.ts` 94 行整檔退場(其 `LEAVE_STATUS` 字面契約另有
