@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CoachesScreen from './CoachesScreen.svelte';
 import { createMember, createCoach, updateMember, updateCoach, getOpsCollections } from '$lib/mobile-admin/api';
 import type { CoachFormValues } from '$lib/mobile-admin/api';
-import { overlay, coaches, toasts } from '$lib/mobile-admin/stores';
+import { overlay, coaches, toasts, opsHydrated } from '$lib/mobile-admin/stores';
 import { COACHES } from '$lib/domain/coaches';
 import type { Coach } from '$lib/domain/coaches';
 import { ApiError } from '$lib/api/client';
@@ -18,7 +18,15 @@ import { ApiError } from '$lib/api/client';
  * 這樣才是驗證本頁「呼叫 seam → 依 outcome.kind 翻譯 toast → refreshOps」的真實
  * 接線，而不是把 seam 也一起 mock 掉、只驗證呼叫參數。overlay 是全域 store，直接
  * 呼叫 sheet 帶入的 onSave（頁面自己的閉包），不重新渲染 CoachForm.svelte（同
- * mobile-admin/admin/members/page.test.ts 慣例）。 */
+ * mobile-admin/admin/members/page.test.ts 慣例）。
+ *
+ * R10：本頁 onMount 加了 hydrateOps() 自保呼叫(水合缺口修補，見 CoachesScreen.svelte
+ * 檔頭新增註解)。既有 8 it 驗證的是「使用者互動」觸發的 refreshOps，跟 onMount 的
+ * hydrateOps 是兩條不同呼叫路徑，但兩者共用同一個 getOpsCollections mock 與
+ * opsHydrated guard——beforeEach 先把 opsHydrated 設為 true，讓 onMount 的
+ * hydrateOps() 因 guard 短路直接 return，不會偷打 getOpsCollections，才不會弄假紅
+ * 既有斷言（:90/:94/:184/:198 四處呼叫次數斷言）。「開啟即水合」測試則反過來，自己
+ * 把 opsHydrated 設回 false 才 render，驗證 guard 開啟時 onMount 真的會呼叫。 */
 
 vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
@@ -43,6 +51,9 @@ beforeEach(() => {
 	vi.mocked(getOpsCollections).mockResolvedValue(opsFixture(COACHES));
 	coaches.set(COACHES);
 	overlay.closeAll();
+	// R10：opsHydrated 是明文「測試重置縫」(stores.ts)——設為已水合，讓本頁新加的
+	// onMount hydrateOps() 因 guard 短路直接 return，不干擾既有的呼叫次數斷言。
+	opsHydrated.set(true);
 });
 
 afterEach(() => {
@@ -208,5 +219,29 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '儲存失敗' });
 		expect(get(toasts).at(-1)?.body).toBe('姓名不符規則');
 		expect(getOpsCollections).not.toHaveBeenCalled();
+	});
+});
+
+describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁→本 overlay 動線上此前無人呼叫 hydrateOps，$coachesStore 只見 domain seed)', () => {
+	it('opsHydrated 為 false 時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
+		opsHydrated.set(false);
+		const hydratedCoach: Coach = {
+			id: 'c-hydrated',
+			userId: 'u-hydrated',
+			name: '水合教練',
+			initial: '水',
+			title: '主任教練',
+			color: '#123456',
+			tags: ['地板動作'],
+			isActive: true
+		};
+		vi.mocked(getOpsCollections).mockResolvedValue(opsFixture([hydratedCoach]));
+
+		const { getByText } = render(CoachesScreen, { props: { onBack: () => {} } });
+
+		await waitFor(() => {
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(getByText('水合教練')).toBeInTheDocument();
+		});
 	});
 });

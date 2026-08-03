@@ -24,13 +24,14 @@
    * 沒有這個工作階段可以重試），錯誤 toast 改為建議至「學員管理」頁確認帳號、或
    * 重新執行一次新增教練（換一個 email）。同桌面一樣不做自動回滾（後端沒有複合
    * 建立端點，也沒有刪除使用者的端點可呼叫）。 */
+  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
-  import { overlay, coaches as coachesStore, toasts, refreshOps } from '$lib/mobile-admin/stores';
+  import { overlay, coaches as coachesStore, toasts, refreshOps, hydrateOps } from '$lib/mobile-admin/stores';
   import type { Coach } from '$lib/domain/coaches';
   import {
     createCoach,
@@ -45,6 +46,18 @@
 
   export let onBack: () => void;
   export let onNew: (() => void) | undefined = undefined;
+
+  // R10 審查發現的水合缺口:admin 首頁 getAdminHome() → 更多頁 getMore()
+  // (routes/mobile-admin/admin/more/+page.svelte)→ 本 overlay 這條動線,沿路兩站
+  // 都只讀各自的本地一次性快照,從未呼叫 hydrateOps()——$coachesStore 因此永遠停
+  // 在 stores.ts 的 domain seed(COACHES),使用者看到的不是後端真資料。消費端自
+  // 保:onMount 觸發 hydrateOps()(stores.ts 的 opsGate 註解明文=hydrateOps() 由
+  // 消費頁在 onMount 觸發;同 classes/members/orders 三頁 + member/courses 頁
+  // onMount hydrate 前例)。opsHydrated guard 保證重複開啟不重抓,catch 吞錯後
+  // domain seed 仍可渲染(best-effort,同 member/courses 頁 hydrateWaitlist 慣例)。
+  onMount(() => {
+    void hydrateOps().catch(() => {});
+  });
 
   // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
   // 文字 → apiErrorMessage 直接透傳，同桌面 coaches 頁慣例。
