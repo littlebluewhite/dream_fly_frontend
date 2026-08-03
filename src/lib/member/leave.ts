@@ -81,9 +81,10 @@ export const hydrateLeaveRequests = gate.hydrate;
 /** 保名 = gate.refresh：無視守衛、一律真抓——MyCourseDetail 開課程詳情要「刷新
  *  最新請假狀態」的既有語意（mobile stores 的 re-export 與 identity pin 均繫於
  *  此名）。走工廠的 wrappedFetch,故一併獲得 P1′ 在飛作廢(跨登出/換帳號的在飛
- *  refresh 回應整包作廢);但無 mutation-wins re-check(同 load-gate applyRefreshed
- *  的「無條件」刻意設計)——refresh 飛行窗口內的併發取消仍可能被蓋回,known-latent,
- *  不在本輪擴語意。 */
+ *  refresh 回應整包作廢);並自架構深化 R10 起改走世代穩定重抓——飛行窗口內的併發
+ *  取消(cancelLeaveRequest 的 markMutated)會讓姍姍來遲的舊快照作廢、原地重抓,已取消
+ *  的假單不再被蓋回 pending(ADR 0016 known-latent #2 閉合;判準是「refresh 進場之後
+ *  才發生的 mutation」,見 $lib/hydration-gate 的 fetchGenStable)。 */
 export const refreshLeaveRequests = gate.refresh;
 
 /** POST /leave-requests（帶 session_id + 選填 reason）。reason 空字串/未提供時省略

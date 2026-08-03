@@ -177,6 +177,31 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     expect(get(leaveRequestsHydrated)).toBe(false); // B 的 hydrate 不會被短路
   });
 
+  it('R10 世代穩定重抓(MyCourseDetail 場景):refresh 在飛期間取消假單 → 已取消不復活,舊快照丟棄並原地重抓(GET×2)', async () => {
+    /* MyCourseDetail 開詳情時呼叫 refreshLeaveRequests()「刷新最新請假狀態」;使用者在
+     * 這個飛行窗口內按下取消,舊碼會讓姍姍來遲的舊快照(server 端仍 pending)無條件落地,
+     * 剛取消的假單復活成 pending。判準是「refresh 進場之後才發生的 mutation」,cancel 的
+     * markMutated 正落在窗口內 → 舊快照丟棄、原地重抓 server 已更新的版本。 */
+    const deferred = createDeferred<unknown[]>();
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /leave-requests/me': () => (++gets === 1 ? deferred.promise : [{ ...API_LR_PENDING, status: 'cancelled' }]),
+      'DELETE /leave-requests/lr-1': undefined
+    }));
+    leaveRequests.set([API_LR_PENDING as never]);
+    leaveRequestsHydrated.set(true); // 清單頁已載入過,詳情頁只是要「最新」
+
+    const p = refreshLeaveRequests(); // 開詳情的刷新在飛
+    await cancelLeaveRequest('lr-1'); // 飛行窗口內取消 → 本地 cancelled + markMutated
+    expect(get(leaveRequests)[0].status).toBe('cancelled');
+
+    deferred.resolve([API_LR_PENDING]); // 舊快照:server 端當時仍是 pending
+    await p;
+
+    expect(gets).toBe(2); // 舊快照丟棄後補抓(refresh 契約:丟棄不能了事)
+    expect(get(leaveRequests)[0].status).toBe('cancelled'); // 已取消不復活
+  });
+
 });
 
 describe('createLeaveRequest — POST /leave-requests', () => {

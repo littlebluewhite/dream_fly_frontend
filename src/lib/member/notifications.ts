@@ -24,7 +24,11 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  restored session 開機立即回呼值冪等)。
  *  C3(架構深化 R9)補完 ADR 0017 記下的 known-latent 殘窗:通知**頁**的 load-gate
  *  入口原本直接拿 api.ts 的 getNotifications 當 fetch、繞過 epoch 核對,現改吃下方
- *  notificationsPageEntry(同一顆閘門吐出的進場包)。 */
+ *  notificationsPageEntry(同一顆閘門吐出的進場包)。
+ *  架構深化 R10:進場包再帶 hydrate.gen(閘門的 mutationGen),通知頁 load-gate 的
+ *  refresh()/silentRefresh() 因此獲得世代穩定重抓——使用者按「重新整理」的飛行窗口內
+ *  點的已讀(markRead/markAllRead 的 markMutated)不再被姍姍來遲的舊快照打回未讀,舊
+ *  快照丟棄後原地重抓(見 $lib/hydration-gate 的 fetchGenStable)。 */
 const gate = createSessionGate<Notification[]>({
   fetch: async () => {
     const list = await api<ApiNotification[]>('/notifications');

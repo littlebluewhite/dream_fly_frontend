@@ -12,8 +12,28 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { createLoadGate } from '$lib/load-gate';
 import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead } from './notifications';
 import { NOTIFS_SEED } from './data';
+
+/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers（同
+ *  leave-requests-api.test.ts / load-gate.test.ts 的慣用式）。 */
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
+/** GET /notifications 的後端形狀（ApiNotification），只填 mapNotification 會讀到的欄位。 */
+function apiNotif(read: boolean) {
+  return {
+    id: 'n1', type: 'system', title: '系統公告', message: '內容',
+    is_read: read, metadata: null, created_at: '2026-01-01T00:00:00Z'
+  };
+}
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -98,5 +118,31 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
   it('hydrate.flag 與 notificationsHydrated 同一實例、fetch 為函式', () => {
     expect(notificationsPageEntry.hydrate.flag).toBe(notificationsHydrated);
     expect(typeof notificationsPageEntry.fetch).toBe('function');
+  });
+
+  /* R10:進場包再帶 hydrate.gen（閘門的 mutationGen），頁面 load-gate 的 refresh 族
+   * 因此獲得世代穩定重抓。這裡釘的是「通知頁重新整理在飛時點已讀，已讀不回退」——
+   * 舊碼的 applyRefreshed 無條件套用，姍姍來遲的舊快照(server 端仍未讀)會把剛剛的
+   * 樂觀已讀打回未讀。 */
+  it('頁面 load-gate 的 refresh 在飛期間 markRead → 已讀不回退,舊快照丟棄並原地重抓(GET×2)', async () => {
+    const d = createDeferred<unknown[]>();
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /notifications': () => (++gets === 1 ? d.promise : [apiNotif(true)]),
+      'PATCH /notifications/n1/read': undefined
+    }));
+
+    const page = createLoadGate({ ...notificationsPageEntry });
+    const p = page.refresh(); // 使用者按「重新整理」/retry — 顯式新鮮度
+    await markRead('n1'); // 飛行窗口內點已讀 → 樂觀更新 + markMutated
+    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
+
+    d.resolve([apiNotif(false)]); // 舊快照:server 端當時仍未讀
+    await p;
+
+    expect(gets).toBe(2); // 舊快照丟棄後補抓
+    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true); // 已讀不回退
+
+    page.destroy();
   });
 });

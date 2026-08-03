@@ -216,6 +216,35 @@ describe('createSessionGate — 和解家族(序列化 + 可重試 + 幽靈取�
 		expect(get(gate.hydrated)).toBe(true);
 	});
 
+	it('R10 和解窗口閉合:R1 在飛期間 M2 完成(不排 R2)→ R1 的舊快照丟棄並原地重抓,M2 的直寫不被蓋掉', async () => {
+		/* 和解快照 vs 後續 mutation 的殘窗:M1 未水合 → 排 R1;R1 掛起期間 M2 進場時旗標
+		 * 已是 true、寫回時仍完整,故**不排** R2——R1 的舊快照(server 尚未看見 B)落地後
+		 * 舊碼會無條件套用,B 蒸發。refresh 收進世代穩定重抓後,R1 進場捕捉的世代早於 M2
+		 * 的 markMutated,落地比對不符 → 丟棄並原地重抓,窗口免費閉合(queueReconcile 零改)。 */
+		const A = { id: 'a' };
+		const B = { id: 'b' };
+		const r1 = createDeferred<Item[]>();
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => (++gets === 1 ? r1.promise : [B, A]) }));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await gate.mutate(async () => A, (r) => store.update((l) => [r, ...l])); // M1 未水合 → markMutated + 排 R1
+		await settleReconcile();
+		expect(gets).toBe(1); // R1 的 GET 出發(掛起)
+
+		await gate.mutate(async () => B, (r) => store.update((l) => [r, ...l])); // M2:進場已水合且寫回時仍完整 → 不排 R2
+		expect(get(store)).toEqual([B, A]);
+		expect(gets).toBe(1); // 確認真的沒有第二支和解——閉合只能靠 R1 自己的世代比對
+
+		r1.resolve([A]); // R1 的舊快照(server 尚未看見 B)此刻才落地
+		await settleReconcile();
+
+		expect(gets).toBe(2); // 世代已變 → 舊快照丟棄、原地重抓
+		expect(get(store)).toEqual([B, A]); // B 沒有被舊快照蓋掉
+		expect(get(gate.hydrated)).toBe(true);
+	});
+
 	it('可重試翻旗:和解重抓失敗 → 旗標翻回 false 留重試路徑,下一次 hydrate 重新真抓完整清單', async () => {
 		const NEW = { id: 'new' };
 		const OLD = { id: 'old' };
@@ -385,6 +414,13 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 
 		expect(entry.hydrate.flag).toBe(gate.hydrated);
 		expect(entry.hydrate.into).toBe(apply);
+	});
+
+	it('hydrate.gen 是 gate.mutationGen 同一函式(R10:頁面的 refresh 族與 store 閘門讀同一本世代帳,不是各記各的)', () => {
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		expect(gate.pageEntry().hydrate.gen).toBe(gate.mutationGen);
 	});
 
 	it('fetch 只回傳資料、不自行 apply(寫入是 load-gate hydrate 的事,翻旗也是)', async () => {

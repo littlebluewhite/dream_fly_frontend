@@ -38,7 +38,11 @@ const notifsBase = createNotifs<NotifItem>(NOTIFS_SEED);
  *  (ADR 0017 的 known-latent 殘窗)。reset 用 NOTIFS_SEED clone(boot 態,badge
  *  teaser 保留,restored session 開機的立即回呼值冪等)。gate.refresh 不匯出——
  *  通知域沒有「無視守衛強制重抓」的模組層消費者(頁面重試走 load-gate 自己的
- *  refresh,見 pageEntry)。 */
+ *  refresh,見 pageEntry)。
+ *  架構深化 R10:進場包再帶 hydrate.gen(閘門的 mutationGen),通知頁 load-gate 的
+ *  refresh()/silentRefresh() 因此獲得世代穩定重抓——重新整理的飛行窗口內點的已讀
+ *  (markRead/markAllRead 的 markMutated)不再被姍姍來遲的舊快照打回未讀,舊快照丟棄後
+ *  原地重抓(見 $lib/hydration-gate 的 fetchGenStable;同 member 側前例)。 */
 const gate = createSessionGate<NotifItem[]>({
 	// 惰性綁定(`() => getNotifications()`,與 member 側 inline closure 同形):模組載入
 	// 期只捕捉呼叫點、不取值,測試以 vi.mock 工廠替換 `$lib/mobile/api` 時不會在本檔

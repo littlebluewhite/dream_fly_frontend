@@ -17,6 +17,12 @@
  * ②門 (c) `onSessionReset` 退役 —— 其唯一消費者 mobile notifs 已改建完整 gate
  * (見 $lib/mobile/notifications.ts),三門收斂為兩門。
  *
+ * 架構深化 R10 只動一行:pageEntry() 的 hydrate 包多帶 `gen: gate.mutationGen`,讓頁面
+ * load-gate 的 refresh 族與 store 閘門讀**同一本** mutation 世代帳,獲得世代穩定重抓
+ * (見 $lib/hydration-gate 的 fetchGenStable)。本檔其餘一字未動——尤其 queueReconcile
+ * 零 diff:它的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費閉合
+ * (見該函式註解)。
+ *
  * 座落位置:authStore 與 domain store 之間。刻意**不**深化 hydration-gate——後者被
  * ~49 頁全 surface 的 load-gate 消費(含 staff 面,其 identity 源非 member authStore),
  * 若把 member auth 維度打進那顆 core,等於把錯向依賴灌進 repo 最寬的 seam;且
@@ -146,6 +152,10 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 	 *   下一次 hydrate 重新真抓;不再吞錯佯裝完整。失敗翻回 false 不會拆掉 in-flight
 	 *   hydrate 的 mutation-wins——gate 的 markMutated 帶單調世代(見 hydration-gate.ts)。
 	 * - 幽靈取消:排隊當下的 session 若在起跑前已結束(epoch 變了),callback 直接跳過。
+	 * - 和解快照 vs 後續 mutation(架構深化 R10 閉合,本函式零 diff):R1 在飛期間若有第二支
+	 *   mutation 完成而**不排** R2(它進場時旗標已 true、寫回時仍完整),R1 的舊快照舊碼會
+	 *   無條件套用、蓋掉那筆直寫。gate.refresh() 收進世代穩定重抓後,R1 進場捕捉的世代早於
+	 *   該 mutation,落地比對不符即丟棄並原地重抓——不必在這裡多排一支和解。
 	 */
 	function queueReconcile(): void {
 		const epoch = core.epoch();
@@ -182,11 +192,15 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 	 *   - stale(跨登出/換帳)→ epochFetch throw → load-gate 既有 error 態;
 	 *   - 使用者按 retry → load-gate 的 refresh 回落同一支 epochFetch → 新 epoch 下成功。
 	 * 換帳當下 identity 重置(onChange)已同步清 store,新帳號永不見舊帳號資料。
-	 * flag 是閘門自己的 hydrated **同一實例**、into 是 opts.apply **同一函式**——頁面
-	 * 與 store 模組共用同一顆守衛,不是複本。
+	 * flag 是閘門自己的 hydrated **同一實例**、into 是 opts.apply **同一函式**、gen 是
+	 * gate.mutationGen **同一支讀取器**——頁面與 store 模組共用同一顆守衛與同一本世代帳,
+	 * 不是複本。
+	 * gen(架構深化 R10)讓頁面的 refresh()/silentRefresh() 獲得世代穩定重抓:使用者按
+	 * 「重新整理」的飛行窗口內做的本地 mutation(已讀、取消…)不會被姍姍來遲的舊快照蓋回
+	 * (見 $lib/hydration-gate 的 fetchGenStable)。load() 不套此迴圈,hydrate 契約不變。
 	 */
 	function pageEntry(): PageEntry<T> {
-		return { fetch: epochFetch, hydrate: { flag: gate.hydrated, into: opts.apply } };
+		return { fetch: epochFetch, hydrate: { flag: gate.hydrated, into: opts.apply, gen: gate.mutationGen } };
 	}
 
 	return { ...gate, mutate, pageEntry };

@@ -197,6 +197,29 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		opsHydrated.set(false);
 	});
 
+	/* R10 關鍵判準守恆釘(現行 HEAD 就綠,世代穩定重抓上線後必須仍綠)。
+	 * 「寫入 → markMutated → await refreshOps()」是 mobile-admin 的正常序列:mutation
+	 * 發生在 refresh **進場之前**,旗標當下雖為 true,快照仍必須套用、且 fetch 恰一次。
+	 * 若把丟棄條件誤寫成「旗標/mutated 當下值為真」,這條釘會炸成無限重抓或永不套用。 */
+	it('判準守恆:markOrderPaid() → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
+		opsHydrated.set(false);
+		const pending = ORDERS.find((o) => o.status === 'pending')!;
+		markOrderPaid(pending.id); // refresh 進場「之前」的 mutation
+		expect(get(opsHydrated)).toBe(true); // 旗標當下為 true——誤用旗標當判準即誤丟
+		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid');
+
+		vi.mocked(getOpsCollections).mockClear();
+		await refreshOps();
+
+		expect(vi.mocked(getOpsCollections)).toHaveBeenCalledTimes(1); // 無在飛 mutation → 零額外重抓
+		expect(get(orders)).toEqual(ORDERS); // 顯式新鮮度:server 快照照常套用(該筆回到 pending)
+		expect(get(opsHydrated)).toBe(true);
+
+		// restore for other tests
+		orders.set(ORDERS);
+		opsHydrated.set(false);
+	});
+
 });
 
 describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 pin）', () => {

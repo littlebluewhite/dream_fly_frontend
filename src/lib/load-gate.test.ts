@@ -21,6 +21,12 @@ function createDeferred<T>() {
 	return { promise, resolve, reject };
 }
 
+/** 讓「原地重抓」跑完一圈(舊快照落地 → 世代比對 → 再發一次 fetch)——跳一個 macrotask
+ *  保證期間的 microtask 全數收束。 */
+function settleRetry() {
+	return new Promise<void>((r) => setTimeout(r, 0));
+}
+
 interface RowsPage extends PagedResponse {
 	rows: string[];
 }
@@ -274,7 +280,7 @@ describe('hydrate 選項', () => {
 		gate.destroy();
 	});
 
-	it('refresh() 無視旗標:旗標 true 仍發 fetch 並套用 into + 翻旗', async () => {
+	it('refresh() 無視旗標:旗標 true 仍發 fetch 並套用 into + 翻旗(未接 hydrate.gen → plain-flag 保舊語意,單次 fetch)', async () => {
 		const flag = writable(true);
 		const data = { v: 2 };
 		const fetch = vi.fn(async () => data);
@@ -438,7 +444,7 @@ describe('hydrate 選項', () => {
 		gate.destroy();
 	});
 
-	it('silentRefresh() 無條件套用 + 翻旗', async () => {
+	it('silentRefresh() 套用 + 翻旗(未接 hydrate.gen → 無世代帳可比,單次 fetch)', async () => {
 		const flag = writable(false);
 		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 }).mockResolvedValueOnce({ v: 2 });
 		const into = vi.fn();
@@ -462,7 +468,7 @@ describe('hydrate 選項', () => {
 	 * 讓旗標先 true、借 hydrate 自己的短路讓 load() 到 ready 但不觸發 fetch/into,再手動
 	 * 撥回 false,乾淨地釘住 silentRefresh() 自己的 false → true 轉移(T9:skip 選項退役,
 	 * 原本借 skip 短路做同一件事,現改借 hydrate 短路)。 */
-	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(hydrate 短路先到 ready,手動撥回旗標)', async () => {
+	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(hydrate 短路先到 ready,手動撥回旗標;未接 hydrate.gen → plain-flag 保舊語意)', async () => {
 		const flag = writable(true); // 先 true 讓 load() 走 hydrate 短路,不觸發 fetch/into
 		const data = { v: 5 };
 		const fetch = vi.fn(async () => data);
@@ -482,6 +488,144 @@ describe('hydrate 選項', () => {
 		expect(into).toHaveBeenCalledWith(data);
 		expect(get(flag)).toBe(true); // false → true 的轉移由 silentRefresh() 自己完成
 		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	/* R10（第四決策點）：hydrate 多一個可選的 `gen`（單調 mutation 世代讀取器，生產上
+	 * 由 session-gate 的 pageEntry 佈線 gate.mutationGen）。在場時 refresh()/silentRefresh()
+	 * 改走 $lib/hydration-gate 的 fetchGenStable：進場捕捉世代、落地比對，飛行窗口內發生的
+	 * 本地 mutation 讓那份快照作廢並原地重抓。load() 不走（hydrate 契約是丟棄了事，不補抓）。
+	 * 上面所有未帶 `gen` 的釘子即 plain-flag 消費端，語意一字不變。 */
+	it('世代穩定重抓(refresh):in-flight 世代變 → 舊快照丟棄並原地重抓,phase 全程單一週期(不回 loading)', async () => {
+		const flag = writable(false);
+		let mutations = 0;
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
+
+		const phases: LoadPhase[] = [];
+		const unsub = gate.subscribe((p) => phases.push(p));
+
+		const p = gate.refresh();
+		mutations += 1; // refresh 進場「之後」的本地 mutation
+		d1.resolve({ v: 1 });
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 舊快照丟棄 + 原地重抓
+		expect(into).not.toHaveBeenCalled();
+
+		d2.resolve({ v: 2 });
+		await p;
+
+		expect(into).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 2 });
+		expect(get(flag)).toBe(true);
+		expect(phases).toEqual(['loading', 'ready']); // 重抓不把 phase 打回 loading（契約：單一週期）
+
+		unsub();
+		gate.destroy();
+	});
+
+	it('世代穩定重抓的棄追:重抓期間被新一輪 load() 取代 → 舊輪不再重抓、靜默退場,共享 store 是新一輪的 payload', async () => {
+		const flag = writable(false);
+		let mutations = 0;
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const d3 = createDeferred<{ v: number }>();
+		const fetch = vi
+			.fn()
+			.mockReturnValueOnce(d1.promise)
+			.mockReturnValueOnce(d2.promise)
+			.mockReturnValueOnce(d3.promise);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
+
+		const p1 = gate.refresh();
+		mutations += 1;
+		d1.resolve({ v: 1 });
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(2); // 舊輪的第一次重抓已出發
+
+		const p2 = gate.load(); // 新一輪取代舊輪（generation++），旗標仍 false 故不短路
+		expect(fetch).toHaveBeenCalledTimes(3); // 第 3 次 = 新一輪自己的 fetch
+
+		mutations += 1; // 舊輪的重抓快照落地前世代又變
+		d2.resolve({ v: 2 });
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(3); // 棄追:舊輪不再抓下一次（否則會是 4）
+		expect(into).not.toHaveBeenCalled();
+
+		d3.resolve({ v: 3 });
+		await Promise.all([p1, p2]);
+
+		expect(into).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 3 }); // 落地的是新一輪的 payload
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	it('世代穩定重抓(silentRefresh):世代變 → 重抓,全程 phase 不動', async () => {
+		const flag = writable(true); // 借 hydrate 短路讓 load() 到 ready 而不觸發 fetch/into
+		let mutations = 0;
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const into = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
+		await gate.load();
+		expect(get(gate)).toBe('ready');
+		expect(fetch).not.toHaveBeenCalled();
+
+		const phases: LoadPhase[] = [];
+		const unsub = gate.subscribe((p) => phases.push(p));
+
+		const p = gate.silentRefresh();
+		mutations += 1;
+		d1.resolve({ v: 1 });
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(2);
+
+		d2.resolve({ v: 2 });
+		await p;
+		unsub();
+
+		expect(into).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 2 });
+		expect(phases.every((x) => x === 'ready')).toBe(true); // 靜默:重抓也不動 phase
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	it('世代穩定重抓的失敗:第 N 次重抓 reject → 原樣傳給 load-gate（onError + phase=error）,不翻旗', async () => {
+		const flag = writable(false);
+		let mutations = 0;
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const into = vi.fn();
+		const onError = vi.fn();
+		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations }, onError });
+
+		const p = gate.refresh();
+		mutations += 1;
+		d1.resolve({ v: 1 });
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(2);
+
+		const err = new Error('retry-boom');
+		d2.reject(err);
+		await p;
+
+		expect(onError).toHaveBeenCalledWith(err); // 重抓的失敗就是這一輪的失敗
+		expect(get(gate)).toBe('error');
+		expect(into).not.toHaveBeenCalled();
+		expect(get(flag)).toBe(false);
 
 		gate.destroy();
 	});

@@ -82,8 +82,11 @@ export function markOrderPaid(id: string) {
  *  mutation 呼叫 opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的
  *  新增/編輯」被首次水合的 seed clone 無聲清除(C1 regression:admin 首頁快速操作
  *  新增學員/教練 → 首次進 classes/members/orders 任一頁 → 舊碼會用 seed 覆寫剛
- *  新增的資料)。refreshOps() 保持無條件寫入,供「重新整理」/ErrorState 重試共用
- *  (使用者明確要求最新資料,不受 guard 短路保護)。guard 短路 + post-await
+ *  新增的資料)。refreshOps() 保持一律真抓,供「重新整理」/ErrorState 重試共用
+ *  (使用者明確要求最新資料,不受 guard 短路保護);架構深化 R10 起落地改走世代穩定
+ *  重抓——只丟棄「refresh **進場之後**」才發生的 mutation,故「markOrderPaid → await
+ *  refreshOps()」這種寫後重抓的正常序列零變化(fetch 恰一次、快照照常套用),只有真的
+ *  在飛期間才發生的 mutation 會讓舊快照作廢、原地補抓。guard 短路 + post-await
  *  re-check(mutation 勝出)的機制本身由 `createHydrationGate` 提供,見
  *  `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭函式(不直接傳函式參照)——
  *  維持原本「只有實際呼叫 hydrateOps()/refreshOps() 時才讀取 getOpsCollections
@@ -122,7 +125,8 @@ export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unrea
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
  *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。同步 seed 保留
  *  (對齊 mobile notifs 前例);markMessageRead 呼叫 messagesGate.markMutated()
- *  (mutation 即宣告水合真相)。refreshMessages() 保持無條件寫入,供重試使用。
+ *  (mutation 即宣告水合真相)。refreshMessages() 保持一律真抓,供重試使用(落地同走
+ *  世代穩定重抓,理由與判準見上方 opsGate 註解)。
  *  guard 短路 + post-await re-check(mutation 勝出)的機制本身由
  *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層
  *  箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */

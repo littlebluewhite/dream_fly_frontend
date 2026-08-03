@@ -22,7 +22,7 @@
  */
 import { onDestroy } from 'svelte';
 import { writable, type Writable } from 'svelte/store';
-import { createHydrationCore } from './hydration-gate';
+import { createHydrationCore, fetchGenStable } from './hydration-gate';
 
 export type LoadPhase = 'loading' | 'error' | 'ready';
 
@@ -47,6 +47,14 @@ export interface LoadGateHydrateOptions<T> {
 	flag: Writable<boolean>;
 	/** 成功時套用資料,寫回共享 store。 */
 	into: (data: T) => void;
+	/** 可選:單調 mutation 世代讀取器(生產上是 session/hydration gate 的 gate.mutationGen,
+	 *  經 pageEntry 佈線)。在場時 refresh()/silentRefresh() 改走 $lib/hydration-gate 的
+	 *  fetchGenStable——進場捕捉世代、落地比對,飛行窗口內發生的本地 mutation 讓那份快照
+	 *  作廢並原地重抓(refresh 契約:顯式新鮮度,丟棄之後必須補抓)。重抓期間 phase 不回
+	 *  loading、run-generation 也不遞增,故 F1/F5 的重入語意原封;被新一輪 run 取代或已
+	 *  卸載即棄追。load() 刻意不走(hydrate 契約:mutation-wins 丟棄了事,本地即真相)。
+	 *  省略時整條路徑與舊碼逐字相同——旗標自持、無世代帳的 plain-flag 消費端保舊語意。 */
+	gen?: () => number;
 }
 
 /** onData 與 hydrate 型別層互斥(discriminated union + `?: never`):一個 gate 只能
@@ -132,14 +140,26 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		core.commit();
 	}
 
+	/** refresh 族的取數:genReader 在場即世代穩定重抓(見 hydration-gate 的 fetchGenStable),
+	 *  否則裸 fetch。棄追判準 = 「已卸載 or 已被新一輪 run 取代」——兩者都單向不可逆,故
+	 *  回 undefined 時呼叫端的既有 destroyed/generation 守衛必然也會攔下,語意不重疊。
+	 *  重抓全程在同一個 run-generation 內:phase 不動、generation 不遞增。 */
 	async function run(
 		fetcher: () => Promise<T>,
-		apply: (data: T, gen: number) => void
+		apply: (data: T, gen: number) => void,
+		genReader?: () => number
 	): Promise<void> {
 		const gen = ++generation;
 		setPhase('loading');
 		try {
-			const data = await fetcher();
+			let data: T;
+			if (genReader) {
+				const stable = await fetchGenStable(fetcher, genReader, () => !destroyed && gen === generation);
+				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
+				data = stable;
+			} else {
+				data = await fetcher();
+			}
 			if (destroyed || gen !== generation) return; // 過期或已卸載,忽略
 			apply(data, gen);
 			// F1(codex B0 r1):apply()(hydrate 的 into())可能同步重入 load(),推進
@@ -164,7 +184,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 
 	async function refresh(): Promise<void> {
 		// 一律真抓,無視 hydrate 旗標——guard 短路只擋 load(),retry 仍要重抓。
-		await run(options.refresh ?? options.fetch, applyRefreshed);
+		await run(options.refresh ?? options.fetch, applyRefreshed, options.hydrate?.gen);
 	}
 
 	async function silentRefresh(): Promise<void> {
@@ -173,8 +193,17 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		// generation 遞增之前:phase 非 ready 直接 no-op。
 		if (phase !== 'ready') return;
 		const gen = ++generation;
+		const genReader = options.hydrate?.gen; // 同 refresh():在場即世代穩定重抓
 		try {
-			const data = await (options.refresh ?? options.fetch)();
+			const fetcher = options.refresh ?? options.fetch;
+			let data: T;
+			if (genReader) {
+				const stable = await fetchGenStable(fetcher, genReader, () => !destroyed && gen === generation);
+				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
+				data = stable;
+			} else {
+				data = await fetcher();
+			}
 			if (destroyed || gen !== generation) return;
 			applyRefreshed(data, gen);
 		} catch {

@@ -10,7 +10,14 @@
  * （markMutated()，或呼叫端直接把 hydrated 設 true），await 結束後的 re-check 會
  * 讓 mutation 勝出、放棄套用剛抓回的資料——避免「水合前的本地寫入」被姍姍來遲的
  * 首次水合覆蓋（mobile-admin 的 C1 regression 即此類 bug）。refresh() 略過 guard、
- * 無條件重抓，供使用者明確要求的「重新整理」與失敗重試共用。
+ * 一律真抓，供使用者明確要求的「重新整理」與失敗重試共用；抓回的快照則走**世代穩定
+ * 重抓**（fetchGenStable，R10 新增的第四決策點）——進場捕捉 mutation 世代、落地比對，
+ * 期間發生的本地 mutation 會讓那份快照作廢並原地重抓，直到抓回一份「不早於最後一次
+ * 本地 mutation 出發點」的快照才套用。
+ *
+ * hydrate 路徑刻意**不**套這個迴圈：hydrate 的契約是 mutation-wins 直接丟棄（本地即
+ * 真相，補抓的責任在後續的和解鏈）；refresh 的契約是顯式新鮮度，丟棄之後**必須**補抓，
+ * 否則使用者按了「重新整理」卻什麼都沒發生。此不對稱是協定本體，不是遺漏。
  *
  * C1（架構深化 R5）：協定的三個決策點抽成 HydrationCore（見下方介面註解），
  * createHydrationGate 與 load-gate.ts 的 hydrate 選項共用同一顆 core——協定詞彙
@@ -31,7 +38,9 @@ import { writable, get, type Writable } from 'svelte/store';
  *    （mutation 發生）即 mutation 勝出，放棄套用剛抓回的資料。
  *  - commit()：套用完成（或 mutator 直寫）後翻旗，宣告水合真相成立。
  *  guarded/mutationWins 目前機制相同（都讀旗標），但語意是協定裡兩個不同的
- *  決策點——分開命名讓呼叫端的意圖可讀、協定文件可逐點對照。 */
+ *  決策點——分開命名讓呼叫端的意圖可讀、協定文件可逐點對照。
+ *  協定的第四決策點（fetchGenStable，R10）**不在**這顆 core 裡：它只讀 mutation 世代、
+ *  不讀旗標，而且是 refresh 族專用（hydrate 三點路徑不套），見下方該函式註解。 */
 export interface HydrationCore {
 	guarded(): boolean;
 	mutationWins(): boolean;
@@ -48,6 +57,45 @@ export function createHydrationCore(hydrated: Writable<boolean>): HydrationCore 
 	};
 }
 
+/**
+ * 第四決策點（R10）：**世代穩定重抓**——refresh 族專用。
+ *
+ * 進場捕捉 `gen()` → `fetch()` → 落地再讀一次 `gen()` 比對：相同代表這份快照的出發點
+ * 不早於最後一次本地 mutation，可以套用；不同代表「refresh **進場之後**」有 mutation
+ * 落地（例如使用者在飛行窗口內按了取消／已讀），該份快照已是舊事實，丟棄並原地重抓，
+ * 直到世代穩定為止。
+ *
+ * 判準只認「進場之後才發生的 mutation」，**絕不可**改讀旗標／世代的當下值：像
+ * mobile-admin 的「寫入 → markMutated → await refreshOps()」是正常序列，mutation 發生
+ * 在進場之前，那份快照必須照常套用、且只能發一次 fetch。
+ *
+ * `iterate` 是棄追判準（預設恆真＝抓到穩定為止）：呼叫端若已知這一輪重抓不再有意義
+ * （load-gate 的「已卸載／被新一輪 run 取代」），回傳假即停，回傳 `undefined` 表示
+ * 「最後那份快照不要套用」——如何處置由呼叫端語意決定。省略 `iterate` 時永不棄追，
+ * 型別上直接回 `T`，呼叫端不必處理不可能發生的出口。
+ *
+ * 任何一次 fetch 的 rejection（含第 N 次重抓的）一律**原樣拋出**，不吞、不回頭補套
+ * 已被丟棄的舊快照——與本模組檔頭的「fetch rejection 原樣拋出」一致。
+ */
+export function fetchGenStable<T>(fetch: () => Promise<T>, gen: () => number): Promise<T>;
+export function fetchGenStable<T>(
+	fetch: () => Promise<T>,
+	gen: () => number,
+	iterate: () => boolean
+): Promise<T | undefined>;
+export async function fetchGenStable<T>(
+	fetch: () => Promise<T>,
+	gen: () => number,
+	iterate: () => boolean = () => true
+): Promise<T | undefined> {
+	for (;;) {
+		const entered = gen();
+		const data = await fetch();
+		if (entered === gen()) return data; // 世代穩定:進場之後零 mutation,快照可套用
+		if (!iterate()) return undefined; // 棄追:呼叫端宣告這一輪已無意義
+	}
+}
+
 export interface HydrationGateOptions<T> {
 	/** 主要抓取函式 */
 	fetch: () => Promise<T>;
@@ -62,6 +110,10 @@ export interface HydrationGate {
 	hydrate(): Promise<void>;
 	refresh(): Promise<void>;
 	markMutated(): void;
+	/** 唯讀:單調 mutation 世代（遞增仍只走 markMutated）。出閘是為了讓頁面的 load-gate
+	 *  能經 `hydrate.gen` 讀到**同一本**世代帳——頁面的 refresh 族與 store 閘門共用一個
+	 *  判準,不是各記各的。 */
+	mutationGen(): number;
 }
 
 export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
@@ -84,8 +136,10 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	}
 
 	async function refresh(): Promise<void> {
-		// 一律真抓，無視 guard——守衛短路後的重新整理／重試仍要重抓。
-		const data = await opts.fetch();
+		// 一律真抓，無視 guard——守衛短路後的重新整理／重試仍要重抓。落地則走世代穩定
+		// 重抓：進場之後才發生的 mutation 會讓那份快照作廢、原地補抓（見 fetchGenStable）。
+		// 不傳 iterate：store 層的 refresh 沒有「這一輪已無意義」的概念，抓到穩定為止。
+		const data = await fetchGenStable(opts.fetch, () => mutationGen);
 		opts.apply(data);
 		core.commit();
 	}
@@ -95,5 +149,5 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		core.commit();
 	}
 
-	return { hydrated, hydrate, refresh, markMutated };
+	return { hydrated, hydrate, refresh, markMutated, mutationGen: () => mutationGen };
 }
