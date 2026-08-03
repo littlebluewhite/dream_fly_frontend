@@ -7,14 +7,22 @@
    * Task 11：「我的請假」清單（GET /leave-requests/me）+ 候補中課程並列在課程
    * 清單下方——pending 可取消、approved 且未補課可逐筆「預約補課」（MakeupDialog
    * 現在吃 leaveRequest，不是課程層級動作，所以課程詳情動作列不再有「預約補課」
-   * 按鈕）。 */
+   * 按鈕）。
+   *
+   * R10 架構深化 D 案：出席明細載入（選課→fetch 協調 + stale-guard）與取消候補收進
+   * $lib/member/mine-controller.ts（仿 coach/messages-controller.ts 先例）——本頁
+   * 退化為薄 adapter：解構 controller 快照、事件轉呼 controller 方法、把 outcome
+   * 翻成 toast 文案。attGate 已退役，出席明細三態改直接讀 controller 快照的
+   * attState，in-card 區塊改手動三分支（ADR 0008 LoadGate 呼叫點 -1）。取消請假
+   * （cancel-leave.ts）是既有雙生模組（mobile MyCourseDetail 共用）維持不動；候補域
+   * 無跨 surface 共用需求（mobile 無取消候補 UI），cancelWaitlistEntry 直接收進本
+   * controller，不另建雙生模組。 */
   import { onMount } from 'svelte';
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
   import { ATT_STATE, LEVEL_TONE, LEAVE_STATUS } from '$lib/member/data';
-  import type { AttRecord } from '$lib/domain/member-app';
   import { formatSessionDateTime } from '$lib/domain/session-format';
   import {
     toasts,
@@ -28,14 +36,19 @@
   } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { createCancelLeave } from '$lib/member/cancel-leave';
+  import { createMineController } from '$lib/member/mine-controller';
   import { getMine, getEnrolmentAttendance, type MineData } from '$lib/member/api';
   import type { IconName } from '$lib/icon-registry';
 
-  let active: string | null = null;
   let dialog: 'leave' | 'contact' | null = null;
   let makeupFor: LeaveRequest | null = null;
   let data: MineData | null = null;
-  let cancellingId: string | null = null;
+
+  // 出席明細載入（選課→fetch 協調 + stale-guard）與取消候補（busy 守衛）收進
+  // controller（R10 架構深化 D 案，見檔頭附註）；deps 對齊 member/api.ts 的
+  // getEnrolmentAttendance、member/waitlist.ts 的 cancelWaitlist（經 gate.mutate）。
+  const ctrl = createMineController({ getEnrolmentAttendance, cancelWaitlist });
+  $: ({ active, attState, attendance, cancellingId } = $ctrl);
 
   // 候補清單/我的請假的 best-effort 旁路 hydrate 已收進 getMine() 接縫本身
   // （卡 6，見 member/api.ts 的 getMine 註解與 hydrateSessionStores 檔頭）——
@@ -44,43 +57,20 @@
     fetch: getMine,
     onData: (d) => {
       data = d;
-      const first = d.courses[0]?.id ?? null;
-      active = first;
-      if (first) loadAttendance(first);
+      ctrl.init(d.courses[0]?.id ?? null);
     }
   });
   onMount(() => {
     gate.load();
   });
 
-  // 出席明細(Task F7：GET /enrolments/{id}/attendance，§3.12)——獨立於課程清單本身
-  // 的載入閘門，選取的報名切換時才重抓(進頁不會替全部報名各打一次端點)。attGate.fetch
-  // 讀取 `active`，呼叫前一律先寫入新值再觸發(見 loadAttendance())，讀寫都在同一個
-  // 同步呼叫序列內完成，不會有競態。
-  let attendance: AttRecord[] | null = null;
-  const attGate = createLoadGate({
-    fetch: () => getEnrolmentAttendance(active as string),
-    onData: (d) => { attendance = d; }
-  });
-  function loadAttendance(id: string): void {
-    active = id;
-    attGate.load();
-  }
-  function selectCourse(id: string): void {
-    if (id === active) return;
-    loadAttendance(id);
-  }
-
   async function doCancelWaitlist(w: WaitlistEntry) {
-    if (cancellingId) return;
-    cancellingId = w.id;
-    try {
-      await cancelWaitlist(w.id);
-      toasts.notify('success', '已取消候補', w.course_name + ' 已從候補名單移除。');
-    } catch {
+    const outcome = await ctrl.cancelWaitlistEntry(w); // null = busy 守衛（in-flight 早退）
+    if (!outcome) return;
+    if (outcome.kind === 'waitlistCancelled') {
+      toasts.notify('success', '已取消候補', outcome.courseName + ' 已從候補名單移除。');
+    } else {
       toasts.notify('error', '取消候補失敗', '請稍後再試。');
-    } finally {
-      cancellingId = null;
     }
   }
 
@@ -133,7 +123,7 @@
     <div style="display:flex;flex-direction:column;gap:14px">
       {#each data.courses as c (c.id)}
         {@const on = active === c.id}
-        <button type="button" class="course-btn" on:click={() => selectCourse(c.id)}>
+        <button type="button" class="course-btn" on:click={() => ctrl.selectCourse(c.id)}>
           <Card padding={18} hoverable style={on ? 'border:2px solid var(--df-primary)' : ''}>
             <div style="display:flex;gap:13px;align-items:center">
               <div
@@ -193,27 +183,25 @@
           <!-- Attendance history(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12) -->
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--df-ink);margin-bottom:12px">出席紀錄</div>
-            <LoadGate gate={attGate}>
-              <Skeleton slot="loading" w="100%" h={56} r={8} />
-              <!-- 卡片內區塊層級的 gate：已在 Card 裡，錯誤畫面覆寫為裸 ErrorState，
-                   不用預設 fallback 的 Card 包裝（避免 Card 套 Card）。 -->
-              <svelte:fragment slot="error" let:retry>
-                <ErrorState onRetry={retry} />
-              </svelte:fragment>
-              {#if attendance && attendance.length === 0}
-                <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
-              {:else if attendance}
-                <div style="display:flex;flex-wrap:wrap;gap:8px">
-                  {#each attendance as h, i (i)}
-                    {@const [tone, label] = ATT_STATE[h.state]}
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
-                      <Badge {tone} dot>{label}</Badge>
-                      <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            </LoadGate>
+            {#if attState === 'loading'}
+              <Skeleton w="100%" h={56} r={8} />
+            {:else if attState === 'error'}
+              <!-- 卡片內區塊層級：已在 Card 裡，錯誤畫面用裸 ErrorState，不套 Card
+                   包裝（避免 Card 套 Card，同原 LoadGate slot="error" 覆寫慣例）。 -->
+              <ErrorState onRetry={ctrl.retryAttendance} />
+            {:else if attendance.length === 0}
+              <EmptyState icon="calendar-x" title="尚無出勤紀錄" body="教練完成點名後，出席狀況會顯示在這裡。" pad="12px 0" />
+            {:else}
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                {#each attendance as h, i (i)}
+                  {@const [tone, label] = ATT_STATE[h.state]}
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+                    <Badge {tone} dot>{label}</Badge>
+                    <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
 
           <!-- Actions -->
