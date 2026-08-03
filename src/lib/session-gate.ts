@@ -89,8 +89,8 @@ export interface PageEntry<T> {
 }
 
 /**
- * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated)再加 mutate
- * 與 pageEntry。
+ * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated/mutationGen)再加
+ * mutate 與 pageEntry。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
  *   進場快照(await 之前捕捉 wasHydrated + epoch)→ await request → epoch 丟棄(過期即
  *   棄寫,結果仍回傳:server 端事實已成立)→ 寫回時重查完整度(stillIncomplete)→

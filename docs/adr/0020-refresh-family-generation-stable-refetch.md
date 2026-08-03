@@ -1,0 +1,202 @@
+# refresh 族的世代穩定重抓:水合協定第四決策點 `fetchGenStable`
+
+> Status: Accepted。源自 2026-08 架構深化工程 Round 10 A 案(commit `9060d95`,base `04fd86e`)。
+> 關閉 `docs/adr/0016`「兩筆 known-latent」第 2 則(殘留 refresh race)——該筆自 R7 起被逐輪確認
+> 仍然有效、R9 再度停放為 P1,本篇是它的結案紀錄。
+
+水合協定自 `docs/adr/0016`(R5 C1)起有三個具名決策點——`guarded()`(進場 guard 短路)、
+`mutationWins()`(落地前的 mutation 勝出重查)、`commit()`(翻旗)——住在
+`src/lib/hydration-gate.ts` 的 `HydrationCore`,由 `createHydrationGate` 與 `load-gate.ts` 的
+`hydrate` 選項共用。三個決策點都只服務 **hydrate** 路徑;**refresh 族**(顯式重新整理、
+`ErrorState` 重試、突變後靜默重同步、mutator 的和解重抓)一路都是「一律真抓 + 無條件套用」,
+在飛窗口內的本地 mutation 會被姍姍來遲的舊快照蓋掉。本篇記錄補上的第四決策點
+`fetchGenStable`(世代穩定重抓)、它的判準句、三形否決紀錄、契約五條,以及刻意留在原地的兩筆殘餘。
+
+## 背景:三處病灶,同一個根
+
+改前的三處寫法各自看似合理,合起來就是 `docs/adr/0016` 那筆 known-latent:
+
+1. **`hydration-gate.ts` 的 `refresh()`**:無世代快照、無條件 `apply` + `commit`——in-flight
+   期間的 `markMutated()` 對它毫無影響,舊快照照樣落地。
+2. **`load-gate.ts` 的 `applyRefreshed`**:不呼叫 `core.mutationWins()`,而且是**刻意**的
+   (F5 註解明言:「無條件」指不做 mutation 旗標重查)。它與 `applyLoaded` 的不對稱是協定本體,
+   不是漏寫。
+3. **`session-gate.ts` 的 `queueReconcile`**:排出的和解重抓走的正是 `gate.refresh`,與上述兩者
+   同族。R1 在飛期間若有第二支 mutation 完成而**不排** R2(它進場時旗標已 true、寫回時仍完整),
+   R1 的舊快照會無條件套用、蓋掉那筆直寫。
+
+三處的共同結構是:**refresh 族沒有任何「這份快照的出發點是否早於最後一次本地 mutation」的判準**。
+使用者可見的樣子:MyCourseDetail 開詳情觸發的 `refreshLeaveRequests()` 飛行窗口內按取消,假單被
+打回 pending;通知頁按重新整理的窗口內點已讀,已讀被打回未讀。
+
+## 決定:第四決策點 `fetchGenStable`,單源住 `hydration-gate.ts`
+
+```ts
+export async function fetchGenStable<T>(
+	fetch: () => Promise<T>,
+	gen: () => number,
+	iterate: () => boolean = () => true
+): Promise<T | undefined>
+```
+
+進場捕捉 `gen()` → `await fetch()` → 落地再讀一次 `gen()` 比對:相同代表這份快照的出發點不早於
+最後一次本地 mutation,可以套用;不同代表 refresh **進場之後**有 mutation 落地,該份快照已是舊
+事實,丟棄並**原地重抓**,直到世代穩定為止。`iterate` 是棄追判準(預設恆真＝抓到穩定為止),
+回傳假即停並回 `undefined`,如何處置由呼叫端語意決定。
+
+住所選在 `hydration-gate.ts`(協定詞彙的單一住所,`docs/adr/0016` 決定一),但**不進**
+`HydrationCore`:這一點只讀 mutation 世代、不讀旗標,而且是 refresh 族專用(hydrate 三點路徑
+刻意不套,見「契約五條」⑤)。`HydrationCore` 的註解已補一句指出第四點不在那顆 core 裡。
+
+### 判準句(誤解即 P1)
+
+**丟棄條件是「refresh 進場之後才發生的 mutation」,絕不可改讀旗標/世代的當下值。**
+(本句與 `hydration-gate.ts` 內 `fetchGenStable` 的 doc 逐字同源——「判準只認『進場之後才發生的
+mutation』,**絕不可**改讀旗標／世代的當下值」;兩處措辭必須同步,任一處被改寫都要回頭校對另一處。)
+
+反例才是這條判準的重點:mobile-admin 的「寫入 → `markMutated` → `await refreshOps()`」是正常
+序列——mutation 發生在 refresh **進場之前**,旗標當下就是 `true`、世代當下就是新的,但那份快照
+必須**照常套用、且只能發一次 fetch**。若把判準寫成「旗標/世代當下是不是被動過」,這條每天都在
+跑的正常序列會變成無窮重抓。守恆釘(`mobile-admin/stores.test.ts`)先斷言
+`get(opsHydrated) === true` 再斷言快照照常套用且 `fetch` 恰一次——誤用旗標判準必炸;這條釘在
+改動前的 HEAD 上就是綠的,全程沒有紅過。
+
+### 三個整合點
+
+- **`createHydrationGate.refresh()`**:`await fetchGenStable(opts.fetch, () => mutationGen)`,
+  **不傳** `iterate`——store 層的 refresh 沒有「這一輪已無意義」的概念,抓到穩定為止。
+  `apply` → `commit` 的次序不變。
+- **`load-gate.ts` 的 gen 分支**:`LoadGateHydrateOptions<T>` 增可選 `gen?: () => number`;
+  在場時 `run()` 與 `silentRefresh()` 以
+  `fetchGenStable(fetcher, genReader, () => !destroyed && gen === generation)` 取代裸 fetch。
+  棄追判準 =「已卸載 or 已被新一輪 run 取代」,兩者都單向不可逆,故回 `undefined` 時呼叫端既有的
+  `destroyed`/`generation` 守衛必然也會攔下,語意不重疊。省略 `gen` 時整條路徑與舊碼逐字相同
+  ——旗標自持、無世代帳的 plain-flag 消費端保舊語意。
+- **`session-gate.ts` 的 `pageEntry()` 佈線**:一行 `gen: gate.mutationGen`。頁面的 load-gate 與
+  store 閘門自此讀**同一本**世代帳,不是各記各的(`session-gate.test.ts` 有 `toBe` 同一函式的恆等
+  釘)。`HydrationGate` 因此 additive 增一支唯讀的 `mutationGen(): number`;遞增仍只走
+  `markMutated()`。
+
+## 否決紀錄(三筆,供未來止步)
+
+採用的是形 1——世代由**閘門**持有、經讀取器交出;以下是同輪評估過的另外兩形,以及一個更早被排除
+的方向。
+
+- **形 2:`mutationGen` 下沉 `HydrationCore`。** 否決。`load-gate.ts` 的 hydrate 選項是拿頁面傳進來
+  的旗標**自建**一顆 core(`createHydrationCore(options.hydrate.flag)`),與 store 端 gate 內部那顆
+  core 是**不同實例**——旗標是同一個 writable(共用),世代若住進 core 就變成兩本各自從 0 起算的帳:
+  「兩顆 core 一面旗」的裂腦。頁面 refresh 讀到的世代永遠不會動,判準當場失效。世代必須是**閘門
+  持有、經 `pageEntry` 交出讀取器**的單一本帳,不是 core 的成員。
+- **形 3:自穩定的 `pageEntry` fetch(把重抓包進 `epochFetch` 那一層)。** 否決兩點:(a) 只有經
+  `pageEntry()` 取得 fetch 的消費端受惠,頁面自帶 plain writable 的 direct-flag 消費端結構性留洞
+  ——判準的覆蓋面取決於呼叫端有沒有走那條路,不是協定本身的性質;(b) 重抓被埋進 fetch 內部後,
+  `docs/adr/0016` 三層界線的**第 1 層(load-gate 特有交織)無物可釘**——phase 是否單週期、棄追是否
+  真的停手,這些正是第 1 層該負責的觀察面,卻在 load-gate 看不見的地方發生。
+- **「丟棄不補抓」(把 hydrate 的 mutation-wins 直接套進 refresh)。** 否決。hydrate 的契約是
+  mutation-wins **丟棄了事**(本地即真相,補抓的責任在後續的和解鏈);refresh 的契約是**顯式
+  新鮮度**——使用者按了「重新整理」,丟棄之後**必須**補抓,否則什麼都沒發生。此不對稱是協定本體,
+  不是遺漏。
+
+## 契約五條
+
+1. **rejection 原樣拋出,含第 N 次重抓的失敗。** 迴圈內 `await fetch()` 沒有 try/catch,rejection
+   直接穿出函式;不吞、不回頭補套已被丟棄的舊快照。與 `hydration-gate.ts` 檔頭「fetch rejection
+   原樣拋出」一致。
+2. **load-gate 整合下 phase 單一週期。** `setPhase('loading')` 在 `run()` 內、迴圈**之外**執行一次,
+   整個重抓迴圈活在那個單一 `await` 裡,沒有任何 phase 寫入點——重抓期間畫面不會閃回骨架。
+3. **run-generation 不因重抓遞增。** `const gen = ++generation` 在迴圈外只執行一次,`fetchGenStable`
+   完全不觸碰 `generation`,棄追判準只**讀**它。F1/F5 的重入語意因此原封,兩組重入釘一字未改且續綠。
+4. **`queueReconcile` 零 diff。** 和解快照與後續 mutation 的殘窗經 `gate.refresh` 自帶的世代比對
+   **免費**閉合——R1 進場捕捉的世代早於那筆 mutation,落地比對不符即丟棄並原地重抓,不必在
+   `queueReconcile` 多排一支和解。閉合釘裡明確斷言和解仍只有一支(`gets === 1` 之後才變 2),
+   證明閉合來源不是新排的 R2。該函式本體(FIFO 序列化、失敗翻旗可重試、幽靈 epoch 檢查)逐字未動。
+5. **hydrate 不套 loop 的刻意不對稱。** `hydration-gate.hydrate()` 與 `load-gate.load()` 都不走這條
+   迴圈,理由見上方「丟棄不補抓」。既有的 hydrate 競態兩釘(in-flight `markMutated`、旗標被翻回
+   `false`)一字未改——誤把 loop 套進 hydrate,這兩釘會因為多出的第二次 fetch 而炸。
+
+## 誠實界線:閉合了什麼、沒閉合什麼
+
+閉合的不變量是「**不套用早於最後一次本地 mutation 出發點的快照**」,且**判定於落地當下**——
+`fetchGenStable` 內最後一次比對與呼叫端 apply 之間仍隔一個 microtask,同輪 drain 內已排隊的寫回
+延續理論上可交錯(與 load-gate 既有 generation re-check 同窗口級,非退化)。
+
+**不是**「refresh 永遠顯示樂觀態」:樂觀 PATCH 與重抓 GET 在 server 端的先後(重抓可能仍讀到寫入
+前的狀態,後續才收斂)屬新鮮度族,與 `docs/adr/0016` known-latent #1 同族,不在本案範圍。
+
+重抓次數只有「mutation 停止即收斂」的保證,沒有硬上限——`iterate` 預設恆真是刻意的
+(store 層沒有「這一輪已無意義」的概念)。無競態時零額外請求;有競態時 1–N 次,有限收斂。
+
+## 兩筆殘餘(落字防未來誤判)
+
+1. **`undefined` 棄追哨兵。** load-gate 的 gen 分支以 `stable === undefined` 判棄追。若未來出現
+   `T` 合法含 `undefined` 的消費端(例如 `createLoadGate<void>`),一次**成功**但回傳 `undefined`
+   的 fetch 會被靜默當成棄追吞掉(不 apply、不進 ready)。今日唯一的 gen 生產者是 `pageEntry()`
+   ——`T` 是物件/陣列,這條路徑不可達。屆時的正解是改用 module-level 的 sentinel symbol,不是在
+   呼叫端補旗標。
+2. **gen 分支在 `run()` 與 `silentRefresh()` 刻意重複約 6 行。** 理由是兩個呼叫點同 closure、彼此
+   相鄰,抽 helper 需要把該輪的 `gen`(run-generation)當參數穿進去,可讀性無增益。**不要**把這條
+   重複記成「為了防 `undefined` 碰撞」——那個 hazard 的完備解是第 1 點的 sentinel symbol,不是重複
+   程式碼;兩者是不同的問題,合併記帳會讓未來的人以為刪掉重複就會踩到型別洞。
+
+## 附帶結構保證:跨帳號洩漏在結構上不可能
+
+`fetchGenStable` **只在成功 fetch 之後**才可能重試——rejection 直接傳播、不重發。`session-gate`
+的 `epochFetch` 在跨登出/換帳號時是 `throw`(不是回傳空值),因此世代穩定 loop 不可能在 session
+epoch 已換的情況下憑一份 stale 回應再發一次 fetch:那份回應根本走不到比對那一行。跨帳號洩漏在
+**結構上**不可能,不是靠某個額外守衛擋下的——這是本案與 `docs/adr/0017` P1′ 在飛作廢語意的交界,
+往後若有人想「順手」讓 loop 吞掉 rejection 重試,這條保證會一起消失。
+
+## 行為變更(逐條)
+
+1. **MyCourseDetail 取消請假不再被舊快照蓋回**:`refreshLeaveRequests()` 飛行窗口內按取消,舊快照
+   丟棄、原地重抓,假單維持 cancelled。
+2. **兩通知頁重新整理在飛時已讀不回退**:member/mobile 通知頁的 load-gate 經 `pageEntry` 拿到
+   `hydrate.gen`,重新整理(或 retry)窗口內點的已讀不再被打回未讀。
+3. **mobile-admin 標記付款/標記已讀不閃回**:`refreshOps()`/`refreshMessages()` 在飛期間的
+   `markOrderPaid`/`markMessageRead` 不再出現狀態閃回。
+4. **waitlist/leave 和解快照不蓋後續 mutation**:`queueReconcile` 排出的 R1 若在飛期間有第二支
+   mutation 完成而未排 R2,R1 的舊快照不再無條件落地。
+5. **競態窗口內 refresh 多發 1–N 次 GET**:有限收斂(mutation 停止即穩定);無競態時零額外請求。
+6. **守恆:「寫後 `await refreshOps()`」正常序列零變化**——快照照常套用、fetch 恰一次(判準句)。
+7. **守恆:未接 `hydrate.gen` 的 plain-flag load-gate 消費端(生產上目前全部)語意逐字不變**
+   ——只有 `pageEntry()` 吐出的進場包帶 `gen`。
+
+## overload 簽章:省略 `iterate` ⇒ 永不棄追
+
+`fetchGenStable` 宣告兩個 overload:省略 `iterate` 時回 `Promise<T>`,帶 `iterate` 時回
+`Promise<T | undefined>`。動機是讓「不傳棄追判準就永遠抓到穩定為止」成為**型別事實**,
+`createHydrationGate.refresh()` 因此不必寫一條不可能執行的 `undefined` 分支——R9「死出口收口」
+慣例的延續(零消費者的出口不留在程式裡)。等價的單一簽章 + 呼叫端一行死出口在行為上完全相同,
+本輪選前者。
+
+## 測試落點:沿三層界線,不越層
+
+機制本體的單元釘住在它自己的住所 `hydration-gate.test.ts`:三條世代穩定重抓釘(重抓一次、續抓到
+穩定、第 N 次 rejection 原樣拋出)+ 一條 `mutationGen()` 唯讀單調薄釘。其餘依 `docs/adr/0016`
+「協定測試三層界線」各補其位,不越層:
+
+- **第 1 層(load-gate 特有交織,`load-gate.test.ts` 的 hydrate describe)**:phase 全程單一週期、
+  重抓期間被新一輪 `load()` 取代即棄追、`silentRefresh()` 版全程不動 phase、第 N 次重抓 reject →
+  `onError` + `error` 態且不翻旗,共四支。
+- **第 2 層(session-gate 通用協定)**:R10 和解窗口閉合釘(含「和解仍只有一支」的斷言)+
+  `hydrate.gen` 是 `gate.mutationGen` 同一函式的恆等釘。
+- **第 3 層(各 adapter 薄採用釘)**:`leave-requests-api.test.ts` 的 MyCourseDetail 場景、
+  `mobile-admin/stores.test.ts` 的判準守恆釘、`member/notifications.test.ts` 的 pageEntry 接線釘。
+
+四條舊語意釘(`refresh() 無條件…`/`silentRefresh() 無條件…` 一類)只改標題、斷言一字未動——
+標題原本宣稱的「無條件」在接上 `gen` 之後不再逐字為真,改題是為了讓釘的名字與它實際罩住的語意
+一致,不是為了讓新功能變綠。
+
+## 關聯 ADR
+
+- **`docs/adr/0016`**:本篇關閉其「兩筆 known-latent」第 2 則;決定一(`HydrationCore` 三決策點
+  單源)不受影響——第四點刻意不進那顆 core;「協定測試三層界線」原樣有效,本輪新釘各安其位
+  (機制本體的單元釘住其自己的住所,三層各補其位,不越層)。
+- **`docs/adr/0008`**:`hydrate` 選項與「`refresh()` 一律真抓」的對稱契約出自該篇。`applyRefreshed`
+  的「無條件套用」在該篇與程式註解中**仍然逐字為真**——世代穩定發生在上游的 `run()`,那支函式
+  本身確實不做旗標重查;該篇已補 dated 增補指回本篇。
+- **`docs/adr/0017`**:`session-gate` 的 `mutate()`/和解鏈是本案第三處病灶的所在地,但本輪
+  `queueReconcile` 零 diff——閉合是 `gate.refresh` 免費帶來的,不是在和解鏈上加新機制。P1′ 在飛
+  作廢與本篇「附帶結構保證」互為前提。
+- **`docs/adr/0019`**:`pageEntry()` 是本案唯一的佈線點(C3 落地);「死出口收口」慣例是 overload
+  簽章決定的依據。

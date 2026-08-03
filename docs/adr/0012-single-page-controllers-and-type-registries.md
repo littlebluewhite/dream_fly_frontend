@@ -184,3 +184,37 @@ stale-guard）、傳送（`send`，過期回應防護改採 conversationId 快�
 toast 文案依判準④留頁。完整判準核對、`closeCompose()`（實作中發現的必要衍生）記錄於
 `docs/adr/0018`。單頁 controller 清單自此 **5→6**：attendance-controller / conversations-filter /
 coach-save / clock-controller / checkout-controller / messages-controller。
+
+## 增補（2026-08-03，架構深化 R10 D 案 + C 案）：名冊 6→8，與「守衛文案 vs toast 文案」的成文界線
+
+**`src/lib/member/mine-controller.ts`（`createMineController`）是第七例，也是 messages-controller
+形（單一快照 store + 效應注入）的第二例。** 收的是 member/mine 頁「課程選取 × 內層出席明細閘門 ×
+候補取消 busy 守衛」這組頁面內協調：`MineViewState` 單一快照（`active`/`attState`/`attendance`/
+`cancellingId`）取代四個頁面鏡射變數，deps 只有 `getEnrolmentAttendance`/`cancelWaitlist` 兩支
+I/O。內層 `attGate`（`createLoadGate`）整支退役，改由 controller 自持的遞增 `seq`/`token`
+stale-guard 提供同一份「後發請求優先」保護（機制同 attendance-controller 的 save-token guard），
+in-card 區塊改讀快照的三分支——LoadGate 呼叫點 −1 的記帳見 `docs/adr/0008` 增補。「先寫後抓」
+自此是結構保證而非註解口頭約束：`fetchAttendance(id)` 只吃參數、不回讀 `active` 閉包，「忘記先
+寫」這種寫法在新結構下不存在。頁面 24 個既有 it 逐字未動、全綠，是行為保真的活證明。
+
+**`src/lib/public/contact-form.ts`（`createContactForm`）是第八例，也是 public surface 的第一個
+表單機。** `ContactForm.svelte` 原本內聯的驗證/送出/重置編排（四道依序守衛、送出、成功後 3 秒
+重置）抽成 deps 注入模組，元件退薄殼（markup 綁定 + outcome→toast 佈線 + subjects 陣列）。四判準
+逐條核對：①呼叫端恆為一處（`ContactForm.svelte`，而它只被 `/contact` 一頁使用）；②deps 只有
+`send`（I/O 效應）與 `schedule: (fn, ms) => cancel`（計時器效應，同 attendance-controller 注入
+`now` 壁鐘的既有慣例——注入的是效應本身，不是行為開關），零行為旗標；③outcome 是洽詢領域詞彙
+（`inquirySent`/`validationFailed`/`failed`/`alreadySubmitting`，非通用 `ok`/`error`）；④零
+`$lib/load-gate`/`toasts`/`error-text` import，兩句 toast 文案逐字留元件。順帶修掉一個真 bug：
+連續兩次成功送出時，第一次殘留的重置 timer 會提早打斷第二次的成功顯示——`submit()` 現在於真正
+送出前取消上一輪殘留排程。
+
+**成文界線：守衛/驗證文案屬表單機，toast 文案屬呼叫端。** 判準④原文說的是「零 gate/toast import、
+文案留呼叫端」，C 案把其中的「文案」拆成兩類落字，避免未來兩邊各執一詞：
+
+- **守衛/驗證文案（inline error box 顯示的那些）住模組，以 exported const 單源**——它是守衛本身的
+  判斷產物，與觸發它的那一行必須同居；模組內部映射與呼叫端的 error box 讀同一顆 const，才不會演變
+  成同一句話兩份字面。`src/lib/login-submit.ts` 的 `EMPTY_FIELDS_ERROR` 是既有先例，本輪隨
+  `contact-form.ts` 的五個文案常數（四道守衛 + 通用送出失敗）**升格為成文慣例**。
+- **toast 文案仍逐字留呼叫端**，判準④原文不變——outcome 攜帶素材、呼叫端組裝。附帶一則同輪教訓
+  （B 案，見 `docs/adr/0014` 增補）：判準④管的是「誰組裝這個字串」，**不授權順手改動字面**；把
+  `SaveOutcome.className` 直接拼進成功 toast 會少掉舊版的時間前綴，那是文案漂移、不是判準④的展開。

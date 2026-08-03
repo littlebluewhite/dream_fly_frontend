@@ -334,3 +334,49 @@ domain 端是顯式標註 `[string, string][]`,mobile 本地 `Tone = [string, st
 `export const NOTIF_CATS: Tone[] = NOTIF_CATS_BASE;` 沒有附加任何型別事實,屬第一形,故一併退役
 (判定經 `npm run check` 對唯一消費檔改直取後零錯誤實測背書,非純推理)。`TIME_ROWS` 在 mobile 側
 「不轉出」的死出口裁決不受影響——它從來就沒有 mobile 消費者。
+
+## 增補(2026-08-03,架構深化 R10 E 案):報表呈現查表收進 `admin/report-math.ts`,並推翻該檔兩條舊紀錄
+
+三類報表**呈現**素材自本日單源,住 `src/lib/admin/report-math.ts`:
+
+1. **三序列色盤**——`COACH_PALETTE`/`VENUE_PALETTE`/`PAYMENT_PALETTE`(各 6 色的
+   `readonly string[]`,消費端 `PALETTE[i % PALETTE.length]` 索引循環取色)。原本桌面
+   `CoachPerf`/`VenueUsage`/`PaymentSplit` 三檔各一份本地 `PALETTE`,`ReportsScreen.svelte` 另有
+   三份同名本地常數,共六份。
+2. **兩張桶表升 `{label,color}` 複合形**——`AGE_BUCKET_LABEL`/`ATTENDANCE_BUCKET_LABEL` 由
+   `Record<key, string>` 升為 `Record<key, {label, color}>`(值型別多行寫法比照同檔既有
+   `REVENUE_SOURCE_LABEL`/`TIER_LABEL` 的複合形慣例),吸收桌面 `AgeDist`/`AttDist` 與
+   `ReportsScreen` 各自逐字重抄的 `BUCKET_COLOR`。
+3. **`REPORT_SCALES`**——5 面板 × `{desktop, mobile}` 的柱高/條寬像素值域(`as const`),取代
+   10 個呼叫點各自硬編的同一組數字。
+
+**住所為何是 `report-math.ts` 而不是 `$lib/domain`**:§1 的「顯示查表住 `$lib/domain` 各 entity 檔」
+管的是**狀態/類型 → tone/label 的域語彙**——跨 surface、跨頁面、與後端 enum 對位。這三類不是域語彙,
+是報表面板的呈現素材,消費者恰好只有桌面報表元件與 mobile-admin `ReportsScreen` 兩處,且與同檔的
+逐面板 VM 算式屬同一個關切(色盤餵 donut/長條、尺度餵 `normalizeBars`)。`report-math.ts` 依
+`docs/adr/0009` 本來就是跨 surface **直取**的純函式模組(不經任何 facade),把素材放在算式旁邊,
+單源與取用路徑一次到位。
+
+**判準:兩 surface 逐字同值即升格單源;單 surface 的呈現決策留呼叫端。** 留在呼叫端的兩例特別落字,
+防未來審查誤判為漏收:`CategoryDonut` 的 `donutStops` **組裝**(色盤已單源,但把色餵成 conic 色標
+是該面板的呈現決策)、`RevenueTrend` 的 peak 月強調色(`var(--df-primary-dark)` vs
+`var(--df-primary)`——只有桌面有這個強調,行動版沒有,不是兩 surface 同值)。
+
+**明文推翻 `report-math.ts` 內兩條舊檔內紀錄**(仿 `docs/adr/0014` §4 明文推翻本篇打卡「未抽
+controller」紀錄的慣例,非靜默覆寫):
+
+- 原「柱高/條寬的 maxScale 由呼叫端傳入……不在本檔硬編」——**參數是接口這件事不變**(桌面/行動
+  用不同值域,本來就該由呼叫端決定傳哪一組,各 VM 的 `maxScale` 參數本身一字未動);被推翻的是
+  「具體像素值各自硬編」這半句,值收進 `REPORT_SCALES`,呼叫端經其取值。
+- 原「conic 色標(donutStops+色盤)屬呈現層,留在各 surface 呼叫端」——**組裝仍留呼叫端**;被推翻
+  的是「色盤本身留呼叫端」,`PAYMENT_PALETTE` 已單源,呼叫端依索引循環取色餵給 `donutStops`。
+
+**`revenueTrendVM` 改形**:回傳 `{total, max}` → `{total, heights}`,`max` 欄位退役,`heights`
+內部改呼叫 `normalizeBars(rows.map(d => d.h), maxScale)`,與其餘四支面板 VM 同型。等價前提落字:
+舊式是「`max` 保底 1 後 `(h/max)*160`」,`normalizeBars` 則是「`max <= 0` 才全 0」——兩者只在
+`0 < max < 1` 這個區間分岔,而 rows 是**月營收(新台幣元)**,`0 < 月營收 < 1` 元在本域不可達;
+全 0 兩式同為 0(不產生 NaN,有釘)。
+
+像素與色值全程逐字保真:32 個色值 + 10 個 scale 值有逐鍵 `toEqual` pin,`charts.test.ts` 的四條
+px 斷言與 `ReportsScreen.test.ts` 零改續綠。同批補上 `RevenueTrend.test.ts`——它是 14 個報表面板中
+唯一沒有元件測試的一支(Task 15 復刻,不在 P4-F2 的 13 面板名單內),也是本輪唯一被改寫算式的面板。

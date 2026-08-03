@@ -76,13 +76,17 @@ _Avoid_: 統計(過於籠統)
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
 `createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。共享 store 的水合協定可經
 `hydrate` 選項直接收進閘門本身(guard 短路/post-await 重查/mutator 翻旗一次到位),語意同下方
-「水合閘門」詞條(見 `docs/adr/0008` 增補)。
+「水合閘門」詞條(見 `docs/adr/0008` 增補);另帶可選的 `hydrate.gen`——在場時 `refresh()`/
+`silentRefresh()` 改走世代穩定重抓(見下方第四決策點)。
 _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合
 
 **水合閘門 (Hydration Gate)**:
 共享 store 的水合協定(guard 短路、post-await 重查「mutation 勝出」、mutator 翻旗);單一來源
-`src/lib/hydration-gate.ts` 的 `createHydrationGate`(見 `docs/adr/0008` 註記)。
-_Avoid_: 手抄 *Hydrated 旗標協定
+`src/lib/hydration-gate.ts` 的 `createHydrationGate`(見 `docs/adr/0008` 註記)。第四決策點是
+**世代穩定重抓**(`fetchGenStable`,refresh 族專用):進場捕捉 mutation 世代、落地比對,期間發生
+的本地 mutation 讓那份快照作廢並原地重抓;hydrate 路徑刻意不套(見 `docs/adr/0020`)。
+_Avoid_: 手抄 *Hydrated 旗標協定;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「寫入 →
+markMutated → await refresh」序列會因此無窮重抓)
 
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
@@ -109,6 +113,8 @@ _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)�
 取用——mobile-admin/member/mobile 屬此;facade 若只是同源且結構恆等的轉手(admin 這類 `Tone` 與 wire
 相容、無可收窄者;facade 端改過名的 alias 亦同),該層已於 2026-08-03 全數退役,消費端改**直取**
 `$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
+報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
+單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
 零型別事實的純轉手 re-export(假接縫——只換來一批逐符號同一性守護測試)
 

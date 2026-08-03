@@ -181,3 +181,27 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
   `generation`／`createPagedLoadGate` 未受影響。`LoadGate.svelte` 的 `retry()`「一律呼叫
   `refresh()`、絕不呼叫 `load()`」設計不變——guard 短路只擋 `load()` 的契約改由 `hydrate`
   承接，行為對呼叫端透明。
+
+## 增補（2026-08-03，架構深化 R10 D 案 + A 案）
+
+- **呼叫點 −1：member 我的課程頁的卡片內出席明細 gate 退役。** 該頁原本有兩個 gate——外層
+  `getMine` 的頁面 gate（不動）與卡片內出席紀錄區塊的 `attGate`。R10 D 案把頁面內層協調收進
+  `src/lib/member/mine-controller.ts`（`docs/adr/0012` 增補），`attGate` 連同其
+  `createLoadGate` 呼叫整支移除，in-card 區塊改讀 controller 快照的 `attState` 三分支
+  （`Skeleton`／`ErrorState`／清單，props 與 DOM 逐字保留）。過期回應保護沒有消失、只是換了住所：
+  controller 自持遞增 `seq`/`token` guard，提供與本篇「`generation` 計數器丟棄過期回應」同一份
+  不變式（同輪 24 個頁面 it 逐字未動、全綠）。這與本篇「排除清單」裡 coach/messages 的
+  `loadThread` 是同一種先例——**頁面內層的次級載入不一定要再開一個 gate**，形狀不合時交給該頁
+  自己的 controller 反而更貼；`loadThread` 那一段本身已於 R8 收進 `messages-controller.ts`。
+  呈現層 wrapper `LoadGate.svelte` 的呼叫站因此 **55 → 54**（本篇「已知後續」記的 53 站是
+  2026-07-10 當下的數字，其後 R5 C4 接上 VenuesScreen／TicketsScreen 成為 55）；卡片內 gate 自此
+  只剩 mobile `MyCourseDetail` 一處以 `slot="error"` 覆寫為裸 `ErrorState`。`load-gate.ts` 本身
+  的公開介面未被此變更觸碰。
+- **「已知後續」中 `hydrate` 選項語意一條的現況指北針。** 該條寫的「`refresh()`／`silentRefresh()`
+  無條件套用 `into()` 並翻旗、不做旗標重查」在程式面**仍然逐字為真**——`applyRefreshed` 確實不
+  呼叫 `core.mutationWins()`。但自 R10 A 案起，`hydrate` 選項多了一個可選的 `gen?: () => number`
+  （由 `session-gate` 的 `pageEntry()` 佈線）：在場時 `refresh()`／`silentRefresh()` 的**取數**改走
+  `$lib/hydration-gate` 的 `fetchGenStable` 世代穩定重抓，飛行窗口內發生的本地 mutation 會讓那份
+  快照作廢並原地重抓。也就是說「無條件」描述的是 apply 那一步，世代穩定發生在上游的 `run()`。
+  省略 `gen` 的 plain-flag 消費端（生產上目前除 `pageEntry()` 之外全部）語意逐字不變。完整判準與
+  契約見 `docs/adr/0020`。

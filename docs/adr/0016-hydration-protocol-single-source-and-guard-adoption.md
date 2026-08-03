@@ -218,3 +218,30 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
 「兩筆 known-latent」第 2 則(`gate.refresh` 無 mutation-wins 的殘留 refresh race)不受本輪影響、
 依然有效——C3 新增的 `pageEntry()` 只是把**同一支**已帶 epoch 核對的 fetch 交給頁面的 load-gate,
 未擴大 mutation-wins 語意。
+
+## 增補(2026-08-03,架構深化 R10 A 案 + rider):known-latent 第 2 則自 `docs/adr/0020` 關閉
+
+1. **「兩筆 known-latent」第 2 則(殘留 refresh race)自本日關閉。** 上節(R9 C3 增補)末段與本篇
+   「由 ADR 0017 取代」節第 2 點都以現在式記著這筆殘窗仍然有效——自 `docs/adr/0020` 落地後皆以本節
+   為準。關閉方式**不是**把 mutation-wins 擴進 refresh(那是該篇明文否決的「丟棄不補抓」),而是補上
+   協定的**第四決策點** `fetchGenStable`(世代穩定重抓,住 `hydration-gate.ts`、不進 `HydrationCore`):
+   refresh 進場捕捉 mutation 世代、落地比對,期間發生的本地 mutation 讓那份快照作廢並**原地重抓**,
+   直到抓回一份不早於最後一次本地 mutation 出發點的快照。原文記載的兩處窗口(顯式 refresh、mutator
+   的和解重抓)一併閉合;`queueReconcile` 本體零 diff——和解窗口是 `gate.refresh` 自帶的世代比對
+   **免費**閉合的,不是在和解鏈上加新機制。判準句、三形否決紀錄、誠實界線與兩筆殘餘見該篇。
+2. **不受影響、仍然有效的三項**:①「兩筆 known-latent」第 1 則(新鮮度回歸——每登入 session 只抓
+   一次,admin 側變化不自動反映)屬新鮮度族,與本輪無關,原樣有效;②「協定測試三層界線」三層互斥
+   的判準不變,R10 的新釘各安其位(第 1 層 phase 單週期/棄追四支、第 2 層和解窗口閉合 + `hydrate.gen`
+   恆等釘、第 3 層三支 adapter 薄釘),機制本體的單元釘則住在 `hydration-gate.test.ts` 自己;
+   ③**決定一(`HydrationCore` 三決策點單源)不變**——第四點刻意留在 core 之外,理由是它只讀 mutation
+   世代、不讀旗標,而且 load-gate 的 hydrate 選項自建的 core 與 store 端 gate 的 core 是不同實例,
+   世代下沉會變成「兩顆 core 一面旗」的裂腦(`docs/adr/0020` 否決形 2)。
+3. **採納名冊補一筆(rider,非 A 案)**:`mobile-admin` 的 `CoachesScreen.svelte`(教練管理 overlay)
+   成為 opsGate 的第 4 個消費端。前三個是 `mobile-admin/admin` 的 classes/members/orders 三頁——它們
+   把 `hydrateOps` 直接當 load-gate 的 `fetch`(`docs/adr/0008` 的 store-owned 變體);本例是 overlay
+   在 `onMount` 自保,形同 `member/courses` 頁的 `hydrateWaitlist().catch(() => {})` 前例。修的是 R10
+   審查發現的真水合缺口:首頁 `getAdminHome()` → 更多頁 `getMore()` → 本 overlay 這條動線沿路兩站
+   都只讀各自的本地一次性快照,從未呼叫 `hydrateOps()`,`$coachesStore` 因此永遠停在 domain seed。
+   `opsHydrated` guard 讓重複開啟不重抓、`.catch(() => {})` 讓失敗時 seed 仍可渲染(best-effort,同
+   前例慣例);`mobile-admin/stores.ts` 零改動——`hydrateOps`/`opsHydrated` 本來就是既有匯出,協定
+   本身不必動。

@@ -128,7 +128,11 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	 *  load() 不短路、發第二次 fetch、generation++;舊一輪隨後的翻旗會讓新一輪的回應
 	 *  在 applyLoaded 的旗標重查誤判 mutation 勝出而丟棄新資料。into() 之後重查
 	 *  generation,不符即不翻旗(翻旗交給新一輪)。「無條件」指不做 mutation 旗標
-	 *  重查(不呼叫 core.mutationWins()),gen 檢查是重入取代的另一維度,into 照常套用。 */
+	 *  重查(不呼叫 core.mutationWins()),gen 檢查是重入取代的另一維度,into 照常套用。
+	 *
+	 *  指北針(R10):hydrate.gen 消費端的世代穩定在上游 run() 的 fetchGenStable 分支已經
+	 *  完成(舊快照在那裡就被丟棄並重抓),本函式維持無條件套用——這裡不重複判斷,見
+	 *  docs/adr/0020。 */
 	function applyRefreshed(data: T, gen: number): void {
 		const hydrate = options.hydrate;
 		if (!hydrate || !core) {

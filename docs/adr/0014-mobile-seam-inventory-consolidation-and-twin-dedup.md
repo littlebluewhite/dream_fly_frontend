@@ -163,3 +163,35 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
   `$lib/domain` 的**純轉手**顯示常數(`WEEK`/`COACH_REPLIES`/`NOTIF_CATS` 等)一律由消費端直取
   canonical 源;`mobile/data.ts` 留下的是真的攜帶本檔型別事實的收窄查表(`LEAVE_STATUS`/
   `LEVEL_TONE`,0013 Form 3)與本地字面資料(`ATT_STATE`/`ANNOUNCE`/`NOTIF_TONE_BG`/`FG`/`PT_TYPE`)。
+
+## 增補(2026-08-03,架構深化 R10 B 案):§2 雙生核可類新例——行動點名頁接回 attendance-controller
+
+- **§2 雙生核可類新例:`src/lib/coach/attendance-controller.ts`。** 該 controller 原是
+  `docs/adr/0012` 判準①(呼叫端恆為一頁)的首例,呼叫端只有桌面 `coach/attendance/+page.svelte`;
+  行動版 `mobile-admin/coach/attendance/+page.svelte` 則自 Task 20 起手抄一份薄化的點名編排
+  (五個鏡射變數 + 自己的 saved/saving 旗標)。本輪核對本節三條件——deps 完全相同
+  (`saveAttendance`/`now`,行動頁自帶同一支 `nowHHMM()`)、零行為旗標參數、編排逐字重複
+  ——全數成立,故行動頁改為 controller 的**第二個呼叫端**,自身退成薄 adapter(`$ctrl` 解構五條
+  鏡射變數 + `labelOf()` 顯示衍生 + outcome→toast 佈線)。判準②③④照舊一條不鬆:toast 文案與其
+  組裝仍逐字留頁面。
+- **映射層退役,改零映射 re-export。** `mobile-admin/api.ts` 原本為行動點名頁維護一層映射
+  (`mapAttRow()` 與 `MAttendanceClass`/`MAttendanceData` 兩個本地形狀),把桌面 seam 的
+  `AttRow`/`AttClassFull` 改鍵名再賣一次;`mobile-admin/data.ts` 另有配套的 `RosterEntry` 型別 +
+  `ROSTER` 11 筆種子。收斂後三者一併退役,改為
+  `export { getAttendance, saveAttendance } from '$lib/coach/api';` + `export type { AttRow,
+  AttDefault, AttClassFull };`——沿本節(§3)`coachLoadErrorCopy`/`coach-save` 與 `CoachProfile`
+  已有的零映射 re-export 慣例(`CoachProfile` 因與本檔另一個 `Coach` 撞名而需 alias,此處三個型別
+  無撞名,故用不帶 alias 的同款手法);`ROSTER` 種子依 `docs/adr/0010` 於原位留退役註記。
+- **行動頁白拿桌面語意(五項行為變更)。** 前四項是真正的改善:①切班不再丟未存草稿(controller 的
+  `byClass` 暫存);②儲存中切班被擋並發 info toast(行動版原本會直接丟棄 in-flight 儲存狀態);
+  ③儲存中再編輯後,遲到的回應被 token guard 丟棄(`stale` 分支不做事);④備註編輯計入未存變更
+  (原本 `saveNote` 完全不碰 saved 旗標,加註記後儲存鈕仍顯示「點名已儲存」,是既有失真行為)。
+  第五項是連帶**繼承**的桌面既有限制:同日兩場同課名時 `selectClass` 以課名比對,只找得到第一場
+  ——桌面 `CoachDropdown` 本來就是這個限制,不是本輪新引入的缺陷,但確實隨收斂帶進了行動版。
+- **教訓(落字防重演):退役一層映射,必然讓它的 seam 測試斷言變成孤兒。** `mobile-admin/api.test.ts`
+  原本兩個 describe 斷言的是**映射後**形狀(`label`/`RosterEntry` 的 `id`/`default`);零映射
+  re-export 之後回傳值變成桌面 seam 的原樣物件,那組深比對必紅——這不是回歸,是斷言本身失去對象。
+  本輪同批改成該檔既有的「delegates … verbatim」形(mock 回傳具名 `payload`,斷言呼叫端回傳值
+  `toBe(payload)` 參照相等,`saveAttendance` 另留 `toHaveBeenCalledWith` 驗參數原樣傳遞)。
+  日後再有映射層退役,請把它的 seam 測試列進同一批寫入集:漏列的話,不是留下一組必紅的斷言,
+  就是留下一組不再驗證任何東西的假綠。

@@ -262,10 +262,11 @@ and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Since 2026-07-08 that branching is itself
 usually collapsed into a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` /
 `slot="error"` with `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never
-`load()`), consumed at 55 call sites (46 uses across 45 route pages — the member 我的課程 page carries a second,
-in-card attendance-history gate — plus 9 mobile/mobile-admin overlay screens since R5 C4 wired
-VenuesScreen/TicketsScreen, mobile's `MyCourseDetail` among them with its own in-card attendance gate;
-the two in-card gates override `slot="error"` with a bare `ErrorState` because they already sit inside
+`load()`), consumed at 54 call sites (one per route page across 45 route pages — the member 我的課程 page's
+second, in-card attendance-history gate retired on 2026-08-03 when R10 D folded it into
+`member/mine-controller.ts`, `docs/adr/0008` — plus 9 mobile/mobile-admin overlay screens since R5 C4 wired
+VenuesScreen/TicketsScreen, mobile's `MyCourseDetail` among them with its own in-card attendance gate,
+the last one still overriding `slot="error"` with a bare `ErrorState` because it already sits inside
 a `Card`) —
 `ScheduleCalendar` keeps its bespoke inline template outside the wrapper. Data that already lives in a store
 (member/mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind
@@ -274,11 +275,20 @@ a `*Hydrated` guard (`notificationsHydrated`, `notifsHydrated`, `opsHydrated`, `
 mechanism and ownership differ by surface. Member/mobile notifications are page-owned: since 2026-07-13
 the page's own `createLoadGate` call carries a `hydrate: { flag, into }` option instead of hand-rolled
 `skip`+`onData` — `flag` is the `*Hydrated` writable, `into` performs the store write, and the guard
-short-circuit / post-await mutation-wins re-check / flag-flip that used to be hand-rolled at the page now
+short-circuit (`load()` only), the post-await mutation-wins re-check (also `load()`'s apply path only —
+`refresh()`/`silentRefresh()` deliberately never re-check the flag) and the flag-flip (shared by all
+three) that used to be hand-rolled at the page now
 live inside `load()`/`refresh()`/`silentRefresh()` themselves (`docs/adr/0008`; since 2026-07-20 those
 three decision points — guard short-circuit, mutation-wins re-check, flag-flip — delegate to the shared
 `HydrationCore` in `src/lib/hydration-gate.ts`, one home for the protocol's vocabulary, while the gate's
-reentry bookkeeping stays put — `docs/adr/0016`). The gate's own
+reentry bookkeeping stays put — `docs/adr/0016`). What covers the refresh family instead is a *fourth*
+decision point added 2026-08-03 (R10 A, `docs/adr/0020`): `fetchGenStable` — capture the gate's monotonic
+mutation generation on entry, re-read it when the response lands, and if a local mutation happened inside
+that window discard the snapshot and refetch in place until it is stable. It deliberately stays outside
+`HydrationCore` (it reads the generation, never the flag) and is deliberately never applied to `load()`
+(hydrate's contract is mutation-wins-discard, with the reconcile chain owing the refetch; refresh's is
+explicit freshness, so a discard *must* be followed by one). A page opts in through the optional
+`hydrate.gen` reader, which today only `session-gate`'s `pageEntry()` wires. The gate's own
 `generation`/`destroyed` bookkeeping (no page-local flag needed any more) still discards a response that
 resolves after the page unmounts (member's read-state *mutations* —
 `markRead`/`markAllRead`, optimistic update + PATCH + `markMutated()` — live in `member/notifications.ts`
@@ -294,9 +304,12 @@ source of truth) and which is rechecked right before the hydrate write lands, so
 in-flight fetch always wins (`saveMember`/`saveClass`/`saveCoach` no longer exist as local mutators —
 Task 20 moved class/member writes and Round 4's Task F5 moved coach writes to the real
 `/courses`/`/users`/`/coaches` API followed by an unconditional `refreshOps()`
-refetch, bypassing `markMutated()` entirely). That store-owned guard + post-await re-check
+refetch, bypassing `markMutated()` entirely — unconditional describes the *call* here, nothing guards it;
+what that refetch *applies* has been generation-stable since R10, see `docs/adr/0020`). That store-owned
+guard + post-await re-check
 protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate.ts`'s
-`createHydrationGate` (`hydrate`/`refresh`/`markMutated`), which `mobile-admin/stores.ts`'s
+`createHydrationGate` (`hydrate`/`refresh`/`markMutated`, plus the read-only `mutationGen` reader since
+R10), which `mobile-admin/stores.ts`'s
 `hydrateOps`/`hydrateMessages` build on; since 2026-07-11 `member/notifications.ts` is the factory's
 second adopter — `refreshNotifications` *is* `gate.hydrate` and `notificationsHydrated` *is* the gate's
 own writable (same instance, so the page-owned load-gate wiring above keeps reading/writing it
@@ -309,9 +322,12 @@ below; `hydrateWaitlist`/`hydrateLeaveRequests`/`refreshNotifications` *are* `ga
 `waitlistHydrated`/`leaveRequestsHydrated`/`notificationsHydrated`, and the five hand-copied mutator
 skeletons collapse into one `gate.mutate()`. `refreshWaitlist` is still deleted outright (YAGNI, the
 notifications precedent); `refreshLeaveRequests` still keeps its name as `gate.refresh` for
-`MyCourseDetail`'s open-refresh — accepting once-per-session freshness, now with in-flight
-cross-login responses discarded too, but still without a mutation-wins re-check on that
-explicit-refresh window, recorded as known-latent (`docs/adr/0016`, unaffected by the R7 change). Separately, member's
+`MyCourseDetail`'s open-refresh — accepting once-per-session freshness, with in-flight
+cross-login responses discarded since R7 and, **as of 2026-08-03 (R10 A), the explicit-refresh window
+closed too**: `gate.refresh` runs the generation-stable refetch loop, so a cancel landing inside that
+window discards the stale snapshot and refetches instead of reverting the row to pending.
+`docs/adr/0016`'s second known-latent is closed by `docs/adr/0020` — deliberately *not* by extending
+mutation-wins into refresh, which that ADR records as an explicit rejection. Separately, member's
 `getDashboard()`/`getAccount()`/`getMine()` getters (`member/api.ts`) also opportunistically hydrate
 session-scoped stores (points/notifications/subscriptions; `getMine()` — the third adopter, 2026-07-16 —
 候補 waitlist + 請假 leave-requests) as a side effect, behind a private, named
@@ -376,7 +392,10 @@ than one place, independent of any single page's own load-gate?
   their `refresh*` counterparts) live in `stores.ts`, not the page — the page's gate calls them directly
   as its `fetch`/`refresh`. Several mutators (`markOrderPaid`/`markMessageRead`) can flip the guard, and
   none of them is "the page", so the fetch/apply/guard lifecycle has to live where the mutators do: the
-  full `createHydrationGate` factory, store-owned.
+  full `createHydrationGate` factory, store-owned. Their `refresh*` counterparts get the generation-stable
+  refetch for free since R10 — the store-owned gate holds the mutation generation itself, so no page-side
+  `hydrate.gen` wiring is involved; "write → `markMutated` → `await refreshOps()`" stays a single fetch
+  whose snapshot applies as before (`docs/adr/0020`'s conservation pin).
 
 Rule of thumb: reach for the standalone `createHydrationGate` when a store's hydration can be triggered
 from more than one place (another getter, another mutator, another page); a lone page with a lone mutator
@@ -406,7 +425,13 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
   back to `false`), `markMutated()`, then conditionally queue a serialized, retryable reconciliation
   refetch. It also returns **`pageEntry()`** (R9 C3): the `{ fetch, hydrate }` pair a page needs to
   build its own load-gate, where `fetch` is the *epoch-checking* one and `hydrate.flag`/`hydrate.into`
-  are the gate's own `hydrated` writable and `apply` function — same instances, not copies.
+  are the gate's own `hydrated` writable and `apply` function — same instances, not copies. Since
+  2026-08-03 (R10 A) the pack also carries `hydrate.gen` — `gate.mutationGen`, the same reader — so the
+  page's refresh family and the store gate read **one** mutation-generation ledger rather than each
+  keeping its own. That closes the reconcile window for free: `queueReconcile` is byte-for-byte
+  unchanged, because a reconcile refetch whose snapshot predates a later mutation is now discarded and
+  refetched by `gate.refresh`'s own generation check instead of needing a second queued reconcile
+  (`docs/adr/0020`).
 - **`createSessionRefresher<T>({ fetch, apply, reset })`** — points / subscriptions. Keeps their
   pre-existing unconditional-refetch semantics (no guard) but adds identity-change reset and *silent*
   in-flight cross-login discard (`return`, not `throw` — throwing would inject a new "switched
@@ -445,7 +470,9 @@ this round (K1/K3/K4) settled on, and its contrast with the cross-page "list-pag
 that `docs/adr/0011` already rejected.
 
 - **`src/lib/coach/attendance-controller.ts`**'s `createAttendanceController` (K1) sits between the
-  existing pure reducer `attendance-draft.ts` and `coach/attendance/+page.svelte`: a single
+  existing pure reducer `attendance-draft.ts` and `coach/attendance/+page.svelte` (since 2026-08-03,
+  R10 B, mobile-admin's coach attendance page is a second caller — it joined the sanctioned twin class
+  below, `docs/adr/0014`): a single
   `AttendanceViewState` snapshot store replaces five mirrored page variables, with `saveAttendance`/`now`
   injected as deps (no Svelte component/lifecycle imports — `svelte/store` only — and construction is
   side-effect-free, SSR-safe). `save()` layers an incrementing
@@ -491,6 +518,26 @@ that `docs/adr/0011` already rejected.
   controller's next `publish()` would overwrite back to `true`. Toast text, the conversations list and
   its gate, and the tab×search filtering (still `conversations-filter.ts`, K3) stay on the page;
   `docs/adr/0018` records the criterion walkthrough.
+- **`src/lib/member/mine-controller.ts`**'s `createMineController` (2026-08-03, R10 D) is the seventh
+  and the second in `messages-controller`'s shape: member/mine's *inner* coordination — course
+  selection × the in-card attendance-history load × the waitlist-cancel busy guard — as one
+  `MineViewState` snapshot (`active`/`attState`/`attendance`/`cancellingId`) with
+  `getEnrolmentAttendance`/`cancelWaitlist` as its only deps. The page's inner `attGate` is gone; the
+  same "latest request wins" invariant now comes from the controller's own incrementing `seq`/`token`
+  guard (`attendance-controller`'s shape again), and "write `active` before fetching" is structural
+  rather than a comment — `fetchAttendance(id)` takes the id as a parameter and never reads the
+  `active` closure. Toast copy and the outer `getMine` gate stay on the page; the 24 existing page
+  tests are byte-for-byte unchanged (`docs/adr/0012`, `docs/adr/0008`).
+- **`src/lib/public/contact-form.ts`**'s `createContactForm` (2026-08-03, R10 C) is the eighth and
+  `public`'s first form machine: `ContactForm.svelte`'s four sequential validation guards, submit and
+  3-second reset choreography, with `send` and `schedule: (fn, ms) => cancel` (a timer effect, the same
+  injection habit as `attendance-controller`'s `now`) as deps and 洽詢-domain outcome kinds
+  (`inquirySent`/`validationFailed`/`failed`/`alreadySubmitting`). It also draws a boundary the ADR now
+  states outright: *validation* copy lives in the machine as exported consts (single string source for
+  the module's own mapping and the component's inline error box — `login-submit.ts`'s
+  `EMPTY_FIELDS_ERROR` was the precedent), while *toast* copy stays at the call site as criterion ④
+  always required. A real bug fell out of the extraction: a leftover reset timer from an earlier
+  successful submit used to cut the next success message short (`docs/adr/0012`).
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
@@ -502,7 +549,13 @@ Since 2026-07-23 (R8 C2) `admin/settings-form.ts`'s `createSettingsForm` joins t
 admin desktop settings page and mobile-admin's `AdminSettingsScreen` share one factory for their
 byte-identical 10-field draft-flattening/assembly orchestration, deliberately *not* split into a
 leave-form-style shared core plus two wrapper factories since there's only one outcome domain to serve
-(`docs/adr/0018`). Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
+(`docs/adr/0018`). Since 2026-08-03 (R10 B) `coach/attendance-controller.ts` joins it as well: the
+mobile-admin coach attendance page dropped its hand-copied thin orchestration (five mirrored variables
+plus its own saved/saving flags) and became a second caller, taking desktop semantics with it — an
+unsaved draft survives a class switch, switching mid-save is blocked with a toast, a late save response
+is dropped as `stale`, and note edits count as unsaved changes. The mapping layer that used to reshape
+the desktop seam's rows for it (`mapAttRow` plus `RosterEntry`/`ROSTER`) retired in favour of a
+zero-mapping re-export from `mobile-admin/api.ts` (`docs/adr/0014`). Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
 pushes the pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store,
 shared by *four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a
 desktop↔mobile pair. It collapses what used to be a byte-identical `submit()` skeleton (re-entrancy
