@@ -10,18 +10,17 @@
   import { Card } from '$lib/components/ui';
   import type { AdminPaymentSplitRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { paymentMethodLabel, paymentVM } from '$lib/admin/report-math';
+  import { paymentMethodLabel, paymentVM, PAYMENT_PALETTE } from '$lib/admin/report-math';
   import { donutStops } from './donut';
 
   let { rows }: { rows: AdminPaymentSplitRow[] } = $props();
 
-  /* 開放集合(付款方式不定)的循環色盤 — 純呈現層,沿用歸檔 mock 的既定色系。 */
-  const PALETTE = ['var(--df-primary)', '#10B981', '#0EA5E9', '#8B5CF6', 'var(--df-warning)', '#EC4899'];
-
   const vm = $derived(paymentVM(rows));
   const shares = $derived(vm.shares);
   const stops = $derived(
-    donutStops(shares.map((share, i) => ({ pct: share * 100, color: PALETTE[i % PALETTE.length] })))
+    donutStops(
+      shares.map((share, i) => ({ pct: share * 100, color: PAYMENT_PALETTE[i % PAYMENT_PALETTE.length] }))
+    )
   );
   const hasData = $derived(vm.hasData);
 </script>
@@ -48,8 +47,8 @@
       {#each rows as p, i (p.method)}
         <div style="display:flex; align-items:center; gap:8px;">
           <span
-            style="width:10px; height:10px; border-radius:5px; background:{PALETTE[
-              i % PALETTE.length
+            style="width:10px; height:10px; border-radius:5px; background:{PAYMENT_PALETTE[
+              i % PAYMENT_PALETTE.length
             ]}; flex:none;"
           ></span>
           <span style="flex:1; font-size:12.5px; color:var(--df-text-dark);">

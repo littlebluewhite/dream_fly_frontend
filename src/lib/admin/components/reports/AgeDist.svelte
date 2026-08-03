@@ -5,24 +5,14 @@
    * 固定 6 桶零填,回 count). The archived component took precomputed pct — the
    * shares are now derived via pctShares() (0–1, fmtPct-ready; bar width =
    * share×100 so the fill IS the displayed 占比; all-zero → 全 0, never NaN).
-   * Labels via AGE_BUCKET_LABEL; the per-bucket colours are presentational and
-   * component-local (6 桶 → 固定色序). */
+   * Labels AND colours come from report-math's AGE_BUCKET_LABEL(R10 架構深化 E 案:
+   * 原本 component-local 的固定桶色併入單源查表)。 */
   import { Card } from '$lib/components/ui';
   import type { AdminAgeDistRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
   import { AGE_BUCKET_LABEL, pctShares } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminAgeDistRow[] } = $props();
-
-  /* 桶固定 6 值 → 固定桶色(呈現層)。 */
-  const BUCKET_COLOR: Record<AdminAgeDistRow['bucket'], string> = {
-    '0-6': '#10B981',
-    '7-12': 'var(--df-primary)',
-    '13-17': '#0EA5E9',
-    '18-25': '#8B5CF6',
-    '26-40': '#F59E0B',
-    '41+': '#EC4899'
-  };
 
   const shares = $derived(pctShares(rows.map((a) => a.count)));
 </script>
@@ -42,10 +32,10 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
             <span
-              style="width:9px; height:9px; border-radius:5px; background:{BUCKET_COLOR[a.bucket]};"
+              style="width:9px; height:9px; border-radius:5px; background:{AGE_BUCKET_LABEL[a.bucket].color};"
             ></span>
             <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">
-              {AGE_BUCKET_LABEL[a.bucket]}
+              {AGE_BUCKET_LABEL[a.bucket].label}
             </span>
           </span>
           <span style="font-size:13px; font-weight:700; color:var(--df-text-dark);">
@@ -54,9 +44,9 @@
         </div>
         <div class="track">
           <div
-            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{BUCKET_COLOR[
+            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{AGE_BUCKET_LABEL[
               a.bucket
-            ]};"
+            ].color};"
           ></div>
         </div>
       </div>

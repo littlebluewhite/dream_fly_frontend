@@ -79,15 +79,34 @@ export function groupIncomeSources(
 
 /* ═════════════ 逐面板 view-model(Round 2 C3:桌面 reports 元件 × mobile-admin ReportsScreen 共用) ═════════════
  * 每面板一支「數字→數字」純函式,收斂兩個 surface 原本各自 re-inline 的同一套算式
- * (ADR 0009:per-surface 的是元件,共用的只有純邏輯)。柱高/條寬的 maxScale 由呼叫端
- * 傳入——桌面/行動的像素值域本來就不同(110/84、104/92、116/104…),不在本檔硬編。 */
+ * (ADR 0009:per-surface 的是元件,共用的只有純邏輯)。柱高/條寬的 maxScale 仍由呼叫端
+ * 傳入(參數是接口——桌面/行動用不同值域,本來就該由呼叫端決定傳哪一組)；但具體
+ * 像素值不再各自硬編,單源收在下方 REPORT_SCALES(R10 架構深化 E 案),呼叫端經其
+ * 取值,不再逐字重抄同一組數字。 */
 
-/** 月營收趨勢:total=12 月加總;max=桌面高度公式 (h/max)*160 的分母,保底 1——空庫
- *  全 0 時 0/1 高度為 0,不產生 NaN(行動版高度另走 normalizeBars,只消費 total)。 */
-export function revenueTrendVM(rows: { h: number }[]): { total: number; max: number } {
+/** 各面板柱高/條寬的桌面／行動像素值域單源查表——原本 5 組 scale 數對散在桌面 9 檔
+ *  與 ReportsScreen.svelte 呼叫端各自硬編同一組數字(110/84、100/84、104/92、
+ *  116/104,加 revenueTrend 的 160/108),現收斂本表;呼叫端改傳
+ *  `REPORT_SCALES.<panel>.desktop`/`.mobile`,各 VM 的 maxScale 參數本身不動。 */
+export const REPORT_SCALES = {
+	revenueTrend: { desktop: 160, mobile: 108 },
+	attDist: { desktop: 110, mobile: 84 },
+	tier: { desktop: 100, mobile: 84 },
+	weekday: { desktop: 104, mobile: 92 },
+	retention: { desktop: 116, mobile: 104 }
+} as const;
+
+/** 月營收趨勢:total=12 月加總;heights=normalizeBars 柱高(桌面 maxScale=160、行動
+ *  108,見 REPORT_SCALES.revenueTrend;全 0 → 全 0,不產生 NaN)。R10 架構深化 E 案
+ *  將桌面原本內嵌的 (h/max)*160、max 另保底 1 的算式收進本函式,改與其餘面板 VM
+ *  同型(heights[] + normalizeBars)。等價前提:月營收金額(新台幣元)<1 不可達——
+ *  舊「max 保底 1」寫法只在 0<max<1 這個不可達區間會與 normalizeBars 的「max<=0
+ *  才保底 0」不同(此時舊式=h×160、新式=滿高 160),真實資料(整數元、全 0 或至少
+ *  1 元)下兩式結果相同。 */
+export function revenueTrendVM(rows: { h: number }[], maxScale = 100): { total: number; heights: number[] } {
 	return {
 		total: rows.reduce((sum, d) => sum + d.h, 0),
-		max: Math.max(...rows.map((d) => d.h), 1)
+		heights: normalizeBars(rows.map((d) => d.h), maxScale)
 	};
 }
 
@@ -172,7 +191,9 @@ export function funnelVM(funnel: { trialInquiries: number; newEnrolments: number
 }
 
 /** 付款方式占比:count 占比(0–1)+ 是否有任何進帳(hasData=false 時呼叫端畫中性圓
- *  環)。conic 色標(donutStops+色盤)屬呈現層,留在各 surface 呼叫端。 */
+ *  環)。conic 色標(donutStops 組裝)仍是呼叫端的事——但色盤本身(PAYMENT_PALETTE)
+ *  已單源收在本檔(R10 架構深化 E 案),呼叫端依索引循環取色餵給 donutStops,不再
+ *  各自重抄色碼陣列。 */
 export function paymentVM(rows: { count: number }[]): { shares: number[]; hasData: boolean } {
 	return {
 		shares: pctShares(rows.map((p) => p.count)),
@@ -248,24 +269,66 @@ export const paymentMethodLabel = (method: string): string => PAYMENT_METHOD_LAB
  *  標籤，陣列索引即 weekday 值。 */
 export const WEEKDAY_LABEL: readonly string[] = ['日', '一', '二', '三', '四', '五', '六'];
 
-/** age_distribution 桶 key(足歲，排除 birth_date 為 NULL 者)→ 中文顯示標籤。 */
-export const AGE_BUCKET_LABEL: Record<'0-6' | '7-12' | '13-17' | '18-25' | '26-40' | '41+', string> = {
-	'0-6': '0–6 歲',
-	'7-12': '7–12 歲',
-	'13-17': '13–17 歲',
-	'18-25': '18–25 歲',
-	'26-40': '26–40 歲',
-	'41+': '41 歲以上'
+/** age_distribution 桶 key(足歲，排除 birth_date 為 NULL 者)→ 中文顯示標籤 + 代表色
+ *  (桌面 AgeDist.svelte 與 ReportsScreen.svelte 原本各自逐字重抄同一份桶色，R10
+ *  架構深化 E 案併入本表，同 TIER_LABEL 的 {label,color} 複合形)。 */
+export const AGE_BUCKET_LABEL: Record<
+	'0-6' | '7-12' | '13-17' | '18-25' | '26-40' | '41+',
+	{ label: string; color: string }
+> = {
+	'0-6': { label: '0–6 歲', color: '#10B981' },
+	'7-12': { label: '7–12 歲', color: 'var(--df-primary)' },
+	'13-17': { label: '13–17 歲', color: '#0EA5E9' },
+	'18-25': { label: '18–25 歲', color: '#8B5CF6' },
+	'26-40': { label: '26–40 歲', color: '#F59E0B' },
+	'41+': { label: '41 歲以上', color: '#EC4899' }
 };
 
 /** attendance_distribution 桶 key(present/(present+absent)，leave 不入分母)→
- *  中文顯示標籤。 */
-export const ATTENDANCE_BUCKET_LABEL: Record<'gte_95' | '85_94' | '75_84' | 'lt_75', string> = {
-	gte_95: '95–100%',
-	'85_94': '85–94%',
-	'75_84': '75–84%',
-	lt_75: '低於 75%'
+ *  中文顯示標籤 + 代表色(桌面 AttDist.svelte 與 ReportsScreen.svelte 原本各自逐字
+ *  重抄同一份桶色，R10 架構深化 E 案併入本表，同 TIER_LABEL 的 {label,color} 複合
+ *  形)。 */
+export const ATTENDANCE_BUCKET_LABEL: Record<
+	'gte_95' | '85_94' | '75_84' | 'lt_75',
+	{ label: string; color: string }
+> = {
+	gte_95: { label: '95–100%', color: 'var(--df-success)' },
+	'85_94': { label: '85–94%', color: 'var(--df-primary)' },
+	'75_84': { label: '75–84%', color: '#0EA5E9' },
+	lt_75: { label: '低於 75%', color: 'var(--df-warning)' }
 };
+
+/** 教練表現排行/場館使用時數/付款方式占比三面板的開放集合(數量不定)循環色盤——
+ *  桌面 CoachPerf/VenueUsage/PaymentSplit 三檔與 ReportsScreen.svelte 原本各自逐字
+ *  重抄同一份陣列,R10 架構深化 E 案單源收斂;呼叫端仍以 `PALETTE[i %
+ *  PALETTE.length]` 依索引循環取色(桶 key 固定的面板走上面的 xxx_LABEL Record,
+ *  這三個是索引式,shape 不同故不併入同一批常數)。 */
+export const COACH_PALETTE: readonly string[] = [
+	'var(--df-primary)',
+	'#0EA5E9',
+	'#10B981',
+	'#8B5CF6',
+	'#EC4899',
+	'#F59E0B'
+];
+
+export const VENUE_PALETTE: readonly string[] = [
+	'var(--df-primary)',
+	'#0EA5E9',
+	'#10B981',
+	'#8B5CF6',
+	'#EC4899',
+	'var(--df-warning)'
+];
+
+export const PAYMENT_PALETTE: readonly string[] = [
+	'var(--df-primary)',
+	'#10B981',
+	'#0EA5E9',
+	'#8B5CF6',
+	'var(--df-warning)',
+	'#EC4899'
+];
 
 /* ═════════════════════════ KPI 卡識別四欄(單源) ═════════════════════════ */
 

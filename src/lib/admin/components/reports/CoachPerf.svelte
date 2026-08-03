@@ -13,12 +13,9 @@
   import { ntd } from '$lib/public/adapters';
   import { fmtNT } from '$lib/format';
   import { fmtPct } from '$lib/admin/format';
-  import { coachPerfVM } from '$lib/admin/report-math';
+  import { coachPerfVM, COACH_PALETTE } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminReportCoachRow[] } = $props();
-
-  /* 開放集合(教練人數不定)的循環色盤 — 純呈現層,沿用歸檔 mock 的既定色系。 */
-  const PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
 
   const vm = $derived(coachPerfVM(rows));
   const ranked = $derived(vm.ranked);
@@ -37,7 +34,7 @@
   <div style="display:flex; flex-direction:column; gap:13px;">
     {#each ranked as c, i (c.id)}
       <div style="display:flex; align-items:center; gap:13px;">
-        <div class="avatar" style="background:{PALETTE[i % PALETTE.length]};">
+        <div class="avatar" style="background:{COACH_PALETTE[i % COACH_PALETTE.length]};">
           {c.name.charAt(0) || '?'}
         </div>
         <div style="flex:1; min-width:0;">
@@ -56,8 +53,8 @@
           </div>
           <div class="track">
             <div
-              style="height:100%; width:{widths[i]}%; border-radius:4px; background:{PALETTE[
-                i % PALETTE.length
+              style="height:100%; width:{widths[i]}%; border-radius:4px; background:{COACH_PALETTE[
+                i % COACH_PALETTE.length
               ]};"
             ></div>
           </div>

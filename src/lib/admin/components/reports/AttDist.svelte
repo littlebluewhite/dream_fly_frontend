@@ -2,26 +2,17 @@
   /* 出席率分布 — restored from the archived reports.jsx port (689769a^),
    * re-plumbed for real data (Round 4 P4-F2). `rows` is now GET /reports/admin's
    * attendance_distribution (契約 §3.24: 每會員 present/(present+absent),leave
-   * 不入分母,未點名者不入分布;固定 4 桶零填). Labels come from report-math's
-   * ATTENDANCE_BUCKET_LABEL; the per-bucket colours are the archived palette keyed
-   * by bucket (presentational, component-local). Bar heights go through
-   * normalizeBars(counts, 110) — the archived count/maxC*110 was NaN on an all-zero
-   * (empty-library) month. */
+   * 不入分母,未點名者不入分布;固定 4 桶零填). Labels AND colours come from
+   * report-math's ATTENDANCE_BUCKET_LABEL(R10 架構深化 E 案:原本 component-local
+   * 的桶色併入單源查表)。Bar heights go through normalizeBars(counts, 110) — the
+   * archived count/maxC*110 was NaN on an all-zero (empty-library) month. */
   import { Card } from '$lib/components/ui';
   import type { AdminAttendanceDistRow } from '$lib/admin/api';
-  import { ATTENDANCE_BUCKET_LABEL, attDistVM } from '$lib/admin/report-math';
+  import { ATTENDANCE_BUCKET_LABEL, attDistVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminAttendanceDistRow[] } = $props();
 
-  /* 桶固定 4 值 → 沿用歸檔 ATT_DIST 的桶色(高出席綠 → 低出席警示)。 */
-  const BUCKET_COLOR: Record<AdminAttendanceDistRow['bucket'], string> = {
-    gte_95: 'var(--df-success)',
-    '85_94': 'var(--df-primary)',
-    '75_84': '#0EA5E9',
-    lt_75: 'var(--df-warning)'
-  };
-
-  const heights = $derived(attDistVM(rows, 110));
+  const heights = $derived(attDistVM(rows, REPORT_SCALES.attDist.desktop));
 </script>
 
 <Card padding={18} style="flex:1; min-width:0;">
@@ -41,9 +32,9 @@
         >
           {d.count}
         </span>
-        <div class="bar" style="height:{heights[i]}px; background:{BUCKET_COLOR[d.bucket]};"></div>
+        <div class="bar" style="height:{heights[i]}px; background:{ATTENDANCE_BUCKET_LABEL[d.bucket].color};"></div>
         <span style="font-size:11.5px; color:var(--df-text-light); text-align:center;">
-          {ATTENDANCE_BUCKET_LABEL[d.bucket]}
+          {ATTENDANCE_BUCKET_LABEL[d.bucket].label}
         </span>
       </div>
     {/each}

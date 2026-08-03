@@ -7,11 +7,11 @@
    * normalizeBars(counts, 100) — all-zero renders zero-height bars, never NaN. */
   import { Card } from '$lib/components/ui';
   import type { AdminTierDistRow } from '$lib/admin/api';
-  import { TIER_LABEL, tierVM } from '$lib/admin/report-math';
+  import { TIER_LABEL, tierVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminTierDistRow[] } = $props();
 
-  const heights = $derived(tierVM(rows, 100));
+  const heights = $derived(tierVM(rows, REPORT_SCALES.tier.desktop));
 </script>
 
 <Card padding={18} style="width:380px; flex:none;">

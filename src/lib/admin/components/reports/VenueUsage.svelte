@@ -8,12 +8,9 @@
    * never NaN). Venue names are an open set → cycling palette colour by index. */
   import { Card } from '$lib/components/ui';
   import type { AdminVenueUsageRow } from '$lib/admin/api';
-  import { fmtHours, venueUsageVM } from '$lib/admin/report-math';
+  import { fmtHours, venueUsageVM, VENUE_PALETTE } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminVenueUsageRow[] } = $props();
-
-  /* 開放集合(場地數不定)的循環色盤 — 純呈現層,沿用歸檔 mock 的既定色系。 */
-  const PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', 'var(--df-warning)'];
 
   const widths = $derived(venueUsageVM(rows));
 </script>
@@ -31,7 +28,7 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
             <span
-              style="width:9px; height:9px; border-radius:5px; background:{PALETTE[i % PALETTE.length]};"
+              style="width:9px; height:9px; border-radius:5px; background:{VENUE_PALETTE[i % VENUE_PALETTE.length]};"
             ></span>
             <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">{v.venue}</span>
           </span>
@@ -41,8 +38,8 @@
         </div>
         <div class="track">
           <div
-            style="height:100%; width:{widths[i]}%; border-radius:4px; background:{PALETTE[
-              i % PALETTE.length
+            style="height:100%; width:{widths[i]}%; border-radius:4px; background:{VENUE_PALETTE[
+              i % VENUE_PALETTE.length
             ]};"
           ></div>
         </div>

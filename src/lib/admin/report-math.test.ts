@@ -27,7 +27,11 @@ import {
 	WEEKDAY_LABEL,
 	AGE_BUCKET_LABEL,
 	ATTENDANCE_BUCKET_LABEL,
-	REPORT_KPI_CARDS
+	REPORT_KPI_CARDS,
+	REPORT_SCALES,
+	COACH_PALETTE,
+	VENUE_PALETTE,
+	PAYMENT_PALETTE
 } from './report-math';
 
 describe('deltaPct — 環比 %', () => {
@@ -190,20 +194,26 @@ describe('groupIncomeSources — 收入來源時間序列重塑', () => {
 /* ═════════════ 逐面板 view-model(Round 2 C3)——固定兩 surface 既有算式的行為 ═════════════ */
 
 describe('revenueTrendVM — 月營收趨勢', () => {
-	it('total 為 12 月加總、max 為最大月(ReportsScreen fixture 驗算:總計 1,078,200)', () => {
-		const vm = revenueTrendVM([{ h: 300000 }, { h: 320000 }, { h: 458200 }]);
+	it('total 為 12 月加總、heights 吃呼叫端 maxScale(桌面 160,ReportsScreen fixture 驗算:總計 1,078,200)', () => {
+		const vm = revenueTrendVM([{ h: 300000 }, { h: 320000 }, { h: 458200 }], 160);
 		expect(vm.total).toBe(1078200);
-		expect(vm.max).toBe(458200);
+		expect(vm.heights[2]).toBe(160); // 458200 為最大月,滿高
+		expect(vm.heights[0]).toBeCloseTo((300000 / 458200) * 160, 10);
 	});
 
-	it('空庫全 0:total 0、max 保底 1(桌面 (h/max)*160 高度為 0,不產生 NaN)', () => {
-		const vm = revenueTrendVM([{ h: 0 }, { h: 0 }, { h: 0 }]);
+	it('行動 108:最大月滿高 108', () => {
+		const vm = revenueTrendVM([{ h: 458200 }, { h: 0 }], 108);
+		expect(vm.heights).toEqual([108, 0]);
+	});
+
+	it('空庫全 0:total 0、heights 全 0,不產生 NaN', () => {
+		const vm = revenueTrendVM([{ h: 0 }, { h: 0 }, { h: 0 }], 160);
 		expect(vm.total).toBe(0);
-		expect(vm.max).toBe(1);
+		expect(vm.heights).toEqual([0, 0, 0]);
 	});
 
-	it('空陣列:total 0、max 保底 1', () => {
-		expect(revenueTrendVM([])).toEqual({ total: 0, max: 1 });
+	it('空陣列:total 0、heights 空陣列', () => {
+		expect(revenueTrendVM([], 160)).toEqual({ total: 0, heights: [] });
 	});
 });
 
@@ -481,23 +491,78 @@ describe('WEEKDAY_LABEL — weekday index 對照(0=週日)', () => {
 	});
 });
 
-describe('AGE_BUCKET_LABEL — 年齡分布桶對照', () => {
+describe('AGE_BUCKET_LABEL — 年齡分布桶對照(R10 架構深化 E 案:{label,color} 複合形，原桌面 AgeDist.svelte/ReportsScreen.svelte 各自重抄桶色)', () => {
 	it('6 桶皆有中文標籤', () => {
-		expect(AGE_BUCKET_LABEL['0-6']).toBe('0–6 歲');
-		expect(AGE_BUCKET_LABEL['7-12']).toBe('7–12 歲');
-		expect(AGE_BUCKET_LABEL['13-17']).toBe('13–17 歲');
-		expect(AGE_BUCKET_LABEL['18-25']).toBe('18–25 歲');
-		expect(AGE_BUCKET_LABEL['26-40']).toBe('26–40 歲');
-		expect(AGE_BUCKET_LABEL['41+']).toBe('41 歲以上');
+		expect(AGE_BUCKET_LABEL['0-6'].label).toBe('0–6 歲');
+		expect(AGE_BUCKET_LABEL['7-12'].label).toBe('7–12 歲');
+		expect(AGE_BUCKET_LABEL['13-17'].label).toBe('13–17 歲');
+		expect(AGE_BUCKET_LABEL['18-25'].label).toBe('18–25 歲');
+		expect(AGE_BUCKET_LABEL['26-40'].label).toBe('26–40 歲');
+		expect(AGE_BUCKET_LABEL['41+'].label).toBe('41 歲以上');
+	});
+
+	it('6 桶皆有代表色', () => {
+		expect(AGE_BUCKET_LABEL['0-6'].color).toBe('#10B981');
+		expect(AGE_BUCKET_LABEL['7-12'].color).toBe('var(--df-primary)');
+		expect(AGE_BUCKET_LABEL['13-17'].color).toBe('#0EA5E9');
+		expect(AGE_BUCKET_LABEL['18-25'].color).toBe('#8B5CF6');
+		expect(AGE_BUCKET_LABEL['26-40'].color).toBe('#F59E0B');
+		expect(AGE_BUCKET_LABEL['41+'].color).toBe('#EC4899');
 	});
 });
 
-describe('ATTENDANCE_BUCKET_LABEL — 出席率分布桶對照', () => {
+describe('ATTENDANCE_BUCKET_LABEL — 出席率分布桶對照(R10 架構深化 E 案:{label,color} 複合形，原桌面 AttDist.svelte/ReportsScreen.svelte 各自重抄桶色)', () => {
 	it('4 桶皆有中文標籤', () => {
-		expect(ATTENDANCE_BUCKET_LABEL.gte_95).toBe('95–100%');
-		expect(ATTENDANCE_BUCKET_LABEL['85_94']).toBe('85–94%');
-		expect(ATTENDANCE_BUCKET_LABEL['75_84']).toBe('75–84%');
-		expect(ATTENDANCE_BUCKET_LABEL.lt_75).toBe('低於 75%');
+		expect(ATTENDANCE_BUCKET_LABEL.gte_95.label).toBe('95–100%');
+		expect(ATTENDANCE_BUCKET_LABEL['85_94'].label).toBe('85–94%');
+		expect(ATTENDANCE_BUCKET_LABEL['75_84'].label).toBe('75–84%');
+		expect(ATTENDANCE_BUCKET_LABEL.lt_75.label).toBe('低於 75%');
+	});
+
+	it('4 桶皆有代表色(高出席綠 → 低出席警示)', () => {
+		expect(ATTENDANCE_BUCKET_LABEL.gte_95.color).toBe('var(--df-success)');
+		expect(ATTENDANCE_BUCKET_LABEL['85_94'].color).toBe('var(--df-primary)');
+		expect(ATTENDANCE_BUCKET_LABEL['75_84'].color).toBe('#0EA5E9');
+		expect(ATTENDANCE_BUCKET_LABEL.lt_75.color).toBe('var(--df-warning)');
+	});
+});
+
+describe('COACH_PALETTE — 教練表現排行循環色盤(R10 架構深化 E 案,原 CoachPerf.svelte/ReportsScreen.svelte 逐字重抄)', () => {
+	it('6 色逐鍵 pin', () => {
+		expect(COACH_PALETTE).toEqual([
+			'var(--df-primary)',
+			'#0EA5E9',
+			'#10B981',
+			'#8B5CF6',
+			'#EC4899',
+			'#F59E0B'
+		]);
+	});
+});
+
+describe('VENUE_PALETTE — 場館使用時數循環色盤(R10 架構深化 E 案,原 VenueUsage.svelte/ReportsScreen.svelte 逐字重抄)', () => {
+	it('6 色逐鍵 pin', () => {
+		expect(VENUE_PALETTE).toEqual([
+			'var(--df-primary)',
+			'#0EA5E9',
+			'#10B981',
+			'#8B5CF6',
+			'#EC4899',
+			'var(--df-warning)'
+		]);
+	});
+});
+
+describe('PAYMENT_PALETTE — 付款方式占比循環色盤(R10 架構深化 E 案,原 PaymentSplit.svelte/ReportsScreen.svelte 逐字重抄)', () => {
+	it('6 色逐鍵 pin', () => {
+		expect(PAYMENT_PALETTE).toEqual([
+			'var(--df-primary)',
+			'#10B981',
+			'#0EA5E9',
+			'#8B5CF6',
+			'var(--df-warning)',
+			'#EC4899'
+		]);
 	});
 });
 
@@ -510,6 +575,18 @@ describe('REPORT_KPI_CARDS — KPI 卡識別四欄單源(Task C5，桌面 Report
 			paidOrdersCount: { icon: 'receipt', label: '本月訂單數', tint: '#8B5CF614', color: '#8B5CF6' },
 			attendanceRate: { icon: 'calendar-check', label: '本月出席率', tint: '#10B98114', color: '#10B981' },
 			retention: { icon: 'repeat', label: '會員留存率', tint: '#0EA5E914', color: '#0EA5E9' }
+		});
+	});
+});
+
+describe('REPORT_SCALES — 各面板柱高/條寬桌面·行動像素值域單源(R10 架構深化 E 案)', () => {
+	it('5 面板 × {desktop,mobile} 十值逐字 pin(px 迴歸單源守望——charts.test.ts 的 4 條像素斷言與此表同源)', () => {
+		expect(REPORT_SCALES).toEqual({
+			revenueTrend: { desktop: 160, mobile: 108 },
+			attDist: { desktop: 110, mobile: 84 },
+			tier: { desktop: 100, mobile: 84 },
+			weekday: { desktop: 104, mobile: 92 },
+			retention: { desktop: 116, mobile: 104 }
 		});
 	});
 });

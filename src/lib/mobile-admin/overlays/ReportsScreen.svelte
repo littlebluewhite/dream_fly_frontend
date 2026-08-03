@@ -36,7 +36,6 @@
   import {
     deltaPct,
     pctShares,
-    normalizeBars,
     topCoursesFrom,
     revenueTrendVM,
     breakdownTotalCents,
@@ -57,7 +56,11 @@
     WEEKDAY_LABEL,
     AGE_BUCKET_LABEL,
     ATTENDANCE_BUCKET_LABEL,
-    REPORT_KPI_CARDS
+    REPORT_KPI_CARDS,
+    REPORT_SCALES,
+    COACH_PALETTE,
+    VENUE_PALETTE,
+    PAYMENT_PALETTE
   } from '$lib/admin/report-math';
   // conic-gradient 累計色標——直接共用桌面 reports/donut.ts 的 donutStops()(Round 2
   // C3:純邏輯跨 surface 單源,同 classes 頁 import course-request.ts 先例;per-surface
@@ -79,22 +82,8 @@
   const now = new Date();
   const monthSub = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 · 營運數據`;
 
-  /* 開放集合(教練/場館/付款方式人數或種類不定)的循環色盤——沿用桌面 CoachPerf/
-   * VenueUsage/PaymentSplit 的既定色系(呈現層，無資料源可依附)。 */
-  const COACH_PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', '#F59E0B'];
-  const VENUE_PALETTE = ['var(--df-primary)', '#0EA5E9', '#10B981', '#8B5CF6', '#EC4899', 'var(--df-warning)'];
-  const PAYMENT_PALETTE = ['var(--df-primary)', '#10B981', '#0EA5E9', '#8B5CF6', 'var(--df-warning)', '#EC4899'];
-  /* 固定桶(年齡/出席)的桶色——沿用桌面 AgeDist/AttDist 的既定色序(呈現層，component-local)。 */
-  const AGE_BUCKET_COLOR: Record<'0-6' | '7-12' | '13-17' | '18-25' | '26-40' | '41+', string> = {
-    '0-6': '#10B981', '7-12': 'var(--df-primary)', '13-17': '#0EA5E9', '18-25': '#8B5CF6', '26-40': '#F59E0B', '41+': '#EC4899'
-  };
-  const ATT_BUCKET_COLOR: Record<'gte_95' | '85_94' | '75_84' | 'lt_75', string> = {
-    gte_95: 'var(--df-success)', '85_94': 'var(--df-primary)', '75_84': '#0EA5E9', lt_75: 'var(--df-warning)'
-  };
-
   $: trend = data?.revenue.trend ?? [];
-  $: trendHeights = normalizeBars(trend.map((d) => d.h), 108);
-  $: trendTotal = revenueTrendVM(trend).total;
+  $: ({ total: trendTotal, heights: trendHeights } = revenueTrendVM(trend, REPORT_SCALES.revenueTrend.mobile));
 
   $: revenueBreakdownTotalCents = breakdownTotalCents(data?.revenueBreakdown ?? []);
 
@@ -127,15 +116,15 @@
     widthPct: venueWidths[i]
   }));
 
-  $: attHeights = attDistVM(data?.attendanceDistribution ?? [], 84);
+  $: attHeights = attDistVM(data?.attendanceDistribution ?? [], REPORT_SCALES.attDist.mobile);
 
-  $: retentionVm = retentionVM(data?.retention ?? [], 104);
+  $: retentionVm = retentionVM(data?.retention ?? [], REPORT_SCALES.retention.mobile);
   $: retentionHeights = retentionVm.heights;
   $: retentionLastRate = retentionVm.lastRate;
 
-  $: tierHeights = tierVM(data?.tierDistribution ?? [], 84);
+  $: tierHeights = tierVM(data?.tierDistribution ?? [], REPORT_SCALES.tier.mobile);
 
-  $: weekdayVm = weekdayVM(data?.weekdayLoad ?? [], 92);
+  $: weekdayVm = weekdayVM(data?.weekdayLoad ?? [], REPORT_SCALES.weekday.mobile);
   $: weekdayHeights = weekdayVm.heights;
   $: weekdayMax = weekdayVm.max;
 
@@ -339,8 +328,8 @@
             {#each data.attendanceDistribution as d, i (d.bucket)}
               <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
                 <span style="font-size:13px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-heading);">{d.count}</span>
-                <div style="width:100%; max-width:42px; height:{attHeights[i]}px; border-radius:6px 6px 2px 2px; background:{ATT_BUCKET_COLOR[d.bucket]};"></div>
-                <span style="font-size:10.5px; color:var(--df-text-light); text-align:center;">{ATTENDANCE_BUCKET_LABEL[d.bucket]}</span>
+                <div style="width:100%; max-width:42px; height:{attHeights[i]}px; border-radius:6px 6px 2px 2px; background:{ATTENDANCE_BUCKET_LABEL[d.bucket].color};"></div>
+                <span style="font-size:10.5px; color:var(--df-text-light); text-align:center;">{ATTENDANCE_BUCKET_LABEL[d.bucket].label}</span>
               </div>
             {/each}
           </div>
@@ -378,10 +367,10 @@
             {#each data.ageDistribution as a, i (a.bucket)}
               <div>
                 <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
-                  <span style="color:var(--df-text-dark); font-weight:600;">{AGE_BUCKET_LABEL[a.bucket]}</span>
+                  <span style="color:var(--df-text-dark); font-weight:600;">{AGE_BUCKET_LABEL[a.bucket].label}</span>
                   <span style="font-weight:700; color:var(--df-text-dark);">{fmtPct(ageShares[i])}</span>
                 </div>
-                <MiniBar value={ageShares[i] * 100} tone={AGE_BUCKET_COLOR[a.bucket]} height={7} />
+                <MiniBar value={ageShares[i] * 100} tone={AGE_BUCKET_LABEL[a.bucket].color} height={7} />
               </div>
             {/each}
           </div>

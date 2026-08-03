@@ -11,11 +11,11 @@
   import { Card } from '$lib/components/ui';
   import type { AdminRetentionRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { retentionVM } from '$lib/admin/report-math';
+  import { retentionVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminRetentionRow[] } = $props();
 
-  const vm = $derived(retentionVM(rows, 116));
+  const vm = $derived(retentionVM(rows, REPORT_SCALES.retention.desktop));
   const heights = $derived(vm.heights);
   const lastRate = $derived(vm.lastRate);
 </script>
