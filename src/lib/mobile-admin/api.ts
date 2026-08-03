@@ -37,8 +37,6 @@ import {
 import type { CoachFormValues, TodayClass } from '$lib/admin/data';
 import {
 	getDashboard as coachGetDashboard,
-	getAttendance as coachGetAttendance,
-	saveAttendance as coachSaveAttendance,
 	getStudents as coachGetStudents,
 	getSettings as coachGetSettings,
 	saveSettings,
@@ -52,7 +50,7 @@ import {
 	type CreateCertificateBody,
 	type CreateReportCardBody
 } from '$lib/coach/api';
-import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault } from '$lib/coach/data';
+import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
 import { SESSION_STATUS } from '$lib/domain/sessions';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
 // $lib/domain 各 entity 檔(原經 ./data 純轉手,零附加型別事實)——ActivityRow 改名,
@@ -70,8 +68,7 @@ import {
 	type ClassRow,
 	type MemberRow,
 	type OrderRow,
-	type MessageRow,
-	type RosterEntry
+	type MessageRow
 } from './data';
 
 export { CoachNotFoundError };
@@ -184,46 +181,19 @@ export const getCoachHome = async (): Promise<MCoachHomeData> => {
 	};
 };
 
-/** AttRow(教練/admin 名冊列)→ 行動版 RosterEntry：mid 兼作 id(enrolment_id 本身就是
- *  穩定的列鍵)，def→default 只是欄位改名，形狀同源零損失。 */
-function mapAttRow(r: AttRow): RosterEntry {
-	return { id: r.mid, name: r.name, initial: r.initial, color: r.color, mid: r.mid, default: r.def };
-}
-
-export interface MAttendanceClass {
-	id: string;
-	/** 切換班級 FilterChips 的顯示字串（時間 + 課名），從 AttClassFull.time
-	 *  ("今日 HH:MM–HH:MM") 取起始時間組成，同既有「19:00 競技啦啦隊 進階班」格式。 */
-	label: string;
-	roster: RosterEntry[];
-}
-export interface MAttendanceData {
-	classes: MAttendanceClass[];
-	/** 名冊載入失敗而被排除的場次課名(部分失敗隔離)；頁面以 toast 提示。 */
-	failedClasses: string[];
-}
-/** 課堂點名 — 復用桌面 coach/api.ts 的 getAttendance()(Task 2：GET /sessions/today
- *  × 各場次 GET /sessions/{id}/roster)。桌面版本已支援「今日所有場次」而非單一
- *  硬編班級——行動版舊 mock 只有一個 ROSTER，先前的切換班級 FilterChips 因此只能
- *  提供一個選項(見舊版註解「The mock only carries ROSTER for this one class」)；
- *  接上真資料後改為如實列出「今日全部場次」，切換班級恢復原本設計的多選功能。 */
-export const getAttendance = async (): Promise<MAttendanceData> => {
-	const { classes, failedClasses } = await coachGetAttendance();
-	return {
-		classes: classes.map((c) => ({
-			id: c.id,
-			label: `${c.time.replace('今日 ', '').split('–')[0]} ${c.name}`,
-			roster: c.roster.map(mapAttRow)
-		})),
-		failedClasses
-	};
-};
-
-/** PUT /sessions/{id}/attendance —— 復用桌面 saveAttendance()，回應重新映射回
- *  RosterEntry[]，讓頁面以伺服器為準同步 marks(同桌面「以伺服器為準，而非樂觀本地
- *  值」的理由)。 */
-export const saveAttendance = (sessionId: string, marks: Record<string, AttDefault>): Promise<RosterEntry[]> =>
-	coachSaveAttendance(sessionId, marks).then((rows) => rows.map(mapAttRow));
+/** 課堂點名 — 零映射 re-export(桌面 coach/api.ts 的 getAttendance/saveAttendance，
+ *  Task 2：GET /sessions/today × 各場次 GET /sessions/{id}/roster、PUT
+ *  /sessions/{id}/attendance)。
+ *
+ *  R10(雙生收斂，ADR 0014 §2)：行動頁改接 $lib/coach/attendance-controller，與桌面
+ *  coach/attendance 頁共用同一套點名編排——原本這裡的 mapAttRow()/MAttendanceClass/
+ *  MAttendanceData(mid 兼作 id、def→default 的行動版專屬 RosterEntry 形狀)已無存在
+ *  必要，退役；FilterChips label 合成(時間+課名)搬進頁面 derived，不再由這裡的映射
+ *  代勞。型別循既有 CoachProfile 慣例經本 seam 轉出，頁面只吃 `$lib/mobile-admin/api`，
+ *  不越過 seam 直取 `$lib/coach/data`（見 routes/mobile-admin/coach/attendance/
+ *  +page.svelte）。 */
+export { getAttendance, saveAttendance } from '$lib/coach/api';
+export type { AttRow, AttDefault, AttClassFull };
 
 export interface MStudentsData {
 	students: Student[];

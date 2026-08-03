@@ -107,9 +107,9 @@ describe('getCoachHome', () => {
 	});
 });
 
-describe('getAttendance', () => {
-	it('maps today’s classes + rosters from the real coach seam, supporting multiple classes', async () => {
-		vi.mocked(coachApi.getAttendance).mockResolvedValue({
+describe('getAttendance / saveAttendance — 零映射 re-export（R10 雙生收斂：ADR 0014 §2，行動頁改接 $lib/coach/attendance-controller，mapAttRow/RosterEntry 映射層退役）', () => {
+	it('getAttendance 直接委派給桌面 coach/api.ts 的 getAttendance verbatim', async () => {
+		const payload = {
 			classes: [
 				{
 					id: 's1',
@@ -121,33 +121,20 @@ describe('getAttendance', () => {
 				}
 			],
 			failedClasses: []
-		} as never);
+		};
+		vi.mocked(coachApi.getAttendance).mockResolvedValue(payload as never);
 
-		const d = await getAttendance();
-
-		expect(d).toEqual({
-			classes: [
-				{
-					id: 's1',
-					label: '19:00 競技啦啦隊 進階班',
-					roster: [{ id: 'en-1', name: '王小明', initial: '王', color: '#000', mid: 'en-1', default: 'present' }]
-				}
-			],
-			failedClasses: []
-		});
+		expect(await getAttendance()).toBe(payload);
 	});
-});
 
-describe('saveAttendance', () => {
-	it('delegates to the real PUT /sessions/{id}/attendance and maps the response back to RosterEntry[]', async () => {
-		vi.mocked(coachApi.saveAttendance).mockResolvedValue([
-			{ n: '01', name: '王小明', initial: '王', color: '#000', mid: 'en-1', def: 'absent' }
-		] as never);
+	it('saveAttendance 直接委派給桌面 coach/api.ts 的 saveAttendance，參數與回傳皆 verbatim', async () => {
+		const payload = [{ n: '01', name: '王小明', initial: '王', color: '#000', mid: 'en-1', def: 'absent' }];
+		vi.mocked(coachApi.saveAttendance).mockResolvedValue(payload as never);
 
 		const rows = await saveAttendance('s1', { 'en-1': 'absent' });
 
 		expect(coachApi.saveAttendance).toHaveBeenCalledWith('s1', { 'en-1': 'absent' });
-		expect(rows).toEqual([{ id: 'en-1', name: '王小明', initial: '王', color: '#000', mid: 'en-1', default: 'absent' }]);
+		expect(rows).toBe(payload);
 	});
 });
 

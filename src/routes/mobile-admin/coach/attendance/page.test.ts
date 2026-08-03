@@ -4,18 +4,19 @@ import { get } from 'svelte/store';
 import AttendancePage from './+page.svelte';
 import { getAttendance, saveAttendance } from '$lib/mobile-admin/api';
 import { toasts } from '$lib/mobile-admin/stores';
-import type { MAttendanceClass } from '$lib/mobile-admin/api';
-import type { RosterEntry } from '$lib/mobile-admin/data';
+import type { AttClassFull, AttRow } from '$lib/mobile-admin/api';
 
 vi.mock('$lib/mobile-admin/api', () => ({ getAttendance: vi.fn(), saveAttendance: vi.fn() }));
 
-const rosterOf = (over: Partial<RosterEntry>[]): RosterEntry[] =>
-	over.map((o, i) => ({ id: 'T-00' + i, name: '測試學員' + i, initial: '測', color: '#000', mid: 'T-00' + i, default: 'present', ...o }));
+const rosterOf = (over: Partial<AttRow>[]): AttRow[] =>
+	over.map((o, i) => ({ n: String(i + 1).padStart(2, '0'), name: '測試學員' + i, initial: '測', color: '#000', mid: 'T-00' + i, def: 'present', ...o }));
 
 // 兩堂課同一天，證明「切換班級」FilterChips 恢復多選功能(舊 mock 因限制只給一堂課)。
-const FIXTURE_CLASSES: MAttendanceClass[] = [
-	{ id: 's1', label: '19:00 測試班甲', roster: rosterOf([{ id: 'T-001', name: '測試學員甲', default: 'present' }, { id: 'T-002', name: '測試學員乙', default: 'leave' }]) },
-	{ id: 's2', label: '20:00 測試班乙', roster: rosterOf([{ id: 'T-003', name: '測試學員丙', default: 'absent' }]) }
+// time 形如桌面 AttClassFull("今日 HH:MM–HH:MM")，labelOf() 取起始時間 + 課名組成
+// FilterChips 顯示字串，同原本映射層算好的 label 斷言不變。
+const FIXTURE_CLASSES: AttClassFull[] = [
+	{ id: 's1', name: '測試班甲', time: '今日 19:00–20:30', room: '', coach: '', roster: rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'present' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]) },
+	{ id: 's2', name: '測試班乙', time: '今日 20:00–21:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-003', name: '測試學員丙', def: 'absent' }]) }
 ];
 
 beforeEach(() => {
@@ -56,7 +57,7 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('儲存點名真打 PUT /sessions/{id}/attendance(saveAttendance)，並以伺服器回傳名冊同步', async () => {
-		const savedRoster = rosterOf([{ id: 'T-001', name: '測試學員甲', default: 'absent' }, { id: 'T-002', name: '測試學員乙', default: 'leave' }]);
+		const savedRoster = rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'absent' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]);
 		vi.mocked(saveAttendance).mockResolvedValue(savedRoster);
 		const { findByText, getByText, getAllByText } = render(AttendancePage);
 		await findByText('測試學員甲');
@@ -68,6 +69,9 @@ describe('mobile-admin/coach/attendance 頁', () => {
 
 		expect(await findByText('點名已儲存')).toBeInTheDocument();
 		expect(saveAttendance).toHaveBeenCalledWith('s1', expect.objectContaining({ 'T-001': 'absent' }));
+		// 釘住完整成功 toast 文案（含時間前綴，同舊版格式）——防止日後把 label 換回
+		// SaveOutcome.className（只有課名、沒有時間）而悄悄漂移。
+		expect(get(toasts).some((t) => t.title === '點名已儲存' && t.body === '19:00 測試班甲 · 2 位學員出勤已記錄。')).toBe(true);
 	});
 
 	it('儲存失敗顯示錯誤提示，不假裝成功', async () => {
@@ -97,5 +101,42 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		const { findByText } = render(AttendancePage);
 		expect(await findByText('測試學員甲')).toBeInTheDocument();
 		expect(get(toasts).some((t) => t.title === '部分場次名冊載入失敗')).toBe(true);
+	});
+
+	it('切班保留未存草稿(甲班點缺席→切乙班→切回甲班，選取仍在且未觸發 save)', async () => {
+		vi.mocked(saveAttendance).mockResolvedValue([]);
+		const { getByText, getAllByText, findByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+
+		// 甲班第一列(測試學員甲，預設 present)標記「缺席」——getAllByText('缺席') 命中
+		// 兩處:統計卡標籤與名冊列按鈕，索引 [1] 才是可點擊的分段鈕(同既有測試慣例)。
+		await fireEvent.click(getAllByText('缺席')[1]);
+
+		// 切到乙班確認乙班名冊顯示，再切回甲班。
+		await fireEvent.click(getByText('20:00 測試班乙'));
+		await findByText('測試學員丙');
+		await fireEvent.click(getByText('19:00 測試班甲'));
+		await findByText('測試學員甲');
+
+		// 切班本身未觸發 save；儲存後草稿(缺席)仍在，證明切班沒有丟棄未存變更。
+		expect(saveAttendance).not.toHaveBeenCalled();
+		await fireEvent.click(getByText('儲存點名'));
+		expect(saveAttendance).toHaveBeenCalledWith('s1', expect.objectContaining({ 'T-001': 'absent' }));
+	});
+
+	it('儲存中切班被擋(save pending 時點乙班 chip → 仍顯示甲班名冊 + info toast)', async () => {
+		vi.mocked(saveAttendance).mockReturnValue(new Promise(() => {})); // 模擬請求進行中，永不 resolve
+		const { getByText, queryByText, findByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+
+		await fireEvent.click(getByText('儲存點名'));
+		expect(await findByText('儲存中…')).toBeInTheDocument();
+
+		await fireEvent.click(getByText('20:00 測試班乙'));
+
+		// 切班被擋:仍顯示甲班名冊，乙班名冊未出現;並跳 info toast 提示。
+		expect(getByText('測試學員甲')).toBeInTheDocument();
+		expect(queryByText('測試學員丙')).toBeNull();
+		expect(get(toasts).some((t) => t.title === '儲存中')).toBe(true);
 	});
 });

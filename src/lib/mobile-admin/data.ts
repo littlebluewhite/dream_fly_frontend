@@ -194,28 +194,12 @@ export interface TodayRow {
 // api.ts 的 mapTodayClassToRow()/mapAdminTodayRow() 仍以它為回傳型別(:136-139,233-235)，
 // coach/page.test.ts 亦以它標註 inline fixture。
 
-/* ---- Attendance roster — 競技啦啦隊 進階班 ---- */
-export interface RosterEntry {
-	id: string;
-	name: string;
-	initial: string;
-	color: string;
-	mid: string;
-	default: 'present' | 'late' | 'leave' | 'absent';
-}
-export const ROSTER: RosterEntry[] = [
-	{ id: 'GY2024001', name: '王承恩', initial: '王', color: '#0066CC', mid: 'GY2024001', default: 'present' },
-	{ id: 'GY2024006', name: '陳思妤', initial: '陳', color: '#EC4899', mid: 'GY2024006', default: 'present' },
-	{ id: 'GY2024010', name: '蔡昀軒', initial: '蔡', color: '#F59E0B', mid: 'GY2024010', default: 'present' },
-	{ id: 'GY2024013', name: '許恩綺', initial: '許', color: '#10B981', mid: 'GY2024013', default: 'leave' },
-	{ id: 'GY2024014', name: '潘柏宏', initial: '潘', color: '#0EA5E9', mid: 'GY2024014', default: 'late' },
-	{ id: 'GY2024015', name: '曾子涵', initial: '曾', color: '#8B5CF6', mid: 'GY2024015', default: 'present' },
-	{ id: 'GY2024016', name: '葉珞晴', initial: '葉', color: '#EF4444', mid: 'GY2024016', default: 'present' },
-	{ id: 'GY2024017', name: '賴宥辰', initial: '賴', color: '#0066CC', mid: 'GY2024017', default: 'absent' },
-	{ id: 'GY2024018', name: '鐘語彤', initial: '鐘', color: '#F59E0B', mid: 'GY2024018', default: 'present' },
-	{ id: 'GY2024019', name: '邱柏勳', initial: '邱', color: '#10B981', mid: 'GY2024019', default: 'present' },
-	{ id: 'GY2024020', name: '馬欣妍', initial: '馬', color: '#EC4899', mid: 'GY2024020', default: 'present' }
-];
+// R10(雙生收斂，ADR 0014 §2)：Attendance roster 種子 RosterEntry(型別)/ROSTER(值)
+// 已退役——課堂點名頁(routes/mobile-admin/coach/attendance)改接
+// $lib/coach/attendance-controller，與桌面 coach/attendance 頁共用同一套點名編排，
+// 名冊改直吃桌面 AttRow 形狀(mid/def，經 $lib/mobile-admin/api 零映射轉出)，不再需要
+// 這層行動版專屬(mid 兼作 id、def→default)的轉譯。零 production 消費者已實證
+// （page.test.ts 改用自帶 inline fixture），同本檔既有死種子退役慣例(ADR 0010)。
 
 /* ---- Coach messages / 訊息 ---- */
 export interface MessageRow {

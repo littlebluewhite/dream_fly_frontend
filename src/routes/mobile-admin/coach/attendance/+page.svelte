@@ -6,10 +6,18 @@
    * 各場次 GET /sessions/{id}/roster)，取代舊 mock 只有單一硬編班級(k1)的限制——
    * 「切換班級」FilterChips 原本就設計成可切換多堂課，只是 mock 只給一筆資料而形同
    * 虛設(見舊版註解)；接上真資料後如實列出「今日全部場次」，切換班級恢復多選功能。
-   * 「儲存點名」改真打 PUT /sessions/{id}/attendance(saveAttendance)，成功後以
-   * 伺服器回傳的名冊覆寫本地 marks(以伺服器為準，同 coach/api.ts 的既有理由)。
-   * 「備註」維持本地草稿(後端無對應欄位，同既有行為，不宣稱已儲存到伺服器)。
-   * 部分場次名冊載入失敗(failedClasses)以 toast 提示，其餘場次照常可點名。 */
+   *
+   * R10(雙生收斂，ADR 0014 §2)：改接桌面 coach/attendance 頁同一套
+   * $lib/coach/attendance-controller，取代原本內聯自管的點名狀態——mobile-admin/api.ts
+   * 的 mapAttRow/MAttendanceClass/MAttendanceData 映射層已退役(getAttendance/
+   * saveAttendance 改零映射 re-export)，本頁退化為薄 adapter：解構 controller 單一
+   * 快照 store、切班/點名/全部標記出席/備註/儲存全轉呼 controller 方法；tally 改直取
+   * $lib/coach/attendance-tally(最後一處點名邏輯雙生收斂)。白拿桌面既有行為，含原
+   * 行動版沒有的：切班保留未存草稿(byClass 暫存)、儲存中切班被擋(info toast)、儲存中
+   * 再編輯後遲到回應被丟棄(stale 不理會)。「切換班級」FilterChips 的 label(時間+課名)
+   * 合成搬本頁 derived(labelOf())取代原映射層算好的字串；「儲存點名」成功/失敗 toast
+   * 文案沿用行動版既有措辭(不採桌面「已同步至雲端」/依 status 分流錯誤文案)。「備註」
+   * 改經 ctrl.applyNote 記入 controller(計入未存變更，同桌面)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -23,14 +31,15 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAttendance, saveAttendance, type MAttendanceClass } from '$lib/mobile-admin/api';
-  import type { RosterEntry } from '$lib/mobile-admin/data';
+  import { getAttendance, saveAttendance, type AttClassFull, type AttRow, type AttDefault } from '$lib/mobile-admin/api';
+  import { createAttendanceController } from '$lib/coach/attendance-controller';
+  import { tally } from '$lib/coach/attendance-tally';
 
   const ATT_STATES = [
     { key: 'present', label: '出席', color: 'var(--df-primary)' },
     { key: 'late', label: '遲到', color: 'var(--df-warning)' },
     { key: 'absent', label: '缺席', color: 'var(--df-error)' }
-  ];
+  ] as const;
 
   /* 本地牆鐘日期(YYYY/MM/DD)，非 toISOString()——後者取 UTC 日期，在 Asia/Taipei
    * (UTC+8)的凌晨會早報一天(同 CertificateDialog.svelte 的 today() 慣例)。 */
@@ -41,24 +50,32 @@
     return `${d.getFullYear()}/${mm}/${dd}`;
   }
 
-  let classesToday: MAttendanceClass[] = [];
-  let cls = '';
-  let marks: Record<string, string> = {};
-  let saving = false;
-  let saved = false;
-  let noteFor: RosterEntry | null = null;
-  let noteText = '';
-  let notes: Record<string, string> = {};
+  /** 目前時間 "HH:MM"，供儲存成功時間戳使用(抄桌面 coach/attendance/+page.svelte
+   *  的 nowHHMM，controller 需要注入)。 */
+  function nowHHMM(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
 
-  const marksFor = (roster: RosterEntry[]): Record<string, string> =>
-    Object.fromEntries(roster.map((r) => [r.id, r.default]));
+  const ctrl = createAttendanceController({ saveAttendance, now: nowHHMM });
+
+  // ── 單一快照 store 解構鏡射(同桌面 coach/attendance/+page.svelte 慣例；canUndo/
+  // dirtyCount/savedAt 本頁 UI 未使用，不解構)。
+  let classesToday: AttClassFull[] = [];
+  let curClassId = '';
+  let marks: Record<string, AttDefault> = {};
+  let notes: Record<string, string> = {};
+  let state: 'dirty' | 'saving' | 'saved' = 'dirty';
+  $: ({ classes: classesToday, curClassId, marks, notes, state } = $ctrl);
+
+  let noteFor: AttRow | null = null;
+  let noteText = '';
 
   const gate = createLoadGate({
     fetch: getAttendance,
     onData: (d) => {
-      classesToday = d.classes;
-      cls = classesToday[0]?.id ?? '';
-      marks = marksFor(classesToday[0]?.roster ?? []);
+      ctrl.init(d.classes);
       if (d.failedClasses.length) {
         toasts.notify('warning', '部分場次名冊載入失敗', d.failedClasses.join('、') + ' 暫時無法點名，請稍後重試。');
       }
@@ -70,46 +87,65 @@
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
 
-  $: current = classesToday.find((c) => c.id === cls) ?? null;
+  /** 切換班級 chip 的顯示字串(時間 + 課名)，亦供下方「儲存點名」成功 toast 沿用
+   *  （文案保真：舊版帶時間前綴，如「19:00 測試班甲 · N 位學員出勤已記錄。」，
+   *  `SaveOutcome.className` 只有課名沒有時間，故不能直接拿來拼字串）——原映射層
+   *  算好的 label 搬到這裡現算，同既有「19:00 競技啦啦隊 進階班」格式。 */
+  const labelOf = (c: AttClassFull): string => `${c.time.replace('今日 ', '').split('–')[0]} ${c.name}`;
+
+  $: current = classesToday.find((c) => c.id === curClassId) ?? null;
   $: roster = current?.roster ?? [];
-  $: classOpts = classesToday.map((c) => ({ key: c.id, label: c.label }));
+  $: classOpts = classesToday.map((c) => ({ key: c.id, label: labelOf(c) }));
 
+  // FilterChips echoes the id；controller selectClass 認 NAME(同桌面 CoachDropdown
+  // 慣例)——這裡一行轉換(byClass 切班暫存已在 controller 內)。blocked(儲存中不可
+  // 切班)由 controller 回報，本頁據此發提示 toast。
   function selectClass(id: string) {
-    cls = id;
-    saved = false;
-    marks = marksFor(classesToday.find((c) => c.id === id)?.roster ?? []);
-  }
-
-  const setMark = (id: string, v: string) => { marks = { ...marks, [id]: v }; saved = false; };
-
-  $: tally = roster.reduce<Record<string, number>>((a, r) => { a[marks[r.id]] = (a[marks[r.id]] || 0) + 1; return a; }, {});
-  $: counts = [
-    { label: '出席', color: 'var(--df-primary)', n: tally.present || 0 },
-    { label: '遲到', color: 'var(--df-warning)', n: tally.late || 0 },
-    { label: '缺席', color: 'var(--df-error)', n: tally.absent || 0 },
-    { label: '請假', color: 'var(--df-info)', n: tally.leave || 0 }
-  ];
-
-  const markAllPresent = () => { marks = Object.fromEntries(roster.map((r) => [r.id, r.default === 'leave' ? 'leave' : 'present'])); saved = false; };
-
-  async function onSave() {
-    if (!current || saving) return;
-    const target = current;
-    saving = true;
-    try {
-      const rows = await saveAttendance(target.id, marks as Record<string, RosterEntry['default']>);
-      classesToday = classesToday.map((c) => (c.id === target.id ? { ...c, roster: rows } : c));
-      marks = marksFor(rows);
-      saved = true;
-      toasts.notify('success', '點名已儲存', target.label + ' · ' + rows.length + ' 位學員出勤已記錄。');
-    } catch {
-      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
-    } finally {
-      saving = false;
+    const name = classesToday.find((c) => c.id === id)?.name;
+    if (!name) return;
+    if (ctrl.selectClass(name) === 'blocked') {
+      toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
     }
   }
-  const openNote = (r: RosterEntry) => { noteFor = r; noteText = notes[r.id] || ''; };
-  const saveNote = () => { if (noteFor) notes = { ...notes, [noteFor.id]: noteText }; noteFor = null; };
+
+  function setMark(mid: string, v: AttDefault) {
+    ctrl.setMark(mid, v);
+  }
+
+  $: tallyCounts = tally(marks, roster);
+  $: counts = [
+    { label: '出席', color: 'var(--df-primary)', n: tallyCounts.present || 0 },
+    { label: '遲到', color: 'var(--df-warning)', n: tallyCounts.late || 0 },
+    { label: '缺席', color: 'var(--df-error)', n: tallyCounts.absent || 0 },
+    { label: '請假', color: 'var(--df-info)', n: tallyCounts.leave || 0 }
+  ];
+
+  function markAllPresent() {
+    ctrl.markAllPresent();
+  }
+
+  async function onSave() {
+    // 存檔前先快照目前班級：儲存中不可切班(見 selectClass 的 blocked 分支)，await
+    // 後仍是同一班，這裡只是避免依賴這個不變量、明確表達「文案用的是送出當下的班級」。
+    const target = current;
+    const outcome = await ctrl.save();
+    if (outcome.kind === 'saved') {
+      const label = target ? labelOf(target) : outcome.className;
+      toasts.notify('success', '點名已儲存', label + ' · ' + outcome.rosterCount + ' 位學員出勤已記錄。');
+    } else if (outcome.kind === 'failed') {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    }
+    // stale：儲存中又被編輯過，回應已過期被丟棄——同現行 guard，頁面不做任何事。
+  }
+  function openNote(r: AttRow) {
+    noteFor = r;
+    noteText = notes[r.mid] || '';
+  }
+  function saveNote() {
+    if (!noteFor) return;
+    ctrl.applyNote(noteFor.mid, noteText);
+    noteFor = null;
+  }
 </script>
 
 <LoadGate {gate}>
@@ -131,7 +167,7 @@
     <MEmpty icon="calendar-x" title="今日尚無場次" body="今天沒有排定的課程，暫時不需要點名。" />
   {:else}
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border);">
-    <FilterChips items={classOpts} value={cls} onChange={selectClass} />
+    <FilterChips items={classOpts} value={curClassId} onChange={selectClass} />
   </div>
 
   <div class="df-scroll df-view">
@@ -153,9 +189,9 @@
       ><Icon name="check-check" size={16} color="var(--df-primary)" />全部標記出席</button>
 
       <!-- roster -->
-      <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current?.label ?? '')}>
-        {#each roster as r, i (r.id)}
-          {@const onLeave = marks[r.id] === 'leave'}
+      <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current ? labelOf(current) : '')}>
+        {#each roster as r, i (r.mid)}
+          {@const onLeave = marks[r.mid] === 'leave'}
           <div style="padding:11px 14px; border-bottom:{i < roster.length - 1 ? '1px solid var(--df-border)' : 'none'};">
             <div style="display:flex; align-items:center; gap:11px;">
               <span style="font-family:var(--df-font-mono); font-size:12.5px; font-weight:600; color:var(--df-text-muted); width:20px; flex:none; text-align:center;">{String(i + 1).padStart(2, '0')}</span>
@@ -169,9 +205,9 @@
               {:else}
                 <div style="display:inline-flex; background:var(--df-bg-light); border:1px solid var(--df-border); border-radius:9px; padding:3px;">
                   {#each ATT_STATES as s (s.key)}
-                    {@const on = marks[r.id] === s.key}
+                    {@const on = marks[r.mid] === s.key}
                     <button
-                      on:click={() => setMark(r.id, s.key)}
+                      on:click={() => setMark(r.mid, s.key)}
                       style="padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:12.5px; font-weight:700; font-family:var(--df-font-body); background:{on ? s.color : 'transparent'}; color:{on ? '#fff' : 'var(--df-text-light)'}; transition:background .14s ease, color .14s ease;"
                     >{s.label}</button>
                   {/each}
@@ -182,10 +218,10 @@
               <button
                 on:click={() => openNote(r)}
                 class="df-tapscale"
-                style="display:inline-flex; align-items:center; gap:5px; border:1px solid var(--df-border); background:{notes[r.id] ? 'var(--df-primary-bg)' : 'var(--df-bg-light)'}; border-radius:8px; padding:5px 11px; font-size:12px; color:{notes[r.id] ? 'var(--df-primary)' : 'var(--df-text-light)'}; cursor:pointer; font-weight:600;"
-              ><Icon name="pencil-line" size={13} color={notes[r.id] ? 'var(--df-primary)' : 'var(--df-text-light)'} />{notes[r.id] ? '已備註' : '備註'}</button>
-              {#if notes[r.id]}
-                <span style="font-size:12px; color:var(--df-text-light); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{notes[r.id]}</span>
+                style="display:inline-flex; align-items:center; gap:5px; border:1px solid var(--df-border); background:{notes[r.mid] ? 'var(--df-primary-bg)' : 'var(--df-bg-light)'}; border-radius:8px; padding:5px 11px; font-size:12px; color:{notes[r.mid] ? 'var(--df-primary)' : 'var(--df-text-light)'}; cursor:pointer; font-weight:600;"
+              ><Icon name="pencil-line" size={13} color={notes[r.mid] ? 'var(--df-primary)' : 'var(--df-text-light)'} />{notes[r.mid] ? '已備註' : '備註'}</button>
+              {#if notes[r.mid]}
+                <span style="font-size:12px; color:var(--df-text-light); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{notes[r.mid]}</span>
               {/if}
             </div>
           </div>
@@ -199,11 +235,11 @@
   <div style="flex:none; padding:12px 16px; background:rgba(255,255,255,0.96); backdrop-filter:blur(10px); border-top:1px solid var(--df-border); z-index:45;">
     <button
       on:click={onSave}
-      disabled={saving}
+      disabled={state === 'saving'}
       class="df-tapscale"
-      style="width:100%; height:50px; border-radius:13px; border:none; background:{saved ? 'var(--df-success)' : 'var(--df-primary)'}; color:#fff; font-size:15.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-family:var(--df-font-body);"
+      style="width:100%; height:50px; border-radius:13px; border:none; background:{state === 'saved' ? 'var(--df-success)' : 'var(--df-primary)'}; color:#fff; font-size:15.5px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; font-family:var(--df-font-body);"
     >
-      <Icon name={saved ? 'check-circle' : 'check'} size={19} color="#fff" />{saving ? '儲存中…' : saved ? '點名已儲存' : '儲存點名'}
+      <Icon name={state === 'saved' ? 'check-circle' : 'check'} size={19} color="#fff" />{state === 'saving' ? '儲存中…' : state === 'saved' ? '點名已儲存' : '儲存點名'}
     </button>
   </div>
 
