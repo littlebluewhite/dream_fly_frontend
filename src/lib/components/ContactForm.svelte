@@ -1,84 +1,33 @@
 <script lang="ts">
   import Icon from '$lib/components/ui/Icon.svelte';
   import { sendContactInquiry } from '$lib/public/api';
-  import { ApiError } from '$lib/api/client';
   import { toasts } from '$lib/stores/marketingToasts';
+  import { createContactForm } from '$lib/public/contact-form';
 
-  let formData = {
-    name: '',
-    email: '',
-    phone: '',
-    subject: '一般諮詢',
-    message: ''
-  };
+  // 卡 C（R10 架構深化）：驗證/送出/重置編排收斂進 $lib/public/contact-form 的
+  // createContactForm；本檔只留 markup 綁定與 outcome→toast 佈線。仍在此 import
+  // sendContactInquiry 後才注入，元件端 vi.mock('$lib/public/api') 照樣攔截得到。
+  const form = createContactForm({
+    send: sendContactInquiry,
+    schedule: (fn, ms) => {
+      const id = setTimeout(fn, ms);
+      return () => clearTimeout(id);
+    }
+  });
+  const { draft } = form;
 
-  let formStatus: 'idle' | 'submitting' | 'success' | 'error' = 'idle';
+  let status: 'idle' | 'submitting' | 'success' | 'error' = 'idle';
   let errorMessage = '';
+  $: ({ status, errorMessage } = $form);
 
   const subjects = ['一般諮詢', '課程報名', '場地預約', '教練諮詢', '其他'];
 
-  function validateEmail(email: string): boolean {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  }
-
-  function validatePhone(phone: string): boolean {
-    const re = /^[0-9\-\s\(\)]+$/;
-    return re.test(phone) && phone.replace(/\D/g, '').length >= 10;
-  }
-
   async function handleSubmit(event: Event) {
     event.preventDefault();
-    errorMessage = '';
-
-    // Validation
-    if (!formData.name.trim()) {
-      errorMessage = '請輸入您的姓名';
-      return;
-    }
-
-    if (!validateEmail(formData.email)) {
-      errorMessage = '請輸入有效的電子郵件地址';
-      return;
-    }
-
-    if (formData.phone && !validatePhone(formData.phone)) {
-      errorMessage = '請輸入有效的電話號碼';
-      return;
-    }
-
-    if (!formData.message.trim()) {
-      errorMessage = '請輸入訊息內容';
-      return;
-    }
-
-    formStatus = 'submitting';
-
-    try {
-      await sendContactInquiry({
-        name: formData.name,
-        email: formData.email,
-        subject: formData.subject,
-        message: formData.message,
-        ...(formData.phone ? { phone: formData.phone } : {})
-      });
-      formStatus = 'success';
+    const outcome = await form.submit();
+    if (outcome.kind === 'inquirySent') {
       toasts.notify('success', '訊息已送出，我們會盡快與您聯繫');
-
-      // Reset form after 3 seconds
-      setTimeout(() => {
-        formData = {
-          name: '',
-          email: '',
-          phone: '',
-          subject: '一般諮詢',
-          message: ''
-        };
-        formStatus = 'idle';
-      }, 3000);
-    } catch (err) {
-      formStatus = 'error';
-      errorMessage = err instanceof ApiError ? err.message : '送出失敗，請稍後再試';
+    } else if (outcome.kind === 'failed') {
       toasts.notify('error', errorMessage);
     }
   }
@@ -90,10 +39,10 @@
     <input
       type="text"
       id="name"
-      bind:value={formData.name}
+      bind:value={$draft.name}
       placeholder="請輸入您的姓名"
       required
-      disabled={formStatus === 'submitting'}
+      disabled={status === 'submitting'}
     />
   </div>
 
@@ -102,10 +51,10 @@
     <input
       type="email"
       id="email"
-      bind:value={formData.email}
+      bind:value={$draft.email}
       placeholder="example@email.com"
       required
-      disabled={formStatus === 'submitting'}
+      disabled={status === 'submitting'}
     />
   </div>
 
@@ -114,9 +63,9 @@
     <input
       type="tel"
       id="phone"
-      bind:value={formData.phone}
+      bind:value={$draft.phone}
       placeholder="0912-345-678"
-      disabled={formStatus === 'submitting'}
+      disabled={status === 'submitting'}
     />
   </div>
 
@@ -124,8 +73,8 @@
     <label for="subject">主旨</label>
     <select
       id="subject"
-      bind:value={formData.subject}
-      disabled={formStatus === 'submitting'}
+      bind:value={$draft.subject}
+      disabled={status === 'submitting'}
     >
       {#each subjects as subject}
         <option value={subject}>{subject}</option>
@@ -137,11 +86,11 @@
     <label for="message">訊息內容 <span class="required">*</span></label>
     <textarea
       id="message"
-      bind:value={formData.message}
+      bind:value={$draft.message}
       placeholder="請輸入您的問題或需求..."
       rows="6"
       required
-      disabled={formStatus === 'submitting'}
+      disabled={status === 'submitting'}
     ></textarea>
   </div>
 
@@ -152,7 +101,7 @@
     </div>
   {/if}
 
-  {#if formStatus === 'success'}
+  {#if status === 'success'}
     <div class="success-message">
       <Icon name="circle-check" size={16} color="var(--df-success-strong)" />
       訊息已送出！我們會盡快與您聯繫。
@@ -162,11 +111,11 @@
   <button
     type="submit"
     class="btn btn-primary submit-btn"
-    disabled={formStatus === 'submitting'}
+    disabled={status === 'submitting'}
   >
-    {#if formStatus === 'submitting'}
+    {#if status === 'submitting'}
       送出中...
-    {:else if formStatus === 'success'}
+    {:else if status === 'success'}
       <Icon name="check" size={18} color="currentColor" />
       已送出
     {:else}
