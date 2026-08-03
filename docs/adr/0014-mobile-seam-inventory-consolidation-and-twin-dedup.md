@@ -186,8 +186,15 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
   `byClass` 暫存);②儲存中切班被擋並發 info toast(行動版原本會直接丟棄 in-flight 儲存狀態);
   ③儲存中再編輯後,遲到的回應被 token guard 丟棄(`stale` 分支不做事);④備註編輯計入未存變更
   (原本 `saveNote` 完全不碰 saved 旗標,加註記後儲存鈕仍顯示「點名已儲存」,是既有失真行為)。
-  第五項是連帶**繼承**的桌面既有限制:同日兩場同課名時 `selectClass` 以課名比對,只找得到第一場
-  ——桌面 `CoachDropdown` 本來就是這個限制,不是本輪新引入的缺陷,但確實隨收斂帶進了行動版。
+  第五項是連帶**繼承**的桌面既有限制:行動 chips 仍以 session id 為 key(`classOpts` 的
+  `key: c.id`),點擊時頁面先把 id 轉回課名才交給 controller 的 `selectClass(name)`,controller
+  內部以課名 `find()` 只找得到陣列中排序在前的第一筆同名場次——同日兩場同課名時,不論怎麼點,
+  另一場的 chip 都無法把畫面切過去,`FilterChips` 的 `value === key` 判斷下那顆 chip 也永遠顯示
+  不出選取中,**第二場實際無法點名**。舊版行動頁 `selectClass` 直接以 id 賦值,能正確區分兩場;
+  這是 B 案接回桌面 `attendance-controller` 才帶進來的行動面 regression——桌面 `CoachDropdown`
+  本來就吃這個以課名比對的限制,不是本輪新引入的缺陷,但確實讓行動版從「能分辨」退化為
+  「不能分辨」。根修需把 `selectClass` 介面由課名改成 session id,是桌面 `CoachDropdown` 與行動
+  chips 需同步跟進的介面設計變更,超出本輪「不動桌面」的既定範圍,列未來輪次候選。
 - **教訓(落字防重演):退役一層映射,必然讓它的 seam 測試斷言變成孤兒。** `mobile-admin/api.test.ts`
   原本兩個 describe 斷言的是**映射後**形狀(`label`/`RosterEntry` 的 `id`/`default`);零映射
   re-export 之後回傳值變成桌面 seam 的原樣物件,那組深比對必紅——這不是回歸,是斷言本身失去對象。
