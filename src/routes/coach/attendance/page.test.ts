@@ -76,6 +76,25 @@ describe('/coach/attendance (+page) — switch class', () => {
 		expect(queryByText(C1.roster[0].name)).toBeNull(); // 王承恩 gone
 	});
 
+	it('同日兩場同課名：dropdown 兩個同名選項各自可選並切到各自名冊(keyed by session id，0014 限制撤銷)', async () => {
+		// 同 label 異 key——若 each key 或 onChange 回歸走 label(而非 o.key)，此釘必紅：
+		// label 當 each key 會觸發 each_key_duplicate，label 進 selectClass 則 id 查無而 noop。
+		vi.mocked(getAttendance).mockResolvedValue({
+			classes: [ATT_TODAY_CLASSES[0], { ...ATT_TODAY_CLASSES[1], name: C1.name }],
+			failedClasses: []
+		});
+		const { container, getAllByText, findByText, getByText, queryByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name); // 第一場名冊(王承恩)
+		const opener = getAllByText(C1.name).find((el) => el.closest('button'));
+		await fireEvent.click(opener!);
+		// popover 的選項按鈕(df-rowhover)恰兩顆、顯示同一課名——點第二顆(第二場)。
+		const opts = container.querySelectorAll('button.df-rowhover');
+		expect(opts.length).toBe(2);
+		await fireEvent.click(opts[1]);
+		expect(getByText(C2.roster[0].name)).toBeInTheDocument(); // 第二場名冊(周彥廷)
+		expect(queryByText(C1.roster[0].name)).toBeNull(); // 王承恩 gone——沒有停在第一場
+	});
+
 	it('preserves a class draft when switching away and back', async () => {
 		// codex round 2 P2: an unsaved edit must survive switching to another class
 		// and back — switching must not silently reset the draft to defaults.

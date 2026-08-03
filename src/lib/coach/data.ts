@@ -224,8 +224,8 @@ export const CAT_COLOR: Record<SchedCat, { bar: string; bg: string; fg: string }
 // Task 1(C2 死種子退役):ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES(出勤記錄示範資料)
 // 已退役——出勤記錄頁改走 getAttendance() 真後端接縫,這三份 mock 已無 runtime
 // 消費者。AttClass/AttRow/AttClassFull interface 仍供頁面與 api.ts 的型別標註
-// 使用,保留(id 是切換班級的 switch key,CoachDropdown echoes the NAME,
-// the handler maps name→id)。
+// 使用,保留(id 是切換班級的 switch key——CoachDropdown keyed options 與
+// selectClass 皆直接走 session id,同名兩場可分辨,見 ADR 0014 增補)。
 export interface AttClassFull extends AttClass {
 	id: string;
 	roster: AttRow[];
