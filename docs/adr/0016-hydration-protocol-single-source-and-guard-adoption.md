@@ -244,6 +244,9 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
    都只讀各自的本地一次性快照,從未呼叫 `hydrateOps()`,`$coachesStore` 因此永遠停在 domain seed。
    `opsHydrated` guard 讓重複開啟不重抓、`.catch(() => {})` 讓失敗時 seed 仍可渲染(best-effort,同
    前例慣例);`mobile-admin/stores.ts` 零改動——`hydrateOps`/`opsHydrated` 本來就是既有匯出,協定
-   本身不必動。此修不改變既有「seed 先渲染、水合後替換」的 surface 協定——水合 pending 或失敗窗口內,
-   seed 資料本身仍可操作(含編輯),是 opsGate 全體採納頁(classes/members/orders/coaches)共有的
-   既有特性,非本修引入;窗口內若對 seed 實體寫入,可能打錯後端實體,列未來輪次候選,本輪不處理。
+   本身不必動。此修不改變既有「seed 先渲染、水合後替換」的協定——水合 pending 或失敗窗口內,seed
+   資料本身仍可操作(含編輯),屬本頁(`onMount` 自保、無 `LoadGate` 包裹)的既有特性,同
+   `member/courses` 頁 `hydrateWaitlist().catch(() => {})` 自保前例同構,非本修引入。以
+   `hydrateOps` 當 `fetch` 的 classes/members/orders 三頁(見上文)因此整頁包在 `<LoadGate>` 元件
+   內,pending 顯示骨架、error 走預設 `ErrorState` 卡,seed 在該窗口內根本不會渲染,無此暴露。窗口內
+   若對 seed 實體寫入,可能打錯後端實體,列未來輪次候選,本輪不處理。
