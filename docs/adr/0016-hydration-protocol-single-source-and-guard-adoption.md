@@ -145,7 +145,7 @@ subscriptions 的同型缺口為前存……不在本輪寫入集,另卡追蹤�
 ## 協定測試三層界線(防誤整併)
 
 > **2026-08-03 增補**:第 2 層現為**兩門**(`onSessionReset` 已退役),並新增 `pageEntry` describe;
-> 三層界線本身不變。見文末「增補(2026-08-03)」與 `docs/adr/0019`。
+> 三層界線本身不變。見文末「增補(2026-08-03,架構深化 R9 C3)」與 `docs/adr/0019`。
 
 測試拓樸自 2026-07-22(架構深化 R7,`docs/adr/0017`)起分三層,審查請勿以「重複」為由提整併——
 三層觀察面互斥,不是同一份協定測試留了兩份:
@@ -244,4 +244,6 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
    都只讀各自的本地一次性快照,從未呼叫 `hydrateOps()`,`$coachesStore` 因此永遠停在 domain seed。
    `opsHydrated` guard 讓重複開啟不重抓、`.catch(() => {})` 讓失敗時 seed 仍可渲染(best-effort,同
    前例慣例);`mobile-admin/stores.ts` 零改動——`hydrateOps`/`opsHydrated` 本來就是既有匯出,協定
-   本身不必動。
+   本身不必動。此修不改變既有「seed 先渲染、水合後替換」的 surface 協定——水合 pending 或失敗窗口內,
+   seed 資料本身仍可操作(含編輯),是 opsGate 全體採納頁(classes/members/orders/coaches)共有的
+   既有特性,非本修引入;窗口內若對 seed 實體寫入,可能打錯後端實體,列未來輪次候選,本輪不處理。

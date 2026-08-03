@@ -39,6 +39,8 @@ export async function fetchGenStable<T>(
 ): Promise<T | undefined>
 ```
 
+(此為實作簽章;對外是兩個 overload——省略 `iterate` 時回 `Promise<T>`,見後文「overload 簽章」節。)
+
 進場捕捉 `gen()` → `await fetch()` → 落地再讀一次 `gen()` 比對:相同代表這份快照的出發點不早於
 最後一次本地 mutation,可以套用;不同代表 refresh **進場之後**有 mutation 落地,該份快照已是舊
 事實,丟棄並**原地重抓**,直到世代穩定為止。`iterate` 是棄追判準(預設恆真＝抓到穩定為止),
@@ -51,7 +53,7 @@ export async function fetchGenStable<T>(
 ### 判準句(誤解即 P1)
 
 **丟棄條件是「refresh 進場之後才發生的 mutation」,絕不可改讀旗標/世代的當下值。**
-(本句與 `hydration-gate.ts` 內 `fetchGenStable` 的 doc 逐字同源——「判準只認『進場之後才發生的
+(本句與 `hydration-gate.ts` 內 `fetchGenStable` 的 doc 逐字同源(標點依本檔慣例正規化,非 byte-for-byte)——「判準只認『進場之後才發生的
 mutation』,**絕不可**改讀旗標／世代的當下值」;兩處措辭必須同步,任一處被改寫都要回頭校對另一處。)
 
 反例才是這條判準的重點:mobile-admin 的「寫入 → `markMutated` → `await refreshOps()`」是正常

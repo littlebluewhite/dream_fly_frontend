@@ -1,4 +1,4 @@
-/* Dream Fly — public 洽詢表單機（R10 架構深化 Wave 1 C 案，ADR 0012 名冊第七例）。
+/* Dream Fly — public 洽詢表單機（R10 架構深化 Wave 1 C 案，ADR 0012 名冊第八例）。
  * 自 ContactForm.svelte 內聯的驗證/送出/重置編排（原 :20-84，含零覆蓋的
  * setTimeout(3000)）抽出，元件退薄殼。
  *
