@@ -22,6 +22,8 @@ const ROSTER_B: AttRow[] = [
 ];
 const CLASS_A: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '', room: '', coach: '', roster: ROSTER_A };
 const CLASS_B: AttClassFull = { id: 'ac2', name: '青少年體操中級班', time: '', room: '', coach: '', roster: ROSTER_B };
+/** 同日第二場同課名（id 相異、名冊相異）——ADR 0014「同日兩場同課名取第一場」限制的撤銷釘。 */
+const CLASS_A_DUP: AttClassFull = { id: 'ac1b', name: '兒童體操初階班', time: '', room: '', coach: '', roster: ROSTER_B };
 
 /** 伺服器回應：全員 present（'late' 於後端併入 present，回應永不含 late）。 */
 const serverAllPresent = (roster: AttRow[]): AttRow[] => roster.map((r) => ({ ...r, def: 'present' as const }));
@@ -156,7 +158,7 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 	it('switched：切到另一班回傳 switched，curClassId 與 marks 換到目標班', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
-		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched');
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
 		const view = get(ctrl);
 		expect(view.curClassId).toBe('ac2');
 		expect(view.marks).toEqual({ GY012: 'present' }); // B 名冊全 present
@@ -169,15 +171,15 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 		deps.saveAttendance.mockReturnValue(new Promise<AttRow[]>(() => {})); // 永不 resolve
 		void ctrl.save(); // state → saving
 		expect(get(ctrl).state).toBe('saving');
-		expect(ctrl.selectClass(CLASS_B.name)).toBe('blocked');
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('blocked');
 		expect(get(ctrl).curClassId).toBe('ac1');
 		expect(get(ctrl).state).toBe('saving');
 	});
 
-	it('noop：切到同一班或不存在的班名回傳 noop，狀態不變', () => {
+	it('noop：切到同一班或不存在的 session id 回傳 noop，狀態不變', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
-		expect(ctrl.selectClass(CLASS_A.name)).toBe('noop'); // 同一班
-		expect(ctrl.selectClass('不存在的班級')).toBe('noop'); // 查無此名
+		expect(ctrl.selectClass(CLASS_A.id)).toBe('noop'); // 同一班
+		expect(ctrl.selectClass('no-such-session')).toBe('noop'); // 查無此 id
 		expect(get(ctrl).curClassId).toBe('ac1');
 	});
 
@@ -185,19 +187,27 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
 		ctrl.setMark('GY001', 'late'); // A dirty 3 → 4
 		expect(get(ctrl).dirtyCount).toBe(4);
-		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched');
-		expect(ctrl.selectClass(CLASS_A.name)).toBe('switched');
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
+		expect(ctrl.selectClass(CLASS_A.id)).toBe('switched');
 		const view = get(ctrl);
 		expect(view.curClassId).toBe('ac1');
 		expect(view.dirtyCount).toBe(4); // A 草稿原封還原，不是回到初始 3
 		expect(view.marks.GY001).toBe('late'); // 編輯保留
 	});
 
+	it('同日兩場同課名：selectClass 以 session id 精準切到第二場（0014 限制撤銷）', () => {
+		ctrl.init([CLASS_A, CLASS_A_DUP]);
+		expect(ctrl.selectClass('ac1b')).toBe('switched');
+		const view = get(ctrl);
+		expect(view.curClassId).toBe('ac1b'); // 不是停在第一場 ac1
+		expect(view.marks).toEqual({ GY012: 'present' }); // 第二場名冊，證明畫面真的切過去
+	});
+
 	it('切班清空復原快照（切換後 canUndo 回到 false）', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
 		ctrl.setMark('GY001', 'late');
 		expect(get(ctrl).canUndo).toBe(true);
-		ctrl.selectClass(CLASS_B.name);
+		ctrl.selectClass(CLASS_B.id);
 		expect(get(ctrl).canUndo).toBe(false);
 	});
 });
@@ -299,7 +309,7 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 
 		const pA = ctrl.save(); // A（ac1）save 起飛，state saving
 		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → state 打回 dirty，放行切班
-		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched'); // 切到 B（ac2）
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched'); // 切到 B（ac2）
 		void ctrl.save(); // B（ac2）save 起飛，seq 遞增、state saving
 
 		dA.resolve(serverAllPresent(ROSTER_A)); // A 的舊回應（4 筆）現在才回來
@@ -321,7 +331,7 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 
 		const pA = ctrl.save(); // A save
 		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → dirty，放行切班
-		expect(ctrl.selectClass(CLASS_B.name)).toBe('switched');
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
 		void ctrl.save(); // B save，state saving
 
 		dA.reject(new Error('A 的舊請求失敗')); // A 的舊回應失敗

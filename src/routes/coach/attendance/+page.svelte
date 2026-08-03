@@ -121,12 +121,12 @@
     ctrl.markAllPresent(); // codex r2 (P2)：changed 計數規則見 draft markAllPresent 註解
   }
 
-  // CoachDropdown echoes the NAME; selectClass maps name→id via the controller (byClass
-  // 切班暫存已在 controller 內)。blocked(儲存中不可切班：in-flight save 回呼只認得 live
-  // 狀態,切走會卡在 儲存中,成功 toast 也可能落錯班)由 controller 回報,頁面據此發提示
-  // toast。(codex round 3 P1)
-  function selectClass(name: string) {
-    if (ctrl.selectClass(name) === 'blocked') {
+  // CoachDropdown 走 keyed options，echo 的是 session id——controller selectClass 直接
+  // 以 id 查找(0014 限制撤銷：同日兩場同課名各自可選；byClass 切班暫存已在 controller
+  // 內)。blocked(儲存中不可切班：in-flight save 回呼只認得 live 狀態,切走會卡在 儲存
+  // 中,成功 toast 也可能落錯班)由 controller 回報,頁面據此發提示 toast。(codex round 3 P1)
+  function selectClass(id: string) {
+    if (ctrl.selectClass(id) === 'blocked') {
       toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
     }
   }
@@ -221,11 +221,11 @@
           </div>
         </div>
       </div>
-      <!-- 切換班級 — CoachDropdown echoes the NAME; selectClass maps name→id. -->
+      <!-- 切換班級 — keyed dropdown：value/onChange 走 session id，label 顯示課名。 -->
       <CoachDropdown
         icon="dumbbell"
-        value={curClass.name}
-        options={classes.map((c) => c.name)}
+        value={curClassId}
+        options={classes.map((c) => ({ key: c.id, label: c.name }))}
         onChange={selectClass}
       />
     </div>

@@ -131,13 +131,13 @@
         <CoachDropdown
           icon="layers"
           value={catFilter}
-          options={['全部課程類型', '體操', '啦啦隊', '跑酷']}
+          options={['全部課程類型', '體操', '啦啦隊', '跑酷'].map((s) => ({ key: s, label: s }))}
           onChange={(v) => (catFilter = v)}
         />
         <CoachDropdown
           icon="map-pin"
           value={venueFilter}
-          options={['所有場館', '主場館', '競技訓練館', '副館']}
+          options={['所有場館', '主場館', '競技訓練館', '副館'].map((s) => ({ key: s, label: s }))}
           onChange={(v) => (venueFilter = v)}
         />
       </div>

@@ -202,3 +202,25 @@ instanceof,因 desktop 頁測試把 `$lib/coach/api` 整支換假模組(class un
   `toBe(payload)` 參照相等,`saveAttendance` 另留 `toHaveBeenCalledWith` 驗參數原樣傳遞)。
   日後再有映射層退役,請把它的 seam 測試列進同一批寫入集:漏列的話,不是留下一組必紅的斷言,
   就是留下一組不再驗證任何東西的假綠。
+
+## 增補(2026-08-04):同日同課名限制撤銷——`selectClass` name→id 落地
+
+上節「根修需把 `selectClass` 介面由課名改成 session id……列未來輪次候選」已於同分支後續
+commit 兌現。動因:R10 合併前的全分支終掃(codex)把此條由 P2 升為 P1 並判 not merge-ready
+(「ADR 落字承認≠移除 regression」),使用者裁決先修再合。三層改動:
+
+- **controller**:`selectClass(id)` 以 `find((c) => c.id === id)` 查找——內部狀態
+  (`curClassId`/`byClass` 鍵)本就以 session id 為 identity,只是查找入口對齊之,一行+簽名。
+- **`CoachDropdown` options keyed 化**:`options: string[]` → `{ key, label }[]`,`value` 與
+  `onChange` 走 key、label 只管顯示。這不只是佈線需要:舊形以顯示字串當 `{#each}` key,同名
+  兩場會直接觸發 Svelte `each_key_duplicate` runtime error——桌面在「選不到第二場」之前就先
+  崩掉整顆 dropdown,keyed 化把兩個病灶一次結構性消除。字串篩選類使用點(我的學員 ×2、
+  排課管理 ×2)以 `key = label` 機械遷移,顯示與語意零變化。
+- **行動頁 shim 退役**:id→name 一行轉換刪除,chips 的 session id 直傳 controller。
+
+上文行為變更清單的**第五項(同日兩場同課名取第一場)自此撤銷**——桌面與行動皆可分辨並點名
+同名兩場。釘:controller 同名 fixture(以 id 切到第二場、名冊隨切)、行動頁同名 chip it
+(labelOf 時間前綴區分顯示、id 分流選取);桌面既有切班互動 it 兼任 keyed 佈線證明(onChange
+若誤傳 label,controller 以 id 查無 → 名冊不換即紅)。殘餘記帳:同名兩場在**桌面** dropdown
+的顯示字串相同(識別已由 key 保證,僅視覺無從分辨哪場是哪場);補時間前綴屬顯示層決策——
+行動 chips 的 `labelOf` 本就帶時間前綴天然消歧——留待實際排課出現同名兩場時再議。

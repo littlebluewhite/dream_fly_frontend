@@ -97,13 +97,11 @@
   $: roster = current?.roster ?? [];
   $: classOpts = classesToday.map((c) => ({ key: c.id, label: labelOf(c) }));
 
-  // FilterChips echoes the id；controller selectClass 認 NAME(同桌面 CoachDropdown
-  // 慣例)——這裡一行轉換(byClass 切班暫存已在 controller 內)。blocked(儲存中不可
-  // 切班)由 controller 回報，本頁據此發提示 toast。
+  // FilterChips echoes the id，controller selectClass 也認 session id(0014 限制撤銷
+  // 後桌面 CoachDropdown 同款)——直傳，同日兩場同課名各自可選(byClass 切班暫存已在
+  // controller 內)。blocked(儲存中不可切班)由 controller 回報，本頁據此發提示 toast。
   function selectClass(id: string) {
-    const name = classesToday.find((c) => c.id === id)?.name;
-    if (!name) return;
-    if (ctrl.selectClass(name) === 'blocked') {
+    if (ctrl.selectClass(id) === 'blocked') {
       toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
     }
   }

@@ -110,13 +110,13 @@
     <CoachDropdown
       icon="graduation-cap"
       value={cls}
-      options={distinctCls}
+      options={distinctCls.map((s) => ({ key: s, label: s }))}
       onChange={(v) => (cls = v)}
     />
     <CoachDropdown
       icon="target"
       value={lvl}
-      options={lvlOptions}
+      options={lvlOptions.map((s) => ({ key: s, label: s }))}
       onChange={(v) => (lvl = v)}
     />
   </div>

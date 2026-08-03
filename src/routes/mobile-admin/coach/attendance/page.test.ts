@@ -49,6 +49,19 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		expect(queryByText('測試學員甲')).toBeNull();
 	});
 
+	it('同日兩場同課名：第二場 chip 可選取並切到其名冊(selectClass 走 session id，0014 限制撤銷)', async () => {
+		vi.mocked(getAttendance).mockResolvedValue({
+			classes: [FIXTURE_CLASSES[0], { ...FIXTURE_CLASSES[1], name: '測試班甲' }],
+			failedClasses: []
+		});
+		const { findByText, getByText, queryByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+		// 兩顆 chip 同課名，靠 labelOf 的時間前綴區分顯示；選取靠 session id 分流。
+		await fireEvent.click(getByText('20:00 測試班甲'));
+		expect(await findByText('測試學員丙')).toBeInTheDocument(); // 第二場名冊
+		expect(queryByText('測試學員甲')).toBeNull(); // 不是停在第一場
+	});
+
 	it('點名狀態切換仍正常運作(既有行為不變)', async () => {
 		const { findByText, getByText, getAllByText } = render(AttendancePage);
 		await findByText('測試學員甲');

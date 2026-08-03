@@ -65,7 +65,7 @@ export interface AttendanceController extends Readable<AttendanceViewState> {
 	applyNote(mid: string, text: string): void;
 	markAllPresent(): void;
 	undo(): void;
-	selectClass(name: string): 'switched' | 'blocked' | 'noop';
+	selectClass(id: string): 'switched' | 'blocked' | 'noop';
 	save(): Promise<SaveOutcome>;
 }
 
@@ -146,8 +146,11 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 		publish();
 	}
 
-	function selectClass(name: string): 'switched' | 'blocked' | 'noop' {
-		const next = classes.find((c) => c.name === name);
+	// 以 session id 查找（0014 限制撤銷）：課名非 identity——同日兩場同課名時 name 查找
+	// 只命中排序在前的第一場，第二場永遠選不到；內部狀態(curClassId/byClass)本就以 id
+	// 為鍵，查找入口對齊之。
+	function selectClass(id: string): 'switched' | 'blocked' | 'noop' {
+		const next = classes.find((c) => c.id === id);
 		if (!next || next.id === curClassId) return 'noop';
 		// 儲存中不切班：in-flight 的 save 回呼只認得 live 狀態，把 'saving' 班級 stash 走會
 		// 卡在儲存中永遠結束不了（成功 toast 也可能落錯班）。頁面據 'blocked' 發提示 toast。
