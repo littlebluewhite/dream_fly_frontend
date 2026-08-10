@@ -10,6 +10,7 @@
   import { get } from 'svelte/store';
   import { profile, prefs, toasts, type Prefs } from '$lib/mobile/stores';
   import type { IconName } from '$lib/icon-registry';
+  import { initialOf } from '$lib/api/wire';
 
   export let onClose: () => void;
 
@@ -23,7 +24,7 @@
 
   function onName(e: Event) {
     const v = (e.target as HTMLInputElement).value;
-    f = { ...f, name: v, initial: v.trim().charAt(0) || f.initial };
+    f = { ...f, name: v, initial: initialOf(v, f.initial) };
   }
 
   function save() {

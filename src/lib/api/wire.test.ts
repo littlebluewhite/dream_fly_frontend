@@ -48,6 +48,18 @@ describe('initialOf', () => {
   it("returns '?' for an empty string", () => {
     expect(initialOf('')).toBe('?');
   });
+
+  it('trim 後仍為空字串（全空白姓名）時回退為預設值 "?"', () => {
+    expect(initialOf('  ')).toBe('?');
+  });
+
+  it('取字首前先 trim 掉姓名前後空白', () => {
+    expect(initialOf(' 王 ')).toBe('王');
+  });
+
+  it('可傳入自訂 fallback 取代預設的 "?"', () => {
+    expect(initialOf('', '學')).toBe('學');
+  });
 });
 
 describe('isoDateTime', () => {

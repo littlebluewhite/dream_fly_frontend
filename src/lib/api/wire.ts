@@ -106,8 +106,8 @@ export interface ApiCertificate {
   created_at: string;
 }
 
-/** 姓名縮寫（頭像 fallback）：空字串回 '?'。 */
-export const initialOf = (name: string): string => name.charAt(0) || '?';
+/** 姓名縮寫（頭像 fallback）：trim 後取首字，空字串（或全空白）回 fallback（預設 '?'）。 */
+export const initialOf = (name: string, fallback = '?'): string => name.trim().charAt(0) || fallback;
 
 /** ISO 時間字串 → 'YYYY-MM-DD HH:mm'（顯示用途）。 */
 export const isoDateTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');

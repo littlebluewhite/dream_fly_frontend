@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { initialOf } from '$lib/api/wire';
+
   export let coach: {
     id: number | string;
     name: string;
@@ -12,7 +14,7 @@
 <div class="coach-card card">
   <div class="coach-header">
     <div class="coach-avatar">
-      {coach.name.charAt(0)}
+      {initialOf(coach.name)}
     </div>
     <div class="coach-info">
       <h3>{coach.name}</h3>

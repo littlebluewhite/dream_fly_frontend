@@ -2,6 +2,8 @@
   /* Dream Fly Avatar — circular member/coach avatar with image or initial
    * fallback (works with CJK surnames). Ported from the DS bundle: disc dim by
    * size token, font ≈ 42% of dim, optional status dot ≈ 24% of dim. */
+  import { initialOf } from '$lib/api/wire';
+
   type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   type Status = 'online' | 'busy' | 'offline';
 
@@ -24,7 +26,7 @@
   $: dim = typeof size === 'number' ? size : SIZES[size] ?? 48;
   $: fontSize = Math.round(dim * 0.42);
   $: dotSize = Math.max(8, Math.round(dim * 0.24));
-  $: initial = name ? name.trim().charAt(0) : '?';
+  $: initial = initialOf(name);
 </script>
 
 <span class="avatar {className}" {style}>

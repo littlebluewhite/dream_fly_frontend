@@ -4,6 +4,7 @@
    * preferences section. Ported from the prototype's ProfileEditDialog
    * (client/views.jsx). */
   import { Avatar, Button, IconButton, Input, Switch, Icon } from '$lib/components/ui';
+  import { initialOf } from '$lib/api/wire';
 
   export let open = false;
   export let profile: any;
@@ -27,7 +28,7 @@
 
   function onName(e: Event) {
     const v = (e.target as HTMLInputElement).value;
-    f = { ...f, name: v, initial: v.trim().charAt(0) || f.initial };
+    f = { ...f, name: v, initial: initialOf(v, f.initial) };
   }
 
   function onKeydown(e: KeyboardEvent) {

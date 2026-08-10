@@ -9,7 +9,7 @@
 import { writable, derived } from 'svelte/store';
 import { api, refreshTokens } from '$lib/api/client';
 import { getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
-import { isoDate } from '$lib/api/wire';
+import { isoDate, initialOf } from '$lib/api/wire';
 import type { Member } from '$lib/domain/member-app';
 
 const AUTH_STORAGE_KEY = 'dreamfly_auth';
@@ -56,7 +56,7 @@ export function toMember(user: ApiUser): Member {
   return {
     id: user.id,
     name: user.name,
-    initial: user.name.charAt(0),
+    initial: initialOf(user.name),
     since: isoDate(user.created_at),
     points: 0,
     color: DEFAULT_AVATAR_COLOR,

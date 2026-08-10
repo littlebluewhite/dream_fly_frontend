@@ -18,6 +18,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import type { MemberRow } from '$lib/mobile-admin/data';
   import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
+  import { initialOf } from '$lib/api/wire';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
@@ -35,7 +36,7 @@
   // 編輯欄位（is_active 由既有 status 推導：只有 'active' 視為啟用中）
   let isActive = m ? m.status === 'active' : true;
 
-  $: initial = name.trim().charAt(0) || '學';
+  $: initial = initialOf(name, '學');
   $: valid = isNew
     ? !!email.trim() && !!name.trim() && password.length >= 8
     : !!name.trim();

@@ -26,6 +26,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/mobile-admin/api';
+  import { initialOf } from '$lib/api/wire';
 
   export let onClose: () => void;
   export let c: Coach | null = null;
@@ -42,7 +43,7 @@
   let tagsText = (c?.tags ?? []).join('、');
   let isActive = c ? c.isActive : true;
 
-  $: initial = name.trim().charAt(0) || '教';
+  $: initial = initialOf(name, '教');
   $: valid = isNew
     ? !!email.trim() && !!name.trim() && !!title.trim() && password.length >= 8
     : !!name.trim() && !!title.trim();

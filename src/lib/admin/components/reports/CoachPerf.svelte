@@ -14,6 +14,7 @@
   import { fmtNT } from '$lib/format';
   import { fmtPct } from '$lib/admin/format';
   import { coachPerfVM, COACH_PALETTE } from '$lib/admin/report-math';
+  import { initialOf } from '$lib/api/wire';
 
   let { rows }: { rows: AdminReportCoachRow[] } = $props();
 
@@ -35,7 +36,7 @@
     {#each ranked as c, i (c.id)}
       <div style="display:flex; align-items:center; gap:13px;">
         <div class="avatar" style="background:{COACH_PALETTE[i % COACH_PALETTE.length]};">
-          {c.name.charAt(0) || '?'}
+          {initialOf(c.name)}
         </div>
         <div style="flex:1; min-width:0;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">

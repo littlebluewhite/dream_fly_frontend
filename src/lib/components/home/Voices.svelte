@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Card, Kicker, Icon } from '$lib/components/ui';
   import { DF_VOICES } from '$lib/data/homeContent';
+  import { initialOf } from '$lib/api/wire';
 </script>
 
 <section id="voices" class="voices">
@@ -18,7 +19,7 @@
         </div>
         <p class="voice-quote">「{v.quote}」</p>
         <div class="voice-author">
-          <div class="voice-avatar">{v.name[0]}</div>
+          <div class="voice-avatar">{initialOf(v.name)}</div>
           <div>
             <div class="voice-name">{v.name}</div>
             <div class="voice-meta">{v.meta}</div>
