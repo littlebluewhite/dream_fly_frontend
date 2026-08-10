@@ -1,12 +1,3 @@
-<script context="module" lang="ts">
-  /* Active-state rule, extracted as a pure function so it can be unit-tested
-   * without mocking `$page`. The dashboard (`/admin`) is active ONLY on the
-   * exact root path; every other item matches by prefix. */
-  export function isActive(href: string, path: string): boolean {
-    return href === '/admin' ? path === '/admin' : path.startsWith(href);
-  }
-</script>
-
 <script lang="ts">
   /* 管理後台 left rail: dark brand header, single nav group (9 real route
    * links with active state), and an admin profile menu in the footer
@@ -16,23 +7,10 @@
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
+  import { NAV, isActive } from '$lib/admin/nav';
   import { toasts } from '$lib/admin/stores';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
   import { authStore } from '$lib/stores/authStore';
-  import type { IconName } from '$lib/icon-registry';
-
-  const NAV: { href: string; label: string; icon: IconName }[] = [
-    { href: '/admin', label: '儀表板總覽', icon: 'layout-dashboard' },
-    { href: '/admin/members', label: '會員管理', icon: 'users' },
-    { href: '/admin/coaches', label: '教練管理', icon: 'user-check' },
-    { href: '/admin/classes', label: '課程管理', icon: 'book-open' },
-    { href: '/admin/orders', label: '訂單管理', icon: 'shopping-bag' },
-    { href: '/admin/coupons', label: '優惠碼管理', icon: 'percent' },
-    { href: '/admin/venues', label: '場館管理', icon: 'building-2' },
-    { href: '/admin/tickets', label: '票券管理', icon: 'ticket' },
-    { href: '/admin/reports', label: '報表分析', icon: 'bar-chart-3' },
-    { href: '/admin/settings', label: '系統設定', icon: 'settings' }
-  ];
 
   const PROFILE = {
     role: '系統管理員',
