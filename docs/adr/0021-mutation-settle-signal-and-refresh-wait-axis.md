@@ -71,9 +71,9 @@ pendingSettle(): Promise<void> | undefined;
 ```
 
 **入帳新呼叫點前先讀這條禁忌**:`tail` 必須是**純網路尾流**——餵進一個「內部會等這顆閘門
-`refresh()`」的 promise 會讓兩邊互等(refresh 等尾流 settle、尾流等 refresh 落地),而且這種掛死不會
-被誠實界線 ① 的自癒論述涵蓋,它是呼叫端造成的死結。上方程式碼區塊的最後一行即
-`hydration-gate.ts` 該義務註解的原文。
+`refresh()`」的 promise 會讓兩邊互等(refresh 等尾流 settle、尾流等 refresh 落地)。此掛死與誠實
+界線 ① 不同:① 是尾流**自身**掛死(refresh 跟著等的既有失效模式),互等則是呼叫端餵錯 `tail` 造成的
+死結,不在 ① 的範圍內。上方程式碼區塊的最後一行即 `hydration-gate.ts` 該義務註解的原文。
 
 三條語意各自是刻意的:
 
