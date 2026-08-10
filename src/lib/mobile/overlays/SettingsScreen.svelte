@@ -8,12 +8,11 @@
    * 整包覆寫，見 $lib/mobile/api.ts 的 getPreferences/savePreferences)——開啟
    * 畫面背景水合覆蓋本地 prefs 快取，切換序列化送出(單一 in-flight 佇列，避免
    * 交錯覆寫)，失敗改整包 resync 成伺服器真值 + 錯誤 toast(resync 也失敗才退回
-   * 單鍵回滾，見 setPref/sendPref 實作註解)；本地 prefs store 保留為快取(離線/
+   * 單鍵回滾，見 $lib/mobile/pref-sync 模組註解)；本地 prefs store 保留為快取(離線/
    * 載入前的顯示來源)。「儲存變更」按鈕與
    * 個人資料欄位(姓名/生日/電話等)本身仍是本地端 store、無對應可寫後端欄位
    * (同 desktop 未接的等值狀態,P2)。 */
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -24,6 +23,7 @@
   import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
   import { getPreferences, savePreferences } from '$lib/mobile/api';
+  import { createPrefSync } from '$lib/mobile/pref-sync';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
@@ -44,46 +44,17 @@
     { icon: 'megaphone', label: '活動公告', sub: '新課程與優惠資訊', k: 'promo', last: true }
   ];
 
-  // 開啟畫面時背景水合真偏好(users.preferences，Task F10)，覆蓋本地 prefs
-  // 快取；本地 store 本身仍是載入前/離線時的顯示來源(同 CartSheet 開啟時
-  // refreshPoints() 的 best-effort 慣例，見該檔案 onMount)——失敗就沿用目前
-  // 快取值，不顯示錯誤(讀取失敗不影響既有可用性)。
+  // 機器在 $lib/mobile/pref-sync，toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。
+  const prefSync = createPrefSync({ getPreferences, savePreferences, prefs });
+
   onMount(() => {
-    getPreferences()
-      .then((p) => prefs.set(p))
-      .catch((err) => console.error('SettingsScreen: 偏好載入失敗，沿用本地快取', err));
+    prefSync.hydrate();
   });
 
-  // 切換開關樂觀更新畫面立即生效；PATCH /users/me 的送出改走單一 in-flight
-  // 序列鏈(saveChain)——每次送出的整包快照在「輪到它執行時」才從 store 重新
-  // 讀取,不是排隊當下就固定。這樣連續快速切換時,後面那次送出永遠疊加在前一次
-  // (含失敗後的修正)之後的最新狀態,不會有「call2 沿用交錯當下的舊快照、把
-  // 已回滾的值蓋回後端」的競態(review 修正:見 task review 的 finding)。
-  // 失敗時改整包 resync:呼叫 getPreferences() 用伺服器真值整個蓋掉本地 store
-  // (取代原本只回滾「這一顆」開關)，確保本地顯示不會跟後端悄悄分歧；resync
-  // 本身也失敗(雙重離線)才退回單鍵回滾(讀切換前的舊值)。錯誤 toast 兩種情況
-  // 都會顯示一次。
-  let saveChain: Promise<void> = Promise.resolve();
-
   function setPref(k: keyof Prefs, v: boolean) {
-    const before = get(prefs)[k];
-    prefs.update((p) => ({ ...p, [k]: v }));
-    saveChain = saveChain.then(() => sendPref(k, before));
-  }
-
-  async function sendPref(k: keyof Prefs, before: boolean) {
-    try {
-      await savePreferences(get(prefs));
-    } catch (err) {
-      console.error('SettingsScreen: 偏好儲存失敗', err);
-      try {
-        prefs.set(await getPreferences());
-      } catch (resyncErr) {
-        prefs.update((p) => ({ ...p, [k]: before }));
-        console.error('SettingsScreen: resync 失敗，退回單鍵回滾', resyncErr);
-      }
-      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
-    }
+    prefSync.set(k, v).then((o) => {
+      if (o.kind !== 'saved') toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    });
   }
 
   function logout() {
