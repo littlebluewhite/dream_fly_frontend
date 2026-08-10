@@ -27,6 +27,18 @@ function settleRetry() {
 	return new Promise<void>((r) => setTimeout(r, 0));
 }
 
+/** 合成的 mutation settle 訊號源（R11 第五決策點）:未 settle 時回 promise、靜止時同步回
+ *  undefined——生產上這本帳由 $lib/hydration-gate 的閘門記(markMutated(tail) 入帳、
+ *  tail settle 出帳),本檔只需要訊號的形狀。 */
+function createSettleSignal() {
+	const d = createDeferred<void>();
+	let quiet = false;
+	const wait = d.promise.then(() => {
+		quiet = true;
+	});
+	return { pendingSettle: () => (quiet ? undefined : wait), settle: () => d.resolve() };
+}
+
 interface RowsPage extends PagedResponse {
 	rows: string[];
 }
@@ -597,6 +609,102 @@ describe('hydrate 選項', () => {
 		expect(into).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 2 });
 		expect(phases.every((x) => x === 'ready')).toBe(true); // 靜默:重抓也不動 phase
+		expect(get(gate)).toBe('ready');
+
+		gate.destroy();
+	});
+
+	/* R11（第五決策點）：hydrate 再多一個可選的 `pendingSettle`（mutation 尾流的 settle
+	 * 訊號，生產上由 session-gate 的 pageEntry 佈線 gate.pendingSettle）。在場時
+	 * refresh()/silentRefresh() 每次出發 GET 之前先等未 settle 的樂觀 mutation 尾流
+	 * （PATCH）——關閉「GET 在 PATCH 仍在飛時出發、server 回舊真值」的 server-race 窗。
+	 * 未帶 `pendingSettle` 的釘子（含上方全部）語意一字不變。 */
+	it('mutation settle(refresh):尾流未 settle → GET 不出發;settle 後才出發,phase 全程單一週期', async () => {
+		const flag = writable(false);
+		const signal = createSettleSignal();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const into = vi.fn();
+		const gate = createLoadGate({
+			fetch,
+			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
+		});
+
+		const phases: LoadPhase[] = [];
+		const unsub = gate.subscribe((p) => phases.push(p));
+
+		const p = gate.refresh();
+		await settleRetry();
+
+		expect(fetch).not.toHaveBeenCalled(); // PATCH 尾流仍在飛,GET 不出發
+
+		signal.settle();
+		await p;
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 1 });
+		expect(get(flag)).toBe(true);
+		expect(phases).toEqual(['loading', 'ready']); // 等待不多推一次 phase（契約：單一週期）
+
+		unsub();
+		gate.destroy();
+	});
+
+	it('mutation settle(silentRefresh):尾流未 settle → GET 不出發;settle 後才出發,全程 phase 不動', async () => {
+		const flag = writable(true); // 借 hydrate 短路讓 load() 到 ready 而不觸發 fetch/into
+		const signal = createSettleSignal();
+		const fetch = vi.fn(async () => ({ v: 2 }));
+		const into = vi.fn();
+		const gate = createLoadGate({
+			fetch,
+			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
+		});
+		await gate.load();
+		expect(fetch).not.toHaveBeenCalled();
+
+		const phases: LoadPhase[] = [];
+		const unsub = gate.subscribe((p) => phases.push(p));
+
+		const p = gate.silentRefresh();
+		await settleRetry();
+
+		expect(fetch).not.toHaveBeenCalled();
+
+		signal.settle();
+		await p;
+		unsub();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 2 });
+		expect(phases.every((x) => x === 'ready')).toBe(true); // 靜默:等待也不動 phase
+
+		gate.destroy();
+	});
+
+	it('mutation settle 的棄追:等待期間被新一輪 load() 取代 → 醒來即棄追,舊輪的 GET 永不出發', async () => {
+		const flag = writable(false);
+		const signal = createSettleSignal();
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn(() => d.promise);
+		const into = vi.fn();
+		const gate = createLoadGate({
+			fetch,
+			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
+		});
+
+		const p1 = gate.refresh(); // 舊輪:卡在等尾流 settle
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+
+		const p2 = gate.load(); // 新一輪取代舊輪（generation++）;load() 不套等待,直接出發
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		signal.settle();
+		d.resolve({ v: 9 });
+		await Promise.all([p1, p2]);
+
+		expect(fetch).toHaveBeenCalledTimes(1); // 棄追:舊輪醒來已無意義,不補發 GET（否則會是 2）
+		expect(into).toHaveBeenCalledTimes(1);
+		expect(into).toHaveBeenCalledWith({ v: 9 }); // 落地的是新一輪的 payload
 		expect(get(gate)).toBe('ready');
 
 		gate.destroy();

@@ -55,6 +55,14 @@ export interface LoadGateHydrateOptions<T> {
 	 *  卸載即棄追。load() 刻意不走(hydrate 契約:mutation-wins 丟棄了事,本地即真相)。
 	 *  省略時整條路徑與舊碼逐字相同——旗標自持、無世代帳的 plain-flag 消費端保舊語意。 */
 	gen?: () => number;
+	/** 可選:mutation 尾流的 settle 訊號(生產上是 session/hydration gate 的
+	 *  gate.pendingSettle,同樣經 pageEntry 佈線)。在場時 refresh()/silentRefresh() 每次
+	 *  出發 fetch 之前先等未 settle 的樂觀 mutation 尾流(mark-before-await 的 PATCH)——
+	 *  關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代又已穩定」的 server-race 窗
+	 *  (ADR 0020 誠實界線,R11 閉合)。等待軸與丟棄軸正交:丟棄仍只看 gen 的進出場比對。
+	 *  與 `gen` 同進退——世代穩定重抓那條分支沒啟用(未帶 gen)時本欄不生效。load() 一樣
+	 *  刻意不走(hydrate 契約:本地即真相,丟棄了事)。省略時整條路徑與舊碼逐字相同。 */
+	pendingSettle?: () => Promise<void> | undefined;
 }
 
 /** onData 與 hydrate 型別層互斥(discriminated union + `?: never`):一個 gate 只能
@@ -147,7 +155,8 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	/** refresh 族的取數:genReader 在場即世代穩定重抓(見 hydration-gate 的 fetchGenStable),
 	 *  否則裸 fetch。棄追判準 = 「已卸載 or 已被新一輪 run 取代」——兩者都單向不可逆,故
 	 *  回 undefined 時呼叫端的既有 destroyed/generation 守衛必然也會攔下,語意不重疊。
-	 *  重抓全程在同一個 run-generation 內:phase 不動、generation 不遞增。 */
+	 *  重抓全程在同一個 run-generation 內:phase 不動、generation 不遞增;R11 起連「等
+	 *  mutation 尾流 settle」也在同一輪內,故等待期間 phase 一樣不多跳一次 loading。 */
 	async function run(
 		fetcher: () => Promise<T>,
 		apply: (data: T, gen: number) => void,
@@ -158,7 +167,10 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 		try {
 			let data: T;
 			if (genReader) {
-				const stable = await fetchGenStable(fetcher, genReader, () => !destroyed && gen === generation);
+				const stable = await fetchGenStable(fetcher, genReader, {
+					iterate: () => !destroyed && gen === generation,
+					pendingSettle: options.hydrate?.pendingSettle
+				});
 				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
 				data = stable;
 			} else {
@@ -202,7 +214,10 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 			const fetcher = options.refresh ?? options.fetch;
 			let data: T;
 			if (genReader) {
-				const stable = await fetchGenStable(fetcher, genReader, () => !destroyed && gen === generation);
+				const stable = await fetchGenStable(fetcher, genReader, {
+					iterate: () => !destroyed && gen === generation,
+					pendingSettle: options.hydrate?.pendingSettle
+				});
 				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
 				data = stable;
 			} else {

@@ -423,6 +423,14 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 		expect(gate.pageEntry().hydrate.gen).toBe(gate.mutationGen);
 	});
 
+	it('hydrate.pendingSettle 是 gate.pendingSettle 同一函式(R11:頁面的 refresh 族與 store 閘門讀同一本 mutation 尾流帳)', () => {
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		expect(typeof gate.pendingSettle).toBe('function'); // 先釘存在,否則 undefined === undefined 是假綠
+		expect(gate.pageEntry().hydrate.pendingSettle).toBe(gate.pendingSettle);
+	});
+
 	it('fetch 只回傳資料、不自行 apply(寫入是 load-gate hydrate 的事,翻旗也是)', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': [{ id: 'x' }] }));
 		const store = writable<Item[]>([]);

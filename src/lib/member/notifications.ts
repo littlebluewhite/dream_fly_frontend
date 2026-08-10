@@ -51,12 +51,18 @@ export const notificationsPageEntry = gate.pageEntry();
  *  本地 store，再送 PATCH 到後端；失敗只記錄錯誤、不還原(避免使用者感覺「點了又
  *  跳回未讀」的閃爍)。呼叫 gate.markMutated() 讓 in-flight 的 refreshNotifications()
  *  (若有)不會拿姍姍來遲的舊資料蓋掉這筆已讀 mutation(同 hydration-gate.ts 的
- *  post-await re-check 語意)。toast 留在頁面——本模組不碰 toast。 */
+ *  post-await re-check 語意)。toast 留在頁面——本模組不碰 toast。
+ *  架構深化 R11:PATCH 的 promise 一併交給 markMutated 當**尾流**。這是 mark-before-await
+ *  (先寫 store、翻旗,才 await 網路),世代軸看不見「PATCH 還在飛」——refresh 的 GET 若搶
+ *  在 PATCH 前面出發,server 回的仍是未讀、而世代此刻已穩定,舊快照照套、已讀被打回未讀
+ *  (ADR 0020 誠實界線)。入帳後 refresh 族會等尾流 settle 才出發;失敗也算 settle,故下方
+ *  的 catch 不需要為閘門多做什麼。 */
 export async function markRead(id: string): Promise<void> {
   notifications.update((list) => list.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  gate.markMutated();
+  const patch = api(`/notifications/${id}/read`, { method: 'PATCH' });
+  gate.markMutated(patch);
   try {
-    await api(`/notifications/${id}/read`, { method: 'PATCH' });
+    await patch;
   } catch (err) {
     console.error('Failed to mark notification as read:', err);
   }
@@ -70,10 +76,11 @@ export async function markRead(id: string): Promise<void> {
 export async function markAllRead(): Promise<'ok' | 'partial'> {
   const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
   notifications.update((list) => list.map((n) => ({ ...n, read: true })));
-  gate.markMutated();
-  const results = await Promise.allSettled(
+  const settled = Promise.allSettled(
     unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
   );
+  gate.markMutated(settled); // 整批當一條尾流(allSettled 含失敗也 settle,不會卡死 refresh)
+  const results = await settled;
   const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (failures.length > 0) {
     failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));

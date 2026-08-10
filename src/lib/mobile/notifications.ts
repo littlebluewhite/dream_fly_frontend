@@ -68,15 +68,20 @@ export const notifsPageEntry = gate.pageEntry();
  *  讓已讀狀態回退成未讀(使用者可見 bug)。現在樂觀更新本地 store 後改送 PATCH
  *  /notifications/{id}/read 落庫;失敗只記錄錯誤、不還原本地狀態(不閃爍原則,
  *  同 $lib/member/notifications.ts 的 markRead/markAllRead 一致)。點擊已讀項
- *  仍會重送 PATCH——端點冪等(同 member 沒有另外擋),不為此加 guard。 */
+ *  仍會重送 PATCH——端點冪等(同 member 沒有另外擋),不為此加 guard。
+ *  架構深化 R11:PATCH 的 promise 一併交給 markMutated 當**尾流**(同 member 側前例)。
+ *  這是 mark-before-await,世代軸看不見「PATCH 還在飛」——通知頁 refresh 的 GET 若搶在
+ *  PATCH 前面出發,server 回的仍是未讀、而世代此刻已穩定,已讀會被舊快照打回未讀
+ *  (ADR 0020 誠實界線)。入帳後 refresh 族等尾流 settle 才出發,失敗也算 settle。 */
 export const notifs = {
 	subscribe: notifsBase.subscribe,
 	set: notifsBase.set,
 	async markRead(id: string): Promise<void> {
 		notifsBase.markRead(id); // 樂觀更新
-		gate.markMutated(); // 翻旗(≡ 舊 notifsHydrated.set(true),走閘門公開協定)
+		const patch = api(`/notifications/${id}/read`, { method: 'PATCH' });
+		gate.markMutated(patch); // 翻旗 + 尾流入帳(≡ 舊 notifsHydrated.set(true) 的超集)
 		try {
-			await api(`/notifications/${id}/read`, { method: 'PATCH' });
+			await patch;
 		} catch (err) {
 			console.error('Failed to mark notification as read:', err); // 不還原(member 不閃爍原則)
 		}
@@ -84,10 +89,11 @@ export const notifs = {
 	async markAllRead(): Promise<'ok' | 'partial'> {
 		const unreadIds = get(notifsBase).filter((n) => !n.read).map((n) => n.id); // 必須在 markAllRead() 前捕捉
 		notifsBase.markAllRead();
-		gate.markMutated();
-		const results = await Promise.allSettled(
+		const settled = Promise.allSettled(
 			unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
 		);
+		gate.markMutated(settled); // 整批當一條尾流(allSettled 含失敗也 settle,不會卡死 refresh)
+		const results = await settled;
 		const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
 		failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
 		return failures.length > 0 ? 'partial' : 'ok';

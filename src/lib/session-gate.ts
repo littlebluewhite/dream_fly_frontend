@@ -17,11 +17,13 @@
  * ②門 (c) `onSessionReset` 退役 —— 其唯一消費者 mobile notifs 已改建完整 gate
  * (見 $lib/mobile/notifications.ts),三門收斂為兩門。
  *
- * 架構深化 R10 只動一行:pageEntry() 的 hydrate 包多帶 `gen: gate.mutationGen`,讓頁面
- * load-gate 的 refresh 族與 store 閘門讀**同一本** mutation 世代帳,獲得世代穩定重抓
+ * 架構深化 R10／R11 都只動 pageEntry():R10 的 hydrate 包多帶 `gen: gate.mutationGen`
+ * (世代穩定重抓),R11 再多帶 `pendingSettle: gate.pendingSettle`(mutation settle 訊號)
+ * ——讓頁面 load-gate 的 refresh 族與 store 閘門讀**同一本**世代帳與**同一本**尾流帳
  * (見 $lib/hydration-gate 的 fetchGenStable)。本檔其餘一字未動——尤其 queueReconcile
  * 零 diff:它的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費閉合
- * (見該函式註解)。
+ * (見該函式註解);mutate() 也零 diff——它是 await-then-write,天生沒有「寫回時尾流仍在
+ * 飛」的窗口,不需要入帳(R11 的缺陷只在四個 mark-before-await 的通知域呼叫點)。
  *
  * 座落位置:authStore 與 domain store 之間。刻意**不**深化 hydration-gate——後者被
  * ~49 頁全 surface 的 load-gate 消費(含 staff 面,其 identity 源非 member authStore),
@@ -89,8 +91,8 @@ export interface PageEntry<T> {
 }
 
 /**
- * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated/mutationGen)再加
- * mutate 與 pageEntry。
+ * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated/mutationGen/
+ * pendingSettle)再加 mutate 與 pageEntry。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
  *   進場快照(await 之前捕捉 wasHydrated + epoch)→ await request → epoch 丟棄(過期即
  *   棄寫,結果仍回傳:server 端事實已成立)→ 寫回時重查完整度(stillIncomplete)→
@@ -193,14 +195,25 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 	 *   - 使用者按 retry → load-gate 的 refresh 回落同一支 epochFetch → 新 epoch 下成功。
 	 * 換帳當下 identity 重置(onChange)已同步清 store,新帳號永不見舊帳號資料。
 	 * flag 是閘門自己的 hydrated **同一實例**、into 是 opts.apply **同一函式**、gen 是
-	 * gate.mutationGen **同一支讀取器**——頁面與 store 模組共用同一顆守衛與同一本世代帳,
-	 * 不是複本。
+	 * gate.mutationGen、pendingSettle 是 gate.pendingSettle **同一支讀取器**——頁面與
+	 * store 模組共用同一顆守衛、同一本世代帳與同一本尾流帳,不是複本。
 	 * gen(架構深化 R10)讓頁面的 refresh()/silentRefresh() 獲得世代穩定重抓:使用者按
 	 * 「重新整理」的飛行窗口內做的本地 mutation(已讀、取消…)不會被姍姍來遲的舊快照蓋回
 	 * (見 $lib/hydration-gate 的 fetchGenStable)。load() 不套此迴圈,hydrate 契約不變。
+	 * pendingSettle(架構深化 R11)補上正交的等待軸:頁面的 refresh 族在樂觀 mutation 的
+	 * PATCH 尚未 settle 時不出發 GET——世代軸看不見「尾流還在飛」,GET 搶跑就會拿到 server
+	 * 舊真值、而世代此刻已穩定,舊快照照套(ADR 0020 誠實界線記載的 GET/PATCH server-race)。
 	 */
 	function pageEntry(): PageEntry<T> {
-		return { fetch: epochFetch, hydrate: { flag: gate.hydrated, into: opts.apply, gen: gate.mutationGen } };
+		return {
+			fetch: epochFetch,
+			hydrate: {
+				flag: gate.hydrated,
+				into: opts.apply,
+				gen: gate.mutationGen,
+				pendingSettle: gate.pendingSettle
+			}
+		};
 	}
 
 	return { ...gate, mutate, pageEntry };

@@ -145,4 +145,35 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
 
     page.destroy();
   });
+
+  /* R11(第五決策點:mutation settle 訊號)。上一條釘的是「GET 已落地、之後才 markMutated」
+   * 的世代軸;這一條釘的是 ADR 0020 誠實界線記載的另一半——markRead 是 mark-before-await
+   * (先寫 store、markMutated,才 await PATCH)。舊碼的 refresh 只看世代穩定,對「PATCH 還在
+   * 飛」是盲的:GET 在 PATCH 落庫前出發 → server 回未讀、而世代此刻已穩定 → 舊快照照套,
+   * 已讀被打回未讀。現在 refresh 族先等尾流 settle 才出發。 */
+  it('mutation settle:markRead 的 PATCH 未 settle → 頁面 refresh 的 GET 不出發;PATCH settle 後才出發,已讀不回退', async () => {
+    const patch = createDeferred<unknown>();
+    let gets = 0;
+    let serverRead = false; // 後端真相:PATCH 落庫後才翻已讀
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /notifications': () => { gets += 1; return [apiNotif(serverRead)]; },
+      'PATCH /notifications/n1/read': () => patch.promise
+    }));
+
+    const page = createLoadGate({ ...notificationsPageEntry });
+    const readP = markRead('n1'); // 樂觀已讀 + markMutated(尾流)
+    const refreshP = page.refresh(); // 使用者同時按「重新整理」
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(gets).toBe(0); // PATCH 仍在飛 → GET 一律不出發(server-race 窗關閉)
+
+    serverRead = true;
+    patch.resolve(undefined);
+    await Promise.all([readP, refreshP]);
+
+    expect(gets).toBe(1); // 尾流 settle 才出發,而且只出發一次(世代已穩定,無補抓)
+    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true); // 已讀不回退
+
+    page.destroy();
+  });
 });

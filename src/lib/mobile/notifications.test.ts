@@ -7,11 +7,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
-import { notifs, notifsHydrated } from './notifications';
+import { notifs, notifsHydrated, notifsPageEntry } from './notifications';
 import { NOTIFS_SEED, type Notification as NotifItem } from '$lib/domain/member-app';
 // C1(session 重置抬升)跨帳號 session 重置釘:用真 authStore.login/logout 驅動 identity。
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { createLoadGate } from '$lib/load-gate';
+
+/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers(同 member 側慣用式)。 */
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
+
+/** GET /notifications 的後端形狀(ApiNotification),只填 mapNotification 會讀到的欄位。 */
+function apiNotif(id: string, read: boolean) {
+	return {
+		id, type: 'system', title: '系統公告', message: '內容',
+		is_read: read, metadata: null, created_at: '2026-01-01T00:00:00Z'
+	};
+}
 
 // W1:notifs.markRead/markAllRead 會送 PATCH 落庫(見 notifications.ts)——只替換
 // $lib/api/client 的 api(),spread 保留 ApiError 等其餘 export(同
@@ -170,5 +190,58 @@ describe('notifs singleton — 跨帳號 session 重置(C1 抬升 → C3 改建�
 
 		expect(get(notifsHydrated)).toBe(false);
 		expect(get(notifs)).toEqual(NOTIFS_SEED); // A 的通知即刻清空為 seed
+	});
+});
+
+describe('notifs singleton — mutation settle 訊號(架構深化 R11 第五決策點)', () => {
+	/* markAllRead 是 mark-before-await(先寫 store、markMutated,才 await 那批 PATCH)。
+	 * 舊碼的 refresh 只看世代穩定,對「PATCH 群還在飛」是盲的:GET 在落庫前出發 → server
+	 * 回未讀、而世代此刻已穩定 → 舊快照照套,已讀被打回未讀(ADR 0020 誠實界線記載的
+	 * GET/PATCH server-race;member 側是 markRead 的鏡射)。allSettled 的尾流「含失敗也
+	 * settle」,不得因為某一筆 PATCH 失敗就永久卡住 refresh。 */
+	const seed: NotifItem[] = [
+		{ id: 'w1', cat: 'system', icon: 'bell', tone: 'info', title: '甲', body: '乙', time: '剛才', read: false },
+		{ id: 'w2', cat: 'system', icon: 'bell', tone: 'info', title: '丙', body: '丁', time: '剛才', read: false }
+	];
+
+	beforeEach(() => {
+		vi.mocked(api).mockReset();
+		notifs.set(seed.map((n) => ({ ...n })));
+		notifsHydrated.set(false);
+	});
+
+	it('markAllRead 的 PATCH 群未 settle → 頁面 refresh 的 GET 不出發;含失敗的 allSettled settle 後照出發', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const okPatch = createDeferred<unknown>();
+		const badPatch = createDeferred<unknown>();
+		let gets = 0;
+		let serverReadW1 = false; // 後端真相:w1 落庫後才翻已讀;w2 的 PATCH 失敗,始終未讀
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'GET /notifications': () => { gets += 1; return [apiNotif('w1', serverReadW1), apiNotif('w2', false)]; },
+			'PATCH /notifications/w1/read': () => okPatch.promise,
+			'PATCH /notifications/w2/read': () => badPatch.promise
+		}));
+
+		const page = createLoadGate({ ...notifsPageEntry });
+		const allP = notifs.markAllRead(); // 樂觀全已讀 + markMutated(allSettled 尾流)
+		const refreshP = page.refresh(); // 使用者同時按「重新整理」
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(gets).toBe(0); // PATCH 群仍在飛 → GET 一律不出發
+
+		serverReadW1 = true;
+		okPatch.resolve(undefined);
+		badPatch.reject(new Error('network error'));
+		const result = await allP;
+		await refreshP;
+
+		expect(result).toBe('partial');
+		expect(gets).toBe(1); // 尾流(含失敗那筆)settle 後才出發,且只一次
+		expect(get(notifs).find((n) => n.id === 'w1')?.read).toBe(true); // 落庫成功的已讀不回退
+		// 已知殘餘(誠實界線):w2 的 PATCH 失敗,重新整理顯示 server 真相(未讀)——這是顯式
+		// 新鮮度契約,不是回歸(見 markAllRead 的「失敗不還原」不閃爍原則)。
+		expect(get(notifs).find((n) => n.id === 'w2')?.read).toBe(false);
+
+		page.destroy();
 	});
 });

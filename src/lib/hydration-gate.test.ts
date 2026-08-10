@@ -222,6 +222,136 @@ describe('createHydrationGate', () => {
 		expect(gate.mutationGen()).toBe(2);
 	});
 
+	/* R11 第五決策點——mutation settle 訊號。第四決策點(世代穩定)只比對進出場世代,對
+	 * 「樂觀 mutation 的網路尾流(PATCH)還沒 settle」是盲的:markRead 是 mark-before-await
+	 * (先寫 store、markMutated,才 await PATCH),refresh 的 GET 若在 PATCH 仍在飛時出發,
+	 * server 回的是舊真值、而世代此刻已穩定 → 舊快照照套,已讀被打回未讀(ADR 0020 誠實
+	 * 界線記載的 GET/PATCH server-race)。現在 refresh 族在出發前先等尾流全數 settle。
+	 * 等待軸與丟棄軸正交:等待不看世代,丟棄仍只看進出場世代比對。 */
+	it('mutation settle:markMutated(尾流) 未 settle → refresh() 不出發 GET;尾流 settle 後恰出發一次', async () => {
+		const tail = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		gate.markMutated(tail.promise); // 樂觀 mutation:store 已寫、PATCH 仍在飛
+		const p = gate.refresh();
+		await settleRetry();
+
+		expect(fetch).not.toHaveBeenCalled(); // 尾流未 settle,GET 一律不出發
+
+		tail.resolve();
+		await p;
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+	});
+
+	it('mutation settle:尾流 reject 也算 settle → refresh() 照樣出發(閘門以 then(done, done) 記帳)', async () => {
+		const tail = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+
+		gate.markMutated(tail.promise);
+		// 呼叫端自己的 catch(生產上是 markRead 的 try/await);閘門的出帳不靠它,見下方斷言。
+		const caughtByCaller = tail.promise.catch(() => {});
+		const p = gate.refresh();
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+
+		tail.reject(new Error('patch-boom'));
+		await caughtByCaller;
+		await p;
+
+		expect(fetch).toHaveBeenCalledTimes(1); // 失敗的 mutation 一樣是「不再在飛」,不得永久卡住 refresh
+	});
+
+	it('mutation settle:等待期間第二筆尾流入帳 → 醒來重查、續等到真正靜止才出發(fetch 恰一次)', async () => {
+		const t1 = createDeferred<void>();
+		const t2 = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+
+		gate.markMutated(t1.promise);
+		// 第二筆刻意掛在 t1 settle 的當下入帳——正是「等待者剛被喚醒」那個窗口:醒來若不
+		// 重查靜止與否,GET 會在 t2 仍在飛時出發,窗口原封不動地重開。
+		t1.promise.then(() => gate.markMutated(t2.promise));
+
+		const p = gate.refresh();
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+
+		t1.resolve();
+		await settleRetry();
+
+		expect(fetch).not.toHaveBeenCalled(); // t2 仍在飛,續等
+
+		t2.resolve();
+		await p;
+
+		expect(fetch).toHaveBeenCalledTimes(1); // 全數 settle 後才出發,而且只出發一次
+	});
+
+	it('mutation settle:refresh 在飛期間 markMutated(尾流) → 世代作廢的補抓輪同樣等 settle 才出發', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const tail = createDeferred<void>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const p = gate.refresh();
+		expect(fetch).toHaveBeenCalledTimes(1); // 進場靜止 → 第一發照常同步出發
+
+		gate.markMutated(tail.promise); // 在飛 mutation:世代作廢 + 尾流入帳
+		d1.resolve({ v: 1 });
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(1); // 補抓輪被 settle 訊號擋住,不搶在 PATCH 前面
+		expect(apply).not.toHaveBeenCalled();
+
+		tail.resolve();
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 尾流 settle 才補抓
+
+		d2.resolve({ v: 2 });
+		await p;
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+	});
+
+	it('mutation settle 守恆:markMutated() 不帶尾流 → refresh() 同步出發(無尾流的 mutation 行為一字不變)', async () => {
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+
+		gate.markMutated(); // mobile-admin markOrderPaid 等 demo mutation:無網路尾流
+		const p = gate.refresh();
+
+		expect(fetch).toHaveBeenCalledTimes(1); // 尚未 await 就已出發
+
+		await p;
+	});
+
+	it('pendingSettle():靜止時同步回 undefined(不得回 resolved promise——多一個 microtask 會鬆掉在飛判準),有未 settle 尾流才回 promise', async () => {
+		const tail = createDeferred<void>();
+		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
+
+		expect(gate.pendingSettle()).toBeUndefined(); // 開機靜止
+		gate.markMutated();
+		expect(gate.pendingSettle()).toBeUndefined(); // 無尾流的 mutation 不入帳
+
+		gate.markMutated(tail.promise);
+		const wait = gate.pendingSettle();
+		expect(wait).toBeInstanceOf(Promise);
+
+		tail.resolve();
+		await wait;
+
+		expect(gate.pendingSettle()).toBeUndefined(); // settle 後回歸靜止
+	});
+
 	it('markMutated() 把 hydrated 翻 true;hydrated.set(false) 後可再次水合(測試重置縫)', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const apply = vi.fn();
