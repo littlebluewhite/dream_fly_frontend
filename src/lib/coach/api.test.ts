@@ -122,7 +122,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 			expect(d.todayLabel).toBe(TODAY_LABEL);
 			// conversations 由 getDashboard() 併入真 getConversations() —— mapConversation 映射結果。
 			expect(d.conversations).toEqual([
-				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 2, preview: '老師您好', sla: '', slaTone: 'muted' }
+				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 2, preview: '老師您好' }
 			]);
 			expect(d.pendingClasses).toBe('1 班');
 			expect(d.attendanceRate).toBe('80%');
@@ -463,8 +463,7 @@ describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
 
 /* Task 12：訊息中心（GET /conversations/me + GET .../messages + POST .../messages +
  * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——CONTEXT.md 明定
- * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故 kind 一律映射'會員'；
- * urgent/sla/slaTone 無資料來源，皆為不觸發顯示的誠實預設值(P2)。 */
+ * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故 kind 一律映射'會員'。 */
 const ME2 = {
 	id: 'u9', email: 'chen@dreamfly.com.tw', name: '陳雅婷',
 	phone: null, last_login: null, created_at: '2020-01-01T00:00:00Z'
@@ -486,11 +485,11 @@ describe('getConversations — GET /conversations/me（§3.21，純陣列不分�
 		expect(d.conversations).toEqual([
 			{
 				id: 'c1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
-				time: '2026-07-05 09:42', badge: 2, preview: '老師您好', sla: '', slaTone: 'muted'
+				time: '2026-07-05 09:42', badge: 2, preview: '老師您好'
 			},
 			{
 				id: 'c2', name: '陳小華', initial: '陳', color: '#0066CC', kind: '會員',
-				time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+				time: '', badge: 0, preview: '尚無訊息'
 			}
 		]);
 	});
@@ -635,7 +634,7 @@ describe('createConversation — POST /conversations（§3.21，get-or-create）
 		});
 		expect(convo).toEqual({
 			id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
-			time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+			time: '', badge: 0, preview: '尚無訊息'
 		});
 	});
 

@@ -38,11 +38,11 @@ vi.mock('$lib/coach/api', () => ({
 const CONVOS = [
 	{
 		id: 'c1', name: '王媽媽', initial: '王', color: '#0066CC', kind: '會員',
-		time: '09:42', badge: 2, preview: '老師您好，小明明天的課可以調整時間嗎？', sla: '', slaTone: 'muted' as const
+		time: '09:42', badge: 2, preview: '老師您好，小明明天的課可以調整時間嗎？'
 	},
 	{
 		id: 'c2', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '會員',
-		time: '昨天', badge: 3, preview: '謝謝老師這學期的細心指導！', sla: '', slaTone: 'muted' as const
+		time: '昨天', badge: 3, preview: '謝謝老師這學期的細心指導！'
 	}
 ];
 
@@ -61,7 +61,7 @@ const MY_STUDENTS = [
 
 const NEW_CONVO = {
 	id: 'c9', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
-	time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted' as const
+	time: '', badge: 0, preview: '尚無訊息'
 };
 
 beforeEach(() => {
@@ -252,7 +252,7 @@ describe('/coach/messages (+page) — 撰寫新對話（getStudents 名冊 + POS
 	it('get-or-create 回傳既有對話 id → 選中既有列，不重複插入', async () => {
 		vi.mocked(createConversation).mockResolvedValue({
 			id: 'c2', name: '陳爸爸', initial: '陳', color: '#0066CC', kind: '會員',
-			time: '昨天', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+			time: '昨天', badge: 0, preview: '尚無訊息'
 		});
 		const { findByText, getByText, getAllByText, findByLabelText } = render(MessagesPage);
 		await findByText('教練好！想請問小明最近的狀況'); // c1 初始載入完成(預設 THREAD_C1 mock)

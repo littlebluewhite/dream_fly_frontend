@@ -3,23 +3,12 @@
    * Renders one conversation row in the left panel list.
    * Dispatches "select" when clicked. */
   import { createEventDispatcher } from 'svelte';
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { type Conversation, type SlaTone } from '$lib/coach/data';
-  import type { IconName } from '$lib/icon-registry';
+  import { type Conversation } from '$lib/coach/data';
 
   export let c: Conversation;
   export let active: boolean = false;
 
   const dispatch = createEventDispatcher<{ select: string }>();
-
-  const SLA_TONE: Record<SlaTone, { fg: string; icon: IconName }> = {
-    warning: { fg: 'var(--df-warning)', icon: 'clock' },
-    error: { fg: 'var(--df-error)', icon: 'triangle-alert' },
-    success: { fg: 'var(--df-success-strong)', icon: 'check' },
-    muted: { fg: 'var(--df-text-muted)', icon: 'clock' },
-  };
-
-  $: sla = SLA_TONE[c.slaTone] || SLA_TONE.muted;
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus -->
@@ -43,15 +32,5 @@
       <span style="font-size:11px;color:var(--df-text-muted);flex:none">{c.time}</span>
     </div>
     <div style="font-size:12.5px;color:var(--df-text-light);margin-top:4px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{c.preview}</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
-      {#if c.urgent}
-        <span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;color:var(--df-error);background:var(--df-error-bg);border-radius:4px;padding:1px 6px">
-          <Icon name="flame" size={11} color="var(--df-error)" />緊急
-        </span>
-      {/if}
-      <span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:{sla.fg}">
-        <Icon name={sla.icon} size={11} color={sla.fg} />{c.sla}
-      </span>
-    </div>
   </div>
 </button>

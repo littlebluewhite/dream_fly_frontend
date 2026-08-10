@@ -36,7 +36,6 @@ export type StudentLevel = '啟蒙' | '初階' | '中階' | '選手';
 export type SchedCat = '體操' | '啦啦隊' | '跑酷';
 export type SchedVenue = '主場館' | '競技訓練館' | '副館';
 export type AttDefault = 'present' | 'late' | 'leave' | 'absent';
-export type SlaTone = 'warning' | 'muted' | 'error' | 'success';
 export type ThreadWho = 'them' | 'me';
 
 /* ──────────────── interfaces ──────────────── */
@@ -130,9 +129,6 @@ export interface Conversation {
 	time: string;
 	badge?: number;
 	preview: string;
-	urgent?: boolean;
-	sla: string;
-	slaTone: SlaTone;
 }
 export interface ThreadAttach {
 	name: string;
@@ -234,8 +230,8 @@ export interface AttClassFull extends AttClass {
 /* ──────────────── messages (訊息中心) ──────────────── */
 // Task 1(C2 死種子退役):CONVERSATIONS(訊息中心 6 筆示範資料)已退役——首頁最新訊息
 // 面板改由 getDashboard() 併入的真 getConversations() 接縫供資料,這份 mock 已無
-// runtime 消費者。Conversation interface 與 SlaTone 仍供 mapConversation 與頁面的
-// 型別標註使用,保留。
+// runtime 消費者。Conversation interface 仍供 mapConversation 與頁面的型別標註使用,
+// 保留。
 
 // Task 1(C2 死種子退役):THREAD/SHARED_FILES(訊息串示範資料,王媽媽 thread)已
 // 退役——訊息中心頁改走 getThread() 真後端接縫,這兩份 mock 已無 runtime 消費者。

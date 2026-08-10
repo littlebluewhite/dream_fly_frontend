@@ -106,7 +106,6 @@
 
   const tabs = [
     { k: '全部', label: '全部' },
-    { k: '緊急', label: '緊急' },
     { k: '未讀', label: '未讀' },
     { k: '家長', label: '家長' },
   ];
@@ -246,19 +245,6 @@
           </button>
         {/each}
       </div>
-
-      <!-- SLA banner (only for conversations flagged urgent; 目前後端無回覆時效資料，
-           恆為預設值，見 api.ts mapConversation 附註——保留區塊供未來若有此欄位時沿用) -->
-      {#if cur.urgent}
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:var(--df-warning-bg);border-bottom:1px solid var(--df-border)">
-          <Icon name="clock" size={15} color="#92400E" />
-          <span style="flex:1;font-size:12.5px;color:#92400E;font-weight:500">緊急對話 · 需於 30 分鐘內回覆（回覆 SLA）</span>
-          <button
-            on:click={() => toasts.notify('success', '已標記', '對話已標記為已處理。')}
-            style="border:none;background:#fff;color:#92400E;border-radius:7px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:var(--df-font-body)"
-          >標記已處理</button>
-        </div>
-      {/if}
 
       <!-- bubble area -->
       <div style="flex:1;overflow-y:auto;min-height:0;padding:20px;display:flex;flex-direction:column;gap:14px">

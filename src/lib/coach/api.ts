@@ -364,9 +364,8 @@ const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
 /** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
  *  member（§3.21 角色規則），且 CONTEXT.md 明定「會員」帳號即學員本人、不分家長/學員
- *  （Avoid: 家長），故 kind 一律誠實給 '會員'；urgent/sla/slaTone 是 mock 時代「緊急
- *  對話/回覆 SLA 倒數」的展示概念，後端無對應資料，一律給不觸發顯示的預設值(P2)；
- *  color 無代表色欄位，同其餘 mapXxx 慣例固定預設值(P2)。time 由 last_message_at 轉換
+ *  （Avoid: 家長），故 kind 一律誠實給 '會員'；color 無代表色欄位，同其餘 mapXxx 慣例
+ *  固定預設值(P2)。time 由 last_message_at 轉換
  *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有
  *  「撰寫新對話」的建立文案 '尚無訊息'；badge 直接用 unread_count(brief 明定)。清單
  *  順序完全依後端排序(last_message_at DESC NULLS LAST, created_at DESC)，前端不重排。 */
@@ -379,9 +378,7 @@ function mapConversation(r: ApiConversationSummary): Conversation {
 		kind: '會員', // P2: 無家長/學員/群組之分，見上方函式註解
 		time: r.last_message_at ? toDisplayTime(r.last_message_at) : '',
 		badge: r.unread_count,
-		preview: r.last_message_body ?? '尚無訊息',
-		sla: '', // P2: 後端無回覆時效(SLA)欄位
-		slaTone: 'muted'
+		preview: r.last_message_body ?? '尚無訊息'
 	};
 }
 

@@ -35,7 +35,7 @@ const THREAD_C2: ThreadMsg[] = [{ who: 'them', text: '謝謝老師', time: '2026
 
 const NEW_CONVO: Conversation = {
 	id: 'c9', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
-	time: '', badge: 0, preview: '尚無訊息', sla: '', slaTone: 'muted'
+	time: '', badge: 0, preview: '尚無訊息'
 };
 
 /** 手動控制 resolve/reject 時序的 promise,用於驗 await 前/後的快照語意(同

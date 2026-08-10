@@ -26,10 +26,10 @@ const TODAY_CLASSES: TodayClass[] = [
 	{ id: 'tc3', start: '11:45', end: '12:45', name: '幼兒體操啟蒙班', room: '主場館 A 教室', count: 10, level: '啟蒙', cat: '體操', status: 'soon' }
 ];
 const CONVERSATIONS: Conversation[] = [
-	{ id: 'cv1', name: '張大文', initial: '張', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 3, preview: '教練這週六可以加練嗎？', sla: '', slaTone: 'muted' },
-	{ id: 'cv2', name: '劉品妍', initial: '劉', color: '#0066CC', kind: '會員', time: '2026-07-05 09:20', badge: 0, preview: '謝謝老師的指導！', sla: '', slaTone: 'muted' },
-	{ id: 'cv3', name: '周宜蓁', initial: '周', color: '#0066CC', kind: '會員', time: '2026-07-04 18:05', badge: 1, preview: '想請問補課的時間', sla: '', slaTone: 'muted' },
-	{ id: 'cv4', name: '鄭凱文', initial: '鄭', color: '#0066CC', kind: '會員', time: '2026-07-04 12:30', badge: 0, preview: '孩子明天想請假一次', sla: '', slaTone: 'muted' }
+	{ id: 'cv1', name: '張大文', initial: '張', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 3, preview: '教練這週六可以加練嗎？' },
+	{ id: 'cv2', name: '劉品妍', initial: '劉', color: '#0066CC', kind: '會員', time: '2026-07-05 09:20', badge: 0, preview: '謝謝老師的指導！' },
+	{ id: 'cv3', name: '周宜蓁', initial: '周', color: '#0066CC', kind: '會員', time: '2026-07-04 18:05', badge: 1, preview: '想請問補課的時間' },
+	{ id: 'cv4', name: '鄭凱文', initial: '鄭', color: '#0066CC', kind: '會員', time: '2026-07-04 12:30', badge: 0, preview: '孩子明天想請假一次' }
 ];
 const FIXTURE = {
 	coach: COACH,
