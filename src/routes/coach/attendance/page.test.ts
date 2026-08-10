@@ -65,11 +65,12 @@ describe('/coach/attendance (+page) — switch class', () => {
 	it('switching class swaps the roster and drops the old roster names', async () => {
 		const { getByText, queryByText, getAllByText, findByText } = render(AttendancePage);
 		await findByText(C1.roster[0].name);
-		// open the 切換班級 dropdown (CoachDropdown shows the current class name).
-		const opener = getAllByText(C1.name).find((el) => el.closest('button'));
+		// open the 切換班級 dropdown (CoachDropdown shows the current class's sessionChipLabel:
+		// 時間前綴 + 課名，非裸課名——R3 K9 銷帳 ADR 0014 :224-226)。
+		const opener = getAllByText('16:00 兒童體操初階班').find((el) => el.closest('button'));
 		await fireEvent.click(opener!);
 		// pick the second class from the popover.
-		const opt = getAllByText(C2.name).find((el) => el.closest('button'));
+		const opt = getAllByText('13:30 青少年體操中級班').find((el) => el.closest('button'));
 		await fireEvent.click(opt!);
 		// new roster present, old roster gone.
 		expect(getByText(C2.roster[0].name)).toBeInTheDocument(); // 周彥廷
@@ -77,19 +78,21 @@ describe('/coach/attendance (+page) — switch class', () => {
 	});
 
 	it('同日兩場同課名：dropdown 兩個同名選項各自可選並切到各自名冊(keyed by session id，0014 限制撤銷)', async () => {
-		// 同 label 異 key——若 each key 或 onChange 回歸走 label(而非 o.key)，此釘必紅：
-		// label 當 each key 會觸發 each_key_duplicate，label 進 selectClass 則 id 查無而 noop。
+		// key 佈線非 label——即使兩堂課同課名，each key 走 o.key(session id)非 o.label，
+		// 選取(onChange)也走 id：兩個選項互不干擾各自可選。sessionChipLabel 的時間前綴
+		// 讓兩者顯示字串其實不再相同(見下方相異斷言)，但此測試鎖的是 id 佈線，非顯示文字。
 		vi.mocked(getAttendance).mockResolvedValue({
 			classes: [ATT_TODAY_CLASSES[0], { ...ATT_TODAY_CLASSES[1], name: C1.name }],
 			failedClasses: []
 		});
 		const { container, getAllByText, findByText, getByText, queryByText } = render(AttendancePage);
 		await findByText(C1.roster[0].name); // 第一場名冊(王承恩)
-		const opener = getAllByText(C1.name).find((el) => el.closest('button'));
+		const opener = getAllByText('16:00 兒童體操初階班').find((el) => el.closest('button'));
 		await fireEvent.click(opener!);
-		// popover 的選項按鈕(df-rowhover)恰兩顆、顯示同一課名——點第二顆(第二場)。
+		// popover 的選項按鈕(df-rowhover)恰兩顆、同課名但時間前綴不同——點第二顆(第二場)。
 		const opts = container.querySelectorAll('button.df-rowhover');
 		expect(opts.length).toBe(2);
+		expect(opts[0].textContent).not.toBe(opts[1].textContent); // 兩選項顯示字串相異(時間前綴消歧義)
 		await fireEvent.click(opts[1]);
 		expect(getByText(C2.roster[0].name)).toBeInTheDocument(); // 第二場名冊(周彥廷)
 		expect(queryByText(C1.roster[0].name)).toBeNull(); // 王承恩 gone——沒有停在第一場
@@ -111,9 +114,9 @@ describe('/coach/attendance (+page) — switch class', () => {
 		const lateBtn = getAllByText('遲到').find((el) => el.tagName === 'BUTTON');
 		await fireEvent.click(lateBtn!);
 		expect(container.textContent).toContain('4 筆變更');
-		// switch away to C2, then back to C1.
-		await switchTo(C1.name, C2.name);
-		await switchTo(C2.name, C1.name);
+		// switch away to C2, then back to C1(sessionChipLabel 的時間前綴完整字串)。
+		await switchTo('16:00 兒童體操初階班', '13:30 青少年體操中級班');
+		await switchTo('13:30 青少年體操中級班', '16:00 兒童體操初階班');
 		// C1's draft is restored (still 4 筆變更, not reset to the default 3).
 		expect(container.textContent).toContain('4 筆變更');
 	});
@@ -131,9 +134,9 @@ describe('/coach/attendance (+page) — switch class', () => {
 		await fireEvent.click(getByText('儲存點名'));
 		expect(container.textContent).toContain('儲存中');
 		// attempt to switch to C2 while saving.
-		const opener = getAllByText(C1.name).find((el) => el.closest('button'));
+		const opener = getAllByText('16:00 兒童體操初階班').find((el) => el.closest('button'));
 		await fireEvent.click(opener!);
-		const opt = getAllByText(C2.name).find((el) => el.closest('button'));
+		const opt = getAllByText('13:30 青少年體操中級班').find((el) => el.closest('button'));
 		if (opt) await fireEvent.click(opt);
 		// switch was blocked: still on C1 (王承恩 present, 周彥廷 absent).
 		expect(getByText(C1.roster[0].name)).toBeInTheDocument();

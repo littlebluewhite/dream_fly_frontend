@@ -195,3 +195,12 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 
 	return { subscribe: store.subscribe, init, setMark, applyNote, markAllPresent, undo, selectClass, save };
 }
+
+/** 場次顯示標籤(桌面 dropdown 選項、行動 FilterChips、兩者「已儲存」toast 共用)：去
+ *  「今日 」前綴、取 en-dash 前的起始時間 + 課名，如「16:00 兒童體操初階班」——同日兩場
+ *  同課名時間不同即可區分。公式逐字搬自舊版 mobile-admin 頁本地 labelOf()（R3 銷帳 ADR
+ *  0014 :224-226）；桌面 dropdown 原本顯示裸 c.name，改用本函式後同名兩場也能區分（蓄意
+ *  行為變更，同筆帳一併了結）。 */
+export function sessionChipLabel(c: AttClassFull): string {
+	return `${c.time.replace('今日 ', '').split('–')[0]} ${c.name}`;
+}

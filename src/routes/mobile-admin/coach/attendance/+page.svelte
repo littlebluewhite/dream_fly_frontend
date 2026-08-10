@@ -15,9 +15,11 @@
    * $lib/coach/attendance-tally(最後一處點名邏輯雙生收斂)。白拿桌面既有行為，含原
    * 行動版沒有的：切班保留未存草稿(byClass 暫存)、儲存中切班被擋(info toast)、儲存中
    * 再編輯後遲到回應被丟棄(stale 不理會)。「切換班級」FilterChips 的 label(時間+課名)
-   * 合成搬本頁 derived(labelOf())取代原映射層算好的字串；「儲存點名」成功/失敗 toast
-   * 文案沿用行動版既有措辭(不採桌面「已同步至雲端」/依 status 分流錯誤文案)。「備註」
-   * 改經 ctrl.applyNote 記入 controller(計入未存變更，同桌面)。 */
+   * 合成公式(R3 K9)已提進 $lib/coach/attendance-controller 的 sessionChipLabel 共用
+   * (供桌面 dropdown 同步消歧義同名場次，ADR 0014 :224-226 銷帳)，取代原映射層算好的
+   * 字串；「儲存點名」成功/失敗 toast 文案沿用行動版既有措辭(不採桌面「已同步至雲端」/
+   * 依 status 分流錯誤文案)。「備註」改經 ctrl.applyNote 記入 controller(計入未存變更，
+   * 同桌面)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -32,7 +34,7 @@
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance, type AttClassFull, type AttRow, type AttDefault } from '$lib/mobile-admin/api';
-  import { createAttendanceController } from '$lib/coach/attendance-controller';
+  import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { tally } from '$lib/coach/attendance-tally';
 
   const ATT_STATES = [
@@ -87,15 +89,9 @@
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
 
-  /** 切換班級 chip 的顯示字串(時間 + 課名)，亦供下方「儲存點名」成功 toast 沿用
-   *  （文案保真：舊版帶時間前綴，如「19:00 測試班甲 · N 位學員出勤已記錄。」，
-   *  `SaveOutcome.className` 只有課名沒有時間，故不能直接拿來拼字串）——原映射層
-   *  算好的 label 搬到這裡現算，同既有「19:00 競技啦啦隊 進階班」格式。 */
-  const labelOf = (c: AttClassFull): string => `${c.time.replace('今日 ', '').split('–')[0]} ${c.name}`;
-
   $: current = classesToday.find((c) => c.id === curClassId) ?? null;
   $: roster = current?.roster ?? [];
-  $: classOpts = classesToday.map((c) => ({ key: c.id, label: labelOf(c) }));
+  $: classOpts = classesToday.map((c) => ({ key: c.id, label: sessionChipLabel(c) }));
 
   // FilterChips echoes the id，controller selectClass 也認 session id(0014 限制撤銷
   // 後桌面 CoachDropdown 同款)——直傳，同日兩場同課名各自可選(byClass 切班暫存已在
@@ -128,7 +124,9 @@
     const target = current;
     const outcome = await ctrl.save();
     if (outcome.kind === 'saved') {
-      const label = target ? labelOf(target) : outcome.className;
+      // 文案保真：舊版帶時間前綴，如「19:00 測試班甲 · N 位學員出勤已記錄。」，
+      // `SaveOutcome.className` 只有課名沒有時間，故不能直接拿來拼字串。
+      const label = target ? sessionChipLabel(target) : outcome.className;
       toasts.notify('success', '點名已儲存', label + ' · ' + outcome.rosterCount + ' 位學員出勤已記錄。');
     } else if (outcome.kind === 'failed') {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
@@ -187,7 +185,7 @@
       ><Icon name="check-check" size={16} color="var(--df-primary)" />全部標記出席</button>
 
       <!-- roster -->
-      <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current ? labelOf(current) : '')}>
+      <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current ? sessionChipLabel(current) : '')}>
         {#each roster as r, i (r.mid)}
           {@const onLeave = marks[r.mid] === 'leave'}
           <div style="padding:11px 14px; border-bottom:{i < roster.length - 1 ? '1px solid var(--df-border)' : 'none'};">

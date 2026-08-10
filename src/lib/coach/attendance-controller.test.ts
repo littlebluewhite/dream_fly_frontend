@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { createAttendanceController, type AttendanceController } from './attendance-controller';
+import { createAttendanceController, sessionChipLabel, type AttendanceController } from './attendance-controller';
 import type { AttRow, AttDefault, AttClassFull } from './data';
 
 /* attendance-controller.ts — coach/attendance 出席點名編排層的單元測試（Round 3 K1）。
@@ -341,5 +341,25 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 		const view = get(ctrl);
 		expect(view.state).toBe('saving'); // B 未被 A 的 catch 打成 dirty
 		expect(view.curClassId).toBe('ac2');
+	});
+});
+
+describe('sessionChipLabel — 場次顯示標籤（桌面 dropdown / 行動 FilterChips 共用，Round 3 K9；R3 銷帳 ADR 0014 :224-226）', () => {
+	it('去除「今日 」前綴，只留起始時間 + 課名', () => {
+		const c: AttClassFull = { id: 's1', name: '兒童體操初階班', time: '今日 16:00–17:30', room: '', coach: '', roster: [] };
+		expect(sessionChipLabel(c)).toBe('16:00 兒童體操初階班');
+		expect(sessionChipLabel(c)).not.toContain('今日');
+	});
+
+	it('取 en-dash 前的起始時間，結束時間不併入輸出', () => {
+		const c: AttClassFull = { id: 's2', name: '青少年體操中級班', time: '今日 13:30–15:00', room: '', coach: '', roster: [] };
+		expect(sessionChipLabel(c)).toBe('13:30 青少年體操中級班');
+		expect(sessionChipLabel(c)).not.toContain('15:00'); // 結束時間被捨棄，非完整時段
+	});
+
+	it('同日兩場同課名：時間前綴不同使顯示字串相異（桌面 dropdown 自此可區分同名兩場）', () => {
+		const first: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '今日 16:00–17:30', room: '', coach: '', roster: [] };
+		const second: AttClassFull = { id: 'ac2', name: '兒童體操初階班', time: '今日 13:30–15:00', room: '', coach: '', roster: [] };
+		expect(sessionChipLabel(first)).not.toBe(sessionChipLabel(second));
 	});
 });

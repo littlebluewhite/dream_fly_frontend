@@ -31,7 +31,7 @@
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
-  import { createAttendanceController } from '$lib/coach/attendance-controller';
+  import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { apiErrorText } from '$lib/api/error-text';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
@@ -221,11 +221,12 @@
           </div>
         </div>
       </div>
-      <!-- 切換班級 — keyed dropdown：value/onChange 走 session id，label 顯示課名。 -->
+      <!-- 切換班級 — keyed dropdown：value/onChange 走 session id，label 用 sessionChipLabel
+           (時間+課名，R3 K9 銷帳 ADR 0014 :224-226：同名兩場自此可用時間區分，非裸課名)。 -->
       <CoachDropdown
         icon="dumbbell"
         value={curClassId}
-        options={classes.map((c) => ({ key: c.id, label: c.name }))}
+        options={classes.map((c) => ({ key: c.id, label: sessionChipLabel(c) }))}
         onChange={selectClass}
       />
     </div>
