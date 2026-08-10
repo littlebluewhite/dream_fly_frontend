@@ -596,8 +596,10 @@ that `docs/adr/0011` already rejected.
   directly by the markup, so the module owns write *timing* and serialization only and its return type
   isn't a `Readable`. The invariant worth knowing: a queued save does **not** freeze its snapshot when
   queued — it re-`get()`s the whole object when its turn comes, so rapid toggling always stacks on the
-  latest state including a previous failure's rollback. `SettingsScreen.svelte` dropped to a 13-line
-  shell and five render-dance tests moved to `pref-sync.test.ts` as no-render units (`docs/adr/0012`).
+  latest state including a previous failure's rollback. `SettingsScreen.svelte`'s preference-sync
+  orchestration dropped from 41 lines to a 13-line shell (the component's `<script>` as a whole is
+  still ~64 lines — logout, the save button and the markup bindings never moved), and five
+  render-dance tests moved to `pref-sync.test.ts` as no-render units (`docs/adr/0012`).
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single

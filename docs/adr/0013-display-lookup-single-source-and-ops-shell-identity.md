@@ -388,7 +388,7 @@ px 斷言與 `ReportsScreen.test.ts` 零改續綠。同批補上 `RevenueTrend.t
 新住戶,收的是課程詳情的兩件顯示知識:
 
 - **`classDetailRows(k): [IconName, string, string][]`** —— 課程詳情的 **12 列** `[icon, 標籤, 值]`
-  (星期時段、教練、教室、年齡、分類、期別、開課日、堂數、報到率、候補、補課、費用)。原本 admin 桌面
+  (星期時段、教練、教室、年齡、分類、期別、開課日、堂數、平均到課率、候補、補課、季費)。原本 admin 桌面
   `ClassDialog.svelte` 與 mobile-admin `ClassSheet.svelte` 各 inline 一份 byte-identical 雙生、兩份
   皆零測。
 - **`classFill(enrolled, cap): { full, pct }`** —— 滿班判定 + 進度條百分比。原本四處各自重複

@@ -62,12 +62,18 @@ R10 之後的通知頁動線,一步一步看:
 
 ```ts
 /** tail 在場 = 這筆 mutation 有網路尾流;閘門以 tail.then(done, done) 記帳,reject 也算 settle。
- *  省略 tail = 無尾流(如 demo mutation),行為與 R11 前逐字相同。 */
+ *  省略 tail = 無尾流(如 demo mutation),行為與 R11 前完全相同。
+ *  呼叫端義務:`tail` 必須是純網路尾流,不得是「內部會等這顆閘門 refresh」的 promise(那會互等)。 */
 markMutated(tail?: Promise<unknown>): void;
 
 /** 有未 settle 的尾流 → 回一個「全數 settle 時 resolve」的 promise;靜止 → 同步回 undefined。 */
 pendingSettle(): Promise<void> | undefined;
 ```
+
+**入帳新呼叫點前先讀這條禁忌**:`tail` 必須是**純網路尾流**——餵進一個「內部會等這顆閘門
+`refresh()`」的 promise 會讓兩邊互等(refresh 等尾流 settle、尾流等 refresh 落地),而且這種掛死不會
+被誠實界線 ① 的自癒論述涵蓋,它是呼叫端造成的死結。上方程式碼區塊的最後一行即
+`hydration-gate.ts` 該義務註解的原文。
 
 三條語意各自是刻意的:
 
