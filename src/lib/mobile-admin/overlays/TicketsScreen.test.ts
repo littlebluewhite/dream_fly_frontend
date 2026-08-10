@@ -49,6 +49,14 @@ describe('TicketsScreen — 載入(GET /products)', () => {
 });
 
 describe('TicketsScreen — ready(接真 payload)', () => {
+	it('hero 文案為「票券銷售總額」，不帶「本季」等後端未提供的窗口口徑(R2)', async () => {
+		const { container, findByText } = render(TicketsScreen, { props: { onBack: () => {} } });
+		await findByText('Alpha 測試月票');
+		const txt = container.textContent ?? '';
+		expect(txt).toContain('票券銷售總額');
+		expect(txt).not.toContain('本季');
+	});
+
 	it('hero 總額＝Σ(price×sold)、總售出＝Σsold，皆由 payload reactive 推導', async () => {
 		const { container, findByText } = render(TicketsScreen, { props: { onBack: () => {} } });
 		await findByText('Alpha 測試月票');

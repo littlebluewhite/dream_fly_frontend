@@ -6,7 +6,7 @@
 import type { ApiDaySchedule, ApiTimeSlot } from '$lib/public/api';
 
 /** 補零 YYYY-MM-DD；month0 一律 0-based（與 Date 相容）。 */
-export function isoDate(year: number, month0: number, day: number): string {
+export function makeIsoDate(year: number, month0: number, day: number): string {
 	const mm = String(month0 + 1).padStart(2, '0');
 	const dd = String(day).padStart(2, '0');
 	return `${year}-${mm}-${dd}`;

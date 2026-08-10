@@ -60,7 +60,7 @@ export interface CoachFormValues {
 // remaining consumer) was retired the same way once ReportsScreen.svelte wired to
 // real data — domain/reports.ts itself is now `git rm`'d, no surface still uses it.
 
-// Base arrays consumed by the `.map` derivations that STAY in admin (import, not re-export).
+// Base types consumed by the row interfaces below (import, not re-export).
 import type { ClassBase } from '$lib/domain/classes';
 import type { MemberBase } from '$lib/domain/members';
 import type { OrderBase } from '$lib/domain/orders';

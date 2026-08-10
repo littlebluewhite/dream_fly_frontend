@@ -9,8 +9,8 @@
  * 後端端點，仍硬編在 TrialScreen.svelte(見 ADR 0006)。 */
 
 export interface TrialDay {
-  d: string;
-  w: string;
+  monthDay: string;
+  weekday: string;
   full: string;
 }
 
@@ -32,13 +32,13 @@ export function addDays(base: Date, days: number): Date {
   return d;
 }
 
-/** Date → TrialDay 顯示物件：d=「MM/DD」、w=中文星期單字、full=「YYYY/MM/DD (週)」。 */
+/** Date → TrialDay 顯示物件：monthDay=「MM/DD」、weekday=中文星期單字、full=「YYYY/MM/DD (週)」。 */
 export function toTrialDay(date: Date): TrialDay {
   const y = date.getFullYear();
   const m = pad2(date.getMonth() + 1);
   const dd = pad2(date.getDate());
   const w = WEEKDAY_LABELS[date.getDay()];
-  return { d: `${m}/${dd}`, w, full: `${y}/${m}/${dd} (${w})` };
+  return { monthDay: `${m}/${dd}`, weekday: w, full: `${y}/${m}/${dd} (${w})` };
 }
 
 /** 依「今日」(new Date())產生 5 個試上日期選項——嚴格晚於今日的下一個週六起算，

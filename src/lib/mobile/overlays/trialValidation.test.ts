@@ -57,7 +57,7 @@ describe('stepValid step 3 (完成)', () => {
 describe('buildTrialInquiry', () => {
 	const filled: TrialState = { cat: '幼兒體操', age: '3–5 歲', day: '06/14', slot: 't1', parent: '王先生', phone: '0912-345-678', student: '小恩' };
 	const lookup = {
-		days: [{ d: '06/14', full: '2026/06/14 (六)' }],
+		days: [{ monthDay: '06/14', full: '2026/06/14 (六)' }],
 		slots: [{ id: 't1', time: '10:00–11:15' }]
 	};
 

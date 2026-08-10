@@ -30,7 +30,7 @@ export function stepValid(step: number, s: TrialState): boolean {
 /** Minimal day-option shape needed below — TrialScreen's TRIAL_DAYS entries
  *  (which carry extra fields) are structurally compatible, no cast needed. */
 export interface TrialDayOption {
-  d: string;
+  monthDay: string;
   full: string;
 }
 
@@ -50,7 +50,7 @@ export function buildTrialInquiry(
   note: string,
   lookup: { days: readonly TrialDayOption[]; slots: readonly TrialSlotOption[] }
 ): TrialInquiryInput {
-  const chosenDay = lookup.days.find((d) => d.d === s.day);
+  const chosenDay = lookup.days.find((d) => d.monthDay === s.day);
   const chosenSlot = lookup.slots.find((sl) => sl.id === s.slot);
   return {
     category: s.cat,

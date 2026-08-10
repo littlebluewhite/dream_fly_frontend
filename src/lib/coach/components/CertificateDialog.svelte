@@ -28,7 +28,7 @@
   export let onClose: () => void = () => {};
 
   /** 本地日期(YYYY-MM-DD)，非 toISOString()——後者取 UTC 日期，在 Asia/Taipei(UTC+8)
-   *  的凌晨 00:00–08:00 會早報一天(同 ScheduleCalendar.svelte 的 isoDate 慣例，
+   *  的凌晨 00:00–08:00 會早報一天(同 ScheduleCalendar.svelte 的 makeIsoDate 慣例，
    *  避免 UTC 位移)。 */
   const today = (): string => {
     const d = new Date();

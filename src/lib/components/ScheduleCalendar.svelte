@@ -7,7 +7,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ApiDaySchedule, type ApiTimeSlot } from '$lib/public/api';
   import {
-    isoDate,
+    makeIsoDate,
     sundayGridDays,
     isToday as isTodayGrid,
     isPastDate as isPastDateGrid,
@@ -103,7 +103,7 @@
   $: calendarDays = sundayGridDays(year, month0);
 
   $: selectedSlots = selectedDate
-    ? slotsForDay(days, isoDate(year, month0, selectedDate.getDate()))
+    ? slotsForDay(days, makeIsoDate(year, month0, selectedDate.getDate()))
     : [];
 </script>
 

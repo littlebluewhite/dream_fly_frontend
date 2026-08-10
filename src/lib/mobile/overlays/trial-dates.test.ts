@@ -9,12 +9,12 @@ afterEach(() => {
 });
 
 describe('buildTrialDays — 依「今日」動態產生 5 個試上日期(六/日/三節奏)', () => {
-  it('①固定週一基準(2026/07/20):五日序列為下一個週六起 [0,1,4,7,8] 天偏移,d/full 皆正確', () => {
+  it('①固定週一基準(2026/07/20):五日序列為下一個週六起 [0,1,4,7,8] 天偏移,monthDay/full 皆正確', () => {
     vi.setSystemTime(new Date(2026, 6, 20, 9, 0, 0));
 
     const days = buildTrialDays();
 
-    expect(days.map((d) => d.d)).toEqual(['07/25', '07/26', '07/29', '08/01', '08/02']);
+    expect(days.map((d) => d.monthDay)).toEqual(['07/25', '07/26', '07/29', '08/01', '08/02']);
     expect(days.map((d) => d.full)).toEqual([
       '2026/07/25 (六)',
       '2026/07/26 (日)',
@@ -29,8 +29,8 @@ describe('buildTrialDays — 依「今日」動態產生 5 個試上日期(六/�
 
     const days = buildTrialDays();
 
-    expect(days[0]).toEqual({ d: '08/01', w: '六', full: '2026/08/01 (六)' });
-    expect(days.map((d) => d.d)).not.toContain('07/25');
+    expect(days[0]).toEqual({ monthDay: '08/01', weekday: '六', full: '2026/08/01 (六)' });
+    expect(days.map((d) => d.monthDay)).not.toContain('07/25');
   });
 
   it('③星期節奏恆為 六/日/三/六/日,與基準當天的星期幾無關(基準改為週四、跨年跨月)', () => {
@@ -38,7 +38,7 @@ describe('buildTrialDays — 依「今日」動態產生 5 個試上日期(六/�
 
     const days = buildTrialDays();
 
-    expect(days.map((d) => d.w)).toEqual(['六', '日', '三', '六', '日']);
+    expect(days.map((d) => d.weekday)).toEqual(['六', '日', '三', '六', '日']);
   });
 });
 
@@ -46,6 +46,6 @@ describe('toTrialDay / pad2 — 格式化(YYYY/MM/DD (週) 與補零)', () => {
   it('④單位數月/日補零至 2 位,full 組成 YYYY/MM/DD (週)', () => {
     expect(pad2(5)).toBe('05');
     expect(pad2(12)).toBe('12');
-    expect(toTrialDay(new Date(2026, 0, 5))).toEqual({ d: '01/05', w: '一', full: '2026/01/05 (一)' });
+    expect(toTrialDay(new Date(2026, 0, 5))).toEqual({ monthDay: '01/05', weekday: '一', full: '2026/01/05 (一)' });
   });
 });

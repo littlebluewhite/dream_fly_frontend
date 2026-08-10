@@ -64,7 +64,7 @@
     'flex:1; border:none; background:transparent; outline:none; font-size:15px; color:var(--df-text-dark); font-family:var(--df-font-body); height:100%; min-width:0;';
 
   $: chosenSlot = TRIAL_SLOTS.find((s) => s.id === slot);
-  $: chosenDay = TRIAL_DAYS.find((d) => d.d === day);
+  $: chosenDay = TRIAL_DAYS.find((d) => d.monthDay === day);
   $: catIcon = TRIAL_CATS.find((c) => c.key === cat)?.icon ?? 'graduation-cap';
   $: state = { cat, age, day, slot, parent, phone, student };
   // step 3 預約單的五列 icon meta rows——原模板內聯 each 陣列 hoist 至此並標型別。
@@ -180,16 +180,16 @@
             <h3 style="margin:0; font-size:15.5px; font-weight:700; color:var(--df-ink);">選擇日期</h3>
           </div>
           <div class="df-scroll" style="display:flex; gap:9px; overflow-x:auto; margin:0 -16px; padding:0 16px 4px;">
-            {#each TRIAL_DAYS as d (d.d)}
-              {@const on = day === d.d}
+            {#each TRIAL_DAYS as d (d.monthDay)}
+              {@const on = day === d.monthDay}
               <button
-                on:click={() => (day = d.d)}
+                on:click={() => (day = d.monthDay)}
                 class="df-tapscale"
                 style="flex:none; width:62px; padding:11px 0; border-radius:14px; cursor:pointer; text-align:center;
                   background:{on ? 'var(--df-primary)' : '#fff'}; border:1.5px solid {on ? 'var(--df-primary)' : 'var(--df-border)'}; color:{on ? '#fff' : 'var(--df-ink)'};"
               >
-                <div style="font-size:11px; opacity:{on ? 0.9 : 0.6};">週{d.w}</div>
-                <div style="font-size:16px; font-weight:800; font-family:var(--df-font-mono); margin-top:2px;">{d.d}</div>
+                <div style="font-size:11px; opacity:{on ? 0.9 : 0.6};">週{d.weekday}</div>
+                <div style="font-size:16px; font-weight:800; font-family:var(--df-font-mono); margin-top:2px;">{d.monthDay}</div>
               </button>
             {/each}
           </div>

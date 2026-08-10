@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-	isoDate,
+	makeIsoDate,
 	getDaysInMonth,
 	getFirstDayOfMonth,
 	sundayGridDays,
@@ -11,9 +11,9 @@ import {
 } from './calendar-grid';
 import type { ApiDaySchedule } from '$lib/public/api';
 
-describe('isoDate', () => {
+describe('makeIsoDate', () => {
 	it('個位月/日補零', () => {
-		expect(isoDate(2026, 0, 5)).toBe('2026-01-05');
+		expect(makeIsoDate(2026, 0, 5)).toBe('2026-01-05');
 	});
 });
 

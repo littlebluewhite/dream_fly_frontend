@@ -72,7 +72,7 @@
           style="background:linear-gradient(135deg, var(--df-ink), var(--df-primary-dark));
             border-radius:16px; padding:18px; color:#fff;"
         >
-          <div style="font-size:12.5px; opacity:0.82;">票券銷售總額 · 本季</div>
+          <div style="font-size:12.5px; opacity:0.82;">票券銷售總額</div>
           <div style="font-size:28px; font-weight:800; font-family:var(--df-font-heading); margin-top:4px;">{fmtNT(totalRevenue)}</div>
           <div style="font-size:12.5px; opacity:0.82; margin-top:4px;">共售出 {totalSold} 張票券</div>
         </div>

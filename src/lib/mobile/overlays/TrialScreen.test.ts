@@ -29,7 +29,7 @@ beforeEach(() => {
 // 相對這個固定基準推算出的第一個日期是 2026/07/25(六)，斷言相對這個固定基準，
 // 不再釘絕對字面。
 const TRIAL_TODAY = new Date(2026, 6, 20, 9, 0, 0);
-const TRIAL_FIRST_DAY = { d: '07/25', full: '2026/07/25 (六)' };
+const TRIAL_FIRST_DAY = { monthDay: '07/25', full: '2026/07/25 (六)' };
 
 /** 走完 step 0(課程+年齡)、step 1(日期+時段)，停在 step 2(聯絡資料)。render()
  *  前用 vi.setSystemTime 固定「今日」，讓元件內動態產生的 TRIAL_DAYS 可預期——
@@ -46,7 +46,7 @@ async function goToContactStep() {
 	await fireEvent.click(screen.getByText('幼兒體操'));
 	await fireEvent.click(screen.getByRole('button', { name: '3–5 歲' }));
 	await fireEvent.click(screen.getByText('下一步'));
-	await fireEvent.click(screen.getByText(TRIAL_FIRST_DAY.d));
+	await fireEvent.click(screen.getByText(TRIAL_FIRST_DAY.monthDay));
 	await fireEvent.click(screen.getByText('10:00–11:15'));
 	await fireEvent.click(screen.getByText('下一步'));
 }
