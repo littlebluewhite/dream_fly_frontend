@@ -20,7 +20,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, role, switchRole, adminNotifs, adminUnreadCount, toasts, orders } from '$lib/mobile-admin/stores';
+  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, openAdminNotif } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
@@ -48,9 +48,6 @@
   $: liveNow = today.find((t) => t.label === SESSION_STATUS.live[1]);
 
   const go = (id: string) => goto(adminPath('admin', id));
-  function openNotif() {
-    overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
-  }
   const openRole = () => overlay.sheet('role', { role: $role, setRole: (r: typeof $role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 
   // POST /users 的錯誤訊息已是後端給的繁中使用者可讀文字 → apiErrorMessage 直接透傳，
@@ -85,7 +82,7 @@
 
   {#if data}
     {@const p = data.profiles.admin}
-    <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openNotif} onRole={openRole}
+    <HeroHeader role="admin" {p} unread={$adminUnreadCount} onBell={openAdminNotif} onRole={openRole}
       greeting="營運總覽" sub="全館即時概況" />
 
     <div class="df-scroll df-view">

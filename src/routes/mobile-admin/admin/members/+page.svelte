@@ -23,7 +23,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MemberRow } from '$lib/mobile-admin/data';
@@ -41,10 +41,6 @@
 
   let tab: MemberAccountStatusFilter = 'all';
   let q = '';
-
-  function openNotif() {
-    overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
-  }
 
   // 409(email 重複)/422(驗證) 皆已是後端給的繁中使用者可讀文字 → apiErrorMessage
   // 直接透傳 e.message，同桌面 admin/members/+page.svelte 慣例。
@@ -104,7 +100,7 @@
   <ScreenHeader title="學員管理" sub={counts.all + ' 位學員'}>
     <div slot="right" style="display:flex; gap:8px;">
       <HeaderIcon icon="user-plus" label="新增學員" onClick={openNew} />
-      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
+      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
     </div>
   </ScreenHeader>
 

@@ -18,7 +18,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminNotifs, adminUnreadCount, toasts, orders, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, orders, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
@@ -46,10 +46,6 @@
     { key: 'refunded', label: '已退款', count: counts.refunded }
   ];
 
-  function openNotif() {
-    overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
-  }
-
   $: rows = filterOrders($orders, { status: tab, query: q });
 </script>
 
@@ -66,7 +62,7 @@
 
   <ScreenHeader title="訂單與金流" sub="報名繳費紀錄">
     <div slot="right">
-      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
+      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
     </div>
   </ScreenHeader>
 

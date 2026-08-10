@@ -27,7 +27,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, classes, coaches, adminNotifs, adminUnreadCount, toasts, hydrateOps, refreshOps } from '$lib/mobile-admin/stores';
+  import { overlay, classes, coaches, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
   import { createLoadGate } from '$lib/load-gate';
   import type { ClassRow } from '$lib/mobile-admin/data';
@@ -51,10 +51,6 @@
   let cat = '全部';
   let q = '';
   const cats = ['全部', '幼兒體操', '兒童基礎', '競技啦啦隊', '競技體操', '成人體操', '跑酷'];
-
-  function openNotif() {
-    overlay.sheet('notif', { notifs: $adminNotifs, onReadAll: () => { adminNotifs.markAllRead(); toasts.notify('success', '已全部標為已讀', ''); overlay.closeSheet(); } });
-  }
 
   function openNew() {
     overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: save });
@@ -118,7 +114,7 @@
   <ScreenHeader title="課程管理" sub={$classes.length + ' 個開課班級 · 本季招生中'}>
     <div slot="right" style="display:flex; gap:8px;">
       <HeaderIcon icon="plus" label="新增班級" onClick={openNew} />
-      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openNotif} />
+      <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
     </div>
   </ScreenHeader>
 

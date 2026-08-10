@@ -11,7 +11,7 @@
  * seams)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
  * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createHydrationGate } from '$lib/hydration-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
@@ -174,4 +174,11 @@ export function closeNotifAfterReadAll(markAllRead: () => void) {
 	markAllRead();
 	toasts.notify('success', '已全部標為已讀', '');
 	overlay.closeSheet();
+}
+
+/** 開通知 sheet(mobile-admin dashboard/orders/classes/members 四頁的 bell icon 共用
+ *  同一顆函式——四頁原本各自維護一份 byte-identical 的本地 openNotif,onReadAll 恰等於
+ *  closeNotifAfterReadAll(adminNotifs.markAllRead),收斂進此處單一具名函式)。 */
+export function openAdminNotif(): void {
+	overlay.sheet('notif', { notifs: get(adminNotifs), onReadAll: () => closeNotifAfterReadAll(adminNotifs.markAllRead) });
 }

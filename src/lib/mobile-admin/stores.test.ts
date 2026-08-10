@@ -8,6 +8,8 @@ import {
 	overlay,
 	switchRole,
 	closeNotifAfterReadAll,
+	openAdminNotif,
+	adminNotifs,
 	orders,
 	markOrderPaid,
 	messages,
@@ -23,7 +25,7 @@ import {
 	hydrateMessages,
 	refreshMessages
 } from './stores';
-import { MEMBERS, CLASSES, ORDERS, MESSAGES } from './data';
+import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS } from './data';
 import { COACHES } from '$lib/domain/coaches';
 import { getOpsCollections, getMessages, markRead } from './api';
 
@@ -93,6 +95,25 @@ describe('closeNotifAfterReadAll', () => {
 		expect(marked).toBe(true);
 		expect(get(overlay).sheet).toBe(null);
 		overlay.closeAll();
+	});
+});
+
+describe('openAdminNotif (mobile-admin 四頁 dashboard/orders/classes/members 的 bell icon 共用同一顆函式)', () => {
+	it('開出 id 為 \'notif\' 的 sheet,props.notifs 帶入 adminNotifs store 的現值', () => {
+		openAdminNotif();
+		expect(get(overlay).sheet?.id).toBe('notif');
+		expect((get(overlay).sheet?.props as { notifs: unknown }).notifs).toEqual(get(adminNotifs));
+		overlay.closeAll();
+	});
+
+	it('觸發 props.onReadAll → adminNotifs 全部標為已讀且 sheet 關閉(同 closeNotifAfterReadAll 全鏈:markAllRead + 關閉)', () => {
+		expect(adminUnread(get(adminNotifs)), 'seed 應含未讀項目,onReadAll 前才有東西可標').toBeGreaterThan(0);
+		openAdminNotif();
+		const props = get(overlay).sheet?.props as { onReadAll: () => void };
+		props.onReadAll();
+		expect(adminUnread(get(adminNotifs))).toBe(0);
+		expect(get(overlay).sheet).toBe(null);
+		adminNotifs.set(ADMIN_NOTIFS); // restore the shared singleton for other tests
 	});
 });
 
