@@ -75,6 +75,9 @@ export async function markRead(id: string): Promise<void> {
  *  toast 文案，本模組不碰 toast。 */
 export async function markAllRead(): Promise<'ok' | 'partial'> {
   const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
+  // 空集零帳(R11 終審修波):沒有未讀就真的無事可做——不樂觀更新、不 markMutated、不
+  // allSettled。行為等價,但同拍呼叫的 refresh 族不必為一筆空尾流多等三個 microtask。
+  if (unreadIds.length === 0) return 'ok';
   notifications.update((list) => list.map((n) => ({ ...n, read: true })));
   const settled = Promise.allSettled(
     unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))

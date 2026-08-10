@@ -88,6 +88,9 @@ export const notifs = {
 	},
 	async markAllRead(): Promise<'ok' | 'partial'> {
 		const unreadIds = get(notifsBase).filter((n) => !n.read).map((n) => n.id); // 必須在 markAllRead() 前捕捉
+		// 空集零帳(R11 終審修波,同 member 側):沒有未讀就真的無事可做——不樂觀更新、不
+		// markMutated、不 allSettled。行為等價,同拍的 refresh 族不必為一筆空尾流多等三個 microtask。
+		if (unreadIds.length === 0) return 'ok';
 		notifsBase.markAllRead();
 		const settled = Promise.allSettled(
 			unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))

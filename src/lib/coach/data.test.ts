@@ -13,7 +13,7 @@ import {
 describe('coach data — shape', () => {
 	it('has the expected collection lengths', () => {
 		expect(SCHED_HOURS).toHaveLength(8);
-		expect(NOTIFS).toHaveLength(4);
+		expect(NOTIFS).toHaveLength(3); // R1 補遺:SLA 逾時那筆隨死概念退役(原 4 筆)
 	});
 });
 

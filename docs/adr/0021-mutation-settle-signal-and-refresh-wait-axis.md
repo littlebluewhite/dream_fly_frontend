@@ -147,9 +147,9 @@ const data = await fetch();
 
 | 層 | 檔案 | 本輪動了什麼 |
 | --- | --- | --- |
-| 機制 | `src/lib/hydration-gate.ts` | `FetchGenStableOptions`、`fetchGenStable` 迴圈前導 + 第三參數 options 化、`pendingTails`/`settleWaiters`、`markMutated(tail?)`、`pendingSettle()` |
+| 機制 | `src/lib/hydration-gate.ts` | `FetchGenStableOptions`、`fetchGenStable` 迴圈前導 + 第三參數 options 化、`pendingTails`/`settleWaiters`/`tailEpoch`、`markMutated(tail?)`(尾流**先**入帳再翻旗)、`pendingSettle()`、`clearPendingTails()` |
 | 第 1 層 | `src/lib/load-gate.ts` | `LoadGateHydrateOptions.pendingSettle`(additive 可選欄)+ `run()`/`silentRefresh()` **兩處**轉傳 |
-| 第 2 層 | `src/lib/session-gate.ts` | `pageEntry()` 的 hydrate 包**一行** `pendingSettle: gate.pendingSettle` |
+| 第 2 層 | `src/lib/session-gate.ts` | `pageEntry()` 的 hydrate 包**一行** `pendingSettle: gate.pendingSettle`;終審修波再於 identity `onChange` 補**一行** `gate.clearPendingTails()`(見誠實界線 ④) |
 | 呼叫端 | `member/notifications.ts`、`mobile/notifications.ts` | `markRead`/`markAllRead` 各兩支,共 **4 點**,`markMutated(patch)`/`markMutated(settled)` |
 
 三筆結構事實:
@@ -164,12 +164,20 @@ const data = await fetch();
   這一點與 `docs/adr/0020` 契約五條第 ⑤ 條同一條界線。等待也發生在同一個 run-generation 之內,故
   等待期間 phase **不多跳一次 loading**。
 - **`markAllRead` 整批當一條尾流。** 傳的是 `Promise.allSettled(...)`——含失敗也 settle,不會因為
-  其中一筆 PATCH reject 就卡死 refresh。
+  其中一筆 PATCH reject 就卡死 refresh。**零未讀時完全不入帳**(終審修波):空集本來就無事可做,
+  不樂觀更新、不 `markMutated`、不 `allSettled`,同拍的 refresh 族不必為一筆空尾流多等三個 microtask。
+- **`markMutated(tail)` 的記帳順序是契約:尾流先入帳,才推世代/翻旗**(終審修波)。`core.commit()`
+  的 `hydrated.set(true)` 會**同步**通知 subscriber(svelte writable 無相等性短路);subscriber 若在
+  那個回呼裡同步重入 `refresh()`,而尾流還沒入帳,`pendingSettle()` 就會回 `undefined` —— GET 帶著
+  已遞增的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地,丟棄軸也接不住(世代已穩)。
+  入帳全程同步(計數 +1 與 `then` 掛載都不 await),移到 `commit()` 之前不替靜止路徑多花任何一個
+  microtask——`pendingSettle()` 靜止同步回 `undefined` 的硬契約原封不動。
 
-## 誠實界線(四則,程式碼刻意不處理)
+## 誠實界線(四則;①②③ 刻意不處理,④ 於本輪終審修波改為處理)
 
-1. **尾流掛死 → refresh 跟著等。** 無逾時、無取消,與「fetch 掛死」同級的既有失效模式。呼叫端的
-   `destroyed`/`generation` 棄追只在**醒來後**才生效,掛死的尾流不會喚醒任何人。
+1. **尾流掛死 → refresh 跟著等(同身分內)。** 無逾時、無取消,與「fetch 掛死」同級的既有失效模式。
+   呼叫端的 `destroyed`/`generation` 棄追只在**醒來後**才生效,掛死的尾流不會喚醒任何人——唯一的
+   例外是 identity 變更的清帳(見 ④),它會直接喚醒全部等待者。
 2. **連續 mutation 流 → refresh 飢餓。** 使用者持續點已讀時 refresh 會一直等;**停手即收斂**
    (尾流帳歸零)。這與 `docs/adr/0020` 重抓次數「mutation 停止即收斂、無硬上限」是同一種有限性
    保證的兩個面向。
@@ -177,12 +185,20 @@ const data = await fetch();
    還原」的不閃爍原則本來就只保證「不當場閃回」;使用者主動重新整理時顯示後端事實正是 refresh 族
    的契約。`mobile/notifications.test.ts` 有一條斷言把它釘成文件(PATCH 失敗 → refresh 後
    `read === false`),避免未來有人把它當缺陷「修掉」。
-4. **跨身分尾流:尾流帳不隨 session identity 重置。** `createSessionGate` 的 `onChange` 只做
-   `reset()` + `hydrated.set(false)` + 和解鏈重置,**不清 `pendingTails`**——A 帳號在飛的 PATCH
-   會讓 B 帳號的第一次 refresh 多等一會兒。這是**必然自癒**的:尾流一 settle 帳就歸零,而且等待
-   本身不搬運任何資料(跨帳號的**資料**洩漏由 `docs/adr/0017` 的 P1′ epoch 核對結構性擋住,見
-   `docs/adr/0020`「附帶結構保證」)。刻意不加重置的理由是:清帳等於讓等待者永遠等不到喚醒
-   (waiter 佇列同時要一併處置),為一個會自癒的延遲引入一種掛死模式,不划算。
+4. **尾流帳的自癒範圍:同身分必然自癒,跨身分靠 identity 重置清帳(本輪終審修波起)。**
+   - **同身分:必然自癒。** 尾流一 settle(fulfil 或 reject 都算)帳就歸零,等待必然結束;掛死的
+     尾流則照 ① 一直等,那是 ① 的失效模式,不是本則的。
+   - **跨身分:不能靠自癒,必須清帳。** 本 ADR 初版寫的是「`onChange` 不清 `pendingTails`,B 只是
+     多等一會兒,必然自癒」——與 ① 併看即知那個說法自相矛盾:A 帳號一筆**掛死**的 PATCH 在換帳後
+     永遠不會 settle,B 帳號的每一次 refresh 於是永遠等待、GET 一次都不出發。那不是延遲,是掛死。
+     終審修波起,`createSessionGate` 的 `onChange` 除了 `reset()` + `hydrated.set(false)` + 和解鏈
+     重置,再多一行 `gate.clearPendingTails()`:帳歸零 + 喚醒全部等待者,**B 不再等 A 的尾流**。
+   - **清帳不沖新帳。** 清帳推進尾流帳的世代戳記,在飛舊尾流之後 settle 時**不再出帳**——否則
+     「清帳 → 新身分的尾流入帳 → 舊尾流姍姍來遲地 settle」會把新帳減掉(甚至減成負數),同一個窗
+     換一個身分原封不動地重開。`pendingTails >= 0` 因此恆成立。
+   - **喚醒不搬運資料。** 被喚醒的舊 refresh 由既有的丟棄軸/epoch 核對處置;跨帳號的**資料**洩漏
+     一直是由 `docs/adr/0017` 的 P1′ epoch 核對結構性擋住(見 `docs/adr/0020`「附帶結構保證」),
+     清帳既不放寬也不倚賴那道保證。
 
 ## 型別事實:`fetchGenStable` 第三參數 options 化
 
@@ -244,13 +260,14 @@ hydrate 則被 post-await 的 mutation-wins 丟棄。故第 3 層兩條釘打的
   一起讀**:0020 管丟棄、本篇管等待,任何想「合併簡化」這兩軸的提案都會同時打破兩篇的反例。
 - **`docs/adr/0016`**:第五決策點與第四點同樣**刻意不進** `HydrationCore`——它只讀尾流帳、不讀旗標,
   而且是 refresh 族專用;決定一(三決策點單源)不受影響。協定測試三層界線原樣有效,本輪新釘各安其位。
-- **`docs/adr/0017`**:`pageEntry()` 是唯一佈線點(一行);`mutate()` 本體零 diff,因為它是
-  await-then-write 形、無需尾流帳。跨帳號**資料**洩漏由該篇的 P1′ epoch 核對結構性擋住,本篇誠實
-  界線 ④ 只承認跨身分的**延遲**,不承認洩漏。
+- **`docs/adr/0017`**:`pageEntry()` 是**進場包**的唯一佈線點(一行);終審修波另在 identity
+  `onChange` 補一行 `clearPendingTails()`(見誠實界線 ④),`mutate()` 本體仍零 diff,因為它是
+  await-then-write 形、無需尾流帳。跨帳號**資料**洩漏由該篇的 P1′ epoch 核對結構性擋住;本篇誠實
+  界線 ④ 自終審修波起連跨身分的**等待**也一併消除,更不涉洩漏。
 - **`docs/adr/0018`**:C7(通知已讀 mutator 雙生收斂)遞延理由在本輪依然成立——本篇正是把
   member/mobile 兩側的 mark-before-await 與 mobile-admin 的 fire-and-forget **正式分開記帳**
   (前者入帳、後者刻意不入),兩者的 mutate 語意確實不同構,那張卡的「先確認是否真同構」前提在此
   得到答案。
 - **`docs/adr/0019`**:`markMutated(tail?)` 的 `then(done, done)` 以**結構**(而非呼叫端自律)保證
-  失敗路徑出帳,沿其 C1 `ForgotSubmitIO` 刻意不給 `setError` 的同一種手法;`pendingSettle()` 的
-  overload 保留亦沿其「死出口收口」慣例。
+  失敗路徑出帳,沿其 C1 `ForgotSubmitIO` 刻意不給 `setError` 的同一種手法;`fetchGenStable()` 的
+  overload 保留亦沿其「死出口收口」慣例(`pendingSettle()` 是單一簽章,沒有 overload)。

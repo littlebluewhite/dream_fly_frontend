@@ -166,6 +166,13 @@ export interface HydrationGate {
 	 *  世代捕捉晚於「refresh 之後同步 markMutated」，在飛丟棄的時序判準就此鬆掉。
 	 *  出閘理由同 mutationGen:頁面 load-gate 經 `hydrate.pendingSettle` 讀同一本尾流帳。 */
 	pendingSettle(): Promise<void> | undefined;
+	/** 清空尾流帳並喚醒全部等待者(R11 終審修波)。給「尾流的擁有者已不存在」的重置點用
+	 *  ——目前唯一呼叫端是 session-gate 的 identity onChange:A 帳號一筆掛死的 PATCH 不得
+	 *  讓 B 帳號的 refresh 永遠等待(「尾流必然 settle」這個自癒前提只在同身分內成立)。
+	 *  清帳後在飛的舊尾流 settle 時**不再出帳**(帳本帶世代戳記),故 `pendingTails >= 0`
+	 *  恆成立、也不會把重置後新入帳的尾流沖掉。被喚醒的舊 refresh 由既有的丟棄軸/epoch
+	 *  核對處置(不套用跨身分的舊快照),喚醒本身不搬運任何資料。 */
+	clearPendingTails(): void;
 }
 
 export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
@@ -181,6 +188,10 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	// 與世代帳分離:世代管「丟棄」、尾流帳管「等待」,兩軸正交。
 	let pendingTails = 0;
 	let settleWaiters: Array<() => void> = [];
+	// 尾流帳本的世代(R11 終審修波):clearPendingTails() 推進它,在飛舊尾流的出帳回呼據此
+	// 作廢——否則「清帳 → 新尾流入帳 → 舊尾流姍姍來遲地 settle」會把新帳減掉(甚至減成負數),
+	// F2 想關的窗換一個身分原封不動地重開。
+	let tailEpoch = 0;
 
 	async function hydrate(): Promise<void> {
 		if (core.guarded()) return;
@@ -203,18 +214,27 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	}
 
 	function markMutated(tail?: Promise<unknown>): void {
+		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。core.commit() 的 hydrated.set(true)
+		// 會同步通知 subscriber(svelte writable 無相等性短路),subscriber 若在那個回呼裡同步
+		// 重入 refresh(),而尾流還沒入帳,pendingSettle() 就會回 undefined —— GET 帶著已遞增
+		// 的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住,世代已穩)。
+		// 入帳全程同步(pendingTails += 1 與 then 掛載都不 await),靜止路徑一個 microtask 都不多花。
+		if (tail) {
+			const epoch = tailEpoch; // 這筆尾流記在哪一本帳上
+			pendingTails += 1;
+			const settled = (): void => {
+				if (epoch !== tailEpoch) return; // 帳已被清(跨身分重置):這筆不再出帳
+				pendingTails -= 1;
+				if (pendingTails > 0) return;
+				const waiters = settleWaiters;
+				settleWaiters = []; // 先清空再喚醒：醒來者若重新排隊，排的是新一批
+				waiters.forEach((wake) => wake());
+			};
+			tail.then(settled, settled); // reject 也出帳（失敗的 mutation 一樣是「不再在飛」）
+		}
+		// 無尾流的 mutation(如 demo mutation)略過上面整段,行為與 R11 前逐字相同。
 		mutationGen += 1;
 		core.commit();
-		if (!tail) return; // 無網路尾流的 mutation：不入帳，行為與 R11 前逐字相同
-		pendingTails += 1;
-		const settled = (): void => {
-			pendingTails -= 1;
-			if (pendingTails > 0) return;
-			const waiters = settleWaiters;
-			settleWaiters = []; // 先清空再喚醒：醒來者若重新排隊，排的是新一批
-			waiters.forEach((wake) => wake());
-		};
-		tail.then(settled, settled); // reject 也出帳（失敗的 mutation 一樣是「不再在飛」）
 	}
 
 	function pendingSettle(): Promise<void> | undefined {
@@ -226,12 +246,21 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		})();
 	}
 
+	function clearPendingTails(): void {
+		tailEpoch += 1; // 先換帳本:在飛舊尾流的出帳回呼就此作廢,不會減到下一本帳
+		pendingTails = 0;
+		const waiters = settleWaiters;
+		settleWaiters = []; // 先清空再喚醒:醒來者若重新排隊(新身分的尾流),排的是新一批
+		waiters.forEach((wake) => wake());
+	}
+
 	return {
 		hydrated,
 		hydrate,
 		refresh,
 		markMutated,
 		mutationGen: () => mutationGen,
-		pendingSettle
+		pendingSettle,
+		clearPendingTails
 	};
 }

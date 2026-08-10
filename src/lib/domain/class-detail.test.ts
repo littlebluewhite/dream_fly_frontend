@@ -7,6 +7,10 @@ describe('classFill', () => {
     expect(classFill(3, 0)).toEqual({ full: true, pct: 0 });
   });
 
+  it('負容量同樣視為已滿、pct 為 0（判準是 cap <= 0,不是 cap === 0——髒資料下不得回負百分比）', () => {
+    expect(classFill(3, -1)).toEqual({ full: true, pct: 0 });
+  });
+
   it('常規案例：未滿班 8/10 → pct 80%', () => {
     expect(classFill(8, 10)).toEqual({ full: false, pct: 80 });
   });

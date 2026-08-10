@@ -108,6 +108,19 @@ describe('markAllRead', () => {
 
     expect(get(notificationsHydrated)).toBe(true);
   });
+
+  it("無未讀時零 PATCH 仍回 'ok',且零記帳——pendingSettle 同步回 undefined(不為「無事可做」讓 refresh 族多等三個 microtask)", async () => {
+    /* 空集路徑本來就無事可做:不樂觀更新、不入帳、不 allSettled。舊碼照樣入一筆空尾流,
+     * 同拍呼叫的頁面 refresh 因此要等 allSettled([]) 的三個 microtask 才出發 GET —— 純粹
+     * 是時序雜訊。這裡在 await 之前同步取讀尾流帳,才照得到那筆空帳(await 之後帳已歸零)。 */
+    notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: true })));
+
+    const p = markAllRead();
+    expect(notificationsPageEntry.hydrate.pendingSettle?.()).toBeUndefined();
+
+    expect(await p).toBe('ok');
+    expect(api).not.toHaveBeenCalled();
+  });
 });
 
 describe('notificationsPageEntry(C3 接線釘)', () => {

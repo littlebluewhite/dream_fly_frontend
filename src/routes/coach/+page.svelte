@@ -122,7 +122,10 @@
         {
           label: '待回覆訊息',
           value: data.pendingReplies,
-          sub: '含 1 則逾時訊息',
+          // R1 補遺:原副標「含 1 則逾時訊息」是 mock 時代的 SLA 概念——後端沒有逾時欄位,
+          // 那個「1」也永遠是硬編的。副標整條退場(空字串 → KpiCard 不渲染該行),不改寫成
+          // 另一句捏造文案;待回覆數本身走 payload。
+          sub: '',
           subTone: 'var(--df-error)',
           icon: 'message-circle',
           iconColor: 'var(--df-error)'

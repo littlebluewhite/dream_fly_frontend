@@ -356,6 +356,38 @@ describe('createHydrationGate', () => {
 		expect(apply).toHaveBeenCalledWith({ v: 2 });
 	});
 
+	it('記帳順序:markMutated(尾流) 翻旗的同步通知裡重入 refresh() → GET 不得出發(尾流必須先入帳,再推世代/翻旗)', async () => {
+		/* 半發布狀態:core.commit() 的 hydrated.set(true) 會**同步**通知 subscriber(svelte
+		 * writable 無相等性短路),subscriber 若在那個回呼裡同步重入 refresh(),而尾流是在
+		 * commit **之後**才入帳,此刻 pendingSettle() 仍回 undefined —— GET 帶著已遞增的世代
+		 * 同步出發,settle 後世代比對相符、server 舊真值照樣落地,丟棄軸也接不住(世代已穩)。
+		 * 記帳全程同步,移到 commit 之前不會替靜止路徑多花任何一個 microtask。 */
+		const tail = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		let refreshP: Promise<void> | undefined;
+		// 訂閱當下的立即回呼帶 false(跳過);翻旗那一次才重入,且只重入一次。
+		const unsub = gate.hydrated.subscribe((flag) => {
+			if (flag && !refreshP) refreshP = gate.refresh();
+		});
+
+		gate.markMutated(tail.promise);
+
+		expect(refreshP).toBeInstanceOf(Promise); // 釘住重入真的發生在翻旗的同步通知裡
+		expect(fetch).not.toHaveBeenCalled(); // 尾流在飛 → 等待軸接住,GET 不得同步出發
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+
+		tail.resolve();
+		await refreshP;
+
+		expect(fetch).toHaveBeenCalledTimes(1); // settle 後恰一次
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+		unsub();
+	});
+
 	it('mutation settle 守恆:markMutated() 不帶尾流 → refresh() 同步出發(無尾流的 mutation 行為一字不變)', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const gate = createHydrationGate({ fetch, apply: () => {} });

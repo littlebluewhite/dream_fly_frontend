@@ -92,7 +92,7 @@ export interface PageEntry<T> {
 
 /**
  * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/markMutated/mutationGen/
- * pendingSettle)再加 mutate 與 pageEntry。
+ * pendingSettle/clearPendingTails)再加 mutate 與 pageEntry。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
  *   進場快照(await 之前捕捉 wasHydrated + epoch)→ await request → epoch 丟棄(過期即
  *   棄寫,結果仍回傳:server 端事實已成立)→ 寫回時重查完整度(stillIncomplete)→
@@ -121,7 +121,9 @@ export interface SessionGate<T> extends HydrationGate {
  *      各自靠「reconcileChain 宣告在 subscribe 之前」的 TDZ 註解手動維持,現收成一處)。
  *
  * onChange = opts.reset() + gate.hydrated.set(false) + reconcileChain 重置(舊 session
- * 卡死的和解不得堵住新 session 的鏈)。
+ * 卡死的和解不得堵住新 session 的鏈)+ gate.clearPendingTails()(R11 終審修波:舊 session
+ * 掛死的 mutation 尾流同樣不得堵住新身分的 refresh —— 尾流帳的「必然自癒」前提只在同身分
+ * 內成立,跨身分時 A 的一筆永不 settle 的 PATCH 會讓 B 的 GET 一次都不出發)。
  */
 export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T> {
 	// 0) epochFetch 抽名。對 core 的前向參照見上方契約說明。
@@ -144,6 +146,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		opts.reset();
 		gate.hydrated.set(false);
 		reconcileChain = Promise.resolve();
+		gate.clearPendingTails(); // 舊身分的尾流不得堵住新身分的 refresh(理由見上方 onChange 說明)
 	});
 
 	/**

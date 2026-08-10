@@ -244,6 +244,7 @@ export interface AttClassFull extends AttClass {
 export const NOTIFS: Notif[] = [
 	{ icon: 'clipboard-check', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', title: '點名提醒', body: '青少年體操中級班 上課中，尚未完成點名', time: '5 分鐘前', read: false, to: 'attendance' },
 	{ icon: 'message-circle', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', title: '王媽媽（小明家長）', body: '老師您好，小明明天的課可以調整時間嗎？', time: '18 分鐘前', read: false, to: 'messages' },
-	{ icon: 'triangle-alert', tone: 'var(--df-error)', bg: 'var(--df-error-bg)', title: '緊急訊息逾時', body: '黃媽媽的訊息已逾回覆時效 1.5 小時', time: '1 小時前', read: false, to: 'messages' },
+	// R1 補遺:原第三筆「緊急訊息逾時 / 已逾回覆時效 1.5 小時」隨 SLA 死概念退役——後端沒有
+	// 逾時欄位,這條由 Topbar 活消費的種子等於在真資料旁邊捏造一則不存在的告警。其餘三筆留。
 	{ icon: 'award', tone: 'var(--df-accent-dark)', bg: '#FFF8DB', title: '評核待更新', body: '競技選手培訓班 3 位學員技能評量待更新', time: '昨天 16:05', read: true, to: 'students' }
 ];

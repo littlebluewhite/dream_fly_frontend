@@ -145,6 +145,65 @@ describe('createSessionGate — session 家族', () => {
 		expect(get(gate.hydrated)).toBe(false); // 不 markMutated
 	});
 
+	/* 跨 session 尾流帳(R11 終審修波 F2)。identity 重置原本只清內容/旗標/和解鏈,**不清尾流
+	 * 帳**:A 帳號一筆永不 settle 的 PATCH(掛死的樂觀 mutation)會讓 B 帳號的每一次 refresh
+	 * 永遠等待、GET 一次都不出發——「必然自癒」的前提(尾流一定會 settle)在跨身分時不成立。
+	 * 現在 onChange 一併清帳並喚醒全部等待者;被喚醒的舊 refresh 由既有的 epoch 核對處置。 */
+	it('跨身分尾流清帳:A 的樂觀 mutation 尾流永不 settle → 換帳後 B 的 refresh 立即出發 GET,不被 A 的殘留尾流擋住', async () => {
+		let logins = 0;
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+			'GET /list': () => { gets += 1; return [{ id: 'b' }]; }
+		}));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		gate.markMutated(new Promise(() => {})); // A 的樂觀 mutation:PATCH 掛死,永不 settle
+		await authStore.login('b@dreamfly.test', 'pw'); // A→B 直換 → identity 重置即清帳
+
+		const p = gate.refresh(); // B 的第一次重新整理
+
+		expect(gets).toBe(1); // 立即出發(舊碼:0——B 永遠等 A 的尾流,GET 一次都不發)
+		await p;
+		expect(get(store)).toEqual([{ id: 'b' }]);
+	});
+
+	it('清帳不沖新帳:清帳後 B 自己的尾流照常擋住 refresh,A 的殘留尾流姍姍來遲地 settle 不得把 B 的帳減掉', async () => {
+		/* 清帳的實作若只寫 pendingTails = 0,舊 tail 的出帳回呼仍掛在原地:它一 settle 就把 B
+		 * 的帳從 1 減成 0 並喚醒等待者,B 的 GET 於是帶著自己在飛的 PATCH 出發——F2 想關的窗
+		 * 原封不動地換一個帳號重開(而且帳可能被減成負數)。出帳必須認帳本世代。 */
+		const staleTail = createDeferred<void>();
+		const freshTail = createDeferred<void>();
+		let logins = 0;
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+			'GET /list': () => { gets += 1; return [{ id: 'b' }]; }
+		}));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		gate.markMutated(staleTail.promise); // A 的尾流
+		await authStore.login('b@dreamfly.test', 'pw'); // 清帳
+		gate.markMutated(freshTail.promise); // B 自己的尾流入帳
+		staleTail.resolve(); // A 的殘留尾流此刻才 settle——它已不在帳上,不得出帳
+		await settleReconcile();
+
+		const p = gate.refresh();
+		await settleReconcile();
+
+		expect(gets).toBe(0); // B 的尾流仍在飛 → GET 不出發
+
+		freshTail.resolve();
+		await p;
+
+		expect(gets).toBe(1); // B 的尾流 settle 後才出發,而且只出發一次
+		expect(get(store)).toEqual([{ id: 'b' }]);
+	});
+
 	it('訪客開機零觸發:未登入下建立 factory,立即回呼身分 null == baseline,reset 不觸發', () => {
 		// beforeEach 已 await logout,authStore 為登出態。
 		const reset = vi.fn();

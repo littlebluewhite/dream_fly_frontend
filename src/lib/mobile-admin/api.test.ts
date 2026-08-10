@@ -224,8 +224,8 @@ describe('getMessages', () => {
 	it('maps real conversations (GET /conversations/me) to the mobile message-list shape', async () => {
 		vi.mocked(coachApi.getConversations).mockResolvedValue({
 			conversations: [
-				{ id: 'c1', name: '王媽媽', initial: '王', color: '#000', kind: '會員', time: '09:10', badge: 2, preview: '哈囉', sla: '', slaTone: 'muted' },
-				{ id: 'c2', name: '陳爸爸', initial: '陳', color: '#000', kind: '會員', time: '昨天', badge: 0, preview: '謝謝', sla: '', slaTone: 'muted' }
+				{ id: 'c1', name: '王媽媽', initial: '王', color: '#000', kind: '會員', time: '09:10', badge: 2, preview: '哈囉' },
+				{ id: 'c2', name: '陳爸爸', initial: '陳', color: '#000', kind: '會員', time: '昨天', badge: 0, preview: '謝謝' }
 			]
 		} as never);
 

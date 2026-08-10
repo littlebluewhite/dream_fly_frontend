@@ -138,7 +138,12 @@ describe('notifs singleton — 已讀落庫(W1:PATCH /notifications/{id}/read)',
 	it("無未讀時零 PATCH 仍回 'ok'——unreadIds 必須在 notifsBase.markAllRead() 前捕捉，不是事後從已被翻成全已讀的 store 反查", async () => {
 		notifs.set(seed.map((n) => ({ ...n, read: true })));
 
-		const result = await notifs.markAllRead();
+		const p = notifs.markAllRead();
+		/* 補強(R11 終審修波 F4):空集路徑零記帳。舊碼照樣把 allSettled([]) 當一筆尾流入帳,
+		 * 同拍呼叫的頁面 refresh 要多等三個 microtask 才出發 GET——純時序雜訊。必須在 await
+		 * 之前同步取讀,await 之後那筆空帳早已歸零、照不到。 */
+		expect(notifsPageEntry.hydrate.pendingSettle?.()).toBeUndefined();
+		const result = await p;
 
 		expect(api).not.toHaveBeenCalled();
 		expect(result).toBe('ok');
