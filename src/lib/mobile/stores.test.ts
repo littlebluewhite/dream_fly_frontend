@@ -8,6 +8,7 @@ import { cart as libCart } from '$lib/cart';
 import * as mobileStores from './stores';
 import * as memberStores from '$lib/member/stores';
 import * as memberCheckout from '$lib/member/checkout';
+import * as memberCheckoutController from '$lib/member/checkout-controller';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
 // 在 TS strict 下無法編譯——換成回傳完整 Course 的 builder（同
@@ -240,11 +241,20 @@ describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同�
 		// 「已持有訂閱」清單;placeOrder 也讀 get(subscriptions)。源 $lib/member/stores。
 		expect(mobileStores.subscriptions).toBe(memberStores.subscriptions);
 	});
-	it('member/checkout 的 validateCoupon/orderErrorMessage/chargeableLines 同參照(CartSheet 消費)', () => {
-		expect(mobileStores.validateCoupon).toBe(memberCheckout.validateCoupon);
+	it('member/checkout 的 applyCouponCode/orderErrorMessage/chargeableLines 同參照(CartSheet 消費)', () => {
+		// C2(R11):CartSheet 的「套用優惠碼」與桌面 CheckoutDialog 收斂成同一顆
+		// applyCouponCode（空輸入 → null／命中／無效同文案的結果機），validateCoupon
+		// 的 mobile re-export 隨之零 production 消費者、依死出口紀律移除。
+		expect(mobileStores.applyCouponCode).toBe(memberCheckout.applyCouponCode);
 		expect(mobileStores.orderErrorMessage).toBe(memberCheckout.orderErrorMessage);
 		// C6:chargeableLines 收編——CartSheet 預覽與 placeOrder 請款同吃這個唯一 brand
 		// 產地（型別強制「預覽 ≡ 請款」）。源路徑漂移會讓 seam 靜默失效，這裡以 toBe 釘住。
 		expect(mobileStores.chargeableLines).toBe(memberCheckout.chargeableLines);
+	});
+	// C2(R11):CartSheet 手焊的結帳機退役，改與桌面 CheckoutDialog 共用同一顆
+	// checkout-controller 工廠——經 seam 取用（同 leave-form/cancel-leave 的既有慣例）。
+	// 源路徑漂移或改成本地重包裝（＝雙生復辟）在這裡直接紅燈。
+	it('member/checkout-controller 的 createCheckoutController 同參照(CartSheet 消費)', () => {
+		expect(mobileStores.createCheckoutController).toBe(memberCheckoutController.createCheckoutController);
 	});
 });

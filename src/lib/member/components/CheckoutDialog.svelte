@@ -14,7 +14,7 @@
   import SuccessBody from './SuccessBody.svelte';
   import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints, type PaymentMethod } from '$lib/member/stores';
   import { fmtNT } from '$lib/format';
-  import { chargeableLines, validateCoupon, orderErrorMessage } from '$lib/member/checkout';
+  import { chargeableLines, applyCouponCode, orderErrorMessage } from '$lib/member/checkout';
   import { checkoutMath } from '$lib/checkout-math';
   import { createCheckoutController } from '$lib/member/checkout-controller';
 
@@ -74,15 +74,10 @@
   $: m = checkoutMath(chargeable, coupon, $points, usePoints);
 
   async function applyCode() {
-    if (!code.trim()) return;                    // 保留空守衛：空輸入按「套用」不顯示錯誤（決策 #4）
-    let hit: { code: string; off: number } | null;
-    try {
-      hit = await validateCoupon(code);
-    } catch {
-      hit = null; // 網路/未預期錯誤與「查無優惠碼」一視同仁，不另開技術性錯誤文案
-    }
-    if (hit) { coupon = hit; codeErr = ''; }
-    else { coupon = null; codeErr = '優惠碼無效或已過期'; }
+    const result = await applyCouponCode(code);
+    if (!result) return;                         // 空輸入按「套用」不顯示錯誤（決策 #4）
+    coupon = result.coupon;
+    codeErr = result.codeErr;
   }
   function close() {
     // 付款請求飛行中不可關閉（X／overlay／Escape 都走這裡）：關閉→重開會走

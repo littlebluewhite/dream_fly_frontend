@@ -1,5 +1,6 @@
 /* Dream Fly — member 結帳前端邏輯單測：chargeableLines（純過濾）、validateCoupon
- * （真 API 優惠碼驗證）、orderErrorMessage（後端錯誤 → 繁中文案）。
+ * （真 API 優惠碼驗證）、applyCouponCode（「套用」按鈕的共用結果機）、
+ * orderErrorMessage（後端錯誤 → 繁中文案）。
  *
  * 舊本地結算 commitCheckout/CheckoutContext/CheckoutResult 及其測試已隨 final
  * review 移除 —— 金額/點數/報名/訂閱規則以後端為準（見 stores.ts placeOrder 與
@@ -9,7 +10,7 @@
  * uuid 格式）。 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chargeableLines, validateCoupon, orderErrorMessage } from './checkout';
+import { chargeableLines, validateCoupon, applyCouponCode, orderErrorMessage } from './checkout';
 import type { CartItem } from '$lib/cart-item';
 import { api, ApiError } from '$lib/api/client';
 
@@ -70,6 +71,34 @@ describe('validateCoupon', () => {
     vi.mocked(api).mockRejectedValue(new ApiError(500, 'internal error'));
 
     await expect(validateCoupon('X')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+/* ─── applyCouponCode（「套用」按鈕的共用結果機：桌面 CheckoutDialog ↔ 行動版
+ * CartSheet 雙生收斂，C2/R11）──────────────────────────────────── */
+describe('applyCouponCode', () => {
+  beforeEach(() => {
+    vi.mocked(api).mockReset();
+  });
+
+  it('空輸入（含只有空白）→ null：呼叫端不動任何狀態、不打 API（空輸入按「套用」不顯示錯誤）', async () => {
+    expect(await applyCouponCode('')).toBeNull();
+    expect(await applyCouponCode('   ')).toBeNull();
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('命中 → 帶回優惠碼與空錯誤文案（呼叫端直接寫回 coupon/codeErr）', async () => {
+    vi.mocked(api).mockResolvedValue({ code: 'DREAMFLY100', discount_cents: 10000 });
+
+    expect(await applyCouponCode('DREAMFLY100')).toEqual({ coupon: { code: 'DREAMFLY100', off: 100 }, codeErr: '' });
+  });
+
+  it('404（查無）與網路/未預期錯誤一視同仁 → 同一句「優惠碼無效或已過期」，不另開技術性文案', async () => {
+    vi.mocked(api).mockRejectedValueOnce(new ApiError(404, 'coupon not found'));
+    expect(await applyCouponCode('NOPE')).toEqual({ coupon: null, codeErr: '優惠碼無效或已過期' });
+
+    vi.mocked(api).mockRejectedValueOnce(new TypeError('fetch failed'));
+    expect(await applyCouponCode('NOPE')).toEqual({ coupon: null, codeErr: '優惠碼無效或已過期' });
   });
 });
 

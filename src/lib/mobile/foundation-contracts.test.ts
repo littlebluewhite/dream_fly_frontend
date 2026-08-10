@@ -95,8 +95,10 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 	// codex R1：identity pin 驗「同參照」驗不出「繞道 barrel 之下的深模組」——若
 	// stores.ts 改從 $lib/member/leave 直接 re-export，參照仍同、但 sheet/overlay
 	// 測試的 vi.mock('$lib/member/stores') 會不再攔截。源路徑白名單補上這一角。
-	it('mobile/stores.ts 的 $lib/member 源路徑僅限白名單四模組（stores/checkout/leave-form/cancel-leave）', () => {
-		const ALLOWED = ['$lib/member/stores', '$lib/member/checkout', '$lib/member/leave-form', '$lib/member/cancel-leave'];
+	it('mobile/stores.ts 的 $lib/member 源路徑僅限白名單五模組（stores/checkout/checkout-controller/leave-form/cancel-leave）', () => {
+		// C2(R11)：checkout-controller 入列——CartSheet 手焊的結帳機退役，改與桌面
+		// CheckoutDialog 共用同一顆工廠（同 leave-form/cancel-leave 的雙生收斂前例）。
+		const ALLOWED = ['$lib/member/stores', '$lib/member/checkout', '$lib/member/checkout-controller', '$lib/member/leave-form', '$lib/member/cancel-leave'];
 		const storesFile = r('src/lib/mobile/stores.ts');
 		const offenders = importSpecifiers(readFileSync(storesFile, 'utf8'))
 			.filter((s) => isMemberReach(storesFile, s))

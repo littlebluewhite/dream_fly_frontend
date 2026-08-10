@@ -1,4 +1,4 @@
-/* Dream Fly — member 結帳付款狀態機（自 member/components/CheckoutDialog.svelte 抽出）。
+/* Dream Fly — 結帳付款狀態機（自 member/components/CheckoutDialog.svelte 抽出）。
  * 收的是「付款生命週期」——有跨事件不變量的四個變數：step（open-reset 歸 0、成功轉 2）、
  * idempotencyKey（重試沿用、fresh 換發——防重複扣款安全機的核心）、paid（成交快照，
  * 購物車清空後成功步仍要顯示）、paying（in-flight 守衛本身）。表單/預覽輸入
@@ -17,11 +17,19 @@
  * disabled={paying}，加了是行為變更。
  *
  * deps 注入只有 placeOrder 一支（confirmPay 的唯一效應）；開啟即水合的
- * refreshSubscriptions/refreshPoints 屬 open-reset 時刻的元件佈線，不入 deps。member
- * 專屬、非 twin：mobile 的 key 是 CartSheet 掛載時產一把、重試沿用（mount 級生命週期，
- * OverlayHost 每次開啟即重掛），無本檔「開啟邊沿換發／飛行中 resumed」的對話框狀態機。無 svelte 元件相依、建構零 dep 呼叫
- * （SSR 安全）。本抽取取代 ADR 0008 §「有意識保留：CheckoutDialog 的防重複扣款不抽成
- * 純模組」的當時裁決（Round 5；render 測試原封全綠 = 搬動零 churn 的證明）。 */
+ * refreshSubscriptions/refreshPoints 屬 open-reset 時刻的元件佈線，不入 deps。
+ *
+ * 雙 surface 共用（C2/R11：mobile CartSheet 原本手焊一台同構的機器，已退役改吃本檔，
+ * 經 $lib/mobile/stores 的 seam 取用）。兩個消費者的生命週期不同層，機器本身不分岔：
+ * 桌面 CheckoutDialog 整個結帳期間都不卸載，用 setOpen 的閉→開邊沿換發 key／偵測飛行中
+ * resumed；行動版 CartSheet 是 mount 級（OverlayHost `{#if}` 每次開啟即重掛），每開一次
+ * 就 new 一顆 controller，**刻意不呼叫 setOpen**——建構期產生的那把 key 即本次結帳流程的
+ * key，失敗重試沿用同一把由 confirmPay 的 catch 分支既有語意提供（這兩條由本檔單測的
+ * 「mount 級生命週期」describe 保存釘住）。
+ *
+ * 無 svelte 元件相依、建構零 dep 呼叫（SSR 安全）。本抽取取代 ADR 0008 §「有意識保留：
+ * CheckoutDialog 的防重複扣款不抽成純模組」的當時裁決（Round 5；render 測試原封全綠 =
+ * 搬動零 churn 的證明）。 */
 import { writable, type Readable } from 'svelte/store';
 import type { PaymentMethod } from '$lib/checkout-order';
 

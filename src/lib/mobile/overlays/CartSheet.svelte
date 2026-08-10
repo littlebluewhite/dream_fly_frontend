@@ -19,29 +19,41 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount } from 'svelte';
-  // 卡 3：points/refreshPoints（member/stores）與 validateCoupon/orderErrorMessage
+  // 卡 3：points/refreshPoints（member/stores）與 applyCouponCode/orderErrorMessage
   // （member/checkout）改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
   // C6：再取用 subscriptions/chargeableLines（同經 seam），供可計費預覽過濾。
-  import { cart, toasts, placeOrder, points, refreshPoints, validateCoupon, orderErrorMessage, subscriptions, chargeableLines } from '$lib/mobile/stores';
+  // C2(R11)：createCheckoutController 同經 seam——付款狀態機與桌面共用（見下方）。
+  import { cart, toasts, placeOrder, points, refreshPoints, applyCouponCode, orderErrorMessage, subscriptions, chargeableLines, createCheckoutController } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import { ME } from '$lib/domain/member-app';
   import { checkoutMath } from '$lib/checkout-math';
 
   export let onClose: () => void;
 
+  /* ── 付款狀態機（step/paying/paid、idempotencyKey 生命週期、防重複扣款守衛）與桌面
+   * CheckoutDialog 共用同一顆 checkout-controller（C2/R11 雙生收斂，經 seam 取用）；
+   * 本元件退化為快照解構鏡射 + 表單/預覽輸入 + outcome → toast 文案的薄 adapter。
+   *
+   * **刻意不呼叫 setOpen**：controller 建構時產生的那一把 key，就是這次結帳流程唯一
+   * 的 key。CartSheet 隨 sheet 開關掛載/卸載（見 OverlayHost：`{#if $overlay.sheet}
+   * <svelte:component .../>`），每次重新開啟本來就是全新的元件實例、全新的一顆
+   * controller、全新的一次結帳嘗試——不需要桌面那種「閉→開邊沿換發／付款飛行中重開
+   * 不重置」的對話框狀態機（那是因為桌面 dialog 整個結帳期間都不卸載，見該檔註解）。
+   * 失敗重試沿用同一把 key，由 confirmPay 的 catch 分支既有語意提供（不換發）。 ── */
+  const checkout = createCheckoutController({ placeOrder });
   let step = 0;
+  let paying = false;
+  // paid：付款時的成交快照（金額/點數以 API 回應為準，非本地試算 m.*），購物車清空後
+  // 完成步仍照快照顯示。型別即 controller 的 PaidSummary，不在這裡窄化——行動版只是用
+  // 不到 hasCourse/hasPass（購物車只產 course，無方案動線，文案不分支）。
+  let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
+  $: ({ step, paying, paid } = $checkout);
+
+  // 表單/預覽輸入是預覽關注，留元件；confirmPay 時以引數傳入（呼叫瞬間讀取一次）。
   let code = '';
   let coupon: { code: string; off: number } | null = null;
   let codeErr = '';
   let usePoints = false;
-  let paying = false;
-  // 這次結帳流程唯一的一把 key。CartSheet 隨 sheet 開關掛載/卸載（見
-  // OverlayHost：`{#if $overlay.sheet}<svelte:component .../>`），每次重新開
-  // 啟本來就是全新的元件實例、全新的一次結帳嘗試——不需要桌面 CheckoutDialog
-  // 那種「關閉重開沿用同一把 key」的額外狀態（那是因為桌面 dialog 整個結帳期
-  // 間都不卸載，見該檔案註解）。
-  const idempotencyKey = crypto.randomUUID();
-  let paid = { total: 0, earned: 0, ptRedeem: 0, orderNumber: '' };
 
   // 開啟即水合真點數餘額——本地 mock 殘值只是 fail-safe，折抵預覽必須用真餘額
   // （同桌面 CheckoutDialog 開啟時呼叫 refreshPoints() 的既有慣例）。
@@ -62,44 +74,32 @@
   $: m = checkoutMath(chargeable, coupon, $points, usePoints);
 
   async function applyCode() {
-    if (!code.trim()) return; // 空輸入按「套用」不顯示錯誤（同桌面 CheckoutDialog 的決策）
-    let hit: { code: string; off: number } | null;
-    try {
-      hit = await validateCoupon(code);
-    } catch {
-      hit = null; // 網路/未預期錯誤與「查無優惠碼」一視同仁，不另開技術性錯誤文案
-    }
-    if (hit) {
-      coupon = hit;
-      codeErr = '';
-    } else {
-      coupon = null;
-      codeErr = '優惠碼無效或已過期';
-    }
+    const result = await applyCouponCode(code);
+    if (!result) return; // 空輸入按「套用」不顯示錯誤（同桌面 CheckoutDialog 的決策）
+    coupon = result.coupon;
+    codeErr = result.codeErr;
   }
 
   /* 確認付款 → 真下單（placeOrder：同步購物車 → POST /orders → 水合真點數 →
-   * 清空購物車）。成功才進 step 2，顯示的金額/點數/訂單編號一律來自真實 API
-   * 回應（paid.*），不是本地預覽（m.*）。失敗顯示後端錯誤訊息轉繁中，購物車
-   * 不清空，讓使用者可以直接重試（沿用同一把 idempotencyKey，不會重複扣款）。 */
+   * 清空購物車）。送單機器與「成功才進 step 2」在 controller；這裡把表單值在呼叫
+   * 瞬間讀一次傳入，並把 outcome 轉 toast 文案。顯示的金額/點數/訂單編號一律來自
+   * 真實 API 回應（paid.*），不是本地預覽（m.*）。失敗顯示後端錯誤訊息轉繁中，購物車
+   * 不清空，讓使用者可以直接重試（沿用同一把 idempotencyKey，不會重複扣款）。
+   * 行動版不做付款方式選擇 UI（Round 4 P4-F4 裁決），一律帶預設 credit_card；
+   * alreadyPaying／nothingChargeable 是按鈕 disabled 之外的第二道防線，靜默返回。 */
   async function confirmPayment() {
-    if (paying) return;
-    paying = true;
-    try {
-      const confirmation = await placeOrder(coupon?.code ?? '', usePoints, idempotencyKey);
-      paid = {
-        total: confirmation.total,
-        earned: confirmation.earned,
-        ptRedeem: confirmation.ptRedeem,
-        orderNumber: confirmation.orderNumber
-      };
-      const redeemNote = paid.ptRedeem > 0 ? `，使用 ${paid.ptRedeem} 點折抵` : '';
-      toasts.notify('success', '報名完成', `課程已加入你的日程${redeemNote}，獲得 ${paid.earned} 點回饋。`);
-      step = 2;
-    } catch (err) {
-      toasts.notify('error', '結帳失敗', orderErrorMessage(err));
-    } finally {
-      paying = false;
+    const outcome = await checkout.confirmPay({
+      coupon: coupon?.code ?? '',
+      usePoints,
+      paymentMethod: 'credit_card',
+      hasChargeable: chargeable.length > 0
+    });
+    if (outcome.kind === 'orderPlaced') {
+      const { earned, ptRedeem } = outcome.paid;
+      const redeemNote = ptRedeem > 0 ? `，使用 ${ptRedeem} 點折抵` : '';
+      toasts.notify('success', '報名完成', `課程已加入你的日程${redeemNote}，獲得 ${earned} 點回饋。`);
+    } else if (outcome.kind === 'orderFailed') {
+      toasts.notify('error', '結帳失敗', orderErrorMessage(outcome.error));
     }
   }
   function done() {
@@ -203,11 +203,11 @@
     {#if step === 0}
       <div style="display:flex; align-items:center; justify-content:space-between; width:100%; gap:12px;">
         <div style="font-size:12.5px; color:var(--df-text-light);">合計<div style="font-size:20px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{fmtNT(m.total)}</div></div>
-        <Button variant="primary" disabled={$cart.length === 0} on:click={() => (step = 1)} style="flex:1; max-width:200px; display:flex; align-items:center; justify-content:center; gap:6px;">前往付款<Icon name="arrow-right" size={16} /></Button>
+        <Button variant="primary" disabled={$cart.length === 0} on:click={checkout.toPayment} style="flex:1; max-width:200px; display:flex; align-items:center; justify-content:center; gap:6px;">前往付款<Icon name="arrow-right" size={16} /></Button>
       </div>
     {:else if step === 1}
       <div style="display:flex; gap:10px; width:100%;">
-        <Button variant="secondary" disabled={paying} on:click={() => (step = 0)}>返回</Button>
+        <Button variant="secondary" disabled={paying} on:click={checkout.backToCart}>返回</Button>
         <Button variant="primary" disabled={paying} on:click={confirmPayment} style="flex:1;">{paying ? '處理中…' : `確認付款 ${fmtNT(m.total)}`}</Button>
       </div>
     {:else}

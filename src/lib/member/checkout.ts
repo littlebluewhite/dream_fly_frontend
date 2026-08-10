@@ -1,8 +1,10 @@
 /* Dream Fly — member 結帳前端邏輯（真 API 時代）。
  *
- * 三個成員：
+ * 四個成員：
  *  - chargeableLines（純）：預覽與 placeOrder 購物車同步共用的「跳過已持有 pass」過濾。
  *  - validateCoupon（API）：GET /coupons/{code}/validate，404 → null。
+ *  - applyCouponCode（API）：「套用」按鈕的結果機（空輸入 → null／命中／無效同文案），
+ *    包住 validateCoupon 的分類；兩個 surface 的 applyCode 共用它。
  *  - orderErrorMessage（純）：後端結帳錯誤字串 → 繁中 toast 文案。
  *
  * Task 16 前的本地結算 commitCheckout / CheckoutContext / CheckoutResult 已移除
@@ -33,8 +35,10 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): Charg
   return cart.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id))) as ChargeableLine[];
 }
 
-/* ─── validateCoupon — 真實 API 驗證（本地查表版 lookupCoupon 已退役；CartSheet 是最後
- * 一個呼叫端，已隨 Task 19 收尾改真 API，查表不再保留）── */
+/* ─── validateCoupon — 真實 API 驗證（本地查表版 lookupCoupon 已退役，查表不再保留）。
+ * C2(R11) 起兩個 surface 的「套用」按鈕都改叫下方的 applyCouponCode，本函式是它的內層
+ * ——保留獨立出口與單測，釘住「404 → null／其餘原樣拋出」這條 applyCouponCode 吞掉之後
+ * 就再也驗不到的分類契約。 ── */
 
 export interface CouponValidateResponse {
   code: string;
@@ -55,6 +59,33 @@ export async function validateCoupon(code: string): Promise<{ code: string; off:
     if (err instanceof ApiError && err.status === 404) return null;
     throw err;
   }
+}
+
+/* ─── applyCouponCode — 「套用優惠碼」按鈕的結果機（C2/R11：桌面 CheckoutDialog 與
+ * 行動版 CartSheet 原本各手焊一份 byte-identical 的 applyCode，收斂到這裡）── */
+
+/** 套用結果：`coupon` 是命中的優惠碼（未命中為 null），`codeErr` 是要顯示的錯誤文案
+ *  （命中為空字串）——呼叫端把兩欄直接寫回自己的表單狀態，不必再自己分類。 */
+export interface ApplyCouponResult {
+  coupon: { code: string; off: number } | null;
+  codeErr: string;
+}
+
+/**
+ * 空輸入（或只有空白）回 null——呼叫端據此不動任何狀態：空輸入按「套用」不顯示錯誤
+ * （兩個 surface 遷入前的既有決策）。命中回 `{ coupon, codeErr: '' }`；查無（404 →
+ * validateCoupon 回 null）與網路/未預期錯誤（validateCoupon 原樣拋出）一視同仁，
+ * 一律回 `{ coupon: null, codeErr: '優惠碼無效或已過期' }`——不另開技術性錯誤文案。
+ */
+export async function applyCouponCode(code: string): Promise<ApplyCouponResult | null> {
+  if (!code.trim()) return null;
+  let hit: { code: string; off: number } | null;
+  try {
+    hit = await validateCoupon(code);
+  } catch {
+    hit = null;
+  }
+  return hit ? { coupon: hit, codeErr: '' } : { coupon: null, codeErr: '優惠碼無效或已過期' };
 }
 
 /* ─── orderErrorMessage — 結帳錯誤 → 繁中 toast 文案 ─────────────── */

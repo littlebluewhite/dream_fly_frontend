@@ -51,6 +51,13 @@ export const overlay = createOverlay<MobilePushId, MobileSheetId>();
 // 直取 $lib/member/stores。
 export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
 
+/* ---------- 結帳付款狀態機（C2/R11：desktop/mobile 雙生收斂的 surface seam） ---------- */
+// CartSheet 的付款生命週期（step/paying/paid、idempotencyKey、防重複扣款守衛）與桌面
+// CheckoutDialog 共用同一份 $lib/member/checkout-controller 工廠——mobile 元件一律經這裡
+// 取用（同上 leave-form/cancel-leave 的 re-export 慣例）。CartSheet 是 mount 級生命週期
+// （OverlayHost 每次開啟即重掛），不呼叫 setOpen，詳見該檔與 controller 檔頭。
+export { createCheckoutController } from '$lib/member/checkout-controller';
+
 /* ---------- 取消請假（卡 6：desktop/mobile 雙生收斂的 surface seam） ---------- */
 // MyCourseDetail 的取消請假機制（busy 守衛 + outcome 攜原始錯誤）與桌面 mine 頁
 // 共用同一份 $lib/member/cancel-leave 工廠——mobile 元件一律經這裡取用（同上
@@ -85,10 +92,12 @@ export {
 	getCourseSessions
 } from '$lib/member/stores';
 export type { LeaveRequest, CourseSession } from '$lib/member/stores';
-// 結帳輔助（CartSheet 的優惠碼驗證與錯誤文案映射）——同上，經 seam 收編。C6 起
+// 結帳輔助（CartSheet 的優惠碼套用與錯誤文案映射）——同上，經 seam 收編。C6 起
 // 再收編 chargeableLines:CartSheet 的可計費預覽（見該檔 $: chargeable）與 placeOrder
-// 的請款（見下方）同吃這個唯一 brand 產地，型別強制「預覽 ≡ 請款」。
-export { validateCoupon, orderErrorMessage, chargeableLines } from '$lib/member/checkout';
+// 的請款（見下方）同吃這個唯一 brand 產地，型別強制「預覽 ≡ 請款」。C2(R11) 起轉出的
+// 是 applyCouponCode（「套用」按鈕的結果機，與桌面 CheckoutDialog 共用）而非其內層的
+// validateCoupon——後者收斂後零 mobile 消費者，死出口不留（ADR 0010 精神）。
+export { applyCouponCode, orderErrorMessage, chargeableLines } from '$lib/member/checkout';
 // C6:CartSheet 過濾可計費項目時，chargeableLines 的第二參數是「已持有訂閱」清單——
 // subscriptions store 經 seam 收編（源 $lib/member/stores，foundation-contracts 白名單
 // 既有）。mobile 購物車只產 course（cart.add 只收 Course；帳戶頁 getAccount() 副作用

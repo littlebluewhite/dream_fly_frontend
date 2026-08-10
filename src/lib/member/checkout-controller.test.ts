@@ -1,4 +1,4 @@
-/* checkout-controller.ts — member 結帳付款狀態機的單元測試。deps（placeOrder）注入
+/* checkout-controller.ts — 結帳付款狀態機的單元測試。deps（placeOrder）注入
  * mock，可控 promise resolve 時序驗 paying 生命週期與「付款飛行中外力關閉再重開」
  * （resumedInFlight）的機器面；idempotencyKey 生命週期（失敗重試沿用同一把／
  * freshCheckout 換發）經 placeOrder mock 的引數捕捉斷言（不注入 keygen dep）。
@@ -189,5 +189,31 @@ describe('idempotencyKey 生命週期（機器面——render 測試從未斷言
 		expect(keyOfCall(0)).not.toBe('');
 		expect(keyOfCall(1)).not.toBe('');
 		expect(keyOfCall(1)).not.toBe(keyOfCall(0)); // 新結帳流程 = 新 key
+	});
+});
+
+/* mount 級消費者（mobile CartSheet：OverlayHost 的 `{#if}` 每次開啟即重掛，所以每開
+ * 一次就 new 一顆 controller，全程不呼叫 setOpen）依賴的兩條既有語意——建構期就備妥
+ * 一把可用的 key、每個實例各持一把。桌面 CheckoutDialog 的 setOpen 佈線遮住了這兩條
+ * （它的 key 永遠在 freshCheckout 換發過），保存測試在此明文釘住。 */
+describe('mount 級生命週期（不呼叫 setOpen 的消費者）', () => {
+	it('不呼叫 setOpen 也能送單：建構期產生的 key 直接可用，失敗重試沿用同一把', async () => {
+		deps.placeOrder.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(CONFIRMED);
+		expect((await ctrl.confirmPay(input())).kind).toBe('orderFailed');
+		expect((await ctrl.confirmPay(input())).kind).toBe('orderPlaced');
+		expect(keyOfCall(0)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+		expect(keyOfCall(1)).toBe(keyOfCall(0)); // 重試沿用同一把（後端辨識重放）
+	});
+
+	it('兩個實例各持一把不同的 key：重新掛載 = 全新的一次結帳嘗試', async () => {
+		const otherDeps = makeDeps();
+		const other = createCheckoutController(otherDeps);
+		deps.placeOrder.mockResolvedValue(CONFIRMED);
+		otherDeps.placeOrder.mockResolvedValue(CONFIRMED);
+		await ctrl.confirmPay(input());
+		await other.confirmPay(input());
+		const otherKey = otherDeps.placeOrder.mock.calls[0]?.[2];
+		expect(otherKey).not.toBe('');
+		expect(otherKey).not.toBe(keyOfCall(0));
 	});
 });
