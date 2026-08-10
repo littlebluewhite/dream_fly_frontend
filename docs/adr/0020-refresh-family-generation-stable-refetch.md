@@ -202,3 +202,36 @@ epoch 已換的情況下憑一份 stale 回應再發一次 fetch:那份回應根
   作廢與本篇「附帶結構保證」互為前提。
 - **`docs/adr/0019`**:`pageEntry()` 是本案唯一的佈線點(C3 落地);「死出口收口」慣例是 overload
   簽章決定的依據。
+
+## 增補(2026-08-10,架構深化 R11 C1):GET/PATCH server-race 窗自 `docs/adr/0021` 關閉;第三參數 options 化
+
+1. **「誠實界線」節劃在範圍外的那一條自本日關閉。** 原文明載——
+
+   > **不是**「refresh 永遠顯示樂觀態」:樂觀 PATCH 與重抓 GET 在 server 端的先後(重抓可能仍讀到
+   > 寫入前的狀態,後續才收斂)屬新鮮度族,與 `docs/adr/0016` known-latent #1 同族,不在本案範圍。
+
+   ——自 `docs/adr/0021` 落地後以本節為準。關閉方式**不是**把樂觀態當成真相顯示(那是前端自造真相),
+   而是補上協定的**第五決策點:mutation settle 訊號**(等待軸,同樣住 `hydration-gate.ts`、同樣
+   刻意不進 `HydrationCore`):`markMutated(tail?)` 以 `tail.then(done, done)` 為在飛的樂觀 mutation
+   記一本尾流帳,`refresh` 族每次出發 fetch 之前先問 `pendingSettle()`,有未 settle 的尾流就等到
+   全數落地才捕捉世代、出發 GET——GET 不再搶在 PATCH 前面,server 回的就是含該筆寫入的真值。
+   **本篇的判準句一字未動、覆蓋面亦未擴大**:等待軸是新增的正交軸,丟棄軸仍只認「refresh 進場之後
+   才發生的 mutation」,`entered === gen()` 那行逐字保留。兩篇的判準句必須一起讀——想「合併簡化」
+   兩軸的提案會同時打破兩篇的反例(把等待接上世代 → 本篇判準句反例的正常序列永久掛住;把丟棄接上
+   尾流 → 本篇關掉的窗當場復發)。誠實界線、否決紀錄(含最像但最危險的「落地丟棄式」)與四則殘餘
+   見該篇。
+
+2. **`fetchGenStable` 第三參數 options 化,型別事實逐條保留。** 簽章由位置參數 `iterate` 改為
+   options bag `{ iterate?, pendingSettle? }`(兩個正交決策不再擠同一個位置);上方「決定」節與
+   「三個整合點」節寫的 `iterate` 位置參數形自此以本節為準。「overload 簽章」節建立的**型別事實
+   不變**:第一支 overload 把 `iterate` 釘成 `?: undefined`,任何帶 `iterate` 的呼叫必然落到第二支,
+   「無 `iterate` ⇒ `Promise<T>`」與「有 `iterate` ⇒ `Promise<T | undefined>`」兩句同時成立,
+   `createHydrationGate.refresh()` 仍不必寫不可能執行的 `undefined` 分支。
+
+3. **不受影響、仍然有效的四項**:①判準句與其反例(「寫入 → `markMutated` → `await refreshOps()`」
+   照常套用、fetch 恰一次)原樣有效;②三形否決紀錄(形 2 世代下沉 core 的裂腦、形 3 自穩定
+   `pageEntry` fetch、「丟棄不補抓」)原樣有效——R11 的「落地丟棄式」否決是它們的延伸,不是翻案;
+   ③契約五條全部成立,其中第 2 條(load-gate 整合下 phase 單一週期)在 R11 之後仍然為真——等待
+   發生在同一個 run-generation 之內、`setPhase('loading')` 仍在迴圈之外;④兩筆殘餘(`undefined`
+   棄追哨兵、`run()`/`silentRefresh()` 刻意重複約 6 行)原樣有效——R11 只讓那兩處各多轉傳一個
+   欄位,**未趁機抽 helper**,重複的理由未改變。

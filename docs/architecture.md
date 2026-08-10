@@ -33,7 +33,15 @@ alongside it (`waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `check
 of the surface folder on 2026-08-03 (R9 C2, `docs/adr/0019`) and the barrel kept re-exporting it, so the
 five call sites that pull `cart` alongside other member symbols in one import clause stay untouched —
 new store/function additions go in the owning module, never in the barrel
-file itself. `admin/api.ts` picked up a narrower version of the same shape on 2026-07-23 (R8 C5): its
+file itself. `nav.ts` is the navigation model — the `NAV` item list, the `isActive` predicate, and the
+layout's longest-prefix `resolve()` title/subtitle map — as pure functions with a sibling `nav.test.ts`;
+`admin`'s joined the family on 2026-08-10 (R11 C7), lifting `NAV`+`isActive` out of its
+`Sidebar.svelte` (whose `<script context="module">` block is gone with them) and `TITLES`+`resolve` out
+of `routes/admin/+layout.svelte`, so all four chrome-bearing surfaces — `admin`/`coach`/`mobile`/
+`mobile-admin` — now share the same shape, and `Sidebar.test.ts`'s five `isActive` cases moved to
+`admin/nav.test.ts` (mirroring what `coach` already looked like). Sidebar labels and `TITLES` labels
+still disagree in a few spots (會員管理 vs 學員管理) — a pre-existing divergence kept verbatim, not
+unified. `admin/api.ts` picked up a narrower version of the same shape on 2026-07-23 (R8 C5): its
 Reports group (`GET /reports/admin` types/mappers/`getReports`, 336 lines) moved out to
 `admin/reports-api.ts`, with `admin/api.ts` re-exporting it name-by-name so its 42 existing consumers —
 `mobile-admin/api.ts`'s own re-export of `getReports` included — stay untouched; the file's other groups
@@ -81,7 +89,14 @@ venues/tickets/members/classes/course-level family: `domain/sessions.ts`'s `SESS
 hand-copied today's-session-status tables (`coach`'s `CLASS_STATUS` label, `admin`'s and
 `mobile-admin`'s own today-status label tables) — the canonical `live` label is `coach`'s and
 `mobile-admin`'s pre-existing `上課中`, so `admin`'s former `進行中` is the one that changed
-(`docs/adr/0018`).
+(`docs/adr/0018`). `domain/class-detail.ts` (2026-08-10, R11 C5) is a different kind of resident, closer
+to `session-format.ts` than to those six: `classDetailRows` — the 12-row `[icon, label, value]` course
+detail list behind `admin`'s `ClassDialog` and `mobile-admin`'s `ClassSheet`, until then two
+byte-identical untested inline copies — plus `classFill(enrolled, cap)`, the full/percentage derivation
+four call sites each carried their own copy of. It maps to no backend enum and yields no `Tone`, so it
+isn't a seventh per-entity lookup; its one behaviour change is that `cap <= 0` now gives `pct: 0`
+instead of the `Infinity`/`NaN` the old inline `Math.round(enrolled / cap * 100)` fed straight into a
+progress bar (`docs/adr/0013`).
 Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
 but since 2026-08-03 (R9 C4, `docs/adr/0019`) **none of them re-exports a pass-through any more**: every
 export line that carried no local type fact (no narrowing annotation, no `as` assertion, no local
@@ -262,12 +277,13 @@ and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. Since 2026-07-08 that branching is itself
 usually collapsed into a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` /
 `slot="error"` with `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never
-`load()`), consumed at 54 call sites (one per route page across 45 route pages — the member 我的課程 page's
+`load()`), consumed at 55 call sites (one per route page across 45 route pages — the member 我的課程 page's
 second, in-card attendance-history gate retired on 2026-08-03 when R10 D folded it into
-`member/mine-controller.ts`, `docs/adr/0008` — plus 9 mobile/mobile-admin overlay screens since R5 C4 wired
+`member/mine-controller.ts`, `docs/adr/0008` — plus 10 mobile/mobile-admin overlay screens since R5 C4 wired
 VenuesScreen/TicketsScreen, mobile's `MyCourseDetail` among them with its own in-card attendance gate,
 the last one still overriding `slot="error"` with a bare `ErrorState` because it already sits inside
-a `Card`) —
+a `Card`; mobile-admin's `CoachesScreen` is the tenth, converted on 2026-08-10 from an `onMount`
+self-hydrate to a real three-state gate — see the hydration section below) —
 `ScheduleCalendar` keeps its bespoke inline template outside the wrapper. Data that already lives in a store
 (member/mobile's notification centre; mobile-admin's ops collections and messages) hydrates once behind
 a `*Hydrated` guard (`notificationsHydrated`, `notifsHydrated`, `opsHydrated`, `messagesHydrated`), with
@@ -288,7 +304,23 @@ that window discard the snapshot and refetch in place until it is stable. It del
 `HydrationCore` (it reads the generation, never the flag) and is deliberately never applied to `load()`
 (hydrate's contract is mutation-wins-discard, with the reconcile chain owing the refetch; refresh's is
 explicit freshness, so a discard *must* be followed by one). A page opts in through the optional
-`hydrate.gen` reader, which today only `session-gate`'s `pageEntry()` wires. The gate's own
+`hydrate.gen` reader, which today only `session-gate`'s `pageEntry()` wires. A *fifth* decision point
+followed on 2026-08-10 (R11 C1, `docs/adr/0021`) — the **mutation settle signal**, an axis orthogonal
+to the generation one. Optimistic mutators are mark-before-await (write the store + `markMutated()`
+*first*, `await` the PATCH after), so "the PATCH is still in flight" is invisible to a generation
+check: a GET leaving inside that window reaches the server before the write does, gets the old truth
+back, finds the generation stable, and applies it — the exact GET/PATCH race `docs/adr/0020` had
+explicitly left out of scope. So `markMutated(tail?)` now takes the mutation's network tail and books
+it with `tail.then(done, done)` (a rejection settles too — failing that structurally rather than
+trusting call sites to `catch`), `pendingSettle()` reports whether any tail is outstanding, and
+`fetchGenStable` waits on it in a re-asking loop *before* capturing the generation and firing. **Wait
+by tails, discard by generations, never swap the two** — the honest boundaries (a hung tail makes
+refresh wait with it; a continuous mutation stream starves refresh until the user stops) are in the
+ADR. When idle, `pendingSettle()` returns `undefined` **synchronously** — a hard contract, since one
+extra microtask would push the generation capture past a caller's "refresh then synchronously
+`markMutated`" and unpick R10's in-flight pins. Pages opt in through `hydrate.pendingSettle`, wired in
+the same single line of `pageEntry()`; the four enrolled call sites are member's and mobile's
+`markRead`/`markAllRead`. The gate's own
 `generation`/`destroyed` bookkeeping (no page-local flag needed any more) still discards a response that
 resolves after the page unmounts (member's read-state *mutations* —
 `markRead`/`markAllRead`, optimistic update + PATCH + `markMutated()` — live in `member/notifications.ts`
@@ -395,7 +427,15 @@ than one place, independent of any single page's own load-gate?
   full `createHydrationGate` factory, store-owned. Their `refresh*` counterparts get the generation-stable
   refetch for free since R10 — the store-owned gate holds the mutation generation itself, so no page-side
   `hydrate.gen` wiring is involved; "write → `markMutated` → `await refreshOps()`" stays a single fetch
-  whose snapshot applies as before (`docs/adr/0020`'s conservation pin).
+  whose snapshot applies as before (`docs/adr/0020`'s conservation pin). Neither mutator enrols a settle
+  tail in R11's fifth decision point, deliberately: `markOrderPaid` is a demo action with no network tail
+  to book, and `markMessageRead`'s fire-and-forget is a standing decision — booking it would make
+  `refreshMessages()` start waiting on a read receipt, which is a behaviour change, not a fix
+  (`docs/adr/0021`). The overlay screens sitting on this store got consistent about their own three
+  states on 2026-08-10 (R11 C3): `CoachesScreen` replaced its `onMount` self-hydrate with
+  `createLoadGate({ fetch: hydrateOps, refresh: refreshOps })` + `<LoadGate>`, so its coach cards no
+  longer render seed rows (editable ones, at that) during the hydrate window — the risk `docs/adr/0016`
+  had parked as a future candidate, now closed; `stores.ts` itself needed no change.
 
 Rule of thumb: reach for the standalone `createHydrationGate` when a store's hydration can be triggered
 from more than one place (another getter, another mutator, another page); a lone page with a lone mutator
@@ -495,14 +535,23 @@ that `docs/adr/0011` already rejected.
   reverses the `docs/adr/0013` note that had declined the extraction; `docs/adr/0014` records the
   re-adjudication.
 - **`src/lib/member/checkout-controller.ts`**'s `createCheckoutController` (2026-07-20, R5 C5) is the
-  fifth: CheckoutDialog's payment lifecycle as a three-field snapshot store (`step`/`paying`/`paid`)
+  fifth: the 結帳 payment lifecycle as a three-field snapshot store (`step`/`paying`/`paid`)
   with `placeOrder` as the single injected dep. The idempotency-key lifecycle (fresh key per checkout
   open, same key across a failed retry — the double-charge safety machine), `setOpen` edge detection
   (`freshCheckout | resumedInFlight | noop`) and the paying guard live inside, returning `kind`-tagged
   outcomes (`orderPlaced`/`orderFailed`/`alreadyPaying`/`nothingChargeable`, original throwable passed
   through) so toast text and all form/preview state stay on the component — this supersedes
   `docs/adr/0008`'s "keep the double-charge guard in the dialog" note; `docs/adr/0016` records the
-  re-adjudication.
+  re-adjudication. Since 2026-08-10 (R11 C2) it has **two** consumers on **different lifecycle layers,
+  with no branch inside the machine**: member's `CheckoutDialog` never unmounts across a checkout, so it
+  drives the key through `setOpen`'s closed→open edge (`freshCheckout` re-issues, `resumedInFlight`
+  keeps an in-flight attempt alive); mobile's `CartSheet` is *per-mount* — the overlay host's `{#if}`
+  rebuilds it on every open, so it news up its own controller each time and **deliberately never calls
+  `setOpen`**, the constructor-time key being that checkout's key, with a failed retry reusing it via
+  `confirmPay`'s existing catch path. `CartSheet` dropped its hand-rolled twin of the same machine
+  (local `step`/`paying`/`paid` plus its own `crypto.randomUUID()`) and is now a thin adapter, reaching
+  the factory through `mobile/stores.ts`'s seam; the two mount-level invariants are pinned by
+  `checkout-controller.test.ts`'s own "mount 級生命週期" describe (`docs/adr/0014`, `docs/adr/0012`).
 - **`src/lib/coach/messages-controller.ts`**'s `createMessagesController` (2026-07-23, R8 C1) is the
   sixth: `coach/messages/+page.svelte`'s conversation-thread orchestration as a single
   `MessagesViewState` snapshot store, with `getThread`/`markRead`/`sendMessage`/`getStudents`/
@@ -538,6 +587,17 @@ that `docs/adr/0011` already rejected.
   `EMPTY_FIELDS_ERROR` was the precedent), while *toast* copy stays at the call site as criterion ④
   always required. A real bug fell out of the extraction: a leftover reset timer from an earlier
   successful submit used to cut the next success message short (`docs/adr/0012`).
+- **`src/lib/mobile/pref-sync.ts`**'s `createPrefSync` (2026-08-10, R11 C4) is the ninth: mobile's
+  account-settings preference sync — background hydrate on mount, optimistic per-key writes, one
+  in-flight `saveChain`, a whole-object resync when a save fails and a single-key rollback when the
+  resync fails too — with `getPreferences`/`savePreferences` as its I/O deps and domain outcome kinds
+  (`saved`/`resynced`/`rolledBack`). Unlike the other eight it does **not** own its state store:
+  `prefs` is the caller's pre-existing cross-screen singleton, injected as a dep and still bound
+  directly by the markup, so the module owns write *timing* and serialization only and its return type
+  isn't a `Readable`. The invariant worth knowing: a queued save does **not** freeze its snapshot when
+  queued — it re-`get()`s the whole object when its turn comes, so rapid toggling always stacks on the
+  latest state including a previous failure's rollback. `SettingsScreen.svelte` dropped to a 13-line
+  shell and five render-dance tests moved to `pref-sync.test.ts` as no-render units (`docs/adr/0012`).
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
@@ -555,7 +615,16 @@ plus its own saved/saving flags) and became a second caller, taking desktop sema
 unsaved draft survives a class switch, switching mid-save is blocked with a toast, a late save response
 is dropped as `stale`, and note edits count as unsaved changes. The mapping layer that used to reshape
 the desktop seam's rows for it (`mapAttRow` plus `RosterEntry`/`ROSTER`) retired in favour of a
-zero-mapping re-export from `mobile-admin/api.ts` (`docs/adr/0014`). Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
+zero-mapping re-export from `mobile-admin/api.ts` (`docs/adr/0014`). Since 2026-08-10 (R11 C2)
+`member/checkout-controller.ts` is in the class as well — mobile's `CartSheet` retired its hand-rolled
+payment machine and became the factory's second caller (details in the controller bullet above), which
+also reverses `docs/adr/0016`'s original "非 twin: mobile CartSheet's payment flow is structurally
+different" note: the difference turned out to be *wiring* (who supplies `placeOrder`, who drives the
+lifecycle), not the machine. The same batch single-sourced the twins' coupon-apply step as
+`member/checkout.ts`'s `applyCouponCode` (trim guard + `validateCoupon` + one shared 404/network copy),
+collapsing both call sites to three lines; `validateCoupon` itself stays exported because its three
+unit tests are the only pin on the 404-vs-other-error split that `applyCouponCode` merges away.
+Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
 pushes the pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store,
 shared by *four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a
 desktop↔mobile pair. It collapses what used to be a byte-identical `submit()` skeleton (re-entrancy

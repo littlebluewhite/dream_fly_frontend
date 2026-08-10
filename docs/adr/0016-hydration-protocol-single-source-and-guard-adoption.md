@@ -250,3 +250,39 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
    `hydrateOps` 當 `fetch` 的 classes/members/orders 三頁(見上文)因此整頁包在 `<LoadGate>` 元件
    內,pending 顯示骨架、error 走預設 `ErrorState` 卡,seed 在該窗口內根本不會渲染,無此暴露。窗口內
    若對 seed 實體寫入,可能打錯後端實體,列未來輪次候選,本輪不處理。
+
+## 增補(2026-08-10,架構深化 R11 C3+C1):CoachesScreen 的 seed 窗口關閉;第五決策點同樣不進 core
+
+1. **上節(R10 rider)末句「窗口內若對 seed 實體寫入,可能打錯後端實體,列未來輪次候選,本輪不處理」
+   自本日銷案**(commit `578065b`)。`mobile-admin/overlays/CoachesScreen.svelte` 已由「`onMount`
+   自保、無 `LoadGate` 包裹」改建為 `createLoadGate({ fetch: hydrateOps, refresh: refreshOps })`
+   + `<LoadGate>` 三態,佈線逐字照抄同 surface 既有的 store-owned 變體前例
+   (`routes/mobile-admin/admin/members/+page.svelte`):pending 顯示骨架(3 張 `SkelCard`)、
+   error 走 `<ErrorState onRetry={gate.refresh} />`,**卡片列表在水合落地前根本不渲染**——也就沒有
+   「對 seed 實體按下編輯、打錯後端實體」的可達路徑。上節記載的另一半事實(此頁是 opsGate 的第 4 個
+   消費端)不變,改變的只是它承接三態的形狀。
+   - **`opsHydrated` 縫的語意零變動**:`mobile-admin/stores.ts` 本輪同樣零改動——`hydrateOps` 的
+     guard 短路仍讓重複開啟不重抓,只是 gate 的 `loading → ready` 收斂現在多花一個 microtask
+     (既有測試因此各補一行 `waitFor`,斷言本體逐字未動)。
+   - **`ScreenHeader`(含「新增教練」按鈕)刻意留在閘外**,三態只包卡片列表區;副標仍讀
+     `$coachesStore.length`,水合前顯示 seed 筆數的裝飾性小噪本輪未動(同批 rider 只把
+     `VenuesScreen` 的副標場地數改成 `$gate === 'ready'` 才顯示,消掉 loading 期誤導性的「0 個場地」)。
+   - **「兩筆 known-latent」第 1 則(新鮮度回歸)不受本輪影響、依然有效**——它講的是 waitlist/leave
+     每登入 session 只抓一次,與本節的 mobile-admin overlay 無關。**請勿**把這兩件事混記為同一筆。
+
+2. **協定的第五決策點(mutation settle 訊號,R11 C1)同樣刻意留在 `HydrationCore` 之外。**
+   `docs/adr/0021` 新增的等待軸只讀「未 settle 的 mutation 尾流帳」、不讀旗標,而且與第四點一樣是
+   refresh 族專用(hydrate 三點路徑不套)。**決定一(`HydrationCore` 三決策點單源)第三度不受影響**
+   ——core 收的仍然只有 `guarded()`/`mutationWins()`/`commit()` 這三個讀旗標的決策點。
+   「協定測試三層界線」三層互斥的判準亦不變,R11 的新釘各安其位(第 1 層 phase 單週期/棄追三支、
+   第 2 層 `hydrate.pendingSettle` 恆等釘、第 3 層 member/mobile 各一支薄採用釘),機制本體的單元釘
+   則住在 `hydration-gate.test.ts` 自己。
+
+3. **本篇「附記:同輪 C5」的「非 twin」一句自本日由 `docs/adr/0014` 增補取代**(commit `20f93a8`)。
+   原句記「**非 twin**:mobile CartSheet 付款流結構不同(`mobile/stores.ts` placeOrder 佈線),
+   不做跨 surface 抽象」——R11 C2 逐字比對兩側編排後認定,分歧只在**佈線層**(誰提供 `placeOrder`、
+   生命週期由誰驅動),付款機本體(`step`/`idempotencyKey`/`paid`/`paying` 四個跨事件不變量)確實
+   是逐字雙生;`CartSheet` 因此退成薄 adapter、成為 `createCheckoutController` 的第二個呼叫端,
+   落入 `docs/adr/0014` §2 的雙生核可類。**附記其餘各點不受影響**:0012 四判準的核對、
+   `docs/adr/0015` 與 `docs/adr/0003` 兩條劃界、以及本篇對 `docs/adr/0008`§「有意識保留」的取代
+   裁決全部原樣有效——改變的只是這台機器有幾個呼叫端。歷史裁決原文不改寫。

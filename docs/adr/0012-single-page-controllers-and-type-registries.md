@@ -218,3 +218,39 @@ in-card 區塊改讀快照的三分支——LoadGate 呼叫點 −1 的記帳見
 - **toast 文案仍逐字留呼叫端**，判準④原文不變——outcome 攜帶素材、呼叫端組裝。附帶一則同輪教訓
   （B 案，見 `docs/adr/0014` 增補）：判準④管的是「誰組裝這個字串」，**不授權順手改動字面**；把
   `SaveOutcome.className` 直接拼進成功 toast 會少掉舊版的時間前綴，那是文案漂移、不是判準④的展開。
+
+## 增補（2026-08-10，架構深化 R11 C4+C2）：名冊 8→9，與第五例的呼叫端 1→2
+
+**`src/lib/mobile/pref-sync.ts`（`createPrefSync`）是第九例。** 收的是 mobile 帳號設定畫面
+（`SettingsScreen.svelte`）的偏好同步編排：`onMount` 背景水合、`setPref` 樂觀更新、單一 in-flight
+序列鏈 `saveChain`、送出失敗的整包 resync、resync 也失敗的單鍵回滾。四判準逐條核對全數成立：
+①呼叫端恆為 `SettingsScreen.svelte` 一處；②deps 只有 `getPreferences`/`savePreferences` 兩支 I/O
+效應與呼叫端**既有的**共享 store `prefs`，零行為旗標；③outcome 是偏好同步領域詞彙
+（`saved`/`resynced`/`rolledBack`，非通用 `ok`/`error`）；④零 `$lib/load-gate`/`toasts`/`error-text`
+import，「儲存失敗」toast 逐字留元件。元件自 41 行編排退成 13 行薄殼。
+
+- **與第八例（`public/contact-form.ts`）的形狀差異落字**：`contact-form` 自建 draft/state 兩顆 store，
+  本模組的 `prefs` 是**呼叫端注入的既有跨畫面單例**（markup 仍直接 `$prefs` 雙向綁定 4 個 Switch），
+  本模組只接管寫入時機與序列化、不取代 store 本身——因此回傳型別**不** extends `Readable`。這條差異
+  不鬆動判準②：注入的仍是效應與既有依賴，不是行為開關。
+- **核心不變量（收斂後才有地方寫下來）**：`saveChain` 排隊時**不**固定快照——每一筆送出的整包快照
+  要等到輪到它執行時才從 store 重新 `get()`。連續快速切換時，後面那次送出永遠疊加在前一次（含其
+  失敗後的整包 resync／單鍵回滾）之後的最新狀態。
+- **測試離開 DOM**：原 `SettingsScreen.test.ts` 靠 render 之舞覆蓋的 5 個 it（水合覆蓋、整包 body、
+  resync 細節、雙重失敗回滾、交錯競態）改由 `pref-sync.test.ts` 的 6 個無渲染單測接手；元件端留
+  3 個既有 it（cache-first 顯示、載入失敗無 toast、佈線證明）+ 1 個新的「送出失敗 → 呼叫端恰一次
+  錯誤 toast、文案逐字」映射釘。`console.error` 前綴隨模組搬遷由 `SettingsScreen:` 改 `pref-sync:`。
+
+單頁 controller 名冊自此 **8→9**：attendance-controller ／ conversations-filter ／ coach-save ／
+clock-controller ／ checkout-controller ／ messages-controller ／ mine-controller ／ contact-form ／
+**pref-sync**。
+
+**第五例 `member/checkout-controller.ts` 的呼叫端自本日 1→2（C2，`docs/adr/0014` §2 雙生核可）。**
+判準①（呼叫端恆為一頁）在本例上**沒有被重新開判**——它走的是 `docs/adr/0014` §2 早已為判準①設立的
+雙生核可類：三條件（deps 完全相同、零行為旗標參數、編排逐字重複）逐條核對成立，故行動版
+`CartSheet.svelte` 手焊的同構付款機退役、改吃同一支工廠，經 `mobile/stores.ts` 的 seam 取用。
+**兩個消費者的生命週期不同層，機器本身不分岔**：桌面 `CheckoutDialog` 不卸載，靠 `setOpen` 的閉→開
+邊沿換發 idempotency key ／偵測 `resumedInFlight`；行動 `CartSheet` 是 mount 級（overlay host 每次
+開啟即重掛），每開一次 new 一顆 controller，**刻意不呼叫 `setOpen`**——建構期那把 key 即本次結帳
+流程的 key。判準②③④照舊一條不鬆（deps 仍只有 `placeOrder`、outcome 詞彙不變、六句 toast 文案逐字
+留元件）。完整的三條件核對與雙生記帳見 `docs/adr/0014` 的 R11 增補。

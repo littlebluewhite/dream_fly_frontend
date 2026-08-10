@@ -329,3 +329,70 @@ identity 來源不同(member 側是 `authStore`,mobile-admin 側目前無 sessio
   re-export 家族新增一員(同 `coachLoadErrorCopy` 手法)。
 - **`docs/adr/0017`**:C7 遞延理由——session-gate 三工廠一週內剛重佈同一鄰近區塊,此輪不二次
   觸碰,冷卻後待下次自然需要時再評估通知已讀 mutator 雙生是否值得收斂。
+
+## 增補(2026-08-10,架構深化 R11):兩筆 NO-GO 裁決(體例同上文 §6 唯讀 spike)
+
+R11 沿本篇 §6 的體例,再記兩個**評估後不落地**的收斂候選。兩者都零 production 寫入,記錄在案供
+未來止步;為免與本篇既有卡號混淆,以下一律加 R11 前綴。
+
+**先結一筆舊帳:§7(C7,通知已讀 mutator 雙生收斂)的遞延前提已在本輪得到答案。** 該節遞延的理由
+之一是「是否值得收斂需要先確認兩者的 mutate 語意是否真的逐字同構,而非只是表面形狀相似——這個確認
+本身超出遞延評估的邊界」。R11 C1(`docs/adr/0021`)為了別的目的做完了這個確認,答案是**不同構**:
+member/mobile 兩側的 `markRead`/`markAllRead` 是 **mark-before-await** 的樂觀 mutation,有網路尾流
+要入帳(第五決策點的四個呼叫端正是它們);mobile-admin 的 `markMessageRead` 是 **fire-and-forget**、
+`markOrderPaid` 根本沒有網路呼叫,兩者都**刻意不入帳**——把它們入帳會讓 `refreshMessages()` 開始等
+已讀回條,是行為變更而非缺陷修復。兩族自此在協定層**正式分開記帳**。C7 因此不只是「還沒到冷卻期」,
+而是「已確認兩者語意不同構」;日後若仍有人想收斂這對雙生,請先解釋要如何在同一支 mutator 裡同時
+表達「入帳」與「刻意不入帳」——那正是 `docs/adr/0011` 已否決的行為旗標寬介面。
+
+### R11 C6 — 「加入購物車 → 額滿轉候補」序列收單源:不成立
+
+**範圍**:五個呼叫端各自寫著同一個三行序列——`const r = cart.add(course)` → `if (r === 'waitlisted')`
+→ `await joinWaitlist(course.id)` + 分流 toast:`mobile/overlays/CourseDetailSheet.svelte`、
+`routes/member/courses/+page.svelte`、`routes/courses/+page.svelte`(公開行銷頁)、
+`routes/mobile/+page.svelte`、`routes/mobile/courses/+page.svelte`。
+
+**依 `docs/adr/0012` 四判準 + deletion test 核對**:
+
+- ①呼叫端恆為 1 頁——**不成立**,恆有 5 個異質呼叫端(其中兩個是不同 surface),既不落 §1 的單頁
+  類,也不落 `docs/adr/0014` §2 的雙生核可類(該類前提是 desktop↔mobile **成對**且編排逐字重複;
+  本案是一對多,且 `member/courses` 頁多一道 `waitlistedIds` 已候補守衛、`CourseDetailSheet` 多一個
+  `onClose()` 收尾,編排並非逐字)。
+- **deletion test 實算不過**:剝掉照判準④該留呼叫端的東西(六到八句 toast 文案、`joinWaitlistErrorMessage`
+  映射、各頁自己的 busy/已候補守衛與關閉動作)之後,可搬走的殘渣是「`add` 回 `'waitlisted'` 就打
+  `joinWaitlist`」這一個 `if`——**每端淨省 ≤4 行**,而新模組(型別簽名 + 函式本體 + 檔頭註解)加上
+  它自己該有的測試檔 **160+ 行**。比本篇 §6 已否決的 `submitEntity` 更薄:那案好歹還吃下 create/update
+  的分派,本案連分派都沒有,是純粹的 if 換函式呼叫。
+- **race 收益主張不成立(本案的核心誤判,落字防重演)**:提案的另一半動機是「順手收掉
+  `docs/adr/0014` §5 記載的候補 prepend race」。核對後**否決**——那筆 race 自 `docs/adr/0016`(R5 C1)
+  起就有機制,並自 `docs/adr/0017`(R7 C1)整段收進 `createSessionGate.mutate()`,今天完整住在
+  **store 層**(`member/waitlist.ts` 的 `joinWaitlist` 只是 `gate.mutate(...)` 的薄呼叫)。呼叫端那
+  三行裡**沒有任何 race 機制可收**;抽出一支新模組不會讓 store 層的機制變多或變少。判準:提「順手
+  收 race」當抽取理由前,先確認那條 race 的機制今天住在哪一層——住在下游就與這層的抽取無關。
+
+**替代處置(已落地,W1 小步包)**:新增 `src/lib/mobile/overlays/CourseDetailSheet.test.ts`(3 例)
+把該端三條路徑釘住——`spots > 0` 直接加購 toast、`spots === 0` 候補成功 toast、候補 409 的專屬文案
+「你已經在候補名單中了」,三者皆另斷言 `onClose()` 被呼叫。這是五個呼叫端中原本唯一零測的一個;
+pin-first 寫出即全綠(無 production 落差)。**不主張任何抽取**。
+
+### R11 R5 — coach `SecurityTab` 接 admin `password-validate`:不成立(蓄意分歧,不是漏收)
+
+**範圍**:`src/lib/admin/components/password-validate.ts` 的 `validatePassword()` 與
+`src/lib/coach/components/settings/SecurityTab.svelte` 內聯的變更密碼守衛,表面上都是「新密碼 +
+確認密碼」的純驗證。
+
+**逐條核對後**:兩者是**不同的驗證行為**,不是同義文案的兩份複本——
+
+| | admin `validatePassword` | coach `SecurityTab` |
+| --- | --- | --- |
+| 規則數 | **兩條** | **三條** |
+| 空欄 | 只看新密碼非空 → 「請輸入新密碼」 | 三欄(目前/新/確認)皆須填 → 「請填寫所有欄位」 |
+| 兩次一致 | → 「兩次輸入的新密碼不一致」 | → 「新密碼與確認密碼不符」 |
+| 長度 | **無此規則** | `length < 8` → 「新密碼至少需 8 個字元」 |
+
+**裁決:不收,記為蓄意分歧。** 收斂到任一側都是**行為變更**:讓 admin 吃 coach 的三規則,admin 的
+變更密碼對話框會多出兩道以前不擋的守衛;讓 coach 吃 admin 的兩規則,coach 會失去長度下限。文案也
+非同義(「請輸入新密碼」vs「請填寫所有欄位」措辭與涵蓋面都不同),不適用 `docs/adr/0011` 的
+「byte-identical 才收」收斂紀律——**這條紀律的反面用法正是本案**:字面不同時,先問是不是行為不同,
+不是先想怎麼統一字面。日後若產品面真的要統一密碼政策,那是一次**產品決策**(該由後端的密碼規則
+單源驅動),不是一次重構;屆時請不要引用本節當作「架構上早就該收」的依據。

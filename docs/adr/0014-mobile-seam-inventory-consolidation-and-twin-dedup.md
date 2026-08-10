@@ -224,3 +224,80 @@ commit 兌現。動因:R10 合併前的全分支終掃(codex)把此條由 P2 升
 若誤傳 label,controller 以 id 查無 → 名冊不換即紅)。殘餘記帳:同名兩場在**桌面** dropdown
 的顯示字串相同(識別已由 key 保證,僅視覺無從分辨哪場是哪場);補時間前綴屬顯示層決策——
 行動 chips 的 `labelOf` 本就帶時間前綴天然消歧——留待實際排課出現同名兩場時再議。
+
+## 增補(2026-08-10,架構深化 R11):四筆現況校正
+
+### 1. 上節末句的「殘餘記帳」已了結——`sessionChipLabel` 提共用,桌面 dropdown 帶時間前綴
+
+上節結尾記著「補時間前綴屬顯示層決策……留待實際排課出現同名兩場時再議」;R11 R3(commit
+`610e7bd`)不等排課出現就把它做掉了,理由是雙生本身:同一條顯示公式(去「今日 」前綴、取
+en-dash 前的起始時間、接課名)當時只住在行動頁的本地 `labelOf()`,桌面 dropdown 則裸顯課名。
+本輪把公式提進 `src/lib/coach/attendance-controller.ts` 的具名匯出
+`sessionChipLabel(c: AttClassFull): string`,行動頁刪本地 `labelOf`、三個呼叫點
+(chips 標籤、儲存成功 toast 的班別標籤、roster 摘要列的 Panel sub)改吃共用函式,桌面
+`coach/attendance/+page.svelte` 的 dropdown `options` 由 `label: c.name` 改為
+`label: sessionChipLabel(c)`。
+
+- **這是蓄意的行為變更,不是等值重構**:桌面 dropdown 的顯示字串自此帶時間前綴,同名兩場在**視覺上**
+  也能分辨(先前只有 key 保證識別正確,人眼分辨不出哪一列是哪一場)。上節的殘餘記帳**自此銷帳**。
+- **識別軸不受影響**:`selectClass` 仍吃 session id、`CoachDropdown` 的 `{#each}` 仍以 `o.key` 為鍵
+  ——上節「keyed 化」的兩個病灶(選不到第二場、`each_key_duplicate`)由 key 一路保證,與 label 顯示
+  什麼無關。行動頁的 `page.test.ts` **零編輯**且既有硬編字串(如 `'19:00 測試班甲'`)原樣通過,是
+  「公式搬家、輸出逐字相同」的直接證據。
+- **一則測試側信道自然弱化,落字防誤判**:桌面同名兩場的 it 原本附帶一種偶然的偵測力——舊公式下兩筆
+  fixture 的顯示字串**必然相同**,故「`{#each}` 誤退化成以 label 為鍵」這種假設性回歸會確定性地撞上
+  Svelte 的 `each_key_duplicate` 而讓測試崩掉。改用 `sessionChipLabel` 後兩筆顯示字串因時間不同而
+  唯一,這條側信道不再觸發。**這是本功能的自然結果、不是覆蓋率缺口**:真正該守的「以 id 路由」主軸
+  仍由該 it 的名冊切換斷言鎖住,本輪並另補一條「兩選項顯示字串相異」的正面斷言。
+
+### 2. §5 known-latent 的候補 prepend race:自 `docs/adr/0017` 起已被 store 層吸收
+
+§5 第一則記載「`joinWaitlist` prepend 可能被更早發出的 in-flight `refreshWaitlist` 回應覆寫」與其
+請假側鏡射,末句寫「水合 guard(`createHydrationGate` 採用)屬另案裁決,不靜默出貨」。該另案是
+`docs/adr/0016`(R5 C1),其機制隨後又於 `docs/adr/0017`(R7 C1)整段收進 `createSessionGate`
+的 `mutate()`——**現況以本節為準**:`src/lib/member/waitlist.ts` 的 `joinWaitlist`/`cancelWaitlist`
+都是 `gate.mutate(request, writeBack)` 的薄呼叫,進場快照(`wasHydrated`/`epoch`)、跨登出寫回作廢、
+寫回時重查完整度、`markMutated()`、以及條件式序列化和解重抓全部發生在工廠內,**呼叫端一行都不焊**。
+這一則因此不再是開放的 known-latent,而是「機制已存在、住在 store 層」。
+
+**同批已核對、確認不需要改動的判斷**:R11 C6(把五個呼叫端的「`cart.add()` → 收到 `'waitlisted'`
+→ `joinWaitlist()`」序列收成單一模組)以「順手把 race 也一起收掉」為部分動機提案,經核對後
+**否決**——race 早已被上述 store 層機制吸收,呼叫端那三行裡根本沒有任何 race 機制可收,收益主張
+不成立。完整的 deletion-test 論證見 `docs/adr/0018` 的 R11 增補。
+
+### 3. §1 的源路徑白名單:四模組 → **五模組**
+
+§1 末段寫「由 foundation-contracts 的源路徑白名單契約(stores/checkout/leave-form/cancel-leave
+四模組)補上」——R11 C2 之後為**五模組**,新增 `$lib/member/checkout-controller`
+(`src/lib/mobile/foundation-contracts.test.ts` 的 `ALLOWED` 陣列與該 it 的描述同批更新)。擴充的
+性質與既有的 `leave-form`/`cancel-leave` 兩員完全同款:都是 desktop↔mobile **雙生收斂**後,
+mobile 經自家 `stores.ts` seam 零映射 re-export 一個住在 `$lib/member` 的共用模組——是白名單設計
+內的正當居民,不是繞道。§1 的不變量(「mobile production source 中,四個 seam 檔之外無任何
+`$lib/member` import」)本身**一字未改**,`MOBILE_SEAM_FILES` 四檔白名單亦零改動。
+
+### 4. §2 雙生核可類新例:`member/checkout-controller.ts`(結帳付款機)
+
+`src/lib/member/checkout-controller.ts` 的 `createCheckoutController` 原是 `docs/adr/0012` 判準①
+(呼叫端恆為一頁)的第五例,呼叫端只有桌面 `CheckoutDialog.svelte`;行動版 `CartSheet.svelte` 則
+自己手焊一台同構的付款機(本地 `step`/`paying`/`paid` 三變數 + 自己 `crypto.randomUUID()` 產的
+`idempotencyKey`)。本輪(commit `20f93a8`)核對本節三條件——deps 完全相同(僅 `placeOrder`)、零
+行為旗標參數、編排逐字重複——全數成立,故 `CartSheet` 改為 controller 的**第二個呼叫端**,自身退成
+薄 adapter(`$: ({ step, paying, paid } = $checkout)` 三條鏡射 + outcome→toast 佈線)。判準②③④
+照舊一條不鬆:六句 toast 文案與其組裝逐字留元件。
+
+- **兩個消費者的生命週期不同層,機器本身不分岔**:桌面 `CheckoutDialog` 整個結帳期間都不卸載,靠
+  `setOpen` 的閉→開邊沿換發 key / 偵測 `resumedInFlight`;行動 `CartSheet` 是 **mount 級**
+  (`OverlayHost` 的 `{#if}` 每次開啟即重掛),每開一次就 new 一顆 controller,**刻意不呼叫
+  `setOpen`**——建構期產生的那把 key 即本次結帳流程的 key,失敗重試沿用同一把由 `confirmPay` 的
+  catch 分支既有語意提供。這兩條由 `checkout-controller.test.ts` 新增的「mount 級生命週期」
+  describe 保存釘住(既有 12 條單測全部針對經 `setOpen` 換發過的 key,對建構期 key 有盲區——以
+  兩次臨時突變實測過該盲區存在)。
+- **`docs/adr/0016` 附記(同輪 C5)的「非 twin」裁決由本節取代**:該篇當年記「**非 twin**:mobile
+  CartSheet 付款流結構不同(`mobile/stores.ts` placeOrder 佈線),不做跨 surface 抽象」;本輪逐字
+  比對後認定分歧只在**佈線層**(誰提供 `placeOrder`、生命週期由誰驅動),付款機本體確實是逐字雙生。
+  歷史裁決原文不改寫,該篇已補 dated 增補指回本節。
+- **同批附帶一筆雙生文案收斂**:優惠碼套用的「trim 空守衛 + `validateCoupon` + 404/網路錯誤同一句
+  文案」兩側逐字重複,收成 `member/checkout.ts` 的 `applyCouponCode()`,兩個呼叫端各縮為 3 行。
+  `validateCoupon` **保留 export**(唯一跨模組消費者退場,但它的三條單測是「404 與其他錯誤分類」
+  這條契約的唯一釘子,`applyCouponCode` 把兩者併成同一句文案後就驗不到了);mobile seam 端的
+  `validateCoupon` re-export 則依死出口紀律移除,identity pin 一併改釘 `applyCouponCode`。

@@ -380,3 +380,45 @@ controller」紀錄的慣例,非靜默覆寫):
 像素與色值全程逐字保真:28 個色值 + 10 個 scale 值有逐鍵 `toEqual` pin,`charts.test.ts` 的四條
 px 斷言與 `ReportsScreen.test.ts` 零改續綠。同批補上 `RevenueTrend.test.ts`——它是 14 個報表面板中
 唯一沒有元件測試的一支(Task 15 復刻,不在 P4-F2 的 13 面板名單內),也是本輪唯一被改寫算式的面板。
+
+## 增補(2026-08-10,架構深化 R11 C5+R1):`domain/class-detail.ts` 入列;`SlaTone` 退役註記校正
+
+### 1. `src/lib/domain/class-detail.ts` — 課程詳情顯示派生單源(C5,commit `06bb6ff`)
+
+新住戶,收的是課程詳情的兩件顯示知識:
+
+- **`classDetailRows(k): [IconName, string, string][]`** —— 課程詳情的 **12 列** `[icon, 標籤, 值]`
+  (星期時段、教練、教室、年齡、分類、期別、開課日、堂數、報到率、候補、補課、費用)。原本 admin 桌面
+  `ClassDialog.svelte` 與 mobile-admin `ClassSheet.svelte` 各 inline 一份 byte-identical 雙生、兩份
+  皆零測。
+- **`classFill(enrolled, cap): { full, pct }`** —— 滿班判定 + 進度條百分比。原本四處各自重複
+  (`ClassDialog`/`ClassSheet`/`ClassCard`/mobile-admin classes 頁)。
+
+**唯一行為變更:`cap <= 0` 時 `pct` 由非有限值改為 0。** 舊式各呼叫點寫的是
+`Math.round(enrolled / cap * 100)`,`cap === 0` 時得到 `Infinity`(或 `enrolled` 也為 0 時的 `NaN`)
+並直接餵給 `ProgressBar`/`MiniBar` 的 `value`——既有缺陷,非本輪引入。`full` 一字未動(含
+`cap === 0 → full === true` 這條「上限 0 視為已滿」的既有語意)。兩個對話框的 null 保真三元
+(`k ? classFill(k.enrolled, k.cap) : { full: false, pct: 0 }`)是刻意的:未開態不可讓
+`classFill(0, 0)` 的 `full === true` 洩進畫面。
+
+**住所與歸類,落字防誤填**:本檔住 `$lib/domain`、消費端**直接 import 不經 facade**,沿的是
+`docs/adr/0014` §1 把 `session-format.ts`(純顯示派生)搬進 `domain/` 的先例,不是 §1 開頭表格那個
+「狀態/類型 → tone/label」家族的第七個 entity 檔——它不對位任何後端 enum、也不產出 `Tone`。下次
+盤點顯示查表時請不要把它算進 venues/tickets/members/classes/course-level/sessions 那六張表的計數。
+`ClassCard.svelte` 只遷 `classFill`,它自己那三列 meta rows 內容與詳情 12 列不同,**未收斂**。
+
+### 2. §2「2026-07-20(R5 C2)退役註記」的末句已過時:`SlaTone` 自本日滅跡
+
+§2 內那則引言註記寫著——
+
+> `Conversation` 型別與 `SlaTone` 仍為活型別(真映射的型別消費者)。
+
+——其中 **`SlaTone` 一詞自本日起不再成立**(R11 R1,commit `8a17ae5`)。SLA 是 mock 時代「緊急對話 /
+回覆 SLA 倒數」的展示概念,後端從未提供對應欄位,`mapConversation()` 一直硬塞 `sla: ''` /
+`slaTone: 'muted'`,UI 側因此渲染的是一顆恆空的 muted 時鐘 icon、一條恆為 falsy 的 banner 分支、
+以及一個點了恆空清單的「緊急」tab。本輪把 `Conversation` 的 `urgent`/`sla`/`slaTone` 三欄與
+`SlaTone` 型別本身連同全部 UI/filter/fixture 佐證一併移除,`SlaTone` 在倉內零殘留。
+
+**`Conversation` 型別仍為活型別**(它是 `mapConversation()` 的回傳形狀),該註記的其餘部分——
+`CONVERSATIONS` seed 已於 `coach/data.ts` 原位退役、歷史裁決原文不改寫——全部原樣有效。**本節只
+校正「`SlaTone` 仍為活型別」這半句的現況,不改寫該註記原文。**
