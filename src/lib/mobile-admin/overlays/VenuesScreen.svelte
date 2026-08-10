@@ -44,7 +44,7 @@
 </script>
 
 <PushScreen>
-  <ScreenHeader {onBack} title="場館管理" sub={venues.length + ' 個場地 · 器材與時段'} />
+  <ScreenHeader {onBack} title="場館管理" sub={($gate === 'ready' ? venues.length + ' 個場地 · ' : '') + '器材與時段'} />
   <LoadGate {gate}>
     <div class="df-scroll" data-testid="venues-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;" slot="loading">
       {#each [0, 1, 2] as i (i)}

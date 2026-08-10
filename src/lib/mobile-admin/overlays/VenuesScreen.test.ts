@@ -39,6 +39,12 @@ describe('VenuesScreen — 載入(GET /venues)', () => {
 		const { findByText } = render(VenuesScreen, { props: { onBack: () => {} } });
 		await findByText('載入失敗');
 	});
+
+	it('loading 期副標不誤導顯示「0 個場地」', () => {
+		vi.mocked(getVenues).mockReturnValue(new Promise(() => {}));
+		const { container } = render(VenuesScreen, { props: { onBack: () => {} } });
+		expect(container.textContent ?? '').not.toContain('0 個場地');
+	});
 });
 
 describe('VenuesScreen — ready(接真 payload)', () => {

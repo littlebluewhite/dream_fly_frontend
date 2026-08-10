@@ -157,6 +157,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		vi.mocked(getOpsCollections).mockResolvedValue(opsFixture(refreshed));
 
 		const { container } = render(CoachesScreen, { props: { onBack: () => {} } });
+		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[0]);
 
@@ -183,6 +184,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		});
 
 		const { container } = render(CoachesScreen, { props: { onBack: () => {} } });
+		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[1]);
 		await sheetOnSave()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
@@ -197,6 +199,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		vi.mocked(updateCoach).mockRejectedValue(new ApiError(422, 'invalid coach payload'));
 
 		const { container } = render(CoachesScreen, { props: { onBack: () => {} } });
+		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[2]);
 		await sheetOnSave()({ email: '', password: '', name: target.name, title: target.title, tags: target.tags, isActive: target.isActive });
@@ -211,6 +214,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		vi.mocked(updateMember).mockRejectedValue(new ApiError(422, '姓名不符規則'));
 
 		const { container } = render(CoachesScreen, { props: { onBack: () => {} } });
+		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[3]);
 		await sheetOnSave()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
@@ -243,5 +247,37 @@ describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁�
 			expect(getOpsCollections).toHaveBeenCalledTimes(1);
 			expect(getByText('水合教練')).toBeInTheDocument();
 		});
+	});
+});
+
+/** 手動控時序的 deferred promise(抄 mobile-admin/stores.test.ts 的 createDeferred 寫法)——
+ *  下面的 loading 態測試需要「先掛住斷言骨架、再 resolve 斷言列表現身」兩階段，VenuesScreen
+ *  既有 loading 測試用的 `new Promise(() => {})`(永不 resolve)不夠用。 */
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((res) => {
+		resolve = res;
+	});
+	return { promise, resolve };
+}
+
+describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 getOpsCollections)', () => {
+	it('loading：opsHydrated 為 false 時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
+		opsHydrated.set(false);
+		const d = createDeferred<ReturnType<typeof opsFixture>>();
+		vi.mocked(getOpsCollections).mockReturnValue(d.promise);
+
+		const { getByTestId, queryByTestId, container, findByText } = render(CoachesScreen, {
+			props: { onBack: () => {} }
+		});
+
+		expect(getByTestId('coaches-skeleton')).toBeTruthy();
+		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(0);
+
+		d.resolve(opsFixture(COACHES));
+		await findByText(COACHES[0].name);
+
+		expect(queryByTestId('coaches-skeleton')).toBeNull();
+		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(COACHES.length);
 	});
 });

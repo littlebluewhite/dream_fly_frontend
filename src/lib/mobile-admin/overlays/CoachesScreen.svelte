@@ -31,7 +31,9 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
+  import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coaches as coachesStore, toasts, refreshOps, hydrateOps } from '$lib/mobile-admin/stores';
+  import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/domain/coaches';
   import {
     createCoach,
@@ -47,16 +49,23 @@
   export let onBack: () => void;
   export let onNew: (() => void) | undefined = undefined;
 
-  // R10 審查發現的水合缺口:admin 首頁 getAdminHome() → 更多頁 getMore()
-  // (routes/mobile-admin/admin/more/+page.svelte)→ 本 overlay 這條動線,沿路兩站
-  // 都只讀各自的本地一次性快照,從未呼叫 hydrateOps()——$coachesStore 因此永遠停
-  // 在 stores.ts 的 domain seed(COACHES),使用者看到的不是後端真資料。消費端自
-  // 保:onMount 觸發 hydrateOps()(stores.ts 的 opsGate 註解明文=hydrateOps() 由
-  // 消費頁在 onMount 觸發;同 classes/members/orders 三頁 + member/courses 頁
-  // onMount hydrate 前例)。opsHydrated guard 保證重複開啟不重抓,catch 吞錯後
-  // domain seed 仍可渲染(best-effort,同 member/courses 頁 hydrateWaitlist 慣例)。
+  // R11(C3,LoadGate 三態第五次複製,先例 VenuesScreen):R10 加的 onMount 自保呼叫
+  // (hydrateOps().catch(()=>{}))只解決「未曾水合」的個案本身——fetch 失敗時仍永久
+  // 停留在 domain seed、沒有 loading 骨架、也沒有重試入口,是 ADR 0016 明文記載的
+  // 風險窗。改建 createLoadGate 三態(loading/error/ready):gate 佈線抄 store-owned
+  // 變體先例(routes/mobile-admin/admin/members/+page.svelte)——fetch/refresh 直接
+  // 是 hydrateOps/refreshOps 本身,兩者已經直寫 $coachesStore,gate 不需要另外的
+  // onData。opsHydrated 為 true(已水合)時 hydrateOps() 內部的 guard 短路,不重打
+  // getOpsCollections,但 gate 仍會經一個 microtask 才從 loading 收斂為 ready(await
+  // 一個已 resolve 的 promise,不是同步)——既有測試「opsHydrated.set(true) 短路」的
+  // 重置縫語意不變,只是斷言需要多等一拍。ScreenHeader(含「新增教練」按鈕)留在
+  // 閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
+  const gate = createLoadGate({
+    fetch: hydrateOps,
+    refresh: refreshOps
+  });
   onMount(() => {
-    void hydrateOps().catch(() => {});
+    gate.load();
   });
 
   // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
@@ -131,7 +140,18 @@
   <ScreenHeader {onBack} title="教練管理" sub={$coachesStore.length + ' 位專任教練'}>
     <HeaderIcon slot="right" icon="user-plus" label="新增教練" onClick={newCoach} />
   </ScreenHeader>
-  <div class="df-scroll">
+  <LoadGate {gate}>
+    <div class="df-scroll" data-testid="coaches-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;" slot="loading">
+      {#each [0, 1, 2] as i (i)}
+        <SkelCard padding={16}><Skeleton w="100%" h={120} r={12} /></SkelCard>
+      {/each}
+    </div>
+
+    <div class="df-scroll" style="padding:16px;" slot="error">
+      <ErrorState onRetry={gate.refresh} />
+    </div>
+
+    <div class="df-scroll">
     <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
       {#each $coachesStore as c (c.id)}
         <div
@@ -181,5 +201,6 @@
       {/each}
       <div style="height:8px;"></div>
     </div>
-  </div>
+    </div>
+  </LoadGate>
 </PushScreen>
