@@ -36,6 +36,7 @@
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { apiErrorText } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
+  import { classFill } from '$lib/domain/class-detail';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -132,8 +133,7 @@
         <MEmpty icon="search-x" title="找不到符合的課程" />
       {:else}
         {#each list as k (k.id)}
-          {@const full = k.enrolled >= k.cap}
-          {@const pct = Math.round((k.enrolled / k.cap) * 100)}
+          {@const fill = classFill(k.enrolled, k.cap)}
           <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); overflow:hidden;">
             <button
               on:click={() => openDetail(k)}
@@ -155,9 +155,9 @@
               <div style="margin-top:12px;">
                 <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
                   <span style="color:var(--df-text-light);">報名人數</span>
-                  <span style="font-weight:700; color:{full ? 'var(--df-warning)' : 'var(--df-text-dark)'};">{k.enrolled} / {k.cap} 人</span>
+                  <span style="font-weight:700; color:{fill.full ? 'var(--df-warning)' : 'var(--df-text-dark)'};">{k.enrolled} / {k.cap} 人</span>
                 </div>
-                <MiniBar value={pct} tone={full ? 'warning' : 'primary'} height={6} />
+                <MiniBar value={fill.pct} tone={fill.full ? 'warning' : 'primary'} height={6} />
               </div>
             </button>
             <div style="display:flex; gap:8px; padding:0 16px 14px;">

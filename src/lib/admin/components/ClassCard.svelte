@@ -12,13 +12,15 @@
   import { toasts as toastStore } from '$lib/admin/stores';
   import type { ClassRow } from '$lib/admin/data';
   import type { IconName } from '$lib/icon-registry';
+  import { classFill } from '$lib/domain/class-detail';
 
   export let k: ClassRow;
   export let onEdit: () => void = () => {};
   export let onOpen: () => void = () => {};
 
-  $: full = k.enrolled >= k.cap;
-  $: pct = Math.round((k.enrolled / k.cap) * 100);
+  $: fill = classFill(k.enrolled, k.cap);
+  $: full = fill.full;
+  $: pct = fill.pct;
 
   // 教練 / 上課日·時段 / 教室·年齡 — mirrors the source's three icon rows.
   $: rows = [

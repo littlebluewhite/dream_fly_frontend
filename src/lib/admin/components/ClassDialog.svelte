@@ -8,34 +8,21 @@
    * 關閉 secondary that calls onClose. */
   import { Dialog, Icon, ProgressBar } from '$lib/components/ui';
   import StatusBadge from './StatusBadge.svelte';
-  import { fmtNT } from '$lib/format';
   import type { ClassRow } from '$lib/admin/data';
-  import type { IconName } from '$lib/icon-registry';
+  import { classFill, classDetailRows } from '$lib/domain/class-detail';
 
   export let klass: ClassRow | null = null;
   export let onClose: () => void = () => {};
   export let onEdit: (k: ClassRow) => void = () => {};
 
-  $: full = klass ? klass.enrolled >= klass.cap : false;
-  $: pct = klass ? Math.round((klass.enrolled / klass.cap) * 100) : 0;
+  // null 保真:klass 為 null(對話框未開)時給 { full: false, pct: 0 } 預設值——
+  // 不可讓 classFill(0, 0) 的 full=true 洩入未開態。
+  $: fill = klass ? classFill(klass.enrolled, klass.cap) : { full: false, pct: 0 };
+  $: full = fill.full;
+  $: pct = fill.pct;
 
   // [icon, label, value] field grid — mirrors the source row list order + icons.
-  $: rows = klass
-    ? ([
-        ['clock', '上課時段', klass.day + ' · ' + klass.time],
-        ['user-round', '授課教練', klass.coach + ' 教練'],
-        ['map-pin', '教室 / 場地', klass.room],
-        ['cake', '適合年齡', klass.age],
-        ['layers', '課程類別', klass.cat],
-        ['calendar-range', '本期期別', klass.term],
-        ['calendar-plus', '開課日期', klass.startDate],
-        ['repeat-2', '本期堂數', klass.sessions + ' 堂'],
-        ['percent', '平均到課率', klass.checkinRate + '%'],
-        ['user-plus', '候補人數', klass.wait + ' 人'],
-        ['history', '補課名額', klass.makeup + ' 位'],
-        ['circle-dollar-sign', '季費', fmtNT(klass.price)]
-      ] satisfies [IconName, string, string][])
-    : [];
+  $: rows = klass ? classDetailRows(klass) : [];
 </script>
 
 <Dialog

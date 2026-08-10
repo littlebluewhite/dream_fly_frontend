@@ -8,9 +8,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { overlay, toasts } from '$lib/mobile-admin/stores';
-  import { fmtNT } from '$lib/format';
   import { STATUS_TONE, type ClassRow } from '$lib/mobile-admin/data';
-  import type { IconName } from '$lib/icon-registry';
+  import { classFill, classDetailRows } from '$lib/domain/class-detail';
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
@@ -24,24 +23,12 @@
     else overlay.sheet('classForm', { k });
   }
 
-  $: full = k ? k.enrolled >= k.cap : false;
-  $: pct = k ? Math.round((k.enrolled / k.cap) * 100) : 0;
-  $: rows = k
-    ? ([
-        ['clock', '上課時段', k.day + ' · ' + k.time],
-        ['user-round', '授課教練', k.coach + ' 教練'],
-        ['map-pin', '教室 / 場地', k.room],
-        ['cake', '適合年齡', k.age],
-        ['layers', '課程類別', k.cat],
-        ['calendar-range', '本期期別', k.term],
-        ['calendar-plus', '開課日期', k.startDate],
-        ['repeat-2', '本期堂數', k.sessions + ' 堂'],
-        ['percent', '平均到課率', k.checkinRate + '%'],
-        ['user-plus', '候補人數', k.wait + ' 人'],
-        ['history', '補課名額', k.makeup + ' 位'],
-        ['circle-dollar-sign', '季費', fmtNT(k.price)]
-      ] satisfies [IconName, string, string][])
-    : [];
+  // null 保真:k 為 null(sheet 未開)時給 { full: false, pct: 0 } 預設值——不可讓
+  // classFill(0, 0) 的 full=true 洩入未開態。
+  $: fill = k ? classFill(k.enrolled, k.cap) : { full: false, pct: 0 };
+  $: full = fill.full;
+  $: pct = fill.pct;
+  $: rows = k ? classDetailRows(k) : [];
 </script>
 
 <Sheet open {onClose} maxHeight="92%" title="課程資料" sub={k ? '班級編號 ' + k.id : ''}>
