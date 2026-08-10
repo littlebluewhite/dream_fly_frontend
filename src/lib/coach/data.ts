@@ -239,8 +239,7 @@ export interface AttClassFull extends AttClass {
 // 保留。
 
 /* ──────────────── notifications (topbar bell menu) ────────────────
- * Defined in the prototype's shell.jsx; data, so it lives here. Old-style icon
- * `alert-triangle` is translated to the registry's `triangle-alert`. */
+ * Defined in the prototype's shell.jsx; data, so it lives here. */
 export const NOTIFS: Notif[] = [
 	{ icon: 'clipboard-check', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)', title: '點名提醒', body: '青少年體操中級班 上課中，尚未完成點名', time: '5 分鐘前', read: false, to: 'attendance' },
 	{ icon: 'message-circle', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', title: '王媽媽（小明家長）', body: '老師您好，小明明天的課可以調整時間嗎？', time: '18 分鐘前', read: false, to: 'messages' },

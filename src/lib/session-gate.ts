@@ -17,10 +17,12 @@
  * ②門 (c) `onSessionReset` 退役 —— 其唯一消費者 mobile notifs 已改建完整 gate
  * (見 $lib/mobile/notifications.ts),三門收斂為兩門。
  *
- * 架構深化 R10／R11 都只動 pageEntry():R10 的 hydrate 包多帶 `gen: gate.mutationGen`
+ * 架構深化 R10／R11 動的主要是 pageEntry():R10 的 hydrate 包多帶 `gen: gate.mutationGen`
  * (世代穩定重抓),R11 再多帶 `pendingSettle: gate.pendingSettle`(mutation settle 訊號)
  * ——讓頁面 load-gate 的 refresh 族與 store 閘門讀**同一本**世代帳與**同一本**尾流帳
- * (見 $lib/hydration-gate 的 fetchGenStable)。本檔其餘一字未動——尤其 queueReconcile
+ * (見 $lib/hydration-gate 的 fetchGenStable)。R11 終審修波再於下方 identity onChange 補
+ * **一行** `gate.clearPendingTails()`(跨身分清尾流帳,理由見該處與 createSessionGate 註解)。
+ * 除這一行外本檔其餘一字未動——尤其 queueReconcile
  * 零 diff:它的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費閉合
  * (見該函式註解);mutate() 也零 diff——它是 await-then-write,天生沒有「寫回時尾流仍在
  * 飛」的窗口,不需要入帳(R11 的缺陷只在四個 mark-before-await 的通知域呼叫點)。

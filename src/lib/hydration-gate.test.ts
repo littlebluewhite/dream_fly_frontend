@@ -357,8 +357,9 @@ describe('createHydrationGate', () => {
 	});
 
 	it('記帳順序:markMutated(尾流) 翻旗的同步通知裡重入 refresh() → GET 不得出發(尾流必須先入帳,再推世代/翻旗)', async () => {
-		/* 半發布狀態:core.commit() 的 hydrated.set(true) 會**同步**通知 subscriber(svelte
-		 * writable 無相等性短路),subscriber 若在那個回呼裡同步重入 refresh(),而尾流是在
+		/* 半發布狀態:core.commit() 的 hydrated.set(true) 在旗標原為 false 時走 false→true 這道邊沿,
+		 * 會**同步**通知 subscriber(svelte writable 只對 primitive 相同值短路,true→true 才不通知),
+		 * subscriber 若在那個回呼裡同步重入 refresh(),而尾流是在
 		 * commit **之後**才入帳,此刻 pendingSettle() 仍回 undefined —— GET 帶著已遞增的世代
 		 * 同步出發,settle 後世代比對相符、server 舊真值照樣落地,丟棄軸也接不住(世代已穩)。
 		 * 記帳全程同步,移到 commit 之前不會替靜止路徑多花任何一個 microtask。 */

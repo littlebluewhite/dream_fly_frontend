@@ -204,6 +204,56 @@ describe('createSessionGate — session 家族', () => {
 		expect(get(store)).toEqual([{ id: 'b' }]);
 	});
 
+	it('清帳與同拍新尾流:換帳同一拍重入的新身分尾流照樣擋住 refresh(巢狀通知排在 onChange 之後,記在新帳本上)', async () => {
+		/* 這條釘的是清帳與「同拍重入的新身分 mutation」之間的相對順序。曾被提報的反例是:清帳排在
+		 * `reset()`/翻旗**之後**,而 reset() 寫 store 會**同步**通知 subscriber、subscriber 在那個
+		 * 回呼裡重入新身分的樂觀 mutation → 新尾流記在舊帳本上、兩行後被同一輪清帳一併沖掉。前提
+		 * 不成立:identity onChange 本身跑在 authStore 自己的通知 flush 裡,svelte writable 的
+		 * subscriber_queue 會把巢狀 set 的通知**排到外層 flush 跑完之後**(實測序列:reset:enter →
+		 * reset:exit → subscriber),故重入的 markMutated(tail) 必然落在整個 onChange(含清帳)
+		 * 之後、記在新帳本上。此釘鎖住的正是那個真行為:同拍進場的新尾流仍擋得住 B 的 refresh。 */
+		const tailB = createDeferred<void>();
+		let logins = 0;
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+			'GET /list': () => { gets += 1; return [{ id: 'b' }]; }
+		}));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		gate.markMutated(new Promise(() => {})); // A 的樂觀 mutation:PATCH 掛死,永不 settle
+
+		// 模擬頁面 subscriber:reset() 寫 store 的那次通知一到,新身分的樂觀 mutation 就進場(恰一次)。
+		let armed = false;
+		let reentered = false;
+		const unsub = store.subscribe(() => {
+			if (!armed) return;
+			armed = false;
+			reentered = true;
+			gate.markMutated(tailB.promise);
+		});
+
+		armed = true;
+		await authStore.login('b@dreamfly.test', 'pw'); // A→B 直換 → identity 重置
+		unsub();
+
+		expect(reentered).toBe(true); // 釘住重入真的發生(否則下面兩條是假綠)
+
+		const p = gate.refresh(); // B 的重新整理
+
+		expect(gets).toBe(0); // B 自己的尾流仍在帳、仍在飛 → GET 不得出發
+		await settleReconcile();
+		expect(gets).toBe(0);
+
+		tailB.resolve();
+		await p;
+
+		expect(gets).toBe(1); // 尾流 settle 後才出發,而且只出發一次
+		expect(get(store)).toEqual([{ id: 'b' }]);
+	});
+
 	it('訪客開機零觸發:未登入下建立 factory,立即回呼身分 null == baseline,reset 不觸發', () => {
 		// beforeEach 已 await logout,authStore 為登出態。
 		const reset = vi.fn();

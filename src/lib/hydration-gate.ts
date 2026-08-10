@@ -214,8 +214,10 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	}
 
 	function markMutated(tail?: Promise<unknown>): void {
-		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。core.commit() 的 hydrated.set(true)
-		// 會同步通知 subscriber(svelte writable 無相等性短路),subscriber 若在那個回呼裡同步
+		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。core.commit() 的 hydrated.set(true) 在
+		// 旗標原為 false 時(mutation 前尚未水合、或和解失敗把旗標翻回 false)走的是 false→true
+		// 這道邊沿,會同步通知 subscriber(svelte writable 只對 primitive **相同值**短路,
+		// true→true 才不通知),subscriber 若在那個回呼裡同步
 		// 重入 refresh(),而尾流還沒入帳,pendingSettle() 就會回 undefined —— GET 帶著已遞增
 		// 的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住,世代已穩)。
 		// 入帳全程同步(pendingTails += 1 與 then 掛載都不 await),靜止路徑一個 microtask 都不多花。

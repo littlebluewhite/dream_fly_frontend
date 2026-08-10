@@ -167,8 +167,10 @@ const data = await fetch();
   其中一筆 PATCH reject 就卡死 refresh。**零未讀時完全不入帳**(終審修波):空集本來就無事可做,
   不樂觀更新、不 `markMutated`、不 `allSettled`,同拍的 refresh 族不必為一筆空尾流多等三個 microtask。
 - **`markMutated(tail)` 的記帳順序是契約:尾流先入帳,才推世代/翻旗**(終審修波)。`core.commit()`
-  的 `hydrated.set(true)` 會**同步**通知 subscriber(svelte writable 無相等性短路);subscriber 若在
-  那個回呼裡同步重入 `refresh()`,而尾流還沒入帳,`pendingSettle()` 就會回 `undefined` —— GET 帶著
+  的 `hydrated.set(true)` 在旗標原為 false 時(mutation 前尚未水合、或和解失敗把旗標翻回 false)走的是
+  false→true 這道邊沿,會**同步**通知 subscriber(svelte writable 只對 primitive **相同值**短路,
+  `true→true` 才不通知);subscriber 若在那個回呼裡同步重入 `refresh()`,而尾流還沒入帳,
+  `pendingSettle()` 就會回 `undefined` —— GET 帶著
   已遞增的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地,丟棄軸也接不住(世代已穩)。
   入帳全程同步(計數 +1 與 `then` 掛載都不 await),移到 `commit()` 之前不替靜止路徑多花任何一個
   microtask——`pendingSettle()` 靜止同步回 `undefined` 的硬契約原封不動。
