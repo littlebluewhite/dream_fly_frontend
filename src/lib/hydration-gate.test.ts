@@ -292,6 +292,40 @@ describe('createHydrationGate', () => {
 		expect(fetch).toHaveBeenCalledTimes(1); // 全數 settle 後才出發,而且只出發一次
 	});
 
+	it('mutation settle:等待醒來與 GET 出發「之間」入帳的尾流 → 前導重問、仍不出發(pendingSettle 內部重查補不到這一段)', async () => {
+		/* 上一條守的是 pendingSettle **內部**的醒後重查;這一條守的是它補不到的下一段:等待
+		 * 的 promise 已經 resolve、fetchGenStable 卻還沒恢復執行,這中間的 microtask 若跑了一筆
+		 * markMutated(tail),舊寫法(前導只 await 一次)會直接往下捕捉世代並出發 GET——尾流在飛,
+		 * 而且世代是在那筆 mutation 「之後」才捕捉的,丟棄軸也接不住。前導必須是迴圈:醒來後
+		 * 重問 pendingSettle(),不靜止就再等。 */
+		const t1 = createDeferred<void>();
+		const t3 = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+
+		gate.markMutated(t1.promise);
+		// 探針:比 refresh 早一步入列的同批等待者,它的 resolve 鏈因此恆比 refresh 的早一拍
+		// ——回呼執行的時點正落在上述窗口內。
+		const probe = gate.pendingSettle();
+		let fetchesWhenT3Landed = -1;
+		void probe?.then(() => {
+			fetchesWhenT3Landed = fetch.mock.calls.length;
+			gate.markMutated(t3.promise);
+		});
+
+		const p = gate.refresh();
+		t1.resolve();
+		await settleRetry();
+
+		expect(fetchesWhenT3Landed).toBe(0); // 釘住這條真的打在窗裡(t3 早於 GET 入帳,不是事後才到)
+		expect(fetch).not.toHaveBeenCalled(); // 窗口關閉:GET 不得帶著在飛尾流出發
+
+		t3.resolve();
+		await p;
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
 	it('mutation settle:refresh 在飛期間 markMutated(尾流) → 世代作廢的補抓輪同樣等 settle 才出發', async () => {
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();

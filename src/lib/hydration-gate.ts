@@ -118,10 +118,14 @@ export async function fetchGenStable<T>(
 	const iterate = opts?.iterate ?? (() => true);
 	for (;;) {
 		// 第五決策點:未 settle 的 mutation 尾流在場就等,不讓 GET 搶在 PATCH 前面出發。
-		// 靜止時 pendingSettle() **同步**回 undefined,整條路徑一個 microtask 都不多花——
-		// 世代捕捉因此仍與呼叫端同步發生,「refresh 之後才 markMutated」的在飛判準不鬆動。
-		const wait = opts?.pendingSettle?.();
-		if (wait) {
+		// 靜止時 pendingSettle() **同步**回 undefined,迴圈體一次都不跑、一個 microtask 都不
+		// 多花——世代捕捉因此仍與呼叫端同步發生,「refresh 之後才 markMutated」的在飛判準
+		// 不鬆動。
+		// 必須是**迴圈**不是單次 await:等待的 promise 已 resolve、本函式卻還沒恢復執行,這
+		// 中間的 microtask 仍可能跑一筆 markMutated(tail)(pendingSettle 內部的醒後重查補不到
+		// 這一段)。醒來一律重問,不靜止就再等;從最後一次重問到下面的 gen()/fetch() 之間全
+		// 程同步,沒有第三方插隊的餘地。
+		for (let wait = opts?.pendingSettle?.(); wait; wait = opts?.pendingSettle?.()) {
 			await wait;
 			if (!iterate()) return undefined; // 棄追:等待期間這一輪已無意義
 		}
