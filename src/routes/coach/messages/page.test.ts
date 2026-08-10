@@ -222,6 +222,14 @@ describe('/coach/messages — sharedFiles 區塊移除（v1 不支援檔案附�
 	});
 });
 
+describe('/coach/messages — SLA 死概念移除（R11 R1：真資料下 urgent/sla 恆空，恆空 UI 退役）', () => {
+	it('不再渲染「緊急」分頁', async () => {
+		const { findByText, queryByText } = render(MessagesPage);
+		await findByText('陳爸爸');
+		expect(queryByText('緊急')).not.toBeInTheDocument();
+	});
+});
+
 describe('/coach/messages (+page) — 撰寫新對話（getStudents 名冊 + POST /conversations）', () => {
 	it('撰寫 opens a dialog listing 我的學員（getStudents 名冊，取代虛構 MSG_DIRECTORY）', async () => {
 		const { findByText, getByText, findByLabelText } = render(MessagesPage);

@@ -1,10 +1,11 @@
-/* Dream Fly — 管理後台 · 導覽模型(單一權威來源)。
+/* Dream Fly — 管理後台 · 導覽模型(Sidebar 與 layout 的共用居所)。
  *
  * NAV 原本放在 Sidebar 的 module-context script;TITLES + 最長前綴 resolve()
  * 原本放在 admin 的 +layout。兩者在此整併(形照 coach/nav.ts),讓 Sidebar 與
  * layout 共用同一份來源,並在 nav.test.ts 單元測試。Sidebar 的 NAV 標籤與
  * TITLES 的標籤在少數幾處本就不同(如「會員管理」vs「學員管理」)——此為既有
- * 分歧,予以逐字保留、未予統一。 */
+ * 分歧,予以逐字保留、未予統一。NAV 與 TITLES 因此是兩份平行清單(非互相
+ * 衍生);新增或改名 /admin 路由時,兩處都須同步。 */
 
 import type { IconName } from '$lib/icon-registry';
 

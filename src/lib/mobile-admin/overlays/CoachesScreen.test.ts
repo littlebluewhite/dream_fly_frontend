@@ -280,4 +280,24 @@ describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 ge
 		expect(queryByTestId('coaches-skeleton')).toBeNull();
 		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(COACHES.length);
 	});
+
+	it('error:getOpsCollections 失敗 → ErrorState「載入失敗」、無編輯鉛筆;點「重新載入」→ refreshOps 重打,成功後列表恢復', async () => {
+		opsHydrated.set(false);
+		// 第一打(hydrateOps)失敗;重試的第二打落回 beforeEach 的 mockResolvedValue(COACHES)。
+		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('network'));
+
+		const { findByText, getByRole, queryByTestId, container } = render(CoachesScreen, {
+			props: { onBack: () => {} }
+		});
+
+		await findByText('載入失敗');
+		expect(queryByTestId('coaches-skeleton')).toBeNull();
+		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(0);
+
+		await fireEvent.click(getByRole('button', { name: /重新載入/ }));
+		await findByText(COACHES[0].name);
+
+		expect(getOpsCollections).toHaveBeenCalledTimes(2);
+		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(COACHES.length);
+	});
 });

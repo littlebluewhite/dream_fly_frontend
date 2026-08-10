@@ -78,6 +78,14 @@ describe('/coach (+page) — 儀表板首頁', () => {
 		expect(txt).toContain(FIXTURE.pendingReplies);
 	});
 
+	it('KPI 待回覆卡不再渲染硬編的「逾時」副標(R11 R1:SLA 概念後端不存在,恆假文案退役)', async () => {
+		const { container, findByText } = render(CoachHomePage);
+		await findByText(FIXTURE.todayLabel);
+		const txt = container.textContent ?? '';
+		expect(txt).toContain(FIXTURE.pendingReplies); // 待回覆本體仍在(正斷言錨,防 render 失敗的空負斷言)
+		expect(txt).not.toContain('逾時');
+	});
+
 	it('橫幅與優先排序 chips 的待點名/待回覆跟著 payload 走(審查回修:單一來源)', async () => {
 		const { getByText, container, findByText } = render(CoachHomePage);
 		await findByText(FIXTURE.todayLabel);
