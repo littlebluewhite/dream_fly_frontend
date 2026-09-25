@@ -18,8 +18,8 @@
    * 合成公式(R3 K9)已提進 $lib/coach/attendance-controller 的 sessionChipLabel 共用
    * (供桌面 dropdown 同步消歧義同名場次，ADR 0014 :224-226 銷帳)，取代原映射層算好的
    * 字串；「儲存點名」成功/失敗 toast 文案沿用行動版既有措辭(不採桌面「已同步至雲端」/
-   * 依 status 分流錯誤文案)。「備註」改經 ctrl.applyNote 記入 controller(計入未存變更，
-   * 同桌面)。 */
+   * 依 status 分流錯誤文案)。「備註」改經 ctrl.applyNote 記入 controller(僅存本機、不計入
+   * 未存變更，同桌面；Sheet 內明示)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -52,15 +52,7 @@
     return `${d.getFullYear()}/${mm}/${dd}`;
   }
 
-  /** 目前時間 "HH:MM"，供儲存成功時間戳使用(抄桌面 coach/attendance/+page.svelte
-   *  的 nowHHMM，controller 需要注入)。 */
-  function nowHHMM(): string {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  }
-
-  const ctrl = createAttendanceController({ saveAttendance, now: nowHHMM });
+  const ctrl = createAttendanceController({ saveAttendance });
 
   // ── 單一快照 store 解構鏡射(同桌面 coach/attendance/+page.svelte 慣例；canUndo/
   // dirtyCount/savedAt 本頁 UI 未使用，不解構)。
@@ -247,6 +239,7 @@
       rows={4}
       style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:10px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;"
     ></textarea>
+    <div style="margin-top:6px; font-size:12px; color:var(--df-text-muted);">僅存本機，重新整理後會消失</div>
     <Button slot="footer" variant="primary" fullWidth on:click={saveNote}>儲存備註</Button>
   </Sheet>
   {/if}

@@ -20,9 +20,10 @@
    * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
    * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。
    *
-   * SaveBar(草稿狀態機)的純轉移在 $lib/coach/attendance-draft.ts(Round 2 C5);其上的
-   * 編排(鏡射、snapshot/undo、byClass 切班暫存、save 生命週期與 state 回應同步 guard)已
-   * 收進 $lib/coach/attendance-controller.ts(Round 3 K1)。本頁退化為薄 adapter:解構
+   * SaveBar(草稿狀態機)的轉移與其上的編排(鏡射、snapshot/undo、byClass 切班暫存、save
+   * 生命週期與 state 回應同步 guard)皆在 $lib/coach/attendance-controller.ts(Round 3 K1;
+   * 草稿轉移 R12 自 attendance-draft.ts 收入)。備註僅存本機(後端點名 PUT 無備註欄位),
+   * 不計入未存變更,Dialog 內明示。本頁退化為薄 adapter:解構
    * controller 的單一快照 store、事件轉呼 controller 方法、把 save 的 SaveOutcome 翻成
    * toast 文案,並保留 noteFor/noteText 編輯暫存、failedClasses 提示與五條顯示衍生。 */
   import { onMount } from 'svelte';
@@ -31,7 +32,7 @@
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
-  import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
+  import { createAttendanceController, sessionChipLabel, nowHHMM } from '$lib/coach/attendance-controller';
   import { apiErrorText } from '$lib/api/error-text';
   import { EmptyState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import AttSegment from '$lib/coach/components/AttSegment.svelte';
@@ -41,7 +42,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import type { IconName } from '$lib/icon-registry';
 
-  const ctrl = createAttendanceController({ saveAttendance, now: nowHHMM });
+  const ctrl = createAttendanceController({ saveAttendance });
 
   // ── 單一快照 store 解構鏡射(原五條鏡射變數 + classes/curClassId + canUndo 衍生) ──
   let classes: AttClassFull[] = [];
@@ -109,7 +110,7 @@
 
   function saveNote() {
     if (!noteFor) return;
-    ctrl.applyNote(noteFor.mid, noteText); // codex r1 (P2)：備註編輯也算未存變更,見 draft applyNote 註解
+    ctrl.applyNote(noteFor.mid, noteText); // 備註僅存本機,不計入未存變更(見 controller draftApplyNote 註解)
     noteFor = null;
   }
 
@@ -118,7 +119,7 @@
   }
 
   function markAll() {
-    ctrl.markAllPresent(); // codex r2 (P2)：changed 計數規則見 draft markAllPresent 註解
+    ctrl.markAllPresent(); // codex r2 (P2)：changed 計數規則見 controller draftMarkAllPresent 註解
   }
 
   // CoachDropdown 走 keyed options，echo 的是 session id——controller selectClass 直接
@@ -129,14 +130,6 @@
     if (ctrl.selectClass(id) === 'blocked') {
       toasts.notify('info', '儲存中', '請待目前點名儲存完成後再切換班級。');
     }
-  }
-
-  /** 目前時間 "HH:MM"，供儲存成功後的「已同步至雲端」時間戳使用(真實存檔時間，取代
-   *  舊 mock 版本的硬編 '14:32')。 */
-  function nowHHMM(): string {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(now.getHours())}:${pad(now.getMinutes())}`;
   }
 
   /** PUT /sessions/{id}/attendance 的錯誤分支(§3.19：404/403/422，此端點無 409) —
@@ -375,6 +368,7 @@
       bind:value={noteText}
       style="width:100%;padding:11px 14px;font-size:14px;font-family:var(--df-font-body);color:var(--df-text-dark);background:#fff;border:1.5px solid var(--df-border-strong);border-radius:8px;outline:none;resize:vertical;line-height:1.6;box-sizing:border-box;"
     ></textarea>
+    <div style="margin-top:6px;font-size:12px;color:var(--df-text-muted);">僅存本機，重新整理後會消失</div>
   {/if}
 </Dialog>
 {/if}

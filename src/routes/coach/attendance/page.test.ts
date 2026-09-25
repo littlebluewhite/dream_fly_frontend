@@ -19,6 +19,7 @@ const ATT_TODAY_CLASSES: AttClassFull[] = [
 		id: 'ac1',
 		name: '兒童體操初階班',
 		time: '今日 16:00–17:30',
+		start: '16:00',
 		room: 'A 教室',
 		coach: '陳怡君',
 		roster: [
@@ -32,6 +33,7 @@ const ATT_TODAY_CLASSES: AttClassFull[] = [
 		id: 'ac2',
 		name: '青少年體操中級班',
 		time: '今日 13:30–15:00',
+		start: '13:30',
 		room: 'B 教室',
 		coach: '陳怡君',
 		roster: [
@@ -166,6 +168,22 @@ describe('/coach/attendance (+page) — undo', () => {
 		await fireEvent.click(getByText('復原'));
 		expect(container.textContent).toContain('3 筆變更');
 		expect(queryByText('復原')).toBeNull();
+	});
+});
+
+describe('/coach/attendance (+page) — 備註僅存本機(D1)', () => {
+	it('備註 Dialog 明示「僅存本機，重新整理後會消失」；儲存備註不增加未存變更筆數', async () => {
+		const { getAllByLabelText, getByText, getByPlaceholderText, container, findByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		expect(container.textContent).toContain('3 筆變更');
+
+		await fireEvent.click(getAllByLabelText('備註')[0]);
+		expect(getByText('僅存本機，重新整理後會消失')).toBeInTheDocument();
+		await fireEvent.input(getByPlaceholderText('輸入對此學員的備註…'), { target: { value: '本週表現進步' } });
+		await fireEvent.click(getByText('儲存備註'));
+
+		expect(await findByText('本週表現進步')).toBeInTheDocument(); // 備註預覽 chip
+		expect(container.textContent).toContain('3 筆變更'); // 不計入待同步
 	});
 });
 

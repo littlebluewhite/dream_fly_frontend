@@ -222,6 +222,8 @@ export const CAT_COLOR: Record<SchedCat, { bar: string; bg: string; fg: string }
 // selectClass 皆直接走 session id,同名兩場可分辨,見 ADR 0014 增補)。
 export interface AttClassFull extends AttClass {
 	id: string;
+	/** 起始時間 "HH:MM"——sessionChipLabel 的時間前綴來源(不反解顯示用的 time 字串)。 */
+	start: string;
 	roster: AttRow[];
 }
 

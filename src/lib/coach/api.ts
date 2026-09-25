@@ -229,13 +229,15 @@ function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
 }
 
 /** TodaySessionResponse + 該場次名冊 → 既有 AttClassFull 形狀。time 組成「今日 HH:MM–
- *  HH:MM」(場次本來就是今日的，同既有 mock 格式慣例)；room 無對應欄位(P2，同
+ *  HH:MM」(場次本來就是今日的，同既有 mock 格式慣例)；start 另帶起始 HH:MM 供
+ *  sessionChipLabel 直接使用；room 無對應欄位(P2，同
  *  mapTodayClass 慣例)；coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)。 */
 function mapAttendanceClass(s: ApiTodaySession, roster: ApiRosterEntry[], coachName: string): AttClassFull {
 	return {
 		id: s.id,
 		name: s.course_name,
 		time: `今日 ${hhmm(s.start_time)}–${hhmm(s.end_time)}`,
+		start: hhmm(s.start_time),
 		room: '', // P2: TodaySessionResponse 無場地欄位
 		coach: coachName,
 		roster: roster.map(mapRosterRow)

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { createAttendanceController, sessionChipLabel, type AttendanceController } from './attendance-controller';
+import { createAttendanceController, sessionChipLabel, nowHHMM, type AttendanceController } from './attendance-controller';
 import type { AttRow, AttDefault, AttClassFull } from './data';
 
 /* attendance-controller.ts — coach/attendance 出席點名編排層的單元測試（Round 3 K1）。
- * draft reducer（attendance-draft.ts，30 it 已測純轉移）之上的「編排 + 效應注入」層：
- * 鏡射變數收斂為單一快照 store、snapshot/undo 副作用、byClass 切班暫存、save 生命週期。
+ * 草稿轉移（R12 自舊 attendance-draft.ts 收入 controller 成非匯出函式）與其上的「編排 +
+ * 效應注入」層一律經 controller 介面測：單一快照 store、snapshot/undo、byClass 切班暫存、
+ * markAll changed 計數規則、save 生命週期、備註僅存本機（D1）。
  * deps（saveAttendance / now）全部注入 mock，可控 promise resolve 時序以驗快照語意。
  *
  * c1 忠實複刻 +page.svelte 現行編排（含 state-based stale guard 與 catch 分支無 guard 的
@@ -20,10 +21,10 @@ const ROSTER_A: AttRow[] = [
 const ROSTER_B: AttRow[] = [
 	{ n: '01', name: '周彥廷', initial: '周', color: '#0066CC', mid: 'GY012', def: 'present' }
 ];
-const CLASS_A: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '', room: '', coach: '', roster: ROSTER_A };
-const CLASS_B: AttClassFull = { id: 'ac2', name: '青少年體操中級班', time: '', room: '', coach: '', roster: ROSTER_B };
+const CLASS_A: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '', start: '', room: '', coach: '', roster: ROSTER_A };
+const CLASS_B: AttClassFull = { id: 'ac2', name: '青少年體操中級班', time: '', start: '', room: '', coach: '', roster: ROSTER_B };
 /** 同日第二場同課名（id 相異、名冊相異）——ADR 0014「同日兩場同課名取第一場」限制的撤銷釘。 */
-const CLASS_A_DUP: AttClassFull = { id: 'ac1b', name: '兒童體操初階班', time: '', room: '', coach: '', roster: ROSTER_B };
+const CLASS_A_DUP: AttClassFull = { id: 'ac1b', name: '兒童體操初階班', time: '', start: '', room: '', coach: '', roster: ROSTER_B };
 
 /** 伺服器回應：全員 present（'late' 於後端併入 present，回應永不含 late）。 */
 const serverAllPresent = (roster: AttRow[]): AttRow[] => roster.map((r) => ({ ...r, def: 'present' as const }));
@@ -112,14 +113,39 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 		expect(view.canUndo).toBe(true); // 修改前已捕捉快照
 	});
 
-	it('applyNote 設定備註、dirtyCount +1、marks 不動、canUndo true', () => {
+	it('applyNote 設定備註、marks 不動、canUndo true；備註僅存本機，不計入未存變更（D1）', () => {
 		ctrl.init([CLASS_A]);
 		ctrl.applyNote('GY014', '本週表現進步');
 		const view = get(ctrl);
 		expect(view.notes).toEqual({ GY014: '本週表現進步' });
-		expect(view.dirtyCount).toBe(4);
+		expect(view.dirtyCount).toBe(3); // 不變：後端點名 PUT 無備註欄位，備註不是待同步變更
 		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
 		expect(view.canUndo).toBe(true);
+	});
+
+	it('只改備註（含空字串）：已儲存的 state 仍為 saved、dirtyCount 不變（D1：備註不打回待同步）', async () => {
+		ctrl.init([CLASS_A]);
+		deps.saveAttendance.mockResolvedValue(serverAllPresent(ROSTER_A));
+		await ctrl.save();
+		expect(get(ctrl).state).toBe('saved');
+		ctrl.applyNote('GY001', '本週表現進步');
+		ctrl.applyNote('GY014', '');
+		const view = get(ctrl);
+		expect(view.notes).toEqual({ GY001: '本週表現進步', GY014: '' });
+		expect(view.state).toBe('saved');
+		expect(view.dirtyCount).toBe(0);
+	});
+
+	it('setMark 自 saved 打回 dirty；設成目前已有的值仍 dirtyCount +1（不去重，逐字原行為）', async () => {
+		ctrl.init([CLASS_A]);
+		deps.saveAttendance.mockResolvedValue(ROSTER_A);
+		await ctrl.save();
+		expect(get(ctrl).state).toBe('saved');
+		ctrl.setMark('GY001', 'present'); // GY001 已是 present
+		const view = get(ctrl);
+		expect(view.state).toBe('dirty');
+		expect(view.marks.GY001).toBe('present');
+		expect(view.dirtyCount).toBe(1); // 0 → 1
 	});
 
 	it('markAllPresent 非請假列翻 present、請假列不動、dirtyCount 加實際改變筆數', () => {
@@ -129,6 +155,30 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 		expect(view.marks).toEqual({ GY001: 'present', GY014: 'present', GY030: 'leave', GY063: 'present' });
 		expect(view.dirtyCount).toBe(5); // 3 + 2（GY014 late→present、GY063 absent→present；GY030 leave 不動、GY001 已 present）
 		expect(view.canUndo).toBe(true);
+	});
+
+	it('markAllPresent：目前草稿已是 present 的列（不論名冊預設）不重複計入', () => {
+		ctrl.init([CLASS_A]);
+		ctrl.setMark('GY014', 'present'); // 預設 late，手動標成 present：3 → 4
+		ctrl.markAllPresent();
+		expect(get(ctrl).dirtyCount).toBe(5); // 只剩 GY063(absent→present) +1
+	});
+
+	it('markAllPresent：請假列即使被手動改掉也不計入 changed，且 marks 強制翻回 leave', () => {
+		ctrl.init([CLASS_A]);
+		ctrl.setMark('GY030', 'absent'); // 預設 leave，手動改 absent：3 → 4
+		ctrl.markAllPresent();
+		const view = get(ctrl);
+		expect(view.dirtyCount).toBe(6); // 4 + GY014 + GY063；GY030 不計
+		expect(view.marks.GY030).toBe('leave');
+	});
+
+	it('markAllPresent 自 saved 打回 dirty', async () => {
+		ctrl.init([CLASS_A]);
+		deps.saveAttendance.mockResolvedValue(ROSTER_A);
+		await ctrl.save();
+		ctrl.markAllPresent();
+		expect(get(ctrl).state).toBe('dirty');
 	});
 
 	it('undo 還原前一步快照（marks + dirtyCount）並清空快照（canUndo false）', () => {
@@ -176,6 +226,14 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 		expect(get(ctrl).state).toBe('saving');
 	});
 
+	it('switched：已儲存（saved）的班級可切走', async () => {
+		ctrl.init([CLASS_A, CLASS_B]);
+		deps.saveAttendance.mockResolvedValue(ROSTER_A);
+		await ctrl.save();
+		expect(get(ctrl).state).toBe('saved');
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
+	});
+
 	it('noop：切到同一班或不存在的 session id 回傳 noop，狀態不變', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
 		expect(ctrl.selectClass(CLASS_A.id)).toBe('noop'); // 同一班
@@ -193,6 +251,19 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 		expect(view.curClassId).toBe('ac1');
 		expect(view.dirtyCount).toBe(4); // A 草稿原封還原，不是回到初始 3
 		expect(view.marks.GY001).toBe('late'); // 編輯保留
+	});
+
+	it('byClass 往返：兩班各自的未存編輯互不覆蓋（切回 B 時 B 的草稿仍在）', () => {
+		ctrl.init([CLASS_A, CLASS_B]);
+		ctrl.setMark('GY001', 'late'); // A 編輯
+		ctrl.selectClass(CLASS_B.id);
+		ctrl.setMark('GY012', 'absent'); // B 編輯：0 → 1
+		ctrl.selectClass(CLASS_A.id);
+		expect(get(ctrl).marks.GY001).toBe('late');
+		ctrl.selectClass(CLASS_B.id);
+		const view = get(ctrl);
+		expect(view.marks).toEqual({ GY012: 'absent' });
+		expect(view.dirtyCount).toBe(1);
 	});
 
 	it('同日兩場同課名：selectClass 以 session id 精準切到第二場（0014 限制撤銷）', () => {
@@ -231,6 +302,13 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		expect(outcome).toEqual({ kind: 'saved', className: '兒童體操初階班', rosterCount: 4, hadLate: true });
 	});
 
+	it('hadLate：送出時無 late 標記即為 false', async () => {
+		ctrl.init([CLASS_B]); // 全 present
+		deps.saveAttendance.mockResolvedValue(ROSTER_B);
+		const outcome = await ctrl.save();
+		expect(outcome).toEqual({ kind: 'saved', className: '青少年體操中級班', rosterCount: 1, hadLate: false });
+	});
+
 	it('stale guard：await 後 state 已非 saving（in-flight 期間又編輯過）即丟棄回應', async () => {
 		const d = deferred<AttRow[]>();
 		deps.saveAttendance.mockReturnValue(d.promise);
@@ -254,7 +332,11 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		const outcome = await ctrl.save();
 		expect(outcome.kind).toBe('failed');
 		if (outcome.kind === 'failed') expect(outcome.error).toBe(err);
-		expect(get(ctrl).state).toBe('dirty');
+		const view = get(ctrl);
+		expect(view.state).toBe('dirty');
+		expect(view.dirtyCount).toBe(3); // 不歸零——未存變更仍在
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
+		expect(view.savedAt).toBeNull();
 	});
 
 	it('classes 同步：成功以伺服器回應覆蓋該班 roster 與 marks（非樂觀本地值）', async () => {
@@ -277,11 +359,47 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		expect(get(ctrl).savedAt).toBe('09:05');
 	});
 
+	it('deps.now 省略時預設 nowHHMM：savedAt 為本地壁鐘 HH:MM', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		try {
+			vi.setSystemTime(new Date(2026, 8, 26, 9, 5)); // 本地 09:05
+			const c = createAttendanceController({ saveAttendance: deps.saveAttendance });
+			c.init([CLASS_A]);
+			deps.saveAttendance.mockResolvedValue(ROSTER_A);
+			await c.save();
+			expect(get(c).savedAt).toBe('09:05');
+			expect(nowHHMM()).toBe('09:05');
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('publish 時序：save() 同步發佈 saving（不等 resolve）', () => {
 		deps.saveAttendance.mockReturnValue(new Promise<AttRow[]>(() => {})); // 永不 resolve
 		ctrl.init([CLASS_A]);
 		void ctrl.save(); // 不 await
-		expect(get(ctrl).state).toBe('saving');
+		const view = get(ctrl);
+		expect(view.state).toBe('saving');
+		expect(view.dirtyCount).toBe(3); // 進入儲存中只翻 state，其餘不動
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
+	});
+
+	it('出勤變更 + 備註 → save：notes 保留、saveAttendance 只收到 marks（備註不上送）', async () => {
+		ctrl.init([CLASS_A]);
+		ctrl.setMark('GY063', 'present');
+		ctrl.applyNote('GY014', '本週表現進步');
+		deps.saveAttendance.mockResolvedValue(serverAllPresent(ROSTER_A));
+		await ctrl.save();
+		expect(deps.saveAttendance).toHaveBeenCalledTimes(1);
+		expect(deps.saveAttendance).toHaveBeenCalledWith('ac1', {
+			GY001: 'present',
+			GY014: 'late',
+			GY030: 'leave',
+			GY063: 'present'
+		});
+		const view = get(ctrl);
+		expect(view.state).toBe('saved');
+		expect(view.notes).toEqual({ GY014: '本週表現進步' });
 	});
 
 	it('dirtyCount 歸零：成功後 dirtyCount 0、state saved', async () => {
@@ -346,20 +464,20 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 
 describe('sessionChipLabel — 場次顯示標籤（桌面 dropdown / 行動 FilterChips 共用，Round 3 K9；R3 銷帳 ADR 0014 :224-226）', () => {
 	it('去除「今日 」前綴，只留起始時間 + 課名', () => {
-		const c: AttClassFull = { id: 's1', name: '兒童體操初階班', time: '今日 16:00–17:30', room: '', coach: '', roster: [] };
+		const c: AttClassFull = { id: 's1', name: '兒童體操初階班', time: '今日 16:00–17:30', start: '16:00', room: '', coach: '', roster: [] };
 		expect(sessionChipLabel(c)).toBe('16:00 兒童體操初階班');
 		expect(sessionChipLabel(c)).not.toContain('今日');
 	});
 
 	it('取 en-dash 前的起始時間，結束時間不併入輸出', () => {
-		const c: AttClassFull = { id: 's2', name: '青少年體操中級班', time: '今日 13:30–15:00', room: '', coach: '', roster: [] };
+		const c: AttClassFull = { id: 's2', name: '青少年體操中級班', time: '今日 13:30–15:00', start: '13:30', room: '', coach: '', roster: [] };
 		expect(sessionChipLabel(c)).toBe('13:30 青少年體操中級班');
 		expect(sessionChipLabel(c)).not.toContain('15:00'); // 結束時間被捨棄，非完整時段
 	});
 
 	it('同日兩場同課名：時間前綴不同使顯示字串相異（桌面 dropdown 自此可區分同名兩場）', () => {
-		const first: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '今日 16:00–17:30', room: '', coach: '', roster: [] };
-		const second: AttClassFull = { id: 'ac2', name: '兒童體操初階班', time: '今日 13:30–15:00', room: '', coach: '', roster: [] };
+		const first: AttClassFull = { id: 'ac1', name: '兒童體操初階班', time: '今日 16:00–17:30', start: '16:00', room: '', coach: '', roster: [] };
+		const second: AttClassFull = { id: 'ac2', name: '兒童體操初階班', time: '今日 13:30–15:00', start: '13:30', room: '', coach: '', roster: [] };
 		expect(sessionChipLabel(first)).not.toBe(sessionChipLabel(second));
 	});
 });

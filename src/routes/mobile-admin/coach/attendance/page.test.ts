@@ -12,11 +12,11 @@ const rosterOf = (over: Partial<AttRow>[]): AttRow[] =>
 	over.map((o, i) => ({ n: String(i + 1).padStart(2, '0'), name: '測試學員' + i, initial: '測', color: '#000', mid: 'T-00' + i, def: 'present', ...o }));
 
 // 兩堂課同一天，證明「切換班級」FilterChips 恢復多選功能(舊 mock 因限制只給一堂課)。
-// time 形如桌面 AttClassFull("今日 HH:MM–HH:MM")，labelOf() 取起始時間 + 課名組成
-// FilterChips 顯示字串，同原本映射層算好的 label 斷言不變。
+// time 形如桌面 AttClassFull("今日 HH:MM–HH:MM")，start 為起始 HH:MM；sessionChipLabel
+// 取 start + 課名組成 FilterChips 顯示字串，同原本映射層算好的 label 斷言不變。
 const FIXTURE_CLASSES: AttClassFull[] = [
-	{ id: 's1', name: '測試班甲', time: '今日 19:00–20:30', room: '', coach: '', roster: rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'present' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]) },
-	{ id: 's2', name: '測試班乙', time: '今日 20:00–21:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-003', name: '測試學員丙', def: 'absent' }]) }
+	{ id: 's1', name: '測試班甲', time: '今日 19:00–20:30', start: '19:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'present' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]) },
+	{ id: 's2', name: '測試班乙', time: '今日 20:00–21:00', start: '20:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-003', name: '測試學員丙', def: 'absent' }]) }
 ];
 
 beforeEach(() => {
@@ -85,6 +85,22 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		// 釘住完整成功 toast 文案（含時間前綴，同舊版格式）——防止日後把 label 換回
 		// SaveOutcome.className（只有課名、沒有時間）而悄悄漂移。
 		expect(get(toasts).some((t) => t.title === '點名已儲存' && t.body === '19:00 測試班甲 · 2 位學員出勤已記錄。')).toBe(true);
+	});
+
+	it('備註 Sheet 明示「僅存本機，重新整理後會消失」；已儲存後只改備註仍顯示「點名已儲存」(D1)', async () => {
+		vi.mocked(saveAttendance).mockResolvedValue(FIXTURE_CLASSES[0].roster);
+		const { findByText, getByText, getAllByText, getByPlaceholderText } = render(AttendancePage);
+		await findByText('測試學員甲');
+		await fireEvent.click(getByText('儲存點名'));
+		expect(await findByText('點名已儲存')).toBeInTheDocument();
+
+		await fireEvent.click(getAllByText('備註')[0]);
+		expect(getByText('僅存本機，重新整理後會消失')).toBeInTheDocument();
+		await fireEvent.input(getByPlaceholderText('例如：後手翻保護需加強、家長提醒早退…'), { target: { value: '早退' } });
+		await fireEvent.click(getByText('儲存備註'));
+
+		expect(await findByText('早退')).toBeInTheDocument(); // 備註預覽
+		expect(getByText('點名已儲存')).toBeInTheDocument(); // 未被打回「儲存點名」
 	});
 
 	it('儲存失敗顯示錯誤提示，不假裝成功', async () => {

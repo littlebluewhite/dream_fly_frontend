@@ -369,14 +369,14 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 
 		expect(d.classes).toEqual([
 			{
-				id: 's1', name: '兒童體操初級班', time: '今日 09:00–10:00', room: '', coach: '林雅婷',
+				id: 's1', name: '兒童體操初級班', time: '今日 09:00–10:00', start: '09:00', room: '', coach: '林雅婷',
 				roster: [
 					{ n: '01', name: '王小明', initial: '王', color: '#0066CC', mid: 'en-1', def: 'present' },
 					{ n: '02', name: '陳小華', initial: '陳', color: '#0066CC', mid: 'en-2', def: 'present' }
 				]
 			},
 			{
-				id: 's2', name: '青少年體操中級班', time: '今日 10:30–11:30', room: '', coach: '林雅婷',
+				id: 's2', name: '青少年體操中級班', time: '今日 10:30–11:30', start: '10:30', room: '', coach: '林雅婷',
 				roster: [{ n: '01', name: '林小美', initial: '林', color: '#0066CC', mid: 'en-3', def: 'leave' }]
 			}
 		]);
