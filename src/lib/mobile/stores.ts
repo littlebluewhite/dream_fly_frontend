@@ -3,15 +3,15 @@
  * The prototype (app.jsx) kept tab / stack / sheet / cart / points / notifs /
  * toasts / prefs / profile in one React component. Rendered as real routes, the
  * bottom tabs are URLs but push-screens + sheets are overlay state, and the
- * cart / toasts / prefs / profile are shared stores that live here — notifs moved
- * out to the `$lib/mobile/notifications` leaf module (C3; reason below).
+ * cart / toasts / prefs / profile are shared stores that live here — notifications
+ * are re-exported from `$lib/member/stores` (Task 5 架構深化 R12：mobile 專屬的
+ * `$lib/mobile/notifications.ts` 已併入 member 模組,理由見下方該段註解)。
  * Toasts come from the canonical shared store (`createToasts` imported from
  * `$lib/stores/toasts`); no local factory is defined or exported here.
  *
  * Task 19：登入守門與 auth 狀態改用真實 `$lib/stores/authStore`(見
  * routes/mobile/+layout.svelte + guard.ts)——這個檔案不再有本地的 demo
- * `session` gate 旗標。通知段(`notifs`/`unread`/已讀 mutation/session 閘門)C3
- * 起搬出成葉模組 `$lib/mobile/notifications.ts`(理由見下方該段註解)。`cart` 改吃
+ * `session` gate 旗標。`cart` 改吃
  * lib-root 共用工廠 $lib/cart(C2:與 member 側同一份實作，不再是平行 store；
  * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
  * CartSheet 的結帳流程本身已改真下單，
@@ -159,11 +159,20 @@ export async function placeOrder(
 }
 
 /* ---------- Notification centre ---------- */
-// C3(架構深化 R9):整段搬出成葉模組 $lib/mobile/notifications.ts——通知段改建
-// createSessionGate 後需要 ./api 的 getNotifications,而 ./api 反過來 import 本檔的
-// PREFS_DEFAULT,留在這裡即 stores ⇄ api 成環。**本檔刻意不 re-export 該模組**
-// (re-export 會讓 api → stores → notifications → api 繞回成環),消費端直接
-// import '$lib/mobile/notifications';與其他 member 側收編走 barrel 的慣例刻意不對稱。
+// Task 5(架構深化 R12·候選 02):mobile 專屬的 $lib/mobile/notifications.ts 已退役
+// ——伺服器本來就是同一份已讀狀態的真值,mobile 與 member 現在共用 member 側的
+// createSessionGate 通知模組(唯一通知 module)。C3(R9)當年不 re-export 是因為
+// stores ⇄ api 成環(通知段需要 ./api 的 getNotifications,./api 又 import 本檔的
+// PREFS_DEFAULT);併入後源頭換成完全獨立的 $lib/member/stores,不再有這個環,
+// 因此改回與其他 member 側收編一致的 barrel re-export 慣例。
+export {
+	notifications,
+	unreadCount,
+	notificationsHydrated,
+	notificationsPageEntry,
+	markRead,
+	markAllRead
+} from '$lib/member/stores';
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);

@@ -4,7 +4,6 @@ import {
 	getCourses,
 	getMine,
 	getAccount,
-	getNotifications,
 	getSchedule,
 	getPoints,
 	getReports,
@@ -18,7 +17,6 @@ import {
 	getMine as memberGetMine,
 	getSchedule as memberGetSchedule,
 	getAccount as memberGetAccount,
-	getNotifications as memberGetNotifications,
 	getPoints as memberGetPoints,
 	getReports as memberGetReports,
 	getReportStats as memberGetReportStats,
@@ -42,7 +40,6 @@ vi.mock('$lib/member/api', () => ({
 	getMine: vi.fn(),
 	getSchedule: vi.fn(),
 	getAccount: vi.fn(),
-	getNotifications: vi.fn(),
 	getPoints: vi.fn(),
 	getReports: vi.fn(),
 	getReportStats: vi.fn(),
@@ -78,7 +75,6 @@ beforeEach(() => {
 			birth: '', phone: '', email: 'a@test.com', guardian: '', remind: true, promo: false
 		}
 	});
-	vi.mocked(memberGetNotifications).mockReset().mockResolvedValue([]);
 	vi.mocked(memberGetPoints).mockReset().mockResolvedValue({ rewards: [], expiring: '360 點', expiryDate: '2026/12/31' });
 	vi.mocked(memberGetReports).mockReset().mockResolvedValue({ reportCards: [], certificates: [], stats: { attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 } });
 	vi.mocked(memberGetReportStats).mockReset().mockResolvedValue({ attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 });
@@ -154,12 +150,8 @@ describe('getAccount — 復用桌面 getAccount().orders', () => {
 	});
 });
 
-describe('getNotifications / getSchedule / getPoints / getReports / getEnrolmentAttendance — surface 邊界契約(純 identity 委派，零映射)', () => {
-	it('五支皆直接透傳桌面 seam 的解析結果(toBe 比 toEqual 更強：reference 相等即委派證明)', async () => {
-		const notificationsFixture = [{ id: 'n1', cat: 'system' as const, icon: 'bell' as const, tone: 'info' as const, title: 't', body: 'b', time: '剛剛', read: false }];
-		vi.mocked(memberGetNotifications).mockResolvedValue(notificationsFixture);
-		expect(await getNotifications()).toBe(notificationsFixture);
-
+describe('getSchedule / getPoints / getReports / getEnrolmentAttendance — surface 邊界契約(純 identity 委派，零映射)', () => {
+	it('四支皆直接透傳桌面 seam 的解析結果(toBe 比 toEqual 更強：reference 相等即委派證明)', async () => {
 		const scheduleFixture = { schedule: SCHEDULE_FIXTURE };
 		vi.mocked(memberGetSchedule).mockResolvedValue(scheduleFixture);
 		expect(await getSchedule()).toBe(scheduleFixture);
@@ -176,7 +168,7 @@ describe('getNotifications / getSchedule / getPoints / getReports / getEnrolment
 		vi.mocked(memberGetReports).mockResolvedValue(reportsFixture);
 		expect(await getReports()).toBe(reportsFixture);
 
-		// 叢裡唯一帶參的委派——多驗一項參數透傳(其餘四支桌面 seam 皆為零參數)。
+		// 叢裡唯一帶參的委派——多驗一項參數透傳(其餘三支桌面 seam 皆為零參數)。
 		const attendanceFixture = [{ date: '06/06', state: 'present' as const }];
 		vi.mocked(memberGetEnrolmentAttendance).mockResolvedValue(attendanceFixture);
 		expect(await getEnrolmentAttendance('e1')).toBe(attendanceFixture);

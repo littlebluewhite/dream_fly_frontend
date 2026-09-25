@@ -6,7 +6,7 @@
  * 的端對端斷言，而不是把邏輯也一起 mock 掉。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, saveBirthDate, getCourses, getPoints, getNotifications } from './api';
+import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, saveBirthDate, getCourses, getPoints } from './api';
 import { api, ApiError } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, notificationsHydrated, waitlist, waitlistHydrated, leaveRequests, leaveRequestsHydrated } from './stores';
@@ -850,53 +850,5 @@ describe('getPoints — Task 14：rewards 換成真 GET /rewards（expiring/expi
       fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': { balance: 0, ledger: [] } })
     );
     expect(getPoints()).toBeInstanceOf(Promise);
-  });
-});
-
-describe('getNotifications', () => {
-  it('type→cat/icon/tone 對照表涵蓋所有後端型別，含未知值 fallback', async () => {
-    const make = (id: string, type: string) => ({ id, type, title: 't-' + id, message: 'm-' + id, is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'GET /notifications': [
-          make('n1', 'booking_confirmed'),
-          make('n2', 'booking_cancelled'),
-          make('n3', 'order_placed'),
-          make('n4', 'order_status'),
-          make('n5', 'system'),
-          make('n6', 'promotion'),
-          make('n7', 'brand_new_unknown_type')
-        ]
-      })
-    );
-
-    const list = await getNotifications();
-
-    expect(list.map((n) => [n.cat, n.icon, n.tone])).toEqual([
-      ['class', 'calendar-check', 'success'],
-      ['class', 'calendar-off', 'warning'],
-      ['order', 'credit-card', 'success'],
-      ['order', 'rotate-cw', 'info'],
-      ['system', 'bell', 'neutral'],
-      ['system', 'megaphone', 'accent'],
-      ['system', 'bell', 'neutral'] // 未知型別 fallback，不因後端新增 enum 值而炸掉
-    ]);
-  });
-
-  it('id/title/message/is_read 直接映射；time 取 created_at 的 YYYY-MM-DD HH:mm', async () => {
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'GET /notifications': [
-          { id: 'n9', type: 'system', title: '標題', message: '內容', is_read: true, metadata: null, created_at: '2026-07-04T06:30:00Z' }
-        ]
-      })
-    );
-    const [n] = await getNotifications();
-    expect(n).toEqual({ id: 'n9', cat: 'system', icon: 'bell', tone: 'neutral', title: '標題', body: '內容', time: '2026-07-04 06:30', read: true });
-  });
-
-  it('是 async 接縫(回 Promise)', () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
-    expect(getNotifications()).toBeInstanceOf(Promise);
   });
 });

@@ -12,8 +12,8 @@ import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
 import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
-import { UPCOMING, ANNOUNCE, mapNotification } from './data';
-import type { UpcomingClass, Announcement, ScheduleBlock, Order, Notification, ApiNotification } from './data';
+import { UPCOMING, ANNOUNCE } from './data';
+import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
 import { ME, STATS, SKILLS } from '$lib/domain/member-app';
 import type { Member, Stat, Skill, EnrolledCourse, AttRecord } from '$lib/domain/member-app';
 
@@ -483,12 +483,4 @@ export interface PointsData {
 export const getPoints = async (): Promise<PointsData> => {
   const [rewardsRes] = await Promise.all([api<ApiRewardListResponse>('/rewards'), refreshPoints()]);
   return { rewards: rewardsRes.rewards.map(mapReward), expiring: '360 點', expiryDate: '2026/12/31' };
-};
-
-/** 通知中心 feed(store-getter，非包物件)。GET /notifications 是純陣列(吃 page/
- *  per_page 但沒有分頁包裝)；type→cat/icon/tone 對照表在 data.ts 的 mapNotification
- *  (跟 stores.ts 的 refreshNotifications 共用同一份對照表)。 */
-export const getNotifications = async (): Promise<Notification[]> => {
-  const list = await api<ApiNotification[]>('/notifications');
-  return list.map(mapNotification);
 };

@@ -200,7 +200,7 @@ describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同�
 	// re-export 源路徑若寫錯(相對路徑、繞道別的模組),sheet/overlay 測試的
 	// vi.mock('$lib/member/stores') 會靜默失效變假綠——這裡以 toBe 釘住每個收編
 	// 符號都是 member 側同一個 binding:路徑漂移或改成本地重包裝時直接紅燈。
-	it('member/stores 的 15 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
+	it('member/stores 的 21 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
 		expect(mobileStores.points).toBe(memberStores.points);
 		expect(mobileStores.pointsLedger).toBe(memberStores.pointsLedger);
 		expect(mobileStores.refreshPoints).toBe(memberStores.refreshPoints);
@@ -218,6 +218,16 @@ describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同�
 		// C6:subscriptions 收編——CartSheet 的可計費預覽用它當 chargeableLines 的
 		// 「已持有訂閱」清單;placeOrder 也讀 get(subscriptions)。源 $lib/member/stores。
 		expect(mobileStores.subscriptions).toBe(memberStores.subscriptions);
+		// Task 5(架構深化 R12):通知段(notifications/unreadCount/notificationsHydrated/
+		// notificationsPageEntry/markRead/markAllRead)收編——mobile 專屬的
+		// $lib/mobile/notifications.ts 已併入 member 模組(唯一通知 module),與其他
+		// member 側收編一致改走 barrel re-export(理由見 stores.ts 通知段註解)。
+		expect(mobileStores.notifications).toBe(memberStores.notifications);
+		expect(mobileStores.unreadCount).toBe(memberStores.unreadCount);
+		expect(mobileStores.notificationsHydrated).toBe(memberStores.notificationsHydrated);
+		expect(mobileStores.notificationsPageEntry).toBe(memberStores.notificationsPageEntry);
+		expect(mobileStores.markRead).toBe(memberStores.markRead);
+		expect(mobileStores.markAllRead).toBe(memberStores.markAllRead);
 	});
 	it('member/checkout 的 applyCouponCode/orderErrorMessage/chargeableLines 同參照(CartSheet 消費)', () => {
 		// C2(R11):CartSheet 的「套用優惠碼」與桌面 CheckoutDialog 收斂成同一顆

@@ -13,13 +13,12 @@ import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
 // 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
 // 一直以來都是對這個寬鬆版型別寫的，沿用它才不會逼既有呼叫端也跟著窄化。
-import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, Notification, AttRecord } from '$lib/domain/member-app';
+import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, AttRecord } from '$lib/domain/member-app';
 import {
 	getCourses as memberGetCourses,
 	getMine as memberGetMine,
 	getSchedule as memberGetSchedule,
 	getAccount as memberGetAccount,
-	getNotifications as memberGetNotifications,
 	getPoints as memberGetPoints,
 	getReports as memberGetReports,
 	getReportStats as memberGetReportStats,
@@ -120,10 +119,6 @@ export const getAccount = async (): Promise<MobileAccountData> => {
 	const { orders } = await memberGetAccount();
 	return { orders };
 };
-
-/** 通知中心 feed — 復用桌面 getNotifications()(GET /notifications)，零映射
- *  (Notification 形狀兩側同源)。 */
-export const getNotifications = (): Promise<Notification[]> => memberGetNotifications();
 
 export interface ScheduleData {
 	schedule: ScheduleBlock[];

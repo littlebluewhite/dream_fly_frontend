@@ -1,18 +1,18 @@
 <script lang="ts">
   /* 通知 tab。account.jsx NotificationsScreen (6-45)。
    * ScreenHeader（右側「重新整理」+「全部已讀」，未讀>0 才顯示）、NOTIF_CATS 類別
-   * chip（本地 cat）、notifs store 清單、點擊 → notifs.markRead(id)、全部已讀 →
-   * notifs.markAllRead 依回傳值分流 toast、MEmpty fallback。
+   * chip（本地 cat）、notifications store 清單、點擊 → markRead(id)、全部已讀 →
+   * markAllRead 依回傳值分流 toast、MEmpty fallback。
    * Legacy Svelte（無 runes）、繁體中文文案。
    *
-   * 資料改由通知模組的 session 閘門非同步水合共享 notifs store
-   * (member notifications 範本同款):createLoadGate($lib/load-gate)取代手寫
-   * 三態,generation/destroyed 機制防 unmount 後 resolve 覆寫、閘門旗標
-   * 守衛防重訪重抓、refresh() 一律重新 fetch 供「重新整理」與 ErrorState 重試
-   * 共用(不會被 load() 的守衛短路)。markRead/markAllRead 現已落庫 PATCH
-   * /notifications/{id}/read(W1,失敗不還原;細節見 $lib/mobile/notifications.ts
-   * 的 notifs wrapper 註解),頁面只依 markAllRead 回傳值('ok'|'partial')分流
-   * toast 文案。 */
+   * 資料改由通知模組的 session 閘門非同步水合共享 notifications store
+   * (Task 5 架構深化 R12 起與 member 通知頁同款,共用同一份 module):
+   * createLoadGate($lib/load-gate)取代手寫三態,generation/destroyed 機制防
+   * unmount 後 resolve 覆寫、閘門旗標守衛防重訪重抓、refresh() 一律重新 fetch
+   * 供「重新整理」與 ErrorState 重試共用(不會被 load() 的守衛短路)。markRead/
+   * markAllRead 落庫 PATCH /notifications/{id}/read(失敗不還原;細節見
+   * $lib/member/notifications.ts),頁面只依 markAllRead 回傳值('ok'|'partial')
+   * 分流 toast 文案。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -22,7 +22,7 @@
   import { NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
   import { NOTIF_CATS } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
-  import { notifs, notifsPageEntry, unread } from '$lib/mobile/notifications';
+  import { notifications, notificationsPageEntry, unreadCount, markRead, markAllRead } from '$lib/mobile/stores';
   import { toasts } from '$lib/mobile/stores';
 
   let cat = 'all';
@@ -31,15 +31,15 @@
   // (跨登出/換帳的在飛回應會 throw,由本頁 error 態接住、retry 走 gate.refresh
   // 回落同一支),hydrate 是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
   // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)仍全在 load-gate 內部。
-  const gate = createLoadGate({ ...notifsPageEntry });
+  const gate = createLoadGate({ ...notificationsPageEntry });
   onMount(() => {
     gate.load();
   });
 
-  $: list = $notifs.filter((n) => cat === 'all' || n.cat === cat);
+  $: list = $notifications.filter((n) => cat === 'all' || n.cat === cat);
 
   async function markAll() {
-    const result = await notifs.markAllRead();
+    const result = await markAllRead();
     if (result === 'partial') {
       toasts.notify('error', '部分通知標記失敗', '部分通知未能同步已讀狀態，請稍後重新整理。');
     } else {
@@ -76,7 +76,7 @@
     <Card padding={0}><ErrorState onRetry={gate.refresh} /></Card>
   </div>
 
-  <ScreenHeader title="通知中心" sub={$unread > 0 ? $unread + ' 則未讀' : '全部已讀'}>
+  <ScreenHeader title="通知中心" sub={$unreadCount > 0 ? $unreadCount + ' 則未讀' : '全部已讀'}>
     <svelte:fragment slot="right">
       <div style="display:flex; gap:8px;">
         <button
@@ -86,7 +86,7 @@
             font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; flex:none;
             display:flex; align-items:center; gap:5px;"
         ><Icon name="rotate-cw" size={14} />重新整理</button>
-        {#if $unread > 0}
+        {#if $unreadCount > 0}
           <button
             on:click={markAll}
             class="df-tapscale"
@@ -121,7 +121,7 @@
       {:else}
         {#each list as n (n.id)}
           <button
-            on:click={() => notifs.markRead(n.id)}
+            on:click={() => markRead(n.id)}
             class="df-tapscale"
             style="text-align:left; display:flex; gap:12px; padding:13px; border-radius:14px;
               border:1px solid var(--df-border); background:{n.read ? '#fff' : 'var(--df-primary-bg)'}; cursor:pointer;"

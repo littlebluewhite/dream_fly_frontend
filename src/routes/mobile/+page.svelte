@@ -27,8 +27,9 @@
   // re-export 取用（單源仍是 member 側同一組 binding）。
   import { overlay, cart, toasts, joinWaitlist, joinWaitlistErrorMessage } from '$lib/mobile/stores';
   import { profile as profileStore } from '$lib/mobile/stores';
-  // C3:通知段已搬出成葉模組(成環故 stores.ts 不 re-export,見該檔註解)。
-  import { unread } from '$lib/mobile/notifications';
+  // Task 5(架構深化 R12):通知段已併入 member 模組,經 $lib/mobile/stores 的 barrel
+  // re-export 取用(見該檔通知段註解)。
+  import { unreadCount } from '$lib/mobile/stores';
   import type { IconName } from '$lib/icon-registry';
 
   /* category taxonomy — home.jsx CATS (6-13). */
@@ -127,7 +128,7 @@
           </div>
         </div>
         <div style="display:flex; gap:9px;">
-          <HeaderIcon icon="bell" light badge={$unread} label="通知" onClick={() => goto('/mobile/notifications')} />
+          <HeaderIcon icon="bell" light badge={$unreadCount} label="通知" onClick={() => goto('/mobile/notifications')} />
           <HeaderIcon icon="shopping-cart" light badge={$cart.reduce((s, c) => s + c.qty, 0)} label="購物車" onClick={() => overlay.sheet('cart')} />
         </div>
       </div>

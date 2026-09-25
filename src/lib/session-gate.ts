@@ -2,20 +2,21 @@
  * session-gate — authStore 身分變更感知的 domain-store 水合閘門家族(架構深化 R7 C1)。
  *
  * 收斂六個 member/mobile domain store 對「session 身分變更」的非同構處理:waitlist/
- * leave 手抄了完整的 epoch/身分重置/序列化和解鏈骨架(位元組級雙生);notifications/
- * mobile-notifs 的 hydrated 旗標跨帳號存活(真缺陷:SPA 登出無整頁重載,B 帳號被
- * guarded() 短路、直接讀到 A 的資料);points/subscriptions 全無守衛。本模組把前二
- * 「吸收」成單源、把後四「抬升」到同一套守衛之下,提供兩門工廠:
+ * leave 手抄了完整的 epoch/身分重置/序列化和解鏈骨架(位元組級雙生);notifications
+ * 的 hydrated 旗標跨帳號存活(真缺陷:SPA 登出無整頁重載,B 帳號被 guarded() 短路、
+ * 直接讀到 A 的資料);points/subscriptions 全無守衛。本模組把前二「吸收」成單源、
+ * 把後四「抬升」到同一套守衛之下,提供兩門工廠:
  *   - createSessionGate     完整 session gate(gate + 身分重置 + 序列化可重試和解鏈
  *                           + epoch 核對 fetch + 頁面進場包 pageEntry())——
- *                           waitlist / leave / member notifications / mobile notifs
+ *                           waitlist / leave / notifications
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
  *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions
  *
- * C3(架構深化 R9)兩處變更:①新增 pageEntry(),關閉 ADR 0017 明載的 known-latent
- * 殘窗(通知**頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對);
- * ②門 (c) `onSessionReset` 退役 —— 其唯一消費者 mobile notifs 已改建完整 gate
- * (見 $lib/mobile/notifications.ts),三門收斂為兩門。
+ * C3(架構深化 R9)新增 pageEntry(),關閉 ADR 0017 明載的 known-latent 殘窗(通知
+ * **頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對)。門 (c)
+ * `onSessionReset` 已退役(其唯一消費者曾是 mobile 專屬的通知模組;Task 5 架構深化
+ * R12 起 mobile 併入 member notifications,經 $lib/mobile/stores 轉出同一顆 gate,
+ * 三門收斂為兩門的結論不變)。
  *
  * 架構深化 R10／R11 動的主要是 pageEntry():R10 的 hydrate 包多帶 `gen: gate.mutationGen`
  * (世代穩定重抓),R11 再多帶 `pendingSettle: gate.pendingSettle`(mutation settle 訊號)

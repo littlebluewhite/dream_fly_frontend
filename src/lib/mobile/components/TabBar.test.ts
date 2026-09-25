@@ -3,13 +3,13 @@ import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import MobileTabBar from './TabBar.svelte';
 import { TABS, mobilePath } from '$lib/mobile/nav';
-import { notifs, unread } from '$lib/mobile/notifications';
+import { markAllRead, unreadCount } from '$lib/mobile/stores';
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile') })
 }));
-// W1:notifs.markAllRead()(見下方 :72)現在會送 PATCH 落庫(見 $lib/mobile/
-// notifications.ts)——這裡純粹隔離掉真正的 fetch,不驗證落庫本身,斷言零變更。
+// W1:markAllRead()(見下方 :78)現在會送 PATCH 落庫(見 $lib/member/notifications.ts)
+// ——這裡純粹隔離掉真正的 fetch,不驗證落庫本身,斷言零變更。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -52,7 +52,7 @@ describe('mobile TabBar adapter — smoke tests', () => {
 		// NOTIFS_SEED has 3 unread items out of the box, so get() should be > 0.
 		// If a previous test called markAllRead() we need at least one unread item.
 		// Use the current live value — whatever the seed gives us.
-		const currentUnread = get(unread);
+		const currentUnread = get(unreadCount);
 		expect(currentUnread).toBeGreaterThan(0); // precondition: seed has unread items
 
 		render(MobileTabBar);
@@ -74,9 +74,9 @@ describe('mobile TabBar adapter — smoke tests', () => {
 	});
 
 	it('notifications badge is absent when unread = 0 (adapter wires badges correctly)', () => {
-		// Mark all notifications read so the derived `unread` store emits 0.
-		notifs.markAllRead();
-		expect(get(unread)).toBe(0); // verify precondition
+		// Mark all notifications read so the derived `unreadCount` store emits 0.
+		markAllRead();
+		expect(get(unreadCount)).toBe(0); // verify precondition
 
 		render(MobileTabBar);
 
