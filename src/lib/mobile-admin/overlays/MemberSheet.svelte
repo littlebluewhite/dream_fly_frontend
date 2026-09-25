@@ -1,7 +1,7 @@
 <script lang="ts">
   /* 學員詳情 sheet。admin.jsx MemberSheet (162) 的行動版接線改版。
-   * onEdit 由 host 傳入時用之;OverlayHost 未傳 onEdit,故 fallback 直接
-   * overlay.sheet('memberForm',{m})(與 app.jsx onEdit 等價)。
+   * onEdit 必填,由開 sheet 的呼叫端帶入(members 頁帶 openEdit,內含 onSave)——舊的
+   * overlay.sheet('memberForm',{m}) fallback 沒帶 onSave,編輯後送出即無聲丟失,已刪。
    *
    * Task 20：改讀真 GET /users 形狀（MemberRow 已瘦身為 id/name/initial/phone/
    * joined/status/points）——同桌面 admin/data.ts 的 MemberAccount，MembersTable
@@ -13,17 +13,16 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { overlay, toasts } from '$lib/mobile-admin/stores';
+  import { toasts } from '$lib/mobile-admin/stores';
   import type { MemberRow } from '$lib/mobile-admin/data';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
-  export let onEdit: ((m: MemberRow) => void) | undefined = undefined;
+  export let onEdit: (m: MemberRow) => void;
 
   function edit() {
     if (!m) return;
-    if (onEdit) onEdit(m);
-    else overlay.sheet('memberForm', { m });
+    onEdit(m);
   }
 
   $: rows = m

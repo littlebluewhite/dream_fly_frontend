@@ -4,51 +4,24 @@
    * push 一律帶 onBack={overlay.pop}，sheet 一律帶 onClose={overlay.closeSheet}，
    * 其餘 props 由 push/sheet 呼叫端透過 props 傳入並展開。 */
   import { overlay } from '$lib/mobile/stores';
+  import type { Component } from 'svelte';
   import type { MobilePushId, MobileSheetId } from '$lib/mobile/stores';
+  import { PUSH, SHEETS } from '$lib/mobile/overlay-registry';
 
-  import MyCourseDetail from '$lib/mobile/overlays/MyCourseDetail.svelte';
-  import ScheduleScreen from '$lib/mobile/overlays/ScheduleScreen.svelte';
-  import ReportScreen from '$lib/mobile/overlays/ReportScreen.svelte';
-  import PointsScreen from '$lib/mobile/overlays/PointsScreen.svelte';
-  import OrdersScreen from '$lib/mobile/overlays/OrdersScreen.svelte';
-  import SettingsScreen from '$lib/mobile/overlays/SettingsScreen.svelte';
-  import TrialScreen from '$lib/mobile/overlays/TrialScreen.svelte';
-
-  import CourseDetailSheet from '$lib/mobile/overlays/CourseDetailSheet.svelte';
-  import CartSheet from '$lib/mobile/overlays/CartSheet.svelte';
-  import LeaveSheet from '$lib/mobile/overlays/LeaveSheet.svelte';
-  import MakeupSheet from '$lib/mobile/overlays/MakeupSheet.svelte';
-  import ContactSheet from '$lib/mobile/overlays/ContactSheet.svelte';
-  import EditProfileSheet from '$lib/mobile/overlays/EditProfileSheet.svelte';
-
+  // 註冊表(id → 元件)單源於 overlay-registry.ts,呼叫端 props 在 overlay.push/sheet 已按元件定型;
+  // host 只負責展開,故此處取寬鬆的 Component<any> 視圖餵 <svelte:component>(寬化指派,非 as 斷言)。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type Comp = any;
-
-  const PUSH: Record<MobilePushId, Comp> = {
-    courseDetail: MyCourseDetail,
-    schedule: ScheduleScreen,
-    report: ReportScreen,
-    points: PointsScreen,
-    orders: OrdersScreen,
-    settings: SettingsScreen,
-    trial: TrialScreen
-  };
-  const SHEETS: Record<MobileSheetId, Comp> = {
-    course: CourseDetailSheet,
-    cart: CartSheet,
-    leave: LeaveSheet,
-    makeup: MakeupSheet,
-    contact: ContactSheet,
-    editProfile: EditProfileSheet
-  };
+  const push: Record<MobilePushId, Component<any>> = PUSH;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sheets: Record<MobileSheetId, Component<any>> = SHEETS;
 
   $: top = $overlay.stack[$overlay.stack.length - 1];
 </script>
 
-{#if top && PUSH[top.id]}
-  <svelte:component this={PUSH[top.id]} onBack={overlay.pop} {...top.props} />
+{#if top && push[top.id]}
+  <svelte:component this={push[top.id]} onBack={overlay.pop} {...top.props} />
 {/if}
 
-{#if $overlay.sheet && SHEETS[$overlay.sheet.id]}
-  <svelte:component this={SHEETS[$overlay.sheet.id]} onClose={overlay.closeSheet} {...$overlay.sheet.props} />
+{#if $overlay.sheet && sheets[$overlay.sheet.id]}
+  <svelte:component this={sheets[$overlay.sheet.id]} onClose={overlay.closeSheet} {...$overlay.sheet.props} />
 {/if}

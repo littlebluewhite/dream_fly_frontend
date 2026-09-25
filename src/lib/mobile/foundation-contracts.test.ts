@@ -11,8 +11,8 @@
  * 原始碼掃描重複把關，也沒有空窗(check 覆蓋全倉，是比原掃描更嚴格的超集)。
  *
  * overlay-map completeness(原②)已退役(T12/K6-4)：createOverlay 收斂為
- * PushId/SheetId 雙泛型(見 $lib/components/mobile/overlay)，兩個 OverlayHost 的
- * PUSH/SHEETS 表改 `Record<union, Comp>` 後，漏鍵/多餘鍵在編譯期雙向擋下——是
+ * push/sheet 雙泛型(見 $lib/components/mobile/overlay；R12 Task 4 起泛型參數是各 surface
+ * overlay-registry.ts 的註冊表，id 聯集由其鍵推出)，漏鍵/多餘鍵在編譯期雙向擋下——是
  * 原掃描的嚴格超集，且多驗到一條原掃描從未覆蓋的保障：呼叫端 push()/sheet()
  * 傳入的 id 也必須屬於該 surface 的註冊集合(原掃描只查「計畫中的 id 有沒有
  * 出現在 OverlayHost」，反過來「呼叫端有沒有傳出界」完全沒查)。 */

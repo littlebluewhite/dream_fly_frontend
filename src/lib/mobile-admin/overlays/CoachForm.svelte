@@ -30,7 +30,7 @@
 
   export let onClose: () => void;
   export let c: Coach | null = null;
-  export let onSave: ((values: CoachFormValues, isNew: boolean) => void) | undefined = undefined;
+  export let onSave: ((values: CoachFormValues, isNew: boolean) => void | Promise<unknown>) | undefined = undefined;
 
   const isNew = !c;
 

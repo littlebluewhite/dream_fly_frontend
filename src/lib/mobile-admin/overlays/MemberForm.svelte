@@ -22,7 +22,7 @@
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
-  export let onSave: ((body: CreateMemberBody | UpdateMemberBody, isNew: boolean) => void) | undefined = undefined;
+  export let onSave: ((body: CreateMemberBody | UpdateMemberBody, isNew: boolean) => void | Promise<unknown>) | undefined = undefined;
 
   const isNew = !m;
 

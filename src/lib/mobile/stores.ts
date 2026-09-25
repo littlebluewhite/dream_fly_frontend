@@ -22,6 +22,7 @@
 import { writable, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createOverlay } from '$lib/components/mobile/overlay';
+import type { MobilePushRegistry, MobileSheetRegistry } from './overlay-registry';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
 import { refreshPoints, subscriptions } from '$lib/member/stores';
 import { chargeableLines } from '$lib/member/checkout';
@@ -35,12 +36,13 @@ import { type Course } from './data';
 // 而來);createOverlay 的直接單元測試在 overlay.test.ts(Task 1(1.5)：本檔過去
 // 純轉出 createOverlay/OverlayEntry/OverlayState 供 stores.test.ts 建獨立實例，
 // 零其餘消費者，已退役——ADR-0010「死值不留死出口」),singleton 仍在此地建立。
-// K6-4:push/sheet 各自的合法 id 集合,緊鄰 singleton 宣告——成員對齊現行
-// OverlayHost.svelte 的 PUSH/SHEETS 註冊表鍵。overlay 泛型化後,呼叫端傳入不在
-// 集合內的 id 會在編譯期被擋下(K6-3 前只有執行期的 foundation-contracts 掃描)。
-export type MobilePushId = 'courseDetail' | 'schedule' | 'report' | 'points' | 'orders' | 'settings' | 'trial';
-export type MobileSheetId = 'course' | 'cart' | 'leave' | 'makeup' | 'contact' | 'editProfile';
-export const overlay = createOverlay<MobilePushId, MobileSheetId>();
+// K6-4:push/sheet 各自的合法 id 集合由 overlay-registry.ts 的註冊表鍵推出;各 id 的
+// props 由註冊元件的 props 推出,呼叫端傳錯 id / 錯 props / 漏必填 props 都在編譯期擋下。
+// 註冊表只能以敘述層級 `import type` 引入(verbatimModuleSyntax 下編譯後整行抹除),
+// 否則執行期會把全部 overlay 元件拉進本檔載入鏈。
+export type MobilePushId = keyof MobilePushRegistry;
+export type MobileSheetId = keyof MobileSheetRegistry;
+export const overlay = createOverlay<MobilePushRegistry, MobileSheetRegistry>();
 
 /* ---------- 請假/補課表單機（卡 2：desktop/mobile 雙生收斂的 surface seam） ---------- */
 // LeaveSheet/MakeupSheet 的表單機制（場次三態/守衛/trim）與桌面 LeaveDialog/

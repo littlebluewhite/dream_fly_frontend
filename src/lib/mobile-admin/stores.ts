@@ -15,6 +15,7 @@ import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createHydrationGate } from '$lib/hydration-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
+import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import type { Role } from './nav';
 // C4 批3(facade 純轉手退役):COACHES/type Coach 改直取 $lib/domain/coaches(原經
@@ -53,21 +54,13 @@ import type { OrderStatus } from '$lib/api/wire';
  * overlay.test.ts(本檔過去純轉出 createOverlay/OverlayEntry/OverlayState 供
  * stores.test.ts 建獨立實例，零其餘消費者，已退役——ADR-0010「死值不留死出口」)；
  * overlay 單例仍由本 surface 自建(per-surface 狀態)。 */
-// K6-4:push/sheet 各自的合法 id 集合,緊鄰 singleton 宣告——成員對齊現行
-// OverlayHost.svelte 的 PUSH/SHEETS 註冊表鍵。overlay 泛型化後,呼叫端傳入不在
-// 集合內的 id 會在編譯期被擋下(K6-3 前只有執行期的 foundation-contracts 掃描)。
-export type MobileAdminPushId = 'coaches' | 'venues' | 'tickets' | 'reports' | 'settings' | 'messageThread';
-export type MobileAdminSheetId =
-	| 'member'
-	| 'class'
-	| 'order'
-	| 'memberForm'
-	| 'classForm'
-	| 'coachForm'
-	| 'notif'
-	| 'role'
-	| 'studentAction';
-export const overlay = createOverlay<MobileAdminPushId, MobileAdminSheetId>();
+// K6-4:push/sheet 各自的合法 id 集合由 overlay-registry.ts 的註冊表鍵推出;各 id 的
+// props 由註冊元件的 props 推出,呼叫端傳錯 id / 錯 props / 漏必填 props 都在編譯期擋下。
+// 註冊表只能以敘述層級 `import type` 引入(verbatimModuleSyntax 下編譯後整行抹除),
+// 否則執行期會把全部 overlay 元件拉進本檔載入鏈。
+export type MobileAdminPushId = keyof MobileAdminPushRegistry;
+export type MobileAdminSheetId = keyof MobileAdminSheetRegistry;
+export const overlay = createOverlay<MobileAdminPushRegistry, MobileAdminSheetRegistry>();
 
 /* ---------- Notifications (mobile bell — `read` flag) ----------
  * 單源於 `$lib/stores/read-state` 的 createReadState(Admin / coach 通知鈴鐺全部

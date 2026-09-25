@@ -26,7 +26,7 @@
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
-  export let onSave: ((rec: ClassRow, durationMinutes: number, isNew: boolean) => void) | undefined = undefined;
+  export let onSave: ((rec: ClassRow, durationMinutes: number, isNew: boolean) => void | Promise<unknown>) | undefined = undefined;
   export let coaches: Coach[] = [];
 
   const isNew = !k;

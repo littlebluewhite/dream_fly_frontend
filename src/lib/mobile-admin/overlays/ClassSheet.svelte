@@ -1,26 +1,26 @@
 <script lang="ts">
   /* 班級詳情 sheet。admin.jsx ClassSheet (252)。
-   * onEdit fallback → overlay.sheet('classForm',{k})(OverlayHost 未傳 onEdit)。 */
+   * onEdit 必填,由開 sheet 的呼叫端帶入(classes 頁帶 openEdit,內含 onSave)——舊的
+   * overlay.sheet('classForm',{k}) fallback 沒帶 onSave,編輯後送出即無聲丟失,已刪。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import LevelBadge from '$lib/mobile-admin/components/LevelBadge.svelte';
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { overlay, toasts } from '$lib/mobile-admin/stores';
+  import { toasts } from '$lib/mobile-admin/stores';
   import { STATUS_TONE, type ClassRow } from '$lib/mobile-admin/data';
   import { classFill, classDetailRows } from '$lib/domain/class-detail';
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
-  export let onEdit: ((k: ClassRow) => void) | undefined = undefined;
+  export let onEdit: (k: ClassRow) => void;
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   function edit() {
     if (!k) return;
-    if (onEdit) onEdit(k);
-    else overlay.sheet('classForm', { k });
+    onEdit(k);
   }
 
   // null 保真:k 為 null(sheet 未開)時給 { full: false, pct: 0 } 預設值——不可讓
