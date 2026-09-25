@@ -273,3 +273,37 @@ hydrate 則被 post-await 的 mutation-wins 丟棄。故第 3 層兩條釘打的
 - **`docs/adr/0019`**:`markMutated(tail?)` 的 `then(done, done)` 以**結構**(而非呼叫端自律)保證
   失敗路徑出帳,沿其 C1 `ForgotSubmitIO` 刻意不給 `setError` 的同一種手法;`fetchGenStable()` 的
   overload 保留亦沿其「死出口收口」慣例(`pendingSettle()` 是單一簽章,沒有 overload)。
+
+## 增補(2026-09-26,架構深化 R12):尾流呼叫端 4 → 2;`markOrderPaid` 改為先寫後改(仍不入帳);settle 測試新路徑
+
+完整背景見 `docs/adr/0022`。本篇原文不改寫,以下三點以本節為準。
+
+**1. 「佈線事實」的呼叫端:4 點 → 2 點。**
+
+- R12 Task 5 把 `src/lib/mobile/notifications.ts` 併入 `src/lib/member/notifications.ts`,member 與
+  mobile 共用同一顆通知閘門。
+- 入帳的呼叫點自此只剩 `member/notifications.ts` 的 `markRead`(`markMutated(patch)`)與
+  `markAllRead`(`markMutated(settled)`)兩處。
+- 機制層、第 1 層、第 2 層零改動;判準句、三條介面語意、硬契約、三形否決、誠實界線四則全數原樣有效。
+- mobile 通知頁經 `mobile/stores.ts` 轉出的 `notificationsPageEntry` 取得同一支 `pendingSettle`,
+  所以兩個通知頁仍都在等待軸的保護之下。
+- 標題「恰四個呼叫端」與「行為變更」第 1 條的「兩個通知頁」:前者自此讀作兩點,後者仍然成立。
+
+**2. 刻意不入帳名單:`markOrderPaid` 仍不入帳,但理由改變。**
+
+- 原文寫它是「demo 動作,沒有網路尾流可入帳(它翻的是本地 ops 快照)」。
+- R12 Task 3 起,它是先寫後改:先 `await updateOrderStatus(order.orderId, 'paid')`,再
+  `applyStatusChange()` 套回 `$orders`,最後 `opsGate.markMutated()`。
+- 它現在**有**網路呼叫,但 `markMutated()` 發生在 PATCH **已落定之後**(await-then-write 形,同
+  `session-gate.mutate()`),沒有在飛尾流可入帳。所以仍走無 `tail` 路徑,程式碼沒有傳 `tail`。
+- 「新增入帳呼叫點前先讀這條禁忌」照舊適用。
+- `markMessageRead` 的裁決(fire-and-forget 是既有裁決,入帳是行為變更)原樣有效。
+
+**3. 測試路徑。**
+
+- 「測試落點」第 3 層的 mobile 側薄採用釘(`markAllRead` 的 PATCH 群含失敗,`allSettled` settle 後
+  照出發),以及誠實界線 ③ 引用的「PATCH 失敗 → refresh 後 `read === false`」斷言,原住已刪除的
+  `src/lib/mobile/notifications.test.ts`。
+- 兩者一起移到 `src/lib/member/notifications.test.ts` 的 describe「markAllRead 的 allSettled 尾流」,
+  斷言不變,並在刪除舊檔之前先對 member 模組跑綠。
+- member 側原有的那支第 3 層釘仍在同檔。

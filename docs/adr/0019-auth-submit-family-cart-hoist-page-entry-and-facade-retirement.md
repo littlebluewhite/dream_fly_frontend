@@ -270,3 +270,47 @@ re-assert)與第三形(member/mobile 以自身較嚴格型別純註記收窄)。
   (`pageEntry()` 而非讓頁面自取 raw getter)。
 - **`docs/adr/0018`**:本篇沿其「一輪多案、單篇記錄」的體例;C1 裁決二與其 C6(admin 三頁 CRUD
   提交同構否決)是同一條「行為旗標寬介面不收」的判準,C1 裁決一與其 C2「單工廠不拆 core」互為表裡。
+
+## 增補(2026-09-26,架構深化 R12):mobile 通知葉模組退役,C3 的取用不對稱消失
+
+完整背景見 `docs/adr/0022` §2。
+
+### C3 的葉模組與「刻意的不對稱」已不存在
+
+C3 記載的兩件事都是被成環迫出的:
+
+- mobile 通知搬成葉模組 `src/lib/mobile/notifications.ts`。
+- `mobile/stores.ts` 不得 re-export 該模組,消費端一律直接 import。
+
+成環的原因是:葉模組需要 `mobile/api.ts` 的 `getNotifications`,而 `mobile/api.ts` 又 import
+`mobile/stores.ts` 的 `PREFS_DEFAULT`/`Prefs`。
+
+R12 Task 5 起的現況:
+
+- 該葉模組與其測試刪除,member 與 mobile 共用 `src/lib/member/notifications.ts` 這一顆通知閘門。
+- 伺服器端本來就是同一份已讀真值。
+- mobile 經 `mobile/stores.ts` 從 `$lib/member/stores` 轉出六個通知符號,消費端(TabBar、mobile
+  首頁、mobile 通知頁)改讀自家 seam。
+- **不成環**:來源是完全獨立的 `$lib/member/stores`,`member/*` 零 `$lib/mobile` import;兩個
+  `getNotifications()`(mobile 轉手與 member 本體)也一併退役。
+- 「後果」節那條「mobile 直取 `$lib/mobile/notifications`,勿為了對稱把葉模組 re-export 回
+  `mobile/stores.ts`」的警語隨之失效:對稱已經以合一的方式達成,不是靠 re-export 葉模組。
+
+### C3 其餘內容不受影響
+
+`pageEntry()` 的交付形狀、零新程式路徑、「epoch 知識只住 `session-gate.ts`」的判準都原樣有效。
+兩門工廠也不變,只是 `createSessionGate` 的消費者由四個變為三個(waitlist / leave / notifications)。
+
+### 「測試守衛」節的路徑
+
+- 該節記的新檔 `src/lib/mobile/notifications.test.ts` 已刪除。
+- 其中 mobile 獨有的兩條(不登出直接換帳號、`markAllRead` 的 `allSettled` 尾流)移到
+  `src/lib/member/notifications.test.ts`。
+- mobile 通知頁的「在飛換帳」render 釘仍在 `src/routes/mobile/notifications/page.test.ts`,改以
+  `vi.mock('$lib/api/client')` + `fakeRouter` 接線。
+
+### C4 與 `docs/adr/0014` 的張力
+
+C4 判準句的適用範圍是 `data.ts` facade。R12 審查曾提議把同一條判準延伸到 `mobile/stores.ts` 的
+store/動作純轉手(候選 07),與 `docs/adr/0014` §1 的 seam 規則衝突。使用者裁決 D2 暫不處理,
+張力記在 `docs/adr/0022`。

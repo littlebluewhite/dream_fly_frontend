@@ -422,3 +422,25 @@ px 斷言與 `ReportsScreen.test.ts` 零改續綠。同批補上 `RevenueTrend.t
 **`Conversation` 型別仍為活型別**(它是 `mapConversation()` 的回傳形狀),該註記的其餘部分——
 `CONVERSATIONS` seed 已於 `coach/data.ts` 原位退役、歷史裁決原文不改寫——全部原樣有效。**本節只
 校正「`SlaTone` 仍為活型別」這半句的現況,不改寫該註記原文。**
+
+## 增補(2026-09-26,架構深化 R12):`TODAY_LABEL` 退役
+
+§2 那句「`TODAY_LABEL`/`CONVERSATIONS` 仍是 `coach/api.ts` 消費」的 `CONVERSATIONS` 一半,已由 R5 C2
+退役註記校正;另一半 `TODAY_LABEL` 自 R12 Task 1(`docs/adr/0022` §7)起同樣不再成立。
+
+- 原型固定日期 `2026-05-30` 的 `TODAY_LABEL` 常數,已自 `coach/data.ts` 退役。
+- `coach/api.ts` 的 `getDashboard`/`getToday` 改呼叫 `coach/schedule-dates.ts` 的 `todayLabel()`,
+  以真實日期產生標籤。
+- 同檔的 `PROTO_TODAY` 一併刪除;`weekDays`/`monthMatrix` 的 `todayRef` 預設改為 `new Date()`。
+
+`coach/data.ts` 檔頭的消費者說明已同步改寫。`NOTIFS` 仍是 Topbar 直接消費的 mock seed,不受影響。
+
+**同輪另一筆路徑校正**:本篇 §3「mobile 通知已讀落庫選型」描述的 `mobile/stores.ts` 的 `notifs` wrapper
+(`notifsBase` + `notifsHydrated`)是 2026-07 當下的形狀。它先於 R9 C3 搬成葉模組
+`src/lib/mobile/notifications.ts`(`docs/adr/0019`),再於 R12 併入 `src/lib/member/notifications.ts`
+(`docs/adr/0022`)。
+
+- 現況:mobile 經 `mobile/stores.ts` 轉出 member 的 `notifications`/`markRead`/`markAllRead`/
+  `notificationsHydrated`。
+- 所記的**行為**不變:已讀落庫、`markAllRead` 回傳 `Promise` 供頁面依結果選 toast。
+- 該節歷史原文不改寫。

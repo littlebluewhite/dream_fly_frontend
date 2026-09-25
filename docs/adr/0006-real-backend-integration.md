@@ -169,6 +169,19 @@ surface（member/staff）共用同一套 API：
 > mock `CONVERSATIONS` seed 回傳——真 payload 的型別掩護了 mock 欄位，屬未列入上表的縫隙，本輪已
 > 補正（`coach/api.ts` 併真 `getConversations()`，best-effort 失敗降級空陣列不擋主資料；R5 C2）。
 > 上表「場館／票券」條目的讀取側同輪接真，詳該列現況欄。
+>
+> **2026-09-26（R12 架構深化）增補**（詳 `docs/adr/0022`）：上表兩列的現況欄有校正。
+>
+> **「`mobile-admin` 列表僅第 1 頁」**：仍只抓第 1 頁，但已不再把第 1 頁筆數當成總數顯示。
+> - `getOpsCollections()` 帶出分頁 meta（`opsPages`），學員／課程／訂單三頁 header 改顯示後端 total。
+> - `total > perPage` 時，搜尋區顯示「僅搜尋前 N 筆，完整清單請至桌面後台」。
+> - 學員／訂單頁狀態 chips 的計數仍數已載入的第 1 頁（已知、刻意遞延）。
+>
+> **「`mobile` 帳戶設定」**：帳號頁的 `EditProfileSheet` 偏好段原本直接寫本地 store，從未送到後端。
+> 自 R12 起，它與 `SettingsScreen` 共用 `$lib/mobile/pref-sync` 的單例 `prefSync`，偏好真的
+> `PATCH /users/me`，並先水合再編輯。姓名／電話等 profile 欄位仍是本地編輯，不變。
+>
+> 同輪 `mobile-admin` 的「標記已付款」也由本地 demo 翻轉，改為真 `PATCH /orders/{id}/status`（本表原未列此項）。
 
 ### 6. Round 3 接線範圍：7 個新後端子系統 + admin 使用者 + 5 級課程分級
 

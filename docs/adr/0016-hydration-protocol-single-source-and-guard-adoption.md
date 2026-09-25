@@ -286,3 +286,12 @@ waitlist/leave 原本位元組級雙生的深層鏡射家族(完整 epoch/序列
    落入 `docs/adr/0014` §2 的雙生核可類。**附記其餘各點不受影響**:0012 四判準的核對、
    `docs/adr/0015` 與 `docs/adr/0003` 兩條劃界、以及本篇對 `docs/adr/0008`§「有意識保留」的取代
    裁決全部原樣有效——改變的只是這台機器有幾個呼叫端。歷史裁決原文不改寫。
+
+## 增補(2026-09-26,架構深化 R12):mobile 通知葉模組已併入 member 通知 module
+
+R9 C3 增補第 1 點寫 mobile notifs「已於 R9 C3 改建完整 `createSessionGate`(`src/lib/mobile/notifications.ts`)」。
+該檔已於 R12 Task 5(`docs/adr/0022`)刪除:mobile 與 member 自此共用 `src/lib/member/notifications.ts`
+這一顆通知閘門,mobile 經 `mobile/stores.ts` 轉出取用。
+
+所記的**事實**(跨登入洩漏已修、epoch 核對 fetch)不變,只是住所合一。「協定測試三層界線」第 3 層
+的 mobile 側薄採用釘,已隨模組移入 `src/lib/member/notifications.test.ts`。三層界線本身不變。

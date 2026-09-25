@@ -254,3 +254,67 @@ clock-controller ／ checkout-controller ／ messages-controller ／ mine-contro
 開啟即重掛），每開一次 new 一顆 controller，**刻意不呼叫 `setOpen`**——建構期那把 key 即本次結帳
 流程的 key。判準②③④照舊一條不鬆（deps 仍只有 `placeOrder`、outcome 詞彙不變、六句 toast 文案逐字
 留元件）。完整的三條件核對與雙生記帳見 `docs/adr/0014` 的 R11 增補。
+
+## 增補（2026-09-26，架構深化 R12）：pref-sync 改列 mobile 共用 module、K6 的 id 聯集改住註冊表、點名 controller 兩處語意校正
+
+完整背景見 `docs/adr/0022`。本篇原文不改寫，以下四點以本節為準。
+
+**1. `src/lib/mobile/pref-sync.ts` 改列為 mobile 共用 module，名冊 9→8。** R11 增補把它列為第九例，
+依據是判準①「呼叫端恆為 `SettingsScreen.svelte` 一處」。R12 Task 1 修 `EditProfileSheet.svelte` 繞過
+pref-sync 的 bug(偏好從未 `PATCH /users/me`,還可能用本地預設值覆寫伺服器值)之後,它有兩個呼叫端，
+判準①自此**不成立**。這也不落入 `docs/adr/0014` §2 的雙生核可類:那一類要求 desktop↔mobile 雙生，
+而這兩個呼叫端都在 mobile。
+
+改列的理由不是「多了一個呼叫端」,而是模組的**形狀**變了:
+
+- `pref-sync.ts` 自此匯出模組層單例 `prefSync`,兩個呼叫端共用同一條 `saveChain`。
+- R11 增補記下的核心不變量(排隊時不凍結快照、輪到才重新 `get()`)只在「一個 `prefs` store 對應
+  一條序列鏈」時成立。兩個畫面各自 `createPrefSync()` 會有兩條鏈互不知道對方在飛的送出，後送的
+  整包快照可能蓋掉先送的回滾。
+- 所以它現在是 mobile surface 內、守一顆跨畫面共享 store 寫入序列的共用模組，性質近於 store 層，
+  不再是嵌在單一頁面 load-gate 之下的編排層。
+
+判準②③④仍一條不鬆:
+
+- deps 仍只有 `getPreferences`/`savePreferences` 與既有的 `prefs` store。
+- outcome 詞彙不變。
+- 零 gate/toast/error-text import。「儲存失敗」toast 逐字留在各呼叫端:`EditProfileSheet` 的任一鍵
+  outcome 非 `saved` 就發一次。
+
+`createPrefSync` 工廠本身保留匯出，供測試建獨立實例。
+
+單頁 controller 名冊自此 **9→8**:attendance-controller ／ conversations-filter ／ coach-save ／
+clock-controller ／ checkout-controller ／ messages-controller ／ mine-controller ／ contact-form。
+attendance-controller 與 checkout-controller 另有第二個呼叫端，走的是 `docs/adr/0014` §2 的雙生核可，
+與 pref-sync 的改列性質不同。
+
+**2. K6 的 overlay id 聯集改住各 surface 的 `overlay-registry.ts`,泛型參數改為註冊表。** §3 記的是
+「`createOverlay<PushId, SheetId>()` 雙泛型，各 surface 在 overlay singleton 旁宣告 id 聯集，
+`OverlayHost.svelte` 的註冊表宣告為 `Record<union, Comp>`」。R12 Task 4 起的形狀:
+
+- `PUSH`/`SHEETS` 對照表搬到 `src/lib/mobile/overlay-registry.ts` 與 `src/lib/mobile-admin/overlay-registry.ts`,
+  以 `satisfies OverlayRegistry` 宣告。
+- 工廠是 `createOverlay<PushReg, SheetReg>()`。id 取註冊表的鍵(`keyof Reg & string`),`push`/`sheet`
+  的 props 取元件 props 扣掉 host 注入的 `onBack`/`onClose`。
+- `MobilePushId` 一類聯集仍由 `stores.ts` 匯出，但改為 `keyof …Registry` 推導，且只以敘述層級
+  `import type` 引入註冊表，避免執行期把 overlay 元件拉進 stores 的載入鏈。
+- 漏鍵、多鍵在新形狀下**結構上不可能**:id 就是鍵本身。原本「兩邊雙向擋下」的保證因此以更強的
+  形式延續，並多鎖住 props 一軸。
+- 守衛是 `src/lib/components/mobile/overlay.test.ts` 的 `@ts-expect-error` 行，由 `npm run check` 強制。
+- §3 的「整陣列 `as` 斷言」教訓照舊。host 端以寬化指派 `const push: Record<Id, Component<any>> = PUSH`
+  取寬鬆視圖，不用 `as`。
+
+**3. 判準②的「`now`(壁鐘讀取)」自 R12 起是可選 dep。** `AttendanceControllerDeps.now` 改為可選，
+省略時用 controller 新匯出的 `nowHHMM`,兩個點名頁各自的 `nowHHMM()` 複本刪除。判準②不受影響：
+注入的仍是效應，不是行為旗標;可選只是讓兩個呼叫端不必各帶一份相同的預設值。
+
+**4. c3 競態段的 `applyNote` 語意改變(D1)。** §1 c3 段寫「儲存中若先 `setMark`/`applyNote`/
+`markAllPresent` 把 `state` 打回 `dirty`」。D1(點名備註改為誠實的本機備註，後端點名 PUT 無備註欄位)
+之後,`applyNote` 只寫 `notes`,**不再**動 `state`/`dirtyCount`。
+
+- c3 的 ABA 序列自此只能由 `setMark`/`markAllPresent` 觸發。儲存中編輯備註時，該次儲存回應會照常
+  套用(`state` 仍是 `saving`),備註保留。
+- token guard 與 state guard 的疊加裁決與其理由原樣有效。
+- 已知的遞延缺陷:儲存在飛時取的 undo 快照帶 `state: 'saving'`,儲存完成後復原會卡在「儲存中」。
+  這條路徑 `setMark` 早已存在,D1 讓 `applyNote` 也能經成功路徑走到。見 `docs/adr/0022`「已知、刻意
+  遞延」。

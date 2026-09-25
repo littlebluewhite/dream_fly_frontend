@@ -1,7 +1,9 @@
 /* Dream Fly — 行動版會員 App · mock data + helpers (ported from mobile/data.jsx).
  *
  * Task 19：`getHome()`/`getCourses()`/`getMine()`/`getAccount()`/`getNotifications()`
- * 在 `$lib/mobile/api.ts` 已改接真後端(復用 `$lib/member/api.ts` 的既有 seam)。
+ * 在 `$lib/mobile/api.ts` 已改接真後端(復用 `$lib/member/api.ts` 的既有 seam；其中
+ * `getNotifications()` 已於 R12 隨通知 module 合一退役，通知改經 `$lib/mobile/stores`
+ * 轉出的 member 通知閘門取得)。
  * Task 1(C2 死種子退役)：本檔案原本混合兩種常數——(a) 仍是畫面唯一資料源的 mock、
  * (b) 已無 production 消費者、僅供既有測試當 fixture 用的舊 mock(如 CATALOG)。
  * 經逐一確認 runtime 消費者後，(b) 類整批退役(STATS/SKILLS/SCHEDULE/ORDERS/

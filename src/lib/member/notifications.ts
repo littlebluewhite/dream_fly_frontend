@@ -14,8 +14,8 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  的頁面，讓 Topbar/Sidebar 的未讀角標一開始就是真資料，不用等使用者先逛過通知頁。
  *  守衛跟 notifications 頁的 load() 用同一顆 notificationsHydrated flag——已經 hydrate
  *  過就不重覆抓，避免蓋掉使用者在通知頁的本地已讀狀態（不論是哪一邊先觸發都一樣：先到者
- *  hydrate、後到者直接讀已經在 store 裡的資料）。type→cat/icon/tone 對照表跟 api.ts 的
- *  getNotifications() 共用 data.ts 的 mapNotification，避免兩處各自維護一份。gate.refresh
+ *  hydrate、後到者直接讀已經在 store 裡的資料）。type→cat/icon/tone 對照表住 data.ts 的
+ *  mapNotification(api.ts 原本的 getNotifications() 已於 R12 退役，本閘門是唯一消費者)。gate.refresh
  *  不匯出——通知域目前沒有「無視守衛強制重抓」的消費者(YAGNI)。
  *  C1 抬升(修跨登入洩漏):原本 notificationsHydrated 旗標跨帳號存活是真缺陷——SPA 登出
  *  無整頁重載,B 帳號的 getDashboard 觸發的 refreshNotifications 被 guarded() 短路,直接
@@ -37,7 +37,7 @@ const gate = createSessionGate<Notification[]>({
   apply: (list) => notifications.set(list),
   reset: () => notifications.set(NOTIFS_SEED.map((n) => ({ ...n }))) // boot 態 = seed clone(值冪等)
 });
-// True once the notifications feed has been hydrated via getNotifications() on
+// True once the notifications feed has been hydrated via GET /notifications on
 // the first client mount; lets re-visits skip re-seeding so read-state (and the
 // unread badge) survive navigation. Independent of `notifications`/`unreadCount`
 // so it never affects the badge. Resettable in tests. Same writable instance as

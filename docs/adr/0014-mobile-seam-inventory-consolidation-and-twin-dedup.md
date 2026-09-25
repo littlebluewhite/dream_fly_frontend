@@ -301,3 +301,59 @@ mobile 經自家 `stores.ts` seam 零映射 re-export 一個住在 `$lib/member`
   `validateCoupon` **保留 export**(唯一跨模組消費者退場,但它的三條單測是「404 與其他錯誤分類」
   這條契約的唯一釘子,`applyCouponCode` 把兩者併成同一句文案後就驗不到了);mobile seam 端的
   `validateCoupon` re-export 則依死出口紀律移除,identity pin 一併改釘 `applyCouponCode`。
+
+## 增補(2026-09-26,架構深化 R12):seam 轉出增減、`sessionChipLabel` 改讀 `start`、R10 第④項由 D1 反轉
+
+完整背景見 `docs/adr/0022`。本篇原文不改寫,以下各點以本節為準。
+
+### 1. §1 seam:通知段改經 `mobile/stores.ts` 轉出(+6),死 export 移除
+
+- **新增轉出**:`mobile/stores.ts` 自 `$lib/member/stores`(白名單內既有源路徑)轉出六個通知符號
+  `notifications`/`unreadCount`/`notificationsHydrated`/`notificationsPageEntry`/`markRead`/
+  `markAllRead`。原因是 R12 Task 5 把 mobile 專屬的 `src/lib/mobile/notifications.ts` 併入 member 的
+  唯一通知 module。
+  - R9 增補第二點說的「C3 新增的葉模組 `src/lib/mobile/notifications.ts` 不需要進白名單」隨該檔刪除
+    而失去對象。
+  - 通知自此走本節的標準 seam 路徑。
+  - 源路徑白名單(五模組)與 `MOBILE_SEAM_FILES` 四檔白名單都**零改動**。
+- **身分釘計數**:
+  - 原文記「`mobile/stores.test.ts` 16 個 + `mobile/auth.test.ts` 3 個」。
+  - 現況是 `mobile/stores.test.ts` 對 `$lib/member/stores` 的 **21 個**(R12 前 15 + 通知 6),
+    `mobile/auth.test.ts` **2 個**。
+- **死 export 移除**(`docs/adr/0010`「死值不留死出口」,R12 Task 1):
+  - `mobile/auth.ts` 不再轉出 `consumeGoogleOauthState`。§1 原文列的 Google OAuth「三件組」現為
+    兩件(`isGoogleLoginEnabled`/`startGoogleLogin`)。唯一的 callback 消費者
+    `GoogleCallbackCard.svelte` 本來就直取 `$lib/member/google-oauth`。
+  - `mobile/stores.ts` 移除 `createOverlay` 值轉出、`OverlayEntry`/`OverlayState`/`AddResult`
+    型別轉出。
+  - `mobile-admin/stores.ts` 同批移除同款 overlay 轉出。
+- **§1 的不變量本身一字未改**。本輪也**沒有**退役任何有消費者的純轉手。
+  - 審查候選 07 提議依 `docs/adr/0019` C4 的純轉手判準退役它們，但使用者裁決 D2 只刪死 export、
+    不改本篇。
+  - 兩篇判準之間的張力記在 `docs/adr/0022`「D2」節，留待日後。
+- **mobile 直取 `$lib/domain/leave-requests`**(R12 Task 6 的 `leaveAction`)是純函式，依本節「純函式
+  維持直取」與 R9 增補第三點，不經 seam。
+
+### 2. R11 增補 §1 的 `sessionChipLabel` 公式:改讀 `start` 欄位
+
+R11 增補記的公式是「去『今日 』前綴、取 en-dash 前的起始時間、接課名」。R12 Task 7 起:
+
+- `AttClassFull` 新增必填欄位 `start`,由 `coach/api.ts` 的 `mapAttendanceClass` 以
+  `hhmm(s.start_time)` 填入。
+- `sessionChipLabel(c)` 改為 `` `${c.start} ${c.name}` ``,不再反解顯示用的 `time` 字串。
+- **輸出逐字不變**,同名兩場以時間區分的效果與識別軸(session id)都不受影響。
+
+### 3. R10 增補的兩處校正:`nowHHMM` 住所,與第④項由 D1 反轉
+
+- **「行動頁自帶同一支 `nowHHMM()`」不再成立**:`AttendanceControllerDeps.now` 改為可選，預設為
+  controller 匯出的 `nowHHMM`,兩頁的本地複本刪除。
+  - 桌面頁仍 import `nowHHMM`,當 saved 卡 `savedAt` 缺值時的後備顯示。
+  - 三條件中的「deps 完全相同」照舊成立:兩頁都只注入 `saveAttendance`。
+- **行為變更清單第④項「備註編輯計入未存變更」自 R12 起反轉**:
+  - 使用者裁決 D1。後端 `PUT /sessions/{id}/attendance` 沒有備註欄位，備註從來不會送到後端。
+    把它算成「待同步」變更，等於暗示儲存會把它送出去。
+  - 現況:`applyNote` 只寫 `notes`、不動 `state`/`dirtyCount`;儲存成功保留 `notes`。
+  - 兩頁的備註 Dialog/Sheet 標示「僅存本機，重新整理後會消失」。
+  - 第④項當年指出「加註記後儲存鈕仍顯示『點名已儲存』是失真」。D1 之後同一個畫面**是**誠實的:
+    儲存鈕描述出勤，備註另有本機標示。
+  - 前三項(切班保留草稿、儲存中切班被擋、遲到回應丟棄)不受影響。

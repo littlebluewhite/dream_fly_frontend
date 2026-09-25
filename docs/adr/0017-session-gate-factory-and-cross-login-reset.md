@@ -181,3 +181,18 @@ notifs**)與 `createSessionRefresher`(points / subscriptions)。本篇其餘裁�
 五個步驟;`reset` 值必須冪等(mobile notifs 的 reset 是 `NOTIFS_SEED` clone,正是這條規則的實例
 ——badge teaser 不被自己的重置抹掉);以及「刻意不把 session 維度深化進 `hydration-gate.ts` 本身」
 的邊界。
+
+## 增補(2026-09-26,架構深化 R12):mobile 通知葉模組退役,`createSessionGate` 消費者 4 → 3
+
+上節(R9 C3 增補)第 2 點記「`createSessionGate`(waitlist / leave / member notifications / **mobile
+notifs**)」,並指向葉模組 `src/lib/mobile/notifications.ts`。R12 Task 5(`docs/adr/0022`)把該葉模組
+併入 `src/lib/member/notifications.ts`,member 與 mobile 自此共用**同一顆**通知閘門,mobile 經
+`mobile/stores.ts` 轉出取用。
+
+**現況**:
+- `createSessionGate` 有三個消費者:waitlist / leave / notifications(member 與 mobile 共用)。
+- `createSessionRefresher` 仍是 points / subscriptions。
+- 每次 factory call 各開一個 `authStore` 訂閱,合計五個。
+
+本篇其餘裁決不受影響。原文「`reset` 值必須冪等」的實例,改由共用閘門的 `NOTIFS_SEED` clone 承擔。
+mobile 獨有的「不登出直接換帳號」釘移到 `src/lib/member/notifications.test.ts`。

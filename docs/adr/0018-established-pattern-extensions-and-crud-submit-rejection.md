@@ -396,3 +396,37 @@ pin-first 寫出即全綠(無 production 落差)。**不主張任何抽取**。
 「byte-identical 才收」收斂紀律——**這條紀律的反面用法正是本案**:字面不同時,先問是不是行為不同,
 不是先想怎麼統一字面。日後若產品面真的要統一密碼政策,那是一次**產品決策**(該由後端的密碼規則
 單源驅動),不是一次重構;屆時請不要引用本節當作「架構上早就該收」的依據。
+
+## 增補(2026-09-26,架構深化 R12):`markOrderPaid` 改為先寫後改(仍無尾流);C6 否決原樣有效
+
+完整背景見 `docs/adr/0022` §1。
+
+### 1. R11 增補「`markOrderPaid` 根本沒有網路呼叫」不再成立
+
+R12 Task 3 起,`mobile-admin/stores.ts` 的 `markOrderPaid(order)` 是**先寫後改**:
+
+1. 先 `updateOrderStatus(order.orderId, 'paid')`(`PATCH /orders/{id}/status`)。
+2. 成功後以桌面同一支 `applyStatusChange()` 把 server 回的 `status` 套回 `$orders`。
+3. 再 `opsGate.markMutated()`。
+
+PATCH 失敗則丟出,store 不動。
+
+**該段的結論不變**:mobile-admin 兩支 mutator 與 member 側 mark-before-await 的已讀 mutator 語意
+不同構,C7 維持「已確認不同構」,兩族在協定層分開記帳。`markOrderPaid` 仍然**不入帳**,但理由換了:
+
+- 舊理由:沒有網路呼叫。
+- 新理由:mark 發生在 PATCH 已落定之後,沒有在飛尾流可入帳。見 `docs/adr/0021` 增補。
+
+`markMessageRead` 的 fire-and-forget 裁決原樣有效。
+
+### 2. §6(C6)CRUD 提交同構否決:R12 沒有重提
+
+R12 讓 mobile-admin 營運 store 擁有逐 entity 的寫入動詞:`addMember`/`saveMember`/`addCourse`/
+`saveCourse`/`addCoach`/`saveCoach`/`markOrderPaid`。這**不是** C6 否決的通用 `submitEntity`:
+
+- 動詞逐 entity、新增/編輯分開,沒有 `isNew` 或 entity 型別參數。
+- 各動詞的差異(coach 兩支回 outcome 且只在成功 kind 重抓,`markOrderPaid` 局部套回不重抓)直接
+  寫在各自的函式裡,沒有為吸收異質性長出行為選項。
+- 共用的只有一支私有的 `refetchAfterWrite()`(寫後重抓 + 失敗只記 log)。
+
+C6 的判準與 deletion-test 論證原樣有效。

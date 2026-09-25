@@ -57,6 +57,18 @@ _Avoid_: 報名(不佔名額、不建報名紀錄), 候補(與名額無關)
 當課程已額滿(無名額)時,會員登記的候補意願;不等於完成報名。
 _Avoid_: 報名, 預約
 
+**請假 (Leave Request)**:
+會員針對已報名課程的**某一具體場次**事先申請不出席;狀態為 待審核(pending)→ 已核准(approved)/
+已婉拒(rejected),或由會員自行取消(cancelled,僅「待審核」可取消)。請假不是取消報名。
+一筆請假可觸發哪個動作(取消 / 預約補課 / 已補課僅顯示 / 無)的規則單一來源是
+`src/lib/domain/leave-requests.ts` 的 `leaveAction()`(見 `docs/adr/0022`)。
+_Avoid_: 缺席(點名結果,不是事先申請), 取消報名, 候補(與名額無關)
+
+**補課 (Makeup)**:
+「已核准」的請假之後,會員另外預約**同一課程的一個未來場次**來補上缺的那堂;是與請假申請分開的
+第二個動作(`POST /leave-requests/{id}/makeup`),每筆請假至多補一次,已補課者只顯示、不可再約。
+_Avoid_: 請假(申請不出席是請假,補上那堂才是補課), 改期, 報名(補課不是新的一次報名)
+
 ### 後台管理 (Admin Operations)
 
 **系統設定 (Settings)**:
@@ -98,7 +110,8 @@ markMutated → await refresh」序列會因此無窮重抓);把等待判準接�
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(完整水合閘門 + identity 重置 + epoch
-核對 fetch + `mutate()` + 頁面進場包 `pageEntry()`,供 waitlist/請假/會員通知/行動版通知)、
+核對 fetch + `mutate()` + 頁面進場包 `pageEntry()`,供 waitlist/請假/通知——通知自 2026-09-26 起
+是 member 與 mobile 共用的同一顆閘門,mobile 經自家 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`)、
 `createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。原第三門 `onSessionReset`
 (僅重置、閘門所有權留呼叫端)已於 2026-08-03 隨其唯一消費者(行動版通知)改建完整閘門而退役
 (見 `docs/adr/0017` 增補與 `docs/adr/0019`)。

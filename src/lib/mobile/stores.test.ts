@@ -38,8 +38,8 @@ function courseFixture(overrides: Partial<Course> = {}): Course {
 vi.mock('$lib/checkout-order', () => ({
 	submitOrder: vi.fn()
 }));
-// C3:通知段(唯一會打 $lib/api/client 的一段)已搬去 $lib/mobile/notifications.ts,
-// 其 api mock 隨測試一起搬(見 notifications.test.ts),本檔不再需要。
+// 通知段(唯一會打 $lib/api/client 的一段)自 R12 起是 member 通知 module 的轉出
+// (測試在 $lib/member/notifications.test.ts),本檔不需要 api mock。
 
 // createOverlay 的直接單元測試已搬到 $lib/components/mobile/overlay.test.ts
 // (Task 1(1.5)：ADR-0010「死值不留死出口」——mobile/stores.ts 的 createOverlay

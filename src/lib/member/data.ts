@@ -171,9 +171,9 @@ export const NOTIF_TONE_FG: Record<string, string> = {
 };
 
 /* ---- 通知中心：後端形狀 → 前端形狀（Task 17）----
- * 共用給 member/api.ts 的 getNotifications() 與 member/stores.ts 的
- * refreshNotifications()，放在這裡是唯一不會在兩者間造成循環 import 的位置
- * （api.ts 需要呼叫 stores.ts 的 refresh* 函式；stores.ts 不會回頭 import api.ts）。
+ * 唯一消費者是 member/notifications.ts 通知閘門的 fetch(refreshNotifications 與通知頁
+ * 進場包共用；member 與 mobile 自 R12 起共用這一個通知 module)。原本另一個消費者
+ * member/api.ts 的 getNotifications() 已於 R12 退役(零 production 呼叫端)。
  * 後端沒有「教練訊息」型別 → 'coach' 分類目前恆為空,是已知落差,非本次範圍。 */
 export interface ApiNotification {
   id: string;

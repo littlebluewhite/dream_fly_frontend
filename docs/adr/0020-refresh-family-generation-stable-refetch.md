@@ -235,3 +235,28 @@ epoch 已換的情況下憑一份 stale 回應再發一次 fetch:那份回應根
    發生在同一個 run-generation 之內、`setPhase('loading')` 仍在迴圈之外;④兩筆殘餘(`undefined`
    棄追哨兵、`run()`/`silentRefresh()` 刻意重複約 6 行)原樣有效——R11 只讓那兩處各多轉傳一個
    欄位,**未趁機抽 helper**,重複的理由未改變。
+
+## 增補(2026-09-26,架構深化 R12):判準守恆釘改寫為 `markOrderPaid(order)` 新簽章
+
+R12 Task 3(`docs/adr/0022` §1)把 `mobile-admin/stores.ts` 的 `markOrderPaid` 由同步的本地 demo
+翻轉(`markOrderPaid(id)`)改為先寫後改的 async 動詞:
+
+1. `await updateOrderStatus(order.orderId, 'paid')`。
+2. `applyStatusChange()` 套回 `$orders`。
+3. `opsGate.markMutated()`。
+
+「判準句」節點名的守恆釘(`src/lib/mobile-admin/stores.test.ts`)依「ADR 點名的測試改寫不刪」
+**改寫**:
+
+- 舊序列:同步 `markOrderPaid(pending.id)` → `await refreshOps()`。
+- 新序列:mock `updateOrderStatus` → `await markOrderPaid(pending)` → `await refreshOps()`。
+- **斷言逐字不變**:重抓前 `get(opsHydrated) === true`、快照照常套用、`fetch` 恰一次。
+- 同檔的「`hydrateOps()` 在飛時 `markOrderPaid` → mutation 勝出」競態釘同形改寫,斷言不變。
+
+**判準句與其反例原樣有效**,反例的正常序列在 R12 反而更常見:
+
+- mobile-admin 的學員/課程/教練寫入動詞(`addMember`/`saveCourse`/…)都在動詞內 `await refreshOps()`。
+- 它們不呼叫 `markMutated()`,寫後重抓自己 `commit` 旗標。
+- 所以「寫入 → 重抓」恰一次 fetch、快照照常套用,正是這條判準要守的形狀。
+
+行為變更第 3 條(`markOrderPaid` 在 `refreshOps()` 在飛期間不再閃回)依然成立。

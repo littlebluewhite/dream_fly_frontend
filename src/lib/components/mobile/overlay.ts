@@ -1,6 +1,7 @@
 /* Dream Fly — mobile 與 mobile-admin 兩 surface 共用的 overlay 堆疊 factory(單一來源)。
  * 原先兩份 stores.ts(mobile / mobile-admin)各有一份逐字相同的複本,自此單源於本檔;
- * 兩邊 stores 之後改以 re-export 供應既有 import 路徑(overlay 單例仍由各 surface 自建)。 */
+ * overlay 單例仍由各 surface 的 stores.ts 自建(直接 import 本檔;R12 起兩邊 stores 不再
+ * re-export createOverlay/OverlayEntry/OverlayState——零消費者的死出口,ADR-0010)。 */
 
 import { writable } from 'svelte/store';
 import type { Component, ComponentProps } from 'svelte';
