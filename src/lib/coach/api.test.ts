@@ -29,7 +29,7 @@ import {
 } from './api';
 import { api } from '$lib/api/client';
 import { deriveSessionStatus as domainDeriveSessionStatus } from '$lib/domain/sessions';
-import { TODAY_LABEL } from './data';
+import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -97,7 +97,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 	};
 
 	it('coach 由 myCoachProfile() 對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room/level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
-		vi.useFakeTimers();
+		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0)); // 09:30 落在 s1 場次(09:00–10:00)中
 		try {
 			vi.mocked(api).mockImplementation(
@@ -119,7 +119,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '', count: 8, level: '基礎', cat: '體操', status: 'wait' }
 			]);
 			expect(d.coach).toEqual(MAPPED_COACH);
-			expect(d.todayLabel).toBe(TODAY_LABEL);
+			expect(d.todayLabel).toBe(todayLabel(new Date(2026, 6, 4, 9, 30, 0)));
 			// conversations 由 getDashboard() 併入真 getConversations() —— mapConversation 映射結果。
 			expect(d.conversations).toEqual([
 				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 2, preview: '老師您好' }
@@ -210,21 +210,27 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 
 describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabel/todayClasses', () => {
 	it('todayClasses 直接反映 GET /sessions/today', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /users/me': ME,
-				'GET /coaches': [MY_COACH],
-				'GET /sessions/today': [
-					{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9 }
-				]
-			})
-		);
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0));
+		try {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({
+					'GET /users/me': ME,
+					'GET /coaches': [MY_COACH],
+					'GET /sessions/today': [
+						{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9 }
+					]
+				})
+			);
 
-		const d = await getToday();
+			const d = await getToday();
 
-		expect(d.todayLabel).toBe(TODAY_LABEL);
-		expect(d.todayClasses).toHaveLength(1);
-		expect(d.todayClasses[0].id).toBe('s1');
+			expect(d.todayLabel).toBe(todayLabel(new Date(2026, 6, 4, 9, 30, 0)));
+			expect(d.todayClasses).toHaveLength(1);
+			expect(d.todayClasses[0].id).toBe('s1');
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('沒有今日場次時回傳空陣列(頁面顯示空狀態)', async () => {

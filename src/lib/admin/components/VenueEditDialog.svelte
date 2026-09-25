@@ -31,7 +31,7 @@
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: Venue) => void = () => {};
+  export let onSave: (updated: Venue) => void | Promise<void> = () => {};
 
   const statusOptions = VENUE_STATUSES.map((v) => ({ value: v, label: VENUE_STATUS[v][1] }));
 

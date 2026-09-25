@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CoachHomePage from './+page.svelte';
-import { COACH, TODAY_LABEL } from '$lib/coach/data';
+import { COACH } from '$lib/coach/data';
 import type { TodayClass, Conversation } from '$lib/coach/data';
+import { todayLabel } from '$lib/coach/schedule-dates';
 import { getDashboard } from '$lib/coach/api';
 import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
 import { toasts } from '$lib/coach/stores';
@@ -58,7 +59,7 @@ describe('/coach (+page) — 儀表板首頁', () => {
 		expect(txt).toContain(`早安，${COACH.display}`);
 		// 日期標籤跟著 payload 走,不是殘留的 seed 值。
 		expect(txt).toContain(FIXTURE.todayLabel);
-		expect(txt).not.toContain(TODAY_LABEL);
+		expect(txt).not.toContain(todayLabel());
 		expect(txt).not.toContain('（李教練）');
 	});
 

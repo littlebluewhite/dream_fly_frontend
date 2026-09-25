@@ -32,7 +32,7 @@
   /** New-coach mode 多收 email/密碼(POST /users 用)，其餘欄位同編輯模式。 */
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (values: CoachFormValues) => void = () => {};
+  export let onSave: (values: CoachFormValues) => void | Promise<void> = () => {};
   /** 非 null＝新增流程第一步(createMember)已成功、第二步(createCoach)失敗待重試
    *  （見呼叫端 coaches/+page.svelte 的 pendingUserId 註解）。此時鎖住 email/姓名——
    *  重試只會重打 createCoach，不會回頭重打 createMember，這兩欄位這時候編輯了也是

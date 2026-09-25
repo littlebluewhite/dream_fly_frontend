@@ -26,10 +26,10 @@ import { getOpsCollections, getMessages, markRead } from './api';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
- * 同一份 factory,見該檔頂端註解)——overlay 單例仍由本 surface 自建(per-surface
- * 狀態)。 */
-export { createOverlay };
-export type { OverlayEntry, OverlayState } from '$lib/components/mobile/overlay';
+ * 同一份 factory,見該檔頂端註解)——createOverlay 的直接單元測試在
+ * overlay.test.ts(本檔過去純轉出 createOverlay/OverlayEntry/OverlayState 供
+ * stores.test.ts 建獨立實例，零其餘消費者，已退役——ADR-0010「死值不留死出口」)；
+ * overlay 單例仍由本 surface 自建(per-surface 狀態)。 */
 // K6-4:push/sheet 各自的合法 id 集合,緊鄰 singleton 宣告——成員對齊現行
 // OverlayHost.svelte 的 PUSH/SHEETS 註冊表鍵。overlay 泛型化後,呼叫端傳入不在
 // 集合內的 id 會在編譯期被擋下(K6-3 前只有執行期的 foundation-contracts 掃描)。

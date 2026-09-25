@@ -17,7 +17,7 @@ import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
 import { deriveSessionStatus } from '$lib/domain/sessions';
-import { TODAY_LABEL } from './data';
+import { todayLabel } from './schedule-dates';
 import type {
 	Coach,
 	TodayClass,
@@ -184,7 +184,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 	]);
 	return {
 		coach: mapCoach(user, coach),
-		todayLabel: TODAY_LABEL,
+		todayLabel: todayLabel(),
 		todayClasses,
 		conversations,
 		pendingClasses: `${reports.pending_attendance} 班`,
@@ -198,7 +198,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 export interface TodayData { todayLabel: string; todayClasses: TodayClass[] }
 export const getToday = async (): Promise<TodayData> => {
 	await requireMyCoach(); // 仍需先確認教練檔案存在(CoachNotFoundError 閘門)，即使 todayClasses 不再需要 coach.id
-	return { todayLabel: TODAY_LABEL, todayClasses: await myTodayClasses() };
+	return { todayLabel: todayLabel(), todayClasses: await myTodayClasses() };
 };
 
 /* ═════════════════════════ 點名（GET /sessions/{id}/roster + PUT .../attendance，見 integration-contract.md §3.19） ═════════════════════════ */

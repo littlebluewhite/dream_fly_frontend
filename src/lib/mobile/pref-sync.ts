@@ -19,7 +19,8 @@
  * ——'saved' 無 toast；'resynced'/'rolledBack' 各發一次「儲存失敗」。hydrate()
  * 失敗吞錯留快取，不 throw、不發 toast(讀取失敗不影響既有可用性，原行為照舊)。 */
 import { get, type Writable } from 'svelte/store';
-import type { Prefs } from '$lib/mobile/stores'; // type-only，不與 stores.ts 成環
+import { prefs, type Prefs } from '$lib/mobile/stores';
+import { getPreferences, savePreferences } from '$lib/mobile/api';
 
 export type PrefSetOutcome = { kind: 'saved' } | { kind: 'resynced' } | { kind: 'rolledBack' };
 
@@ -78,3 +79,14 @@ export function createPrefSync(deps: PrefSyncDeps): PrefSync {
 
 	return { hydrate, set };
 }
+
+// 單一實例：SettingsScreen/EditProfileSheet 兩個呼叫端共用同一個 saveChain 序列鏈，
+// 避免各自 createPrefSync() 一份、互不知道對方在飛的送出(見兩個呼叫端各自的
+// 檔頭附註)。deps 用惰性包裝(() => getPreferences() 而非直傳函式參照)，讓
+// `vi.mock('$lib/mobile/api')` 的工廠不會在本模組載入當下就需要 api.ts 已初始化
+// 完成——無循環：pref-sync → api → stores。
+export const prefSync = createPrefSync({
+	getPreferences: () => getPreferences(),
+	savePreferences: (p) => savePreferences(p),
+	prefs
+});

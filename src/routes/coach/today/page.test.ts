@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import TodayPage from './+page.svelte';
-import { TODAY_LABEL } from '$lib/coach/data';
 import type { TodayClass } from '$lib/coach/data';
 import { getToday } from '$lib/coach/api';
 
 vi.mock('$lib/coach/api', () => ({ getToday: vi.fn() }));
+
+// Task 1(1.2 教練頁日期寫死退役):todayLabel 現由真實日期算出(schedule-dates.ts
+// 的 todayLabel()),不再有 coach/data.ts 的固定 TODAY_LABEL 值可 import——getToday()
+// 全被 mock,這裡的 fixture 標籤本就任意,改用檔內固定字串即可。
+const TODAY_LABEL = '2026年5月30日 星期六(測試)';
 
 // Task 1(C2 死種子退役):coach/data.ts 的 TODAY_CLASSES(值)已退役——改為檔內
 // inline fixture(3 筆,涵蓋 done/live/wait 三態,供下方 KPI/直播 banner 斷言)。

@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { createReadState } from '$lib/stores/read-state';
 import {
-	createOverlay,
 	adminUnread,
 	role,
 	overlay,
@@ -44,18 +43,10 @@ vi.mock('./api', async (importOriginal) => {
 	};
 });
 
-describe('createOverlay (admin)', () => {
-	it('pushes / pops the stack and opens / closes a sheet', () => {
-		const o = createOverlay();
-		o.push('coaches');
-		o.sheet('member', { m: { id: 'GY1' } });
-		expect(get(o).stack[0]).toEqual({ id: 'coaches', props: {} });
-		expect(get(o).sheet).toEqual({ id: 'member', props: { m: { id: 'GY1' } } });
-		o.closeAll();
-		expect(get(o).stack).toHaveLength(0);
-		expect(get(o).sheet).toBe(null);
-	});
-});
+// createOverlay 的直接單元測試已搬到 $lib/components/mobile/overlay.test.ts
+// (Task 1(1.5)：ADR-0010「死值不留死出口」——mobile-admin/stores.ts 的
+// createOverlay 轉出已退役，overlay singleton 本身直接 import 自
+// $lib/components/mobile/overlay)。
 
 describe('createReadState (adminNotifs/coachNotifs 的底層 factory)', () => {
 	const seed = [

@@ -45,9 +45,8 @@
   type View = '日' | '週' | '月';
   const viewOptions: View[] = ['日', '週', '月'];
 
-  // 5/30/2026 is the prototype's "today" (Sat) — fixed for a deterministic demo.
   let view: View = '週';
-  let anchor = new Date(2026, 4, 30);
+  let anchor = new Date();
   let catFilter = '全部課程類型';
   let venueFilter = '所有場館';
 
@@ -116,7 +115,7 @@
         </button>
         <button
           type="button"
-          on:click={() => (anchor = new Date(2026, 4, 30))}
+          on:click={() => (anchor = new Date())}
           style="margin-left:4px;padding:7px 14px;border:1px solid var(--df-border);border-radius:8px;background:#fff;font-size:13px;font-weight:600;color:var(--df-text-dark);cursor:pointer;font-family:var(--df-font-body)"
         >
           今日

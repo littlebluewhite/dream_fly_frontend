@@ -16,10 +16,6 @@ const WEEK: Array<{ key: string; zh: string }> = [
 	{ key: 'Sun', zh: '日' }
 ];
 
-/** The prototype's fixed "current day". The 今日 highlight stays pinned here, so
- * prev/next navigation never re-labels the navigated-to anchor (e.g. 5/23, 6/6) as today. */
-const PROTO_TODAY = new Date(2026, 4, 30); // Sat 30 May 2026
-
 /** SCHED_COURSES.day key for a Date (NOT Sunday-zero — Sat→'Sat'). */
 export function dayKey(date: Date): string {
 	return KEYS[date.getDay()];
@@ -51,10 +47,10 @@ export interface WeekDayCell {
 }
 
 /** 7 Monday-leading cells for the anchor's week. `today` is true only for the cell
- * equal to the fixed `todayRef` (the prototype current day) — NOT the anchor — so
+ * equal to `todayRef` (defaults to the real current date) — NOT the anchor — so
  * navigating weeks doesn't drag the 今日 highlight along. Shape mirrors SCHED_DAYS
  * so ScheduleGrid renders identically. */
-export function weekDays(anchor: Date, todayRef: Date = PROTO_TODAY): WeekDayCell[] {
+export function weekDays(anchor: Date, todayRef: Date = new Date()): WeekDayCell[] {
 	const mon = weekMonday(anchor);
 	return WEEK.map((w, i) => {
 		const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
@@ -75,7 +71,7 @@ export interface MonthCell {
 }
 
 /** 6×7 = 42 Monday-leading cells covering the anchor's month. */
-export function monthMatrix(anchor: Date, todayRef: Date = PROTO_TODAY): MonthCell[] {
+export function monthMatrix(anchor: Date, todayRef: Date = new Date()): MonthCell[] {
 	const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
 	const start = weekMonday(first); // grid origin (may be in prev month)
 	const cells: MonthCell[] = [];
@@ -112,4 +108,11 @@ export function fmtMonthTitle(anchor: Date): string {
 /** e.g. 5月30日 星期六 */
 export function fmtDayTitle(anchor: Date): string {
 	return `${anchor.getMonth() + 1}月${anchor.getDate()}日 星期${ZH_WEEK[anchor.getDay()]}`;
+}
+
+/** e.g. 2026年5月30日 星期六 — the label coach/api.ts's getDashboard/getToday attach
+ * to the real current date (real API, so "today" must track the clock, not a
+ * fixed prototype day). */
+export function todayLabel(d: Date = new Date()): string {
+	return `${d.getFullYear()}年${fmtDayTitle(d)}`;
 }

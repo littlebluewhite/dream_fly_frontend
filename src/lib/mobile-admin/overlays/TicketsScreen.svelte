@@ -8,8 +8,9 @@
    * 是 hero 總額與卡片渲染的來源(totalRevenue/totalSold 改為 payload reactive 推導)。
    * GET /products 固定抓第 1 頁(呼叫端不帶 page，吃後端預設 per_page=20，與「更多」樞紐
    * getMore() 同一口徑)——行動版無 PaginationBar，超過一頁如實只顯示第一頁(P2，同
-   * getOpsCollections() 附註)。寫入側維持 demo——「新增方案」「編輯」仍只發 toast(無對應
-   * 後端端點)。 */
+   * getOpsCollections() 附註)。寫入側維持 demo——「新增方案」「編輯」仍只發 toast，
+   * 未接 POST/PATCH /products(desktop admin 端已接，見 admin/api.ts；mobile-admin
+   * 這裡是 P2，見 CLAUDE.md 的存量盤點)。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';

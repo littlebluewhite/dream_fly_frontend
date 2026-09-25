@@ -25,7 +25,7 @@
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: ClassRow, durationMinutes: number) => void = () => {};
+  export let onSave: (updated: ClassRow, durationMinutes: number) => void | Promise<void> = () => {};
   // Caller (classes/+page.svelte) passes the getClasses() seam's coaches — required,
   // no mock fallback (Task 11 P2 cleanup); standalone renders (tests) must supply it.
   export let coaches: Coach[];
@@ -60,7 +60,7 @@
       price: parseInt(priceText, 10) || 0,
       sessions: parseInt(sessionsText, 10) || 0
     };
-    onSave(updated, parseInt(durationText, 10) || 0);
+    return onSave(updated, parseInt(durationText, 10) || 0);
   }
 </script>
 

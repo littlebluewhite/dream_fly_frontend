@@ -1,10 +1,10 @@
 /**
  * 三態載入閘門(loading/error/ready)的唯一機制來源。
  *
- * 現況:49 個檔案(44 個 route 頁 + ScheduleCalendar + 4 個 mobile overlay)各自手抄
+ * 原本 49 個檔案(44 個 route 頁 + ScheduleCalendar + 4 個 mobile overlay)各自手抄
  * `let phase; load(); onMount(load); retry` 樣板,四軸變異(卸載守衛有無、
  * load/refresh 拆分、*Hydrated 守衛、retry 接法)導致同一類 bug 逐頁修逐頁測。
- * 本模組把這套機制收斂成單一 factory,後續任務會把 49 個呼叫端遷移到它之上。
+ * 本模組把這套機制收斂成單一 factory,呼叫端已遷移到它之上。
  *
  * Legacy store factory 風格(仿 stores/toasts.ts 的 createToasts):closure、
  * 無 `this`,回傳物件的 `subscribe` 直接轉發 svelte/store 的 writable,頁面以

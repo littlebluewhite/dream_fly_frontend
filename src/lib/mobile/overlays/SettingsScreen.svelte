@@ -22,8 +22,7 @@
   import { authStore } from '$lib/stores/authStore';
   import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
-  import { getPreferences, savePreferences } from '$lib/mobile/api';
-  import { createPrefSync } from '$lib/mobile/pref-sync';
+  import { prefSync } from '$lib/mobile/pref-sync';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
@@ -44,9 +43,8 @@
     { icon: 'megaphone', label: '活動公告', sub: '新課程與優惠資訊', k: 'promo', last: true }
   ];
 
-  // 機器在 $lib/mobile/pref-sync，toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。
-  const prefSync = createPrefSync({ getPreferences, savePreferences, prefs });
-
+  // 機器在 $lib/mobile/pref-sync(module 層單例，EditProfileSheet 共用同一個)，
+  // toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。
   onMount(() => {
     prefSync.hydrate();
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { createOverlay, cart, placeOrder, prefs, PREFS_DEFAULT } from './stores';
+import { cart, placeOrder, prefs, PREFS_DEFAULT } from './stores';
 import { type Course } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
 import { cart as libCart } from '$lib/cart';
@@ -41,31 +41,9 @@ vi.mock('$lib/checkout-order', () => ({
 // C3:通知段(唯一會打 $lib/api/client 的一段)已搬去 $lib/mobile/notifications.ts,
 // 其 api mock 隨測試一起搬(見 notifications.test.ts),本檔不再需要。
 
-describe('createOverlay', () => {
-	it('pushes and pops the screen stack', () => {
-		const o = createOverlay();
-		o.push('courseDetail', { course: { id: 'k1' } });
-		expect(get(o).stack).toHaveLength(1);
-		expect(get(o).stack[0]).toEqual({ id: 'courseDetail', props: { course: { id: 'k1' } } });
-		o.pop();
-		expect(get(o).stack).toHaveLength(0);
-	});
-	it('opens and closes a sheet', () => {
-		const o = createOverlay();
-		o.sheet('cart');
-		expect(get(o).sheet).toEqual({ id: 'cart', props: {} });
-		o.closeSheet();
-		expect(get(o).sheet).toBe(null);
-	});
-	it('closeAll clears both the stack and the sheet (used on tab change)', () => {
-		const o = createOverlay();
-		o.push('schedule');
-		o.sheet('leave');
-		o.closeAll();
-		expect(get(o).stack).toHaveLength(0);
-		expect(get(o).sheet).toBe(null);
-	});
-});
+// createOverlay 的直接單元測試已搬到 $lib/components/mobile/overlay.test.ts
+// (Task 1(1.5)：ADR-0010「死值不留死出口」——mobile/stores.ts 的 createOverlay
+// 轉出已退役，overlay singleton 本身直接 import 自 $lib/components/mobile/overlay)。
 
 describe('mobile seam 收窄接線(C2：factory 上移 $lib/cart 後，mobile cart 收斂為 subscribe/add/remove/clear 四個成員)', () => {
 	// 工廠本體的 dedup/qty 鎖/waitlist guard 語意已由 lib/cart.test.ts 覆蓋——這裡

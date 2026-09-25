@@ -13,9 +13,9 @@
  *   (admin/coach/member) share one label set.
  *
  * Task 1(C2 死種子退役):本檔案現況是「活查表 + 活種子 + 型別」混合,不再是
- * mock-only。NOTIFS 是 Topbar 直接消費的活種子,TODAY_LABEL 是
- * coach/api.ts 消費的活種子(COACH 消費者見其宣告旁的漂移註記——W4 起
- * Topbar/Sidebar 已改讀 authStore,不再直接消費 COACH);CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
+ * mock-only。NOTIFS 是 Topbar 直接消費的活種子(COACH 消費者見其宣告旁的漂移註記——W4 起
+ * Topbar/Sidebar 已改讀 authStore,不再直接消費 COACH);TODAY_LABEL 已隨真實日期化退役,
+ * 改由 schedule-dates.ts 的 todayLabel() 取代(見該檔);CLASS_STATUS/LEVEL_TINT/SCHED_HOURS/
  * CAT_COLOR 是頁面與元件消費的活查表;其餘示範資料(TODAY_CLASSES/STUDENTS/
  * SCHED_DAYS/SCHED_COURSES/ATT_CLASS/ATT_ROSTER/ATT_TODAY_CLASSES/THREAD/
  * SHARED_FILES/CONVERSATIONS)因對應頁面已改走 getDashboard()/getToday()/getStudents()/
@@ -180,8 +180,6 @@ export const COACH: Coach = {
 	registered: '2019-08-15',
 	lastLogin: '今日 08:42'
 };
-
-export const TODAY_LABEL = '2026年5月30日 星期六';
 
 // Task 1(C2 死種子退役):TODAY_CLASSES(今日課程 5 堂示範資料)已退役——首頁/今日課程
 // 頁改走 getDashboard()/getToday() 真後端接縫,這份 mock 已無 runtime 消費者。

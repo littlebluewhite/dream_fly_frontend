@@ -31,7 +31,7 @@
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: Ticket) => void = () => {};
+  export let onSave: (updated: Ticket) => void | Promise<void> = () => {};
 
   const typeOptions = TICKET_TYPES.map((v) => ({ value: v, label: TICKET_TYPE[v][1] }));
 

@@ -21,7 +21,7 @@
   export let member: MemberAccount | null = null;
   export let open = false;
   export let onClose: () => void = () => {};
-  export let onSave: (id: string, body: UpdateMemberBody) => void = () => {};
+  export let onSave: (id: string, body: UpdateMemberBody) => void | Promise<void> = () => {};
 
   let name = member?.name ?? '';
   let phone = member?.phone ?? '';

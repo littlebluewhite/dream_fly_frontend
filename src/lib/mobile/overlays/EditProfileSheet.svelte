@@ -1,7 +1,18 @@
 <script lang="ts">
   /* 編輯個人資料 sheet。mobile/profile.jsx EditProfileSheet (20-70)。
    * 編輯 profile 欄位 + prefs 通知偏好 → 寫回 stores + toast + close。
-   * 編輯的是本地副本 f / p，按儲存才 commit 到 store（取消不影響）。 */
+   * 編輯的是本地副本 f / p，按儲存才 commit（取消不影響）。
+   *
+   * Task 1(1.3)：prefs 段過去直接 `prefs.set(p)`，繞過 $lib/mobile/pref-sync，
+   * 從未真的送到後端(PATCH /users/me)；且本地副本 p 若在 hydrate 水合完成前就
+   * 從 store 取快照，還可能用預設值蓋掉伺服器真值。改為 mount 時先
+   * `await prefSync.hydrate()`，之後才用 store 值建立本地副本 p 與「初始值」
+   * initial；存檔時只對「和初始值不同」的 key 呼叫 prefSync.set(k, v)(單一
+   * module 層實例，與 SettingsScreen 共用同一個 saveChain 序列鏈)，任一 key
+   * 的 outcome 非 'saved' 就映射成錯誤 toast(ADR 0011 呼叫端映射慣例)。
+   * profile 欄位(姓名/生日/電話等)仍維持本機、無對應可寫後端欄位(已知 P2，同
+   * desktop 未接的等值狀態)。 */
+  import { onMount } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -9,6 +20,7 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import { get } from 'svelte/store';
   import { profile, prefs, toasts, type Prefs } from '$lib/mobile/stores';
+  import { prefSync } from '$lib/mobile/pref-sync';
   import type { IconName } from '$lib/icon-registry';
   import { initialOf } from '$lib/api/wire';
 
@@ -16,9 +28,18 @@
 
   const AVATAR_COLORS = ['#0066CC', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
 
-  // local editable copies — committed to the stores only on save
+  // local editable copies — committed only on save. p/initial are (re)built from
+  // the prefs store once hydrate() resolves (see 檔頭附註); the pre-hydrate
+  // values here are just the cache-first placeholder for the initial paint.
   let f = { ...get(profile) };
   let p: Prefs = { ...get(prefs) };
+  let initial: Prefs = { ...p };
+
+  onMount(async () => {
+    await prefSync.hydrate();
+    p = { ...get(prefs) };
+    initial = { ...p };
+  });
 
   $: valid = (f.name || '').trim().length > 0;
 
@@ -27,10 +48,19 @@
     f = { ...f, name: v, initial: initialOf(v, f.initial) };
   }
 
-  function save() {
+  async function save() {
     profile.set(f);
-    prefs.set(p);
-    toasts.notify('success', '資料已更新', f.name);
+    const changedKeys = (Object.keys(p) as (keyof Prefs)[]).filter((k) => p[k] !== initial[k]);
+    let failed = false;
+    for (const k of changedKeys) {
+      const outcome = await prefSync.set(k, p[k]);
+      if (outcome.kind !== 'saved') failed = true;
+    }
+    if (failed) {
+      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+    } else {
+      toasts.notify('success', '資料已更新', f.name);
+    }
     onClose();
   }
 

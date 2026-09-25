@@ -89,6 +89,23 @@ describe('ClassEditDialog', () => {
 		expect(getByText('建立班級')).toBeInTheDocument();
 	});
 
+	/* 防連點守衛(EditModal 的 handleSave)只有在 onSave() 回傳 promise 時才會鎖住
+	 * 主按鈕；save() 過去沒有 `return onSave(...)`，回傳值恆為 undefined，守衛形同
+	 * 虛設——連點會重複送出。這裡用一個懸而未決的 promise 卡住 onSave，點兩次，
+	 * 斷言只呼叫一次。 */
+	it('locks the primary button against a second click while onSave is pending', async () => {
+		let resolveSave: () => void;
+		const onSave = vi.fn(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES, onSave });
+
+		const btn = getByText('儲存課程');
+		await fireEvent.click(btn);
+		await fireEvent.click(btn);
+
+		expect(onSave).toHaveBeenCalledTimes(1);
+		resolveSave!();
+	});
+
 	it('calls onClose from the 取消 button', async () => {
 		const onClose = vi.fn();
 		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES, onClose });

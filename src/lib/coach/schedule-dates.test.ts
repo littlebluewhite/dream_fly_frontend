@@ -5,7 +5,8 @@ import {
 	monthMatrix,
 	shiftAnchor,
 	fmtMonthTitle,
-	fmtDayTitle
+	fmtDayTitle,
+	todayLabel
 } from './schedule-dates';
 
 // Reference anchor used by the page: Sat 30 May 2026 (getDay()===6).
@@ -39,28 +40,28 @@ describe('weekDays', () => {
 		const w = weekDays(SAT);
 		expect(w.map((d) => d.zh)).toEqual(['一', '二', '三', '四', '五', '六', '日']);
 	});
-	it('marks today true only for the fixed prototype today (5/30, the anchor here)', () => {
-		const w = weekDays(SAT);
+	it('marks today true only for the given todayRef (5/30, the anchor here)', () => {
+		const w = weekDays(SAT, SAT);
 		const todays = w.filter((d) => d.today);
 		expect(todays).toHaveLength(1);
 		expect(todays[0].key).toBe('Sat');
 	});
 });
 
-describe('today is fixed to the prototype current day (2026-05-30), not the anchor', () => {
+describe('today is pinned to the explicit todayRef (2026-05-30), not the anchor', () => {
 	// codex round 2 P2: prev/next navigation moves the anchor, but the "today"
-	// highlight + 今日 label must stay on 5/30 — not follow the anchor to 5/23 / 6/6.
+	// highlight + 今日 label must stay on todayRef — not follow the anchor to 5/23 / 6/6.
 	it('weekDays marks no cell as today when navigated to another week', () => {
-		expect(weekDays(new Date(2026, 4, 23)).some((d) => d.today)).toBe(false); // prev week
-		expect(weekDays(new Date(2026, 5, 6)).some((d) => d.today)).toBe(false); // next week
+		expect(weekDays(new Date(2026, 4, 23), SAT).some((d) => d.today)).toBe(false); // prev week
+		expect(weekDays(new Date(2026, 5, 6), SAT).some((d) => d.today)).toBe(false); // next week
 	});
 	it('weekDays still highlights exactly 5/30 in the home week', () => {
-		const todays = weekDays(SAT).filter((d) => d.today);
+		const todays = weekDays(SAT, SAT).filter((d) => d.today);
 		expect(todays).toHaveLength(1);
 		expect(todays[0].date).toBe('5/30');
 	});
 	it('monthMatrix marks no today in a month that does not contain 5/30', () => {
-		expect(monthMatrix(new Date(2026, 5, 1)).some((c) => c.today)).toBe(false); // June
+		expect(monthMatrix(new Date(2026, 5, 1), SAT).some((c) => c.today)).toBe(false); // June
 	});
 });
 
@@ -79,8 +80,8 @@ describe('monthMatrix', () => {
 		expect(m[4].date.getMonth()).toBe(4); // May
 		expect(m[4].date.getDate()).toBe(1);
 	});
-	it('every cell carries a string key and the fixed today (5/30) is flagged', () => {
-		const m = monthMatrix(SAT);
+	it('every cell carries a string key and the given todayRef (5/30) is flagged', () => {
+		const m = monthMatrix(SAT, SAT);
 		for (const c of m) expect(typeof c.key).toBe('string');
 		const todays = m.filter((c) => c.today);
 		expect(todays).toHaveLength(1);
@@ -115,5 +116,8 @@ describe('title formatters', () => {
 	});
 	it('fmtDayTitle → 5月30日 星期六', () => {
 		expect(fmtDayTitle(SAT)).toBe('5月30日 星期六');
+	});
+	it('todayLabel → 2026年5月30日 星期六', () => {
+		expect(todayLabel(SAT)).toBe('2026年5月30日 星期六');
 	});
 });

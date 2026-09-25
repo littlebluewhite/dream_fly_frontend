@@ -20,7 +20,9 @@ beforeEach(() => {
 
 /* 排課管理 page — now interactive: 日/週/月 toggle, prev/next/今日, and two
  * CoachDropdown filters (category + venue) that narrow the rendered courses.
- * Anchor is fixed at Sat 30 May 2026 so the rendered week is deterministic.
+ * Anchor defaults to the real current date (Task 1: 1.2); assertions below
+ * match courses by weekday key, not by an exact date, so they stay
+ * deterministic regardless of which real week the test runs in.
  * Data now arrives through the getSchedule() seam (async), so every assertion
  * first awaits the ready phase. */
 describe('/coach/schedule (+page) — interactive', () => {

@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get, writable } from 'svelte/store';
-import { createPrefSync } from './pref-sync';
+import { createPrefSync, prefSync } from './pref-sync';
+import { prefs as realPrefs } from './stores';
 import type { Prefs } from './stores';
+import { getPreferences, savePreferences } from '$lib/mobile/api';
+
+// R11 Task 1(1.3)：只給 module 層單例 prefSync 那一條接線測試用；createPrefSync()
+// 系列的其餘測試全走手動注入的假 deps，不受這個模組 mock 影響。
+vi.mock('$lib/mobile/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
+	return { ...actual, getPreferences: vi.fn(), savePreferences: vi.fn() };
+});
 
 /* pref-sync.ts — mobile 帳號設定偏好同步機的單元測試(R11 架構深化 Task 2，ADR 0012
  * 名冊第九例)。只測機器本身(hydrate 水合、set() 樂觀更新 + saveChain 序列鏈、
@@ -145,5 +154,32 @@ describe('createPrefSync — 交錯競態(saveChain 序列鏈；移植自 Settin
 		expect(get(deps.prefs)).toEqual({ classReminder: true, coachMsg: true, promo: false, dark: false });
 
 		consoleErrorSpy.mockRestore();
+	});
+});
+
+describe('module 層單例 prefSync（1.3：SettingsScreen/EditProfileSheet 共用同一個，不再各自 createPrefSync 一份）', () => {
+	beforeEach(() => {
+		realPrefs.set({ ...DEFAULT_PREFS });
+		vi.mocked(getPreferences).mockReset();
+		vi.mocked(savePreferences).mockReset();
+	});
+
+	it('hydrate() 接的是真 $lib/mobile/api 的 getPreferences()，整包覆蓋真 $lib/mobile/stores 的 prefs store', async () => {
+		const serverPrefs: Prefs = { classReminder: false, coachMsg: false, promo: true, dark: true };
+		vi.mocked(getPreferences).mockResolvedValue(serverPrefs);
+
+		await prefSync.hydrate();
+
+		expect(get(realPrefs)).toEqual(serverPrefs);
+	});
+
+	it('set() 接的是真 savePreferences()，送出真 prefs store 當下的整包值', async () => {
+		vi.mocked(savePreferences).mockResolvedValue(undefined);
+
+		const outcome = await prefSync.set('dark', true);
+
+		expect(outcome).toEqual({ kind: 'saved' });
+		expect(savePreferences).toHaveBeenCalledWith({ ...DEFAULT_PREFS, dark: true });
+		expect(get(realPrefs)).toEqual({ ...DEFAULT_PREFS, dark: true });
 	});
 });

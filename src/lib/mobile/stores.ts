@@ -32,10 +32,9 @@ import { type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
 // C5:factory 單源於 components/mobile/overlay.ts(與 mobile-admin 共用複本合併
-// 而來);createOverlay 本身也重新 export(供既有測試建立獨立實例,見
-// stores.test.ts 的 describe('createOverlay', …)),singleton 仍在此地建立。
-export { createOverlay };
-export type { OverlayEntry, OverlayState } from '$lib/components/mobile/overlay';
+// 而來);createOverlay 的直接單元測試在 overlay.test.ts(Task 1(1.5)：本檔過去
+// 純轉出 createOverlay/OverlayEntry/OverlayState 供 stores.test.ts 建獨立實例，
+// 零其餘消費者，已退役——ADR-0010「死值不留死出口」),singleton 仍在此地建立。
 // K6-4:push/sheet 各自的合法 id 集合,緊鄰 singleton 宣告——成員對齊現行
 // OverlayHost.svelte 的 PUSH/SHEETS 註冊表鍵。overlay 泛型化後,呼叫端傳入不在
 // 集合內的 id 會在編譯期被擋下(K6-3 前只有執行期的 foundation-contracts 掃描)。
@@ -114,7 +113,6 @@ export { subscriptions } from '$lib/member/stores';
  *  的 CartItemInput（經 courseToCartItem），並保留課程自帶 icon（來自 api.ts
  *  的 CATEGORY_ICON 薄映射）覆寫掉 courseToCartItem 對公開課程消費端給的硬編
  *  預設('sparkles')——這段覆寫邏輯 factory 不擁有，留在這層做。 */
-export type { AddResult } from '$lib/cart';
 const cartBase = createCart(); // 無 persist(= mobile 現行為)
 export const cart = { // 介面不膨脹:只出 4 個成員
 	subscribe: cartBase.subscribe,
