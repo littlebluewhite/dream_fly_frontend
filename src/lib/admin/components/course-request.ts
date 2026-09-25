@@ -55,10 +55,6 @@ export function coachIdOf(coachName: string, coaches: Coach[]): string | undefin
 	return coaches.find((c) => c.name === coachName)?.id;
 }
 
-/** ClassRow 目前的編輯內容 → POST/PATCH /courses 共用欄位。不含 duration_minutes——
- *  ClassRow 的 durationMinutes 走 ClassEditDialog 自己的文字欄位（人數上限/季費/
- *  本期堂數同一種「文字緩衝」模式），新增/編輯兩種流程都由呼叫端（classes/+page.svelte）
- *  另外併入 body，見該檔的 save()（FE#18 起編輯流程也會送出）。 */
 /** 新增課程 flow 的空白 ClassRow（Task 2：桌面 classes/+page.svelte 原本自帶的
  *  blankClass，與 mobile-admin ClassForm.svelte 的預設值分頭維護，兩邊會逐漸分歧
  *  ——這裡收斂為桌面的預設值，兩 surface 共用同一份。ClassRow 型別桌面/mobile-admin
@@ -88,6 +84,10 @@ export function blankClassRow(coaches: Coach[]): ClassRow {
 	};
 }
 
+/** ClassRow 目前的編輯內容 → POST/PATCH /courses 共用欄位。不含 duration_minutes——
+ *  ClassRow 的 durationMinutes 走 ClassEditDialog 自己的文字欄位（人數上限/季費/
+ *  本期堂數同一種「文字緩衝」模式），新增/編輯兩種流程都由呼叫端（classes/+page.svelte）
+ *  另外併入 body，見該檔的 save()（FE#18 起編輯流程也會送出）。 */
 export function buildCourseBody(k: ClassRow, coaches: Coach[]): CourseWriteBody {
 	return {
 		name: k.name,

@@ -1,5 +1,6 @@
 /* Dream Fly — 行動版後台 · 表單選項常數。forms.jsx 頂部常數 (5-10)。
- * MemberForm / ClassForm 共用。
+ * F_LEVELS 現僅 ClassForm.svelte 消費（MemberForm 未用）；F_MEMBER_STATUS 為既有死碼
+ * （無消費者，非本次變更範圍，不刪）。
  *
  * Task F5：F_COACH_STATUS/F_COLORS 已隨 CoachForm 欄位收斂移除——教練狀態(線上/
  * 忙碌/離線)與頭像代表色 swatch 選色器皆無後端來源，CoachForm 現改用 isActive

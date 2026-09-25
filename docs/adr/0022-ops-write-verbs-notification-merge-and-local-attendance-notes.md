@@ -104,9 +104,9 @@ member 桌面 `routes/member/mine/+page.svelte` 與 mobile `MyCourseDetail.svelt
   - 儀表板快速新增的 `onSave` 參數過窄,改吃 `CreateMemberBody | UpdateMemberBody`,以 `'email' in body` 收窄。
   - `ClassSheet`/`MemberSheet` 的 `onEdit` 改必填。原本的 fallback 分支會悄悄丟掉 `onSave`,已刪除。
   - 三個行動表單的 `onSave` 型別照實寫成 `=> void | Promise<unknown>`。
-- **型別斷言有閘門**:`src/lib/components/mobile/overlay.test.ts` 的 7 行 `@ts-expect-error` 覆蓋四種錯誤:
+- **型別斷言有閘門**:`src/lib/components/mobile/overlay.test.ts` 的 8 行 `@ts-expect-error` 覆蓋四種錯誤:
   錯命名空間的 id、錯或多的 props、缺必填 props、傳 host 注入的 prop。這些由 `npm run check` 強制:
-  故意把 `OverlayProps` 退化成寬鬆型別時,check 報 7 個 unused-directive 錯誤。
+  故意把 `OverlayProps` 退化成寬鬆型別時,其中 7 行轉為 unused-directive 錯誤。
 
 ### 5. 候選 03 — 點名草稿收進 controller;D1 備註本機化(Task 7)
 

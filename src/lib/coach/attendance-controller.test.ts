@@ -191,6 +191,19 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 		expect(view.canUndo).toBe(false);
 	});
 
+	it('undo 還原「儲存中」快照時落地為 dirty，不卡在儲存中（applyNote 於 in-flight 期間取的快照）', async () => {
+		ctrl.init([CLASS_A, CLASS_B]);
+		deps.saveAttendance.mockResolvedValue(serverAllPresent(ROSTER_A));
+		const p = ctrl.save(); // state → saving
+		ctrl.applyNote('GY001', '備註'); // 儲存中 takeSnapshot：prev.state === 'saving'
+		await p; // 儲存照常完成（notes 不影響 state guard）→ state 'saved'
+		expect(get(ctrl).state).toBe('saved');
+		ctrl.undo(); // 還原 prev（state 曾是 'saving'）——不應卡在儲存中
+		const view = get(ctrl);
+		expect(view.state).toBe('dirty'); // 落地為 dirty，非 'saving'
+		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched'); // 證明真的沒有卡住：可切班
+	});
+
 	it('undo 為單步快照：兩次編輯後只回退最後一步（dirtyCount 逐次累加、非回到初始）', () => {
 		ctrl.init([CLASS_A]);
 		ctrl.setMark('GY001', 'late'); // 3 → 4
@@ -463,16 +476,22 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 });
 
 describe('sessionChipLabel — 場次顯示標籤（桌面 dropdown / 行動 FilterChips 共用，Round 3 K9；R3 銷帳 ADR 0014 :224-226）', () => {
-	it('去除「今日 」前綴，只留起始時間 + 課名', () => {
+	it('輸出為 start + 課名（直取 start 欄位，不反解 time）', () => {
 		const c: AttClassFull = { id: 's1', name: '兒童體操初階班', time: '今日 16:00–17:30', start: '16:00', room: '', coach: '', roster: [] };
 		expect(sessionChipLabel(c)).toBe('16:00 兒童體操初階班');
 		expect(sessionChipLabel(c)).not.toContain('今日');
 	});
 
-	it('取 en-dash 前的起始時間，結束時間不併入輸出', () => {
+	it('start 不含結束時間，輸出不併入結束時間', () => {
 		const c: AttClassFull = { id: 's2', name: '青少年體操中級班', time: '今日 13:30–15:00', start: '13:30', room: '', coach: '', roster: [] };
 		expect(sessionChipLabel(c)).toBe('13:30 青少年體操中級班');
 		expect(sessionChipLabel(c)).not.toContain('15:00'); // 結束時間被捨棄，非完整時段
+	});
+
+	it('start 與 time 不一致時，輸出只採 start，完全無視 time', () => {
+		const c: AttClassFull = { id: 's3', name: '兒童體操初階班', time: '今日 09:00–10:00', start: '16:00', room: '', coach: '', roster: [] };
+		expect(sessionChipLabel(c)).toBe('16:00 兒童體操初階班'); // 取 start，非 time 裡的 09:00
+		expect(sessionChipLabel(c)).not.toContain('09:00');
 	});
 
 	it('同日兩場同課名：時間前綴不同使顯示字串相異（桌面 dropdown 自此可區分同名兩場）', () => {

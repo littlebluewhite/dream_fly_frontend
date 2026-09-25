@@ -231,7 +231,11 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 
 	function undo(): void {
 		if (!prev) return;
-		applyDraft(prev);
+		// prev 可能是 in-flight save 期間由 applyNote 取的快照（prev.state === 'saving'）——
+		// 若此刻已不在儲存中（save 已 resolve/reject 落地），原樣還原會把畫面卡回「儲存中」
+		// 卻已無任何 save 在跑。落地為 'dirty'，其餘欄位（marks/notes/dirtyCount/savedAt）
+		// 照舊還原。
+		applyDraft(state !== 'saving' && prev.state === 'saving' ? { ...prev, state: 'dirty' } : prev);
 		prev = null;
 		publish();
 	}
