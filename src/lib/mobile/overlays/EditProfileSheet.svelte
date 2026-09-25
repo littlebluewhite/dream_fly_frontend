@@ -11,7 +11,12 @@
    * module 層實例，與 SettingsScreen 共用同一個 saveChain 序列鏈)，任一 key
    * 的 outcome 非 'saved' 就映射成錯誤 toast(ADR 0011 呼叫端映射慣例)。
    * profile 欄位(姓名/生日/電話等)仍維持本機、無對應可寫後端欄位(已知 P2，同
-   * desktop 未接的等值狀態)。 */
+   * desktop 未接的等值狀態)。
+   *
+   * Task 1 fix round 1：hydrate() 在飛時通知偏好 Switch 與「儲存資料」按鈕一律
+   * disabled(`hydrating` 旗標)——不是「合併使用者在 hydrate 期間的編輯」，而是
+   * 乾脆不讓使用者在那個窗口編輯，避免 hydrate 落地後重建 p/initial 把使用者
+   * 剛切的那一下悄悄蓋掉、initial 也跟著被重設而讓那次切換永遠算不進「有變動」。 */
   import { onMount } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -34,11 +39,14 @@
   let f = { ...get(profile) };
   let p: Prefs = { ...get(prefs) };
   let initial: Prefs = { ...p };
+  // 通知偏好 Switch/存檔按鈕在 hydrate 落地前一律 disabled(見上方檔頭附註)。
+  let hydrating = true;
 
   onMount(async () => {
     await prefSync.hydrate();
     p = { ...get(prefs) };
     initial = { ...p };
+    hydrating = false;
   });
 
   $: valid = (f.name || '').trim().length > 0;
@@ -49,6 +57,10 @@
   }
 
   async function save() {
+    // 雙重保險：Button 的 disabled 擋不掉合成 click(dispatchEvent 不受瀏覽器
+    // 「disabled 元素不觸發使用者互動」限制)，這裡再擋一次，確保 hydrate 尚未
+    // 落地時不會用飛行中的 p/initial 送出。
+    if (hydrating) return;
     profile.set(f);
     const changedKeys = (Object.keys(p) as (keyof Prefs)[]).filter((k) => p[k] !== initial[k]);
     let failed = false;
@@ -113,7 +125,7 @@
               <div style="font-size:14px; color:var(--df-text-dark);">{row.label}</div>
               <div style="font-size:11.5px; color:var(--df-text-muted); margin-top:1px;">{row.sub}</div>
             </div>
-            <Switch checked={p[row.k]} on:change={(e) => (p = { ...p, [row.k]: e.detail })} />
+            <Switch checked={p[row.k]} disabled={hydrating} on:change={(e) => (p = { ...p, [row.k]: e.detail })} />
           </div>
         {/each}
       </div>
@@ -121,7 +133,7 @@
   </div>
   <svelte:fragment slot="footer">
     <Button variant="secondary" on:click={onClose}>取消</Button>
-    <Button variant="primary" disabled={!valid} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={save}>
+    <Button variant="primary" disabled={!valid || hydrating} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={save}>
       <Icon name="check" size={16} />儲存資料
     </Button>
   </svelte:fragment>

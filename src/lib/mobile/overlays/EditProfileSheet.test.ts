@@ -67,4 +67,46 @@ describe('EditProfileSheet — prefs 存檔改經 pref-sync(不再繞過 prefs.s
 		expect(savePreferences).not.toHaveBeenCalled();
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	/* Fix round 1：hydrate() 在飛的窗口內，Switch 與「儲存資料」都必須 disabled——
+	 * 不是「hydrate 落地後合併使用者這段期間的編輯」，而是乾脆不讓使用者在這個
+	 * 窗口編輯，避免 onMount 的 `p = { ...get(prefs) }; initial = { ...p };` 把
+	 * 使用者剛切的那一下悄悄蓋掉、initial 也一併被重設。用一個懸而未決的
+	 * getPreferences() promise 卡住 hydrate，斷言：Switch 顯示 disabled、點擊
+	 * 不改變 checked、「儲存資料」按鈕 disabled 且點擊不觸發存檔/關閉。 */
+	it('hydrate() 尚未落地時，通知偏好 Switch 與「儲存資料」按鈕都是 disabled，編輯不會被悄悄蓋掉', async () => {
+		let resolveGetPreferences!: (p: typeof SERVER_PREFS) => void;
+		vi.mocked(getPreferences).mockReset().mockReturnValue(
+			new Promise((resolve) => {
+				resolveGetPreferences = resolve;
+			})
+		);
+		const onClose = vi.fn();
+		render(EditProfileSheet, { props: { onClose } });
+
+		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(1));
+
+		// hydrate 在飛中：switch 顯示 disabled，開場值是本地舊快取(STALE_LOCAL_PREFS)。
+		const switches = screen.getAllByRole('switch');
+		expect(switches).toHaveLength(3);
+		for (const sw of switches) expect(sw).toHaveAttribute('disabled');
+		expect(switches[2]).toHaveAttribute('aria-checked', 'false'); // promo=false(本地舊快取)
+
+		// 點擊 disabled 的 switch 不應改變 checked 狀態(Switch.svelte 的 toggle() 對
+		// disabled 直接 return，不 dispatch change)。
+		await fireEvent.click(switches[2]);
+		expect(switches[2]).toHaveAttribute('aria-checked', 'false');
+
+		// 存檔按鈕也 disabled，點擊不觸發存檔或關閉。
+		const saveBtn = screen.getByText('儲存資料').closest('button')!;
+		expect(saveBtn).toBeDisabled();
+		await fireEvent.click(saveBtn);
+		expect(savePreferences).not.toHaveBeenCalled();
+		expect(onClose).not.toHaveBeenCalled();
+
+		// hydrate 落地後才解除鎖定，恢復可編輯。
+		resolveGetPreferences({ ...SERVER_PREFS });
+		await waitFor(() => expect(screen.getAllByRole('switch')[0]).not.toHaveAttribute('disabled'));
+		expect(screen.getByText('儲存資料').closest('button')).not.toBeDisabled();
+	});
 });
