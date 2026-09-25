@@ -2,13 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
-import { getAdminHome, createMember } from '$lib/mobile-admin/api';
-import { overlay, toasts } from '$lib/mobile-admin/stores';
-import type { Profile, TodayRow } from '$lib/mobile-admin/data';
+import { getAdminHome, createMember, getOpsCollections } from '$lib/mobile-admin/api';
+import { overlay, toasts, members, opsHydrated } from '$lib/mobile-admin/stores';
+import { MEMBERS, CLASSES, ORDERS, type Profile, type TodayRow } from '$lib/mobile-admin/data';
+import { COACHES } from '$lib/domain/coaches';
 import type { Activity as ActivityRow } from '$lib/domain/activity';
 import type { CreateMemberBody } from '$lib/mobile-admin/api';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getAdminHome: vi.fn(), createMember: vi.fn() }));
+vi.mock('$lib/mobile-admin/api', () => ({ getAdminHome: vi.fn(), createMember: vi.fn(), getOpsCollections: vi.fn() }));
 
 const FIXTURE_PROFILES: Record<'admin' | 'coach', Profile> = {
 	admin: { name: '測試管理員', initial: '測', role: '測試角色', desc: '', color: '#000', id: 'T-1' },
@@ -36,10 +37,27 @@ const FIXTURE = {
 	revenueMonthValue: 'NT$999,000'
 };
 
+/** getOpsCollections 回傳(新增學員走 store 的 addMember,寫入成功後會重抓 ops 集合)。 */
+const opsWith = (memberRows: typeof MEMBERS) => ({
+	members: memberRows,
+	classes: CLASSES,
+	coaches: COACHES,
+	orders: ORDERS,
+	pages: {
+		members: { total: memberRows.length, perPage: 20 },
+		classes: { total: CLASSES.length, perPage: 20 },
+		orders: { total: ORDERS.length, perPage: 20 }
+	}
+});
+
 beforeEach(() => {
 	vi.mocked(getAdminHome).mockReset();
 	vi.mocked(getAdminHome).mockResolvedValue(FIXTURE);
 	vi.mocked(createMember).mockReset();
+	vi.mocked(getOpsCollections).mockReset();
+	vi.mocked(getOpsCollections).mockResolvedValue(opsWith(MEMBERS));
+	members.set(MEMBERS);
+	opsHydrated.set(false);
 	overlay.closeAll();
 });
 
@@ -105,6 +123,25 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		await sheetProps.onSave({ email: 'a@test.com', name: '新學員', password: 'password123' });
 
 		expect(createMember).toHaveBeenCalledWith({ email: 'a@test.com', name: '新學員', password: 'password123' });
+		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
+	});
+
+	/* R12 Task 3 回歸:快速新增學員原本只打 createMember、不重抓——$members 維持舊清單,
+	 * 使用者轉到學員管理頁看不到剛建的學員(hydrateOps 已水合則被 guard 短路)。改走
+	 * store 的 addMember() 後,寫入成功即 await refreshOps()。 */
+	it('快速新增學員後重抓 ops 集合($members 含新學員),並顯示成功 toast', async () => {
+		const created = { ...MEMBERS[0], id: 'zz-quick', name: '快速新增的學員' };
+		vi.mocked(createMember).mockResolvedValue({} as never);
+		vi.mocked(getOpsCollections).mockResolvedValue(opsWith([...MEMBERS, created]));
+		opsHydrated.set(true); // 已水合:舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
+		const { findByText } = render(AdminHomePage);
+		await fireEvent.click(await findByText('新增學員'));
+		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };
+
+		await sheetProps.onSave({ email: 'q@test.com', name: '快速新增的學員', password: 'password123' });
+
+		expect(getOpsCollections).toHaveBeenCalledTimes(1);
+		expect(get(members).some((m) => m.id === 'zz-quick')).toBe(true);
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});
 });

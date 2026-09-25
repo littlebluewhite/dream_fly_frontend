@@ -1,17 +1,15 @@
 <script lang="ts">
   /* 訂單明細 sheet。admin.jsx OrderSheet (346)。
-   * Task 20：標記已付款改真打 PATCH /orders/{id}/status(updateOrderStatus，
-   * admin/api.ts Task 8 piece 2)——用 orderId(真實後端 UUID，非顯示用的 order_
-   * number)呼叫；成功後才用 markOrderPaid() 把確認後的狀態同步進 $orders store
-   * (該函式的本地 store 機制本身沒問題，問題只在於它先前完全沒有真的打 API 就
-   * 直接呼叫——同 desktop admin/orders/+page.svelte 的 changeStatus() 慣例)。 */
+   * Task 20：標記已付款改真打 PATCH /orders/{id}/status。R12 起整段(用 orderId
+   * ——真實後端 UUID，非顯示用的 order_number——PATCH、成功後以 applyStatusChange
+   * 套回 $orders)收進 store 的 markOrderPaid(order)；本頁只留 saving 防連點與
+   * toast / 錯誤文案表。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
   import type { OrderRow } from '$lib/mobile-admin/data';
-  import { updateOrderStatus } from '$lib/mobile-admin/api';
   import { apiErrorText } from '$lib/api/error-text';
   import { orderStatusBadge } from '$lib/api/wire';
 
@@ -62,8 +60,7 @@
     const target = o;
     saving = true;
     try {
-      await updateOrderStatus(target.orderId, 'paid');
-      markOrderPaid(target.id);
+      await markOrderPaid(target);
       toasts.notify('success', '已標記收款', target.id + ' · ' + fmtNT(target.amount) + ' 已入帳。');
       onClose();
     } catch (e) {

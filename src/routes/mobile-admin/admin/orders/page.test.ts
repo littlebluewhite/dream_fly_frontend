@@ -21,7 +21,13 @@ const FIXTURE_ORDERS: OrderRow[] = [
 	mkOrder({ id: 'DF-TEST01', member: '測試學員甲', amount: 12345, status: 'paid' }),
 	mkOrder({ id: 'DF-TEST02', member: '測試學員乙', amount: 500, status: 'pending' })
 ];
-const OPS_FIXTURE = { members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: FIXTURE_ORDERS };
+/** getOpsCollections 的分頁 meta(R12 Task 3:header 顯示 total、total > perPage 出搜尋提示)。 */
+const pagesOf = (members: number, classes: number, orders: number) => ({
+	members: { total: members, perPage: 20 },
+	classes: { total: classes, perPage: 20 },
+	orders: { total: orders, perPage: 20 }
+});
+const OPS_FIXTURE = { members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: FIXTURE_ORDERS, pages: pagesOf(MEMBERS.length, CLASSES.length, 2) };
 
 beforeEach(() => {
 	vi.mocked(getOpsCollections).mockReset();
@@ -68,14 +74,14 @@ describe('mobile-admin/admin/orders 頁', () => {
 	});
 
 	it('orders 空集合不當機,顯示找不到符合的訂單', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [] });
+		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [], pages: pagesOf(MEMBERS.length, CLASSES.length, 0) });
 		const { findByText } = render(OrdersPage);
 		expect(await findByText('找不到符合的訂單')).toBeInTheDocument();
 	});
 
 	it('未知 status(契約若擴出新值) → 該筆訂單降級為 neutral 徽章 + 原字串，不會炸掉(orderStatusBadge fallback)', async () => {
 		const unknownOrder = mkOrder({ id: 'DF-TEST03', member: '測試學員丙', status: 'future_status' as OrderRow['status'] });
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [unknownOrder] });
+		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [unknownOrder], pages: pagesOf(MEMBERS.length, CLASSES.length, 1) });
 
 		const { container, findByText } = render(OrdersPage);
 		expect(await findByText('測試學員丙')).toBeInTheDocument();
@@ -100,5 +106,19 @@ describe('mobile-admin/admin/orders 頁', () => {
 		await fireEvent.input(input, { target: { value: '   ' } });
 		expect(await findByText('測試學員乙')).toBeInTheDocument();
 		expect(queryByText('測試學員甲')).not.toBeNull();
+	});
+});
+
+describe('mobile-admin/admin/orders 頁 — 分頁誠實(R12 Task 3)', () => {
+	it('header 顯示後端 total;total > perPage 時搜尋區提示僅搜尋前 N 筆', async () => {
+		vi.mocked(getOpsCollections).mockResolvedValue({ ...OPS_FIXTURE, pages: pagesOf(MEMBERS.length, CLASSES.length, 120) });
+		const { findByText } = render(OrdersPage);
+		expect(await findByText('共 120 筆報名繳費紀錄')).toBeInTheDocument();
+		expect(await findByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeInTheDocument();
+	});
+	it('total <= perPage 時不顯示提示', async () => {
+		const { findByText, queryByText } = render(OrdersPage);
+		await findByText('共 2 筆報名繳費紀錄');
+		expect(queryByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeNull();
 	});
 });

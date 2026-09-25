@@ -10,8 +10,8 @@
    * Task 20：Hero KPI 改讀真 GET /reports/admin(admin/api.ts getReports())——同
    * 桌面 admin/+page.svelte 的裁決 9：原 4 張 KPI 卡中「本週課堂」「出席偏低」在
    * /reports/admin 沒有對應資料源，已隨桌面版一併移除，不留假數字；硬編 hero 日期
-   * (dateLabel)同理移除。「新增學員」快速操作改開真表單並接 createMember(同
-   * admin/members 頁的寫入邏輯)，不再是本地假寫入。 */
+   * (dateLabel)同理移除。「新增學員」快速操作改開真表單並接 store 的 addMember()(同
+   * admin/members 頁的寫入邏輯，寫入成功即整包重抓 ops 集合)，不再是本地假寫入。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
@@ -20,10 +20,10 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, openAdminNotif } from '$lib/mobile-admin/stores';
+  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAdminHome, createMember, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
+  import { getAdminHome, type MAdminHomeData, type CreateMemberBody } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
   import { SESSION_STATUS } from '$lib/domain/sessions';
@@ -54,7 +54,7 @@
   // 同 members 頁慣例。
   async function quickCreateMember(body: CreateMemberBody) {
     try {
-      await createMember(body);
+      await addMember(body);
     } catch (e) {
       toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;

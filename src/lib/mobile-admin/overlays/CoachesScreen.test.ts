@@ -40,7 +40,13 @@ vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 	};
 });
 
-const opsFixture = (coachesList: Coach[]) => ({ members: [], classes: [], coaches: coachesList, orders: [] });
+const opsFixture = (coachesList: Coach[]) => ({
+	members: [],
+	classes: [],
+	coaches: coachesList,
+	orders: [],
+	pages: { members: { total: 0, perPage: 20 }, classes: { total: 0, perPage: 20 }, orders: { total: 0, perPage: 20 } }
+});
 
 beforeEach(() => {
 	vi.mocked(createMember).mockReset();

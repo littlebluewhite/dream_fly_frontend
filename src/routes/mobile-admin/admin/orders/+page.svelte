@@ -8,7 +8,9 @@
    *
    * Round 2 C3:計數/已收/篩選改共用桌面 orders-filter.ts 純函式(countByStatus/
    * paidRevenue/filterOrders)——OrderRow 結構同桌面 Order,structural typing 直接
-   * 相容;本頁 chips 只消費 7 桶計數中的 4 桶。 */
+   * 相容;本頁 chips 只消費 7 桶計數中的 4 桶。
+   *
+   * R12:header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區提示搜尋範圍。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -18,7 +20,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, orders, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, orders, hydrateOps, refreshOps, openAdminNotif, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
@@ -47,6 +49,7 @@
   ];
 
   $: rows = filterOrders($orders, { status: tab, query: q });
+  $: capHint = searchCapHint($opsPages.orders);
 </script>
 
 <LoadGate {gate}>
@@ -60,7 +63,7 @@
     {/each}
   </div>
 
-  <ScreenHeader title="訂單與金流" sub="報名繳費紀錄">
+  <ScreenHeader title="訂單與金流" sub={'共 ' + $opsPages.orders.total + ' 筆報名繳費紀錄'}>
     <div slot="right">
       <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
     </div>
@@ -68,6 +71,7 @@
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
     <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋訂單編號、學員…" />
+    {#if capHint}<div style="font-size:11.5px; color:var(--df-text-muted); margin-top:-4px;">{capHint}</div>{/if}
     <FilterChips items={chips} value={tab} onChange={(k) => (tab = k as OrderStatusFilter)} />
   </div>
 

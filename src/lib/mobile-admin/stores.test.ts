@@ -22,26 +22,71 @@ import {
 	refreshOps,
 	messagesHydrated,
 	hydrateMessages,
-	refreshMessages
+	refreshMessages,
+	opsPages,
+	searchCapHint,
+	addMember,
+	saveMember,
+	addCourse,
+	saveCourse,
+	addCoach,
+	saveCoach
 } from './stores';
 import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS } from './data';
 import { COACHES } from '$lib/domain/coaches';
-import { getOpsCollections, getMessages, markRead } from './api';
+import {
+	getOpsCollections,
+	getMessages,
+	markRead,
+	updateOrderStatus,
+	createMember,
+	updateMember,
+	createCourse,
+	updateCourse,
+	createCoach,
+	updateCoach,
+	type OpsCollections
+} from './api';
 
 // Task 20：getOpsCollections()/getMessages() 現委派桌面 admin/coach seams 真呼叫
 // 後端——這裡的測試關心的是 store 自己的水合守衛/樂觀更新機制(與資料來源無關)，
 // 故明確 mock 這三支(而非 importOriginal passthrough)，預設解析回舊測試假設的
 // MEMBERS/CLASSES/COACHES/ORDERS/MESSAGES 靜態陣列；個別測試仍可用
 // mockResolvedValueOnce/mockRejectedValueOnce 覆寫單次行為(race 測試等)。
+// R12 Task 3：ops store 自有寫入動詞(addMember/saveCourse/markOrderPaid…)內部呼叫的
+// 寫入端點一併 mock——否則 passthrough 會打到真 api()。
 vi.mock('./api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./api')>();
 	return {
 		...actual,
-		getOpsCollections: vi.fn(async () => ({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: ORDERS })),
+		getOpsCollections: vi.fn(async () => opsFixture()),
 		getMessages: vi.fn(async () => MESSAGES.map((m) => ({ ...m }))),
-		markRead: vi.fn(async () => ({ updated: 0 }))
+		markRead: vi.fn(async () => ({ updated: 0 })),
+		updateOrderStatus: vi.fn(),
+		createMember: vi.fn(),
+		updateMember: vi.fn(),
+		createCourse: vi.fn(),
+		updateCourse: vi.fn(),
+		createCoach: vi.fn(),
+		updateCoach: vi.fn()
 	};
 });
+
+/** getOpsCollections 的預設回傳(含分頁 meta)。function 宣告會被 hoist,vi.mock 工廠可用。 */
+function opsFixture(over: Partial<OpsCollections> = {}): OpsCollections {
+	return {
+		members: MEMBERS,
+		classes: CLASSES,
+		coaches: COACHES,
+		orders: ORDERS,
+		pages: {
+			members: { total: MEMBERS.length, perPage: 20 },
+			classes: { total: CLASSES.length, perPage: 20 },
+			orders: { total: ORDERS.length, perPage: 20 }
+		},
+		...over
+	};
+}
 
 // createOverlay 的直接單元測試已搬到 $lib/components/mobile/overlay.test.ts
 // (Task 1(1.5)：ADR-0010「死值不留死出口」——mobile-admin/stores.ts 的
@@ -111,17 +156,48 @@ describe('openAdminNotif (mobile-admin 四頁 dashboard/orders/classes/members �
 describe('markOrderPaid', () => {
 	// Regression: 標記已付款 used to only toast, leaving the order pending so the
 	// orders KPIs (revenue / 待付款 count) and the admin home banner never updated.
-	it('flips a pending order to paid and stamps the receipt time', () => {
+	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store,
+	// paidAt 用訂單日期(同 mapAdminOrder 讀取規則),不再是「剛剛」。
+	it('PATCH 成功 → 該筆翻為 paid、paidAt 為訂單日期,且不重抓(無 refreshOps)', async () => {
 		const pending = get(orders).find((o) => o.status === 'pending');
 		expect(pending, 'seed should contain a pending order').toBeTruthy();
 		const pendingBefore = get(orders).filter((o) => o.status === 'pending').length;
-		markOrderPaid(pending!.id);
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending!.orderId, order_number: pending!.id, status: 'paid' });
+		vi.mocked(getOpsCollections).mockClear();
+
+		await markOrderPaid(pending!);
+
+		expect(updateOrderStatus).toHaveBeenCalledWith(pending!.orderId, 'paid');
 		const after = get(orders).find((o) => o.id === pending!.id)!;
 		expect(after.status).toBe('paid');
-		expect(after.paidAt).toBe('剛剛');
+		expect(after.paidAt).toBe(pending!.date);
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
+		expect(get(opsHydrated)).toBe(true); // opsGate.markMutated()
+		expect(getOpsCollections).not.toHaveBeenCalled();
 		orders.set(ORDERS); // restore the shared singleton for other tests
-		opsHydrated.set(false); // markOrderPaid now also flips this (C1) — reset for other tests
+		opsHydrated.set(false);
+	});
+
+	it('PATCH 失敗 → 丟出,store 與 opsHydrated 皆不動', async () => {
+		const pending = ORDERS.find((o) => o.status === 'pending')!;
+		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new Error('409'));
+		opsHydrated.set(false);
+
+		await expect(markOrderPaid(pending)).rejects.toThrow('409');
+
+		expect(get(orders)).toEqual(ORDERS);
+		expect(get(opsHydrated)).toBe(false);
+	});
+
+	it('store 以 server 回的 status 為準(不硬寫 paid)', async () => {
+		const pending = ORDERS.find((o) => o.status === 'pending')!;
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'processing' });
+
+		await markOrderPaid(pending);
+
+		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('processing');
+		orders.set(ORDERS);
+		opsHydrated.set(false);
 	});
 });
 
@@ -209,14 +285,17 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		opsHydrated.set(false);
 	});
 
-	/* R10 關鍵判準守恆釘(現行 HEAD 就綠,世代穩定重抓上線後必須仍綠)。
-	 * 「寫入 → markMutated → await refreshOps()」是 mobile-admin 的正常序列:mutation
-	 * 發生在 refresh **進場之前**,旗標當下雖為 true,快照仍必須套用、且 fetch 恰一次。
-	 * 若把丟棄條件誤寫成「旗標/mutated 當下值為真」,這條釘會炸成無限重抓或永不套用。 */
-	it('判準守恆:markOrderPaid() → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
+	/* R10 關鍵判準守恆釘(ADR-0020 點名;R12 Task 3 改寫成 markOrderPaid(order) 新簽名,
+	 * 判準不變)。「寫入 → markMutated → await refreshOps()」是 mobile-admin 的正常序列:
+	 * mutation 發生在 refresh **進場之前**,旗標當下雖為 true,快照仍必須套用、且 fetch
+	 * 恰一次。若把丟棄條件誤寫成「旗標/mutated 當下值為真」,這條釘會炸成無限重抓或永不套用。
+	 * markOrderPaid 現為先寫後改(await PATCH → 套回 → markMutated() 無尾流,ADR-0021),
+	 * 所以 refresh 也不會因尾流帳而等待。 */
+	it('判準守恆:await markOrderPaid(order) → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
 		opsHydrated.set(false);
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		markOrderPaid(pending.id); // refresh 進場「之前」的 mutation
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
+		await markOrderPaid(pending); // refresh 進場「之前」的 mutation
 		expect(get(opsHydrated)).toBe(true); // 旗標當下為 true——誤用旗標當判準即誤丟
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid');
 
@@ -232,6 +311,23 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		opsHydrated.set(false);
 	});
 
+	it('hydrateOps()/refreshOps() 把分頁 meta 寫進 opsPages', async () => {
+		const pages = { members: { total: 57, perPage: 20 }, classes: { total: 3, perPage: 20 }, orders: { total: 120, perPage: 20 } };
+		vi.mocked(getOpsCollections).mockResolvedValueOnce(opsFixture({ pages }));
+		await refreshOps();
+		expect(get(opsPages)).toEqual(pages);
+		opsHydrated.set(false);
+	});
+});
+
+describe('searchCapHint(僅抓第 1 頁時的搜尋範圍提示)', () => {
+	it('total > perPage → 提示僅搜尋前 N 筆(N = perPage)', () => {
+		expect(searchCapHint({ total: 57, perPage: 20 })).toBe('僅搜尋前 20 筆，完整清單請至桌面後台');
+	});
+	it('total <= perPage → 無提示', () => {
+		expect(searchCapHint({ total: 20, perPage: 20 })).toBeNull();
+		expect(searchCapHint({ total: 3, perPage: 20 })).toBeNull();
+	});
 });
 
 describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 pin）', () => {
@@ -303,17 +399,18 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 	// 真寫入成功後改呼叫 refreshOps() 整包重抓,不再是 markMutated 站點。)
 	it('markOrderPaid() 在 hydrateOps() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後不覆寫剛標記的付款狀態,opsHydrated 為 true', async () => {
 		opsHydrated.set(false);
-		const d = createDeferred<{ members: typeof MEMBERS; classes: typeof CLASSES; coaches: typeof COACHES; orders: typeof ORDERS }>();
+		const d = createDeferred<OpsCollections>();
 		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise);
 
 		const hydrating = hydrateOps();
 		expect(get(opsHydrated)).toBe(false); // in-flight,尚未水合
 
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		markOrderPaid(pending.id);
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
+		await markOrderPaid(pending); // R12 Task 3 新簽名:先寫後改,PATCH 落定後才 markMutated
 		expect(get(opsHydrated)).toBe(true); // markOrderPaid 已呼叫 opsGate.markMutated()
 
-		d.resolve({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: ORDERS }); // 模擬水合帶回「該筆仍 pending」的舊資料
+		d.resolve(opsFixture()); // 模擬水合帶回「該筆仍 pending」的舊資料
 		await hydrating;
 
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid'); // mutation 保留,沒被水合覆寫
@@ -345,5 +442,193 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 		// restore for other tests
 		messages.set(MESSAGES.map((m) => ({ ...m })));
 		messagesHydrated.set(false);
+	});
+});
+
+/* R12 Task 3:ops store 自有寫入動詞(逐 entity、新增/編輯分兩支,不做通用 CRUD——ADR-0018 C6)。
+ * 每支三條:寫入成功 → getOpsCollections 恰一次、store 反映重抓結果;寫入失敗 → 丟出
+ * (coach 系列回 outcome)、不重抓;重抓失敗 → 不丟出(console.error)。錯誤/toast 文案留頁面。 */
+describe('ops 寫入動詞', () => {
+	const REFRESHED_MEMBER = { ...MEMBERS[0], id: 'zz-new', name: '重抓回來的學員' };
+	const REFRESHED_CLASS = { ...CLASSES[0], id: 'zz-k', name: '重抓回來的班級' };
+	const REFRESHED_COACH = { ...COACHES[0], id: 'zz-c', name: '重抓回來的教練' };
+	const refreshedOps = () =>
+		opsFixture({ members: [REFRESHED_MEMBER], classes: [REFRESHED_CLASS], coaches: [REFRESHED_COACH] });
+
+	function reset() {
+		members.set(MEMBERS);
+		classes.set(CLASSES);
+		coaches.set(COACHES);
+		orders.set(ORDERS);
+		opsHydrated.set(false);
+		vi.mocked(getOpsCollections).mockClear();
+	}
+
+	/** 寫入成功但重抓失敗:動詞 resolve(不丟出)、console.error 被叫。 */
+	async function expectRefreshFailureSwallowed(run: () => Promise<unknown>) {
+		reset();
+		const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('refetch boom'));
+		await expect(run()).resolves.not.toThrow();
+		expect(getOpsCollections).toHaveBeenCalledTimes(1);
+		expect(err).toHaveBeenCalled();
+		err.mockRestore();
+		reset();
+	}
+
+	describe('addMember(body)', () => {
+		const body = { email: 'a@test.com', name: '新學員', password: 'password123' };
+		it('成功 → createMember(body) → 重抓恰一次,members 反映結果', async () => {
+			reset();
+			vi.mocked(createMember).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			await addMember(body);
+			expect(createMember).toHaveBeenCalledWith(body);
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(members)).toEqual([REFRESHED_MEMBER]);
+			reset();
+		});
+		it('寫入失敗 → 丟出、不重抓', async () => {
+			reset();
+			vi.mocked(createMember).mockRejectedValueOnce(new Error('Email 已被使用'));
+			await expect(addMember(body)).rejects.toThrow('Email 已被使用');
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出', async () => {
+			vi.mocked(createMember).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(() => addMember(body));
+		});
+	});
+
+	describe('saveMember(id, body)', () => {
+		const body = { name: '改名學員' };
+		it('成功 → updateMember(id, body) → 重抓恰一次,members 反映結果', async () => {
+			reset();
+			vi.mocked(updateMember).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			await saveMember('m-1', body);
+			expect(updateMember).toHaveBeenCalledWith('m-1', body);
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(members)).toEqual([REFRESHED_MEMBER]);
+			reset();
+		});
+		it('寫入失敗 → 丟出、不重抓', async () => {
+			reset();
+			vi.mocked(updateMember).mockRejectedValueOnce(new Error('422'));
+			await expect(saveMember('m-1', body)).rejects.toThrow('422');
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出', async () => {
+			vi.mocked(updateMember).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(() => saveMember('m-1', body));
+		});
+	});
+
+	describe('addCourse(row, durationMinutes)', () => {
+		it('成功 → createCourse(buildCourseBody(row, $coaches) + duration_minutes) → 重抓恰一次,classes 反映結果', async () => {
+			reset();
+			const coach = COACHES[0];
+			const row = { ...CLASSES[0], name: '新班級', coach: coach.name };
+			vi.mocked(createCourse).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			await addCourse(row, 75);
+			expect(createCourse).toHaveBeenCalledTimes(1);
+			expect(vi.mocked(createCourse).mock.calls[0][0]).toMatchObject({ name: '新班級', coach_id: coach.id, duration_minutes: 75 });
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(classes)).toEqual([REFRESHED_CLASS]);
+			reset();
+		});
+		it('寫入失敗 → 丟出、不重抓', async () => {
+			reset();
+			vi.mocked(createCourse).mockRejectedValueOnce(new Error('409'));
+			await expect(addCourse(CLASSES[0], 60)).rejects.toThrow('409');
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出', async () => {
+			vi.mocked(createCourse).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(() => addCourse(CLASSES[0], 60));
+		});
+	});
+
+	describe('saveCourse(row, durationMinutes)', () => {
+		it('成功 → updateCourse(row.id, body + duration_minutes) → 重抓恰一次,classes 反映結果', async () => {
+			reset();
+			const row = { ...CLASSES[0], name: '改名後的班級' };
+			vi.mocked(updateCourse).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			await saveCourse(row, 90);
+			expect(updateCourse).toHaveBeenCalledWith(row.id, expect.objectContaining({ name: '改名後的班級', duration_minutes: 90 }));
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(classes)).toEqual([REFRESHED_CLASS]);
+			reset();
+		});
+		it('寫入失敗 → 丟出、不重抓', async () => {
+			reset();
+			vi.mocked(updateCourse).mockRejectedValueOnce(new Error('403'));
+			await expect(saveCourse(CLASSES[0], 60)).rejects.toThrow('403');
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出', async () => {
+			vi.mocked(updateCourse).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(() => saveCourse(CLASSES[0], 60));
+		});
+	});
+
+	describe('addCoach(values)', () => {
+		const V = { name: '新教練', email: 'c@test.com', password: 'password123', title: '主教練', tags: ['體操'], isActive: true };
+		it('成功 → createMember → createCoach(user_id) → 回 created、重抓恰一次,coaches 反映結果', async () => {
+			reset();
+			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-new' } as never);
+			vi.mocked(createCoach).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			const outcome = await addCoach(V);
+			expect(outcome).toEqual({ kind: 'created' });
+			expect(createCoach).toHaveBeenCalledWith({ user_id: 'u-new', title: V.title, specialties: V.tags, is_active: V.isActive });
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(coaches)).toEqual([REFRESHED_COACH]);
+			reset();
+		});
+		it('寫入失敗 → 原樣回失敗 outcome(不丟出)、不重抓', async () => {
+			reset();
+			const error = new Error('bind');
+			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-x' } as never);
+			vi.mocked(createCoach).mockRejectedValueOnce(error);
+			const outcome = await addCoach(V);
+			expect(outcome).toEqual({ kind: 'coachBindFailed', pendingUserId: 'u-x', error });
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出,仍回 created', async () => {
+			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-new' } as never);
+			vi.mocked(createCoach).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(async () => expect(await addCoach(V)).toEqual({ kind: 'created' }));
+		});
+	});
+
+	describe('saveCoach(values, target)', () => {
+		const target = COACHES[0];
+		const V = { name: target.name, email: '', password: '', title: '改職稱', tags: target.tags, isActive: target.isActive };
+		it('成功 → updateCoach(target.id, …) → 回 saved、重抓恰一次,coaches 反映結果', async () => {
+			reset();
+			vi.mocked(updateCoach).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			const outcome = await saveCoach(V, target);
+			expect(outcome).toEqual({ kind: 'saved' });
+			expect(updateCoach).toHaveBeenCalledWith(target.id, { title: '改職稱', specialties: target.tags, is_active: target.isActive });
+			expect(getOpsCollections).toHaveBeenCalledTimes(1);
+			expect(get(coaches)).toEqual([REFRESHED_COACH]);
+			reset();
+		});
+		it('寫入失敗 → 原樣回失敗 outcome(不丟出)、不重抓', async () => {
+			reset();
+			const error = new Error('422');
+			vi.mocked(updateCoach).mockRejectedValueOnce(error);
+			const outcome = await saveCoach(V, target);
+			expect(outcome).toEqual({ kind: 'coachUpdateFailed', error });
+			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('重抓失敗 → 不丟出,仍回 saved', async () => {
+			vi.mocked(updateCoach).mockResolvedValueOnce({} as never);
+			await expectRefreshFailureSwallowed(async () => expect(await saveCoach(V, target)).toEqual({ kind: 'saved' }));
+		});
 	});
 });

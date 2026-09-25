@@ -6,15 +6,14 @@
    *
    * Task F5：新增/編輯改接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
    * routes/admin/coaches/+page.svelte 的兩步流程（先建 user 帳號、再綁 coach）與
-   * 錯誤訊息設計。寫入成功後 refreshOps() 整包重抓 members/classes/coaches/orders
-   * 四個 store（同 routes/mobile-admin/admin/members/+page.svelte 慣例），取代
-   * 舊有的本地 saveCoach() 假寫入。
+   * 錯誤訊息設計。寫入成功後整包重抓 members/classes/coaches/orders 四個 store
+   * （同 routes/mobile-admin/admin/members/+page.svelte 慣例）。
    *
    * C3：兩步序列本身（API 呼叫順序、outcome 判別聯集）已收進
    * $lib/admin/components/coach-save.ts 的 saveNewCoach/saveCoachEdit——同桌面
-   * admin/coaches/+page.svelte 復用的同一套無狀態純函式（K4），本頁不再 inline
-   * 重抄一份兩步序列，只剩「呼叫 saveNewCoach/saveCoachEdit → 依 outcome.kind
-   * 翻譯 toast」。
+   * admin/coaches/+page.svelte 復用的同一套無狀態純函式（K4）。R12 起再由 store 的
+   * addCoach/saveCoach 動詞包起來(成功 outcome → 動詞內 await refreshOps())，本頁
+   * 只剩「呼叫動詞 → 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
    *
    * 本頁沿用既有的「儲存即關閉 sheet、成功/失敗 toast 非同步顯示」慣例（同
    * MemberForm 對照的 members/+page.svelte handleSave），跟桌面「失敗時保留對話框
@@ -32,18 +31,10 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coaches as coachesStore, toasts, refreshOps, hydrateOps } from '$lib/mobile-admin/stores';
+  import { overlay, coaches as coachesStore, toasts, refreshOps, hydrateOps, addCoach, saveCoach } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/domain/coaches';
-  import {
-    createCoach,
-    updateCoach,
-    createMember,
-    updateMember,
-    saveNewCoach,
-    saveCoachEdit,
-    type CoachFormValues
-  } from '$lib/mobile-admin/api';
+  import type { CoachFormValues } from '$lib/mobile-admin/api';
   import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;
@@ -80,7 +71,7 @@
   };
 
   async function createAndRefresh(v: CoachFormValues) {
-    const outcome = await saveNewCoach(v, null, { createMember, createCoach });
+    const outcome = await addCoach(v);
     switch (outcome.kind) {
       case 'userCreateFailed':
         toasts.notify('error', '新增失敗', apiErrorMessage(outcome.error));
@@ -100,16 +91,11 @@
         return;
       case 'created':
         toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
-        await refreshOps();
     }
   }
 
   async function updateAndRefresh(coach: Coach, v: CoachFormValues) {
-    const outcome = await saveCoachEdit(
-      v,
-      { id: coach.id, userId: coach.userId, name: coach.name },
-      { updateMember, updateCoach }
-    );
+    const outcome = await saveCoach(v, coach);
     switch (outcome.kind) {
       case 'nameUpdateFailed':
         toasts.notify('error', '儲存失敗', apiErrorMessage(outcome.error));
@@ -119,7 +105,6 @@
         return;
       case 'saved':
         toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
-        await refreshOps();
     }
   }
 

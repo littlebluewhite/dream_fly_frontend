@@ -22,7 +22,30 @@ import type { Role } from './nav';
 // 非 test-only 消費。
 import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
 import { COACHES, type Coach } from '$lib/domain/coaches';
-import { getOpsCollections, getMessages, markRead } from './api';
+import {
+	getOpsCollections,
+	getMessages,
+	markRead,
+	createMember,
+	updateMember,
+	createCourse,
+	updateCourse,
+	createCoach,
+	updateCoach,
+	updateOrderStatus,
+	saveNewCoach,
+	saveCoachEdit,
+	type CreateMemberBody,
+	type UpdateMemberBody,
+	type CoachFormValues,
+	type SaveNewCoachOutcome,
+	type SaveCoachEditOutcome,
+	type OpsPages,
+	type PageInfo
+} from './api';
+import { buildCourseBody } from '$lib/admin/components/course-request';
+import { applyStatusChange } from '$lib/admin/components/orders-filter';
+import type { OrderStatus } from '$lib/api/wire';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
@@ -57,41 +80,44 @@ export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 /* ---------- Live collections (新增 / 編輯 表單寫回) ---------- */
 export const members = writable<MemberRow[]>(MEMBERS);
 export const classes = writable<ClassRow[]>(CLASSES);
-// saveMember/saveClass/saveCoach 的本地寫入版本已分別隨 Task 20（courses/users）與
-// Task F5（coaches/users 兩步流程）改接真後端移除——真寫入成功後一律呼叫
-// refreshOps() 整包重抓，不再局部樂觀更新這些 store（見 CoachesScreen.svelte）。
+// 寫入不局部樂觀更新這些 store:寫入成功後一律 refreshOps() 整包重抓(見下方寫入動詞)。
 export const coaches = writable<Coach[]>(COACHES);
 
 /** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本月已收
  *  revenue, 待付款 count) and the admin home 待付款 banner all derive from this
  *  store — keep it the single source of truth for order status. */
 export const orders = writable<OrderRow[]>(ORDERS);
-/** Flip a pending order to paid and stamp the receipt time, so revenue / counts /
- *  filter chips recompute. Without this the action only toasts and the row stays
- *  pending. The detail sheet closes on action, so only the list needs to react.
- *  Also flips `opsHydrated` true(mutation 即宣告水合真相 — 見下方 opsHydrated 守衛
- *  註解)。 */
-export function markOrderPaid(id: string) {
-	orders.update((os) => os.map((o) => (o.id === id ? { ...o, status: 'paid', paidAt: '剛剛' } : o)));
-	opsGate.markMutated();
+
+/** members/classes/orders 的分頁 meta(只抓第 1 頁,見 api.ts getOpsCollections)。頁面
+ *  header 顯示 total,total > perPage 時搜尋區顯示 searchCapHint()。同步 seed 取 seed 陣列
+ *  長度(perPage 同值 → 不出提示),水合後由 opsGate.apply 覆寫。 */
+const _opsPages = writable<OpsPages>({
+	members: { total: MEMBERS.length, perPage: MEMBERS.length },
+	classes: { total: CLASSES.length, perPage: CLASSES.length },
+	orders: { total: ORDERS.length, perPage: ORDERS.length }
+});
+export const opsPages = { subscribe: _opsPages.subscribe };
+
+/** 行動版不能換頁,搜尋只涵蓋已抓回的第 1 頁——超過一頁時誠實提示(不照抄桌面「切換頁面」文案)。 */
+export function searchCapHint(p: PageInfo): string | null {
+	return p.total > p.perPage ? `僅搜尋前 ${p.perPage} 筆，完整清單請至桌面後台` : null;
 }
 
 /** 集合水合守衛(members/classes/coaches/orders 一次到位)。四個 store 都保留同步
  *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸)。hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發;save* / markOrderPaid 等
- *  mutation 呼叫 opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的
- *  新增/編輯」被首次水合的 seed clone 無聲清除(C1 regression:admin 首頁快速操作
- *  新增學員/教練 → 首次進 classes/members/orders 任一頁 → 舊碼會用 seed 覆寫剛
- *  新增的資料)。refreshOps() 保持一律真抓,供「重新整理」/ErrorState 重試共用
- *  (使用者明確要求最新資料,不受 guard 短路保護);架構深化 R10 起落地改走世代穩定
- *  重抓——只丟棄「refresh **進場之後**」才發生的 mutation,故「markOrderPaid → await
- *  refreshOps()」這種寫後重抓的正常序列零變化(fetch 恰一次、快照照常套用),只有真的
- *  在飛期間才發生的 mutation 會讓舊快照作廢、原地補抓。guard 短路 + post-await
- *  re-check(mutation 勝出)的機制本身由 `createHydrationGate` 提供,見
- *  `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭函式(不直接傳函式參照)——
- *  維持原本「只有實際呼叫 hydrateOps()/refreshOps() 時才讀取 getOpsCollections
- *  這個 binding」的惰性時機,而非在本模組載入當下就讀取;純 import stores.ts 而
- *  不曾呼叫 hydrateOps() 的頁面測試,其 api mock 因此不必連帶提供 getOpsCollections。 */
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發;markOrderPaid 呼叫
+ *  opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的本地寫入」被首次
+ *  水合的 seed clone 無聲清除(C1 regression)。refreshOps() 保持一律真抓,供「重新
+ *  整理」/ErrorState 重試與寫入動詞的寫後重抓共用(使用者明確要求最新資料,不受 guard
+ *  短路保護);架構深化 R10 起落地改走世代穩定重抓——只丟棄「refresh **進場之後**」才
+ *  發生的 mutation,故「await markOrderPaid() → await refreshOps()」這種寫後重抓的正常
+ *  序列零變化(fetch 恰一次、快照照常套用),只有真的在飛期間才發生的 mutation 會讓舊
+ *  快照作廢、原地補抓。guard 短路 + post-await re-check(mutation 勝出)的機制本身由
+ *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭
+ *  函式(不直接傳函式參照)——維持原本「只有實際呼叫 hydrateOps()/refreshOps() 時才讀取
+ *  getOpsCollections 這個 binding」的惰性時機,而非在本模組載入當下就讀取;純 import
+ *  stores.ts 而不曾呼叫 hydrateOps()(或寫入動詞)的頁面測試,其 api mock 因此不必連帶
+ *  提供 getOpsCollections。 */
 const opsGate = createHydrationGate({
 	fetch: () => getOpsCollections(),
 	apply: (d) => {
@@ -99,18 +125,77 @@ const opsGate = createHydrationGate({
 		classes.set(d.classes);
 		coaches.set(d.coaches);
 		orders.set(d.orders);
+		_opsPages.set(d.pages);
 	}
 });
 export const opsHydrated = opsGate.hydrated;
 export const hydrateOps = opsGate.hydrate;
 export const refreshOps = opsGate.refresh;
 
+/* ---------- 寫入動詞(R12:ops store 擁有自己的寫入) ----------
+ * 逐 entity、新增/編輯分兩支(不做跨 entity 的通用 CRUD——ADR-0018 C6;不用 isNew 旗標
+ * ——ADR-0012)。寫入失敗 → 丟出(coach 系列回 coach-save 的 outcome 原樣),頁面照舊用
+ * 自己的錯誤文案表(ADR-0011)。寫入成功 → 動詞內 await 寫後重抓,呼叫端拿到 resolve 時
+ * 列表已是新的;重抓失敗只 console.error、不丟出(寫入本身已成功,不該回報成失敗)。 */
+async function refetchAfterWrite(): Promise<void> {
+	try {
+		await refreshOps();
+	} catch (e) {
+		console.error('[mobile-admin] 寫入成功但重抓 ops 集合失敗', e);
+	}
+}
+
+export async function addMember(body: CreateMemberBody): Promise<void> {
+	await createMember(body);
+	await refetchAfterWrite();
+}
+export async function saveMember(id: string, body: UpdateMemberBody): Promise<void> {
+	await updateMember(id, body);
+	await refetchAfterWrite();
+}
+
+/** 課程 body 由桌面 buildCourseBody() 組(兩邊 ClassRow/Coach 形狀相同),coach_id 對照
+ *  當下的 $coaches;duration_minutes 由表單另給(ClassRow 無此欄)。 */
+export async function addCourse(row: ClassRow, durationMinutes: number): Promise<void> {
+	await createCourse({ ...buildCourseBody(row, get(coaches)), duration_minutes: durationMinutes });
+	await refetchAfterWrite();
+}
+export async function saveCourse(row: ClassRow, durationMinutes: number): Promise<void> {
+	await updateCourse(row.id, { ...buildCourseBody(row, get(coaches)), duration_minutes: durationMinutes });
+	await refetchAfterWrite();
+}
+
+/** 教練兩步寫入(coach-save.ts):失敗不丟出,outcome 原樣回傳給頁面翻譯 toast。新增不帶
+ *  pendingUserId(行動版「儲存即關 sheet」,沒有同工作階段重試第二步的哨兵,見
+ *  CoachesScreen.svelte 檔頭)。 */
+export async function addCoach(v: CoachFormValues): Promise<SaveNewCoachOutcome> {
+	const outcome = await saveNewCoach(v, null, { createMember, createCoach });
+	if (outcome.kind === 'created') await refetchAfterWrite();
+	return outcome;
+}
+export async function saveCoach(v: CoachFormValues, target: Coach): Promise<SaveCoachEditOutcome> {
+	const outcome = await saveCoachEdit(v, { id: target.id, userId: target.userId, name: target.name }, { updateMember, updateCoach });
+	if (outcome.kind === 'saved') await refetchAfterWrite();
+	return outcome;
+}
+
+/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 成功後,用桌面同一支
+ *  applyStatusChange() 把 server 回的 status 套回 $orders(以 orderId 比對,paidAt 取訂單
+ *  日期,同 mapAdminOrder 的讀取規則),再 opsGate.markMutated()(防首次水合覆寫)。
+ *  PATCH 已落定才 mark,沒有在飛尾流可入帳——**不帶 tail**(ADR-0021)。不重抓:KPI /
+ *  橫幅都由 $orders 衍生,局部套回即足夠。PATCH 失敗 → 丟出,store 不動。 */
+export async function markOrderPaid(order: OrderRow): Promise<void> {
+	const res = await updateOrderStatus(order.orderId, 'paid');
+	orders.update((rows) => applyStatusChange(rows, order.orderId, res.status as OrderStatus));
+	opsGate.markMutated();
+}
+
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from
  *  this store, so reading a thread updates both — the static seed only ever showed
  *  the original unread count for the whole session. */
 export const messages = writable<MessageRow[]>(MESSAGES.map((m) => ({ ...m })));
 /** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
- *  (同 ops 集合的 save* / markOrderPaid — mutation 即宣告水合真相,防止首次水合
+ *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
  *  覆寫)。Task 20：本地立即翻已讀(樂觀更新，同既有 UX)之餘，一併 best-effort 打真
  *  PATCH /conversations/{id}/read(markRead，coach/api.ts)——已讀回條屬於「最終
  *  一致即可」的次要狀態，失敗不影響本地已讀顯示，也不阻塞使用者操作，故 fire-

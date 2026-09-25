@@ -13,9 +13,10 @@
    * buildCourseBody()（course-request.ts，桌面 Task 8 piece 1 既有的請求體組裝
    * 純函式，兩邊 ClassRow/Coach 形狀相同，直接沿用不重寫）組出共用欄位；openEdit
    * 統一收斂「班級卡編輯鈕」與「班級詳情 sheet 的編輯鈕」兩個入口，兩者都需要真正
-   * 呼叫後端，不能其中一條路徑漏接。成功後 refreshOps() 整包重抓（同桌面 members
-   * 頁的「新增/編輯後全量重抓」慣例，比起手動合併單筆映射結果更不容易漏同步
-   * classes/coaches 兩個 store 的交叉引用）。 */
+   * 呼叫後端，不能其中一條路徑漏接。R12 起寫入經 store 的 addCourse/saveCourse
+   * 動詞(內部 buildCourseBody + 寫入成功後 await refreshOps() 整包重抓)，toast 在
+   * 動詞 resolve 後才出現。header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區
+   * 提示搜尋範圍。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -27,13 +28,11 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, classes, coaches, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
+  import { overlay, classes, coaches, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
   import { createLoadGate } from '$lib/load-gate';
   import type { ClassRow } from '$lib/mobile-admin/data';
   import { CATS } from '$lib/admin/data';
-  import { createCourse, updateCourse } from '$lib/mobile-admin/api';
-  import { buildCourseBody } from '$lib/admin/components/course-request';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import { apiErrorText } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
@@ -73,26 +72,24 @@
   };
 
   async function save(updated: ClassRow, durationMinutes: number, isNew: boolean) {
-    const body = buildCourseBody(updated, $coaches);
     try {
       if (isNew) {
-        await createCourse({ ...body, duration_minutes: durationMinutes });
+        await addCourse(updated, durationMinutes);
         toasts.notify('success', '已新增班級', `「${updated.name}」已建立。`);
       } else {
-        await updateCourse(updated.id, { ...body, duration_minutes: durationMinutes });
+        await saveCourse(updated, durationMinutes);
         toasts.notify('success', '已儲存課程', `「${updated.name}」已更新。`);
       }
     } catch (e) {
       toasts.notify('error', isNew ? '新增失敗' : '儲存失敗', apiErrorText(e, COURSE_ERROR_TEXT));
-      return;
     }
-    await refreshOps();
   }
 
   // Round 2 C3:分類/搜尋改共用桌面 classes-filter.ts 的 filterClasses()(兩邊
   // ClassRow 結構相同)。Task 2:上方 cats chips 改用桌面 admin/data.ts 的 CATS
   // 單一來源(['全部', ...CATS]),分類順序與桌面一致。
   $: list = filterClasses($classes, { cat, query: q });
+  $: capHint = searchCapHint($opsPages.classes);
 
   // 班級卡片的三顆 icon meta rows(教練/日期時段/教室)——原模板內聯 each 陣列
   // hoist 為純函式並標型別(依 k 逐卡片而異，不是單一靜態陣列)。
@@ -112,7 +109,7 @@
     {/each}
   </div>
 
-  <ScreenHeader title="課程管理" sub={$classes.length + ' 個開課班級 · 本季招生中'}>
+  <ScreenHeader title="課程管理" sub={$opsPages.classes.total + ' 個開課班級 · 本季招生中'}>
     <div slot="right" style="display:flex; gap:8px;">
       <HeaderIcon icon="plus" label="新增班級" onClick={openNew} />
       <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
@@ -121,6 +118,7 @@
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
     <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋班級、教練…" />
+    {#if capHint}<div style="font-size:11.5px; color:var(--df-text-muted); margin-top:-4px;">{capHint}</div>{/if}
     <FilterChips items={cats} value={cat} onChange={(k) => (cat = k)} />
   </div>
 

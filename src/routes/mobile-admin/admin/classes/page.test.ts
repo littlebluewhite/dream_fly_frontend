@@ -24,7 +24,13 @@ const FIXTURE_CLASSES: ClassRow[] = [
 		durationMinutes: 90
 	}
 ];
-const OPS_FIXTURE = { members: MEMBERS, classes: FIXTURE_CLASSES, coaches: COACHES, orders: ORDERS };
+/** getOpsCollections 的分頁 meta(R12 Task 3:header 顯示 total、total > perPage 出搜尋提示)。 */
+const pagesOf = (members: number, classes: number, orders: number) => ({
+	members: { total: members, perPage: 20 },
+	classes: { total: classes, perPage: 20 },
+	orders: { total: orders, perPage: 20 }
+});
+const OPS_FIXTURE = { members: MEMBERS, classes: FIXTURE_CLASSES, coaches: COACHES, orders: ORDERS, pages: pagesOf(MEMBERS.length, 1, ORDERS.length) };
 
 beforeEach(() => {
 	vi.mocked(getOpsCollections).mockReset();
@@ -71,7 +77,7 @@ describe('mobile-admin/admin/classes 頁', () => {
 	});
 
 	it('classes 空集合不當機,顯示找不到符合的課程', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: [], coaches: COACHES, orders: ORDERS });
+		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: [], coaches: COACHES, orders: ORDERS, pages: pagesOf(MEMBERS.length, 0, ORDERS.length) });
 		const { findByText } = render(ClassesPage);
 		expect(await findByText('找不到符合的課程')).toBeInTheDocument();
 	});
@@ -134,7 +140,8 @@ describe('mobile-admin/admin/classes 頁', () => {
 			members: MEMBERS,
 			classes: [FIXTURE_CLASSES[0], { ...FIXTURE_CLASSES[0], id: 'zz2', name: '測試班級乙' }],
 			coaches: COACHES,
-			orders: ORDERS
+			orders: ORDERS,
+			pages: pagesOf(MEMBERS.length, 2, ORDERS.length)
 		});
 		const { findByText, queryByText, getByPlaceholderText } = render(ClassesPage);
 		await findByText('測試班級甲');
@@ -146,5 +153,19 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 		await fireEvent.input(input, { target: { value: '   ' } });
 		expect(await findByText('測試班級乙')).toBeInTheDocument();
+	});
+});
+
+describe('mobile-admin/admin/classes 頁 — 分頁誠實(R12 Task 3)', () => {
+	it('header 顯示後端 total;total > perPage 時搜尋區提示僅搜尋前 N 筆', async () => {
+		vi.mocked(getOpsCollections).mockResolvedValue({ ...OPS_FIXTURE, pages: pagesOf(MEMBERS.length, 33, ORDERS.length) });
+		const { findByText } = render(ClassesPage);
+		expect(await findByText('33 個開課班級 · 本季招生中')).toBeInTheDocument();
+		expect(await findByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeInTheDocument();
+	});
+	it('total <= perPage 時不顯示提示', async () => {
+		const { findByText, queryByText } = render(ClassesPage);
+		await findByText('1 個開課班級 · 本季招生中');
+		expect(queryByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeNull();
 	});
 });

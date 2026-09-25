@@ -10,9 +10,10 @@
    * MemberAccount)——狀態篩選由舊 3 態(在學中/出席偏低/暫停中，出席率導向)改為
    * 真後端的 is_active 二元旗標(啟用中/已停用)；搜尋拿掉「課程」關鍵字(真資料無
    * 課程欄位)，改為姓名/電話/編號。新增/編輯改接真 POST /users、PATCH /users/{id}
-   * （復用桌面 createMember/updateMember，經 $lib/mobile-admin/api 薄層），同桌面
-   * admin/members/+page.svelte 的「寫入成功後 refreshOps() 整包重抓」慣例——學員
-   * 筆數少，整包重抓比手動合併單筆映射結果更不容易漏同步。 */
+   * （R12 起經 store 的 addMember/saveMember 動詞，內部復用桌面 createMember/
+   * updateMember 並在寫入成功後 await refreshOps() 整包重抓），toast 在動詞 resolve
+   * 後才出現——和更新後的列表同時。header 顯示後端 total(只抓第 1 頁)，超過一頁時
+   * 搜尋區提示搜尋範圍。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -23,11 +24,11 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MemberRow } from '$lib/mobile-admin/data';
-  import { createMember, updateMember, type CreateMemberBody, type UpdateMemberBody } from '$lib/mobile-admin/api';
+  import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';
 
@@ -46,23 +47,21 @@
   // 直接透傳 e.message，同桌面 admin/members/+page.svelte 慣例。
   async function createAndRefresh(body: CreateMemberBody) {
     try {
-      await createMember(body);
+      await addMember(body);
     } catch (e) {
       toasts.notify('error', '新增失敗', apiErrorMessage(e));
       return;
     }
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
-    await refreshOps();
   }
   async function updateAndRefresh(id: string, body: UpdateMemberBody) {
     try {
-      await updateMember(id, body);
+      await saveMember(id, body);
     } catch (e) {
       toasts.notify('error', '儲存失敗', apiErrorMessage(e));
       return;
     }
     toasts.notify('success', '已儲存', `${body.name ?? ''} 學員資料已更新。`);
-    await refreshOps();
   }
   function handleSave(body: CreateMemberBody | UpdateMemberBody, isNew: boolean, id?: string): Promise<void> {
     if (isNew) return createAndRefresh(body as CreateMemberBody);
@@ -88,6 +87,7 @@
     { key: 'inactive', label: '已停用', count: counts.inactive }
   ];
   $: rows = filterMemberAccounts($members, { status: tab, query: q });
+  $: capHint = searchCapHint($opsPages.members);
 </script>
 
 <LoadGate {gate}>
@@ -97,7 +97,7 @@
     {/each}
   </div>
 
-  <ScreenHeader title="學員管理" sub={counts.all + ' 位學員'}>
+  <ScreenHeader title="學員管理" sub={$opsPages.members.total + ' 位學員'}>
     <div slot="right" style="display:flex; gap:8px;">
       <HeaderIcon icon="user-plus" label="新增學員" onClick={openNew} />
       <HeaderIcon icon="bell" badge={$adminUnreadCount} label="通知" onClick={openAdminNotif} />
@@ -106,6 +106,7 @@
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border); display:flex; flex-direction:column; gap:11px;">
     <SearchField value={q} onChange={(v) => (q = v)} placeholder="搜尋學員姓名、電話、編號…" />
+    {#if capHint}<div style="font-size:11.5px; color:var(--df-text-muted); margin-top:-4px;">{capHint}</div>{/if}
     <FilterChips items={chips} value={tab} onChange={(k) => (tab = k as MemberAccountStatusFilter)} />
   </div>
 

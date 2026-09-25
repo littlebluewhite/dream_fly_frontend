@@ -73,9 +73,9 @@ import {
 
 export { CoachNotFoundError };
 export { coachLoadErrorCopy, GENERIC_LOAD_ERROR, type LoadErrorCopy } from '$lib/coach/load-error-copy';
-// saveNewCoach/saveCoachEdit(新增/編輯教練兩階段 async 編排器，K4/C3)——CoachesScreen.svelte
-// 復用桌面 admin/coaches/+page.svelte 同一套無狀態純函式，取代原本 inline 重抄的兩步序列
-// （見 CoachesScreen.svelte 檔頭註解）。
+// saveNewCoach/saveCoachEdit(新增/編輯教練兩階段 async 編排器，K4/C3)——mobile-admin 復用
+// 桌面 admin/coaches/+page.svelte 同一套無狀態純函式，取代原本 inline 重抄的兩步序列；R12 起
+// 由 stores.ts 的 addCoach/saveCoach 動詞包裝呼叫（見 CoachesScreen.svelte 檔頭註解）。
 export { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
 // C3(A3 並行任務跨任務凍結契約)：createSettingsForm/SettingsDraft 由並行任務建立中的
 // $lib/admin/settings-form 供給，這裡預埋 re-export——本檔自檢時此行可能報「找不到
@@ -263,29 +263,45 @@ export const getAdminHome = async (): Promise<MAdminHomeData> => {
 
 /** 集合水合(members/classes/coaches/orders 一次到位)。四者皆復用桌面 admin seam
  *  的真資料，平行拉取——members/classes/orders 皆為分頁端點(Task 17)，這裡固定抓
- *  第一頁(後端預設 per_page=20)。
+ *  第一頁(後端預設 per_page=20)。coaches 直接取 getClasses() 回應裡的 coaches(同一支
+ *  listCoaches() + mapCoach() 映射，與 getCoaches() 形狀相同)，不再另打一次 GET /coaches。
  *  // P2: 行動版目前沒有 PaginationBar 可切頁，資料超過一頁時清單如實只顯示第一頁
  *  （不假裝資料齊全），也不在本次任務新蓋一套行動版分頁 UI——桌面對應頁面皆已有
- *  PaginationBar，行動版尚未跟進，記錄為後續 polish(見 task-20-report.md)。四個
- *  型別與桌面對應型別逐欄位相同(見 data.ts 各型別附註)，故零映射、直接沿用。 */
+ *  PaginationBar，行動版尚未跟進，記錄為後續 polish(見 task-20-report.md)。R12 起
+ *  分頁 meta(total/perPage)一併帶出(pages)，頁面據此顯示真實總數與「僅搜尋前 N 筆」
+ *  提示。四個型別與桌面對應型別逐欄位相同(見 data.ts 各型別附註)，故零映射、直接沿用。 */
+export interface PageInfo {
+	total: number;
+	perPage: number;
+}
+export interface OpsPages {
+	members: PageInfo;
+	classes: PageInfo;
+	orders: PageInfo;
+}
 export interface OpsCollections {
 	members: MemberRow[];
 	classes: ClassRow[];
 	coaches: Coach[];
 	orders: OrderRow[];
+	pages: OpsPages;
 }
 export const getOpsCollections = async (): Promise<OpsCollections> => {
-	const [membersRes, classesRes, coachesRes, ordersRes] = await Promise.all([
+	const [membersRes, classesRes, ordersRes] = await Promise.all([
 		adminGetMembers(1),
 		adminGetClasses(1),
-		adminGetCoaches(),
 		adminGetOrders(1)
 	]);
 	return {
 		members: membersRes.members,
 		classes: classesRes.classes,
-		coaches: coachesRes.coaches,
-		orders: ordersRes.orders
+		coaches: classesRes.coaches,
+		orders: ordersRes.orders,
+		pages: {
+			members: { total: membersRes.total, perPage: membersRes.perPage },
+			classes: { total: classesRes.total, perPage: classesRes.perPage },
+			orders: { total: ordersRes.total, perPage: ordersRes.perPage }
+		}
 	};
 };
 

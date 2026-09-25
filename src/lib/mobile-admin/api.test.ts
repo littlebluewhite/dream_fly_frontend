@@ -205,18 +205,30 @@ describe('getAdminHome', () => {
 });
 
 describe('getOpsCollections', () => {
-	it('resolves members/classes/coaches/orders from the real admin seams (page 1, parallel)', async () => {
-		vi.mocked(adminApi.getMembers).mockResolvedValue({ members: [{ id: 'm1' }], total: 1, page: 1, perPage: 20 } as never);
-		vi.mocked(adminApi.getClasses).mockResolvedValue({ classes: [{ id: 'k1' }], coaches: [], total: 1, page: 1, perPage: 20 } as never);
-		vi.mocked(adminApi.getCoaches).mockResolvedValue({ coaches: [{ id: 'c1' }] } as never);
-		vi.mocked(adminApi.getOrders).mockResolvedValue({ orders: [{ id: 'o1' }], total: 1, page: 1, perPage: 20 } as never);
+	it('resolves members/classes/coaches/orders + 分頁 meta from the real admin seams (page 1, parallel)', async () => {
+		vi.mocked(adminApi.getCoaches).mockClear();
+		vi.mocked(adminApi.getMembers).mockResolvedValue({ members: [{ id: 'm1' }], total: 57, page: 1, perPage: 20 } as never);
+		vi.mocked(adminApi.getClasses).mockResolvedValue({ classes: [{ id: 'k1' }], coaches: [{ id: 'c1' }], total: 1, page: 1, perPage: 20 } as never);
+		vi.mocked(adminApi.getOrders).mockResolvedValue({ orders: [{ id: 'o1' }], total: 120, page: 1, perPage: 20 } as never);
 
 		const d = await getOpsCollections();
 
-		expect(d).toEqual({ members: [{ id: 'm1' }], classes: [{ id: 'k1' }], coaches: [{ id: 'c1' }], orders: [{ id: 'o1' }] });
+		expect(d).toEqual({
+			members: [{ id: 'm1' }],
+			classes: [{ id: 'k1' }],
+			coaches: [{ id: 'c1' }],
+			orders: [{ id: 'o1' }],
+			pages: {
+				members: { total: 57, perPage: 20 },
+				classes: { total: 1, perPage: 20 },
+				orders: { total: 120, perPage: 20 }
+			}
+		});
 		expect(adminApi.getMembers).toHaveBeenCalledWith(1);
 		expect(adminApi.getClasses).toHaveBeenCalledWith(1);
 		expect(adminApi.getOrders).toHaveBeenCalledWith(1);
+		// coaches 取自 getClasses() 的回應——GET /coaches 只打一次(getClasses 內部那次)。
+		expect(adminApi.getCoaches).not.toHaveBeenCalled();
 	});
 });
 

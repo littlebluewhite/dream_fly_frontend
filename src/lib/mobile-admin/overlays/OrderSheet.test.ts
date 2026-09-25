@@ -26,6 +26,8 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 
 		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalledWith(pending!.orderId, 'paid'));
 		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('paid');
+		// R12 Task 3:store 經桌面 applyStatusChange 套回——paidAt 取訂單日期,不再是「剛剛」。
+		expect(get(orders).find((o) => o.id === pending!.id)?.paidAt).toBe(pending!.date);
 	});
 
 	it('API 失敗時不更動 store 狀態，也不關閉 sheet（不假裝成功）', async () => {

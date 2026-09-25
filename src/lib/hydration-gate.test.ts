@@ -393,7 +393,7 @@ describe('createHydrationGate', () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const gate = createHydrationGate({ fetch, apply: () => {} });
 
-		gate.markMutated(); // mobile-admin markOrderPaid 等 demo mutation:無網路尾流
+		gate.markMutated(); // mobile-admin markOrderPaid(先寫後改,PATCH 已落定才 mark)等:無網路尾流
 		const p = gate.refresh();
 
 		expect(fetch).toHaveBeenCalledTimes(1); // 尚未 await 就已出發
