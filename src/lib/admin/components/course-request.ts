@@ -4,7 +4,7 @@
 // C4 批4:Level/Coach 改直取對應 $lib/domain 各 entity 檔(原經 $lib/admin/data 純
 // 轉手,零附加型別事實);ClassRow 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留
 // 原處。Level 與既有 COURSE_LEVEL_LABEL 同源,合併進同一行 import。
-import type { ClassRow } from '$lib/admin/data';
+import { CATS, type ClassRow } from '$lib/admin/data';
 import { COURSE_LEVEL_LABEL, type Level } from '$lib/domain/course-level';
 import type { Coach } from '$lib/domain/coaches';
 import { toCents } from '$lib/public/adapters';
@@ -59,6 +59,35 @@ export function coachIdOf(coachName: string, coaches: Coach[]): string | undefin
  *  ClassRow 的 durationMinutes 走 ClassEditDialog 自己的文字欄位（人數上限/季費/
  *  本期堂數同一種「文字緩衝」模式），新增/編輯兩種流程都由呼叫端（classes/+page.svelte）
  *  另外併入 body，見該檔的 save()（FE#18 起編輯流程也會送出）。 */
+/** 新增課程 flow 的空白 ClassRow（Task 2：桌面 classes/+page.svelte 原本自帶的
+ *  blankClass，與 mobile-admin ClassForm.svelte 的預設值分頭維護，兩邊會逐漸分歧
+ *  ——這裡收斂為桌面的預設值，兩 surface 共用同一份。ClassRow 型別桌面/mobile-admin
+ *  結構相同，純函式可直接吃兩種。 */
+export function blankClassRow(coaches: Coach[]): ClassRow {
+	return {
+		id: '',
+		name: '',
+		level: '基礎',
+		cat: CATS[0],
+		coach: coaches[0]?.name ?? '',
+		room: '',
+		day: '',
+		time: '',
+		enrolled: 0,
+		cap: 12,
+		age: '',
+		price: 3200,
+		status: '招生中',
+		wait: 0,
+		term: '2026 春季',
+		sessions: 16,
+		startDate: '',
+		checkinRate: 0,
+		makeup: 0,
+		durationMinutes: 90
+	};
+}
+
 export function buildCourseBody(k: ClassRow, coaches: Coach[]): CourseWriteBody {
 	return {
 		name: k.name,

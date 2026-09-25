@@ -5,7 +5,12 @@
    * POST/PATCH /courses（見 admin/classes/+page.svelte 的 save()），呼叫端一律
    * 提供 onSave——不再有本地 store 假寫入 fallback（沒有 onSave 時單純不儲存，
    * 比起假裝成功更誠實）。單堂時長欄位比照桌面 ClassEditDialog：新增預設 90
-   * 分鐘，編輯帶入該課程既有的 durationMinutes。 */
+   * 分鐘，編輯帶入該課程既有的 durationMinutes。
+   * Task 2：新增課程的空白 ClassRow 改用 blankClassRow()（course-request.ts）——
+   * 與桌面 classes/+page.svelte 共用同一份預設值，不再各自維護一份會逐漸分歧的
+   * literal（原本 startDate/checkinRate 帶 demo 值、cat 落在 F_CATS[0]＝幼兒體操，
+   * 桌面則是空白 / 0 / CATS[0]＝競技體操）。分類 / 招生狀態選項也改用
+   * admin/data.ts 的 CATS/CLASS_STATUS 單一來源（F_CATS/F_CLASS_STATUS 已退役）。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -13,7 +18,9 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { get } from 'svelte/store';
   import { coaches as coachesStore } from '$lib/mobile-admin/stores';
-  import { F_LEVELS, F_CATS, F_CLASS_STATUS } from '$lib/mobile-admin/form-options';
+  import { F_LEVELS } from '$lib/mobile-admin/form-options';
+  import { CATS, CLASS_STATUS } from '$lib/admin/data';
+  import { blankClassRow } from '$lib/admin/components/course-request';
   import type { ClassRow } from '$lib/mobile-admin/data';
   import type { Coach } from '$lib/domain/coaches';
 
@@ -26,33 +33,7 @@
   /* Coach options fall back to the live store when the host opens the form
    * without passing them (every current call site does). */
   const initCoaches = coaches.length ? coaches : get(coachesStore);
-  /* Seed a COMPLETE ClassRow for new classes — ClassSheet renders term,
-   * startDate, sessions, checkinRate, wait, makeup, so a partial record shows
-   * `undefined` in the detail sheet. */
-  let f: ClassRow = k
-    ? { ...k }
-    : {
-        id: '',
-        name: '',
-        level: '基礎',
-        cat: F_CATS[0],
-        coach: (initCoaches[0] && initCoaches[0].name) || '',
-        room: '',
-        day: '',
-        time: '',
-        enrolled: 0,
-        cap: 12,
-        age: '',
-        price: 3200,
-        status: '招生中',
-        wait: 0,
-        term: '2026 春季',
-        sessions: 16,
-        startDate: '2026/03/01',
-        checkinRate: 90,
-        makeup: 0,
-        durationMinutes: 90
-      };
+  let f: ClassRow = k ? { ...k } : blankClassRow(initCoaches);
 
   let capStr = String(f.cap ?? '');
   let priceStr = String(f.price ?? '');
@@ -84,7 +65,7 @@
     <Input label="班級名稱" bind:value={f.name} />
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
       <Select label="分級" bind:value={f.level} options={F_LEVELS} />
-      <Select label="課程類別" bind:value={f.cat} options={F_CATS} />
+      <Select label="課程類別" bind:value={f.cat} options={CATS} />
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
       <Select label="授課教練" bind:value={f.coach} options={coachOpts.map((c) => c.name)} />
@@ -100,7 +81,7 @@
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
       <Input label="季費 (NT$)" bind:value={priceStr} />
-      <Select label="招生狀態" bind:value={f.status} options={F_CLASS_STATUS} />
+      <Select label="招生狀態" bind:value={f.status} options={CLASS_STATUS} />
     </div>
     <Input label="單堂時長（分鐘）" bind:value={durationStr} />
   </div>

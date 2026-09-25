@@ -31,6 +31,7 @@
   import { STATUS_TONE } from '$lib/mobile-admin/data';
   import { createLoadGate } from '$lib/load-gate';
   import type { ClassRow } from '$lib/mobile-admin/data';
+  import { CATS } from '$lib/admin/data';
   import { createCourse, updateCourse } from '$lib/mobile-admin/api';
   import { buildCourseBody } from '$lib/admin/components/course-request';
   import { filterClasses } from '$lib/admin/components/classes-filter';
@@ -50,7 +51,7 @@
 
   let cat = '全部';
   let q = '';
-  const cats = ['全部', '幼兒體操', '兒童基礎', '競技啦啦隊', '競技體操', '成人體操', '跑酷'];
+  const cats = ['全部', ...CATS];
 
   function openNew() {
     overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: save });
@@ -89,8 +90,8 @@
   }
 
   // Round 2 C3:分類/搜尋改共用桌面 classes-filter.ts 的 filterClasses()(兩邊
-  // ClassRow 結構相同;上方 cats chips 字面量保留——桌面 CATS 不含「全部」且順序相異,
-  // 非同一份 render 資料)。
+  // ClassRow 結構相同)。Task 2:上方 cats chips 改用桌面 admin/data.ts 的 CATS
+  // 單一來源(['全部', ...CATS]),分類順序與桌面一致。
   $: list = filterClasses($classes, { cat, query: q });
 
   // 班級卡片的三顆 icon meta rows(教練/日期時段/教室)——原模板內聯 each 陣列

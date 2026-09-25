@@ -5,8 +5,9 @@
  * 忙碌/離線)與頭像代表色 swatch 選色器皆無後端來源，CoachForm 現改用 isActive
  * (coaches.is_active) 取代，同桌面 CoachEditDialog 的收斂理由。 */
 export { LEVELS as F_LEVELS } from '$lib/domain/course-level';
-export const F_CATS = ['幼兒體操', '兒童基礎', '競技啦啦隊', '競技體操', '成人體操', '跑酷'];
-export const F_CLASS_STATUS = ['招生中', '候補', '額滿'];
+// Task 2：F_CATS/F_CLASS_STATUS 退役——分類 / 招生狀態清單改以 admin/data.ts 的
+// CATS/CLASS_STATUS 為單一來源（ClassForm.svelte 改直取），不再兩邊各刻一份會
+// 逐漸分歧的 literal（mobile-admin 分類順序原本跟桌面不同）。
 export const F_MEMBER_STATUS: [string, string][] = [
 	['active', '在學中'],
 	['warning', '出席偏低'],

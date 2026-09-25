@@ -7,8 +7,8 @@
    *
    * Data now arrives async via getClasses() (public seam): onMount loads it into
    * a three-state gate (loading/error/ready). `classes` is the local mutable
-   * working copy 新增/編輯 edits in place; `coaches` is read-only here (blankClass's
-   * default coach + the ClassEditDialog 授課教練 picker).
+   * working copy 新增/編輯 edits in place; `coaches` is read-only here
+   * (blankClassRow's default coach + the ClassEditDialog 授課教練 picker).
    *
    * Task 8 piece 1: 新增/編輯 now submit to the real POST /courses / PATCH
    * /courses/{id} (createCourse/updateCourse, admin/api.ts) instead of only
@@ -26,7 +26,7 @@
   import { Button, Icon, FilterChip, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { filterClasses } from '$lib/admin/components/classes-filter';
-  import { buildCourseBody } from '$lib/admin/components/course-request';
+  import { buildCourseBody, blankClassRow } from '$lib/admin/components/course-request';
   import { search, toasts } from '$lib/admin/stores';
   // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
   // CATS/ClassRow 是 admin/data.ts 本檔真內容,續留原處。
@@ -34,33 +34,6 @@
   import type { Coach } from '$lib/domain/coaches';
   import { getClasses, createCourse, updateCourse, mapCourse } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';
-
-  // Blank班級 for the 新增 flow (ported from admin.jsx blankClass, enriched with
-  // the ClassRow-only fields the detail view reads). Takes `coaches` as a
-  // parameter (rather than reading the module-level seed) now that coaches
-  // arrive through the getClasses() seam.
-  const blankClass = (coaches: Coach[]): ClassRow => ({
-    id: '',
-    name: '',
-    level: '基礎',
-    cat: CATS[0],
-    coach: coaches[0]?.name ?? '',
-    room: '',
-    day: '',
-    time: '',
-    enrolled: 0,
-    cap: 12,
-    age: '',
-    price: 3200,
-    status: '招生中',
-    wait: 0,
-    term: '2026 春季',
-    sessions: 16,
-    startDate: '',
-    checkinRate: 0,
-    makeup: 0,
-    durationMinutes: 90
-  });
 
   const cats = ['全部', ...CATS];
 
@@ -97,7 +70,7 @@
   function openNew() {
     detail = null;
     addNew = true;
-    edit = blankClass(coaches);
+    edit = blankClassRow(coaches);
     editOpen = true;
   }
   function closeEdit() {

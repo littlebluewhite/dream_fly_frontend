@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody } from './course-request';
-import type { ClassRow } from '$lib/admin/data';
+import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody, blankClassRow } from './course-request';
+import { CATS, type ClassRow } from '$lib/admin/data';
 import type { Coach } from '$lib/domain/coaches';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 
@@ -133,5 +133,40 @@ describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_m
 	it('price_cents uses toCents (NT$ → cents), never a raw *100 inline', () => {
 		const k: ClassRow = { ...BASE_CLASS, price: 3200 };
 		expect(buildCourseBody(k, coaches).price_cents).toBe(320000);
+	});
+});
+
+describe('blankClassRow — 新增課程 flow 的空白 ClassRow（桌面 blankClass 預設，Task 2 單一來源）', () => {
+	const coaches: Coach[] = [
+		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true }
+	];
+
+	it('seeds the desktop defaults, with cat = CATS[0] and coach = coaches[0].name', () => {
+		expect(blankClassRow(coaches)).toEqual({
+			id: '',
+			name: '',
+			level: '基礎',
+			cat: CATS[0],
+			coach: '林雅婷',
+			room: '',
+			day: '',
+			time: '',
+			enrolled: 0,
+			cap: 12,
+			age: '',
+			price: 3200,
+			status: '招生中',
+			wait: 0,
+			term: '2026 春季',
+			sessions: 16,
+			startDate: '',
+			checkinRate: 0,
+			makeup: 0,
+			durationMinutes: 90
+		});
+	});
+
+	it('falls back to an empty coach name when there are no coaches', () => {
+		expect(blankClassRow([]).coach).toBe('');
 	});
 });
