@@ -20,12 +20,13 @@
  * refreshSubscriptions/refreshPoints 屬 open-reset 時刻的元件佈線，不入 deps。
  *
  * 雙 surface 共用（C2/R11：mobile CartSheet 原本手焊一台同構的機器，已退役改吃本檔，
- * 經 $lib/mobile/stores 的 seam 取用）。兩個消費者的生命週期不同層，機器本身不分岔：
- * 桌面 CheckoutDialog 整個結帳期間都不卸載，用 setOpen 的閉→開邊沿換發 key／偵測飛行中
- * resumed；行動版 CartSheet 是 mount 級（OverlayHost `{#if}` 每次開啟即重掛），每開一次
- * 就 new 一顆 controller，**刻意不呼叫 setOpen**——建構期產生的那把 key 即本次結帳流程的
- * key，失敗重試沿用同一把由 confirmPay 的 catch 分支既有語意提供（這兩條由本檔單測的
- * 「mount 級生命週期」describe 保存釘住）。
+ * 經 $lib/mobile/stores 的 seam 取用）。C3/R13 起兩個消費者的生命週期同層，機器本身
+ * 仍不分岔：桌面 CheckoutDialog 整個結帳期間都不卸載；行動版改為 $lib/mobile/stores.ts
+ * 的模組級單例（`export const checkout`，與 `cart` 同生命週期，比 CartSheet 這顆 mount
+ * 級元件活得久，OverlayHost `{#if}` 每次開闔都拿同一顆）。兩側都用 setOpen 的閉→開邊沿
+ * 換發 key／偵測飛行中 resumed——CartSheet 隨掛載/卸載呼叫 setOpen(true/false)，若 sheet
+ * 在付款飛行中被關閉（如導航觸發的 closeAll）又重開，走 resumedInFlight，同一把 key
+ * 續用、paying 繼續鎖住，不會開出第二張真訂單。
  *
  * 無 svelte 元件相依、建構零 dep 呼叫（SSR 安全）。本抽取取代 ADR 0008 §「有意識保留：
  * CheckoutDialog 的防重複扣款不抽成純模組」的當時裁決（Round 5；render 測試原封全綠 =

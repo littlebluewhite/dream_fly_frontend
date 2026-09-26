@@ -192,11 +192,12 @@ describe('idempotencyKey 生命週期（機器面——render 測試從未斷言
 	});
 });
 
-/* mount 級消費者（mobile CartSheet：OverlayHost 的 `{#if}` 每次開啟即重掛，所以每開
- * 一次就 new 一顆 controller，全程不呼叫 setOpen）依賴的兩條既有語意——建構期就備妥
- * 一把可用的 key、每個實例各持一把。桌面 CheckoutDialog 的 setOpen 佈線遮住了這兩條
- * （它的 key 永遠在 freshCheckout 換發過），保存測試在此明文釘住。 */
-describe('mount 級生命週期（不呼叫 setOpen 的消費者）', () => {
+/* 建構期即備妥可用 key、每個實例各持一把——這是 controller 本身的通用保證，不繫在
+ * 特定消費者身上。C3/R13 起 mobile CartSheet 已改用 setOpen 佈線的模組級單例（見
+ * $lib/mobile/stores.ts），不再是這裡描述的「不呼叫 setOpen」消費者；但保證本身仍
+ * 值得保存測試釘住——桌面 CheckoutDialog 的 setOpen 佈線遮住了這兩條（它的 key 永遠
+ * 在 freshCheckout 換發過），只有這裡的無渲染單測看得到。 */
+describe('建構期即備妥可用 key（不呼叫 setOpen 的消費者）', () => {
 	it('不呼叫 setOpen 也能送單：建構期產生的 key 直接可用，失敗重試沿用同一把', async () => {
 		deps.placeOrder.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(CONFIRMED);
 		expect((await ctrl.confirmPay(input())).kind).toBe('orderFailed');
@@ -205,7 +206,7 @@ describe('mount 級生命週期（不呼叫 setOpen 的消費者）', () => {
 		expect(keyOfCall(1)).toBe(keyOfCall(0)); // 重試沿用同一把（後端辨識重放）
 	});
 
-	it('兩個實例各持一把不同的 key：重新掛載 = 全新的一次結帳嘗試', async () => {
+	it('每個實例各持一把 key：不同建構彼此獨立，互不影響', async () => {
 		const otherDeps = makeDeps();
 		const other = createCheckoutController(otherDeps);
 		deps.placeOrder.mockResolvedValue(CONFIRMED);

@@ -172,3 +172,137 @@ describe('CartSheet — 課程數量鎖 1（報名不是數量，同桌面 membe
     expect(queryByLabelText('減')).toBeNull();
   });
 });
+
+/* C3(R13)：checkout 升為 $lib/mobile/stores.ts 的模組級單例，生命週期比 CartSheet
+ * 這顆 mount 級元件活得久（見 stores.ts 與 checkout-controller.ts 檔頭）。checkout
+ * 是跨測試共用的單例，不隨每個 it 重建——每個 it 結束前都要讓自己開出的 in-flight
+ * promise 落地，否則殘留的 paying=true 會污染下一個 it（見各 it 結尾的 resolve）。 */
+describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checkout 是模組級單例）', () => {
+  /** 手動控制 resolve 時序的 promise，用於停在「飛行中」驗證關閉守衛與 resumedInFlight。 */
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  /** 開到付款中：加一門課、前往付款、確認付款，等 POST /orders 真的發出且停在飛行中。 */
+  async function renderInFlightPayment(onClose: () => void = () => {}) {
+    cart.add(COURSE);
+    const d = deferred<unknown>();
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/orders' && method === 'POST') return d.promise;
+      if (path === '/points/me') return { balance: 0, ledger: [] };
+      return undefined; // DELETE /cart、POST /cart/items
+    });
+    const utils = render(CartSheet, { props: { onClose } });
+    await fireEvent.click(utils.getByText(/前往付款/));
+    await fireEvent.click(utils.getByText(/確認付款/));
+    await vi.waitFor(() => {
+      const calls = vi.mocked(api).mock.calls.filter(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+      expect(calls).toHaveLength(1);
+    });
+    return { ...utils, resolveOrder: d.resolve };
+  }
+
+  /** 兩次 POST /orders 呼叫各自帶的 Idempotency-Key。 */
+  function idempotencyKeysOf(calls: [string, RequestInit?][]) {
+    return calls
+      .filter(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST')
+      .map(([, i]) => (i as RequestInit & { headers: Record<string, string> }).headers['Idempotency-Key']);
+  }
+
+  it('付款中 X／Esc／遮罩都關不掉', async () => {
+    const onClose = vi.fn();
+    const { getByLabelText, getByText, container, resolveOrder } = await renderInFlightPayment(onClose);
+
+    await fireEvent.click(getByLabelText('關閉'));
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    const scrim = container.querySelector('.df-scrim');
+    expect(scrim).toBeTruthy();
+    if (scrim) await fireEvent.click(scrim);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // 讓本測試開出的 in-flight promise 真的落地（paying 復位）——checkout 是跨測試
+    // 共用的模組級單例，只確認呼叫次數不夠，不等到 confirmPay 的 finally 跑完，
+    // 殘留的 paying=true 會污染下一個 it。
+    resolveOrder(SAMPLE_ORDER);
+    await vi.waitFor(() => expect(getByText('報名完成！')).toBeInTheDocument());
+  });
+
+  it('付款中卸載再重開：只有 1 次 POST /orders，重開後第二次確認被擋（resumedInFlight 鎖住 paying）', async () => {
+    const { unmount, resolveOrder } = await renderInFlightPayment();
+    unmount(); // 模擬 sheet 被導航觸發的 closeAll 關閉——不經 close() 守衛，直接卸載
+
+    const reopened = render(CartSheet, { props: { onClose: () => {} } });
+    await vi.waitFor(() => expect(reopened.getByText('處理中…')).toBeInTheDocument()); // resumedInFlight：paying 延續
+
+    const ordersBefore = idempotencyKeysOf(vi.mocked(api).mock.calls as [string, RequestInit?][]);
+    expect(ordersBefore).toHaveLength(1);
+
+    await fireEvent.click(reopened.getByText('處理中…')); // 按鈕 disabled，點了也不會再送單
+    const ordersAfter = idempotencyKeysOf(vi.mocked(api).mock.calls as [string, RequestInit?][]);
+    expect(ordersAfter).toHaveLength(1);
+
+    resolveOrder(SAMPLE_ORDER);
+    await vi.waitFor(() => expect(reopened.getByText('報名完成！')).toBeInTheDocument());
+  });
+
+  it('409 之後重試沿用同一個 Idempotency-Key', async () => {
+    cart.add(COURSE);
+    let call = 0;
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/orders' && method === 'POST') {
+        call += 1;
+        if (call === 1) throw new ApiError(409, 'course is full');
+        return SAMPLE_ORDER;
+      }
+      if (path === '/points/me') return { balance: 0, ledger: [] };
+      return undefined;
+    });
+    const { getByText } = render(CartSheet, { props: { onClose: () => {} } });
+
+    await fireEvent.click(getByText(/前往付款/));
+    await fireEvent.click(getByText(/確認付款/));
+    // 失敗後按鈕從「處理中…」變回「確認付款」＝ paying 已復位，可以重試——不用
+    // toasts 判斷本次已落地：toasts.notify 對相同 tone/title/body 會 dedup（bump
+    // 既有 entry，見 $lib/stores/toasts.ts），長度增量在多次 409 場景下不可靠。
+    await vi.waitFor(() => expect(getByText(/確認付款/)).toBeInTheDocument());
+
+    await fireEvent.click(getByText(/確認付款/)); // 重試——沿用同一把 key，購物車未清空未擋按鈕
+    await vi.waitFor(() => expect(getByText('報名完成！')).toBeInTheDocument());
+
+    const keys = idempotencyKeysOf(vi.mocked(api).mock.calls as [string, RequestInit?][]);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('成功後重開是全新流程：新的一把 Idempotency-Key', async () => {
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/orders' && method === 'POST') return SAMPLE_ORDER;
+      if (path === '/points/me') return { balance: 0, ledger: [] };
+      return undefined;
+    });
+
+    cart.add(COURSE);
+    const first = render(CartSheet, { props: { onClose: () => {} } });
+    await fireEvent.click(first.getByText(/前往付款/));
+    await fireEvent.click(first.getByText(/確認付款/));
+    await vi.waitFor(() => expect(first.getByText('報名完成！')).toBeInTheDocument());
+    first.unmount(); // setOpen(false)，讓下一次掛載偵測得到閉→開邊沿
+
+    cart.add(COURSE); // 上一單成功已清空購物車，重開下一單要重新加
+    const second = render(CartSheet, { props: { onClose: () => {} } });
+    await fireEvent.click(second.getByText(/前往付款/));
+    await fireEvent.click(second.getByText(/確認付款/));
+    await vi.waitFor(() => expect(second.getByText('報名完成！')).toBeInTheDocument());
+
+    const keys = idempotencyKeysOf(vi.mocked(api).mock.calls as [string, RequestInit?][]);
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).not.toBe(keys[0]); // freshCheckout 換發新 key
+  });
+});

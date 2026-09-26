@@ -18,12 +18,13 @@
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   // 卡 3：points/refreshPoints（member/stores）與 applyCouponCode/orderErrorMessage
   // （member/checkout）改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
   // C6：再取用 subscriptions/chargeableLines（同經 seam），供可計費預覽過濾。
-  // C2(R11)：createCheckoutController 同經 seam——付款狀態機與桌面共用（見下方）。
-  import { cart, toasts, placeOrder, points, refreshPoints, applyCouponCode, orderErrorMessage, subscriptions, chargeableLines, createCheckoutController } from '$lib/mobile/stores';
+  // C2(R11)/C3(R13)：checkout 同經 seam 取用——付款狀態機與桌面共用同一份機器，這裡
+  // 拿的是 stores.ts 的模組級單例（見下方）。
+  import { cart, toasts, points, refreshPoints, applyCouponCode, orderErrorMessage, subscriptions, chargeableLines, checkout } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import { ME } from '$lib/domain/member-app';
   import { checkoutMath } from '$lib/checkout-math';
@@ -34,13 +35,12 @@
    * CheckoutDialog 共用同一顆 checkout-controller（C2/R11 雙生收斂，經 seam 取用）；
    * 本元件退化為快照解構鏡射 + 表單/預覽輸入 + outcome → toast 文案的薄 adapter。
    *
-   * **刻意不呼叫 setOpen**：controller 建構時產生的那一把 key，就是這次結帳流程唯一
-   * 的 key。CartSheet 隨 sheet 開關掛載/卸載（見 OverlayHost：`{#if $overlay.sheet}
-   * <svelte:component .../>`），每次重新開啟本來就是全新的元件實例、全新的一顆
-   * controller、全新的一次結帳嘗試——不需要桌面那種「閉→開邊沿換發／付款飛行中重開
-   * 不重置」的對話框狀態機（那是因為桌面 dialog 整個結帳期間都不卸載，見該檔註解）。
-   * 失敗重試沿用同一把 key，由 confirmPay 的 catch 分支既有語意提供（不換發）。 ── */
-  const checkout = createCheckoutController({ placeOrder });
+   * C3/R13：controller 改為 stores.ts 的模組級單例，生命週期比本元件（CartSheet 隨
+   * sheet 開關掛載/卸載，見 OverlayHost：`{#if $overlay.sheet} <svelte:component .../>`）
+   * 活得久——不再每開一次就 new 一顆。掛載/卸載時呼叫 setOpen(true/false)（同桌面
+   * CheckoutDialog 的 $checkoutOpen 閉→開偵測），讓「sheet 在付款飛行中被外力關閉
+   * （如導航觸發的 closeAll）又重開」也能延續同一把 idempotencyKey、鎖住 paying，
+   * 不會開出第二張真訂單。 ── */
   let step = 0;
   let paying = false;
   // paid：付款時的成交快照（金額/點數以 API 回應為準，非本地試算 m.*），購物車清空後
@@ -55,11 +55,20 @@
   let codeErr = '';
   let usePoints = false;
 
-  // 開啟即水合真點數餘額——本地 mock 殘值只是 fail-safe，折抵預覽必須用真餘額
-  // （同桌面 CheckoutDialog 開啟時呼叫 refreshPoints() 的既有慣例）。
+  // 掛載 = setOpen(true)、卸載 = setOpen(false)（C3/R13：controller 是模組級單例，
+  // 靠這兩個邊沿讓機器知道「本次是哪一次結帳嘗試」）。只在 freshCheckout（無飛行中）
+  // 才水合真點數餘額——本地 mock 殘值只是 fail-safe，折抵預覽必須用真餘額；
+  // resumedInFlight（付款飛行中被外力關閉又重開）不重新水合，同桌面 CheckoutDialog
+  // 的既有慣例（見該檔 $: { checkout.setOpen(...) } 反應塊）。
   // best-effort：失敗就沿用目前的 store 值，送單時後端仍是最終防線。
   onMount(() => {
-    void refreshPoints().catch(() => {});
+    const outcome = checkout.setOpen(true);
+    if (outcome.kind === 'freshCheckout') {
+      void refreshPoints().catch(() => {});
+    }
+  });
+  onDestroy(() => {
+    checkout.setOpen(false);
   });
 
   // C6：預覽金額只算「可計費項目」——chargeableLines 濾掉已持有的 pass，與請款
@@ -102,6 +111,14 @@
       toasts.notify('error', '結帳失敗', orderErrorMessage(outcome.error));
     }
   }
+  // 付款請求飛行中不可關閉（X／遮罩／Esc 都走 Sheet 的 onClose，見下方 <Sheet
+  // onClose={close}>）：同桌面 CheckoutDialog 的 close() 守衛——鎖住直到 promise 落定，
+  // 否則使用者會被跟付款結果隔開。導航觸發的 closeAll() 不經這裡，繞過守衛直接關閉
+  // （見 stores.ts 的 overlay.closeAll），重開走 onMount 的 resumedInFlight。
+  function close() {
+    if (paying) return;
+    onClose();
+  }
   function done() {
     onClose();
   }
@@ -109,7 +126,7 @@
 
 <Sheet
   open
-  {onClose}
+  onClose={close}
   maxHeight="92%"
   title={step === 2 ? '報名完成' : '購物車與結帳'}
   sub={$cart.length > 0 && step < 2 ? $cart.length + ' 門課程' : ''}

@@ -8,7 +8,6 @@ import { cart as libCart } from '$lib/cart';
 import * as mobileStores from './stores';
 import * as memberStores from '$lib/member/stores';
 import * as memberCheckout from '$lib/member/checkout';
-import * as memberCheckoutController from '$lib/member/checkout-controller';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
 // 在 TS strict 下無法編譯——換成回傳完整 Course 的 builder（同
@@ -240,9 +239,27 @@ describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同�
 		expect(mobileStores.chargeableLines).toBe(memberCheckout.chargeableLines);
 	});
 	// C2(R11):CartSheet 手焊的結帳機退役，改與桌面 CheckoutDialog 共用同一顆
-	// checkout-controller 工廠——經 seam 取用（同 leave-form/cancel-leave 的既有慣例）。
-	// 源路徑漂移或改成本地重包裝（＝雙生復辟）在這裡直接紅燈。
-	it('member/checkout-controller 的 createCheckoutController 同參照(CartSheet 消費)', () => {
-		expect(mobileStores.createCheckoutController).toBe(memberCheckoutController.createCheckoutController);
+	// checkout-controller 工廠。C3(R13)：工廠本身不再逐次轉出讓 CartSheet 自己 new——
+	// 唯一消費者變成本檔的模組級單例 `checkout`（與 cart 同生命週期，比 CartSheet 這顆
+	// mount 級元件活得久）。身分釘（工廠是否同參照）換成接線釘：斷言工廠實際上是被
+	// 以 `{ placeOrder }` 呼叫來建構這顆單例——源路徑漂移或改成本地重包裝（＝雙生
+	// 復辟）在這裡直接紅燈。
+	it('checkout 單例以本檔的 { placeOrder } 接線建構（模組級單例，非身分再轉出）', async () => {
+		vi.resetModules();
+		const spy = vi.fn(() => ({
+			subscribe: vi.fn(() => () => {}),
+			setOpen: vi.fn(),
+			toPayment: vi.fn(),
+			backToCart: vi.fn(),
+			confirmPay: vi.fn()
+		}));
+		vi.doMock('$lib/member/checkout-controller', () => ({ createCheckoutController: spy }));
+		try {
+			const fresh = await import('./stores');
+			expect(spy).toHaveBeenCalledWith({ placeOrder: fresh.placeOrder });
+		} finally {
+			vi.doUnmock('$lib/member/checkout-controller');
+			vi.resetModules();
+		}
 	});
 });

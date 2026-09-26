@@ -52,12 +52,17 @@ export const overlay = createOverlay<MobilePushRegistry, MobileSheetRegistry>();
 // 直取 $lib/member/stores。
 export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
 
-/* ---------- 結帳付款狀態機（C2/R11：desktop/mobile 雙生收斂的 surface seam） ---------- */
+/* ---------- 結帳付款狀態機（C2/R11 起、C3/R13 升級：desktop/mobile 雙生收斂的 surface
+ * seam） ---------- */
 // CartSheet 的付款生命週期（step/paying/paid、idempotencyKey、防重複扣款守衛）與桌面
-// CheckoutDialog 共用同一份 $lib/member/checkout-controller 工廠——mobile 元件一律經這裡
-// 取用（同上 leave-form/cancel-leave 的 re-export 慣例）。CartSheet 是 mount 級生命週期
-// （OverlayHost 每次開啟即重掛），不呼叫 setOpen，詳見該檔與 controller 檔頭。
-export { createCheckoutController } from '$lib/member/checkout-controller';
+// CheckoutDialog 共用同一份 $lib/member/checkout-controller 工廠。C3/R13 起不再逐次
+// re-export 工廠讓 CartSheet 自己 new——工廠轉出失去唯一消費者，退役；改在這裡建一顆
+// 模組級單例 `checkout`（與下方 `cart` 同生命週期，比 CartSheet 這顆 mount 級元件活得
+// 久），CartSheet 隨 sheet 開關呼叫 setOpen(true/false)，語意同桌面 $checkoutOpen 的
+// 閉→開偵測——sheet 若在付款飛行中被外力關閉（如導航觸發的 closeAll）又重開，走
+// resumedInFlight，同一把 key 續用、paying 繼續鎖住，不會開出第二張真訂單。詳見
+// controller 檔頭與 CartSheet 該段註解。
+import { createCheckoutController } from '$lib/member/checkout-controller';
 
 /* ---------- 取消請假（卡 6：desktop/mobile 雙生收斂的 surface seam） ---------- */
 // MyCourseDetail 的取消請假機制（busy 守衛 + outcome 攜原始錯誤）與桌面 mine 頁
@@ -122,6 +127,12 @@ export const cart = { // 介面不膨脹:只出 4 個成員
 	remove: cartBase.remove,
 	clear: cartBase.clear
 };
+
+// C3/R13：checkout 與 cart 同生命週期（模組級單例，比 CartSheet 這顆 mount 級元件
+// 活得久）——deps 只有 placeOrder 一支，即下方緊接著的 placeOrder（函式宣告已提升，
+// 這裡引用它先於其文字定義出現不影響執行期）。詳見上方段落註解與 checkout-controller
+// 檔頭。
+export const checkout = createCheckoutController({ placeOrder });
 
 /* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
  * C4 收斂：原本焊在這裡的「同步購物車 → POST /orders → 下單後刷新 → 清購物車」
