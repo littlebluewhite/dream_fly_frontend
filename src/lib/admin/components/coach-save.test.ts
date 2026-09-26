@@ -1,5 +1,20 @@
 import { describe, it, expect, vi } from 'vitest';
-import { saveNewCoach, saveCoachEdit, type SaveNewCoachDeps, type SaveCoachEditDeps } from './coach-save';
+import {
+	saveNewCoach,
+	saveCoachEdit,
+	checkNewCoach,
+	checkCoachEdit,
+	COACH_EMAIL_ERROR,
+	COACH_NAME_ERROR,
+	COACH_TITLE_ERROR,
+	COACH_TITLE_LENGTH_ERROR,
+	COACH_PASSWORD_ERROR,
+	type SaveNewCoachDeps,
+	type SaveCoachEditDeps,
+	type NewCoachDraft,
+	type CoachEditDraft,
+	type CoachErrors
+} from './coach-save';
 import type { CoachFormValues } from '$lib/admin/data';
 import { ApiError } from '$lib/api/client';
 
@@ -189,5 +204,59 @@ describe('saveCoachEdit — 編輯教練(姓名 trim 判定 + updateMember/updat
 			specialties: ['吊環'],
 			is_active: false
 		});
+	});
+});
+
+/* R13 Task 4(C2):表單驗證與標籤拆分收進本模組(checkNewCoach/checkCoachEdit)，桌面
+ * CoachEditDialog 與 mobile CoachForm 共用；上限對齊後端——姓名 2–100、密碼 8–128
+ * (POST /users)，職稱 1–100(coaches.title)。 */
+const NEW_DRAFT: NewCoachDraft = { email: 'coach@test.com', password: 'password123', name: '新教練', title: '兼任教練', tagsText: '', isActive: true };
+const EDIT_DRAFT: CoachEditDraft = { name: '林雅婷', title: '資深教練', tagsText: '競技體操、競技啦啦隊', isActive: true };
+
+describe('checkNewCoach — 新增教練表單驗證', () => {
+	it('valid ⇒ trim 後的 CoachFormValues，標籤以 、 , ， 拆分並去空白', () => {
+		expect(checkNewCoach({ ...NEW_DRAFT, email: ' coach@test.com ', name: ' 新教練 ', title: ' 兼任教練 ', tagsText: '跑酷、 體操, 成人體操，、' })).toEqual({
+			kind: 'valid',
+			values: { email: 'coach@test.com', password: 'password123', name: '新教練', title: '兼任教練', tags: ['跑酷', '體操', '成人體操'], isActive: true }
+		});
+	});
+
+	it.each<[string, Partial<NewCoachDraft>, CoachErrors]>([
+		['email 空白', { email: ' ' }, { email: COACH_EMAIL_ERROR }],
+		['姓名 1 字', { name: '林' }, { name: COACH_NAME_ERROR }],
+		['姓名 101 字', { name: '林'.repeat(101) }, { name: COACH_NAME_ERROR }],
+		['職稱空白', { title: '   ' }, { title: COACH_TITLE_ERROR }],
+		['職稱 101 字', { title: '教'.repeat(101) }, { title: COACH_TITLE_LENGTH_ERROR }],
+		['密碼 7 碼', { password: '1234567' }, { password: COACH_PASSWORD_ERROR }],
+		['密碼 129 碼', { password: 'a'.repeat(129) }, { password: COACH_PASSWORD_ERROR }]
+	])('%s ⇒ invalid', (_l, over, errors) => {
+		const r = checkNewCoach({ ...NEW_DRAFT, ...over });
+		expect(r.kind === 'invalid' && r.errors).toEqual(errors);
+	});
+
+	it.each<[string, Partial<NewCoachDraft>]>([
+		['姓名 2 字', { name: '林婷' }],
+		['職稱 100 字', { title: '教'.repeat(100) }],
+		['密碼 8 碼', { password: '12345678' }],
+		['密碼 128 碼', { password: 'a'.repeat(128) }]
+	])('邊界 %s ⇒ valid', (_l, over) => {
+		expect(checkNewCoach({ ...NEW_DRAFT, ...over }).kind).toBe('valid');
+	});
+});
+
+describe('checkCoachEdit — 編輯教練表單驗證', () => {
+	it('valid ⇒ CoachFormValues(email/password 恆為空字串)', () => {
+		expect(checkCoachEdit({ ...EDIT_DRAFT, isActive: false })).toEqual({
+			kind: 'valid',
+			values: { email: '', password: '', name: '林雅婷', title: '資深教練', tags: ['競技體操', '競技啦啦隊'], isActive: false }
+		});
+	});
+
+	it.each<[string, Partial<CoachEditDraft>, CoachErrors]>([
+		['姓名空白', { name: '  ' }, { name: COACH_NAME_ERROR }],
+		['職稱空白', { title: '' }, { title: COACH_TITLE_ERROR }]
+	])('%s ⇒ invalid', (_l, over, errors) => {
+		const r = checkCoachEdit({ ...EDIT_DRAFT, ...over });
+		expect(r.kind === 'invalid' && r.errors).toEqual(errors);
 	});
 });

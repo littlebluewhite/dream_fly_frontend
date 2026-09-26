@@ -12,8 +12,9 @@
    *
    * Task 8 piece 1: 新增/編輯 now submit to the real POST /courses / PATCH
    * /courses/{id} (createCourse/updateCourse, admin/api.ts) instead of only
-   * mutating `classes` locally. buildCourseBody() (course-request.ts) assembles
-   * the request body from the edited ClassRow; on success the response is mapped
+   * mutating `classes` locally. The dialog hands over a validated ValidCourse;
+   * buildCreateCourseBody()/buildUpdateCourseBody() (course-request.ts, R13 Task 4)
+   * assemble the request body; on success the response is mapped
    * back through the same mapCourse() the read seam uses (so the row shown here
    * matches exactly what a fresh getClasses() would render) and merged into
    * `classes`; on failure the list is left untouched and a 繁中 error toast shows
@@ -26,7 +27,7 @@
   import { Button, Icon, FilterChip, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { filterClasses } from '$lib/admin/components/classes-filter';
-  import { buildCourseBody, blankClassRow } from '$lib/admin/components/course-request';
+  import { buildCreateCourseBody, buildUpdateCourseBody, blankClassRow, type ValidCourse } from '$lib/admin/components/course-request';
   import { search, toasts } from '$lib/admin/stores';
   // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
   // CATS/ClassRow 是 admin/data.ts 本檔真內容,續留原處。
@@ -89,18 +90,18 @@
     });
   }
 
-  async function save(updated: ClassRow, durationMinutes: number) {
-    const body = buildCourseBody(updated, coaches);
+  async function save(course: ValidCourse) {
     const coachNameById = new Map(coaches.map((c) => [c.id, c.name]));
+    const id = edit?.id ?? '';
     try {
       if (addNew) {
-        const created = await createCourse({ ...body, duration_minutes: durationMinutes });
+        const created = await createCourse(buildCreateCourseBody(course));
         classes = [mapCourse(created, coachNameById), ...classes];
-        toasts.notify('success', '已新增班級', '「' + updated.name + '」已建立。');
+        toasts.notify('success', '已新增班級', '「' + course.name + '」已建立。');
       } else {
-        const saved = await updateCourse(updated.id, { ...body, duration_minutes: durationMinutes });
-        classes = classes.map((c) => (c.id === updated.id ? mapCourse(saved, coachNameById) : c));
-        toasts.notify('success', '已儲存課程', '「' + updated.name + '」已更新。');
+        const saved = await updateCourse(id, buildUpdateCourseBody(course));
+        classes = classes.map((c) => (c.id === id ? mapCourse(saved, coachNameById) : c));
+        toasts.notify('success', '已儲存課程', '「' + course.name + '」已更新。');
       }
       closeEdit();
     } catch (e) {

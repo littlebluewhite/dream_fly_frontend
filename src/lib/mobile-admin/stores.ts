@@ -44,7 +44,7 @@ import {
 	type OpsPages,
 	type PageInfo
 } from './api';
-import { buildCourseBody } from '$lib/admin/components/course-request';
+import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import { applyStatusChange } from '$lib/admin/components/orders-filter';
 import type { OrderStatus } from '$lib/api/wire';
 
@@ -147,14 +147,14 @@ export async function saveMember(id: string, body: UpdateMemberBody): Promise<vo
 	await refetchAfterWrite();
 }
 
-/** 課程 body 由桌面 buildCourseBody() 組(兩邊 ClassRow/Coach 形狀相同),coach_id 對照
- *  當下的 $coaches;duration_minutes 由表單另給(ClassRow 無此欄)。 */
-export async function addCourse(row: ClassRow, durationMinutes: number): Promise<void> {
-	await createCourse({ ...buildCourseBody(row, get(coaches)), duration_minutes: durationMinutes });
+/** 課程 body 由桌面 course-request.ts 組(R13 Task 4):ClassForm 已驗證成 ValidCourse
+ *  (coach_id 在表單端對照 $coaches 解出),這裡只挑 POST/PATCH 對應的 builder。 */
+export async function addCourse(course: ValidCourse): Promise<void> {
+	await createCourse(buildCreateCourseBody(course));
 	await refetchAfterWrite();
 }
-export async function saveCourse(row: ClassRow, durationMinutes: number): Promise<void> {
-	await updateCourse(row.id, { ...buildCourseBody(row, get(coaches)), duration_minutes: durationMinutes });
+export async function saveCourse(id: string, course: ValidCourse): Promise<void> {
+	await updateCourse(id, buildUpdateCourseBody(course));
 	await refetchAfterWrite();
 }
 

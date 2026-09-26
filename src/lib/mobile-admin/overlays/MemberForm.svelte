@@ -9,7 +9,9 @@
    * MemberCreateDialog/MemberEditDialog 兩支各自負責一種模式的分工——但保留單一
    * 元件、內部切換（不拆兩個檔案），對齊行動版既有的「一個 overlay 元件」慣例。
    * 儲存 → onSave(body, isNew)；沒有 onSave 時單純不送出，不再有本地 store 假寫入
-   * fallback（同 ClassForm 的決定：沒有後端呼叫者就不假裝成功）。 */
+   * fallback（同 ClassForm 的決定：沒有後端呼叫者就不假裝成功）。
+   * R13 Task 4：驗證與 body 組裝改用桌面同一份 member-request.ts（checkNewMember/
+   * checkMemberEdit），主按鈕 disabled 依驗證結果。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -19,6 +21,7 @@
   import type { MemberRow } from '$lib/mobile-admin/data';
   import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
   import { initialOf } from '$lib/api/wire';
+  import { checkNewMember, checkMemberEdit } from '$lib/admin/components/member-request';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
@@ -31,34 +34,18 @@
   let name = m?.name ?? '';
   let phone = m?.phone ?? '';
   let password = '';
-  let passwordError = '';
 
   // 編輯欄位（is_active 由既有 status 推導：只有 'active' 視為啟用中）
   let isActive = m ? m.status === 'active' : true;
 
   $: initial = initialOf(name, '學');
-  $: valid = isNew
-    ? !!email.trim() && !!name.trim() && password.length >= 8
-    : !!name.trim();
+  $: check = isNew
+    ? checkNewMember({ email, name, phone, password, birthDate: '' })
+    : checkMemberEdit({ name, phone, isActive });
 
   function save() {
-    if (isNew) {
-      if (password.length < 8) {
-        passwordError = '密碼至少需要 8 碼';
-        return;
-      }
-      passwordError = '';
-      const body: CreateMemberBody = { email: email.trim(), name: name.trim(), password };
-      const trimmedPhone = phone.trim();
-      if (trimmedPhone) body.phone = trimmedPhone;
-      onSave?.(body, true);
-    } else {
-      if (!m) return;
-      const body: UpdateMemberBody = { name: name.trim(), is_active: isActive };
-      const trimmedPhone = phone.trim();
-      if (trimmedPhone) body.phone = trimmedPhone;
-      onSave?.(body, false);
-    }
+    if (check.kind !== 'valid') return;
+    onSave?.(check.body, isNew);
     onClose();
   }
 </script>
@@ -90,7 +77,6 @@
         type="password"
         bind:value={password}
         placeholder="至少 8 碼"
-        error={passwordError}
       />
     {:else}
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top:4px;">
@@ -102,7 +88,7 @@
 
   <svelte:fragment slot="footer">
     <Button variant="secondary" on:click={onClose}>取消</Button>
-    <Button variant="primary" disabled={!valid} style="flex:1;" on:click={save}>
+    <Button variant="primary" disabled={check.kind !== 'valid'} style="flex:1;" on:click={save}>
       <Icon name="check" size={16} style="margin-right:6px;" />{isNew ? '建立學員' : '儲存資料'}
     </Button>
   </svelte:fragment>

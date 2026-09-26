@@ -4,9 +4,9 @@ import MemberForm from './MemberForm.svelte';
 import type { MemberRow } from '$lib/mobile-admin/data';
 
 /* Task 20：學員新增/編輯改接真 POST /users、PATCH /users/{id}（契約 §3.2 兩個端點
- * 接受的欄位完全不同）——這裡驗證新增/編輯兩種模式各自組出正確的 body 並呼叫
- * onSave(body, isNew)，取代舊版驗證「MemberRow 假資料形狀完整」的測試（那個形狀
- * 本身已隨 data.ts 的 MemberRow 瘦身而不存在）。 */
+ * 接受的欄位完全不同）——這裡驗證新增/編輯兩種模式各自呼叫 onSave(body, isNew)。
+ * R13 Task 4：body 規則住 member-request.ts(桌面同一份)，由 member-request.test.ts
+ * 覆蓋；這裡只剩接線與 disabled。 */
 
 const EXISTING: MemberRow = {
 	id: 'u1',
@@ -36,20 +36,7 @@ describe('MemberForm — 新增模式（POST /users）', () => {
 		);
 	});
 
-	it('omits phone when left blank (undefined, not empty string)', async () => {
-		const onSave = vi.fn();
-		render(MemberForm, { props: { onClose: () => {}, onSave } });
-
-		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
-		await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '測試生' } });
-		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
-		await fireEvent.click(screen.getByText('建立學員').closest('button')!);
-
-		const body = onSave.mock.calls[0][0];
-		expect('phone' in body).toBe(false);
-	});
-
-	it('blocks submit with an inline error when the password is under 8 chars (does not call onSave)', async () => {
+	it('disables submit when the password is under 8 chars (does not call onSave)', async () => {
 		const onSave = vi.fn();
 		render(MemberForm, { props: { onClose: () => {}, onSave } });
 

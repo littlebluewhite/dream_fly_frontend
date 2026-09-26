@@ -34,6 +34,7 @@ import {
 } from './stores';
 import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS } from './data';
 import { COACHES } from '$lib/domain/coaches';
+import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import {
 	getOpsCollections,
 	getMessages,
@@ -524,16 +525,20 @@ describe('ops 寫入動詞', () => {
 		});
 	});
 
-	describe('addCourse(row, durationMinutes)', () => {
-		it('成功 → createCourse(buildCourseBody(row, $coaches) + duration_minutes) → 重抓恰一次,classes 反映結果', async () => {
+	// R13 Task 4:課程動詞吃 ClassForm 驗證過的 ValidCourse(coach_id 已在表單端解出)，
+	// body 組裝的逐欄規則由 course-request.test.ts 覆蓋，這裡只驗接線與重抓語意。
+	const COURSE: ValidCourse = {
+		name: '新班級', level: '基礎', category: '兒童基礎', coachId: COACHES[0].id, scheduleText: null,
+		minAge: 8, maxAge: null, maxStudents: 12, price: 3200, durationMinutes: 75
+	};
+
+	describe('addCourse(course)', () => {
+		it('成功 → createCourse(buildCreateCourseBody(course)) → 重抓恰一次,classes 反映結果', async () => {
 			reset();
-			const coach = COACHES[0];
-			const row = { ...CLASSES[0], name: '新班級', coach: coach.name };
 			vi.mocked(createCourse).mockResolvedValueOnce({} as never);
 			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
-			await addCourse(row, 75);
-			expect(createCourse).toHaveBeenCalledTimes(1);
-			expect(vi.mocked(createCourse).mock.calls[0][0]).toMatchObject({ name: '新班級', coach_id: coach.id, duration_minutes: 75 });
+			await addCourse(COURSE);
+			expect(createCourse).toHaveBeenCalledWith(buildCreateCourseBody(COURSE));
 			expect(getOpsCollections).toHaveBeenCalledTimes(1);
 			expect(get(classes)).toEqual([REFRESHED_CLASS]);
 			reset();
@@ -541,23 +546,22 @@ describe('ops 寫入動詞', () => {
 		it('寫入失敗 → 丟出、不重抓', async () => {
 			reset();
 			vi.mocked(createCourse).mockRejectedValueOnce(new Error('409'));
-			await expect(addCourse(CLASSES[0], 60)).rejects.toThrow('409');
+			await expect(addCourse(COURSE)).rejects.toThrow('409');
 			expect(getOpsCollections).not.toHaveBeenCalled();
 		});
 		it('重抓失敗 → 不丟出', async () => {
 			vi.mocked(createCourse).mockResolvedValueOnce({} as never);
-			await expectRefreshFailureSwallowed(() => addCourse(CLASSES[0], 60));
+			await expectRefreshFailureSwallowed(() => addCourse(COURSE));
 		});
 	});
 
-	describe('saveCourse(row, durationMinutes)', () => {
-		it('成功 → updateCourse(row.id, body + duration_minutes) → 重抓恰一次,classes 反映結果', async () => {
+	describe('saveCourse(id, course)', () => {
+		it('成功 → updateCourse(id, buildUpdateCourseBody(course)) → 重抓恰一次,classes 反映結果', async () => {
 			reset();
-			const row = { ...CLASSES[0], name: '改名後的班級' };
 			vi.mocked(updateCourse).mockResolvedValueOnce({} as never);
 			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
-			await saveCourse(row, 90);
-			expect(updateCourse).toHaveBeenCalledWith(row.id, expect.objectContaining({ name: '改名後的班級', duration_minutes: 90 }));
+			await saveCourse('k-1', COURSE);
+			expect(updateCourse).toHaveBeenCalledWith('k-1', buildUpdateCourseBody(COURSE));
 			expect(getOpsCollections).toHaveBeenCalledTimes(1);
 			expect(get(classes)).toEqual([REFRESHED_CLASS]);
 			reset();
@@ -565,12 +569,12 @@ describe('ops 寫入動詞', () => {
 		it('寫入失敗 → 丟出、不重抓', async () => {
 			reset();
 			vi.mocked(updateCourse).mockRejectedValueOnce(new Error('403'));
-			await expect(saveCourse(CLASSES[0], 60)).rejects.toThrow('403');
+			await expect(saveCourse('k-1', COURSE)).rejects.toThrow('403');
 			expect(getOpsCollections).not.toHaveBeenCalled();
 		});
 		it('重抓失敗 → 不丟出', async () => {
 			vi.mocked(updateCourse).mockResolvedValueOnce({} as never);
-			await expectRefreshFailureSwallowed(() => saveCourse(CLASSES[0], 60));
+			await expectRefreshFailureSwallowed(() => saveCourse('k-1', COURSE));
 		});
 	});
 

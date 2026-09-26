@@ -6,6 +6,7 @@ import { getOpsCollections, createCourse, updateCourse } from '$lib/mobile-admin
 import { classes, members, coaches, orders, overlay, opsHydrated, toasts } from '$lib/mobile-admin/stores';
 import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { ClassRow } from '$lib/mobile-admin/data';
+import type { ValidCourse } from '$lib/admin/components/course-request';
 import { COACHES } from '$lib/domain/coaches';
 
 vi.mock('$lib/mobile-admin/api', () => ({
@@ -15,11 +16,12 @@ vi.mock('$lib/mobile-admin/api', () => ({
 }));
 
 // 與 seed 相異的 fixture(班級名稱皆改過),證明頁面讀 hydrateOps() 水合後的
-// $classes store,而非殘留的同步 seed 巧合通過。
+// $classes store,而非殘留的同步 seed 巧合通過。R13 Task 4:教練名對上 COACHES[0]
+// (ClassForm 會驗證教練在清單裡)。
 const FIXTURE_CLASSES: ClassRow[] = [
 	{
-		id: 'zz1', name: '測試班級甲', level: '基礎', cat: '幼兒體操', coach: '測試教練', room: '測試教室',
-		day: '一', time: '10:00', enrolled: 5, cap: 10, age: '3-5', price: 1000, status: '招生中',
+		id: 'zz1', name: '測試班級甲', level: '基礎', cat: '幼兒體操', coach: COACHES[0].name, room: '測試教室',
+		day: '一', time: '10:00', enrolled: 5, cap: 10, age: '3–5 歲', price: 1000, status: '招生中',
 		wait: 0, term: '2026 春季', sessions: 12, startDate: '2026/03/01', checkinRate: 90, makeup: 0,
 		durationMinutes: 90
 	}
@@ -85,18 +87,25 @@ describe('mobile-admin/admin/classes 頁', () => {
 	/* Task 20 — 新增/編輯班級改接真 POST/PATCH /courses，不再是 saveClass 本地假寫入。
 	 * mobile 的 overlay 是全域 store（非頁面自己的元件樹），ClassForm 由另一個
 	 * OverlayHost 渲染——這裡不重新渲染 ClassForm，改為直接呼叫「新增班級」按鈕開出的
-	 * sheet 所帶入的 onSave（即頁面自己的 save() 閉包），驗證它真的打 createCourse/
-	 * updateCourse，同 OrderSheet.test.ts 對 mobile overlay 架構的驗證慣例。 */
+	 * sheet 所帶入的 onSave（即頁面自己的 create/update 閉包），驗證它真的打 createCourse/
+	 * updateCourse，同 OrderSheet.test.ts 對 mobile overlay 架構的驗證慣例。
+	 * R13 Task 4:onSave 收 ClassForm 驗證過的 ValidCourse。 */
+	const COURSE: ValidCourse = {
+		name: '新班級', level: '基礎', category: '幼兒體操', coachId: COACHES[0].id, scheduleText: null,
+		minAge: null, maxAge: null, maxStudents: 10, price: 1000, durationMinutes: 60
+	};
+	type SheetSave = { onSave: (c: ValidCourse, isNew: boolean) => Promise<void> };
+
 	it('「新增班級」開出的 sheet 帶入真正呼叫 createCourse 的 onSave（不是本地假寫入）', async () => {
 		vi.mocked(createCourse).mockResolvedValue({ id: 'new-1' } as never);
 		const { findByText, getByLabelText } = render(ClassesPage);
 		await findByText('測試班級甲');
 
 		await fireEvent.click(getByLabelText('新增班級'));
-		const sheetProps = get(overlay).sheet?.props as { onSave: (r: ClassRow, d: number, isNew: boolean) => Promise<void> };
+		const sheetProps = get(overlay).sheet?.props as SheetSave;
 		expect(sheetProps).toBeTruthy();
 
-		await sheetProps.onSave({ ...FIXTURE_CLASSES[0], id: '', name: '新班級' }, 60, true);
+		await sheetProps.onSave(COURSE, true);
 
 		expect(createCourse).toHaveBeenCalledTimes(1);
 		expect(vi.mocked(createCourse).mock.calls[0][0]).toMatchObject({ name: '新班級', duration_minutes: 60 });
@@ -109,10 +118,10 @@ describe('mobile-admin/admin/classes 頁', () => {
 		await findByText('測試班級甲');
 
 		await fireEvent.click(await findByText('編輯'));
-		const sheetProps = get(overlay).sheet?.props as { onSave: (r: ClassRow, d: number, isNew: boolean) => Promise<void> };
+		const sheetProps = get(overlay).sheet?.props as SheetSave;
 		expect(sheetProps).toBeTruthy();
 
-		await sheetProps.onSave({ ...FIXTURE_CLASSES[0], name: '改名後的班級' }, 90, false);
+		await sheetProps.onSave({ ...COURSE, name: '改名後的班級' }, false);
 
 		expect(updateCourse).toHaveBeenCalledTimes(1);
 		expect(updateCourse).toHaveBeenCalledWith(FIXTURE_CLASSES[0].id, expect.objectContaining({ name: '改名後的班級' }));
@@ -125,8 +134,8 @@ describe('mobile-admin/admin/classes 頁', () => {
 		await findByText('測試班級甲');
 
 		await fireEvent.click(getByLabelText('新增班級'));
-		const sheetProps = get(overlay).sheet?.props as { onSave: (r: ClassRow, d: number, isNew: boolean) => Promise<void> };
-		await sheetProps.onSave({ ...FIXTURE_CLASSES[0], id: '', name: '新班級' }, 60, true);
+		const sheetProps = get(overlay).sheet?.props as SheetSave;
+		await sheetProps.onSave(COURSE, true);
 
 		expect(get(toasts).some((t) => t.title === '新增失敗')).toBe(true);
 	});

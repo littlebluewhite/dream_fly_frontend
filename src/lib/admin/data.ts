@@ -10,16 +10,16 @@
  * MEMBER_STATUS/MemberStatus/MEMBER_ACCOUNT_STATUS(→ $lib/domain/members)、
  * VENUE_STATUS(→ $lib/domain/venues)、TICKET_TYPE(→ $lib/domain/tickets)、
  * STATUS_TONE(→ $lib/domain/classes)——重驗皆為零附加型別事實的純轉手,已退役,
- * 消費端改直取各 canonical 源。Tone/MemberAccountStatus/VenueStatus/TicketType/
- * ClassStatus 五個型別本檔內部仍用(下方 MemberAccount/VENUE_STATUSES/
- * TICKET_TYPES/CLASS_STATUS 的型別標註),依 ADR 0010「刪 export 留 import」處置,
- * 只拿掉對外轉出。PayStatus/AttMark(連同它們唯一的消費者 PAY_STATUS/ATT_MARK 與
+ * 消費端改直取各 canonical 源。Tone/MemberAccountStatus/VenueStatus/TicketType
+ * 四個型別本檔內部仍用(下方 MemberAccount/VENUE_STATUSES/TICKET_TYPES 的型別
+ * 標註),依 ADR 0010「刪 export 留 import」處置,只拿掉對外轉出。CLASS_STATUS(連同
+ * ClassStatus import)隨 R13 Task 4 退役:招生狀態改唯讀,兩個課程表單不再有它的 Select。
+ * PayStatus/AttMark(連同它們唯一的消費者 PAY_STATUS/ATT_MARK 與
  * MemberDialog 的死 member 分支)隨 Task 1(R13 小 bug 包)一併退役。 */
 import type { Tone } from '$lib/api/wire';
 import type { MemberAccountStatus } from '$lib/domain/members';
 import type { VenueStatus } from '$lib/domain/venues';
 import type { TicketType } from '$lib/domain/tickets';
-import type { ClassStatus } from '$lib/domain/classes';
 
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
@@ -142,7 +142,6 @@ export interface Order extends OrderBase {
 
 /* ───────────────────────── form constants ───────────────────────── */
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];
-export const CLASS_STATUS: ClassStatus[] = ['招生中', '候補', '額滿'];
 /** Ticket type union as a 新增/編輯票券 Select source (keys of TICKET_TYPE). */
 export const TICKET_TYPES: TicketType[] = ['ticket', 'membership', 'course_package'];
 /** Venue status union as a 新增/編輯場地 Select source (keys of VENUE_STATUS). */

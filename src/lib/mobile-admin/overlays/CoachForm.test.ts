@@ -6,7 +6,8 @@ import type { Coach } from '$lib/domain/coaches';
 /* Task F5：教練新增/編輯改接真 POST /coaches、PATCH /coaches/{id}（契約 §3.4，
  * 兩步流程的第二步）——這裡驗證新增/編輯兩種模式各自組出正確的 CoachFormValues
  * 並呼叫 onSave(values, isNew)，取代舊版驗證「本地 store 假寫入」的測試（見桌面
- * CoachEditDialog.test.ts 的對應收斂）。 */
+ * CoachEditDialog.test.ts 的對應收斂）。R13 Task 4：驗證規則住 coach-save.ts，
+ * 這裡只驗接線與 disabled。 */
 
 const EXISTING: Coach = {
 	id: 'c1',
@@ -107,17 +108,16 @@ describe('CoachForm — 編輯模式（PATCH /coaches/{id}，姓名變動另觸�
 		expect(onSave.mock.calls[0][0]).toMatchObject({ isActive: false });
 	});
 
-	it('blocks submit with an inline error when 職稱 is cleared (title 必填)', async () => {
+	it('disables 儲存 when 職稱 is cleared (title 必填，規則住 coach-save.ts)', async () => {
 		const onSave = vi.fn();
 		render(CoachForm, { props: { onClose: () => {}, onSave, c: EXISTING } });
 
 		await fireEvent.input(screen.getByLabelText('職稱 / 專業', { exact: false }), {
 			target: { value: '   ' }
 		});
-		await fireEvent.click(screen.getByText('儲存'));
 
+		expect(screen.getByText('儲存').closest('button')).toBeDisabled();
 		expect(onSave).not.toHaveBeenCalled();
-		expect(screen.getByText('請輸入職稱')).toBeInTheDocument();
 	});
 
 	it('does nothing (no throw) when no onSave is provided — no silent fake-write fallback', async () => {

@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import CoachEditDialog from './CoachEditDialog.svelte';
 import { COACHES, type Coach } from '$lib/domain/coaches';
+import { COACH_TITLE_ERROR, COACH_PASSWORD_ERROR } from './coach-save';
 
 /* CoachEditDialog — 編輯/新增共用一個對話框(Task F5 欄位收斂)。編輯模式收
  * name/title/tags/isActive，儲存時組出 CoachFormValues 交給 onSave；新增模式
  * (isNew)額外收 email/密碼(POST /users 用)。兩步流程(建 user→綁 coach)本身的
- * API 呼叫與失敗處理由呼叫端(routes/admin/coaches/+page.svelte)負責，這裡只驗證
- * 表單收欄位/驗證/onSave 的 payload。 */
+ * API 呼叫與失敗處理由呼叫端(routes/admin/coaches/+page.svelte)負責。R13 Task 4：
+ * 驗證規則與標籤拆分住 coach-save.ts(checkNewCoach/checkCoachEdit)，由
+ * coach-save.test.ts 的驗證表覆蓋；這裡只驗接線(欄位、錯誤顯示、onSave payload、reset)。 */
 const base: Coach = COACHES[0]; // 林雅婷，isActive: true
 
 describe('CoachEditDialog — 編輯模式', () => {
@@ -61,20 +63,6 @@ describe('CoachEditDialog — 編輯模式', () => {
 		});
 	});
 
-	it('splits the 專長標籤 text buffer back into a tags[] array on save', async () => {
-		const onSave = vi.fn();
-		const { getByDisplayValue, getByText } = render(CoachEditDialog, {
-			open: true,
-			coach: base,
-			onSave
-		});
-		await fireEvent.input(getByDisplayValue(base.tags.join('、')), {
-			target: { value: '競技體操、跑酷, 成人體操' }
-		});
-		await fireEvent.click(getByText('儲存'));
-		expect(onSave.mock.calls[0][0].tags).toEqual(['競技體操', '跑酷', '成人體操']);
-	});
-
 	it('toggling 公開顯示 flows isActive:false through to onSave', async () => {
 		const onSave = vi.fn();
 		render(CoachEditDialog, { open: true, coach: base, onSave });
@@ -93,7 +81,7 @@ describe('CoachEditDialog — 編輯模式', () => {
 		await fireEvent.input(getByDisplayValue(base.title), { target: { value: '   ' } });
 		await fireEvent.click(getByText('儲存'));
 		expect(onSave).not.toHaveBeenCalled();
-		expect(getByText('請輸入職稱')).toBeInTheDocument();
+		expect(getByText(COACH_TITLE_ERROR)).toBeInTheDocument();
 	});
 
 	it('calls onClose from the 取消 button', async () => {
@@ -192,20 +180,7 @@ describe('CoachEditDialog — 新增模式（isNew，兩步流程第一步收 em
 		await fireEvent.click(screen.getByText('建立教練'));
 
 		expect(onSave).not.toHaveBeenCalled();
-		expect(screen.getByText('密碼至少需要 8 碼')).toBeInTheDocument();
-	});
-
-	it('blocks submit with an inline error when 職稱 is left blank (title 必填，coaches.title NOT NULL)', async () => {
-		const onSave = vi.fn();
-		render(CoachEditDialog, { open: true, coach: null, isNew: true, onSave });
-
-		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'coach@test.com' } });
-		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '新教練' } });
-		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
-		await fireEvent.click(screen.getByText('建立教練'));
-
-		expect(onSave).not.toHaveBeenCalled();
-		expect(screen.getByText('請輸入職稱')).toBeInTheDocument();
+		expect(screen.getByText(COACH_PASSWORD_ERROR)).toBeInTheDocument();
 	});
 
 	it('builds a full CoachFormValues (email/password/name/title/tags/isActive) and calls onSave once valid', async () => {

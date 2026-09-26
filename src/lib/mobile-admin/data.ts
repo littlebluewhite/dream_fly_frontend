@@ -68,8 +68,8 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 
 /* ---- Classes / 班級 ---- */
 // level/status 窄化為 CLASSES_BASE(`$lib/domain/classes`)本身的字面聯集型別（同
-// 桌面 admin/data.ts 的 ClassRow）——course-request.ts 的 buildCourseBody() 要求
-// 這兩個窄型別，鬆散的 string 無法安全傳入。
+// 桌面 admin/data.ts 的 ClassRow）——course-request.ts 的 courseDraftOf()/blankClassRow()
+// 要求這兩個窄型別，鬆散的 string 無法安全傳入。
 export interface ClassRow {
 	id: string;
 	name: string;

@@ -9,13 +9,13 @@
    * 機制擋下,不再需要頁面自帶的 alive 旗標。
    *
    * Task 20：新增/編輯改接真 POST /courses、PATCH /courses/{id}（復用桌面
-   * createCourse/updateCourse/mapCourse，經 $lib/mobile-admin/api 薄層）——
-   * buildCourseBody()（course-request.ts，桌面 Task 8 piece 1 既有的請求體組裝
-   * 純函式，兩邊 ClassRow/Coach 形狀相同，直接沿用不重寫）組出共用欄位；openEdit
+   * createCourse/updateCourse/mapCourse，經 $lib/mobile-admin/api 薄層）；openEdit
    * 統一收斂「班級卡編輯鈕」與「班級詳情 sheet 的編輯鈕」兩個入口，兩者都需要真正
    * 呼叫後端，不能其中一條路徑漏接。R12 起寫入經 store 的 addCourse/saveCourse
-   * 動詞(內部 buildCourseBody + 寫入成功後 await refreshOps() 整包重抓)，toast 在
-   * 動詞 resolve 後才出現。header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區
+   * 動詞(寫入成功後 await refreshOps() 整包重抓)，toast 在動詞 resolve 後才出現。
+   * R13 Task 4：ClassForm 交出驗證過的 ValidCourse(course-request.ts)，新增/編輯
+   * 各接一支函式(create/update)，編輯的 id 由 openEdit 的閉包帶入。
+   * header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區
    * 提示搜尋範圍。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -34,6 +34,7 @@
   import type { ClassRow } from '$lib/mobile-admin/data';
   import { CATS } from '$lib/admin/data';
   import { filterClasses } from '$lib/admin/components/classes-filter';
+  import type { ValidCourse } from '$lib/admin/components/course-request';
   import { apiErrorText } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
   import { classFill } from '$lib/domain/class-detail';
@@ -53,10 +54,10 @@
   const cats = ['全部', ...CATS];
 
   function openNew() {
-    overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: save });
+    overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: create });
   }
   function openEdit(k: ClassRow) {
-    overlay.sheet('classForm', { k, coaches: $coaches, onSave: save });
+    overlay.sheet('classForm', { k, coaches: $coaches, onSave: (course) => update(k.id, course) });
   }
   function openDetail(k: ClassRow) {
     overlay.sheet('class', { k, onEdit: openEdit });
@@ -71,17 +72,20 @@
     409: '課程名稱或代碼已存在，請調整後再試。'
   };
 
-  async function save(updated: ClassRow, durationMinutes: number, isNew: boolean) {
+  async function create(course: ValidCourse) {
     try {
-      if (isNew) {
-        await addCourse(updated, durationMinutes);
-        toasts.notify('success', '已新增班級', `「${updated.name}」已建立。`);
-      } else {
-        await saveCourse(updated, durationMinutes);
-        toasts.notify('success', '已儲存課程', `「${updated.name}」已更新。`);
-      }
+      await addCourse(course);
+      toasts.notify('success', '已新增班級', `「${course.name}」已建立。`);
     } catch (e) {
-      toasts.notify('error', isNew ? '新增失敗' : '儲存失敗', apiErrorText(e, COURSE_ERROR_TEXT));
+      toasts.notify('error', '新增失敗', apiErrorText(e, COURSE_ERROR_TEXT));
+    }
+  }
+  async function update(id: string, course: ValidCourse) {
+    try {
+      await saveCourse(id, course);
+      toasts.notify('success', '已儲存課程', `「${course.name}」已更新。`);
+    } catch (e) {
+      toasts.notify('error', '儲存失敗', apiErrorText(e, COURSE_ERROR_TEXT));
     }
   }
 

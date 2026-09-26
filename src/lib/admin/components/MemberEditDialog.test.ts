@@ -2,13 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import MemberEditDialog from './MemberEditDialog.svelte';
 import type { MemberAccount } from '$lib/admin/data';
+import { MEMBER_NAME_ERROR } from './member-request';
 
 /* MemberEditDialog — edit form inside the shared EditModal (Task 16). 契約 §3.2
- * PATCH /users/{id}：name/phone/is_active 皆選填，但這裡一律全部送出（同
- * CoachEditDialog 的全量 resend 慣例——is_active 一定有具體布林值，name/phone 也都是
- * 既有帳號預先帶入的值，實務上不會真的「全省略」）。空白 phone 仍省略（undefined，
- * 維持原值語意），不可改 email/roles/password——本表單完全不出現這三個欄位（契約明文
- * v1 範圍外）。 */
+ * PATCH /users/{id}。R13 Task 4：body 規則(trim、空白 phone 省略、長度)住
+ * member-request.ts(checkMemberEdit)，由 member-request.test.ts 覆蓋；這裡只剩接線。
+ * 不可改 email/roles/password——本表單完全不出現這三個欄位（契約明文 v1 範圍外）。 */
 const acc: MemberAccount = {
 	id: 'u1',
 	name: '王小明',
@@ -66,25 +65,15 @@ describe('MemberEditDialog', () => {
 		expect(onSave.mock.calls[0][1]).toEqual({ name: '王大明', phone: '0912345678', is_active: false });
 	});
 
-	it('omits phone from the payload when the field is blank', async () => {
-		const onSave = vi.fn();
-		const noPhone: MemberAccount = { ...acc, phone: '' };
-		const { getByText } = render(MemberEditDialog, { open: true, member: noPhone, onSave });
-		await fireEvent.click(getByText('儲存'));
-
-		expect(onSave.mock.calls[0][1]).toEqual({ name: acc.name, is_active: true });
-		expect(onSave.mock.calls[0][1].phone).toBeUndefined();
-	});
-
-	it('trims name/phone before sending', async () => {
+	it('不合法時(姓名 1 字)顯示 module 的錯誤、不呼叫 onSave', async () => {
 		const onSave = vi.fn();
 		const { getByDisplayValue, getByText } = render(MemberEditDialog, { open: true, member: acc, onSave });
 
-		await fireEvent.input(getByDisplayValue(acc.name), { target: { value: '  王大明  ' } });
-		await fireEvent.input(getByDisplayValue(acc.phone), { target: { value: '  0900000000  ' } });
+		await fireEvent.input(getByDisplayValue(acc.name), { target: { value: '王' } });
 		await fireEvent.click(getByText('儲存'));
 
-		expect(onSave.mock.calls[0][1]).toEqual({ name: '王大明', phone: '0900000000', is_active: true });
+		expect(onSave).not.toHaveBeenCalled();
+		expect(getByText(MEMBER_NAME_ERROR)).toBeInTheDocument();
 	});
 
 	it('calls onClose from the 取消 button', async () => {

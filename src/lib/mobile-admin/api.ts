@@ -26,7 +26,6 @@ import {
 	getRecentActivity as adminGetRecentActivity,
 	getSettings,
 	putSettings,
-	type CourseWriteBody,
 	type CreateMemberBody,
 	type UpdateMemberBody,
 	type CoachWriteBody,
@@ -82,7 +81,6 @@ export { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEd
 // 模組」，屬預期，待該模組併入後由主 agent 權威閘裁決。
 export { createSettingsForm, type SettingsDraft } from '$lib/admin/settings-form';
 export type {
-	CourseWriteBody,
 	CreateMemberBody,
 	UpdateMemberBody,
 	CreateCertificateBody,

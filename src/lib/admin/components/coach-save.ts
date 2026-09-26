@@ -15,8 +15,78 @@
  * 可能執行時依序執行——先 users 後 coaches，任一失敗即中止，不繼續打下一支。
  *
  * 兩支 mapper（apiErrorMessage/coachErrorMessage）留頁面（ADR 0011）——本模組的
- * error 欄位一律是原始拋出物，不做文案轉換。 */
+ * error 欄位一律是原始拋出物，不做文案轉換。
+ *
+ * R13 Task 4(C2)：表單驗證也收進本模組——checkNewCoach()/checkCoachEdit() 把桌面
+ * CoachEditDialog 與 mobile CoachForm 的草稿轉成 CoachFormValues(含標籤拆分)，驗證
+ * 文案是本檔 exported const(ADR-0012 ④)。上限對齊後端：姓名 2–100、密碼 8–128
+ * (POST/PATCH /users)，職稱 1–100(coaches.title)。 */
 import type { CoachFormValues } from '$lib/admin/data';
+
+/** 新增教練表單草稿(文字欄位原樣，標籤是「以、分隔」的文字緩衝)。 */
+export interface NewCoachDraft {
+	email: string;
+	password: string;
+	name: string;
+	title: string;
+	tagsText: string;
+	isActive: boolean;
+}
+
+/** 編輯教練表單草稿——沒有 email/密碼(那兩欄只屬於 POST /users)。 */
+export interface CoachEditDraft {
+	name: string;
+	title: string;
+	tagsText: string;
+	isActive: boolean;
+}
+
+export type CoachErrors = Partial<Record<'email' | 'name' | 'title' | 'password', string>>;
+
+export type CoachCheck = { kind: 'valid'; values: CoachFormValues } | { kind: 'invalid'; errors: CoachErrors };
+
+export const COACH_EMAIL_ERROR = '請輸入 Email';
+export const COACH_NAME_ERROR = '姓名需為 2–100 字';
+export const COACH_TITLE_ERROR = '請輸入職稱';
+export const COACH_TITLE_LENGTH_ERROR = '職稱不可超過 100 字';
+export const COACH_PASSWORD_ERROR = '密碼需為 8–128 碼';
+
+const charLen = (s: string) => [...s].length;
+
+/** 專長標籤文字 → tags[]：以 、 , ， 分隔，去空白、去空項。 */
+function splitTags(text: string): string[] {
+	return text
+		.split(/[、,，]/)
+		.map((t) => t.trim())
+		.filter(Boolean);
+}
+
+/** 新增/編輯共用的姓名與職稱規則，回傳 trim 後的值。 */
+function checkNameTitle(name: string, title: string, errors: CoachErrors) {
+	const n = name.trim();
+	const t = title.trim();
+	if (charLen(n) < 2 || charLen(n) > 100) errors.name = COACH_NAME_ERROR;
+	if (!t) errors.title = COACH_TITLE_ERROR;
+	else if (charLen(t) > 100) errors.title = COACH_TITLE_LENGTH_ERROR;
+	return { name: n, title: t };
+}
+
+export function checkNewCoach(d: NewCoachDraft): CoachCheck {
+	const errors: CoachErrors = {};
+	const email = d.email.trim();
+	if (!email) errors.email = COACH_EMAIL_ERROR;
+	const { name, title } = checkNameTitle(d.name, d.title, errors);
+	if (charLen(d.password) < 8 || charLen(d.password) > 128) errors.password = COACH_PASSWORD_ERROR;
+	if (Object.keys(errors).length > 0) return { kind: 'invalid', errors };
+	return { kind: 'valid', values: { email, password: d.password, name, title, tags: splitTags(d.tagsText), isActive: d.isActive } };
+}
+
+export function checkCoachEdit(d: CoachEditDraft): CoachCheck {
+	const errors: CoachErrors = {};
+	const { name, title } = checkNameTitle(d.name, d.title, errors);
+	if (Object.keys(errors).length > 0) return { kind: 'invalid', errors };
+	return { kind: 'valid', values: { email: '', password: '', name, title, tags: splitTags(d.tagsText), isActive: d.isActive } };
+}
 
 /** deps 用最小結構型別——只描述本模組實際用到的參數/回傳形狀，不 import 真正的函式
  *  簽名（`$lib/admin/api` 的型別皆為 `import type`，零 runtime 耦合）。呼叫端

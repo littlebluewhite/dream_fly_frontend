@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import MemberCreateDialog from './MemberCreateDialog.svelte';
+import { MEMBER_PASSWORD_ERROR } from './member-request';
 
 /* MemberCreateDialog — create-only form inside the shared EditModal (Task 16).
- * 契約 §3.2 POST /users：email/name/password 必填，phone 選填。密碼 8-128 字，前端
- * 同步擋 < 8 碼（送出前，不打後端）；空白 phone 省略（undefined），不做 email 格式
- * 驗證——交由後端 422 判斷。不打 API、不丟 toast（同 CouponCreateDialog），成功/失敗
- * 一律由呼叫端（members/+page.svelte）依 API 結果處理。 */
+ * R13 Task 4：規則與 body(trim、選填欄位省略、長度上下限)住 member-request.ts，
+ * 由 member-request.test.ts 覆蓋；這裡只剩接線——欄位、onSave 收到 checkNewMember 的
+ * body、不合法時顯示錯誤不送出、reset。不打 API、不丟 toast（同 CouponCreateDialog）。 */
 describe('MemberCreateDialog', () => {
 	it('renders open with the 5 field labels and the 建立學員 primary', () => {
 		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true });
@@ -23,13 +23,14 @@ describe('MemberCreateDialog', () => {
 		expect(queryByText('建立學員')).toBeNull();
 	});
 
-	it('fires onSave with { email, name, phone, password } — payload 釘住', async () => {
+	it('fires onSave with checkNewMember’s body — payload 釘住', async () => {
 		const onSave = vi.fn();
 		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
 
 		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
 		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
 		await fireEvent.input(getByLabelText('聯絡電話（選填）'), { target: { value: '0911222333' } });
+		await fireEvent.input(getByLabelText('生日（選填）'), { target: { value: '2015-06-12' } });
 		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
 		await fireEvent.click(getByText('建立學員'));
 
@@ -38,78 +39,14 @@ describe('MemberCreateDialog', () => {
 			email: 'new@example.com',
 			name: '新學員',
 			phone: '0911222333',
-			password: 'abcd1234'
-		});
-	});
-
-	it('omits phone from the payload when left blank (optional field)', async () => {
-		const onSave = vi.fn();
-		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
-
-		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
-		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
-		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
-		await fireEvent.click(getByText('建立學員'));
-
-		expect(onSave.mock.calls[0][0]).toEqual({
-			email: 'new@example.com',
-			name: '新學員',
-			password: 'abcd1234'
-		});
-		expect(onSave.mock.calls[0][0].phone).toBeUndefined();
-	});
-
-	it('fires onSave with birth_date when filled in（Round 4 Task P4-F4）', async () => {
-		const onSave = vi.fn();
-		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
-
-		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
-		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
-		await fireEvent.input(getByLabelText('生日（選填）'), { target: { value: '2015-06-12' } });
-		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
-		await fireEvent.click(getByText('建立學員'));
-
-		expect(onSave.mock.calls[0][0]).toEqual({
-			email: 'new@example.com',
-			name: '新學員',
 			password: 'abcd1234',
 			birth_date: '2015-06-12'
 		});
 	});
 
-	it('omits birth_date from the payload when left blank (optional field)', async () => {
+	it('不合法時(密碼 7 碼)顯示 module 的錯誤、不呼叫 onSave', async () => {
 		const onSave = vi.fn();
 		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
-
-		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
-		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
-		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
-		await fireEvent.click(getByText('建立學員'));
-
-		expect(onSave.mock.calls[0][0].birth_date).toBeUndefined();
-	});
-
-	it('trims email/name/phone before sending', async () => {
-		const onSave = vi.fn();
-		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
-
-		await fireEvent.input(getByLabelText('Email'), { target: { value: '  new@example.com  ' } });
-		await fireEvent.input(getByLabelText('姓名'), { target: { value: '  新學員  ' } });
-		await fireEvent.input(getByLabelText('聯絡電話（選填）'), { target: { value: '  0911222333  ' } });
-		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: 'abcd1234' } });
-		await fireEvent.click(getByText('建立學員'));
-
-		expect(onSave.mock.calls[0][0]).toEqual({
-			email: 'new@example.com',
-			name: '新學員',
-			phone: '0911222333',
-			password: 'abcd1234'
-		});
-	});
-
-	it('密碼過短前端擋：< 8 碼時顯示錯誤、不呼叫 onSave', async () => {
-		const onSave = vi.fn();
-		const { getByLabelText, getByText, container } = render(MemberCreateDialog, { open: true, onSave });
 
 		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
 		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
@@ -117,19 +54,7 @@ describe('MemberCreateDialog', () => {
 		await fireEvent.click(getByText('建立學員'));
 
 		expect(onSave).not.toHaveBeenCalled();
-		expect(container.querySelector('.hint.err')?.textContent).toBeTruthy();
-	});
-
-	it('恰好 8 碼視為合法密碼，會呼叫 onSave（邊界值）', async () => {
-		const onSave = vi.fn();
-		const { getByLabelText, getByText } = render(MemberCreateDialog, { open: true, onSave });
-
-		await fireEvent.input(getByLabelText('Email'), { target: { value: 'new@example.com' } });
-		await fireEvent.input(getByLabelText('姓名'), { target: { value: '新學員' } });
-		await fireEvent.input(getByLabelText('初始密碼'), { target: { value: '12345678' } }); // 恰好 8 碼
-		await fireEvent.click(getByText('建立學員'));
-
-		expect(onSave).toHaveBeenCalledTimes(1);
+		expect(getByText(MEMBER_PASSWORD_ERROR)).toBeInTheDocument();
 	});
 
 	it('calls onClose from the 取消 button', async () => {

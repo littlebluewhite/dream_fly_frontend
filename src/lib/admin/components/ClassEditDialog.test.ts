@@ -5,10 +5,12 @@ import ClassEditDialog from './ClassEditDialog.svelte';
 import type { ClassRow } from '$lib/admin/data';
 import { COACHES } from '$lib/domain/coaches';
 import { toasts } from '$lib/admin/stores';
+import { COURSE_AGE_FORMAT_ERROR } from './course-request';
 
 /* ClassEditDialog — edit form in an EditModal (admin.jsx ClassEditDialog). It
- * holds a local copy of the class; 儲存課程 fires onSave(updated) + a success
- * toast. We assert the fields render and the onSave wiring carries the edit.
+ * holds a CourseDraft of the class; 儲存課程 runs checkCourseDraft() and fires
+ * onSave(ValidCourse) only when valid. R13 Task 4:驗證規則與 body 組裝的逐欄測試
+ * 住 course-request.test.ts，這裡只剩接線(欄位、錯誤顯示、onSave、reset)。
  *
  * Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——改為檔內 inline
  * ClassRow fixture(沿用真實種子 k1 的欄位值)。 */
@@ -25,11 +27,16 @@ describe('ClassEditDialog', () => {
 		expect(getByText('儲存課程')).toBeInTheDocument();
 	});
 
-	it('renders the editable field labels', () => {
-		const { getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES });
-		for (const lbl of ['班級名稱', '分級', '課程類別', '授課教練', '教室 / 場地', '招生狀態']) {
-			expect(getByText(lbl)).toBeInTheDocument();
+	it('renders the editable field labels; 場地/期別/堂數 inputs are gone and 招生狀態 is a read-only badge', () => {
+		const { getByText, queryByLabelText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES });
+		for (const lbl of ['班級名稱', '分級', '課程類別', '授課教練', '上課日', '時段', '適合年齡', '人數上限', '季費 (NT$)', '單堂時長（分鐘）']) {
+			expect(queryByLabelText(lbl)).toBeInTheDocument();
 		}
+		for (const lbl of ['教室 / 場地', '本期期別', '本期堂數', '招生狀態']) {
+			expect(queryByLabelText(lbl)).toBeNull();
+		}
+		expect(getByText('招生狀態')).toBeInTheDocument();
+		expect(getByText(base.status)).toBeInTheDocument();
 	});
 
 	/* Task 8 review fix B (concern #2): parseAgeRange accepts only 3 exact formats
@@ -49,39 +56,34 @@ describe('ClassEditDialog', () => {
 		expect(queryByText('儲存課程')).toBeNull();
 	});
 
-	it('fires onSave with the edited name when 儲存課程 is clicked', async () => {
+	it('fires onSave(ValidCourse) with the edited values when 儲存課程 is clicked', async () => {
 		const onSave = vi.fn();
-		const { getByDisplayValue, getByText } = render(ClassEditDialog, {
+		const { getByLabelText, getByText } = render(ClassEditDialog, {
 			open: true,
 			klass: base,
 			coaches: COACHES,
 			onSave
 		});
 
-		const nameInput = getByDisplayValue(base.name) as HTMLInputElement;
-		await fireEvent.input(nameInput, { target: { value: '測試班級' } });
+		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '測試班級' } });
+		await fireEvent.input(getByLabelText('人數上限'), { target: { value: '20' } });
+		await fireEvent.input(getByLabelText('單堂時長（分鐘）'), { target: { value: '75' } });
 		await fireEvent.click(getByText('儲存課程'));
 
 		expect(onSave).toHaveBeenCalledTimes(1);
-		const updated = onSave.mock.calls[0][0] as ClassRow;
-		expect(updated.name).toBe('測試班級');
-		expect(updated.id).toBe(base.id); // identity preserved
+		expect(onSave.mock.calls[0][0]).toMatchObject({ name: '測試班級', maxStudents: 20, durationMinutes: 75, coachId: COACHES[0].id });
+		expect(onSave.mock.calls[0]).toHaveLength(1);
 	});
 
-	it('coerces edited numeric fields (cap/price) back to numbers on save', async () => {
+	it('shows the module’s error and does not call onSave when the draft is invalid', async () => {
 		const onSave = vi.fn();
-		const { getByDisplayValue, getByText } = render(ClassEditDialog, {
-			open: true,
-			klass: base,
-			coaches: COACHES,
-			onSave
-		});
-		await fireEvent.input(getByDisplayValue(String(base.cap)), { target: { value: '20' } });
-		await fireEvent.input(getByDisplayValue(String(base.price)), { target: { value: '5000' } });
+		const { getByLabelText, getByText } = render(ClassEditDialog, { open: true, klass: base, coaches: COACHES, onSave });
+
+		await fireEvent.input(getByLabelText('適合年齡'), { target: { value: '國小以上' } });
 		await fireEvent.click(getByText('儲存課程'));
-		const updated = onSave.mock.calls[0][0] as ClassRow;
-		expect(updated.cap).toBe(20);
-		expect(updated.price).toBe(5000);
+
+		expect(onSave).not.toHaveBeenCalled();
+		expect(getByText(COURSE_AGE_FORMAT_ERROR)).toBeInTheDocument();
 	});
 
 	it('uses the 建立班級 primary and label in new mode', () => {
@@ -122,9 +124,9 @@ describe('ClassEditDialog', () => {
 		expect(get(toasts).length).toBe(before);
 	});
 
-	/* 單堂時長（duration_minutes）— FE#18：ClassRow 現有 durationMinutes 欄位，
-	 * 時長欄位新增/編輯兩種模式皆顯示可改，並隨 onSave 的第二個參數送出。 */
-	it('shows 單堂時長（分鐘） in new mode, defaulting to 90, and passes it as onSave’s 2nd arg', async () => {
+	/* 單堂時長（duration_minutes）— FE#18：新增/編輯兩種模式皆顯示可改。新增模式的
+	 * 預設 90 來自 blankClassRow()(呼叫端傳入)，編輯模式帶該課程自己的 durationMinutes。 */
+	it('shows 單堂時長（分鐘） in new mode with the blank row’s 90 and sends it through onSave', async () => {
 		const onSave = vi.fn();
 		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
 			open: true,
@@ -135,49 +137,18 @@ describe('ClassEditDialog', () => {
 		});
 		expect(getByDisplayValue('90')).toBeInTheDocument();
 		await fireEvent.click(getByText('建立班級'));
-		expect(onSave.mock.calls[0][1]).toBe(90);
+		expect(onSave.mock.calls[0][0].durationMinutes).toBe(90);
 	});
 
-	/* FE#18: 時長欄位過去只在 isNew 顯示（{#if isNew}），編輯模式看不到也改不到
-	 * 既有課程的單堂時長。現在編輯模式也要顯示，且預設值來自該課程自己的
-	 * durationMinutes（不是新增模式的寫死 90）。 */
 	it('shows 單堂時長（分鐘） in edit mode too, defaulting to the class’s own duration', () => {
 		const klass = { ...base, durationMinutes: 45 };
 		const { getByDisplayValue } = render(ClassEditDialog, { open: true, klass, coaches: COACHES, isNew: false });
 		expect(getByDisplayValue('45')).toBeInTheDocument();
 	});
 
-	it('parses an edited 單堂時長 value back to a number on save (new mode)', async () => {
-		const onSave = vi.fn();
-		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
-			open: true,
-			klass: base,
-			coaches: COACHES,
-			isNew: true,
-			onSave
-		});
-		await fireEvent.input(getByDisplayValue('90'), { target: { value: '60' } });
-		await fireEvent.click(getByText('建立班級'));
-		expect(onSave.mock.calls[0][1]).toBe(60);
-	});
-
-	it('parses an edited 單堂時長 value back to a number on save (edit mode)', async () => {
-		const onSave = vi.fn();
-		const klass = { ...base, durationMinutes: 45 };
-		const { getByText, getByDisplayValue } = render(ClassEditDialog, {
-			open: true,
-			klass,
-			coaches: COACHES,
-			isNew: false,
-			onSave
-		});
-		await fireEvent.input(getByDisplayValue('45'), { target: { value: '75' } });
-		await fireEvent.click(getByText('儲存課程'));
-		expect(onSave.mock.calls[0][1]).toBe(75);
-	});
-
 	/* 卡 7 reset 回歸對（措辭仿 CouponCreateDialog.test.ts 的成對先例）：
-	 * ①換實體不殘留——working copy 與 cap/price/sessions/duration 四個文字 buffer 都要跟著新實體；
+	 * ①換實體不殘留——working copy 與 cap/price/duration 文字 buffer 都要跟著新實體(R13 Task 4
+	 * 拿掉本期堂數輸入，原 sessions buffer 的那一行斷言隨之刪除，其餘斷言不變)；
 	 * ②關閉重開丟棄髒草稿——兼作「初始 working copy 改 clone」修正的回歸釘：初次掛載後的
 	 * bind:value 編輯絕不可寫回呼叫端傳入的原實體（別名形會讓取消不救、列表資料已髒）。 */
 	it('resets fields when the klass prop changes to a different class (no stale data)', async () => {
@@ -192,7 +163,6 @@ describe('ClassEditDialog', () => {
 		expect((getByLabelText('班級名稱') as HTMLInputElement).value).toBe('兒童基礎 B 班');
 		expect((getByLabelText('人數上限') as HTMLInputElement).value).toBe('20');
 		expect((getByLabelText('季費 (NT$)') as HTMLInputElement).value).toBe('5200');
-		expect((getByLabelText('本期堂數') as HTMLInputElement).value).toBe('12');
 		expect((getByLabelText('單堂時長（分鐘）') as HTMLInputElement).value).toBe('60');
 	});
 

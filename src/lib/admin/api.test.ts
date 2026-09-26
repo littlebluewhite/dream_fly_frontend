@@ -507,7 +507,9 @@ describe('createCourse — POST /courses（admin，Task 8 piece 1）', () => {
 
 	it('propagates a rejected request (e.g. 422/409) to the caller', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /courses': new Error('conflict') }));
-		await expect(createCourse({ name: 'x' })).rejects.toThrow('conflict');
+		await expect(
+			createCourse({ name: 'x', level: 'beginner', duration_minutes: 60, price_cents: 0, max_students: 1 })
+		).rejects.toThrow('conflict');
 	});
 });
 

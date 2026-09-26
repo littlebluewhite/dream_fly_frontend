@@ -1,148 +1,181 @@
 import { describe, it, expect } from 'vitest';
-import { levelToApi, scheduleTextOf, parseAgeRange, coachIdOf, buildCourseBody, blankClassRow } from './course-request';
+import {
+	courseDraftOf,
+	checkCourseDraft,
+	buildCreateCourseBody,
+	buildUpdateCourseBody,
+	blankClassRow,
+	COURSE_NAME_ERROR,
+	COURSE_COACH_ERROR,
+	COURSE_AGE_FORMAT_ERROR,
+	COURSE_AGE_RANGE_ERROR,
+	COURSE_CAP_ERROR,
+	COURSE_PRICE_ERROR,
+	COURSE_DURATION_ERROR,
+	type CourseDraft,
+	type CourseErrors,
+	type ValidCourse
+} from './course-request';
 import { CATS, type ClassRow } from '$lib/admin/data';
 import type { Coach } from '$lib/domain/coaches';
-import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { COURSE_LEVEL_LABEL, type Level } from '$lib/domain/course-level';
 
-/* course-request.ts — 純函式，組出 POST/PATCH /courses body（Task 8 piece 1）。
- * 反向對照 admin/api.ts 唯讀映射用到的三個小函式（COURSE_LEVEL_TO_CLASS_LEVEL /
- * splitSchedule / ageRange）。全部無需渲染，直接測純函式輸出。
- *
- * Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——`BASE_CLASS` 是檔內
- * inline fixture(沿用真實種子 k1 的欄位值)，供下方各 it() 用 spread 覆寫個別
- * 欄位。 */
-const BASE_CLASS: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: 'A 訓練館', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 86, makeup: 0, durationMinutes: 90 };
+/* course-request.ts — 課程寫入 module（R13 Task 4 / C2）：draft → check → body。全部是純
+ * 函式，不需渲染。表單（ClassEditDialog / mobile ClassForm）的測試只剩接線。 */
+const COACHES: Coach[] = [
+	{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true },
+	{ id: 'co2', userId: 'u2', name: '陳冠宇', initial: '陳', title: '教練', color: '#000', tags: [], isActive: true }
+];
+const BASE_CLASS: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: '', day: '週二', time: '19:00–20:30', enrolled: 11, cap: 12, age: '8–14 歲', price: 4800, status: '招生中', wait: 0, term: '', sessions: 0, startDate: '', checkinRate: 0, makeup: 0, durationMinutes: 90 };
 
-describe('levelToApi — 5 態本地分級 → 後端 5 態 course_level enum', () => {
-	it('maps all 5 levels to their own backend enum value (no 5→3 fold)', () => {
-		expect(levelToApi('啟蒙')).toBe('foundation');
-		expect(levelToApi('入門')).toBe('beginner');
-		expect(levelToApi('基礎')).toBe('intermediate');
-		expect(levelToApi('進階')).toBe('advanced');
-		expect(levelToApi('選手')).toBe('elite');
+function validOf(d: CourseDraft): ValidCourse {
+	const r = checkCourseDraft(d, COACHES);
+	if (r.kind !== 'valid') throw new Error('expected valid, got ' + JSON.stringify(r.errors));
+	return r.course;
+}
+const draft = (over: Partial<CourseDraft> = {}): CourseDraft => ({ ...courseDraftOf(BASE_CLASS), ...over });
+
+describe('buildUpdateCourseBody — 年齡上下限兩個都送(後端 PATCH 會合併缺的那一邊)', () => {
+	it('8–14 歲 改成 12 歲以上 ⇒ { min_age: 12, max_age: null }', () => {
+		const body = buildUpdateCourseBody(validOf(draft({ age: '12 歲以上' })));
+		expect(body.min_age).toBe(12);
+		expect(body.max_age).toBeNull();
 	});
 
-	// Round-3 merge-blocker regression：LEVEL_TO_API 曾手刻成 5→3（啟蒙/選手各自就近
-	// 併入 beginner/advanced），造成建立/編輯 foundation、elite 課程時靜默降級。改為
-	// 從 COURSE_LEVEL_LABEL（讀側 SSOT）反向推導後，round-trip 對每一級都必須成立，
-	// 兩份表才不會再度分歧。
-	it('round-trips every level through COURSE_LEVEL_LABEL: levelToApi(label) === code', () => {
-		for (const [code, label] of Object.entries(COURSE_LEVEL_LABEL)) {
-			expect(levelToApi(label)).toBe(code);
-		}
-	});
-});
-
-describe('scheduleTextOf — day/time 組回 schedule_text（splitSchedule 的反向）', () => {
-	it('combines day + time with a single space', () => {
-		expect(scheduleTextOf('週二、四', '17:00-19:00')).toBe('週二、四 17:00-19:00');
+	it('改成 9 歲以下 ⇒ { min_age: null, max_age: 9 }', () => {
+		const body = buildUpdateCourseBody(validOf(draft({ age: '9 歲以下' })));
+		expect(body.min_age).toBeNull();
+		expect(body.max_age).toBe(9);
 	});
 
-	it('day only (no time) returns day alone', () => {
-		expect(scheduleTextOf('週日', '')).toBe('週日');
+	it('清空 時段 / 年齡 / 分類 ⇒ 送 null(不是省略)', () => {
+		const body = buildUpdateCourseBody(validOf(draft({ day: ' ', time: '', age: '', cat: '' })));
+		expect(body).toMatchObject({ schedule_text: null, min_age: null, max_age: null, category: null });
 	});
 
-	it('time only (no day) returns time alone', () => {
-		expect(scheduleTextOf('', '15:00-16:30')).toBe('15:00-16:30');
-	});
-
-	it('both empty returns undefined (PATCH omits, POST sends no schedule)', () => {
-		expect(scheduleTextOf('', '')).toBeUndefined();
-		expect(scheduleTextOf('  ', '  ')).toBeUndefined();
+	it('每個 draft 鍵都會進 body(無 undefined 值)', () => {
+		const body = buildUpdateCourseBody(validOf(draft()));
+		expect(Object.keys(body).sort()).toEqual(
+			['name', 'level', 'category', 'coach_id', 'schedule_text', 'min_age', 'max_age', 'price_cents', 'max_students', 'duration_minutes'].sort()
+		);
+		expect(Object.values(body)).not.toContain(undefined);
 	});
 });
 
-describe('parseAgeRange — age 顯示字串反向解析為 min_age/max_age（ageRange 的反向）', () => {
-	it('parses a full "min–max 歲" range', () => {
-		expect(parseAgeRange('8–14 歲')).toEqual({ min_age: 8, max_age: 14 });
-	});
-
-	it('parses "N 歲以上" (min only)', () => {
-		expect(parseAgeRange('12 歲以上')).toEqual({ min_age: 12 });
-	});
-
-	it('parses "N 歲以下" (max only)', () => {
-		expect(parseAgeRange('9 歲以下')).toEqual({ max_age: 9 });
-	});
-
-	it('empty string yields no keys at all (not both undefined values — absent)', () => {
-		expect(parseAgeRange('')).toEqual({});
-	});
-
-	it('unrecognised free text yields no keys (never guesses)', () => {
-		expect(parseAgeRange('國小以上')).toEqual({});
-	});
-});
-
-describe('coachIdOf — coach 姓名比對 coaches 清單取得 id', () => {
-	const coaches: Coach[] = [
-		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true },
-		{ id: 'co2', userId: 'u2', name: '陳冠宇', initial: '陳', title: '教練', color: '#000', tags: [], isActive: true }
-	];
-
-	it('finds the matching coach id by exact name', () => {
-		expect(coachIdOf('陳冠宇', coaches)).toBe('co2');
-	});
-
-	it('returns undefined when no coach matches (including empty string)', () => {
-		expect(coachIdOf('', coaches)).toBeUndefined();
-		expect(coachIdOf('查無此人', coaches)).toBeUndefined();
-	});
-});
-
-describe('buildCourseBody — ClassRow → 共用寫入 body（不含 duration_minutes）', () => {
-	const coaches: Coach[] = [
-		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true }
-	];
-
-	it('assembles name/level/category/coach_id/schedule_text/age/price_cents/max_students', () => {
-		const k: ClassRow = {
-			...BASE_CLASS,
-			name: '測試班級',
-			level: '進階',
-			cat: '競技體操',
-			coach: '林雅婷',
-			day: '週二、四',
-			time: '17:00-19:00',
-			age: '8–14 歲',
-			price: 4800,
-			cap: 12
-		};
-		expect(buildCourseBody(k, coaches)).toEqual({
+describe('buildCreateCourseBody — ValidCourse → POST body', () => {
+	it('組出完整 body(level 轉 enum、季費轉 cents、時段組回 schedule_text)', () => {
+		const body = buildCreateCourseBody(
+			validOf(draft({ name: '測試班級', coach: '陳冠宇', cat: '競技體操', day: '週二、四', time: '17:00-19:00', priceText: '4800', capText: '12', durationText: '60' }))
+		);
+		expect(body).toEqual({
 			name: '測試班級',
 			level: 'advanced',
 			category: '競技體操',
-			coach_id: 'co1',
+			coach_id: 'co2',
 			schedule_text: '週二、四 17:00-19:00',
 			min_age: 8,
 			max_age: 14,
 			price_cents: 480000,
-			max_students: 12
+			max_students: 12,
+			duration_minutes: 60
 		});
 	});
 
-	it('omits coach_id/schedule_text/age keys when there is nothing to derive them from', () => {
-		const k: ClassRow = { ...BASE_CLASS, coach: '', day: '', time: '', age: '' };
-		const body = buildCourseBody(k, coaches);
-		expect(body.coach_id).toBeUndefined();
-		expect(body.schedule_text).toBeUndefined();
-		expect(body.min_age).toBeUndefined();
-		expect(body.max_age).toBeUndefined();
+	it('每一級 level 都對到自己的後端 enum(無 5→3 摺疊)', () => {
+		for (const [code, label] of Object.entries(COURSE_LEVEL_LABEL)) {
+			expect(buildCreateCourseBody(validOf(draft({ level: label as Level }))).level).toBe(code);
+		}
 	});
 
-	it('price_cents uses toCents (NT$ → cents), never a raw *100 inline', () => {
-		const k: ClassRow = { ...BASE_CLASS, price: 3200 };
-		expect(buildCourseBody(k, coaches).price_cents).toBe(320000);
+	it('時段只填一邊時只送那一邊', () => {
+		expect(buildCreateCourseBody(validOf(draft({ day: '週日', time: '' }))).schedule_text).toBe('週日');
+		expect(buildCreateCourseBody(validOf(draft({ day: '', time: '15:00' }))).schedule_text).toBe('15:00');
+	});
+});
+
+describe('checkCourseDraft — 驗證', () => {
+	it('名稱 trim 後送出', () => {
+		expect(validOf(draft({ name: '  新班級  ' })).name).toBe('新班級');
+	});
+
+	it.each([
+		['8–14 歲', 8, 14],
+		['8-14 歲', 8, 14],
+		['8~14歲', 8, 14],
+		['8 – 14 歲', 8, 14],
+		['12 歲以上', 12, null],
+		['9 歲以下', null, 9],
+		['0–150 歲', 0, 150],
+		['', null, null]
+	])('年齡 %j ⇒ min %s / max %s', (age, min, max) => {
+		const c = validOf(draft({ age }));
+		expect([c.minAge, c.maxAge]).toEqual([min, max]);
+	});
+
+	it.each<[string, Partial<CourseDraft>, keyof CourseErrors, string]>([
+		['名稱空白', { name: '   ' }, 'name', COURSE_NAME_ERROR],
+		['名稱 101 字', { name: '班'.repeat(101) }, 'name', COURSE_NAME_ERROR],
+		['教練不在清單', { coach: '查無此人' }, 'coach', COURSE_COACH_ERROR],
+		['教練空白', { coach: '' }, 'coach', COURSE_COACH_ERROR],
+		['年齡自由文字', { age: '國小以上' }, 'age', COURSE_AGE_FORMAT_ERROR],
+		['年齡缺 歲', { age: '8-14' }, 'age', COURSE_AGE_FORMAT_ERROR],
+		['年齡下限大於上限', { age: '14–8 歲' }, 'age', COURSE_AGE_RANGE_ERROR],
+		['年齡超過 150', { age: '151 歲以上' }, 'age', COURSE_AGE_RANGE_ERROR],
+		['人數 0', { capText: '0' }, 'cap', COURSE_CAP_ERROR],
+		['人數 10001', { capText: '10001' }, 'cap', COURSE_CAP_ERROR],
+		['人數非整數', { capText: '12.5' }, 'cap', COURSE_CAP_ERROR],
+		['人數空白', { capText: '' }, 'cap', COURSE_CAP_ERROR],
+		['季費負數', { priceText: '-1' }, 'price', COURSE_PRICE_ERROR],
+		['季費超過 1,000,000', { priceText: '1000001' }, 'price', COURSE_PRICE_ERROR],
+		['時長 0', { durationText: '0' }, 'duration', COURSE_DURATION_ERROR],
+		['時長 1441', { durationText: '1441' }, 'duration', COURSE_DURATION_ERROR]
+	])('%s ⇒ invalid', (_label, over, key, message) => {
+		expect(errorsOf(draft(over))).toEqual({ [key]: message });
+	});
+
+	it.each<[string, Partial<CourseDraft>]>([
+		['名稱 1 字', { name: '班' }],
+		['名稱 100 字', { name: '班'.repeat(100) }],
+		['人數 1', { capText: '1' }],
+		['人數 10000', { capText: '10000' }],
+		['季費 0', { priceText: '0' }],
+		['季費 1,000,000', { priceText: '1000000' }],
+		['時長 1', { durationText: '1' }],
+		['時長 1440', { durationText: '1440' }]
+	])('邊界 %s ⇒ valid', (_label, over) => {
+		expect(checkCourseDraft(draft(over), COACHES).kind).toBe('valid');
+	});
+
+	it('多個欄位同時不合法 ⇒ 每個都有錯誤', () => {
+		expect(Object.keys(errorsOf(draft({ name: '', capText: 'x', durationText: '' }))).sort()).toEqual(['cap', 'duration', 'name']);
+	});
+});
+
+function errorsOf(d: CourseDraft) {
+	const r = checkCourseDraft(d, COACHES);
+	return r.kind === 'invalid' ? r.errors : {};
+}
+
+describe('courseDraftOf — ClassRow → draft(只含可寫欄位)', () => {
+	it('數字欄位轉文字緩衝，不帶場地/期別/堂數/招生狀態', () => {
+		expect(courseDraftOf(BASE_CLASS)).toEqual({
+			name: '競技啦啦隊 進階班',
+			level: '進階',
+			cat: '競技啦啦隊',
+			coach: '林雅婷',
+			day: '週二',
+			time: '19:00–20:30',
+			age: '8–14 歲',
+			capText: '12',
+			priceText: '4800',
+			durationText: '90'
+		});
 	});
 });
 
 describe('blankClassRow — 新增課程 flow 的空白 ClassRow（桌面 blankClass 預設，Task 2 單一來源）', () => {
-	const coaches: Coach[] = [
-		{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true }
-	];
-
 	it('seeds the desktop defaults, with cat = CATS[0] and coach = coaches[0].name', () => {
-		expect(blankClassRow(coaches)).toEqual({
+		expect(blankClassRow(COACHES)).toEqual({
 			id: '',
 			name: '',
 			level: '基礎',

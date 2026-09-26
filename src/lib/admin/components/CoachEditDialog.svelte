@@ -19,13 +19,17 @@
    * 兩步分別是 POST /users、POST /coaches；本元件不知道兩步怎麼打，只負責收欄位、
    * 組出 CoachFormValues 交給 onSave，實際的兩步 API 呼叫、失敗訊息、成功後刷新皆由
    * 呼叫端（routes/admin/coaches/+page.svelte）決定——同 Task F1/F4 的「dialog 不打
-   * API、不丟 toast」慣例。 */
+   * API、不丟 toast」慣例。
+   *
+   * R13 Task 4：驗證與標籤拆分收進 coach-save.ts 的 checkNewCoach()/checkCoachEdit()
+   * (mobile CoachForm 共用)，不過就把錯誤顯示在各欄位、不呼叫 onSave。 */
   import { Input, Switch } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
   // C4 批4:Coach 改直取 $lib/domain/coaches(原經 $lib/admin/data 純轉手);
   // CoachFormValues 是 admin/data.ts 本檔真內容(草稿形狀),續留原處。
   import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/admin/data';
+  import { checkNewCoach, checkCoachEdit, type CoachErrors } from './coach-save';
 
   export let coach: Coach | null = null;
   export let open = false;
@@ -51,8 +55,7 @@
   let isActive = coach ? coach.isActive : true;
   let email = '';
   let password = '';
-  let titleError = '';
-  let passwordError = '';
+  let errors: CoachErrors = {};
 
   let lastCoach: Coach | null = coach;
   let wasOpen = open;
@@ -65,27 +68,19 @@
     isActive = coach ? coach.isActive : true;
     email = '';
     password = '';
-    titleError = '';
-    passwordError = '';
+    errors = {};
   }
 
   function save() {
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
-      titleError = '請輸入職稱';
+    const r = isNew
+      ? checkNewCoach({ email, password, name, title, tagsText, isActive })
+      : checkCoachEdit({ name, title, tagsText, isActive });
+    if (r.kind === 'invalid') {
+      errors = r.errors;
       return;
     }
-    titleError = '';
-    if (isNew && password.length < 8) {
-      passwordError = '密碼至少需要 8 碼';
-      return;
-    }
-    passwordError = '';
-    const tags = tagsText
-      .split(/[、,，]/)
-      .map((t) => t.trim())
-      .filter(Boolean);
-    return onSave({ email: email.trim(), password, name: name.trim(), title: trimmedTitle, tags, isActive });
+    errors = {};
+    return onSave(r.values);
   }
 </script>
 
@@ -106,10 +101,11 @@
         bind:value={email}
         placeholder="coach@example.com"
         disabled={pendingUserId !== null}
+        error={errors.email ?? ''}
       />
     {/if}
-    <Input label="教練姓名" bind:value={name} disabled={pendingUserId !== null} />
-    <Input label="職稱 / 專業" required error={titleError} bind:value={title} />
+    <Input label="教練姓名" bind:value={name} disabled={pendingUserId !== null} error={errors.name ?? ''} />
+    <Input label="職稱 / 專業" required error={errors.title ?? ''} bind:value={title} />
     <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
     {#if isNew}
       <Input
@@ -117,7 +113,7 @@
         type="password"
         bind:value={password}
         placeholder="至少 8 碼"
-        error={passwordError}
+        error={errors.password ?? ''}
       />
     {/if}
     <div style="display:flex;flex-direction:column;gap:4px;padding-top:4px">

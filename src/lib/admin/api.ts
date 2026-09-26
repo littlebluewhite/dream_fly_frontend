@@ -432,11 +432,29 @@ export const getClasses = async (page = 1): Promise<ClassesData> => {
 };
 
 /* ── 課程建立/編輯（POST /courses、PATCH /courses/{id}，admin-only，Task 8 piece 1） ──
- * Body 形狀對齊 CreateCourseRequest/UpdateCourseRequest（契約 §3.3）；兩個端點的欄位
- * 全部選填語意不同（POST 有 4 個實質必填、PATCH 全選填一律「省略＝維持原值」），這裡
- * 用同一個寬鬆型別給兩支函式共用（呼叫端 course-request.ts 的 buildCourseBody() 負責
- * 組出實際會送出的欄位），不為了型別層面的必填/選填強分兩型別。 */
-export interface CourseWriteBody {
+ * Body 形狀對齊 CreateCourseRequest/UpdateCourseRequest（契約 §3.3）。R13 Task 4 拆成
+ * 兩型別：POST 有 5 個必填；PATCH 全選填，「省略＝維持原值」、「null＝清空」——
+ * min_age/max_age/category/schedule_text 可送 null（後端 Option<Option<T>>）。coach_id
+ * 刻意不收 null：GET /coaches 只回在職教練，送 null 會悄悄解除綁定。body 由
+ * course-request.ts 的 buildCreateCourseBody()/buildUpdateCourseBody() 組出。 */
+export interface CreateCourseBody {
+	name: string;
+	slug?: string;
+	level: string;
+	description?: string;
+	duration_minutes: number;
+	price_cents: number;
+	max_students: number;
+	min_age?: number | null;
+	max_age?: number | null;
+	features?: string[];
+	coach_id?: string;
+	category?: string | null;
+	schedule_text?: string | null;
+	is_highlighted?: boolean;
+}
+
+export interface UpdateCourseBody {
 	name?: string;
 	slug?: string;
 	level?: string;
@@ -444,19 +462,19 @@ export interface CourseWriteBody {
 	duration_minutes?: number;
 	price_cents?: number;
 	max_students?: number;
-	min_age?: number;
-	max_age?: number;
+	min_age?: number | null;
+	max_age?: number | null;
 	features?: string[];
 	coach_id?: string;
-	category?: string;
-	schedule_text?: string;
+	category?: string | null;
+	schedule_text?: string | null;
 	is_highlighted?: boolean;
 }
 
-export const createCourse = (body: CourseWriteBody): Promise<ApiCourse> =>
+export const createCourse = (body: CreateCourseBody): Promise<ApiCourse> =>
 	api<ApiCourse>('/courses', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateCourse = (id: string, body: CourseWriteBody): Promise<ApiCourse> =>
+export const updateCourse = (id: string, body: UpdateCourseBody): Promise<ApiCourse> =>
 	api<ApiCourse>(`/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 教練（GET /coaches，公開端點，復用 Task 14 public seam） ═════════════════════════ */

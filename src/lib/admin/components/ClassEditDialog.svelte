@@ -1,94 +1,96 @@
 <script lang="ts">
   /* 編輯課程 / 新增班級 — edit form inside the shared EditModal. Faithful port of
    * admin.jsx ClassEditDialog: a 2-col field grid (班級名稱 spanning both cols,
-   * then 分級 / 課程類別 / 授課教練 / 教室 / 上課日 / 時段 / 適合年齡 / 人數上限 / 本期期別 /
-   * 本期堂數 / 季費 / 招生狀態). Holds a local `let f` copy of the class prop, reset
-   * whenever the dialog transitions to open. Numeric fields (人數上限 / 本期堂數 /
-   * 季費) are edited as text and parsed back on save.
+   * then 分級 / 課程類別 / 授課教練 / 上課日 / 時段 / 適合年齡 / 人數上限 / 季費 /
+   * 單堂時長), plus a read-only 招生狀態 badge.
    *
-   * Task 8 piece 1: 儲存改為呼叫真實 POST/PATCH /courses（classes/+page.svelte 的
-   * save() 是非同步的，可能失敗），這裡不再樂觀地立刻丟成功 toast——成功/失敗 toast
-   * 一律由 page 在 API 呼叫結束後決定並顯示。單堂時長（duration_minutes，FE#18 起
-   * ClassRow 的 durationMinutes 欄位）新增/編輯兩種模式皆收集：新增預設 90 分鐘
-   * （沿用既有 fixture 常見值，無來源課程可讀），編輯模式預設帶入該課程自己的
-   * durationMinutes；一律隨 onSave 的第二個參數送出。 */
+   * R13 Task 4(C2):工作副本是 course-request.ts 的 CourseDraft(只含後端可寫欄位，
+   * 數字欄位是文字緩衝)。場地/期別/堂數後端沒有，輸入已拿掉；招生狀態由後端依人數
+   * 推導，改唯讀徽章。儲存時 checkCourseDraft() 驗證：不過就顯示錯誤、不呼叫 onSave；
+   * 過了就把 ValidCourse 交給 onSave。成功/失敗 toast 一律由 page 在 API 呼叫結束後
+   * 決定並顯示(Task 8 piece 1)。
+   *
+   * Reset(ADR-0015 entity 族):klass prop 變更時重建 draft(courseDraftOf 每次產生
+   * 新物件，不別名呼叫端傳入的原實體)。 */
   import { Input, Select } from '$lib/components/ui';
   import EditModal from './EditModal.svelte';
-  // C4 批4(facade 純轉手退役):LEVELS/Coach 改直取對應 $lib/domain 各 entity 檔
-  // (原經 $lib/admin/data 純轉手,零附加型別事實);CATS/CLASS_STATUS/ClassRow 是
-  // admin/data.ts 本檔真內容,續留原處。
+  import StatusBadge from './StatusBadge.svelte';
   import { LEVELS } from '$lib/domain/course-level';
   import type { Coach } from '$lib/domain/coaches';
-  import { CATS, CLASS_STATUS, type ClassRow } from '$lib/admin/data';
+  import { CATS, type ClassRow } from '$lib/admin/data';
+  import { courseDraftOf, checkCourseDraft, type CourseDraft, type CourseErrors, type ValidCourse } from './course-request';
 
   export let klass: ClassRow | null = null;
   export let open = false;
   export let isNew = false;
   export let onClose: () => void = () => {};
-  export let onSave: (updated: ClassRow, durationMinutes: number) => void | Promise<void> = () => {};
+  export let onSave: (course: ValidCourse) => void | Promise<void> = () => {};
   // Caller (classes/+page.svelte) passes the getClasses() seam's coaches — required,
   // no mock fallback (Task 11 P2 cleanup); standalone renders (tests) must supply it.
   export let coaches: Coach[];
 
   const coachOptions = coaches.map((c) => c.name);
 
-  // Local editable copy, reset whenever the klass prop changes (mirrors React's
-  // useEffect(() => setF(k), [k])). Numeric fields are edited as text
-  // (Input.value is a string) and parsed back on save.
-  let f: ClassRow | null = klass ? { ...klass } : null;
-  let capText = klass ? String(klass.cap) : '';
-  let priceText = klass ? String(klass.price) : '';
-  let sessionsText = klass ? String(klass.sessions) : '';
-  // 單堂時長（分鐘）—— 編輯模式帶入該課程自己的 durationMinutes；新增模式沒有來源
-  // 課程可讀，預設 90 分鐘（沿用既有 fixture 常見值）。兩者皆可在送出前調整。
-  let durationText = klass ? String(klass.durationMinutes) : '90';
+  let d: CourseDraft | null = klass ? courseDraftOf(klass) : null;
+  let errors: CourseErrors = {};
   let lastKlass: ClassRow | null = klass;
   $: if (klass !== lastKlass) {
     lastKlass = klass;
-    f = klass ? { ...klass } : null;
-    capText = klass ? String(klass.cap) : '';
-    priceText = klass ? String(klass.price) : '';
-    sessionsText = klass ? String(klass.sessions) : '';
-    durationText = klass ? String(klass.durationMinutes) : '90';
+    d = klass ? courseDraftOf(klass) : null;
+    errors = {};
   }
 
   function save() {
-    if (!f) return;
-    const updated: ClassRow = {
-      ...f,
-      cap: parseInt(capText, 10) || 0,
-      price: parseInt(priceText, 10) || 0,
-      sessions: parseInt(sessionsText, 10) || 0
-    };
-    return onSave(updated, parseInt(durationText, 10) || 0);
+    if (!d) return;
+    const r = checkCourseDraft(d, coaches);
+    if (r.kind === 'invalid') {
+      errors = r.errors;
+      return;
+    }
+    errors = {};
+    return onSave(r.course);
   }
 </script>
 
-{#if f}
+{#if d && klass}
   <EditModal
     {open}
     title={isNew ? '新增班級' : '編輯課程'}
-    sub={isNew ? '建立新的開課班級' : '班級編號 ' + f.id}
+    sub={isNew ? '建立新的開課班級' : '班級編號 ' + klass.id}
     icon="calendar-days"
     primaryLabel={isNew ? '建立班級' : '儲存課程'}
     {onClose}
     onSave={save}
   >
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-      <Input label="班級名稱" bind:value={f.name} style="grid-column:span 2" />
-      <Select label="分級" bind:value={f.level} options={LEVELS} />
-      <Select label="課程類別" bind:value={f.cat} options={CATS} />
-      <Select label="授課教練" bind:value={f.coach} options={coachOptions} />
-      <Input label="教室 / 場地" bind:value={f.room} />
-      <Input label="上課日" bind:value={f.day} />
-      <Input label="時段" bind:value={f.time} />
-      <Input label="適合年齡" bind:value={f.age} placeholder="例如 8–14 歲 / 12 歲以上 / 9 歲以下" />
-      <Input label="人數上限" bind:value={capText} />
-      <Input label="本期期別" bind:value={f.term} />
-      <Input label="本期堂數" bind:value={sessionsText} />
-      <Input label="季費 (NT$)" bind:value={priceText} />
-      <Select label="招生狀態" bind:value={f.status} options={CLASS_STATUS} />
-      <Input label="單堂時長（分鐘）" bind:value={durationText} />
+      <Input label="班級名稱" bind:value={d.name} error={errors.name ?? ''} style="grid-column:span 2" />
+      <Select label="分級" bind:value={d.level} options={LEVELS} />
+      <Select label="課程類別" bind:value={d.cat} options={CATS} />
+      <Select label="授課教練" bind:value={d.coach} options={coachOptions} helper={errors.coach ?? ''} />
+      <div class="status">
+        <span class="status-label">招生狀態</span>
+        <StatusBadge kind="classStatus" value={klass.status} />
+      </div>
+      <Input label="上課日" bind:value={d.day} />
+      <Input label="時段" bind:value={d.time} />
+      <Input label="適合年齡" bind:value={d.age} error={errors.age ?? ''} placeholder="例如 8–14 歲 / 12 歲以上 / 9 歲以下" />
+      <Input label="人數上限" bind:value={d.capText} error={errors.cap ?? ''} />
+      <Input label="季費 (NT$)" bind:value={d.priceText} error={errors.price ?? ''} />
+      <Input label="單堂時長（分鐘）" bind:value={d.durationText} error={errors.duration ?? ''} />
     </div>
   </EditModal>
 {/if}
+
+<style>
+  .status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .status-label {
+    font-size: var(--df-text-sm);
+    font-weight: var(--df-weight-semibold);
+    color: var(--df-text-dark);
+  }
+</style>
