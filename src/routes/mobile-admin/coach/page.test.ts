@@ -12,9 +12,9 @@ vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
 // 3 堂課、共 30 位學員 — 與桌面 seed 慣例刻意不同,證明「今日課堂/今日學員」統計
 // 讀 payload 動態算出,而非殘留頁面硬編字面。
 const FIXTURE_COACH_TODAY: TodayRow[] = [
-	{ time: '09:00', name: '測試班 A', room: '測試教室', count: 10, tone: 'success', label: '上課中', taken: true },
-	{ time: '11:00', name: '測試班 B', room: '測試教室', count: 10, tone: 'warning', label: '即將開始', taken: false },
-	{ time: '13:00', name: '測試班 C', room: '測試教室', count: 10, tone: 'neutral', label: '尚未開始', taken: false }
+	{ time: '09:00', name: '測試班 A', room: '測試教室', count: 10, state: 'live', tone: 'success', label: '上課中', taken: true },
+	{ time: '11:00', name: '測試班 B', room: '測試教室', count: 10, state: 'soon', tone: 'warning', label: '即將開始', taken: false },
+	{ time: '13:00', name: '測試班 C', room: '測試教室', count: 10, state: 'wait', tone: 'neutral', label: '尚未開始', taken: false }
 ];
 // coach 身分改用真實教練資料(取代舊 PROFILES.coach 固定假人名)，姓名刻意與
 // PROFILES.coach.name(林雅婷)不同，證明頁面讀 payload 而非殘留 mock import。

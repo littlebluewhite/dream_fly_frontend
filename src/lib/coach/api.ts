@@ -15,7 +15,7 @@ import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiCertificate, ApiReportCard } from '$lib/api/wire';
+import type { ApiPage, ApiCertificate, ApiReportCard, ApiTodaySession } from '$lib/api/wire';
 import { deriveSessionStatus } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import type {
@@ -99,24 +99,12 @@ function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
 
 /* ═════════════════════════ 今日課程 / 儀表板（GET /sessions/today，見 integration-contract.md §3.18） ═════════════════════════ */
 
-/** TodaySessionResponse（§3.18）。教練呼叫時後端已只回自己課程（courses.coach_id 對應
- *  呼叫者 coaches.id）的今日場次，並依 start_time 排序——前端不再需要自行過濾/排序。 */
-interface ApiTodaySession {
-	id: string;
-	course_id: string;
-	course_name: string;
-	start_time: string; // "HH:MM:SS"
-	end_time: string;
-	enrolled_count: number;
-}
+/** TodaySessionResponse(§3.18，教練/admin 兩分支共用同一形狀，$lib/api/wire 單源，C5)。
+ *  教練呼叫時後端已只回自己課程（courses.coach_id 對應呼叫者 coaches.id）的今日場次，
+ *  並依 start_time 排序——前端不再需要自行過濾/排序。 */
 
-/** 場次狀態推導 + 牆鐘比較邏輯已搬到 $lib/domain/sessions.ts（admin/coach/mobile-admin
- *  三處原本各自手抄一份 status/tone/label 查表，C4 單源收斂）——這裡留活 re-export，
- *  下方 mapTodayClass()、呼叫端與測試 mock 路徑不動。 */
-export { deriveSessionStatus };
-
-/** TodaySessionResponse → 既有 TodayClass 形狀。room/level/cat 無對應欄位(場次回應不含
- *  場地/課程等級/課程分類)，一律誠實給預設值(P2)；count 用 enrolled_count；status 由
+/** TodaySessionResponse → 既有 TodayClass 形狀。level/cat 無對應欄位，一律誠實給預設值
+ *  (P2)；room 用 venue(null → '—')；count 用 enrolled_count；status 由
  *  deriveSessionStatus 依目前時間推導(§3.18 裁決 2)。 */
 function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 	return {
@@ -124,7 +112,7 @@ function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 		start: hhmm(s.start_time),
 		end: hhmm(s.end_time),
 		name: s.course_name,
-		room: '', // P2: TodaySessionResponse 無場地欄位
+		room: s.venue ?? '—',
 		count: s.enrolled_count,
 		level: '基礎', // P2: TodaySessionResponse 無課程等級欄位
 		cat: '體操', // P2: TodaySessionResponse 無課程分類欄位
@@ -230,15 +218,15 @@ function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
 
 /** TodaySessionResponse + 該場次名冊 → 既有 AttClassFull 形狀。time 組成「今日 HH:MM–
  *  HH:MM」(場次本來就是今日的，同既有 mock 格式慣例)；start 另帶起始 HH:MM 供
- *  sessionChipLabel 直接使用；room 無對應欄位(P2，同
- *  mapTodayClass 慣例)；coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)。 */
+ *  sessionChipLabel 直接使用；room 用 venue(null → '—'，同 mapTodayClass 慣例)；
+ *  coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)。 */
 function mapAttendanceClass(s: ApiTodaySession, roster: ApiRosterEntry[], coachName: string): AttClassFull {
 	return {
 		id: s.id,
 		name: s.course_name,
 		time: `今日 ${hhmm(s.start_time)}–${hhmm(s.end_time)}`,
 		start: hhmm(s.start_time),
-		room: '', // P2: TodaySessionResponse 無場地欄位
+		room: s.venue ?? '—',
 		coach: coachName,
 		roster: roster.map(mapRosterRow)
 	};

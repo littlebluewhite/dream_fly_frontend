@@ -27,7 +27,6 @@
   import { getAdminHome, type MAdminHomeData, type CreateMemberBody, type UpdateMemberBody } from '$lib/mobile-admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
-  import { SESSION_STATUS } from '$lib/domain/sessions';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -48,10 +47,10 @@
   // $orders 是同步 seed(見上方註解),水合前直接讀會顯示一個假的待付款橫幅——
   // 落地前一律當 0,水合後才反映真實 pending 數。
   $: pending = $opsHydrated ? $orders.filter((o) => o.status === 'pending').length : 0;
-  // C4：label 正字單源自 $lib/domain/sessions 的 SESSION_STATUS（live→「上課中」），
-  // 不再硬編字面比對——admin 桌面的 live 標籤已隨單源收斂從「進行中」改「上課中」，
-  // 這裡的比對值必須跟著同一個來源走，否則兩邊字面一旦再分歧，這裡會又悄悄失效。
-  $: liveNow = today.find((t) => t.label === SESSION_STATUS.live[1]);
+  // C5：改比對 state(TodayStatus 窄型別)，不再比對 label 字面——label 是查表算出的
+  // 顯示文字，兩者一度分歧過一次(admin 桌面 live 標籤從「進行中」改「上課中」)；
+  // state 是後端 wire 單源投影出的狀態值，不會因為顯示文案改動而悄悄失效。
+  $: liveNow = today.find((t) => t.state === 'live');
 
   const go = (id: string) => goto(adminPath('admin', id));
   const openRole = () => overlay.sheet('role', { role: $role, setRole: (r: typeof $role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });

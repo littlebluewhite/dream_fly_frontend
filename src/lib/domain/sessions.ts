@@ -6,7 +6,8 @@
  * 場次時間為牆鐘語意，前端以本地時間直接比較，不做時區換算）與其私有的 wallClockTime
  * 亦自 coach/api.ts 整段移入（語意零改）——coach/api.ts 只留 re-export，admin/api.ts 改
  * 直接從這裡 import，消除原本 admin → coach 的跨 surface 借實作。 */
-import type { Tone } from '$lib/api/wire';
+import type { ApiTodaySession, Tone } from '$lib/api/wire';
+import { hhmm } from '$lib/api/wire';
 
 /** 今日場次狀態 union（admin/coach/mobile-admin 共用查表鍵，自 coach/data.ts 升遷）。 */
 export type TodayStatus = 'wait' | 'live' | 'done' | 'soon';
@@ -34,4 +35,32 @@ export function deriveSessionStatus(startTime: string, endTime: string, now: Dat
 	if (wall < startTime) return 'wait';
 	if (wall < endTime) return 'live';
 	return 'done';
+}
+
+/** 今日場次投影（C5：admin/coach/mobile-admin 三處原本各自手抄一份 ApiTodaySession →
+ *  自家目標形狀的映射，逐欄位相同，單源收斂到這裡）。coach_name/venue 為 null 時皆給
+ *  '—'（誠實預設值，P2：後端無對應資料時的既有慣例）；state 仍委派 deriveSessionStatus
+ *  依目前時間推導，語意零改。 */
+export interface TodaySession {
+	id: string;
+	start: string;
+	end: string;
+	name: string;
+	coach: string;
+	room: string;
+	count: number;
+	state: TodayStatus;
+}
+
+export function toTodaySession(s: ApiTodaySession, now: Date): TodaySession {
+	return {
+		id: s.id,
+		start: hhmm(s.start_time),
+		end: hhmm(s.end_time),
+		name: s.course_name,
+		coach: s.coach_name ?? '—',
+		room: s.venue ?? '—',
+		count: s.enrolled_count,
+		state: deriveSessionStatus(s.start_time, s.end_time, now)
+	};
 }

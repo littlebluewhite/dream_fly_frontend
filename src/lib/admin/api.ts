@@ -8,9 +8,9 @@ import { listCoaches, listVenues } from '$lib/public/api';
 import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage } from '$lib/api/wire';
-import { deriveSessionStatus, SESSION_STATUS } from '$lib/domain/sessions';
+import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate } from '$lib/api/wire';
+import type { ApiPage, ApiTodaySession } from '$lib/api/wire';
+import { SESSION_STATUS, toTodaySession } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 // C4 批4(facade 純轉手退役):Ticket/TicketType/ClassStatus/Coach/Venue/
 // OrderStatus/Activity 七個型別改直取對應 $lib/domain 各 entity 檔 / $lib/api/wire
@@ -262,39 +262,23 @@ export type {
 /* ═════════════════════════ 今日課表（GET /sessions/today，admin 分支，見 integration-
  * contract.md §3.18，Task F11：admin 儀表板今日課表接真） ═════════════════════════ */
 
-interface ApiAdminTodaySession {
-	id: string;
-	course_id: string;
-	course_name: string;
-	coach_name: string | null;
-	start_time: string; // "HH:MM:SS"
-	end_time: string;
-	enrolled_count: number;
-	venue: string | null;
-}
-
-/** TodaySessionResponse(admin 分支)→ 既有 TodayClass 形狀。coach_name(Round 4 Task B8
- *  新增)為 null 表示課程尚未指定教練；venue(同批新增)為 null 表示場次反推不到對應
- *  slot——兩者皆顯示「—」。state 由 deriveSessionStatus 依目前時間推導；tone/label
- *  改查 $lib/domain/sessions 的 SESSION_STATUS（C4：admin/coach/mobile-admin 三處
- *  原本各自手抄一份查表，已單源收斂——live 的正字標籤「上課中」取代這裡舊值
- *  「進行中」，語意相同、字面各自維護導致的靜默發散，隨此次收斂統一）。
- *  deriveSessionStatus 依目前時間只會推導 wait/live/done 3 態，但 SESSION_STATUS
- *  四鍵齊全（soon 是型別上合法、目前推導不到的第 4 值），state 能直接查表、不需要
- *  窄化 cast 掩蓋兩者落差——查表若真的漏了某個 TodayStatus 值，現在是編譯期錯誤，
- *  不是等真資料哪天推導出第 4 態才在這裡 destructure 到 undefined 而炸掉
- *  (TodayState(見 data.ts)另外多出的 prep(備課中)緩衝態不屬於 TodayStatus，這裡
- *  不涉及)。 */
-function mapTodaySession(s: ApiAdminTodaySession, now: Date): TodayClass {
-	const state = deriveSessionStatus(s.start_time, s.end_time, now);
-	const [tone, label] = SESSION_STATUS[state];
+/** ApiTodaySession(§3.18，admin/coach 兩分支共用同一形狀，$lib/api/wire 單源)→ 既有
+ *  TodayClass 形狀。coach_name/venue 為 null 時皆顯示「—」；hhmm 裁切、null 代換、
+ *  state 推導三件事已收斂進 $lib/domain/sessions 的 toTodaySession()（C5：admin/coach/
+ *  mobile-admin 三處原本各自手抄一份 ApiTodaySession → 目標形狀映射，單源收斂），
+ *  這裡只再投影出 tone/label（查 SESSION_STATUS，C4 既有裁決：live 正字標籤「上課中」，
+ *  soon 雖然 deriveSessionStatus 目前推導不到，四鍵查表仍齊全，不需要窄化 cast 掩蓋
+ *  兩者落差)。 */
+function mapTodaySession(s: ApiTodaySession, now: Date): TodayClass {
+	const t = toTodaySession(s, now);
+	const [tone, label] = SESSION_STATUS[t.state];
 	return {
-		time: hhmm(s.start_time),
-		name: s.course_name,
-		coach: s.coach_name ?? '—',
-		room: s.venue ?? '—',
-		count: s.enrolled_count,
-		state,
+		time: t.start,
+		name: t.name,
+		coach: t.coach,
+		room: t.room,
+		count: t.count,
+		state: t.state,
 		tone,
 		label
 	};
@@ -306,7 +290,7 @@ export interface TodaySessionsData {
 
 /** GET /sessions/today——admin 分支回全站當日場次，後端已依 start_time 排序。 */
 export const getTodaySessions = async (): Promise<TodaySessionsData> => {
-	const sessions = await api<ApiAdminTodaySession[]>('/sessions/today');
+	const sessions = await api<ApiTodaySession[]>('/sessions/today');
 	const now = new Date();
 	return { sessions: sessions.map((s) => mapTodaySession(s, now)) };
 };

@@ -106,6 +106,20 @@ export interface ApiCertificate {
   created_at: string;
 }
 
+/** GET /sessions/today 回應（admin/coach 兩分支共用同一形狀，integration-contract.md
+ *  §3.18；Round 4 Task B8 新增 coach_name/venue，皆可為 null）。自 admin/api.ts 與
+ *  coach/api.ts 逐字複製收斂（C5：今日場次 wire 單源）。 */
+export interface ApiTodaySession {
+  id: string;
+  course_id: string;
+  course_name: string;
+  coach_name: string | null;
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  enrolled_count: number;
+  venue: string | null;
+}
+
 /** 姓名縮寫（頭像 fallback）：trim 後取首字，空字串（或全空白）回 fallback（預設 '?'）。 */
 export const initialOf = (name: string, fallback = '?'): string => name.trim().charAt(0) || fallback;
 

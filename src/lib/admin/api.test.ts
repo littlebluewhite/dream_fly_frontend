@@ -34,7 +34,7 @@ import {
 	putSettings
 } from './api';
 import { api, ApiError } from '$lib/api/client';
-import { deriveSessionStatus } from '$lib/domain/sessions';
+import { toTodaySession } from '$lib/domain/sessions';
 import { mapMemberAccount } from './data';
 import { ORDER_STATUS } from '$lib/api/wire';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -44,13 +44,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-// deriveSessionStatus 預設沿用真實實作(其餘既有測試靠 vi.setSystemTime 驅動真實時間
-// 比較邏輯)——只有下面「soon 分支」測試會用 mockReturnValueOnce 強制覆寫一次，驗證
-// SESSION_STATUS 已補齊的第 4 值查表分支(Important #2(b) 終審修正；C4 起查表單源
-// 收斂至 $lib/domain/sessions，mock 路徑同步改)。
+// toTodaySession 預設沿用真實實作(其餘既有測試靠 vi.setSystemTime 驅動真實時間比較
+// 邏輯)——只有下面「soon 分支」測試會用 mockReturnValueOnce 強制覆寫一次，驗證
+// SESSION_STATUS 已補齊的第 4 值查表分支(Important #2(b) 終審修正；C5 起 admin/api.ts
+// 的 mapTodaySession 改投影 $lib/domain/sessions 的 toTodaySession()，不再直接呼叫
+// deriveSessionStatus，mock 路徑同步改包 toTodaySession)。
 vi.mock('$lib/domain/sessions', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/domain/sessions')>();
-	return { ...actual, deriveSessionStatus: vi.fn(actual.deriveSessionStatus) };
+	return { ...actual, toTodaySession: vi.fn(actual.toTodaySession) };
 });
 
 beforeEach(() => {
@@ -1008,10 +1009,13 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 	 * 聯集(soon 是現行實作推導不到、但型別上合法的第 4 值)。之前 mapTodaySession 把
 	 * 回傳值窄化 cast 成 'wait'|'live'|'done' 3 態去查一張只有 3 個 key 的表——查表
 	 * 一旦真的遇到 soon 就會 destructure 到 undefined 而炸掉。SESSION_STATUS(C4 起
-	 * 單源收斂至 $lib/domain/sessions)現已補齊 soon 分支、移除窄化 cast，這裡用
-	 * mock 強制 deriveSessionStatus 回傳 soon 驗證查表能正確降級，不會炸。 */
-	it('state 推導：deriveSessionStatus 回傳 soon(現行實作不會產生，但型別合法的第 4 態)時查表仍有對應 tone/label，不會炸掉', async () => {
-		vi.mocked(deriveSessionStatus).mockReturnValueOnce('soon');
+	 * 單源收斂至 $lib/domain/sessions)現已補齊 soon 分支、移除窄化 cast；C5 起
+	 * mapTodaySession 改投影 toTodaySession() 的回傳值，這裡改用 mock 強制
+	 * toTodaySession 回傳 state: 'soon' 驗證查表能正確降級，不會炸。 */
+	it('state 推導：toTodaySession 回傳 soon(現行實作不會產生，但型別合法的第 4 態)時查表仍有對應 tone/label，不會炸掉', async () => {
+		vi.mocked(toTodaySession).mockReturnValueOnce({
+			id: 's1', start: '09:00', end: '10:00', name: 'X', coach: '—', room: '—', count: 1, state: 'soon'
+		});
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /sessions/today': [

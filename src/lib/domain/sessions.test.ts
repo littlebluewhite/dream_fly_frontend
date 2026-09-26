@@ -6,7 +6,7 @@
  * ——「上課中」是 canonical 標籤，不是 admin 舊值「進行中」(status-lookups.test.ts
  * 另補一組較簡短的守衛，重點放在跨檔案 canonical 不回歸)。 */
 import { describe, it, expect } from 'vitest';
-import { deriveSessionStatus, SESSION_STATUS, type TodayStatus } from './sessions';
+import { deriveSessionStatus, SESSION_STATUS, toTodaySession, type TodayStatus } from './sessions';
 
 describe('deriveSessionStatus — §3.18 裁決 2(場次時間為牆鐘語意，本地直接比較，不做時區換算)', () => {
 	it('now < start_time → wait', () => {
@@ -48,5 +48,40 @@ describe('SESSION_STATUS — 查表(四鍵、tone、label 正字)', () => {
 
 	it('canonical 守衛：live 標籤是「上課中」，不是 admin 舊值「進行中」', () => {
 		expect(SESSION_STATUS.live[1]).toBe('上課中');
+	});
+});
+
+describe('toTodaySession — ApiTodaySession → TodaySession 投影(C5：今日場次 wire 單源)', () => {
+	const BASE = {
+		id: 's1', course_id: 'c1', course_name: '兒童體操 初階班', coach_name: '黃詩涵',
+		start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 6, venue: 'C 軟墊區'
+	};
+
+	it('hhmm 裁切 start/end；coach_name/venue 皆有值時直接映射；state 依目前時間推導', () => {
+		const t = toTodaySession(BASE, new Date(2026, 6, 4, 9, 30, 0));
+		expect(t).toEqual({
+			id: 's1', start: '09:00', end: '10:00', name: '兒童體操 初階班',
+			coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live'
+		});
+	});
+
+	it('coach_name 為 null(尚未指定教練)時映射為「—」', () => {
+		const t = toTodaySession({ ...BASE, coach_name: null }, new Date(2026, 6, 4, 9, 30, 0));
+		expect(t.coach).toBe('—');
+	});
+
+	it('venue 為 null(反推不到對應 slot)時映射為「—」', () => {
+		const t = toTodaySession({ ...BASE, venue: null }, new Date(2026, 6, 4, 9, 30, 0));
+		expect(t.room).toBe('—');
+	});
+
+	it('now < start_time → state=wait', () => {
+		const t = toTodaySession(BASE, new Date(2026, 6, 4, 8, 0, 0));
+		expect(t.state).toBe('wait');
+	});
+
+	it('now >= end_time → state=done', () => {
+		const t = toTodaySession(BASE, new Date(2026, 6, 4, 11, 0, 0));
+		expect(t.state).toBe('done');
 	});
 });

@@ -95,7 +95,7 @@ describe('getCoachHome', () => {
 
 		expect(d).toEqual({
 			coach: { name: '林雅婷', display: '林教練' },
-			coachToday: [{ time: '09:00', name: '測試班', room: 'A', count: 5, tone: 'success', label: '上課中' }],
+			coachToday: [{ time: '09:00', name: '測試班', room: 'A', count: 5, state: 'live', tone: 'success', label: '上課中' }],
 			pendingClasses: '2 班',
 			pendingReplies: '3 則'
 		});
@@ -177,8 +177,8 @@ describe('getAdminHome', () => {
 		expect(d).toEqual({
 			profiles: PROFILES,
 			today: [
-				{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, tone: 'success', label: '進行中' },
-				{ time: '20:00', name: '成人體操 基礎班', coach: '—', room: '—', count: 9, tone: 'neutral', label: '尚未開始' }
+				{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, state: 'live', tone: 'success', label: '進行中' },
+				{ time: '20:00', name: '成人體操 基礎班', coach: '—', room: '—', count: 9, state: 'wait', tone: 'neutral', label: '尚未開始' }
 			],
 			activity: [{ icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新會員註冊:謝佩珊', time: '2026-07-10 09:12' }],
 			enrolledValue: '248',
@@ -200,7 +200,7 @@ describe('getAdminHome', () => {
 
 		const d = await getAdminHome();
 
-		expect(d.today).toEqual([{ time: '08:00', name: '跑酷體驗班', coach: '—', room: '—', count: 3, tone: 'neutral', label: '尚未開始' }]);
+		expect(d.today).toEqual([{ time: '08:00', name: '跑酷體驗班', coach: '—', room: '—', count: 3, state: 'wait', tone: 'neutral', label: '尚未開始' }]);
 	});
 });
 

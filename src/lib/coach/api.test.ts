@@ -22,13 +22,11 @@ import {
 	saveSettings,
 	createCertificate,
 	createReportCard,
-	deriveSessionStatus,
 	getPendingLeaveRequests,
 	decideLeaveRequest,
 	CoachNotFoundError
 } from './api';
 import { api } from '$lib/api/client';
-import { deriveSessionStatus as domainDeriveSessionStatus } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
 
@@ -84,8 +82,8 @@ describe('myCoachProfile — GET /users/me → GET /coaches → find(user_id ===
 
 describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己課程且依 start_time 排序）', () => {
 	const SESSIONS_TODAY = [
-		{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9 },
-		{ id: 's2', course_id: 'c2', course_name: '青少年體操中級班', start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8 }
+		{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: '林雅婷', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9, venue: 'C 軟墊區' },
+		{ id: 's2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: '林雅婷', start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8, venue: null }
 	];
 
 	const REPORTS = {
@@ -96,7 +94,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 		attendance_rate_30d: 0.8
 	};
 
-	it('coach 由 myCoachProfile() 對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room/level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
+	it('coach 由 myCoachProfile() 對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room 用 venue(null → 「—」)，level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0)); // 09:30 落在 s1 場次(09:00–10:00)中
 		try {
@@ -115,8 +113,8 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 			const d = await getDashboard();
 
 			expect(d.todayClasses).toEqual([
-				{ id: 's1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: '', count: 9, level: '基礎', cat: '體操', status: 'live' },
-				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '', count: 8, level: '基礎', cat: '體操', status: 'wait' }
+				{ id: 's1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: 'C 軟墊區', count: 9, level: '基礎', cat: '體操', status: 'live' },
+				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '—', count: 8, level: '基礎', cat: '體操', status: 'wait' }
 			]);
 			expect(d.coach).toEqual(MAPPED_COACH);
 			expect(d.todayLabel).toBe(todayLabel(new Date(2026, 6, 4, 9, 30, 0)));
@@ -251,14 +249,10 @@ describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabe
 	});
 });
 
-/* C4：牆鐘語意 5 例已搬到 $lib/domain/sessions.test.ts(deriveSessionStatus 本體與
- * wallClockTime 私有輔助函式一併移入該檔，語意零改)——這裡只留一條 re-export 參照
- * pin，確認 coach/api.ts 的 export 是同一個函式物件、不是重新實作的複本。 */
-describe('deriveSessionStatus — re-export pin(完整牆鐘語意測試見 domain/sessions.test.ts)', () => {
-	it('coach/api.ts 匯出的 deriveSessionStatus 與 $lib/domain/sessions 是同一函式參照', () => {
-		expect(deriveSessionStatus).toBe(domainDeriveSessionStatus);
-	});
-});
+// C4：牆鐘語意 5 例已搬到 $lib/domain/sessions.test.ts(deriveSessionStatus 本體與
+// wallClockTime 私有輔助函式一併移入該檔，語意零改)。C5：coach/api.ts 不再 re-export
+// deriveSessionStatus(僅內部使用，見 mapTodayClass/mapAttendanceClass)——上方的
+// re-export 參照 pin 隨之退役，沒有其他消費者。
 
 describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 	it('day_of_week 0–6 對映 Sun..Sat key；HH:MM:SS 裁切為 HH:MM；只保留 is_available 的時段', async () => {
@@ -343,8 +337,8 @@ describe('saveSettings — PATCH /users/me，寫入後重新取得最新 Coach �
 
 describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§3.19）', () => {
 	const SESSIONS_TODAY = [
-		{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 2 },
-		{ id: 's2', course_id: 'c2', course_name: '青少年體操中級班', start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 1 }
+		{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: '林雅婷', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 2, venue: 'C 軟墊區' },
+		{ id: 's2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: '林雅婷', start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 1, venue: null }
 	];
 	const ROSTER_S1 = [
 		{ enrolment_id: 'en-1', user_id: 'u1', user_name: '王小明', attendance_status: 'present' },
@@ -369,14 +363,14 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 
 		expect(d.classes).toEqual([
 			{
-				id: 's1', name: '兒童體操初級班', time: '今日 09:00–10:00', start: '09:00', room: '', coach: '林雅婷',
+				id: 's1', name: '兒童體操初級班', time: '今日 09:00–10:00', start: '09:00', room: 'C 軟墊區', coach: '林雅婷',
 				roster: [
 					{ n: '01', name: '王小明', initial: '王', color: '#0066CC', mid: 'en-1', def: 'present' },
 					{ n: '02', name: '陳小華', initial: '陳', color: '#0066CC', mid: 'en-2', def: 'present' }
 				]
 			},
 			{
-				id: 's2', name: '青少年體操中級班', time: '今日 10:30–11:30', start: '10:30', room: '', coach: '林雅婷',
+				id: 's2', name: '青少年體操中級班', time: '今日 10:30–11:30', start: '10:30', room: '—', coach: '林雅婷',
 				roster: [{ n: '01', name: '林小美', initial: '林', color: '#0066CC', mid: 'en-3', def: 'leave' }]
 			}
 		]);

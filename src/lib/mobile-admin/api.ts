@@ -51,6 +51,7 @@ import {
 } from '$lib/coach/api';
 import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
 import { SESSION_STATUS } from '$lib/domain/sessions';
+import type { TodayStatus } from '$lib/domain/sessions';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
 // $lib/domain 各 entity 檔(原經 ./data 純轉手,零附加型別事實)——ActivityRow 改名,
 // 用 import-site alias `Activity as ActivityRow` 保留本檔既有用名(:258)。
@@ -58,7 +59,6 @@ import type { Coach } from '$lib/domain/coaches';
 import type { Venue } from '$lib/domain/venues';
 import type { Ticket } from '$lib/domain/tickets';
 import type { Activity as ActivityRow } from '$lib/domain/activity';
-import type { Tone } from '$lib/api/wire';
 import { fmtNT } from '$lib/format';
 import {
 	PROFILES,
@@ -139,18 +139,18 @@ export const getMore = async (): Promise<MoreData> => {
 	return { profiles: PROFILES, coaches, venues, tickets };
 };
 
-/** TodaySessionResponse 的 4 態狀態 → 行動版今日課表卡的 tone/label。單源改查
- *  $lib/domain/sessions 的 SESSION_STATUS（admin/coach/mobile-admin 三處原本各自
+/** coach TodayClass.status(TodayStatus 窄型別)→ 行動版今日課表卡的 tone/label。單源
+ *  改查 $lib/domain/sessions 的 SESSION_STATUS（admin/coach/mobile-admin 三處原本各自
  *  手抄一份查表，已隨 C4 收斂；標籤沿用原本這裡就已經是 canonical 的字面——
- *  done→已結束、live→上課中、soon→即將開始、wait→尚未開始）。t.status 是後端 wire
- *  給的鬆散 string(非 TodayStatus 窄型別)，故沿用既有的 ?? ['neutral', ''] fallback
- *  （查無對應鍵時不顯示語意，行為保真，不因單源收斂而改變）。既有的 taken(是否已
- *  點名)欄位無對應真實訊號可推導——TodaySessionResponse 不含「本場次是否已完成
- *  點名」旗標，一律不設(undefined)，讓畫面固定顯示「點名」動作按鈕，不假裝知道
- *  点名是否已完成。 */
-function mapTodayClassToRow(t: { start: string; name: string; room: string; count: number; status: string }): TodayRow {
-	const [tone, label] = (SESSION_STATUS as Record<string, [Tone, string] | undefined>)[t.status] ?? ['neutral', ''];
-	return { time: t.start, name: t.name, room: t.room, count: t.count, tone, label };
+ *  done→已結束、live→上課中、soon→即將開始、wait→尚未開始）。t.status 現直接是
+ *  TodayStatus 窄型別（C5：coach/api.ts 的 mapTodayClass 回傳形狀本就是窄型別，先前
+ *  這裡的寬鍵 Record<string,…> ?? fallback 是不必要的轉型——查表恆有對應，直接索引
+ *  即可，查無鍵是編譯期錯誤而非執行期 fallback）。既有的 taken(是否已點名)欄位無
+ *  對應真實訊號可推導——TodaySessionResponse 不含「本場次是否已完成點名」旗標，一律
+ *  不設(undefined)，讓畫面固定顯示「點名」動作按鈕，不假裝知道点名是否已完成。 */
+function mapTodayClassToRow(t: { start: string; name: string; room: string; count: number; status: TodayStatus }): TodayRow {
+	const [tone, label] = SESSION_STATUS[t.status];
+	return { time: t.start, name: t.name, room: t.room, count: t.count, state: t.status, tone, label };
 }
 
 export interface MCoachHomeData {
@@ -219,9 +219,9 @@ export const getCsettings = (): Promise<CsettingsData> => coachGetSettings();
 /** 桌面 TodayClass(見 admin/api.ts getTodaySessions()，GET /sessions/today admin
  *  分支)→ 行動版 TodayRow。coach/room 的 null→「—」代換已在桌面 mapTodaySession()
  *  做過，這裡原樣沿用；tone/label 桌面也已查表算好(給 Badge 用途一致)，不重新推導；
- *  state(桌面內部推導用欄位)行動版不需要，不帶入。 */
+ *  state(C5)一併帶過去——首頁「進行中課堂」橫幅據此判斷，不再比對 label 字面。 */
 function mapAdminTodayRow(t: TodayClass): TodayRow {
-	return { time: t.time, name: t.name, coach: t.coach, room: t.room, count: t.count, tone: t.tone, label: t.label };
+	return { time: t.time, name: t.name, coach: t.coach, room: t.room, count: t.count, state: t.state, tone: t.tone, label: t.label };
 }
 
 export interface MAdminHomeData {

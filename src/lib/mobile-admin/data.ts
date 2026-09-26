@@ -51,6 +51,7 @@ import type { OrderStatus } from '$lib/api/wire';
 import { taxFromGross } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE, type Level } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
+import type { TodayState } from '$lib/admin/data';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -182,6 +183,10 @@ export interface TodayRow {
 	coach?: string;
 	room: string;
 	count: number;
+	/** 場次狀態(C5)——admin 首頁「進行中課堂」橫幅據此判斷，不再比對 label 字面。型別
+	 *  借桌面 admin/data.ts 的 TodayState(5 值超集，含歷史緩衝態 'prep')：coach 分支
+	 *  的 TodayStatus(4 值)是其子集，兩個消費端都能直接賦值，不需要窄化 cast。 */
+	state: TodayState;
 	tone: string;
 	label: string;
 	taken?: boolean;

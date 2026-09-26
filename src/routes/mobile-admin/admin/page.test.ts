@@ -15,13 +15,12 @@ const FIXTURE_PROFILES: Record<'admin' | 'coach', Profile> = {
 	admin: { name: '測試管理員', initial: '測', role: '測試角色', desc: '', color: '#000', id: 'T-1' },
 	coach: { name: '測試教練', initial: '測', role: '測試教練職稱', desc: '', color: '#000', id: 'T-2' }
 };
-// label 用 C4 正字「上課中」(SESSION_STATUS.live[1])——舊字面「進行中」是 admin 桌面
-// 已淘汰的舊值，fixture 沿用舊字面會遮蔽 +page.svelte 的 liveNow 比對回歸(該比對值
-// 若跟著改回硬編舊字面，這裡改用舊 fixture 也測不出來，見下方「進行中課堂橫幅」測試
-// 的斷言強化)。
+// C5：liveNow 改比對 state(TodayStatus 窄型別)，不再比對 label 字面——fixture 的
+// label 因此刻意跟 state 脫鉤(見下方「state/label 脫鉤」兩則回歸測試)，證明橫幅
+// 真的是看 state，不是巧合地看到某個字面。
 const FIXTURE_TODAY: TodayRow[] = [
-	{ time: '08:00', name: '測試進行中班', coach: '測試教練甲', room: '測試教室', count: 5, tone: 'success', label: '上課中' },
-	{ time: '10:00', name: '測試備課班', coach: '測試教練乙', room: '測試教室2', count: 3, tone: 'info', label: '備課中' }
+	{ time: '08:00', name: '測試進行中班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'live', tone: 'success', label: '上課中' },
+	{ time: '10:00', name: '測試備課班', coach: '測試教練乙', room: '測試教室2', count: 3, state: 'wait', tone: 'info', label: '備課中' }
 ];
 const FIXTURE_ACTIVITY: ActivityRow[] = [
 	{ icon: 'user-plus', tone: '#000', bg: '#fff', text: '測試動態一', time: '剛剛' },
@@ -105,6 +104,27 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect((await findAllByText('測試進行中班')).length).toBeGreaterThan(0);
 		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 		expect(await findByText('測試備課班')).toBeInTheDocument();
+	});
+
+	/* C5 回歸(pin-first)：liveNow 改比對 state，不再比對 label 字面——以下兩則證明
+	 * label 的字面內容跟橫幅是否出現無關，只有 state === 'live' 才算數。 */
+	it('state=live 但 label 隨便填任意字面時，橫幅仍出現', async () => {
+		vi.mocked(getAdminHome).mockResolvedValue({
+			...FIXTURE,
+			today: [{ time: '08:00', name: '測試任意標籤班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'live', tone: 'success', label: '隨便亂填的字面' }]
+		});
+		const { findByText } = render(AdminHomePage);
+		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
+	});
+
+	it('label 寫「上課中」但 state=wait 時，橫幅不出現', async () => {
+		vi.mocked(getAdminHome).mockResolvedValue({
+			...FIXTURE,
+			today: [{ time: '08:00', name: '測試尚未開始班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'wait', tone: 'success', label: '上課中' }]
+		});
+		const { findByText, queryByText } = render(AdminHomePage);
+		await findByText('測試尚未開始班'); // 等今日課表清單渲染完成
+		expect(queryByText('● 進行中課堂')).toBeNull();
 	});
 
 	it('render 最新動態(讀 payload 的 activity)', async () => {
