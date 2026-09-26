@@ -1,78 +1,72 @@
 <script lang="ts">
   /* 編輯個人資料 sheet。mobile/profile.jsx EditProfileSheet (20-70)。
-   * 編輯 profile 欄位 + prefs 通知偏好 → 寫回 stores + toast + close。
-   * 編輯的是本地副本 f / p，按儲存才 commit（取消不影響）。
+   * 編輯姓名/生日/電話 + 通知偏好 → 一次 saveProfile(PATCH /users/me)→ toast + close。
+   * 編輯的是本地副本 f / p，按儲存才送出（取消不影響）。
    *
-   * Task 1(1.3)：prefs 段過去直接 `prefs.set(p)`，繞過 $lib/mobile/pref-sync，
-   * 從未真的送到後端(PATCH /users/me)；且本地副本 p 若在 hydrate 水合完成前就
-   * 從 store 取快照，還可能用預設值蓋掉伺服器真值。改為 mount 時先
-   * `await prefSync.hydrate()`，之後才用 store 值建立本地副本 p 與「初始值」
-   * initial；存檔時只對「和初始值不同」的 key 呼叫 prefSync.set(k, v)(單一
-   * module 層實例，與 SettingsScreen 共用同一個 saveChain 序列鏈)，任一 key
-   * 的 outcome 非 'saved' 就映射成錯誤 toast(ADR 0011 呼叫端映射慣例)。
-   * profile 欄位(姓名/生日/電話等)仍維持本機、無對應可寫後端欄位(已知 P2，同
-   * desktop 未接的等值狀態)。
-   *
-   * Task 1 fix round 1：hydrate() 在飛時通知偏好 Switch 與「儲存資料」按鈕一律
-   * disabled(`hydrating` 旗標)——不是「合併使用者在 hydrate 期間的編輯」，而是
-   * 乾脆不讓使用者在那個窗口編輯，避免 hydrate 落地後重建 p/initial 把使用者
-   * 剛切的那一下悄悄蓋掉、initial 也跟著被重設而讓那次切換永遠算不進「有變動」。 */
+   * R13 Task 3(C1):改走 member 側唯一的會員資料 module($lib/member/profile,經
+   * $lib/mobile/stores 轉出;原 $lib/mobile/pref-sync 退役)。
+   *  - 開啟時先 await hydrateProfile(),落地後才用真值建立 f/p(水合前 Switch 與「儲存
+   *    資料」一律 disabled——不讓使用者在那個窗口編輯,避免落地後把剛切的那一下悄悄蓋掉)。
+   *  - 存檔只呼叫一次 saveProfile:module 自己比對、只送改過的欄位,沒改就不發請求;
+   *    表單規則(姓名 2–100、電話 8–20、原本有電話不能清空)用同一份 profileEditError。
+   *  - busy 鎖:儲存飛行中「儲存資料」停用、save() 再擋一次(合成 click 不受 disabled 限制)
+   *    ——關掉 ADR-0022 遞延的防連點項。失敗時 sheet 不關、可重試。
+   *  - 後端沒有的會員編號、家長聯絡人、大頭照底色拿掉(D2);email 只讀。 */
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
-  import { get } from 'svelte/store';
-  import { profile, prefs, toasts, type Prefs } from '$lib/mobile/stores';
-  import { prefSync } from '$lib/mobile/pref-sync';
+  import {
+    memberProfile,
+    prefs,
+    hydrateProfile,
+    saveProfile,
+    profileEditError,
+    toasts,
+    type Prefs
+  } from '$lib/mobile/stores';
   import type { IconName } from '$lib/icon-registry';
   import { initialOf } from '$lib/api/wire';
 
   export let onClose: () => void;
 
-  const AVATAR_COLORS = ['#0066CC', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'];
-
-  // local editable copies — committed only on save. p/initial are (re)built from
-  // the prefs store once hydrate() resolves (see 檔頭附註); the pre-hydrate
-  // values here are just the cache-first placeholder for the initial paint.
-  let f = { ...get(profile) };
+  // local editable copies — (re)built from the module once hydrateProfile() resolves.
+  let f = { name: '', phone: '', birth: '', email: '' };
   let p: Prefs = { ...get(prefs) };
-  let initial: Prefs = { ...p };
-  // 通知偏好 Switch/存檔按鈕在 hydrate 落地前一律 disabled(見上方檔頭附註)。
   let hydrating = true;
+  let busy = false;
 
   onMount(async () => {
-    await prefSync.hydrate();
+    try {
+      await hydrateProfile();
+    } catch (err) {
+      console.error('EditProfileSheet: 會員資料載入失敗', err);
+      toasts.notify('error', '載入失敗', '連線發生問題，請稍後再試。');
+      onClose();
+      return;
+    }
+    const cur = get(memberProfile);
+    if (cur) f = { name: cur.name, phone: cur.phone, birth: cur.birth, email: cur.email };
     p = { ...get(prefs) };
-    initial = { ...p };
     hydrating = false;
   });
 
-  $: valid = (f.name || '').trim().length > 0;
-
-  function onName(e: Event) {
-    const v = (e.target as HTMLInputElement).value;
-    f = { ...f, name: v, initial: initialOf(v, f.initial) };
-  }
+  $: error = hydrating ? null : profileEditError({ name: f.name, phone: f.phone }, $memberProfile);
 
   async function save() {
-    // 雙重保險：Button 的 disabled 擋不掉合成 click(dispatchEvent 不受瀏覽器
-    // 「disabled 元素不觸發使用者互動」限制)，這裡再擋一次，確保 hydrate 尚未
-    // 落地時不會用飛行中的 p/initial 送出。
-    if (hydrating) return;
-    profile.set(f);
-    const changedKeys = (Object.keys(p) as (keyof Prefs)[]).filter((k) => p[k] !== initial[k]);
-    let failed = false;
-    for (const k of changedKeys) {
-      const outcome = await prefSync.set(k, p[k]);
-      if (outcome.kind !== 'saved') failed = true;
-    }
-    if (failed) {
+    // 雙重保險：Button 的 disabled 擋不掉合成 click，這裡再擋一次。
+    if (hydrating || busy || error) return;
+    busy = true;
+    const outcome = await saveProfile({ name: f.name, phone: f.phone, birth: f.birth, prefs: p });
+    busy = false;
+    if (outcome.kind === 'failed') {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
-    } else {
-      toasts.notify('success', '資料已更新', f.name);
+      return;
     }
+    toasts.notify('success', '資料已更新', f.name.trim());
     onClose();
   }
 
@@ -83,36 +77,21 @@
   ];
 </script>
 
-<Sheet open {onClose} maxHeight="93%" title="編輯個人資料" sub={'會員編號 ' + f.id}>
+<Sheet open {onClose} maxHeight="93%" title="編輯個人資料">
   <div style="display:flex; flex-direction:column; gap:20px;">
-    <!-- avatar + 大頭照底色 -->
-    <div style="display:flex; flex-direction:column; align-items:center; gap:13px;">
-      <span style="width:80px; height:80px; border-radius:50%; background:{f.color}; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:34px; font-weight:800; font-family:var(--df-font-body); line-height:1; user-select:none;">{f.initial}</span>
-      <div>
-        <div style="font-size:12px; color:var(--df-text-muted); text-align:center; margin-bottom:9px;">大頭照底色</div>
-        <div style="display:flex; gap:11px; justify-content:center;">
-          {#each AVATAR_COLORS as c}
-            {@const on = f.color === c}
-            <button
-              type="button"
-              on:click={() => (f = { ...f, color: c })}
-              aria-label={'選擇底色 ' + c}
-              class="df-tapscale"
-              style="width:32px; height:32px; border-radius:999px; background:{c}; border:{on ? '3px solid var(--df-ink)' : '2px solid #fff'}; box-shadow:0 0 0 1px var(--df-border); cursor:pointer; flex:none;"
-            ></button>
-          {/each}
-        </div>
-      </div>
+    <!-- avatar -->
+    <div style="display:flex; flex-direction:column; align-items:center;">
+      <span style="width:80px; height:80px; border-radius:50%; background:var(--df-primary); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:34px; font-weight:800; font-family:var(--df-font-body); line-height:1; user-select:none;">{initialOf(f.name, $memberProfile?.initial ?? '')}</span>
     </div>
     <!-- editable fields -->
     <div style="display:flex; flex-direction:column; gap:13px;">
-      <Input label="學員姓名" value={f.name} on:input={onName} />
+      <Input label="學員姓名" bind:value={f.name} disabled={hydrating} />
       <div style="display:flex; gap:12px;">
-        <Input label="生日" bind:value={f.birth} style="flex:1;" />
-        <Input label="聯絡電話" bind:value={f.phone} style="flex:1;" />
+        <Input label="生日" type="date" bind:value={f.birth} disabled={hydrating} style="flex:1;" />
+        <Input label="聯絡電話" bind:value={f.phone} disabled={hydrating} style="flex:1;" />
       </div>
-      <Input label="Email" type="email" bind:value={f.email} />
-      <Input label="家長 / 緊急聯絡人" bind:value={f.guardian} />
+      <Input label="Email" type="email" value={f.email} disabled helper="Email 無法在此變更" />
+      {#if error}<div role="alert" style="font-size:12.5px; color:var(--df-error);">{error}</div>{/if}
     </div>
     <!-- notification preferences -->
     <div>
@@ -133,7 +112,7 @@
   </div>
   <svelte:fragment slot="footer">
     <Button variant="secondary" on:click={onClose}>取消</Button>
-    <Button variant="primary" disabled={!valid || hydrating} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={save}>
+    <Button variant="primary" disabled={hydrating || busy || !!error} style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" on:click={save}>
       <Icon name="check" size={16} />儲存資料
     </Button>
   </svelte:fragment>

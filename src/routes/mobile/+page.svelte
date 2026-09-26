@@ -26,7 +26,7 @@
   // 卡 3：joinWaitlist/joinWaitlistErrorMessage 改經 $lib/mobile/stores 的存量
   // re-export 取用（單源仍是 member 側同一組 binding）。
   import { overlay, cart, toasts, joinWaitlist, joinWaitlistErrorMessage } from '$lib/mobile/stores';
-  import { profile as profileStore } from '$lib/mobile/stores';
+  import { authStore } from '$lib/stores/authStore';
   // Task 5(架構深化 R12):通知段已併入 member 模組,經 $lib/mobile/stores 的 barrel
   // re-export 取用(見該檔通知段註解)。
   import { unreadCount } from '$lib/mobile/stores';
@@ -51,7 +51,8 @@
     gate.load();
   });
 
-  $: profile = $profileStore;
+  // hero 問候讀 authStore 的真名字(R13 Task 3;mock profile store 退役)。
+  $: member = $authStore.member;
   $: catalog = data?.catalog ?? [];
   $: announce = data?.announce ?? [];
   $: myCourses = data?.myCourses ?? [];
@@ -125,10 +126,10 @@
     <div style="padding:2px 18px 18px;">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <div style="display:flex; align-items:center; gap:11px;">
-          <Avatar name={profile.initial} size="md" color="rgba(255,255,255,0.22)" />
+          <Avatar name={member?.initial ?? ''} size="md" color="rgba(255,255,255,0.22)" />
           <div>
             <div style="font-size:12.5px; opacity:0.85;">早安，歡迎回來 👋</div>
-            <div style="font-size:18px; font-weight:800; font-family:var(--df-font-heading);">{profile.name}</div>
+            <div style="font-size:18px; font-weight:800; font-family:var(--df-font-heading);">{member?.name ?? ''}</div>
           </div>
         </div>
         <div style="display:flex; gap:9px;">

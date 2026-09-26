@@ -1,17 +1,17 @@
 <script lang="ts">
   /* 帳號設定 push screen。account.jsx SettingsScreen (288)。
    * 頭像 + 編輯個人資料（overlay.sheet）→ 個人資料欄位 → 通知偏好 / 一般（prefs Switch 列）
-   * → 儲存變更（toast）→ 登出帳號（authStore.logout() + goto /mobile/login）。
+   * → 登出帳號（authStore.logout() + goto /mobile/login）。
    * Legacy Svelte（無 runes）。Task 19:登出改真 authStore.logout()(清 token,
    * 不再是示範性的 df_mobile_session，同 account/+page.svelte 的 logout()）。
    * Task F10:通知偏好 + 深色模式四個開關改真 users.preferences(PATCH /users/me
-   * 整包覆寫，見 $lib/mobile/api.ts 的 getPreferences/savePreferences)——開啟
-   * 畫面背景水合覆蓋本地 prefs 快取，切換序列化送出(單一 in-flight 佇列，避免
+   * 整包覆寫)——開啟畫面背景水合覆蓋本地 prefs 快取，切換序列化送出(單一 in-flight 佇列，避免
    * 交錯覆寫)，失敗改整包 resync 成伺服器真值 + 錯誤 toast(resync 也失敗才退回
-   * 單鍵回滾，見 $lib/mobile/pref-sync 模組註解)；本地 prefs store 保留為快取(離線/
-   * 載入前的顯示來源)。「儲存變更」按鈕與
-   * 個人資料欄位(姓名/生日/電話等)本身仍是本地端 store、無對應可寫後端欄位
-   * (同 desktop 未接的等值狀態,P2)。 */
+   * 單鍵回滾)。
+   * R13 Task 3(C1):偏好同步機與個人資料欄位改走 member 側唯一的會員資料 module
+   * ($lib/member/profile,經 $lib/mobile/stores 轉出;原 $lib/mobile/pref-sync 退役)。
+   * 個人資料列顯示後端真值;後端沒有的「會員編號」列與假的「儲存變更」按鈕拿掉
+   * (偏好切換即存,個人資料在 EditProfileSheet 存)。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -20,9 +20,8 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { authStore } from '$lib/stores/authStore';
-  import { overlay, prefs, profile, toasts } from '$lib/mobile/stores';
+  import { overlay, prefs, memberProfile, hydrateProfile, setPref as savePref, toasts } from '$lib/mobile/stores';
   import type { Prefs } from '$lib/mobile/stores';
-  import { prefSync } from '$lib/mobile/pref-sync';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
@@ -31,10 +30,9 @@
   type ToggleRow = { icon: IconName; label: string; sub?: string; k: keyof Prefs; last?: boolean };
 
   $: personal = [
-    { icon: 'user-round', label: '姓名', value: $profile.name },
-    { icon: 'hash', label: '會員編號', value: $profile.id },
-    { icon: 'cake', label: '生日', value: $profile.birth },
-    { icon: 'phone', label: '聯絡電話', value: $profile.phone, last: true }
+    { icon: 'user-round', label: '姓名', value: $memberProfile?.name ?? $authStore.member?.name ?? '' },
+    { icon: 'cake', label: '生日', value: $memberProfile?.birth ?? '' },
+    { icon: 'phone', label: '聯絡電話', value: $memberProfile?.phone ?? '', last: true }
   ] satisfies FieldRow[];
 
   const notifyRows: ToggleRow[] = [
@@ -43,14 +41,15 @@
     { icon: 'megaphone', label: '活動公告', sub: '新課程與優惠資訊', k: 'promo', last: true }
   ];
 
-  // 機器在 $lib/mobile/pref-sync(module 層單例，EditProfileSheet 共用同一個)，
-  // toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。
+  // 機器在會員資料 module(單例，EditProfileSheet 與桌面帳戶頁共用同一條寫入鏈)，
+  // toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。背景水合失敗只記錄、沿用
+  // 目前顯示(同原 pref-sync 語意)。
   onMount(() => {
-    prefSync.hydrate();
+    hydrateProfile().catch((err) => console.error('SettingsScreen: 會員資料載入失敗', err));
   });
 
   function setPref(k: keyof Prefs, v: boolean) {
-    prefSync.set(k, v).then((o) => {
+    savePref(k, v).then((o) => {
       if (o.kind !== 'saved') toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
     });
   }
@@ -66,7 +65,7 @@
   <div class="df-scroll">
     <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
       <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:6px 0 2px;">
-        <Avatar name={$profile.initial} size="xl" color={$profile.color} />
+        <Avatar name={$memberProfile?.initial ?? $authStore.member?.initial ?? ''} size="xl" />
         <button
           on:click={() => overlay.sheet('editProfile')}
           class="df-tapscale"
@@ -126,12 +125,6 @@
         </div>
       </div>
 
-      <button
-        on:click={() => toasts.notify('success', '設定已儲存')}
-        class="df-tapscale"
-        style="border:none; background:var(--df-primary); color:#fff; border-radius:12px; padding:14px;
-          font-size:15px; font-weight:700; cursor:pointer;"
-      >儲存變更</button>
       <button
         on:click={logout}
         class="df-tapscale"

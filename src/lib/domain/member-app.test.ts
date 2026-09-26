@@ -32,7 +32,6 @@ import { describe, it, expect } from 'vitest';
 import * as MemberData from '$lib/member/data';
 import * as MobileData from '$lib/mobile/data';
 import {
-	ME,
 	STATS,
 	SKILLS,
 	UPCOMING,
@@ -62,12 +61,6 @@ describe('member facade re-exports domain/member-app by reference (single source
 
 /* ── 2. 獨立字面不變量(誤改 domain 值 → 這裡變紅) ── */
 describe('literal seed invariants (independent of the facades)', () => {
-	it('ME is 王承恩 GY2024001, 1250 points, age 13', () => {
-		expect(ME.name).toBe('王承恩');
-		expect(ME.id).toBe('GY2024001');
-		expect(ME.points).toBe(1250);
-		expect(ME.age).toBe(13);
-	});
 	it('STATS[0] is 報名課程數 = 3', () => {
 		expect(STATS[0].label).toBe('報名課程數');
 		expect(STATS[0].value).toBe('3');

@@ -3,25 +3,20 @@
  * 換成真後端資料(GET /report-cards/me + GET /certificates/me，見 §3.22)；Task 14：
  * getPoints 的 rewards 換成真後端資料(GET /rewards，見 §3.23)。回傳「形狀」盡量
  * 維持不變，頁面不用重寫樣板。 */
-import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fmtRatio } from '$lib/format';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { orderStatusBadge, initialOf, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
+import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, points } from './stores';
+import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, hydrateProfile } from './stores';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
-import { ME, STATS, SKILLS } from '$lib/domain/member-app';
-import type { Member, Stat, Skill, EnrolledCourse, AttRecord } from '$lib/domain/member-app';
-
-/** 「會員本人」單一內部來源;未來 fetch 只改此處。 */
-const me = (): Member => ME;
+import { STATS, SKILLS } from '$lib/domain/member-app';
+import type { Stat, Skill, EnrolledCourse, AttRecord } from '$lib/domain/member-app';
 
 export interface DashboardData {
-  me: Member;
   stats: Stat[];
   skills: Skill[];
   upcoming: UpcomingClass[];
@@ -92,7 +87,6 @@ export const getDashboard = async (): Promise<DashboardData> => {
   const [active, stats] = await Promise.all([activeEnrolments(), getReportStats()]);
   await hydrateSessionStores('getDashboard', [['點數', refreshPoints], ['通知', refreshNotifications]]);
   return {
-    me: me(),
     stats: [
       { ...STATS[0], value: String(stats.activeEnrolments) },
       { ...STATS[1], value: fmtRatio(stats.attendanceRate, '—') },
@@ -228,7 +222,7 @@ const DOW_TO_SCHEDULE_DAY = [6, 0, 1, 2, 3, 4, 5];
 
 /** MyScheduleEntryResponse → 既有 ScheduleBlock 形狀。coach_name 為 null(尚未指定教練)
  *  /venue 為 null(無場地資料)時一律給空字串；color/tone 無對應後端欄位，一律給預設
- *  主色(P2，同 mapProfile 對「無品牌色」欄位的預設慣例)。 */
+ *  主色(P2，後端無品牌色欄位時的預設慣例)。 */
 function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
   return {
     day: DOW_TO_SCHEDULE_DAY[e.day_of_week],
@@ -325,28 +319,9 @@ export const getEnrolmentAttendance = async (id: string): Promise<AttRecord[]> =
   return entries.map(mapAttendanceEntry);
 };
 
-export interface AccountProfile extends Member {
-  birth: string;
-  phone: string;
-  email: string;
-  guardian: string;
-  remind: boolean;
-  promo: boolean;
-}
-
 export interface AccountData {
   orders: Order[];
   ordersTotal: number;
-  profile: AccountProfile;
-}
-
-interface ApiUser {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  created_at: string;
-  birth_date: string | null;
 }
 
 interface ApiOrderSummary {
@@ -373,63 +348,25 @@ function mapOrder(o: ApiOrderSummary): Order {
   };
 }
 
-/** UserResponse 沒有「會員編號 / 大頭貼色 / 年齡 / 監護人 / 通知偏好」這些欄位 ——
- *  initial 由姓名首字推導，其餘(color/age/guardian/remind/promo)沿用合理預設值
- *  (ProfileEditDialog 這幾欄仍只做本地端編輯、不寫回後端，非本次範圍)。
- *  birth(Round 4 Task P4-F4)改接真 birth_date —— null(未設定)映射空字串，
- *  ISO YYYY-MM-DD 字串直接沿用(與 <input type="date"> 的 value 格式一致，不需
- *  再轉換)。id 直接採用後端真實 uuid(沒有 mock 那種「GY2024001」會員編號可用)。
- *  points 借用剛 refresh 過的 points store 當下值(帳戶頁本身讀 $points，不讀
- *  這個欄位，純粹求型別完整、內容誠實)。 */
-function mapProfile(u: ApiUser): AccountProfile {
-  return {
-    name: u.name,
-    initial: initialOf(u.name),
-    color: BRAND_PRIMARY_HEX,
-    id: u.id,
-    since: u.created_at.slice(0, 7).replace('-', '/'),
-    points: get(points),
-    age: 0,
-    birth: u.birth_date ?? '',
-    phone: u.phone ?? '',
-    email: u.email,
-    guardian: '',
-    remind: true,
-    promo: false
-  };
-}
-
-/** GET /users/me + GET /orders/me?per_page=100；主資料(profile+orders)fail-hard
- *  (Promise.all)。per_page=100 顯式帶滿單頁上限(同 coach/api.ts getPendingLeaveRequests
+/** GET /orders/me?per_page=100 + 會員資料水合(hydrateProfile，GET /users/me，每個
+ *  identity 只抓一次)；兩者 fail-hard(Promise.all)——帳戶頁讀 $memberProfile，不讀
+ *  這裡的回傳值(R13 Task 3：個人資料的讀寫收進 $lib/member/profile)。per_page=100 顯式帶滿單頁上限(同 coach/api.ts getPendingLeaveRequests
  *  的既有慣例)——後端預設 per_page=20 會把訂單較多的會員截斷成只看到最近 20 筆；
  *  ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/OrdersScreen)顯示的
  *  「N 筆報名紀錄」不會被這個截斷誤導成 20。
  *  順手 hydrate points/subscriptions store(best-effort 語意，見 hydrateSessionStores()
  *  檔頭)——帳戶頁直接讀 $points / $subscriptions store(不是這裡的回傳值)。 */
 export const getAccount = async (): Promise<AccountData> => {
-  const [user, orderList] = await Promise.all([
-    api<ApiUser>('/users/me'),
-    api<ApiOrderListResponse>('/orders/me?per_page=100')
+  const [orderList] = await Promise.all([
+    api<ApiOrderListResponse>('/orders/me?per_page=100'),
+    hydrateProfile()
   ]);
   await hydrateSessionStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
   return {
     orders: orderList.orders.map(mapOrder),
-    ordersTotal: orderList.total,
-    profile: mapProfile(user)
+    ordersTotal: orderList.total
   };
 };
-
-/** PATCH /users/me { birth_date }（Round 4 Task P4-F4；integration-contract.md
- *  §3.2）—— 帳戶頁 ProfileEditDialog 的「生日」欄位存檔路徑。只送這一個欄位，
- *  不動 name/phone/preferences：preferences 是 mobile SettingsScreen 的獨立
- *  存檔路徑(mobile/api.ts savePreferences)，兩者互不干擾。空字串(清空欄位)
- *  轉成顯式 JSON null——後端 deserialize_some 語意：帶 null 清空，不帶此欄則
- *  維持原值不動；這裡永遠帶入 birth_date 這個欄位，所以空字串 = 顯式清空。 */
-export const saveBirthDate = (birthDate: string): Promise<AccountProfile> =>
-  api<ApiUser>('/users/me', {
-    method: 'PATCH',
-    body: JSON.stringify({ birth_date: birthDate || null })
-  }).then(mapProfile);
 
 export interface CoursesData { catalog: CatalogCourse[]; }
 

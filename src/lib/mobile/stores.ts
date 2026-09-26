@@ -3,7 +3,7 @@
  * The prototype (app.jsx) kept tab / stack / sheet / cart / points / notifs /
  * toasts / prefs / profile in one React component. Rendered as real routes, the
  * bottom tabs are URLs but push-screens + sheets are overlay state, and the
- * cart / toasts / prefs / profile are shared stores that live here — notifications
+ * cart / toasts are shared stores that live here — prefs/profile and notifications
  * are re-exported from `$lib/member/stores` (Task 5 架構深化 R12：mobile 專屬的
  * `$lib/mobile/notifications.ts` 已併入 member 模組,理由見下方該段註解)。
  * Toasts come from the canonical shared store (`createToasts` imported from
@@ -19,7 +19,7 @@
  * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律
  * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
 
-import { writable, get } from 'svelte/store';
+import { get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobilePushRegistry, MobileSheetRegistry } from './overlay-registry';
@@ -28,7 +28,6 @@ import { refreshPoints, subscriptions } from '$lib/member/stores';
 import { chargeableLines } from '$lib/member/checkout';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
-import { ME } from '$lib/domain/member-app';
 import { type Course } from './data';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ---------- */
@@ -188,24 +187,9 @@ export {
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);
 
-/* ---------- Preferences + profile (帳戶 / 設定) ---------- */
-export interface Prefs {
-	classReminder: boolean;
-	coachMsg: boolean;
-	promo: boolean;
-	dark: boolean;
-}
-/** W3:PREFS_DEFAULT 原本在這裡與 api.ts(getPreferences 後端未設定值時的
- *  fallback)各自硬編一份同字面常數,兩處要同步改。單源改宣告在這裡,api.ts
- *  改 import 使用。顯式型別註記 `: Prefs`(非整段 `as Prefs` 斷言)——ADR 0012
- *  §3 合規。 */
-export const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
-export const prefs = writable<Prefs>({ ...PREFS_DEFAULT }); // spread 防常數被 store 突變污染
-
-export const profile = writable({
-	...ME,
-	birth: '2013/05/18',
-	phone: '0912-345-678',
-	email: 'wang.family@example.com',
-	guardian: '王先生 · 0911-222-333'
-});
+/* ---------- 會員資料 + 通知偏好(帳戶 / 設定) ---------- */
+// R13 Task 3(候選 C1):本地 profile(ME mock 種子)與 prefs store 退役,連同
+// $lib/mobile/pref-sync——改經 member 側唯一的會員資料 module($lib/member/profile,
+// createSessionGate + 單一寫入鏈),桌面與 mobile 讀寫同一顆單例,換帳號即重置。
+export { memberProfile, prefs, hydrateProfile, setPref, saveProfile, profileEditError } from '$lib/member/stores';
+export type { MemberProfile, Prefs, ProfileEdit, PrefSetOutcome, ProfileSaveOutcome } from '$lib/member/stores';

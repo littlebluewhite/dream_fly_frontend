@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { cart, placeOrder, prefs, PREFS_DEFAULT } from './stores';
+import { cart, placeOrder } from './stores';
 import { type Course } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
 import { cart as libCart } from '$lib/cart';
@@ -184,22 +184,11 @@ describe('placeOrder — 委派 submitOrder(mobile adapter,C4 首套單測)', ()
 	});
 });
 
-describe('prefs', () => {
-	// W3:PREFS_DEFAULT 單源改宣告在 stores.ts(api.ts 的 getPreferences fallback
-	// 改 import 這裡的常數,不再各自硬編一份字面)。prefs store 的初始值必須是
-	// PREFS_DEFAULT 的 spread 拷貝,不是同一參照——否則 store 之後的突變會污染
-	// 這顆共用常數。
-	it('初始值等於 PREFS_DEFAULT，但非同一參照(spread 隔離)', () => {
-		expect(get(prefs)).toEqual(PREFS_DEFAULT);
-		expect(get(prefs)).not.toBe(PREFS_DEFAULT);
-	});
-});
-
 describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同參照,防分叉)', () => {
 	// re-export 源路徑若寫錯(相對路徑、繞道別的模組),sheet/overlay 測試的
 	// vi.mock('$lib/member/stores') 會靜默失效變假綠——這裡以 toBe 釘住每個收編
 	// 符號都是 member 側同一個 binding:路徑漂移或改成本地重包裝時直接紅燈。
-	it('member/stores 的 21 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
+	it('member/stores 的 27 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
 		expect(mobileStores.points).toBe(memberStores.points);
 		expect(mobileStores.pointsLedger).toBe(memberStores.pointsLedger);
 		expect(mobileStores.refreshPoints).toBe(memberStores.refreshPoints);
@@ -227,6 +216,14 @@ describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同�
 		expect(mobileStores.notificationsPageEntry).toBe(memberStores.notificationsPageEntry);
 		expect(mobileStores.markRead).toBe(memberStores.markRead);
 		expect(mobileStores.markAllRead).toBe(memberStores.markAllRead);
+		// R13 Task 3(C1):會員資料 module 收編——本地 profile/prefs store 與
+		// $lib/mobile/pref-sync 退役,改與桌面共用同一顆單例(換帳號即重置)。
+		expect(mobileStores.memberProfile).toBe(memberStores.memberProfile);
+		expect(mobileStores.prefs).toBe(memberStores.prefs);
+		expect(mobileStores.hydrateProfile).toBe(memberStores.hydrateProfile);
+		expect(mobileStores.setPref).toBe(memberStores.setPref);
+		expect(mobileStores.saveProfile).toBe(memberStores.saveProfile);
+		expect(mobileStores.profileEditError).toBe(memberStores.profileEditError);
 	});
 	it('member/checkout 的 applyCouponCode/orderErrorMessage/chargeableLines 同參照(CartSheet 消費)', () => {
 		// C2(R11):CartSheet 的「套用優惠碼」與桌面 CheckoutDialog 收斂成同一顆

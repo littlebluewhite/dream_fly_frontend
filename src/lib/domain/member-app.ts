@@ -32,17 +32,6 @@ export interface Member {
 	age: number;
 }
 
-/* Logged-in member — 王承恩 (ties to admin GY2024001) */
-export const ME: Member = {
-	name: '王承恩',
-	initial: '王',
-	color: '#0066CC',
-	id: 'GY2024001',
-	since: '2023/09',
-	points: 1250,
-	age: 13
-};
-
 /* ---- 總覽統計 ---- */
 export interface Stat {
 	icon: IconName;

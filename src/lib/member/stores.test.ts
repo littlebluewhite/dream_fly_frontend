@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { subscriptions, points, pointsLedger } from './stores';
-import { ME, POINTS_LEDGER } from '$lib/domain/member-app';
+import { POINTS_LEDGER } from '$lib/domain/member-app';
+
+// R13 Task 3:mock 會員 ME 退役;points 的起始值改用本地常數。
+const SEED_POINTS = 1250;
 
 // The singleton subscriptions persist to localStorage; reset it (and storage)
 // between tests.
 beforeEach(() => {
   localStorage.clear();
   subscriptions.set([]);
-  points.set(ME.points);
+  points.set(SEED_POINTS);
   pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
 });
 

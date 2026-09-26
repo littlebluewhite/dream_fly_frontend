@@ -15,7 +15,8 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
-  import { toasts, profile } from '$lib/mobile/stores';
+  import { toasts, memberProfile } from '$lib/mobile/stores';
+  import { authStore } from '$lib/stores/authStore';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
   import { buildTrialDays, type TrialDay } from './trial-dates';
@@ -51,8 +52,10 @@
   let age = '';
   let day = '';
   let slot = '';
-  let parent = $profile.name || '';
-  let phone = $profile.phone || '';
+  // 預填真值(R13 Task 3):名字取 authStore,電話取會員資料 module(已水合才有值;
+  // 本畫面不為了預填多打一支 GET)。
+  let parent = $authStore.member?.name ?? '';
+  let phone = $memberProfile?.phone ?? '';
   let student = '';
   let note = '';
   let submitting = false;

@@ -8,6 +8,7 @@
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type DashboardData } from '$lib/member/api';
+  import { authStore } from '$lib/stores/authStore';
 
   let data: DashboardData | null = null;
   const gate = createLoadGate({
@@ -39,7 +40,7 @@
     >
       <div>
         <div style="font-size:14px;opacity:0.85">歡迎回來，</div>
-        <div style="font-family:var(--df-font-heading);font-size:30px;font-weight:800;margin:3px 0 8px">{data.me.name} 👋</div>
+        <div style="font-family:var(--df-font-heading);font-size:30px;font-weight:800;margin:3px 0 8px">{$authStore.member?.name ?? ''} 👋</div>
         <div style="display:flex;align-items:center;gap:8px;font-size:14.5px;opacity:0.92">
           <Icon name="calendar-clock" size={17} color="#fff" />下一堂課：{data.nextClass}
         </div>

@@ -26,7 +26,7 @@
   // 拿的是 stores.ts 的模組級單例（見下方）。
   import { cart, toasts, points, refreshPoints, applyCouponCode, orderErrorMessage, subscriptions, chargeableLines, checkout } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
-  import { ME } from '$lib/domain/member-app';
+  import { authStore } from '$lib/stores/authStore';
   import { checkoutMath } from '$lib/checkout-math';
 
   export let onClose: () => void;
@@ -192,7 +192,7 @@
 
     {#if step === 1}
       <div style="display:flex; flex-direction:column; gap:13px;">
-        <Input label="持卡人姓名" value={ME.name} />
+        <Input label="持卡人姓名" value={$authStore.member?.name ?? ''} />
         <Input label="卡號" placeholder="0000 0000 0000 0000" />
         <div style="display:flex; gap:12px;">
           <Input label="有效期限" placeholder="MM/YY" style="flex:1;" />

@@ -2,83 +2,107 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { prefs, toasts } from '$lib/mobile/stores';
-import { getPreferences, savePreferences } from '$lib/mobile/api';
+import { api } from '$lib/api/client';
+import { authStore } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
 import SettingsScreen from './SettingsScreen.svelte';
 
-/* Task F10：SettingsScreen 偏好持久化(users.preferences，PATCH /users/me 整包
- * 覆寫)。只 mock $lib/mobile/api 的 getPreferences/savePreferences(HTTP 映射
- * 已在 api.test.ts 端對端測過)，同 PointsScreen.test.ts/routes/admin/settings
- * /page.test.ts 的既有慣例。畫面上 4 個 Switch 沒有各自獨立的 aria-label(見
- * Switch.svelte：不帶 label prop 時一律是 'toggle'，帶 label 又會多渲染一顆
- * 目前不需要的可見文字——非本任務範圍)，因此依既有慣例(admin settings page
- * test)用 getAllByRole('switch') 的 DOM 順序索引：0=課程提醒 1=教練訊息
- * 2=活動公告 3=深色模式。
+/* SettingsScreen 偏好持久化(users.preferences，PATCH /users/me 整包覆寫)。
  *
- * R11 Task 2：偏好同步機(水合/樂觀更新/序列鏈/resync/回滾)下沉為
- * $lib/mobile/pref-sync.ts(ADR 0012 第九例)，該機制本身的單元測試(交錯競態、
- * 三種 outcome、hydrate 細節)移至 pref-sync.test.ts；本檔僅留 markup 綁定與
- * outcome→toast 呼叫端佈線(ADR 0011 慣例)。 */
-vi.mock('$lib/mobile/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
-	return { ...actual, getPreferences: vi.fn(), savePreferences: vi.fn() };
+ * R13 Task 3(C1):偏好同步機改由會員資料 module($lib/member/profile)持有,原
+ * $lib/mobile/pref-sync 退役;機制本身(三種 outcome、交錯競態、水合前切換)的單元測試
+ * 在 member/profile.test.ts。本檔改走 $lib/api/client + fakeRouter(ADR-0022 通知合一的
+ * 前例)、真 authStore 登入,只留 markup 綁定、PATCH body 與 outcome→toast 佈線。
+ * 4 個 Switch 依 DOM 順序索引:0=課程提醒 1=教練訊息 2=活動公告 3=深色模式。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
+const USER = {
+	id: 'u-set', email: 'a@dreamfly.test', name: '王小明', phone: '0912345678', phone_verified: false,
+	avatar_url: null, is_active: true, created_at: '2024-03-15T00:00:00Z', roles: ['member']
+};
+const ME = { ...USER, birth_date: '2013-05-18', preferences: null };
+
+let routes: Record<string, unknown>;
+function route(extra: Record<string, unknown>) {
+	routes = { ...routes, ...extra };
+}
+function patchBodies(): unknown[] {
+	return vi.mocked(api).mock.calls
+		.filter(([path, init]) => path === '/users/me' && init?.method === 'PATCH')
+		.map(([, init]) => JSON.parse(String(init!.body)));
+}
+
+beforeEach(async () => {
+	vi.mocked(api).mockReset();
+	routes = {
+		'POST /auth/logout': undefined,
+		'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: USER },
+		'GET /users/me': ME,
+		'PATCH /users/me': (init: RequestInit) => ({ ...ME, ...JSON.parse(String(init.body)) })
+	};
+	vi.mocked(api).mockImplementation((path, init) => fakeRouter(routes)(path, init));
+	await authStore.logout(); // identity 重置:prefs 回預設、每個 it 重新水合
+	await authStore.login(USER.email, 'pw');
 });
 
-const DEFAULT_PREFS = { classReminder: true, coachMsg: true, promo: false, dark: false };
+describe('SettingsScreen — 開啟時背景水合(GET /users/me)', () => {
+	it('個人資料列顯示後端真值;沒有「會員編號」列與假的「儲存變更」按鈕', async () => {
+		const { container } = render(SettingsScreen, { props: { onBack: () => {} } });
 
-beforeEach(() => {
-	prefs.set({ ...DEFAULT_PREFS });
-	vi.mocked(getPreferences).mockReset().mockResolvedValue({ ...DEFAULT_PREFS });
-	vi.mocked(savePreferences).mockReset().mockResolvedValue(undefined);
-});
-
-describe('SettingsScreen — 開啟時背景水合真偏好(GET /users/me，覆蓋本地 prefs 快取)', () => {
-	it('載入前先顯示本地快取值(cache-first，不是空白/骨架)', () => {
-		prefs.set({ classReminder: false, coachMsg: true, promo: true, dark: false });
-		vi.mocked(getPreferences).mockReturnValue(new Promise(() => {})); // 掛住不 resolve
-		render(SettingsScreen, { props: { onBack: () => {} } });
-		const switches = screen.getAllByRole('switch');
-		expect(switches[0]).toHaveAttribute('aria-checked', 'false'); // classReminder(本地快取值)
-		expect(switches[2]).toHaveAttribute('aria-checked', 'true'); // promo(本地快取值)
+		await screen.findByText('2013-05-18');
+		expect(container.textContent).toContain('0912345678');
+		expect(container.textContent).not.toContain('會員編號');
+		expect(screen.queryByText('儲存變更')).toBeNull();
 	});
 
-	it('載入失敗時沿用本地快取，不拋出、不顯示錯誤 toast', async () => {
-		vi.mocked(getPreferences).mockRejectedValue(new Error('offline'));
+	it('水合後偏好開關反映後端值', async () => {
+		route({ 'GET /users/me': { ...ME, preferences: { class_reminder: false, promo: true } } });
+		render(SettingsScreen, { props: { onBack: () => {} } });
+
+		await waitFor(() => expect(screen.getAllByRole('switch')[0]).toHaveAttribute('aria-checked', 'false'));
+		expect(screen.getAllByRole('switch')[2]).toHaveAttribute('aria-checked', 'true');
+	});
+
+	it('載入失敗時沿用目前值，不拋出、不顯示錯誤 toast', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		route({ 'GET /users/me': new Error('offline') });
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(SettingsScreen, { props: { onBack: () => {} } });
-		await waitFor(() => expect(getPreferences).toHaveBeenCalled());
-		expect(get(prefs)).toEqual(DEFAULT_PREFS);
+
+		await waitFor(() => expect(console.error).toHaveBeenCalled());
+		expect(get(prefs)).toEqual({ classReminder: true, coachMsg: true, promo: false, dark: false });
 		expect(notifySpy).not.toHaveBeenCalled();
 		notifySpy.mockRestore();
 	});
 });
 
-describe('SettingsScreen — 切換開關即時 PATCH /users/me(savePreferences 整包覆寫)', () => {
-	it('切換課程提醒:樂觀更新 store + 呼叫 savePreferences 帶入切換後的整包 4 key', async () => {
+describe('SettingsScreen — 切換開關即時 PATCH /users/me(整包覆寫)', () => {
+	it('切換課程提醒:樂觀更新 + PATCH 帶切換後的整包 4 key', async () => {
 		render(SettingsScreen, { props: { onBack: () => {} } });
-		await waitFor(() => expect(getPreferences).toHaveBeenCalled());
+		await screen.findByText('2013-05-18');
 
-		const switches = screen.getAllByRole('switch');
-		await fireEvent.click(switches[0]); // 課程提醒 classReminder true→false
+		await fireEvent.click(screen.getAllByRole('switch')[0]); // 課程提醒 true→false
 
 		expect(get(prefs).classReminder).toBe(false); // 樂觀更新立即生效
 		await waitFor(() =>
-			expect(savePreferences).toHaveBeenCalledWith({ classReminder: false, coachMsg: true, promo: false, dark: false })
+			expect(patchBodies()).toEqual([{ preferences: { class_reminder: false, coach_msg: true, promo: false, dark: false } }])
 		);
 	});
 });
 
-describe('SettingsScreen — 送出失敗時的 toast 佈線(outcome.kind !== \'saved\')', () => {
-	it('savePreferences 失敗:呼叫端依 outcome 映射恰一次錯誤 toast(resync/單鍵回滾等內部機制細節見 pref-sync.test.ts)', async () => {
-		vi.mocked(savePreferences).mockRejectedValue(new Error('network'));
-		vi.mocked(getPreferences)
-			.mockResolvedValueOnce({ ...DEFAULT_PREFS }) // onMount 背景水合
-			.mockResolvedValueOnce({ ...DEFAULT_PREFS }); // 失敗後的整包 resync
+describe("SettingsScreen — 送出失敗時的 toast 佈線(outcome.kind !== 'saved')", () => {
+	it('PATCH 失敗:呼叫端依 outcome 映射恰一次錯誤 toast', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		route({ 'PATCH /users/me': new Error('network') });
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(SettingsScreen, { props: { onBack: () => {} } });
-		await waitFor(() => expect(getPreferences).toHaveBeenCalledTimes(1));
+		await screen.findByText('2013-05-18');
 
-		const switches = screen.getAllByRole('switch');
-		await fireEvent.click(switches[1]); // 教練訊息 coachMsg true→false，送出失敗
+		await fireEvent.click(screen.getAllByRole('switch')[1]); // 教練訊息 true→false，送出失敗
 
 		await waitFor(() => expect(notifySpy).toHaveBeenCalledTimes(1)); // 恰一次，非重複發送
 		expect(notifySpy).toHaveBeenCalledWith('error', '儲存失敗', '連線發生問題，請稍後再試。');

@@ -10,8 +10,9 @@
    * 的 points(getAccount() 內部已呼叫 refreshPoints() 側效水合,見 member/api.ts
    * getAccount() 註解) — 不再是 mobile 本地、永遠停在 mock 種子值的 points store
    * (那顆本地 store 仍保留給 CartSheet 的既有假結帳流程使用,兩者現在是分開的,
-   * 見 task-19-report.md 的顧慮)。profile 沿用 mobile 本地 store(編輯個人資料
-   * 本來就是本地端行為,同 desktop ProfileEditDialog,非本任務範圍)。 */
+   * 見 task-19-report.md 的顧慮)。hero 的名字讀 authStore(改名經 syncUser 同步)、
+   * 加入年月讀會員資料 module 的 $memberProfile(getAccount() 會等它水合,R13 Task 3);
+   * 後端沒有的會員編號拿掉。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -20,7 +21,7 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   // 卡 3：points 改經 $lib/mobile/stores 的存量 re-export 取用（單源仍是
   // member 側同一顆 store，getAccount() 的側效水合不變）。
-  import { overlay, profile, points } from '$lib/mobile/stores';
+  import { overlay, memberProfile, points } from '$lib/mobile/stores';
   import type { MobilePushId } from '$lib/mobile/stores';
   import { authStore } from '$lib/stores/authStore';
   import { createLoadGate } from '$lib/load-gate';
@@ -80,10 +81,10 @@
 
   <div class="m-top-inset" style="flex:none; background:linear-gradient(125deg, var(--df-primary), var(--df-primary-dark)); color:#fff;">
     <div style="padding:4px 18px 22px; display:flex; align-items:center; gap:14px;">
-      <Avatar name={$profile.initial} size="lg" color="rgba(255,255,255,0.22)" />
+      <Avatar name={$authStore.member?.initial ?? ''} size="lg" color="rgba(255,255,255,0.22)" />
       <div style="flex:1; min-width:0;">
-        <div style="font-size:21px; font-weight:800; font-family:var(--df-font-heading);">{$profile.name}</div>
-        <div style="font-size:12.5px; opacity:0.85; margin-top:2px;">會員編號 {$profile.id} · {$profile.since} 加入</div>
+        <div style="font-size:21px; font-weight:800; font-family:var(--df-font-heading);">{$authStore.member?.name ?? ''}</div>
+        {#if $memberProfile}<div style="font-size:12.5px; opacity:0.85; margin-top:2px;">{$memberProfile.since} 加入</div>{/if}
       </div>
       <button
         on:click={() => overlay.sheet('editProfile')}

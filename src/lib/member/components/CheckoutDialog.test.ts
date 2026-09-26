@@ -4,7 +4,10 @@ import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import CheckoutDialog from './CheckoutDialog.svelte';
 import { cart, subscriptions, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-import { POINTS_LEDGER, ME } from '$lib/domain/member-app';
+import { POINTS_LEDGER } from '$lib/domain/member-app';
+
+// R13 Task 3:mock 會員 ME 退役;本地 points 的 mock 殘值改用本地常數。
+const SEED_POINTS = 1250;
 import { passToCartItem } from '$lib/cart-item';
 import { fmtNT } from '$lib/format';
 import { api, ApiError } from '$lib/api/client';
@@ -42,7 +45,7 @@ beforeEach(() => {
 	localStorage.clear();
 	cart.clear();
 	subscriptions.set([]);
-	points.set(ME.points);
+	points.set(SEED_POINTS);
 	pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
 	checkoutOpen.set(false);
 	vi.mocked(api).mockReset();
@@ -88,7 +91,7 @@ describe('CheckoutDialog — pure-pass checkout creates a Subscription (使用�
 				items: [{ id: 'oi-1', item_type: 'product', product_id: PASS.id, course_id: null, quantity: 1, unit_price_cents: 450000 }]
 			},
 			[{ id: 'sub-1', product_id: PASS.id, product_name: PASS.name, status: 'active', started_at: '2026-06-22T00:00:00Z', expires_at: null, total_sessions: null, remaining_sessions: null, price_cents: 450000 }],
-			ME.points + 225
+			SEED_POINTS + 225
 		);
 		const { getByText, container } = render(CheckoutDialog);
 
@@ -116,7 +119,7 @@ describe('CheckoutDialog — pure-pass checkout creates a Subscription (使用�
 		expect(tones.some((t) => t.body.includes('日程'))).toBe(false);
 
 		// Pass still earns points (5% of 4500 = 225) — hydrated from GET /points/me.
-		expect(get(points)).toBe(ME.points + 225);
+		expect(get(points)).toBe(SEED_POINTS + 225);
 	});
 });
 
@@ -132,7 +135,7 @@ describe('CheckoutDialog — course checkout stays a mock (points only, 報名 c
 				items: [{ id: 'oi-2', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
 			},
 			[],
-			ME.points + 240
+			SEED_POINTS + 240
 		);
 		const { getByText, container } = render(CheckoutDialog);
 
@@ -144,7 +147,7 @@ describe('CheckoutDialog — course checkout stays a mock (points only, 報名 c
 		// Real order_number is surfaced in the success copy.
 		expect(container.textContent).toContain('DF-0002');
 		// Points rewarded (5% of 4800 = 240) — hydrated from GET /points/me.
-		expect(get(points)).toBe(ME.points + 240);
+		expect(get(points)).toBe(SEED_POINTS + 240);
 	});
 });
 
@@ -286,7 +289,7 @@ describe('CheckoutDialog — 開啟時水合已持有訂閱（GET /subscriptions
 describe('CheckoutDialog — 開啟時水合點數餘額（GET /points/me）', () => {
 	it('點數折抵預覽用 API 餘額，不用本地 mock 殘值（可用 300 點，非 1,250）', async () => {
 		cart.addItem(COURSE);
-		// beforeEach 已把本地 points 設成 mock 殘值 ME.points=1250；開啟後必須被
+		// beforeEach 已把本地 points 設成 mock 殘值 SEED_POINTS=1250；開啟後必須被
 		// API 的真實餘額（300）蓋掉，否則折抵預覽是照虛構餘額算的。
 		vi.mocked(api).mockImplementation(async (path: string) => {
 			if (path === '/points/me') return { balance: 300, ledger: [] };

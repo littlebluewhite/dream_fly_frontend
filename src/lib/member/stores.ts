@@ -17,6 +17,7 @@
  *  - subscriptions.ts   訂閱 / entitlement
  *  - checkout-sync.ts   購物車同步 + 送出訂單
  *  - notifications.ts   通知中心
+ *  - profile.ts         會員資料(個人資料 + 通知偏好,GET/PATCH /users/me)
  *  - ui.ts              跨路由 UI 狀態（checkoutOpen/search/toasts） */
 
 export { createCart, cart, cartCount } from '$lib/cart';
@@ -48,5 +49,8 @@ export { placeOrder } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
 export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, refreshNotifications, markRead, markAllRead } from './notifications';
+
+export { memberProfile, prefs, hydrateProfile, setPref, saveProfile, profileEditError } from './profile';
+export type { MemberProfile, Prefs, ProfileEdit, PrefSetOutcome, ProfileSaveOutcome } from './profile';
 
 export { checkoutOpen, search, toasts } from './ui';

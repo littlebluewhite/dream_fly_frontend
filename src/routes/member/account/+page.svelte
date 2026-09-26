@@ -6,44 +6,44 @@
   import { onMount } from 'svelte';
   import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { fmtNT } from '$lib/format';
-  import { points, subscriptions, toasts } from '$lib/member/stores';
+  import { points, subscriptions, toasts, memberProfile, prefs, saveProfile, type ProfileEdit } from '$lib/member/stores';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAccount, saveBirthDate, type AccountData, type AccountProfile } from '$lib/member/api';
+  import { getAccount, type AccountData } from '$lib/member/api';
   import type { IconName } from '$lib/icon-registry';
 
   let data: AccountData | null = null;
-  let profile: AccountProfile | null = null;
   let editing = false;
+  let saving = false;
 
+  // 個人資料讀 $memberProfile(會員資料 module;getAccount 會等它水合完成)。
   const gate = createLoadGate({
     fetch: getAccount,
-    onData: (d) => { data = d; profile = d.profile; }
+    onData: (d) => { data = d; }
   });
   onMount(() => {
     gate.load();
   });
 
-  $: contacts = profile ? ([
-    ['phone', profile.phone],
-    ['mail', profile.email],
-    ['users', profile.guardian]
-  ] satisfies [IconName, string][]) : [];
+  $: profile = $memberProfile;
+  $: contacts = profile
+    ? ([['phone', profile.phone], ['mail', profile.email]] satisfies [IconName, string][]).filter(([, v]) => v)
+    : [];
 
-  // 儲存個人資料（Round 4 Task P4-F4）——目前只有「生日」真的寫回後端（PATCH
-  // /users/me），其餘欄位（姓名/電話/家長聯絡人/通知偏好）維持既有的本地端編輯、
-  // 不寫回後端行為（非本次範圍），所以送出成功後仍以 dialog 的完整本地編輯副本
-  // `f` 覆蓋 profile，只是額外多打這一支 API、失敗時擋下並顯示錯誤 toast。
-  async function saveProfile(f: AccountProfile) {
-    try {
-      await saveBirthDate(f.birth);
-    } catch {
+  // 儲存個人資料(R13 Task 3)——姓名/電話/生日/通知偏好經會員資料 module 一次寫回
+  // PATCH /users/me(只送改過的欄位,不做樂觀更新)。saving 鎖防連點;失敗時 dialog
+  // 不關、可重試。
+  async function save(edit: ProfileEdit) {
+    if (saving) return;
+    saving = true;
+    const outcome = await saveProfile(edit);
+    saving = false;
+    if (outcome.kind === 'failed') {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
       return;
     }
-    profile = f;
     editing = false;
-    toasts.notify('success', '已儲存', '生日已更新，其他欄位目前僅本機預覽，尚未送出。');
+    toasts.notify('success', '已儲存', '個人資料已更新。');
   }
 </script>
 
@@ -61,9 +61,8 @@
   <div class="df-view" style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
     <div style="display:flex;flex-direction:column;gap:18px">
       <Card padding={24} style="text-align:center">
-        <div style="display:inline-block"><Avatar name={profile.initial} size="xl" color={profile.color} /></div>
+        <div style="display:inline-block"><Avatar name={profile.initial} size="xl" /></div>
         <div style="font-size:20px;font-weight:800;color:var(--df-ink);margin-top:12px;font-family:var(--df-font-heading)">{profile.name}</div>
-        <div style="font-size:13px;color:var(--df-text-light);margin-top:3px;font-family:var(--df-font-mono)">{profile.id}</div>
         <div style="margin-top:10px"><Badge tone="primary">競技啦啦隊 進階班</Badge></div>
         <div style="border-top:1px solid var(--df-border);margin-top:16px;padding-top:14px;display:flex;flex-direction:column;gap:9px;text-align:left">
           {#each contacts as [ic, v] (ic)}
@@ -137,8 +136,10 @@
     <ProfileEditDialog
       open={editing}
       {profile}
+      prefs={$prefs}
+      {saving}
       onClose={() => (editing = false)}
-      onSave={saveProfile}
+      onSave={save}
     />
   </div>
   {/if}
