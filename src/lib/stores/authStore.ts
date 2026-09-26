@@ -50,8 +50,9 @@ interface AuthResponse {
 
 /** id=uuid, initial=name[0], since=created_at 前 10 碼. points/color/age have no
  *  backend counterpart yet — points defaults to 0 here and is filled in later
- *  by the member surface (points-ledger endpoint); color/age are unused by any
- *  current UI beyond the ME mock they used to come from. */
+ *  by the member surface (points-ledger endpoint); color/age only exist because
+ *  the `Member` shape predates the backend (the `ME` mock seed that filled them
+ *  retired in R13) — color is a fixed default, age is unused. */
 export function toMember(user: ApiUser): Member {
   return {
     id: user.id,

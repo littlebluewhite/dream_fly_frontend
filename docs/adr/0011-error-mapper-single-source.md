@@ -90,3 +90,31 @@ orders 判 `400`、mobile-admin OrderSheet 判 `409`——同名不同狀態碼�
   wrapper 定義處，其呼叫端再以 wrapper 名反查一跳）。
 - `apiErrorMessage` 的空字串透傳是**已知且刻意**的現況複刻；若日後要加 truthy 防護，
   必須一次評估全部呼叫點（屆時是行為變更，不是重構）。
+
+## 增補（2026-09-26，架構深化 R13）：訂單 400/409「兩端後端路徑分歧」的前提不成立
+
+完整背景見 `docs/adr/0023` §5。
+
+§1 記「**status 分歧逐字保留**：桌面 admin orders 判 `400`、mobile-admin OrderSheet 判 `409`——同名
+不同狀態碼是兩端後端路徑的現況」。R13 Task 5 核對 `dream_fly_backend` 後，這個前提不成立：
+
+- 兩端打的是**同一支** `PATCH /orders/{id}/status` handler（`orders/service.rs::update_order_status`）。
+- **400** = `refund::decide_transition` 的「不可轉移」分支，涵蓋非法轉移，也涵蓋「`FOR UPDATE` 讀到的
+  狀態已被別人改掉」的並發。
+- **409** 只出現在退款／取消的點數扣回違反 `users_points_balance_check`（「點數不足」，整筆交易回滾）。
+
+所以 OrderSheet 把 409 當成「訂單狀態已變更」是錯的，真正的並發 400 反而落到泛用連線錯誤。這不是
+「收斂 plumbing 不裁決的分歧」，而是其中一端讀錯了同一個後端。
+
+**現況**：「狀態碼 → 領域意義」改住 `src/lib/admin/components/order-status.ts` 的
+`changeOrderStatus`：400 → `illegalTransition`、409 → `pointsShortfall`、其他（含非 `ApiError`）→
+`failed{error}` 原樣。桌面訂單頁與 OrderSheet 都依 outcome 分支。
+
+**本篇主裁決不受影響**：
+
+- 文案仍留呼叫端。兩句新／搬家的文案（「會員已使用本單回饋點數…」「訂單狀態已變更…」）都寫在頁面
+  與 OrderSheet 裡，module 只回 `kind`。
+- plumbing 仍是 `error-text.ts`：`failed` 分支照舊 `apiErrorText(outcome.error, { 403: … })`。
+  OrderSheet 的 `STATUS_ERROR_TEXT` 只剩 `403` 一鍵。
+
+教訓記在這裡：看到「同名不同狀態碼」時，先查後端是不是同一條路徑，再決定是不是現況分歧。

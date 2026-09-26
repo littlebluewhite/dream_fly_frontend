@@ -790,7 +790,7 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 });
 
 /* Task 11：請假審核（GET /leave-requests?status=pending + PATCH /leave-requests/{id}，
- * §3.20）。同 getStudents 慣例——無需 requireMyCoach() 閘門，呼叫者掛 coach 角色但查無
+ * §3.20）。同 getStudents 慣例——無需 requireCoach() 閘門，呼叫者掛 coach 角色但查無
  * 對應 coaches 資料列時後端本身回空頁而非錯誤(§3.20 引用§3.18/§3.19既有慣例)。 */
 describe('getPendingLeaveRequests — GET /leave-requests?status=pending&per_page=100（§3.20）', () => {
 	// fakeRouter 對未交代的 key 一律丟錯——下列測試同時釘住「請求必須帶 per_page=100」

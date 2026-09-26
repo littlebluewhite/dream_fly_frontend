@@ -314,3 +314,19 @@ R12 Task 5 起的現況:
 C4 判準句的適用範圍是 `data.ts` facade。R12 審查曾提議把同一條判準延伸到 `mobile/stores.ts` 的
 store/動作純轉手(候選 07),與 `docs/adr/0014` §1 的 seam 規則衝突。使用者裁決 D2 暫不處理,
 張力記在 `docs/adr/0022`。
+
+## 增補(2026-09-26,架構深化 R13):C3 的成環論證完全失效
+
+完整背景見 `docs/adr/0023` §2。
+
+R12 增補寫的是「通知這一段」不再成環。C3 當年的成環前提有兩半:葉模組需要 `mobile/api.ts` 的
+`getNotifications`,**而** `mobile/api.ts` 又 import `mobile/stores.ts` 的 `PREFS_DEFAULT`/`Prefs`。
+R12 拿掉了前一半;R13 Task 3 拿掉了後一半:
+
+- mobile 本地的 `Prefs`/`PREFS_DEFAULT`/`prefs` 退役,偏好改由 `$lib/member/profile` 擁有。
+- `mobile/api.ts` 的 `getPreferences`/`savePreferences`/`mapPreferences` 隨 `pref-sync.ts` 退役,
+  連帶刪掉它對 `./stores` 的 import。
+
+`mobile/api.ts` 自此**零** `mobile/stores.ts` import,`stores ⇄ api` 這條邊不存在。C3「葉模組、不得
+re-export」那段論證因此沒有任何殘餘前提;日後若有 mobile 模組想從 `stores.ts` 轉出,不必再為這個環
+另開葉模組。`pageEntry()` 的交付形狀與「epoch 知識只住 `session-gate.ts`」的判準不受影響。

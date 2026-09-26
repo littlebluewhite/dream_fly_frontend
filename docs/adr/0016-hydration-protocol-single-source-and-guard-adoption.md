@@ -295,3 +295,22 @@ R9 C3 增補第 1 點寫 mobile notifs「已於 R9 C3 改建完整 `createSessio
 
 所記的**事實**(跨登入洩漏已修、epoch 核對 fetch)不變,只是住所合一。「協定測試三層界線」第 3 層
 的 mobile 側薄採用釘,已隨模組移入 `src/lib/member/notifications.test.ts`。三層界線本身不變。
+
+## 增補(2026-09-26,架構深化 R13):候選 07「`pageEntry()` 改交 store 自持那一對」否決
+
+完整背景見 `docs/adr/0023`「明確不做」。
+
+R13 架構審查的候選 07 提議反方向收斂:讓 session 閘門的 `pageEntry()` 改交 store 自持的
+`{ fetch: hydrate, refresh }` 那一對,退役 load-gate 的 `hydrate` 選項,決策點全部留在 hydration-gate。
+本篇決定一否決的是「load-gate 整段委派 `createHydrationGate`」,理由是 F1 重入語意;候選 07 是同一個
+理由的另一面,結論相同:**不做**。那一對接法下,寫共享 store 的是 store 閘門,它不知道頁面的存在,
+會丟掉四項只有 load-gate 的 `hydrate` 選項才有的保護:
+
+1. 卸載即棄追(refresh 族 `fetchGenStable` 的 `iterate`)。
+2. 被新一輪 run 取代的回應不寫進共享 store(後發優先)。
+3. F1:`applyLoaded` 的 `into()` 重入重查。
+4. F5:`applyRefreshed` 的同款重查。
+
+目前以那一對接 load-gate 的有 5 個呼叫端(mobile-admin 的 4 個 `hydrateOps` 呼叫端與訊息頁),它們
+本來就拿不到這四項。收斂成一種接法的方向應是反過來:給 `HydrationGate` 加 `pageEntry()`,讓這 5 個
+呼叫端也改走 `hydrate` 選項。記為未來候選,本輪不動碼。

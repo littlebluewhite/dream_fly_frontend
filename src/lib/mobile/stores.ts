@@ -172,9 +172,10 @@ export async function placeOrder(
 // Task 5(架構深化 R12·候選 02):mobile 專屬的 $lib/mobile/notifications.ts 已退役
 // ——伺服器本來就是同一份已讀狀態的真值,mobile 與 member 現在共用 member 側的
 // createSessionGate 通知模組(唯一通知 module)。C3(R9)當年不 re-export 是因為
-// stores ⇄ api 成環(通知段需要 ./api 的 getNotifications,./api 又 import 本檔的
-// PREFS_DEFAULT);併入後源頭換成完全獨立的 $lib/member/stores,不再有這個環,
-// 因此改回與其他 member 側收編一致的 barrel re-export 慣例。
+// stores ⇄ api 成環(通知段需要 ./api 的 getNotifications,./api 當年又 import 本檔的
+// PREFS_DEFAULT——該常數已於 R13 隨會員資料 module 退役);併入後源頭換成完全獨立的
+// $lib/member/stores,不再有這個環,因此改回與其他 member 側收編一致的 barrel
+// re-export 慣例。
 export {
 	notifications,
 	unreadCount,

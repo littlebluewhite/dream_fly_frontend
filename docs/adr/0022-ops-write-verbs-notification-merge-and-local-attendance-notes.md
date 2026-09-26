@@ -283,3 +283,33 @@ seam,seam 的可見性收益只落在 production import 面。
 - **`docs/adr/0020`**:判準守恆釘改寫為新簽章,判準句與反例原樣有效(增補)。
 - **`docs/adr/0021`**:尾流呼叫端 4 → 2;`markOrderPaid` 仍不入帳,但理由改變;settle 測試換路徑
   (增補)。
+
+## 增補(2026-09-26,架構深化 R13):undo 已修、防連點關閉、`markOrderPaid` 改回傳 outcome,及三處現況
+
+完整背景見 `docs/adr/0023`。本篇原文不改寫,以下各點以本節為準。
+
+### 1. 「已知、刻意遞延」兩條已關閉
+
+- **「undo 可能復原成 `'saving'`」**:已在 `157a70d`(R12 終審修波)修掉。`attendance-controller` 的
+  `undo()` 還原到 `prev.state === 'saving'` 的快照、而此刻已不在儲存中時,落地為 `'dirty'`,並有 controller
+  測試釘住。本篇該條的「建議修法」即實際修法。
+- **「其他」條的「`EditProfileSheet.save()` 沒有防連點鎖」**:R13 Task 3 加上 busy 鎖(按鈕停用,
+  `save()` 內再擋一次),存檔改為一次 `saveProfile`,失敗時不關。
+
+### 2. `markOrderPaid` 改回傳 outcome,不再丟出
+
+§1 與「可見的行為變更」第 3 條記「真的送出 PATCH;失敗時丟出,store 不動」。R13 Task 5 起它回傳
+`changeOrderStatus` 的 outcome(`changed | illegalTransition | pointsShortfall | failed{error}`),
+只有 `changed` 才套回並 `markMutated()`。「寫入失敗 → 丟出」的語意只剩學員/課程兩組動詞(教練兩支
+本來就回 outcome)。測試對照見 `docs/adr/0023`。
+
+### 3. 三處現況校正
+
+- **課程動詞簽章**:`addCourse(course)`/`saveCourse(id, course)` 改收 `ValidCourse`(`course-request.ts`
+  的 `checkCourseDraft` 產物),不再自己 `get(coaches)` 解 `coach_id`;body 由 `buildCreateCourseBody`/
+  `buildUpdateCourseBody` 組出。「明確不做」節列的共用純函式 `buildCourseBody` 已退役,
+  `applyStatusChange` 搬到 `order-status.ts`。
+- **§6 的單一來源清單**:`CLASS_STATUS` 已退役(D2 讓招生狀態改唯讀,它失去最後消費者);分類清單仍以
+  `admin/data.ts` 的 `CATS` 為單一來源。
+- **§7 的 `prefSync` 單例**:隨 `pref-sync.ts` 退役,偏好寫入改走 `$lib/member/profile` 的 `setPref`,
+  與 `saveProfile` 共用一條寫入鏈。「先水合再編輯」由該 module 結構保證。

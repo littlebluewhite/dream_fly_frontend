@@ -18,7 +18,7 @@
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS(值+
  * interface)與 MY_COURSES/SCHEDULE/ORDERS(值)經確認無 runtime 消費者後整批從
  * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的常數,
- * 現為 12 個(卡 3 升遷 LEAVE_STATUS 後 11→12)。
+ * 現為 11 個(卡 3 升遷 LEAVE_STATUS 後 11→12;R13 會員資料 module 落地後 ME 退役,12→11)。
  * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
  * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。
  *

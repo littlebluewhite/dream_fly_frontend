@@ -357,3 +357,37 @@ R11 增補記的公式是「去『今日 』前綴、取 en-dash 前的起始時
   - 第④項當年指出「加註記後儲存鈕仍顯示『點名已儲存』是失真」。D1 之後同一個畫面**是**誠實的:
     儲存鈕描述出勤，備註另有本機標示。
   - 前三項(切班保留草稿、儲存中切班被擋、遲到回應丟棄)不受影響。
+
+## 增補(2026-09-26,架構深化 R13):seam 轉出 +6、身分釘 21 → 27、結帳由工廠轉出改為模組級實例
+
+完整背景見 `docs/adr/0023`。本篇原文不改寫,以下各點以本節為準。
+
+### 1. §1 seam:會員資料段經 `mobile/stores.ts` 轉出,mobile 本地 profile/prefs 退役
+
+- **新增轉出**:`mobile/stores.ts` 自 `$lib/member/stores`(白名單內既有源路徑)轉出會員資料 module 的
+  6 個值 `memberProfile`/`prefs`/`hydrateProfile`/`setPref`/`saveProfile`/`profileEditError`,以及
+  5 個型別 `MemberProfile`/`Prefs`/`ProfileEdit`/`PrefSetOutcome`/`ProfileSaveOutcome`。
+- **退役**:mobile 本地的 `Prefs`/`PREFS_DEFAULT`/`prefs`/`profile` store、`ME` import,以及
+  `$lib/mobile/pref-sync`(整檔)。mobile 與 member 自此讀寫**同一顆**會員資料單例。
+- **身分釘計數**:`mobile/stores.test.ts` 對 `$lib/member/stores` 的同參照釘由 **21 → 27**(+6)。
+- 源路徑白名單(`ALLOWED`)與 `MOBILE_SEAM_FILES` **零改動**:新符號走 `$lib/member/stores` barrel。
+- **成環前提消失**:`mobile/api.ts` 不再 import `mobile/stores.ts`(`getPreferences`/`savePreferences`
+  隨 pref-sync 退役)。見 `docs/adr/0019` 增補。
+
+### 2. 結帳:工廠純轉出退役,改為模組級實例 `checkout`
+
+- 舊:`mobile/stores.ts` 純轉出 `createCheckoutController`,`CartSheet` 每次掛載自己 `new` 一個;
+  `mobile/stores.test.ts` 以 `toBe` 釘它與 member 同參照。
+- 新:`mobile/stores.ts` 在 `cart` 旁建 `export const checkout = createCheckoutController({ placeOrder })`
+  (與購物車同生命週期,付款在飛時關掉 sheet 再開不會換 key)。工廠轉出失去唯一消費者,退役。
+- 這不是純轉手:它是以本檔的 `placeOrder` 接線建構的實例。同參照釘因此換成**接線釘**——以
+  `vi.doMock('$lib/member/checkout-controller')` 重新載入本檔,斷言工廠以 `{ placeOrder }` 被呼叫。
+- `stores.ts` 仍 import `$lib/member/checkout-controller`(白名單內),只是不再轉出工廠本身。
+
+### 3. 雙生核可類的 `checkout-controller`:兩端改為同一種生命週期
+
+R11 增補把 `checkout-controller` 列入 §2 雙生核可類時,記下兩個消費端落在不同生命週期層、機器內無
+分支。R13 起兩端都用 `setOpen` 邊沿:mobile `CartSheet` 掛載時 `setOpen(true)`、卸載時 `setOpen(false)`,
+只在 `freshCheckout` 時 `refreshPoints()`,同桌面。差異仍只在接線,機器零 diff。
+
+§1 的不變量一字未改。`docs/adr/0022` 記的 D2 張力(本篇 §1 vs `docs/adr/0019` C4 判準)本輪沒有重提。

@@ -174,3 +174,29 @@ C4 之後這句話的含意更精確：差異不再來自「哪個 facade 順手
 失敗」的技巧。那份檔案守的正是 mobile facade 的型別轉出，而型別轉出已於 C4 批1 全數退役——守衛
 失去守護對象，整檔（94 行）一併刪除，`admin` 的同款檔早在 ADR 0009 那輪就走過同一條路。技巧本身
 沒有錯，只是倉內不再有任何 facade 需要它；`docs/architecture.md` 的 domain 段同步改寫為現況。
+
+## 增補（2026-09-26，架構深化 R13）：本輪退役清單
+
+完整背景見 `docs/adr/0023`。每個符號刪除前都照第 1 節重新 grep 全部消費者，不採信既有註解。
+
+- **Task 1**（死碼）：`MemberDialog` 的 `member` 分支、`onEdit` prop 與 `ProgressBar` import；
+  `admin/data.ts` 的 `Member`（連同 `MemberBase` import）、`PAY_STATUS`／`PayStatus`、`ATT_MARK`／
+  `AttMark`；`StatusBadge` 的 `member`／`pay` case；`domain/members.ts` 的 `MEMBER_STATUS`。
+  **型別留下**：`MemberStatus` 仍替 mobile-admin 的 `MEMBERS_BASE` 背書（第 2 節判準）。
+- **Task 2**：`mobile/stores.ts` 對 `createCheckoutController` 的轉出——唯一消費者 `CartSheet` 改讀
+  模組級單例 `checkout`。
+- **Task 3**：domain 的 `ME`；`member/api.ts` 的 `AccountProfile`、私有 `ApiUser`、`mapProfile`、
+  `saveBirthDate`、`me()`、`DashboardData.me`（以及因此變成孤兒的 import）；mobile 本地的 `Prefs`／
+  `PREFS_DEFAULT`／`prefs`／`profile` store；`mobile/api.ts` 的 `getPreferences`／`savePreferences`／
+  `mapPreferences`；`src/lib/mobile/pref-sync.ts` 整檔。**型別留下**：`Member`（authStore 在用）。
+- **Task 4**：`buildCourseBody`；`admin/api.ts` 的 `CourseWriteBody`（拆成 `CreateCourseBody`／
+  `UpdateCourseBody`）與 `mobile-admin/api.ts` 的同名零消費者轉出；`admin/data.ts` 的 `CLASS_STATUS`。
+  `levelToApi`／`scheduleTextOf`／`parseAgeRange`／`coachIdOf` 不是退役，是收為 `course-request.ts`
+  私有。
+- **Task 5**：`paidRevenue`（由 `revenueTotal` 取代，口徑同時改為後端 `is_revenue`）。`LEGAL_NEXT`／
+  `legalNextStatuses`／`applyStatusChange` 是搬家到 `order-status.ts`，不是退役。
+- **Task 6**：admin 的 `ApiAdminTodaySession`、coach 的本地 `ApiTodaySession`（兩者收進 wire）；
+  `coach/api.ts` 對 `deriveSessionStatus` 的活 re-export（production 零消費者，只剩自己的測試釘）。
+- **Task 7**：`coach/api.ts` 的 `myCoachProfile`（只剩自己的測試）與本地窄化 `ApiUser`。
+
+「死值不留死出口」照舊：上列轉出一律與其值同批移除，不留空殼 re-export。

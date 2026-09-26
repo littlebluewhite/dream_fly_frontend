@@ -430,3 +430,40 @@ R12 讓 mobile-admin 營運 store 擁有逐 entity 的寫入動詞:`addMember`/`
 - 共用的只有一支私有的 `refetchAfterWrite()`(寫後重抓 + 失敗只記 log)。
 
 C6 的判準與 deletion-test 論證原樣有效。
+
+## 增補(2026-09-26,架構深化 R13):C6 否決仍然成立;「PATCH 失敗則丟出」已被取代;§4 兩處承接形退役
+
+完整背景見 `docs/adr/0023`。
+
+### 1. §6(C6)CRUD 提交同構否決:R13 的逐 entity 寫入 module 不是它
+
+R13 Task 4(候選 C2)為課程/學員/教練各建一個寫入 module:`course-request.ts`
+(`courseDraftOf`/`checkCourseDraft`/`buildCreateCourseBody`/`buildUpdateCourseBody`)、新增的
+`member-request.ts`(`checkNewMember`/`checkMemberEdit`)、擴充的 `coach-save.ts`
+(`checkNewCoach`/`checkCoachEdit`)。這**不是** C6 否決的通用 `submitEntity`:
+
+- 逐 entity、各自一套 draft/valid/errors 型別;新增與編輯是兩支函式,沒有 `isNew` 或 entity 型別參數。
+- 共用的只有 entity 內部的私有 helper(`courseFields`、`checkNamePhone`、`checkNameTitle`),不跨 entity。
+- 收的是「表單值 → 驗證 → body」這一段規則,不是提交骨架;busy 鎖、toast、錯誤文案仍在各呼叫端。
+
+C6 的判準與 deletion-test 論證原樣有效。
+
+### 2. R12 增補「PATCH 失敗則丟出,store 不動」已被取代
+
+R13 Task 5 起,`mobile-admin/stores.ts` 的 `markOrderPaid(order)` 回傳
+`Promise<ChangeOrderStatusOutcome>`,**不再丟出**。它委派 `order-status.ts` 的 `changeOrderStatus`:
+
+- `changed` → `applyStatusChange` 套回 `$orders`,再 `opsGate.markMutated()`。
+- `illegalTransition`(400)、`pointsShortfall`(409)、`failed{error}` → store 不動,由 `OrderSheet` 依
+  kind 選文案。
+
+R12 增補的其餘結論不變:mark 仍發生在 PATCH 落定之後,沒有在飛尾流可入帳;仍不重抓。
+
+### 3. §4(C4)的兩處承接形已退役
+
+- **`coach/api.ts` 的 `deriveSessionStatus` 活 re-export**:production 零消費者(只剩自己的測試釘),
+  R13 Task 6 退役。`mapTodayClass` 仍在本地呼叫它。
+- **`mobile-admin/api.ts` 的寬鍵 fallback**:`mapTodayClassToRow` 改收窄鍵 `TodayStatus`,直接
+  `SESSION_STATUS[t.status]`,漏鍵成為編譯錯誤。
+- **admin** 改經 `toTodaySession` 取 `state` 再索引 `SESSION_STATUS`。canonical 標籤「上課中」與
+  「色彩留 surface」的裁決不變。見 `docs/adr/0013` 增補。

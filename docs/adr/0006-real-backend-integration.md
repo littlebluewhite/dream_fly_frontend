@@ -182,6 +182,22 @@ surface（member/staff）共用同一套 API：
 > `PATCH /users/me`，並先水合再編輯。姓名／電話等 profile 欄位仍是本地編輯，不變。
 >
 > 同輪 `mobile-admin` 的「標記已付款」也由本地 demo 翻轉，改為真 `PATCH /orders/{id}/status`（本表原未列此項）。
+>
+> **2026-09-26（R13 架構深化）增補**（詳 `docs/adr/0023`）：上表「`mobile` 帳戶設定「儲存變更」／桌面會員帳戶頁
+> 個人資料」一列**關閉**。
+> - 會員本人的姓名／電話／生日與四個通知偏好只住 `src/lib/member/profile.ts` 一處，`member` 與 `mobile`
+>   都經它真 `PATCH /users/me`（使用者裁決 D1）。mobile 也能改生日了。上述 R12 增補的 `prefSync` 單例
+>   隨 `pref-sync.ts` 一併退役，語意移入該 module。
+> - 後端沒有的欄位——會員編號、家長聯絡人、頭像顏色——連同 mobile 設定頁假的「儲存變更」鈕一併拿掉
+>   （使用者裁決 D2），不再是「本地端編輯」。
+> - `authStore` 新增 `syncUser(user)`：同一位登入者的 `/users/me` 回應（水合或 PATCH 之後）同步 `member`
+>   與 `dreamfly_auth` 快取，Topbar 名字即時更新。identity key 不變，不觸發任何 session 閘門重置。教練的
+>   `saveSettings` 也用它。
+> - 後端無法清空電話（`update_profile` 沒有清空路徑），原本有電話的會員不能把它改成空白，記為已知遞延。
+>
+> 同輪另有三筆本表原未列的誠實化：admin／mobile-admin 課程表單拿掉場地、本期期別、本期堂數輸入，招生
+> 狀態改唯讀（D2；列表與明細仍顯示空值，遞延）；coach 今日場次與點名卡的場地改讀後端 `venue`（原「P2
+> 無場地欄位」寫死空字串）；mobile-admin 首頁待付款橫幅不再於水合前數種子裡的假訂單。
 
 ### 6. Round 3 接線範圍：7 個新後端子系統 + admin 使用者 + 5 級課程分級
 

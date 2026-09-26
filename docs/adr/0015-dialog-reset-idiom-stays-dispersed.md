@@ -43,3 +43,15 @@ clone 進本地 `f`,並重建各自的派生 string buffer)與 **derive 族**一
 - **`docs/adr/0012`**:統一 helper 的否決與其「太薄、抽出不比呼叫點深」的既有否決紀律同源;
   本 ADR 把該裁決固定下來,未來審查請先讀此篇再提對話框 reset 收斂。
 - **`docs/adr/0014`**:同批次 ADR;卡 7 與其餘七卡的批次脈絡見彼處 Status 段。
+
+## 增補(2026-09-26,架構深化 R13):`ClassEditDialog` 工作副本改 `CourseDraft`,reset 釘少一行斷言
+
+完整背景見 `docs/adr/0023` §4。
+
+- R13 Task 4 把 `ClassEditDialog` 的工作副本由 `ClassRow` clone 改為 `courseDraftOf(klass)` 產生的
+  `CourseDraft`(只含可寫欄位,人數/季費/時長為文字緩衝)。`courseDraftOf` 每次都回新物件,所以決定二
+  「working copy 生命週期的每一步都必須產生新物件」照舊成立,別名污染不可能發生。
+- 使用者裁決 D2 拿掉了場地/本期期別/本期堂數三個輸入。第一支 reset 釘(換實體不殘留)因此刪掉
+  `本期堂數` 那一行斷言(輸入已不存在,斷言沒有對象);其餘斷言逐字不變。第二支(關閉重開丟棄髒草稿、
+  原實體不污染)完全不變。
+- 決定一(reset 慣用式維持分散、不建統一 helper)不受影響。

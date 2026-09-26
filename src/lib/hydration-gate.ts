@@ -3,8 +3,9 @@
  *
  * 收斂「共享 store 的水合協定」：guard 短路 + post-await re-check（mutation 勝出）
  * + mutator 翻旗。是 src/lib/mobile-admin/stores.ts 中 hydrateOps／hydrateMessages
- * 兩段逐字重複協定的深模組化——那兩段已原地改用本 factory（見該檔 hydrateOps/
- * hydrateMessages 旁的 createHydrationGate 呼叫）。
+ * 兩段逐字重複協定的深模組化——hydrateOps 仍原地直接用本 factory（見該檔
+ * opsGate 的 createHydrationGate 呼叫）；hydrateMessages 自 R13（docs/adr/0023）
+ * 改建在 session-gate.ts 的 createSessionGate 上（換帳號即重置），仍間接用本 factory。
  *
  * 核心語意：hydrate() 開頭若已水合就短路、不打 API；fetch 進行中若發生 mutation
  * （markMutated()，或呼叫端直接把 hydrated 設 true），await 結束後的 re-check 會

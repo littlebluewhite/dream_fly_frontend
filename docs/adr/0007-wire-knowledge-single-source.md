@@ -124,3 +124,28 @@ interface 天生沒有「同一份宣告被改壞其中一處、其他處沒跟�
 - 若後端未來新增 `OrderStatus` 之外的其他 union+標籤表（例如付款方式、會員等級的 badge 化），
   可比照 `ORDER_STATUS`/`orderStatusBadge` 的既有 pattern（含 fallback 契約）新增，不必另創
   一套機制。
+
+## 增補(2026-09-26,架構深化 R13):`ApiTodaySession` 收進 wire;`ApiUser` 三處窄化投影只剩一份
+
+完整背景見 `docs/adr/0023` §6、§2、§7。
+
+### 1. `ApiTodaySession` 符合收錄判準,已收進 `wire.ts`
+
+`GET /sessions/today` 的 admin 與 coach 分支在後端是同一支 service、同一個 `TodaySessionResponse`,
+前端卻各宣告一份(admin 叫 `ApiAdminTodaySession`,coach 叫 `ApiTodaySession`)。這是「≥2 個 surface
+共用的後端 wire 知識」,R13 Task 6 把它收成 `wire.ts` 的 `ApiTodaySession`(8 欄,`coach_name`/`venue`
+可為 `null`),兩份本地宣告刪除。
+
+UI 目標型別 `TodaySession` 與投影 `toTodaySession(s, now)` **不進** `wire.ts`(本篇判準:UI 目標型別
+一律不收),住 `src/lib/domain/sessions.ts`,與 `deriveSessionStatus` 同居。後端回應另帶的 `status`
+欄位本輪刻意不讀,前端仍依本地時間推導。
+
+### 2. 「`ApiUser` 三處窄化投影——刻意不合併」的現況
+
+- `member/api.ts` 的私有 `ApiUser` 隨 `mapProfile` 一併退役(Task 3)。
+- `coach/api.ts` 的窄化版改 import `stores/authStore.ts` 匯出的 `ApiUser`(Task 7)。
+- `member/profile.ts` 以 `ApiUser & { preferences, birth_date }` 延伸同一份。
+
+倉內只剩 authStore 一個宣告處。本節的理由沒有被推翻:收斂不是為了防漂移,而是兩個消費端開始把
+`/users/me` 的回應餵回 `authStore.syncUser`,型別必須是 authStore 自己的那一份。它仍不進 `wire.ts`,
+因為宣告處只有一個,也只有 authStore 定義它的語意。

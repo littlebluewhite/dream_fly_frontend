@@ -14,6 +14,13 @@ _Avoid_: 使用者(指訪客時), 家長
 尚未登入的瀏覽者;可瀏覽、可加入購物車,但**結帳前必須先登入成為會員**(auth-at-checkout)。
 _Avoid_: 使用者
 
+**會員資料 (Member Profile)**:
+會員本人可檢視、可自行修改的個人資料——姓名、電話、生日(email 只讀、加入年月由後端推導)——以及
+本人的通知偏好(課前提醒、教練訊息、活動與優惠、深色模式)。真值在後端 `/users/me`,讀寫單一來源是
+`src/lib/member/profile.ts`(member 與 mobile 共用同一顆,換帳號即重置;見 `docs/adr/0023`)。只收後端
+真的有欄位的資料:會員編號、家長聯絡人、頭像顏色這類後端沒有的欄位不算會員資料,也不提供輸入。
+_Avoid_: 帳號設定(那是含登出、密碼等的整個畫面), 個人檔案(與教練檔案混淆), 系統設定(那是 admin 的全域組態)
+
 ### 報名、訂閱與結帳 (Enrolment, Subscription & Checkout)
 
 **課程 (Course)**:
@@ -42,7 +49,15 @@ _Avoid_: 付款, 購買
 
 **結算 (Settlement)**:
 一次「結帳」算出的結果——金額拆解(小計、折抵、應付、回饋點數)與該次產生的報名／訂閱及點數變動。「結帳」是動作,「結算」是其產物。
-_Avoid_: 訂單, order, 帳單
+_Avoid_: 以「訂單」指金額拆解(訂單是後端保存的紀錄,見下), 帳單
+
+**訂單 (Order)**:
+一次結帳送出後、由後端保存的紀錄(`POST /orders` 建立),有訂單編號、金額與狀態(待付款 / 已付款 /
+處理中 / 已完成 / 已取消 / 已退款)。狀態只能沿合法轉移前進;已付款、處理中、已完成三者計入營收。
+轉移規則、營收口徑與「變更狀態時各錯誤代表什麼」的單一來源是
+`src/lib/admin/components/order-status.ts`(見 `docs/adr/0023`)。結算是前端算出的金額拆解,訂單是後端
+留下的紀錄;方案購買的訂單產生訂閱,不是報名。
+_Avoid_: 結算(指後端紀錄時), 帳單, 報名紀錄(訂單可能是方案購買)
 
 **洽詢 (Enquiry)**:
 訪客從公開網站送出、由人員後續**手動聯繫**的請求(一般問題);不產生報名 / 訂閱、也不收款。
@@ -110,8 +125,10 @@ markMutated → await refresh」序列會因此無窮重抓);把等待判準接�
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(完整水合閘門 + identity 重置 + epoch
-核對 fetch + `mutate()` + 頁面進場包 `pageEntry()`,供 waitlist/請假/通知——通知自 2026-09-26 起
-是 member 與 mobile 共用的同一顆閘門,mobile 經自家 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`)、
+核對 fetch + `mutate()` + 頁面進場包 `pageEntry()`,供 waitlist/請假/通知/會員資料/教練身分/mobile-admin
+訊息——通知自 2026-09-26 起是 member 與 mobile 共用的同一顆閘門,mobile 經自家 `mobile/stores.ts` 轉出
+取用,見 `docs/adr/0022`;會員資料同樣兩端共用一顆,教練身分住 `coach/api.ts` 內部、每個 session 只解析
+一次,mobile-admin 訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
 `createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。原第三門 `onSessionReset`
 (僅重置、閘門所有權留呼叫端)已於 2026-08-03 隨其唯一消費者(行動版通知)改建完整閘門而退役
 (見 `docs/adr/0017` 增補與 `docs/adr/0019`)。

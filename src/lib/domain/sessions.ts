@@ -37,8 +37,11 @@ export function deriveSessionStatus(startTime: string, endTime: string, now: Dat
 	return 'done';
 }
 
-/** 今日場次投影（C5：admin/coach/mobile-admin 三處原本各自手抄一份 ApiTodaySession →
- *  自家目標形狀的映射，逐欄位相同，單源收斂到這裡）。coach_name/venue 為 null 時皆給
+/** 今日場次投影（C5：wire 形狀 ApiTodaySession 單源在 $lib/api/wire）。production
+ *  呼叫端是 admin/api.ts 的 mapTodaySession（mobile-admin 的 admin 分支經它取得
+ *  state）；coach/api.ts 的 mapTodayClass/mapAttendanceClass 目標形狀另帶 level/cat
+ *  等欄位，仍各自投影、只共用 wire 型別與 deriveSessionStatus（見 docs/adr/0023）。
+ *  coach_name/venue 為 null 時皆給
  *  '—'（誠實預設值，P2：後端無對應資料時的既有慣例）；state 仍委派 deriveSessionStatus
  *  依目前時間推導，語意零改。 */
 export interface TodaySession {

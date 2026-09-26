@@ -79,7 +79,7 @@ export const classes = writable<ClassRow[]>(CLASSES);
 // 寫入不局部樂觀更新這些 store:寫入成功後一律 refreshOps() 整包重抓(見下方寫入動詞)。
 export const coaches = writable<Coach[]>(COACHES);
 
-/** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本月已收
+/** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本頁已收
  *  revenue, 待付款 count) and the admin home 待付款 banner all derive from this
  *  store — keep it the single source of truth for order status. */
 export const orders = writable<OrderRow[]>(ORDERS);

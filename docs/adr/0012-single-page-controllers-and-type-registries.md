@@ -318,3 +318,33 @@ attendance-controller 與 checkout-controller 另有第二個呼叫端，走的�
 - 已知的遞延缺陷:儲存在飛時取的 undo 快照帶 `state: 'saving'`,儲存完成後復原會卡在「儲存中」。
   這條路徑 `setMark` 早已存在,D1 讓 `applyNote` 也能經成功路徑走到。見 `docs/adr/0022`「已知、刻意
   遞延」。
+
+## 增補（2026-09-26，架構深化 R13）：pref-sync 退役、語意併入會員資料 module；coach-save 加驗證；結帳 controller 兩端同形
+
+完整背景見 `docs/adr/0023`。本篇原文不改寫，以下三點以本節為準。
+
+**1. `src/lib/mobile/pref-sync.ts` 退役，語意移入 `src/lib/member/profile.ts`。** R12 增補把它改列為
+mobile 共用 module（單例 `prefSync`，一條 `saveChain`）。R13 Task 3 把會員本人的資料與偏好收成單一
+module（`docs/adr/0023` §2），pref-sync 與其測試整檔刪除：
+
+- `setPref(k, v)` 的三種 outcome（`saved`／`resynced`／`rolledBack`）與「排隊時不凍結快照、輪到才
+  重新讀」的不變量原樣移入；單元測試移到 `member/profile.test.ts` 的兩個「移植自 pref-sync.test.ts」
+  describe，斷言語意不變。
+- 形狀變了：它不再接收呼叫端注入的 `prefs` store，而是自己擁有 `prefs`、建在 `createSessionGate`
+  上（換帳號即重置），並與 `saveProfile` 共用**同一條**寫入鏈。這是 store 層 module，不是單頁
+  controller，也不在本篇名冊內。
+- 名冊不變，仍是 8 例。R12 增補的「`createPrefSync` 工廠保留匯出供測試」隨檔刪除。
+
+**2. `coach-save.ts` 加入驗證：`checkNewCoach`／`checkCoachEdit`。** 回傳 `valid{values} |
+invalid{errors}`，驗證文案以 exported const（`COACH_*_ERROR`）住 module，標籤拆分收成私有
+`splitTags`。判準④不受影響：這是 R10 C 案（`contact-form.ts`）已成文的界線——**驗證**文案住 module、
+**toast** 文案留呼叫端。`saveNewCoach`／`saveCoachEdit` 的編排與 outcome 不變。同輪的
+`course-request.ts`（`checkCourseDraft`）與新增的 `member-request.ts`（`checkNewMember`／
+`checkMemberEdit`）是無狀態純函式，不是 controller，也不入名冊。
+
+**3. `checkout-controller` 兩個消費端改為同一種生命週期。** R11 增補記它有兩個消費端、落在不同生命
+週期層：桌面 `CheckoutDialog` 以 `setOpen` 邊沿驅動 key，mobile `CartSheet` 每次掛載自己 `new` 一個、
+永不呼叫 `setOpen`。R13 Task 2（候選 C3）起，mobile 的 controller 是 `mobile/stores.ts` 的模組級單例
+`checkout`，`CartSheet` 掛載時 `setOpen(true)`、卸載時 `setOpen(false)`，兩端都走邊沿語意。controller
+本身零 diff；「建構期即備妥可用 key」的機器面保證仍由 `checkout-controller.test.ts` 釘住（describe
+已改名，見 `docs/adr/0023` 測試對照表）。

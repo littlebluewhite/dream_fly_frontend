@@ -8,7 +8,9 @@
  * 把後四「抬升」到同一套守衛之下,提供兩門工廠:
  *   - createSessionGate     完整 session gate(gate + 身分重置 + 序列化可重試和解鏈
  *                           + epoch 核對 fetch + 頁面進場包 pageEntry())——
- *                           waitlist / leave / notifications
+ *                           waitlist / leave / notifications;R13(docs/adr/0023)
+ *                           再加會員資料(member/profile)、教練身分(coach/api 私有)
+ *                           與 mobile-admin 訊息(messagesGate),共六個
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
  *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions
  *
@@ -36,7 +38,8 @@
  * .subscribe() 發生在 factory **被呼叫**時(call site 在各 store 模組頂層 = 現行
  * waitlist/leave 同位置),不是本模組 import 時——SSR 姿勢與現況一致。
  *
- * 每次 factory call 一個獨立的 authStore 訂閱(共六個模組級永生訂閱,與現狀同類),
+ * 每次 factory call 一個獨立的 authStore 訂閱(R13 起共八個模組級永生訂閱——六個
+ * createSessionGate + 兩個 createSessionRefresher,與現狀同類),
  * 無共享 registry:registry 會違反零副作用憲章、需要新的 registry-reset 測試接縫,
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR 0016 定案 3)。
  */

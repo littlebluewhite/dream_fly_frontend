@@ -444,3 +444,39 @@ px 斷言與 `ReportsScreen.test.ts` 零改續綠。同批補上 `RevenueTrend.t
   `notificationsHydrated`。
 - 所記的**行為**不變:已讀落庫、`markAllRead` 回傳 `Promise` 供頁面依結果選 toast。
 - 該節歷史原文不改寫。
+
+## 增補(2026-09-26,架構深化 R13):`MEMBER_STATUS` 退役;`SESSION_STATUS` 消費形校正;`toTodaySession` 與 `order-detail.ts` 入列
+
+完整背景見 `docs/adr/0023`。本篇原文不改寫,以下各點以本節為準。
+
+### 1. `MEMBER_STATUS`(出席率三態)退役
+
+§1 現況表的 `MEMBER_STATUS` 一列,以及「測試守衛」節的同名異義守衛(斷言 `MEMBER_STATUS.active[1]`
+不等於 `MEMBER_ACCOUNT_STATUS.active[1]`),自 R13 Task 1 起失去對象:
+
+- 它唯一的 production 消費者是 `StatusBadge` 的 `'member'` case,而 `kind="member"` 全倉只有
+  `MemberDialog` 的死分支傳入。三者同批退役(`docs/adr/0010` 增補)。
+- `status-lookups.test.ts` 的三支 `MEMBER_STATUS` 測試(字面快照、同名異義守衛、鍵數 canary)一併刪除。
+- `MEMBER_ACCOUNT_STATUS` 不受影響。`MemberStatus` 型別保留,仍替 mobile-admin 的 `MEMBERS_BASE`
+  背書。同名異義的風險隨其中一方消失而消失。
+
+### 2. `SESSION_STATUS` 三個消費端的承接形
+
+R8 C4 增補與 `docs/adr/0018` §4 記的承接形,R13 Task 6 改了兩處:
+
+- **admin**:`mapTodaySession` 改為 `toTodaySession(s, now)` 之後以 `SESSION_STATUS[t.state]` 取
+  tone/label,不再直接呼叫 `deriveSessionStatus`。
+- **mobile-admin**:`mapTodayClassToRow` 的輸入改收窄鍵 `TodayStatus`,直接索引 `SESSION_STATUS`;
+  寬鍵 fallback `(… as Record<string, …>)[t.status] ?? ['neutral', '']` 退役,漏鍵變成編譯錯誤。
+  `TodayRow` 另帶 `state`,首頁「上課中」橫幅改依 `state === 'live'` 判斷,不再比對 label 字面。
+- **coach**:`data.ts` 的 `CLASS_STATUS` 合成 label 不變。`coach/api.ts` 對 `deriveSessionStatus`
+  的活 re-export 失去消費者,退役;`mapTodayClass` 仍在本地呼叫它。
+
+### 3. `domain/sessions.ts` 新增 `toTodaySession`;`domain/order-detail.ts` 入列
+
+- `toTodaySession(s: ApiTodaySession, now)` → `TodaySession`,是 `sessions.ts` 的第二支純函式,
+  與 `deriveSessionStatus` 同居。它是投影,不是顯示查表,不影響「第六個 entity 檔」的計數。
+- `src/lib/domain/order-detail.ts` 的 `orderDetailRows(o)` 是 `class-detail.ts`(R11 增補)的同類居民:
+  桌面 `OrderDialog` 與 mobile-admin `OrderSheet` 原本各自內嵌的 13 列訂單明細(有退款原因時 14 列),
+  以結構型別 `OrderDetailSource` 同時吃 `Order` 與 `OrderRow`。不對應後端 enum、不產出 `Tone`,
+  不算第七個顯示查表。

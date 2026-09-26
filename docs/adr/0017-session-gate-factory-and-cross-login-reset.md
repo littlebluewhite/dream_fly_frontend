@@ -196,3 +196,32 @@ notifs**)」,並指向葉模組 `src/lib/mobile/notifications.ts`。R12 Task 5(`
 
 本篇其餘裁決不受影響。原文「`reset` 值必須冪等」的實例,改由共用閘門的 `NOTIFS_SEED` clone 承擔。
 mobile 獨有的「不登出直接換帳號」釘移到 `src/lib/member/notifications.test.ts`。
+
+## 增補(2026-09-26,架構深化 R13):`createSessionGate` 消費者 3 → 6,首批 staff 面消費者
+
+完整背景見 `docs/adr/0023` §2、§7。
+
+**現況**:
+
+- `createSessionGate` 有六個消費者:waitlist / leave / notifications(member 與 mobile 共用),加上
+  R13 的三個——
+  - **會員資料**(`src/lib/member/profile.ts`,Task 3):會員本人的 `/users/me` 與偏好,member 與
+    mobile 共用一顆。
+  - **教練身分**(`src/lib/coach/api.ts` 模組私有,Task 7):`{ user, coach | null }`,每個 session
+    只解析一次。查無教練檔案時把 `gate.hydrated` 翻回 `false` 再丟 `CoachNotFoundError`,保留重試路徑。
+  - **mobile-admin 訊息**(`messagesGate`,Task 7):由 `createHydrationGate` 改建,`reset` 回
+    `MESSAGES` 種子(boot-parity)。修掉「第二個教練看到前一個教練的對話列表」。`opsGate` 仍用
+    `createHydrationGate`:ops 是全機構資料,不是個人資料。
+- `createSessionRefresher` 仍是 points / subscriptions。
+- 每次 factory call 各開一個 `authStore` 訂閱,合計八個。
+
+教練身分與 mobile-admin 訊息是第一批 staff 面的消費者。identity 源仍是同一個 `authStore`:staff 與
+mobile-admin 登入頁同樣寫入它,identity key(`member.id`)就是 user id。本篇其餘裁決不受影響。
+
+兩處觀察,記給日後:
+
+- `gate.hydrate()` 不合併併發呼叫。`profile.ts` 的 `hydrateProfile` 與 `coach/api.ts` 的
+  `hydrateIdentity` 各自加了一個 `inflight`。若出現第三處,再考慮收進閘門。
+- mobile-admin 訊息頁仍以 `{ fetch: hydrateMessages, refresh: refreshMessages }` 接 load-gate,不是
+  `pageEntry()`。換帳號當下在飛的 `hydrateMessages` 會因 epoch 核對拋出,頁面落到 error 態、重試即恢復,
+  與 `docs/adr/0019` C3 的語意一致。
