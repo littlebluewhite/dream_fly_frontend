@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { ApiError } from '$lib/api/client';
 import { createReadState } from '$lib/stores/read-state';
 import {
 	adminUnread,
@@ -179,13 +180,17 @@ describe('markOrderPaid', () => {
 		opsHydrated.set(false);
 	});
 
-	it('PATCH 失敗 → 丟出,store 與 opsHydrated 皆不動', async () => {
+	// R13 Task 5(C4):markOrderPaid 改共用 changeOrderStatus,PATCH 失敗不再 throw
+	// ——回傳 illegalTransition(400,已對過後端:非法轉換/並發衝突一律 400),
+	// store 與 opsHydrated 皆不動(同舊行為的「不動」語意,只是不再用 throw 表達)。
+	it('PATCH 400 → 回傳 illegalTransition,store 與 opsHydrated 皆不動', async () => {
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new Error('409'));
+		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new ApiError(400, 'cannot transition order'));
 		opsHydrated.set(false);
 
-		await expect(markOrderPaid(pending)).rejects.toThrow('409');
+		const outcome = await markOrderPaid(pending);
 
+		expect(outcome).toEqual({ kind: 'illegalTransition' });
 		expect(get(orders)).toEqual(ORDERS);
 		expect(get(opsHydrated)).toBe(false);
 	});

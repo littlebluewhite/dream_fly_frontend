@@ -5,7 +5,8 @@ import Page from './+page.svelte';
 import type { Order } from '$lib/admin/data';
 import { search, toasts } from '$lib/admin/stores';
 import { fmtNT } from '$lib/format';
-import { countByStatus, paidRevenue } from '$lib/admin/components/orders-filter';
+import { countByStatus } from '$lib/admin/components/orders-filter';
+import { revenueTotal } from '$lib/admin/components/order-status';
 import { getOrders, updateOrderStatus } from '$lib/admin/api';
 import { ApiError } from '$lib/api/client';
 
@@ -26,11 +27,14 @@ beforeEach(() => {
 	vi.mocked(updateOrderStatus).mockReset();
 });
 
-/* 訂單與金流 page — PageHead + four summary StatCards (本月已收/待付款/本月訂單/退款)
+/* 訂單與金流 page — PageHead + four summary StatCards (本頁已收/待付款/本頁訂單/退款)
  * + the orders table. We assert the heading, the derived summary numbers, and
  * that real ORDERS rows render with their StatusBadge + fmtNT amounts. Data now
  * arrives through the getOrders() seam (async), so every assertion first awaits
- * the ready phase. */
+ * the ready phase.
+ *
+ * R13 Task 5(C4)：本月已收/本月訂單改本頁已收/本頁訂單（分頁下兩個數字都只算
+ * 已載入的這一頁，paidRevenue 改名 revenueTotal）。 */
 describe('orders +page', () => {
 	it('renders the 訂單與金流 heading and the 匯出對帳單 action', async () => {
 		const { getByText, findByText } = render(Page);
@@ -43,11 +47,11 @@ describe('orders +page', () => {
 		const { container, findByText } = render(Page);
 		await findByText(ORDERS[0].id);
 		const c = countByStatus(ORDERS);
-		expect(container.textContent).toContain('本月已收');
-		expect(container.textContent).toContain(fmtNT(paidRevenue(ORDERS))); // 本月已收 value
+		expect(container.textContent).toContain('本頁已收');
+		expect(container.textContent).toContain(fmtNT(revenueTotal(ORDERS))); // 本頁已收 value
 		expect(container.textContent).toContain('待付款');
 		expect(container.textContent).toContain(c.pending + ' 筆');
-		expect(container.textContent).toContain('本月訂單');
+		expect(container.textContent).toContain('本頁訂單');
 		expect(container.textContent).toContain(c.all + ' 筆');
 		expect(container.textContent).toContain('退款');
 		expect(container.textContent).toContain(c.refunded + ' 筆');
@@ -105,10 +109,32 @@ describe('orders +page — 變更狀態接真 API（Task 8 piece 2：PATCH /orde
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(toasts).at(-1)?.body).toContain('不合法');
 
-		// 失敗時 catch 分支不套用任何本地變更，本月訂單總數（不受狀態變更影響的基準值）
-		// 與待付款筆數（跟這筆 paid→refunded 嘗試無關）皆維持原值。
+		// 失敗時不套用任何本地變更，本頁訂單總數（不受狀態變更影響的基準值）與
+		// 待付款筆數（跟這筆 paid→refunded 嘗試無關）皆維持原值。
 		expect(container.textContent).toContain(initial.all + ' 筆');
 		expect(container.textContent).toContain(initial.pending + ' 筆');
+	});
+
+	/* R13 Task 5(C4) 回歸：已對過後端 update_order_status，409 只在退款/取消補償
+	 * 撞點數不足（Conflict("點數不足")）時發生——桌面舊碼把 409 併進「連線問題」
+	 * 通用 fallback，這裡釘住新增的專屬點數不足文案。 */
+	it('狀態更新失敗（409 點數不足）→ 顯示點數不足專屬 toast，KPI 維持原值', async () => {
+		const target = ORDERS.find((o) => o.status === 'paid')!;
+		vi.mocked(updateOrderStatus).mockRejectedValue(new ApiError(409, '點數不足'));
+		const before = get(toasts).length;
+		const initial = countByStatus(ORDERS);
+
+		const { getByText, findByText, container } = render(Page);
+		await findByText(target.id);
+		await fireEvent.click(getByText(target.id));
+		await fireEvent.click(getByText('套用')); // 預設選項（第一個合法下一狀態）
+
+		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
+		expect(get(toasts).at(-1)?.body).toBe(
+			'會員已使用本單回饋點數，餘額不足以扣回，無法退款或取消。'
+		);
+		expect(container.textContent).toContain(initial.all + ' 筆');
 	});
 });
 

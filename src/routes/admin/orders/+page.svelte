@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 訂單與金流 — 報名繳費紀錄. Faithful port of admin.jsx OrdersView: a PageHead
-   * with an 匯出對帳單 action, four summary StatCards (本月已收 / 待付款 / 本月訂單 /
+   * with an 匯出對帳單 action, four summary StatCards (本頁已收 / 待付款 / 本頁訂單 /
    * 退款), then the orders table. Filtering + the detail dialog live in
    * OrdersTable; the summary numbers derive from the same orders working copy.
    *
@@ -8,13 +8,14 @@
    * three-state gate (loading/error/ready); `orders` is the local mutable
    * working copy.
    *
-   * Task 8 piece 2: 變更狀態 now calls the real PATCH /orders/{id}/status
-   * (updateOrderStatus) instead of only flipping status locally. OrderDialog only
-   * offers legalNextStatuses(order.status), so a 400 illegal-transition shouldn't
-   * be reachable by design — the catch branch below is a defensive fallback
-   * (e.g. a concurrent change on the backend) with a 繁中 error toast; on success
-   * applyStatusChange() folds the response's new status into the working copy,
-   * so the KPIs + table stay consistent with the persisted truth. */
+   * R13 Task 5(C4)：變更狀態改共用 order-status.ts 的 changeOrderStatus——PATCH
+   * /orders/{id}/status 的呼叫 + ApiError 狀態碼判別收進該模組（與 mobile-admin
+   * markOrderPaid 共用同一份判別，不再各自維護 400/409 語意）。已對過後端
+   * update_order_status：非法轉換/並發衝突一律 400（illegalTransition，
+   * OrderDialog 只提供合法選項，理論上不會踩到，這裡是防禦性 fallback）；
+   * 409（pointsShortfall）是退款/取消補償撞點數不足時才會發生；其餘（含 403）
+   * 走 failed，用 apiErrorText 查表。成功後 applyStatusChange() 折回 server 回的
+   * 新狀態，KPI/表格保持與已持久化的真值一致。 */
   import { onMount } from 'svelte';
   import { Button, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
@@ -22,12 +23,13 @@
   import OrdersTable from '$lib/admin/components/OrdersTable.svelte';
   // C4 批4:ORDER_STATUS/OrderStatus 改直取 $lib/api/wire(原經 $lib/admin/data 純
   // 轉手);Order 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
-  import { ORDER_STATUS, type OrderStatus } from '$lib/api/wire';
+  import { orderStatusBadge, type OrderStatus } from '$lib/api/wire';
   import type { Order } from '$lib/admin/data';
   import { toasts } from '$lib/admin/stores';
   import { createPagedLoadGate } from '$lib/load-gate';
   import { fmtNT } from '$lib/format';
-  import { countByStatus, paidRevenue, applyStatusChange } from '$lib/admin/components/orders-filter';
+  import { countByStatus } from '$lib/admin/components/orders-filter';
+  import { revenueTotal, applyStatusChange, changeOrderStatus } from '$lib/admin/components/order-status';
   import { getOrders, updateOrderStatus } from '$lib/admin/api';
   import { apiErrorText } from '$lib/api/error-text';
 
@@ -36,7 +38,7 @@
   // with the table (instead of the stats staying frozen on the original fixture).
   let orders: Order[] = [];
   $: counts = countByStatus(orders);
-  $: revenue = paidRevenue(orders);
+  $: revenue = revenueTotal(orders);
 
   const gate = createPagedLoadGate({
     fetch: (page) => getOrders(page),
@@ -46,23 +48,22 @@
     gate.load();
   });
 
-  // 400（非法轉換，理論上不會發生——OrderDialog 只提供合法選項）/ 403 權限 →
-  // 對應繁中提示；其餘（連線問題等）給通用訊息，同 classes 頁的 ApiError 判斷慣例。
-  function statusErrorMessage(e: unknown): string {
-    return apiErrorText(e, {
-      400: '狀態轉換不合法，請重新整理後再試。',
-      403: '沒有權限執行此操作。'
-    });
-  }
-
   async function changeStatus(o: Order, next: OrderStatus) {
-    try {
-      const res = await updateOrderStatus(o.orderId, next);
-      const newStatus = res.status as OrderStatus;
-      orders = applyStatusChange(orders, o.orderId, newStatus);
-      toasts.notify('success', '狀態已更新', o.id + ' 已更新為「' + ORDER_STATUS[newStatus][1] + '」。');
-    } catch (e) {
-      toasts.notify('error', '狀態更新失敗', statusErrorMessage(e));
+    const outcome = await changeOrderStatus(o.orderId, next, { updateOrderStatus });
+    switch (outcome.kind) {
+      case 'changed':
+        orders = applyStatusChange(orders, o.orderId, outcome.status);
+        toasts.notify('success', '狀態已更新', o.id + ' 已更新為「' + orderStatusBadge(outcome.status)[1] + '」。');
+        break;
+      case 'illegalTransition':
+        toasts.notify('error', '狀態更新失敗', '狀態轉換不合法，請重新整理後再試。');
+        break;
+      case 'pointsShortfall':
+        toasts.notify('error', '狀態更新失敗', '會員已使用本單回饋點數，餘額不足以扣回，無法退款或取消。');
+        break;
+      case 'failed':
+        toasts.notify('error', '狀態更新失敗', apiErrorText(outcome.error, { 403: '沒有權限執行此操作。' }));
+        break;
     }
   }
   function remind(o: Order) {
@@ -94,7 +95,7 @@
   <div class="stats">
     <StatCard
       icon="circle-dollar-sign"
-      label="本月已收"
+      label="本頁已收"
       value={fmtNT(revenue)}
       tint="var(--df-success-bg)"
       color="var(--df-success)"
@@ -108,7 +109,7 @@
     />
     <StatCard
       icon="receipt"
-      label="本月訂單"
+      label="本頁訂單"
       value={counts.all + ' 筆'}
       tint="var(--df-primary-bg)"
       color="var(--df-primary)"

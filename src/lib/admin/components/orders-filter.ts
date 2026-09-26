@@ -4,7 +4,11 @@
  * (docs/design/admin/admin.jsx): filter by status tab, then by the topbar
  * search term (matches id OR member OR item, case-insensitive — the source
  * matches `o.id + o.member + o.item`). Kept here, unit-testable without
- * rendering, and imported by the orders page/table. */
+ * rendering, and imported by the orders page/table.
+ *
+ * R13 Task 5(C4)：訂單狀態變更（LEGAL_NEXT/legalNextStatuses/applyStatusChange/
+ * paidRevenue→revenueTotal）已搬到同目錄的 order-status.ts，本檔只留純篩選/計數
+ * 這條線。 */
 
 // C4 批4:OrderStatus 改直取 $lib/api/wire(原經 $lib/admin/data 純轉手);Order 是
 // admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
@@ -43,47 +47,6 @@ export function countByStatus(rows: Order[]): OrderCounts {
 		completed: rows.filter((o) => o.status === 'completed').length,
 		cancelled: rows.filter((o) => o.status === 'cancelled').length
 	};
-}
-
-/** Sum of `amount` over already-paid orders — the 本月已收 stat. */
-export function paidRevenue(rows: Order[]): number {
-	return rows.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
-}
-
-/* ───────────────────────── Task 8 piece 2: 訂單狀態變更（PATCH /orders/{id}/status） ─────────────────────────
- * The general, real-API-backed replacement for the old local-only mark-paid
- * helper (removed — no live caller remained): the UI only offers
- * legalNextStatuses()'s options (so a 400 illegal-transition can't be hit by
- * design), and applyStatusChange() folds the PATCH response's new status into
- * the working copy once the call succeeds (persisted truth comes from the API). */
-
-/** 契約 §3.10 訂單狀態機：目前狀態 → 合法的下一狀態清單（不含同狀態幂等）。
- * cancelled/refunded 無合法的下一狀態（終態），回傳空陣列。 */
-const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
-	pending: ['paid', 'cancelled'],
-	paid: ['processing', 'refunded', 'cancelled'],
-	processing: ['completed', 'refunded'],
-	completed: ['refunded'],
-	cancelled: [],
-	refunded: []
-};
-
-export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
-	return LEGAL_NEXT[current];
-}
-
-/**
- * Fold a successful PATCH /orders/{id}/status response into the working copy.
- * Matches by `orderId` (the real backend UUID — `id` above is actually the
- * display order_number, see admin/api.ts's mapAdminOrder). paidAt mirrors the
- * same rule mapAdminOrder already applies on read (pending → placeholder, any
- * other status → the order's date), so the row stays consistent with what a
- * fresh getOrders() would show. Returns a NEW array; the input is never mutated.
- */
-export function applyStatusChange(rows: Order[], orderId: string, status: OrderStatus): Order[] {
-	return rows.map((o) =>
-		o.orderId === orderId ? { ...o, status, paidAt: status === 'pending' ? '—（待付款）' : o.date } : o
-	);
 }
 
 /**

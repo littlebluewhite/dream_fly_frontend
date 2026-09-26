@@ -45,8 +45,10 @@ import {
 	type PageInfo
 } from './api';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
-import { applyStatusChange } from '$lib/admin/components/orders-filter';
-import type { OrderStatus } from '$lib/api/wire';
+// R13 Task 5(C4):applyStatusChange 搬到 order-status.ts,markOrderPaid 改共用
+// changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後
+// 直接假設成功)。
+import { applyStatusChange, changeOrderStatus, type ChangeOrderStatusOutcome } from '$lib/admin/components/order-status';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
@@ -172,15 +174,21 @@ export async function saveCoach(v: CoachFormValues, target: Coach): Promise<Save
 	return outcome;
 }
 
-/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 成功後,用桌面同一支
- *  applyStatusChange() 把 server 回的 status 套回 $orders(以 orderId 比對,paidAt 取訂單
- *  日期,同 mapAdminOrder 的讀取規則),再 opsGate.markMutated()(防首次水合覆寫)。
- *  PATCH 已落定才 mark,沒有在飛尾流可入帳——**不帶 tail**(ADR-0021)。不重抓:KPI /
- *  橫幅都由 $orders 衍生,局部套回即足夠。PATCH 失敗 → 丟出,store 不動。 */
-export async function markOrderPaid(order: OrderRow): Promise<void> {
-	const res = await updateOrderStatus(order.orderId, 'paid');
-	orders.update((rows) => applyStatusChange(rows, order.orderId, res.status as OrderStatus));
-	opsGate.markMutated();
+/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 成功(changed)後,用桌面
+ *  同一支 applyStatusChange() 把 server 回的 status 套回 $orders(以 orderId 比對,
+ *  paidAt 取訂單日期,同 mapAdminOrder 的讀取規則),再 opsGate.markMutated()(防
+ *  首次水合覆寫)。PATCH 已落定才 mark,沒有在飛尾流可入帳——**不帶 tail**
+ *  (ADR-0021)。不重抓:KPI / 橫幅都由 $orders 衍生,局部套回即足夠。
+ *  R13 Task 5(C4):改回傳 changeOrderStatus 的 outcome(不再 throw)——只有
+ *  'changed' 才套回 store + markMutated();illegalTransition/pointsShortfall/
+ *  failed 皆不動 store,由呼叫端(OrderSheet)依 kind 翻繁中 toast。 */
+export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusOutcome> {
+	const outcome = await changeOrderStatus(order.orderId, 'paid', { updateOrderStatus });
+	if (outcome.kind === 'changed') {
+		orders.update((rows) => applyStatusChange(rows, order.orderId, outcome.status));
+		opsGate.markMutated();
+	}
+	return outcome;
 }
 
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from

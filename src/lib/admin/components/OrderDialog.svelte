@@ -21,7 +21,11 @@
   // 轉手);Order 是 admin/data.ts 本檔真內容(.map 衍生形狀),續留原處。
   import { ORDER_STATUS, type OrderStatus } from '$lib/api/wire';
   import type { Order } from '$lib/admin/data';
-  import { legalNextStatuses } from './orders-filter';
+  // R13 Task 5(C4):legalNextStatuses 搬到 order-status.ts(orders-filter.ts 只留
+  // 純篩選/計數);詳情欄位列改共用 domain/order-detail.ts 的 orderDetailRows(與
+  // mobile-admin OrderSheet 共用同一份查表)。
+  import { legalNextStatuses } from './order-status';
+  import { orderDetailRows } from '$lib/domain/order-detail';
 
   export let order: Order | null = null;
   export let onClose: () => void = () => {};
@@ -45,25 +49,9 @@
     if (order && nextStatus) onChangeStatus(order, nextStatus);
   }
 
-  // [label, value, mono?] field grid — mirrors the source row list order.
-  $: rows = order
-    ? ([
-        ['訂單編號', order.id, true],
-        ['學員', order.member],
-        ['項目', order.item],
-        ['所屬分校', order.campus],
-        ['優惠', order.discount],
-        ['付款方式', order.method],
-        ['收款時間', order.paidAt, true],
-        ['未稅金額', fmtNT(order.net), true],
-        ['營業稅 5%', fmtNT(order.tax), true],
-        ['發票號碼', order.invoice, true],
-        ['統一編號', order.taxId, true],
-        ['經手人', order.handler],
-        ['建立時間', order.date, true],
-        ...(order.reason ? ([['退款原因', order.reason]] as [string, string][]) : [])
-      ] as [string, string, boolean?][])
-    : [];
+  // field grid — 共用 domain/order-detail.ts 的 orderDetailRows (與 mobile-admin
+  // OrderSheet 共用同一份查表)。
+  $: rows = order ? orderDetailRows(order) : [];
 </script>
 
 <Dialog

@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import OrderSheet from './OrderSheet.svelte';
-import { orders } from '$lib/mobile-admin/stores';
+import { orders, toasts } from '$lib/mobile-admin/stores';
 import { updateOrderStatus } from '$lib/mobile-admin/api';
+import { ApiError } from '$lib/api/client';
 import type { OrderRow } from '$lib/mobile-admin/data';
 
 vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
@@ -39,6 +40,23 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 		await fireEvent.click(getByText('標記已付款'));
 
 		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalled());
+		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('pending');
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	/* R13 Task 5(C4) 回歸：舊碼把「並發衝突」文案掛在 409 上（判錯狀態碼——已對過
+	 * 後端 update_order_status，非法轉換/並發衝突一律 400）。這裡釘住 400 →
+	 * illegalTransition 分支顯示這句、store 不動、sheet 不關。 */
+	it('PATCH 400（illegalTransition）→ 顯示「訂單狀態已變更…」，store 不動，sheet 不關', async () => {
+		vi.mocked(updateOrderStatus).mockRejectedValue(new ApiError(400, 'cannot transition order'));
+		const pending = get(orders).find((o) => o.status === 'pending');
+		const onClose = vi.fn();
+
+		const { getByText } = render(OrderSheet, { props: { onClose, o: pending } });
+		await fireEvent.click(getByText('標記已付款'));
+
+		await vi.waitFor(() => expect(get(toasts).at(-1)?.body).toBe('訂單狀態已變更，請重新整理後再試。'));
+		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('pending');
 		expect(onClose).not.toHaveBeenCalled();
 	});

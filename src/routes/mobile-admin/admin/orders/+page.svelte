@@ -7,8 +7,10 @@
    * 等 mutation,refreshOps() 供 ErrorState 重試(不受守衛短路)。
    *
    * Round 2 C3:計數/已收/篩選改共用桌面 orders-filter.ts 純函式(countByStatus/
-   * paidRevenue/filterOrders)——OrderRow 結構同桌面 Order,structural typing 直接
-   * 相容;本頁 chips 只消費 7 桶計數中的 4 桶。
+   * filterOrders)——OrderRow 結構同桌面 Order,structural typing 直接相容;本頁
+   * chips 只消費 7 桶計數中的 4 桶。R13 Task 5(C4):已收改用 order-status.ts 的
+   * revenueTotal(按 isRevenueStatus 加總),文案「本月已收」改「本頁已收」——本頁
+   * 只抓第 1 頁,數字只反映已載入的這一頁。
    *
    * R12:header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區提示搜尋範圍。 */
   import { onMount } from 'svelte';
@@ -24,7 +26,8 @@
   import { fmtNT } from '$lib/format';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
-  import { countByStatus, paidRevenue, filterOrders, type OrderStatusFilter } from '$lib/admin/components/orders-filter';
+  import { countByStatus, filterOrders, type OrderStatusFilter } from '$lib/admin/components/orders-filter';
+  import { revenueTotal } from '$lib/admin/components/order-status';
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
@@ -40,7 +43,7 @@
   let q = '';
 
   $: counts = countByStatus($orders);
-  $: revenue = paidRevenue($orders);
+  $: revenue = revenueTotal($orders);
   $: chips = [
     { key: 'all', label: '全部', count: counts.all },
     { key: 'paid', label: '已付款', count: counts.paid },
@@ -79,7 +82,7 @@
     <div style="padding:16px; display:flex; flex-direction:column; gap:14px;">
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
         <div style="background:linear-gradient(135deg, var(--df-success-bg), #fff); border:1px solid var(--df-success); border-radius:14px; padding:14px;">
-          <div style="font-size:12px; color:var(--df-text-light);">本月已收</div>
+          <div style="font-size:12px; color:var(--df-text-light);">本頁已收</div>
           <div style="font-size:22px; font-weight:800; color:var(--df-success); font-family:var(--df-font-heading); margin-top:4px;">{fmtNT(revenue)}</div>
         </div>
         <div style="background:#fff; border:1px solid var(--df-border); border-radius:14px; padding:14px; box-shadow:var(--df-shadow-card);">

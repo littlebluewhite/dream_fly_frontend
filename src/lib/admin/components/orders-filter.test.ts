@@ -1,13 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Order } from '$lib/admin/data';
 import type { OrderStatus } from '$lib/api/wire';
-import {
-	filterOrders,
-	countByStatus,
-	paidRevenue,
-	legalNextStatuses,
-	applyStatusChange
-} from './orders-filter';
+import { filterOrders, countByStatus } from './orders-filter';
 
 /* Task 1(C2 死種子退役):admin/data.ts 的 ORDERS(值)已退役——這裡改為檔內 inline
  * fixture，比照真實 ORDERS_BASE 只出現 paid/pending/refunded 三態的現況(Task 6
@@ -174,64 +168,6 @@ describe('countByStatus — 全部 6 態（含 processing/completed/cancelled）
 	});
 });
 
-describe('paidRevenue', () => {
-	it('sums amount over paid orders only', () => {
-		const expected = ORDERS.filter((o) => o.status === 'paid').reduce((s, o) => s + o.amount, 0);
-		expect(paidRevenue(ORDERS)).toBe(expected);
-	});
-});
-
-/* Task 8 piece 2: 契約 §3.10 的訂單狀態機 —— PATCH /orders/{id}/status 非法轉換回
- * 400，UI 應只提供合法的下一狀態，讓 admin 不會踩到。 */
-describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', () => {
-	it('pending → paid | cancelled', () => {
-		expect(legalNextStatuses('pending')).toEqual(['paid', 'cancelled']);
-	});
-
-	it('paid → processing | refunded | cancelled', () => {
-		expect(legalNextStatuses('paid')).toEqual(['processing', 'refunded', 'cancelled']);
-	});
-
-	it('processing → completed | refunded', () => {
-		expect(legalNextStatuses('processing')).toEqual(['completed', 'refunded']);
-	});
-
-	it('completed → refunded only', () => {
-		expect(legalNextStatuses('completed')).toEqual(['refunded']);
-	});
-
-	it('cancelled/refunded are terminal (no legal next state to offer in the UI)', () => {
-		expect(legalNextStatuses('cancelled')).toEqual([]);
-		expect(legalNextStatuses('refunded')).toEqual([]);
-	});
-});
-
-describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地working copy', () => {
-	const rows: Order[] = [
-		makeOrder('paid', 'DF-1'),
-		makeOrder('pending', 'DF-2')
-	];
-
-	it('matches by orderId (真實後端 UUID)，不是顯示用的 id (order_number)', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
-		expect(out.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('processing');
-		expect(out.find((o) => o.orderId === 'uuid-DF-2')!.status).toBe('pending'); // 其餘不動
-	});
-
-	it('never mutates the input array', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
-		expect(out).not.toBe(rows);
-		expect(rows.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('paid');
-	});
-
-	it('sets paidAt to the order date for any non-pending target status (mirrors mapAdminOrder)', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'refunded');
-		const o = out.find((x) => x.orderId === 'uuid-DF-1')!;
-		expect(o.paidAt).toBe(o.date);
-	});
-
-	it('is a no-op for an unknown orderId', () => {
-		const out = applyStatusChange(rows, '___nope___', 'refunded');
-		expect(out.map((o) => o.status)).toEqual(rows.map((o) => o.status));
-	});
-});
+/* legalNextStatuses/applyStatusChange/paidRevenue（→revenueTotal）搬到
+ * order-status.test.ts（R13 Task 5，C4）——連同它們的測試一併搬走，這裡不留
+ * 重複。 */
