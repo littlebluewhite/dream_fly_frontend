@@ -48,7 +48,7 @@ describe('createMineController — 建構', () => {
 
 describe('init — 首課載入 / 無課程', () => {
 	it('init(firstCourseId)：寫入 active 並立即以該 id 呼叫 getEnrolmentAttendance，resolve 後 attState 轉 ready', async () => {
-		deps.getEnrolmentAttendance.mockResolvedValue([{ date: '06/06', state: 'present' }]);
+		deps.getEnrolmentAttendance.mockResolvedValue([{ date: '06/06', year: '2026', state: 'present' }]);
 
 		ctrl.init('k1');
 
@@ -58,7 +58,7 @@ describe('init — 首課載入 / 無課程', () => {
 
 		await new Promise((r) => setTimeout(r, 0)); // 讓 getEnrolmentAttendance 的 .then 鏈跑完
 		expect(get(ctrl).attState).toBe('ready');
-		expect(get(ctrl).attendance).toEqual([{ date: '06/06', state: 'present' }]);
+		expect(get(ctrl).attendance).toEqual([{ date: '06/06', year: '2026', state: 'present' }]);
 	});
 
 	it('init(null)：收斂 ready + 空陣列，不呼叫 getEnrolmentAttendance（無課不觸發）', () => {
@@ -98,18 +98,18 @@ describe('selectCourse — stale-guard（快速切課，較舊回應被丟棄）
 		deps.getEnrolmentAttendance.mockReturnValueOnce(a.promise);
 		ctrl.init('k1'); // 觸發 A(k1) 的 fetch，尚未 resolve
 
-		deps.getEnrolmentAttendance.mockResolvedValueOnce([{ date: '05/01', state: 'leave' }]);
+		deps.getEnrolmentAttendance.mockResolvedValueOnce([{ date: '05/01', year: '2026', state: 'leave' }]);
 		ctrl.selectCourse('k2'); // 快切到 B(k2)，B 立即 resolve
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(get(ctrl).attState).toBe('ready');
-		expect(get(ctrl).attendance).toEqual([{ date: '05/01', state: 'leave' }]);
+		expect(get(ctrl).attendance).toEqual([{ date: '05/01', year: '2026', state: 'leave' }]);
 
-		a.resolve([{ date: '01/01', state: 'present' }]); // A 的舊回應這時才回來
+		a.resolve([{ date: '01/01', year: '2026', state: 'present' }]); // A 的舊回應這時才回來
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(get(ctrl).active).toBe('k2'); // selection 未被 A 的過期回應動搖
-		expect(get(ctrl).attendance).toEqual([{ date: '05/01', state: 'leave' }]); // 未被覆蓋
+		expect(get(ctrl).attendance).toEqual([{ date: '05/01', year: '2026', state: 'leave' }]); // 未被覆蓋
 		expect(get(ctrl).attState).toBe('ready');
 	});
 
@@ -138,7 +138,7 @@ describe('retryAttendance', () => {
 		await new Promise((r) => setTimeout(r, 0));
 		expect(get(ctrl).attState).toBe('error');
 
-		deps.getEnrolmentAttendance.mockResolvedValueOnce([{ date: '06/06', state: 'present' }]);
+		deps.getEnrolmentAttendance.mockResolvedValueOnce([{ date: '06/06', year: '2026', state: 'present' }]);
 		ctrl.retryAttendance();
 
 		expect(get(ctrl).attState).toBe('loading'); // 立即翻 loading（同步）
@@ -146,7 +146,7 @@ describe('retryAttendance', () => {
 
 		await new Promise((r) => setTimeout(r, 0));
 		expect(get(ctrl).attState).toBe('ready');
-		expect(get(ctrl).attendance).toEqual([{ date: '06/06', state: 'present' }]);
+		expect(get(ctrl).attendance).toEqual([{ date: '06/06', year: '2026', state: 'present' }]);
 	});
 
 	it('active 仍為初始 null 時呼叫（結構上不可達，型別層防護）：靜默不做事，不呼叫 deps', () => {

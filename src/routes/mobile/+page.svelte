@@ -77,6 +77,10 @@
       }
       return;
     }
+    if (r === 'bumped') {
+      toasts.notify('info', `${c.name} 已在購物車中`);
+      return;
+    }
     toasts.notify('success', '已加入購物車', c.name);
   }
 </script>

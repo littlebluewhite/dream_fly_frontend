@@ -83,17 +83,11 @@ export const MEMBERS_BASE: MemberBase[] = [
 	{ id: 'GY2024048', name: '賀梓睿', initial: '賀', color: '#10B981', course: '跑酷入門班', coach: '王思齊', att: 76, status: 'warning', age: 14, parent: '賀太太', phone: '0911-900-985', joined: '2024/03', points: 172, pay: 'due', remain: 4, lastSeen: '06/02', recent: ['a', 'p', 'a', 'p', 'l', 'a'], emName: '賀先生', emPhone: '0911-900-988' }
 ];
 
-/** [Tone, label] tuples —— 出席率三態顯示（同名異義守衛見 MemberAccountStatus 註解：
- *  這裡的 'active' 是「在學中」，非帳號啟用狀態）。 */
-export const MEMBER_STATUS: Record<MemberStatus, [Tone, string]> = {
-	active: ['success', '在學中'],
-	warning: ['warning', '出席偏低'],
-	paused: ['neutral', '暫停中']
-};
-
 /** MemberAccount 專用（GET /users 的 is_active 布林值）——同名異義：鍵面 active 與
- *  MEMBER_STATUS.active 撞名但語意不同（這裡=啟用中，MEMBER_STATUS=在學中），故獨立
- *  一份查表，不可共用。 */
+ *  MemberStatus 的 'active'（見上方型別註解：在學中）撞名但語意不同（這裡=啟用中），
+ *  故獨立一份查表，不可共用。（MEMBER_STATUS 這張查表本身隨 MemberDialog 的死
+ *  member 分支一併退役於 Task 1，R13 小 bug 包；MemberStatus 型別保留，
+ *  mobile-admin seed 仍在用。） */
 export const MEMBER_ACCOUNT_STATUS: Record<MemberAccountStatus, [Tone, string]> = {
 	active: ['success', '啟用中'],
 	inactive: ['neutral', '已停用']

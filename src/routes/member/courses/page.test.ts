@@ -102,6 +102,16 @@ describe('課程介紹 — addToCart branches on the store AddResult (waitlist g
 		// no POST /waitlist for a course that still has spots
 		expect(vi.mocked(api).mock.calls.some(([p, i]) => p === '/waitlist' && (i as RequestInit)?.method === 'POST')).toBe(false);
 	});
+
+	it('加兩次同一門課 → 第二次顯示「已在購物車中」的 info toast（跟公開頁 courses/+page.svelte 同文案）', async () => {
+		cart.clear();
+		const { container } = render(Page);
+		const btns = await findAllByRole(container, 'button', { name: '加入' });
+		await fireEvent.click(btns[0]);
+		await fireEvent.click(btns[0]);
+
+		expect(get(toasts).some((t) => t.title === `${OPEN.name} 已在購物車中`)).toBe(true);
+	});
 });
 
 describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補 409）', () => {

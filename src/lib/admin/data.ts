@@ -11,17 +11,16 @@
  * VENUE_STATUS(→ $lib/domain/venues)、TICKET_TYPE(→ $lib/domain/tickets)、
  * STATUS_TONE(→ $lib/domain/classes)——重驗皆為零附加型別事實的純轉手,已退役,
  * 消費端改直取各 canonical 源。Tone/MemberAccountStatus/VenueStatus/TicketType/
- * ClassStatus 五個型別本檔內部仍用(下方 PAY_STATUS/MemberAccount/VENUE_STATUSES/
+ * ClassStatus 五個型別本檔內部仍用(下方 MemberAccount/VENUE_STATUSES/
  * TICKET_TYPES/CLASS_STATUS 的型別標註),依 ADR 0010「刪 export 留 import」處置,
- * 只拿掉對外轉出。 */
+ * 只拿掉對外轉出。PayStatus/AttMark(連同它們唯一的消費者 PAY_STATUS/ATT_MARK 與
+ * MemberDialog 的死 member 分支)隨 Task 1(R13 小 bug 包)一併退役。 */
 import type { Tone } from '$lib/api/wire';
 import type { MemberAccountStatus } from '$lib/domain/members';
 import type { VenueStatus } from '$lib/domain/venues';
 import type { TicketType } from '$lib/domain/tickets';
 import type { ClassStatus } from '$lib/domain/classes';
 
-export type PayStatus = 'paid' | 'due' | 'trial';
-export type AttMark = 'p' | 'a' | 'l' | 'v';
 export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
@@ -62,7 +61,6 @@ export interface CoachFormValues {
 
 // Base types consumed by the row interfaces below (import, not re-export).
 import type { ClassBase } from '$lib/domain/classes';
-import type { MemberBase } from '$lib/domain/members';
 import type { OrderBase } from '$lib/domain/orders';
 import { initialOf, isoDate } from '$lib/api/wire';
 // Task 1(C2 死種子退役):tierOf 轉出與其唯一消費者一併退役(唯一消費者是
@@ -83,21 +81,11 @@ export interface ClassRow extends ClassBase {
 // data.test.ts/元件測試,已改為各測試檔內的 inline ClassRow fixture。ClassRow
 // interface 仍供 classes/+page.svelte 與眾多元件的型別標註使用,保留。
 
-/* ───────────────────────── members ───────────────────────── */
-export interface Member extends MemberBase {
-	campus: string;
-	source: string;
-	birthday: string;
-	tier: string;
-	tierColor: string;
-	renewDue: string;
-	lineId: string;
-}
-
 /* ───────────────────────── members：GET /users 映射（Task 18） ─────────────────────────
  * MEMBERS／MEMBERS_BASE 已於 Task 11 P2 清理移除——唯一消費者是 data.test.ts，學員管理頁
- * MembersTable 走的是下面這組真實 GET /users 映射，早就不吃那份 mock seed；Member
- * interface 保留在上面供 MemberDialog 使用。這裡另外的「從真實 GET /users 回應映射」型別
+ * MembersTable 走的是下面這組真實 GET /users 映射，早就不吃那份 mock seed。Member
+ * interface(曾供 MemberDialog 的死 member 分支使用)隨該分支一併退役於 Task 1
+ * (R13 小 bug 包)。這裡另外的「從真實 GET /users 回應映射」型別
  * ＋函式，供 api.ts 的 getMembers() 使用 —— GET /users 是通用帳號端點，只有 id/name/
  * phone/is_active/points_balance/created_at 這類帳號欄位，沒有課程/教練/出席/繳費/
  * 緊急聯絡人等健身房專屬資料，因此輸出型別是 Member 的一個小子集（MemberAccount），
@@ -151,24 +139,6 @@ export interface Order extends OrderBase {
 // Task 1(C2 死種子退役):ORDERS(ORDERS_BASE 的 .map 衍生)已退役——唯一消費者是
 // data.test.ts/元件測試,已改為各測試檔內的 inline Order fixture。Order interface
 // 仍供 orders/+page.svelte 與眾多元件的型別標註使用,保留。
-
-/* ───────────────────────── status maps (shapes differ!) ───────────────────────── */
-// MEMBER_STATUS/MEMBER_ACCOUNT_STATUS/VENUE_STATUS/TICKET_TYPE/STATUS_TONE/LEVEL_TONE
-// 六張表已隨批次 1 W2a 單源收斂移至 $lib/domain；C4 批4 進一步把檔頭 unions 區塊
-// 轉出這六張表的 export 一併退役（消費端改直取 domain/wire），本檔不再本地宣告、
-// 也不再轉出這六張表，只留下面兩張沒有搬遷的表。
-export const PAY_STATUS: Record<PayStatus, [Tone, string]> = {
-	paid: ['success', '已繳清'],
-	due: ['warning', '待續費'],
-	trial: ['info', '體驗中']
-};
-/** ⚠ raw hex colour + label (NOT a Tone) — used for the 6-dot attendance strip. */
-export const ATT_MARK: Record<AttMark, [string, string]> = {
-	p: ['#10B981', '出'],
-	a: ['#EF4444', '缺'],
-	l: ['#F59E0B', '遲'],
-	v: ['#94A3B8', '假']
-};
 
 /* ───────────────────────── form constants ───────────────────────── */
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];

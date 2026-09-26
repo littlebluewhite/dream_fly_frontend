@@ -293,7 +293,7 @@
                       border-top:{i ? '1px solid var(--df-border)' : 'none'};"
                   >
                     <Icon name="calendar" size={16} color="var(--df-text-muted)" />
-                    <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">2026 / {a.date}</span>
+                    <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">{a.year} / {a.date}</span>
                     <Badge tone={tone as Tone} dot>{label}</Badge>
                   </div>
                 {/each}

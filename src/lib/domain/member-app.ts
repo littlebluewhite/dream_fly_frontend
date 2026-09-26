@@ -121,6 +121,7 @@ export interface EnrolledCourse {
  * enum 收斂移除 'late'(後端只有 present/absent/leave 三值)。 */
 export interface AttRecord {
 	date: string;
+	year: string;
 	state: 'present' | 'leave' | 'absent';
 }
 

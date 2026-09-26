@@ -333,3 +333,19 @@ describe('/coach/attendance — 三態', () => {
 		);
 	});
 });
+
+describe('/coach/attendance — 出席保存狀態卡文案誠實(Task 1，R13 小 bug 包)', () => {
+	it('說明文字不再宣稱「支援離線暫存與多裝置衝突處理」(功能不存在，只有即時儲存進度)', async () => {
+		const { findByText, queryByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		expect(await findByText('即時顯示儲存進度。')).toBeInTheDocument();
+		expect(queryByText('支援離線暫存與多裝置衝突處理', { exact: false })).toBeNull();
+	});
+
+	it('未儲存變更時不再顯示假的「已自動暫存於本機 14:30」硬編時間(初始名冊已有 3 筆非 present，一進頁就是「尚未儲存」)', async () => {
+		const { findByText, queryByText } = render(AttendancePage);
+		await findByText(C1.roster[0].name);
+		await findByText('尚未儲存 · 3 筆變更');
+		expect(queryByText('已自動暫存於本機', { exact: false })).toBeNull();
+	});
+});

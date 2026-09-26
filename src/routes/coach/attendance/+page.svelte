@@ -298,7 +298,7 @@
   <!-- ── 出席保存狀態卡 ──────────────────────────────────────── -->
   <Card padding={20}>
     <h3 style="margin:0 0 4px;font-size:16px;font-weight:700;color:var(--df-ink);">出席保存狀態</h3>
-    <p style="margin:0 0 14px;font-size:13px;color:var(--df-text-light);line-height:1.5;">即時顯示儲存進度，支援離線暫存與多裝置衝突處理，資料不遺失。</p>
+    <p style="margin:0 0 14px;font-size:13px;color:var(--df-text-light);line-height:1.5;">即時顯示儲存進度。</p>
     <div style="display:flex;align-items:center;gap:14px;background:{SS.bg};border-radius:12px;padding:16px;">
       <span style="width:40px;height:40px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;flex:none;">
         <span style="display:inline-flex;animation:{state === 'saving' ? 'df-spin 1s linear infinite' : 'none'};">
@@ -332,7 +332,7 @@
     {#if state === 'saved'}
       {(savedAt || nowHHMM())} 已同步至雲端 · 全部 {roster.length} 位學員
     {:else}
-      尚未儲存 · {dirtyCount} 筆變更 · 已自動暫存於本機 14:30
+      尚未儲存 · {dirtyCount} 筆變更
     {/if}
   </span>
   <div style="display:flex;gap:10px;">

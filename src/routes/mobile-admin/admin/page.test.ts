@@ -80,6 +80,22 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect(txt).not.toContain('2026 年 6 月 10 日');
 	});
 
+	it('opsHydrated 未落地時，待付款橫幅不出現，即使 $orders 仍是同步 seed(有 pending 訂單)', async () => {
+		// getOpsCollections 故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——
+		// orders store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、
+		// 直接讀 $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		const { findByText, queryByText } = render(AdminHomePage);
+		await findByText('測試動態一'); // 等 getAdminHome 的 ready(與 ops 水合是獨立的兩支請求)
+		expect(queryByText('筆訂單', { exact: false })).toBeNull();
+	});
+
+	it('opsHydrated 落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
+		const { findByText } = render(AdminHomePage);
+		await findByText('測試動態一');
+		expect(await findByText('筆訂單', { exact: false })).toBeInTheDocument(); // onMount 的 hydrateOps() 落地後才出現
+	});
+
 	it('render 今日課表與進行中課堂橫幅(皆讀 payload 的 today)', async () => {
 		const { findAllByText, findByText } = render(AdminHomePage);
 		// 進行中的班級同時出現在「進行中課堂」橫幅與「今日課表」清單——但班名本身在

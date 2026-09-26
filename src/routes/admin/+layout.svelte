@@ -5,12 +5,12 @@
    * heading). Admin-only — coach is a separate future app. */
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
   import Sidebar from '$lib/admin/components/Sidebar.svelte';
   import Topbar from '$lib/admin/components/Topbar.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { resolve } from '$lib/admin/nav';
-  import { toasts } from '$lib/admin/stores';
+  import { toasts, search } from '$lib/admin/stores';
   import { authStore } from '$lib/stores/authStore';
   import { staffGuardTarget } from '$lib/staff/roles';
   import '$lib/admin/admin.css';
@@ -24,6 +24,12 @@
   }
 
   $: [title, sub] = resolve($page.url.pathname);
+
+  // 跨頁殘留的 topbar 搜尋字串同 coach +layout.svelte 的既有先例清掉，不然從某頁
+  // 帶著搜尋字串切到另一頁會誤導(Task 1，R13 小 bug 包)。
+  afterNavigate(() => {
+    search.set('');
+  });
 </script>
 
 <div class="shell">

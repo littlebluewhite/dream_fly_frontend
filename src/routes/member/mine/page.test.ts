@@ -57,7 +57,7 @@ describe('member/mine 頁', () => {
   // 迴歸:出席紀錄若以顯示文字/日期為 key,同日同狀態時 Svelte 擲 each_key_duplicate。
   // 改用 index key 後即使有同日同狀態項目也不崩潰。
   it('出席紀錄含同日同狀態項目時仍正常渲染(index-key 迴歸)', async () => {
-    const dupRec: AttRecord = { date: '06/06', state: 'present' };
+    const dupRec: AttRecord = { date: '06/06', year: '2026', state: 'present' };
     vi.mocked(getMine).mockResolvedValue(SEED);
     vi.mocked(getEnrolmentAttendance).mockResolvedValue([dupRec, dupRec]);
     render(Page);
@@ -88,8 +88,8 @@ describe('member/mine 頁 — 出席明細(Task F7：GET /enrolments/{id}/attend
   it('進頁以第一筆報名 id 呼叫 getEnrolmentAttendance，渲染回傳的出席紀錄', async () => {
     vi.mocked(getMine).mockResolvedValue(SEED);
     vi.mocked(getEnrolmentAttendance).mockResolvedValue([
-      { date: '06/06', state: 'present' },
-      { date: '05/21', state: 'leave' }
+      { date: '06/06', year: '2026', state: 'present' },
+      { date: '05/21', year: '2026', state: 'leave' }
     ]);
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
 
@@ -128,7 +128,7 @@ describe('member/mine 頁 — 出席明細(Task F7：GET /enrolments/{id}/attend
     vi.mocked(getMine).mockResolvedValue(SEED);
     vi.mocked(getEnrolmentAttendance)
       .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce([{ date: '06/06', state: 'present' }]);
+      .mockResolvedValueOnce([{ date: '06/06', year: '2026', state: 'present' }]);
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': [], 'GET /leave-requests/me': [] }));
 
     render(Page);

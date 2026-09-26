@@ -24,6 +24,7 @@ const ORDERS: Order[] = [
 
 const SEED: AccountData = {
 	orders: ORDERS,
+	ordersTotal: ORDERS.length,
 	profile: {
 		...ME,
 		birth: '2013-05-18',

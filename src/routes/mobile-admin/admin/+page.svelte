@@ -4,8 +4,9 @@
    * onBell/onRole 開 notif/role sheet(於呼叫端帶入所需 props,OverlayHost 僅展開 props)。
    *
    * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
-   * ready)。$orders 維持原樣直接讀共享 store(待付款橫幅,與本頁 payload 無關,
-   * store 本身已同步 seed)。
+   * ready)。$orders 是跨頁共享 store(待付款橫幅,與本頁 payload 無關),但 store
+   * 本身同步帶 seed——onMount 補呼叫 hydrateOps() 真的水合,並用 $opsHydrated
+   * 守衛 pending 計算,避免落地前先閃一個假橫幅(Task 1，R13 小 bug 包)。
    *
    * Task 20：Hero KPI 改讀真 GET /reports/admin(admin/api.ts getReports())——同
    * 桌面 admin/+page.svelte 的裁決 9：原 4 張 KPI 卡中「本週課堂」「出席偏低」在
@@ -20,7 +21,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
+  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, opsHydrated, hydrateOps, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, type MAdminHomeData, type CreateMemberBody, type UpdateMemberBody } from '$lib/mobile-admin/api';
@@ -37,11 +38,16 @@
   });
   onMount(() => {
     gate.load();
+    // best-effort：待付款橫幅只是提示,失敗就先不顯示,不擋首頁其餘內容(同
+    // member/courses 的候補水合慣例)。真正擋橫幅假出現的是下面 $opsHydrated 守衛。
+    void hydrateOps().catch(() => {});
   });
 
   $: today = data?.today ?? [];
   $: activity = data?.activity ?? [];
-  $: pending = $orders.filter((o) => o.status === 'pending').length;
+  // $orders 是同步 seed(見上方註解),水合前直接讀會顯示一個假的待付款橫幅——
+  // 落地前一律當 0,水合後才反映真實 pending 數。
+  $: pending = $opsHydrated ? $orders.filter((o) => o.status === 'pending').length : 0;
   // C4：label 正字單源自 $lib/domain/sessions 的 SESSION_STATUS（live→「上課中」），
   // 不再硬編字面比對——admin 桌面的 live 標籤已隨單源收斂從「進行中」改「上課中」，
   // 這裡的比對值必須跟著同一個來源走，否則兩邊字面一旦再分歧，這裡會又悄悄失效。

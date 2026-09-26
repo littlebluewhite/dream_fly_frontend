@@ -12,7 +12,7 @@ const FIXTURE = [{ id: 'DF-9001', item: '接縫測試專用訂單', amount: 1234
 
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();
-	vi.mocked(getAccount).mockResolvedValue({ orders: FIXTURE });
+	vi.mocked(getAccount).mockResolvedValue({ orders: FIXTURE, ordersTotal: FIXTURE.length });
 });
 
 describe('OrdersScreen — 三態 + 接縫 wiring', () => {
@@ -36,8 +36,15 @@ describe('OrdersScreen — 三態 + 接縫 wiring', () => {
 	});
 
 	it('沒有訂單時顯示誠實空狀態，不留白', async () => {
-		vi.mocked(getAccount).mockResolvedValue({ orders: [] });
+		vi.mocked(getAccount).mockResolvedValue({ orders: [], ordersTotal: 0 });
 		render(OrdersScreen, { props: { onBack: () => {} } });
 		expect(await screen.findByText('目前沒有任何訂單紀錄。')).toBeInTheDocument();
+	});
+
+	it('total 57 但只回 20 筆時，標題顯示 57 筆(pin：不是被截斷的 orders.length)', async () => {
+		const twenty = Array.from({ length: 20 }, (_, i) => ({ ...FIXTURE[0], id: `DF-${i}` }));
+		vi.mocked(getAccount).mockResolvedValue({ orders: twenty, ordersTotal: 57 });
+		render(OrdersScreen, { props: { onBack: () => {} } });
+		expect(await screen.findByText('57 筆報名紀錄')).toBeInTheDocument();
 	});
 });

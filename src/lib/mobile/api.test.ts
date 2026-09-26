@@ -70,6 +70,7 @@ beforeEach(() => {
 	vi.mocked(memberGetSchedule).mockReset().mockResolvedValue({ schedule: SCHEDULE_FIXTURE });
 	vi.mocked(memberGetAccount).mockReset().mockResolvedValue({
 		orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
+		ordersTotal: 1,
 		profile: {
 			name: '測試會員', initial: '測', color: '#000', id: 'u1', since: '2026/01', points: 0, age: 0,
 			birth: '', phone: '', email: 'a@test.com', guardian: '', remind: true, promo: false
@@ -143,10 +144,28 @@ describe('getMine — courses 復用桌面 getMine()，schedule 復用桌面 get
 	});
 });
 
-describe('getAccount — 復用桌面 getAccount().orders', () => {
-	it('只取 orders，不含 profile', async () => {
+describe('getAccount — 復用桌面 getAccount().orders/ordersTotal', () => {
+	it('只取 orders/ordersTotal，不含 profile', async () => {
 		const d = await getAccount();
-		expect(d).toEqual({ orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }] });
+		expect(d).toEqual({
+			orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
+			ordersTotal: 1
+		});
+	});
+
+	it('ordersTotal 忠實轉傳桌面回傳值，即使跟 orders.length 不同(pin：57 筆但只回 20 筆時仍回 57)', async () => {
+		vi.mocked(memberGetAccount).mockResolvedValue({
+			orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
+			ordersTotal: 57,
+			profile: {
+				name: '測試會員', initial: '測', color: '#000', id: 'u1', since: '2026/01', points: 0, age: 0,
+				birth: '', phone: '', email: 'a@test.com', guardian: '', remind: true, promo: false
+			}
+		});
+
+		const d = await getAccount();
+
+		expect(d.ordersTotal).toBe(57);
 	});
 });
 
@@ -169,7 +188,7 @@ describe('getSchedule / getPoints / getReports / getEnrolmentAttendance — surf
 		expect(await getReports()).toBe(reportsFixture);
 
 		// 叢裡唯一帶參的委派——多驗一項參數透傳(其餘三支桌面 seam 皆為零參數)。
-		const attendanceFixture = [{ date: '06/06', state: 'present' as const }];
+		const attendanceFixture = [{ date: '06/06', year: '2026', state: 'present' as const }];
 		vi.mocked(memberGetEnrolmentAttendance).mockResolvedValue(attendanceFixture);
 		expect(await getEnrolmentAttendance('e1')).toBe(attendanceFixture);
 		expect(memberGetEnrolmentAttendance).toHaveBeenCalledWith('e1');

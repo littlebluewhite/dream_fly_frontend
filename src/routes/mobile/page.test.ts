@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { getHome } from '$lib/mobile/api';
 import { ANNOUNCE } from '$lib/mobile/data';
 import type { Course } from '$lib/mobile/data';
 import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
+import { cart, toasts } from '$lib/mobile/stores';
 
 // Task 5(架構深化 R12):本頁的鈴鐺角標(unreadCount)改經 $lib/mobile/stores 轉出
 // member 側的通知 module(getNotifications 隨 mobile/notifications.ts 退役一併
@@ -24,6 +26,10 @@ const MY_COURSES: MyCourse[] = [
 beforeEach(() => {
 	vi.mocked(getHome).mockReset();
 	vi.mocked(getHome).mockResolvedValue({ catalog: CATALOG, announce: ANNOUNCE, myCourses: MY_COURSES });
+});
+
+afterEach(() => {
+	cart.clear();
 });
 
 describe('首頁 tab — 三態', () => {
@@ -103,5 +109,16 @@ describe('首頁 tab — 三態', () => {
 		expect(await screen.findByText('熱門課程')).toBeInTheDocument();
 		expect(screen.queryByText('下一堂課')).toBeNull();
 		expect(screen.queryByText('接縫測試專用課程')).toBeNull(); // 卡片整塊不出現,不是只藏日期
+	});
+});
+
+describe('首頁 tab — 加入購物車', () => {
+	it('連按兩次同一門課的「加入」→ 第二次顯示「已在購物車中」的 info toast', async () => {
+		render(Page);
+		const btn = await screen.findByRole('button', { name: /加入/ });
+		await fireEvent.click(btn);
+		await fireEvent.click(btn);
+
+		expect(get(toasts).some((t) => t.title === `${CATALOG[0].name} 已在購物車中`)).toBe(true);
 	});
 });

@@ -59,7 +59,7 @@
       } catch (err) {
         toasts.notify('error', '加入候補失敗', joinWaitlistErrorMessage(err));
       }
-    } else if (r === 'bumped') toasts.notify('info', '已更新數量', c.name + ' 數量 +1。');
+    } else if (r === 'bumped') toasts.notify('info', `${c.name} 已在購物車中`);
     else toasts.notify('success', '已加入購物車', c.name + ' — 前往購物車完成報名。');
   }
 </script>

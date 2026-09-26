@@ -309,10 +309,10 @@ interface ApiAttendanceEntry {
   marked_at: string;
 }
 
-/** session_date("YYYY-MM-DD") → AttRecord.date("MM/DD")，對齊既有 AttRecord 形狀
- *  (原 ATT_HISTORY mock 同一種日期格式)。 */
+/** session_date("YYYY-MM-DD") → AttRecord.date("MM/DD") + AttRecord.year("YYYY")，
+ *  對齊既有 AttRecord 形狀(原 ATT_HISTORY mock 同一種日期格式)。 */
 function mapAttendanceEntry(e: ApiAttendanceEntry): AttRecord {
-  return { date: e.session_date.slice(5).replace('-', '/'), state: e.status };
+  return { date: e.session_date.slice(5).replace('-', '/'), year: e.session_date.slice(0, 4), state: e.status };
 }
 
 /** GET /enrolments/{id}/attendance（Task F7；integration-contract.md §3.12）——這筆
@@ -336,6 +336,7 @@ export interface AccountProfile extends Member {
 
 export interface AccountData {
   orders: Order[];
+  ordersTotal: number;
   profile: AccountProfile;
 }
 
@@ -398,17 +399,22 @@ function mapProfile(u: ApiUser): AccountProfile {
   };
 }
 
-/** GET /users/me + GET /orders/me；主資料(profile+orders)fail-hard(Promise.all)。
+/** GET /users/me + GET /orders/me?per_page=100；主資料(profile+orders)fail-hard
+ *  (Promise.all)。per_page=100 顯式帶滿單頁上限(同 coach/api.ts getPendingLeaveRequests
+ *  的既有慣例)——後端預設 per_page=20 會把訂單較多的會員截斷成只看到最近 20 筆；
+ *  ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/OrdersScreen)顯示的
+ *  「N 筆報名紀錄」不會被這個截斷誤導成 20。
  *  順手 hydrate points/subscriptions store(best-effort 語意，見 hydrateSessionStores()
  *  檔頭)——帳戶頁直接讀 $points / $subscriptions store(不是這裡的回傳值)。 */
 export const getAccount = async (): Promise<AccountData> => {
   const [user, orderList] = await Promise.all([
     api<ApiUser>('/users/me'),
-    api<ApiOrderListResponse>('/orders/me')
+    api<ApiOrderListResponse>('/orders/me?per_page=100')
   ]);
   await hydrateSessionStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
   return {
     orders: orderList.orders.map(mapOrder),
+    ordersTotal: orderList.total,
     profile: mapProfile(user)
   };
 };

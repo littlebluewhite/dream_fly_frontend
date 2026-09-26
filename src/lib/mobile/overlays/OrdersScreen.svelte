@@ -32,10 +32,11 @@
   });
 
   $: orders = data?.orders ?? [];
+  $: ordersTotal = data?.ordersTotal ?? 0;
 </script>
 
 <PushScreen>
-  <ScreenHeader {onBack} title="我的訂單" sub={$gate === 'ready' ? orders.length + ' 筆報名紀錄' : ''} />
+  <ScreenHeader {onBack} title="我的訂單" sub={$gate === 'ready' ? ordersTotal + ' 筆報名紀錄' : ''} />
   <LoadGate {gate}>
     <div class="df-scroll" data-testid="orders-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:12px;" slot="loading">
       {#each [0, 1, 2] as i (i)}

@@ -4,27 +4,16 @@ import StatusBadge from './StatusBadge.svelte';
 import type { TicketType } from '$lib/domain/tickets';
 
 /* StatusBadge maps a (kind, value) pair onto the shared Badge, resolving tone +
- * label from the frozen status maps (單源 $lib/domain 各 entity 檔，PAY_STATUS 仍留
- * $lib/admin/data，見 StatusBadge.svelte 匯入區) and applying the per-kind dot/solid
- * the admin prototype uses. Badge renders the dot as a `.dot` span and a solid
- * pill as a `.solid` class on the `.badge` span — assertions target both. */
+ * label from the frozen status maps (單源 $lib/domain 各 entity 檔) and applying
+ * the per-kind dot/solid the admin prototype uses. Badge renders the dot as a
+ * `.dot` span and a solid pill as a `.solid` class on the `.badge` span —
+ * assertions target both.
+ * `member`/`pay` cases (連同 admin/data.ts 的 PAY_STATUS/PayStatus) 隨 MemberDialog
+ * 的死 member 分支一併退役於 Task 1(R13 小 bug 包)——唯一呼叫端 MembersTable 從未
+ * 傳過 kind="member"/"pay"。 */
 describe('StatusBadge', () => {
 	const dot = (c: HTMLElement) => c.querySelector('.badge .dot');
 	const isSolid = (c: HTMLElement) => c.querySelector('.badge')?.classList.contains('solid');
-
-	it('member/active → 在學中 with a leading dot', () => {
-		const { container, getByText } = render(StatusBadge, { kind: 'member', value: 'active' });
-		expect(getByText('在學中')).toBeInTheDocument();
-		expect(dot(container)).not.toBeNull();
-		expect(isSolid(container)).toBe(false);
-	});
-
-	it('pay/paid → 已繳清, no dot, not solid', () => {
-		const { container, getByText } = render(StatusBadge, { kind: 'pay', value: 'paid' });
-		expect(getByText('已繳清')).toBeInTheDocument();
-		expect(dot(container)).toBeNull();
-		expect(isSolid(container)).toBe(false);
-	});
 
 	it('order/refunded → 已退款 with a dot', () => {
 		const { container, getByText } = render(StatusBadge, { kind: 'order', value: 'refunded' });

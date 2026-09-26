@@ -108,16 +108,19 @@ export const getMine = async (): Promise<MineData> => {
 
 export interface MobileAccountData {
 	orders: Order[];
+	ordersTotal: number;
 }
 
 /** 帳戶 — 復用桌面 getAccount().orders(GET /users/me + GET /orders/me；桌面
  *  getAccount() 內部已 side-effect 呼叫 refreshPoints()/refreshSubscriptions()，
  *  讓帳戶頁的 $points 一開始就是真資料——見 member/api.ts getAccount() 註解)。
  *  本頁不需要 profile 欄位(行動版帳戶頁的個人資料仍是本地 profile store，見
- *  mobile/stores.ts 的既有慣例，非本任務範圍)，只取 orders。 */
+ *  mobile/stores.ts 的既有慣例，非本任務範圍)，只取 orders/ordersTotal —— 後者
+ *  是真正的訂單總數(桌面 getAccount() 打 per_page=100，orders 可能仍被截斷，
+ *  ordersTotal 才不會顯示錯的筆數)。 */
 export const getAccount = async (): Promise<MobileAccountData> => {
-	const { orders } = await memberGetAccount();
-	return { orders };
+	const { orders, ordersTotal } = await memberGetAccount();
+	return { orders, ordersTotal };
 };
 
 export interface ScheduleData {

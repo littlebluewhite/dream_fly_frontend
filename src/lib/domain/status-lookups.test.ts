@@ -8,9 +8,9 @@
  * 1. wiring check(toBe)：mobile-admin facade 匯出的每張表與 domain 是「同一個
  *    物件參照」——不是各自維護、恰好值相同的複本。
  * 2. 獨立字面不變量：對 domain 的表做 toEqual 快照(誤改 domain 值時這裡變紅)，另加
- *    兩類守衛——同名異義(MEMBER_STATUS.active 與 MEMBER_ACCOUNT_STATUS.active 鍵名
- *    相同、語意不同，標籤不可相等)、canonical(VENUE_STATUS.available 的標籤是
- *    「可預約」，不是 mobile-admin 舊值「可使用」)。
+ *    canonical 守衛(VENUE_STATUS.available 的標籤是「可預約」，不是 mobile-admin
+ *    舊值「可使用」)。MEMBER_STATUS(連同它的同名異義守衛)隨 MemberDialog 的死
+ *    member 分支一併退役於 Task 1(R13 小 bug 包)。
  * 3. key-count canary：防漏鍵/多鍵。
  *
  * LEVEL_TONE 的 facade toBe/字面不變量留在 course-level.test.ts(單獨擴充，含
@@ -22,7 +22,7 @@
  * 是單純轉出同一個查表物件的 facade，故無層 1 wiring check 可補(同 LEVEL_TONE
  * 的例外，理由不同：LEVEL_TONE 另檔測，SESSION_STATUS 是無 facade 可測)。 */
 import { describe, it, expect } from 'vitest';
-import { MEMBER_STATUS, MEMBER_ACCOUNT_STATUS } from './members';
+import { MEMBER_ACCOUNT_STATUS } from './members';
 import { VENUE_STATUS } from './venues';
 import { TICKET_TYPE } from './tickets';
 import { STATUS_TONE } from './classes';
@@ -41,14 +41,6 @@ describe('mobile-admin facade re-asserts domain status lookups by reference (sin
 
 /* ── 2. 獨立字面不變量(誤改 domain 值 → 這裡變紅) ── */
 describe('literal table invariants (independent of the facades)', () => {
-	it('MEMBER_STATUS matches the known 3-state literal (在學中/出席偏低/暫停中)', () => {
-		expect(MEMBER_STATUS).toEqual({
-			active: ['success', '在學中'],
-			warning: ['warning', '出席偏低'],
-			paused: ['neutral', '暫停中']
-		});
-	});
-
 	it('MEMBER_ACCOUNT_STATUS matches the known 2-state literal (啟用中/已停用)', () => {
 		expect(MEMBER_ACCOUNT_STATUS).toEqual({
 			active: ['success', '啟用中'],
@@ -88,10 +80,6 @@ describe('literal table invariants (independent of the facades)', () => {
 		});
 	});
 
-	it('同名異義守衛：MEMBER_STATUS.active(在學中)與 MEMBER_ACCOUNT_STATUS.active(啟用中)標籤不相等', () => {
-		expect(MEMBER_STATUS.active[1]).not.toBe(MEMBER_ACCOUNT_STATUS.active[1]);
-	});
-
 	it('canonical 守衛：VENUE_STATUS.available 標籤是「可預約」，不是 mobile-admin 舊值「可使用」', () => {
 		expect(VENUE_STATUS.available[1]).toBe('可預約');
 	});
@@ -103,7 +91,6 @@ describe('literal table invariants (independent of the facades)', () => {
 
 /* ── 3. key-count canaries(防漏鍵/多鍵) ── */
 describe('key counts', () => {
-	it('MEMBER_STATUS has 3 keys', () => expect(Object.keys(MEMBER_STATUS)).toHaveLength(3));
 	it('MEMBER_ACCOUNT_STATUS has 2 keys', () => expect(Object.keys(MEMBER_ACCOUNT_STATUS)).toHaveLength(2));
 	it('VENUE_STATUS has 2 keys', () => expect(Object.keys(VENUE_STATUS)).toHaveLength(2));
 	it('TICKET_TYPE has 3 keys', () => expect(Object.keys(TICKET_TYPE)).toHaveLength(3));

@@ -495,7 +495,7 @@ describe('getMine', () => {
 });
 
 describe('getEnrolmentAttendance — GET /enrolments/{id}/attendance（Task F7；逐堂出勤明細，§3.12）', () => {
-  it('session_date(YYYY-MM-DD) → date(MM/DD)；status 原樣映射為 state；依端點回應順序輸出(後端已保證舊到新)', async () => {
+  it('session_date(YYYY-MM-DD) → date(MM/DD) + year(YYYY)；status 原樣映射為 state；依端點回應順序輸出(後端已保證舊到新)', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/enrol-1/attendance': [
@@ -509,10 +509,24 @@ describe('getEnrolmentAttendance — GET /enrolments/{id}/attendance（Task F7�
     const d = await getEnrolmentAttendance('enrol-1');
 
     expect(d).toEqual([
-      { date: '05/14', state: 'present' },
-      { date: '05/21', state: 'leave' },
-      { date: '05/28', state: 'absent' }
+      { date: '05/14', year: '2026', state: 'present' },
+      { date: '05/21', year: '2026', state: 'leave' },
+      { date: '05/28', year: '2026', state: 'absent' }
     ]);
+  });
+
+  it('跨年出勤紀錄各自保留自己的 year，不是統一硬編某一年(pin：2025 年場次要顯示 2025)', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /enrolments/enrol-1/attendance': [
+          { session_date: '2025-12-30', start_time: '19:00:00', end_time: '20:30:00', status: 'present', marked_at: '2025-12-30T19:05:00Z' }
+        ]
+      })
+    );
+
+    const d = await getEnrolmentAttendance('enrol-1');
+
+    expect(d).toEqual([{ date: '12/30', year: '2025', state: 'present' }]);
   });
 
   it('無點名紀錄時回空陣列(不是 404)', async () => {
@@ -528,16 +542,16 @@ describe('getEnrolmentAttendance — GET /enrolments/{id}/attendance（Task F7�
 });
 
 describe('getAccount', () => {
-  it('GET /users/me + GET /orders/me → profile + orders 映射；順手 hydrate points/subscriptions store', async () => {
+  it('GET /users/me + GET /orders/me?per_page=100 → profile + orders 映射(含 ordersTotal)；順手 hydrate points/subscriptions store', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'user-uuid-1', email: 'wang@example.com', name: '王承恩', phone: '0911222333', created_at: '2023-09-15T00:00:00Z' },
-        'GET /orders/me': {
+        'GET /orders/me?per_page=100': {
           orders: [{
             id: 'order-1', order_number: 'DF-20260701AAAA', status: 'paid', total_cents: 480000, created_at: '2026-07-01T10:00:00Z',
             items: [{ name: '競技啦啦隊 進階班', quantity: 1 }]
           }],
-          total: 1, page: 1, per_page: 20
+          total: 1, page: 1, per_page: 100
         },
         'GET /points/me': { balance: 1250, ledger: [] },
         'GET /subscriptions/me': []
@@ -550,6 +564,7 @@ describe('getAccount', () => {
       orders: [
         { id: 'DF-20260701AAAA', item: '競技啦啦隊 進階班', amount: 4800, status: ['success', '已付款'], date: '2026-07-01' }
       ],
+      ordersTotal: 1,
       profile: {
         name: '王承恩', initial: '王', color: '#0066CC', id: 'user-uuid-1', since: '2023/09',
         points: 1250, age: 0, birth: '', phone: '0911222333', email: 'wang@example.com',
@@ -559,11 +574,31 @@ describe('getAccount', () => {
     expect(get(subscriptions)).toEqual([]);
   });
 
+  it('訂單筆數超過單頁上限(如 total 57)時，orders.length 只有 20 但 ordersTotal 回真正的 57(pin：帳戶頁該顯示 57 筆，不是被截斷的 20)', async () => {
+    const twentyOrders = Array.from({ length: 20 }, (_, i) => ({
+      id: `order-${i}`, order_number: `DF-2026070${i}AAAA`, status: 'paid', total_cents: 100000, created_at: '2026-07-01T10:00:00Z',
+      items: [{ name: '測試課程', quantity: 1 }]
+    }));
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /users/me': { id: 'user-uuid-1', email: 'wang@example.com', name: '王承恩', phone: null, created_at: '2023-09-15T00:00:00Z' },
+        'GET /orders/me?per_page=100': { orders: twentyOrders, total: 57, page: 1, per_page: 100 },
+        'GET /points/me': { balance: 0, ledger: [] },
+        'GET /subscriptions/me': []
+      })
+    );
+
+    const d = await getAccount();
+
+    expect(d.orders).toHaveLength(20);
+    expect(d.ordersTotal).toBe(57);
+  });
+
   it('item 摘要依 items 數量組成：0 項 fallback 訂單編號、1 項用該項名稱、N>1 項用「第一項 外 N-1 項」', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': {
+        'GET /orders/me?per_page=100': {
           orders: [
             { id: 'o1', order_number: 'DF-1', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [] },
             { id: 'o2', order_number: 'DF-2', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: '體操基礎班', quantity: 1 }] },
@@ -594,7 +629,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u1', email: 'a@b.com', name: '測試', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': {
+        'GET /orders/me?per_page=100': {
           orders: [
             { id: 'o1', order_number: 'DF-1', status: 'pending', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
             { id: 'o2', order_number: 'DF-2', status: 'processing', total_cents: 200000, created_at: '2026-01-02T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
@@ -624,7 +659,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u3', email: 'a@b.com', name: '測試三', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': {
+        'GET /orders/me?per_page=100': {
           orders: [{ id: 'o9', order_number: 'DF-9', status: 'paid', total_cents: 100000, created_at: '2026-02-01T00:00:00Z', items: [] }],
           total: 1, page: 1, per_page: 20
         },
@@ -648,7 +683,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u6', email: 'a@b.com', name: '測試六', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /orders/me?per_page=100': { orders: [], total: 0, page: 1, per_page: 20 },
         'GET /points/me': pointsError,
         'GET /subscriptions/me': subsError
       })
@@ -664,7 +699,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u2', email: 'a@b.com', name: '測試二', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /orders/me?per_page=100': { orders: [], total: 0, page: 1, per_page: 20 },
         'GET /points/me': { balance: 0, ledger: [] },
         'GET /subscriptions/me': []
       })
@@ -677,7 +712,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u4', email: 'a@b.com', name: '測試四', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: '2013-05-18' },
-        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /orders/me?per_page=100': { orders: [], total: 0, page: 1, per_page: 20 },
         'GET /points/me': { balance: 0, ledger: [] },
         'GET /subscriptions/me': []
       })
@@ -690,7 +725,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u5', email: 'a@b.com', name: '測試五', phone: null, created_at: '2026-01-01T00:00:00Z', birth_date: null },
-        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /orders/me?per_page=100': { orders: [], total: 0, page: 1, per_page: 20 },
         'GET /points/me': { balance: 0, ledger: [] },
         'GET /subscriptions/me': []
       })
@@ -703,7 +738,7 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /users/me': { id: 'u', email: 'a@b.com', name: 'x', phone: null, created_at: '2026-01-01T00:00:00Z' },
-        'GET /orders/me': { orders: [], total: 0, page: 1, per_page: 20 },
+        'GET /orders/me?per_page=100': { orders: [], total: 0, page: 1, per_page: 20 },
         'GET /points/me': { balance: 0, ledger: [] },
         'GET /subscriptions/me': []
       })

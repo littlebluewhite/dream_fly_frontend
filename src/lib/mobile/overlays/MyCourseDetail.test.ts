@@ -34,8 +34,8 @@ const COURSE: MyCourse = {
 };
 
 const DEFAULT_ATTENDANCE: AttRecord[] = [
-	{ date: '06/06', state: 'present' },
-	{ date: '05/21', state: 'leave' }
+	{ date: '06/06', year: '2026', state: 'present' },
+	{ date: '05/21', year: '2026', state: 'leave' }
 ];
 
 const PENDING: LeaveRequest = {
@@ -170,9 +170,9 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 	it('依 present/absent/leave 三態渲染出席徽章(late 態已隨後端 enum 收斂移除)', async () => {
 		leaveRequests.set([]);
 		vi.mocked(getEnrolmentAttendance).mockResolvedValue([
-			{ date: '06/06', state: 'present' },
-			{ date: '05/21', state: 'leave' },
-			{ date: '05/14', state: 'absent' }
+			{ date: '06/06', year: '2026', state: 'present' },
+			{ date: '05/21', year: '2026', state: 'leave' },
+			{ date: '05/14', year: '2026', state: 'absent' }
 		]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
@@ -189,5 +189,13 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 		vi.mocked(getEnrolmentAttendance).mockRejectedValue(new Error('boom'));
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
+	});
+
+	it('每筆紀錄顯示自己的 year，不是硬編某一年(pin：2025 年場次顯示 2025，不是 2026)', async () => {
+		leaveRequests.set([]);
+		vi.mocked(getEnrolmentAttendance).mockResolvedValue([{ date: '12/30', year: '2025', state: 'present' }]);
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+
+		expect(await screen.findByText('2025 / 12/30')).toBeInTheDocument();
 	});
 });

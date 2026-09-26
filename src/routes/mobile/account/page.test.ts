@@ -14,7 +14,7 @@ const ORDERS = [
 
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();
-	vi.mocked(getAccount).mockResolvedValue({ orders: ORDERS });
+	vi.mocked(getAccount).mockResolvedValue({ orders: ORDERS, ordersTotal: ORDERS.length });
 });
 
 describe('帳戶頁 — 三態', () => {
@@ -32,9 +32,17 @@ describe('帳戶頁 — 三態', () => {
 
 	it('「我的訂單」筆數來自接縫回傳值(相異 fixture,非直接 import 的 seed 4 筆)', async () => {
 		vi.mocked(getAccount).mockResolvedValue({
-			orders: [{ id: 'zz-1', item: '接縫測試專用訂單', amount: 1, status: ['success', '已完成'], date: '2026/01/01' }]
+			orders: [{ id: 'zz-1', item: '接縫測試專用訂單', amount: 1, status: ['success', '已完成'], date: '2026/01/01' }],
+			ordersTotal: 1
 		});
 		render(Page);
 		expect(await screen.findByText('1 筆報名紀錄')).toBeInTheDocument();
+	});
+
+	it('total 57 但只回 20 筆時，顯示 57 筆(pin：不是被截斷的 orders.length)', async () => {
+		const twenty = Array.from({ length: 20 }, (_, i) => ({ ...ORDERS[0], id: `DF-${i}` }));
+		vi.mocked(getAccount).mockResolvedValue({ orders: twenty, ordersTotal: 57 });
+		render(Page);
+		expect(await screen.findByText('57 筆報名紀錄')).toBeInTheDocument();
 	});
 });

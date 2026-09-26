@@ -85,6 +85,16 @@ describe('課程介紹 — 候補守門（codex P2 regression；C8 改接真 POS
 		expect(vi.mocked(api).mock.calls.some(([p, i]) => p === '/waitlist' && (i as RequestInit)?.method === 'POST')).toBe(false);
 	});
 
+	it('連按兩次同一門課的「加入」→ 第二次顯示「已在購物車中」的 info toast', async () => {
+		const open = CATALOG.find((c) => c.spots > 0)!;
+		render(Page);
+		const btn = (await screen.findAllByRole('button', { name: '加入' }))[0];
+		await fireEvent.click(btn);
+		await fireEvent.click(btn);
+
+		expect(get(toasts).some((t) => t.title === `${open.name} 已在購物車中`)).toBe(true);
+	});
+
 	it('重複候補（後端 409 "already on waitlist"）→ 顯示「加入候補失敗」與專屬繁中文案，不顯示「已加入候補」', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }, WAITLIST_DEFAULTS));
 

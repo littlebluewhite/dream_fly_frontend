@@ -53,6 +53,18 @@ describe('CourseDetailSheet — 加入購物車(尚有名額，spots > 0)', () =
 		).toBe(true);
 		expect(onClose).toHaveBeenCalled();
 	});
+
+	it('連按兩次「加入購物車」→ 第二次顯示「已在購物車中」的 info toast，並呼叫 onClose', async () => {
+		const course = courseFixture({ spots: 3 });
+		const onClose = vi.fn();
+		const { getByText } = render(CourseDetailSheet, { props: { onClose, course } });
+
+		await fireEvent.click(getByText('加入購物車'));
+		await fireEvent.click(getByText('加入購物車'));
+
+		expect(get(toasts).some((t) => t.tone === 'info' && t.title === `${course.name} 已在購物車中`)).toBe(true);
+		expect(onClose).toHaveBeenCalled();
+	});
 });
 
 describe('CourseDetailSheet — 加入候補(額滿，spots === 0)', () => {
