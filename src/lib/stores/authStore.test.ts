@@ -300,6 +300,56 @@ describe('authStore.hydrate', () => {
   });
 });
 
+// R13 Task 3(T0):會員資料 module 的 PATCH /users/me 成功後,用回應同步 Topbar 等讀
+// authStore 的名字——identity key(loggedIn + member.id)不變,不得觸發任何 session gate 重置。
+describe('authStore.syncUser', () => {
+  async function loginAs(user: ApiUser) {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user })));
+    await authStore.login(user.email, 'pw');
+    vi.unstubAllGlobals();
+  }
+
+  it('同 id:更新 member(名字/首字)與 dreamfly_auth 快取,roles 不動', async () => {
+    await loginAs(SAMPLE_USER);
+
+    authStore.syncUser({ ...SAMPLE_USER, name: '李大華', roles: ['admin'] });
+
+    const state = get(authStore);
+    expect(state.loggedIn).toBe(true);
+    expect(state.member?.name).toBe('李大華');
+    expect(state.member?.initial).toBe('李');
+    expect(state.roles).toEqual(['member']);
+    expect(localStorage.getItem('dreamfly_auth')).toContain('李大華');
+  });
+
+  it('登出時:no-op(不會把人「同步」回登入態)', () => {
+    authStore.syncUser(SAMPLE_USER);
+
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+  });
+
+  it('不同 id:no-op(遲到的 A 回應不得寫進 B 的 session)', async () => {
+    await loginAs(SAMPLE_USER);
+    const before = get(authStore);
+
+    authStore.syncUser({ ...SAMPLE_USER, id: 'uuid-other', name: '別人' });
+
+    expect(get(authStore)).toEqual(before);
+  });
+
+  it('identity 不變 → session gate 的 reset 不被呼叫', async () => {
+    const { createSessionGate } = await import('$lib/session-gate');
+    const reset = vi.fn();
+    createSessionGate({ fetch: async () => null, apply: () => {}, reset });
+    await loginAs(SAMPLE_USER);
+    const calls = reset.mock.calls.length;
+
+    authStore.syncUser({ ...SAMPLE_USER, name: '李大華' });
+
+    expect(reset).toHaveBeenCalledTimes(calls);
+  });
+});
+
 describe('toMember', () => {
   it('projects id/name/initial/since from the API user, defaulting points to 0', () => {
     const member = toMember(SAMPLE_USER);

@@ -54,7 +54,8 @@ export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[] }) 
 			state.set({ loggedIn: true, member: null, roles: ['member'] });
 		}),
 		logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
-		hydrate: vi.fn(async () => {})
+		hydrate: vi.fn(async () => {}),
+		syncUser: vi.fn()
 	};
 	return { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn) };
 }
@@ -64,7 +65,7 @@ export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[] }) 
  *  isLoggedIn 具名 export 的偏差檔(mobile-admin/page)。 */
 export function makeAuthMockB(opts?: { withIsLoggedIn?: boolean }) {
 	const state = writable<MockAuthState>({ loggedIn: false, member: null, roles: [] });
-	const authStore = { subscribe: state.subscribe, __set: state.set };
+	const authStore = { subscribe: state.subscribe, __set: state.set, syncUser: vi.fn() };
 	return opts?.withIsLoggedIn
 		? { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn) }
 		: { authStore };

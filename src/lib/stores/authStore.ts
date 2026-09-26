@@ -76,7 +76,7 @@ function loadCache(): AuthState {
 }
 
 function createAuthStore() {
-  const { subscribe, set } = writable<AuthState>(loadCache());
+  const { subscribe, set, update } = writable<AuthState>(loadCache());
 
   if (typeof window !== 'undefined') {
     subscribe((state) => {
@@ -170,7 +170,15 @@ function createAuthStore() {
     }
   }
 
-  return { subscribe, login, register, loginWithGoogle, logout, hydrate };
+  /** 以 GET/PATCH /users/me 的回應同步目前 session 的 member(R13 Task 3:改名後
+   *  Topbar/問候不必等重新登入)。只在「已登入且同一個 member.id」時寫入——identity key
+   *  不變,所以任何 session gate 都不會重置;登出或不同 id(遲到的舊帳號回應)一律 no-op。
+   *  roles 不動(角色變更不是這條路徑的事)。dreamfly_auth 快取經上方 subscribe 自動跟上。 */
+  function syncUser(user: ApiUser): void {
+    update((s) => (s.loggedIn && s.member?.id === user.id ? { ...s, member: toMember(user) } : s));
+  }
+
+  return { subscribe, login, register, loginWithGoogle, logout, hydrate, syncUser };
 }
 
 export const authStore = createAuthStore();
