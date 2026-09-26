@@ -29,6 +29,7 @@
   import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
@@ -74,6 +75,8 @@
   let noteFor: AttRow | null = null;
   let noteText = '';
 
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
+
   const gate = createLoadGate({
     fetch: getAttendance,
     onData: (d) => {
@@ -87,6 +90,9 @@
           d.failedClasses.join('、') + ' 的名冊暫時無法載入，其他班級可正常點名，請稍後重新整理再試。'
         );
       }
+    },
+    onError: (e) => {
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {
@@ -178,7 +184,7 @@
   } satisfies Record<'dirty' | 'saving' | 'saved', { icon: IconName; tone: string; bg: string; title: string; desc: string }>)[state];
 </script>
 
-<LoadGate {gate}>
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
   <div style="display:flex;flex-direction:column;gap:16px;padding-bottom:80px;" data-testid="attendance-skeleton" slot="loading">
     <SkelCard><Skeleton w="100%" h={64} r={12} /></SkelCard>
     <div style="display:flex;gap:12px;flex-wrap:wrap;">

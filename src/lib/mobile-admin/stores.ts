@@ -14,6 +14,7 @@
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createHydrationGate } from '$lib/hydration-gate';
+import { createSessionGate } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
@@ -213,13 +214,18 @@ export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unrea
  *  (對齊 mobile notifs 前例);markMessageRead 呼叫 messagesGate.markMutated()
  *  (mutation 即宣告水合真相)。refreshMessages() 保持一律真抓,供重試使用(落地同走
  *  世代穩定重抓,理由與判準見上方 opsGate 註解)。
- *  guard 短路 + post-await re-check(mutation 勝出)的機制本身由
- *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層
- *  箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */
-const messagesGate = createHydrationGate({
+ *  R13 Task 7(C6):對話列表是**登入教練本人**的資料,改用 createSessionGate——換帳號/
+ *  登出即重置回種子、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(原本的 hydration
+ *  gate 跨帳號存活,第二位教練會看到前一位的對話列表)。opsGate 是全機構的營運集合,
+ *  不涉個人隱私,維持不動。reset 回種子 clone 滿足 boot-parity(store 開機即帶種子)。
+ *  fetch 包一層箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */
+const messagesGate = createSessionGate({
 	fetch: () => getMessages(),
 	apply: (d) => {
 		messages.set(d);
+	},
+	reset: () => {
+		messages.set(MESSAGES.map((m) => ({ ...m })));
 	}
 });
 export const messagesHydrated = messagesGate.hydrated;

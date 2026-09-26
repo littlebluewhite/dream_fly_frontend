@@ -1,5 +1,5 @@
-/* Dream Fly — coach 載入錯誤文案單源。coach 桌面四頁（儀表板/今日課程/排課/個人設定）
- * 與 mobile-admin coach 兩頁（工作台/個人設定）的 gate onError 文案逐字同文，收斂於此；
+/* Dream Fly — coach 載入錯誤文案單源。coach 桌面五頁（儀表板/今日課程/排課/點名/個人設定）
+ * 與 mobile-admin coach 三頁（工作台/點名/個人設定）的 gate onError 文案逐字同文，收斂於此；
  * GENERIC_LOAD_ERROR 同時是各頁 errorTitle/errorBody 的初始值單源。動作錯誤的
  * per-entity 文案表依 ADR 0011 仍留各呼叫端，本模組只管「載入」這一種。
  *

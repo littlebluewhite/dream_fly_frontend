@@ -3,14 +3,18 @@
  * Task 12：getConversations/getThread/sendMessage/markRead 換真後端資料（訊息中心，
  * §3.21）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。
  *
- * myCoachProfile()：GET /users/me → GET /coaches → find(user_id === me.id) 是本檔案
- * 的核心（登入的使用者本人就是教練，教練姓名只能從 users.name 來，見 integration-
- * contract.md §3.4 附註）。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
+ * 教練身分：GET /users/me + GET /coaches → find(user_id === me.id) 是本檔案的核心
+ * （登入的使用者本人就是教練，教練姓名只能從 users.name 來，見 integration-contract.md
+ * §3.4 附註）。R13 Task 7(C6)起由私有 session 閘門快取：每個登入身分只解析一次，
+ * 換帳號/登出即重置。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
  * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面 catch 用 e.name 判斷
  * （不是 instanceof —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，
  * import 進來的 class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號
  * 未綁定教練檔案」。 */
+import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
+import { createSessionGate } from '$lib/session-gate';
+import { authStore, type ApiUser } from '$lib/stores/authStore';
 import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
@@ -30,7 +34,7 @@ import type {
 	ThreadMsg
 } from './data';
 
-/** myCoachProfile() 找不到對應教練檔案時拋出；UI 顯示「此帳號未綁定教練檔案」。 */
+/** 教練身分找不到對應教練檔案時拋出；UI 顯示「此帳號未綁定教練檔案」。 */
 export class CoachNotFoundError extends Error {
 	constructor() {
 		super('此帳號未綁定教練檔案');
@@ -40,32 +44,60 @@ export class CoachNotFoundError extends Error {
 
 /* ═════════════════════════ 教練本人（GET /users/me + GET /coaches） ═════════════════════════ */
 
-/** UserResponse 只取用得到的欄位（同 member/api.ts 的窄化 local 慣例）。 */
-interface ApiUser {
-	id: string;
-	name: string;
-	email: string;
-	phone: string | null;
-	last_login: string | null;
-	created_at: string;
+/** 教練身分:登入者本人(GET /users/me)+ 對應的教練檔案(GET /coaches 只回 active 教練;
+ *  找不到為 null)。 */
+interface CoachIdentity {
+	user: ApiUser;
+	coach: ApiCoach | null;
 }
 
-async function fetchMe(): Promise<{ user: ApiUser; coach: ApiCoach | null }> {
+async function fetchMe(): Promise<CoachIdentity> {
 	const [user, coaches] = await Promise.all([api<ApiUser>('/users/me'), listCoaches()]);
 	return { user, coach: coaches.find((c) => c.user_id === user.id) ?? null };
 }
 
-export async function myCoachProfile(): Promise<ApiCoach | null> {
-	return (await fetchMe()).coach;
+// 以下兩個 let 必須宣告在 createSessionGate 之前:restored session 開機時 gate 建構當下
+// 就會呼叫 reset(見 session-gate 的建構順序契約)。
+let identity: CoachIdentity | null = null;
+let inflight: Promise<void> | null = null;
+
+/** 每個登入身分只解析一次;換帳號/登出(authStore identity 變更)即清空,在飛的舊回應由
+ *  閘門的 epoch 核對作廢。 */
+const gate = createSessionGate<CoachIdentity>({
+	fetch: fetchMe,
+	apply: (d) => {
+		identity = d;
+	},
+	reset: () => {
+		identity = null;
+		inflight = null;
+	}
+});
+
+/** 併發呼叫共用同一支在飛解析(gate.hydrate 本身不去重)。 */
+function hydrateIdentity(): Promise<void> {
+	if (!inflight) {
+		const p: Promise<void> = gate.hydrate().finally(() => {
+			if (inflight === p) inflight = null;
+		});
+		inflight = p;
+	}
+	return inflight;
 }
 
-async function requireMyCoach(): Promise<{ user: ApiUser; coach: ApiCoach }> {
-	const { user, coach } = await fetchMe();
-	if (!coach) throw new CoachNotFoundError();
-	return { user, coach };
+/** 教練身分(快取命中不打 API)。沒有教練檔案時把 hydrated 翻回 false 再拋
+ *  CoachNotFoundError——管理員綁定教練檔案後,使用者按重試就會重新解析。 */
+async function requireCoach(): Promise<{ user: ApiUser; coach: ApiCoach }> {
+	await hydrateIdentity();
+	const me = identity;
+	if (!me?.coach) {
+		gate.hydrated.set(false);
+		throw new CoachNotFoundError();
+	}
+	return { user: me.user, coach: me.coach };
 }
 
-/** GET /users/me + myCoachProfile() 組合成既有 Coach 形狀，getDashboard/getSettings 共用。
+/** 教練身分(user + coach)組合成既有 Coach 形狀，getDashboard/getSettings 共用。
  *  name/display/full/initial 由 user.name 推導（東亞姓名慣例：首字視為姓氏，同 mock 原始
  *  資料「李志偉」→「李教練」/「李志偉 教練」的推導方式一致）；role/bio/chips 來自
  *  ApiCoach 的 title/bio/certifications；id 改用教練真實 uuid（舊「DF-C2019-007」員編
@@ -156,7 +188,7 @@ export interface CoachDashboardData {
  *  不強塞新卡片。conversations 由 getConversations() best-effort 併入(降級語意見
  *  下方行內註解)。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
-	const { user, coach } = await requireMyCoach();
+	const { user, coach } = await requireCoach();
 	const [todayClasses, reports, conversations] = await Promise.all([
 		myTodayClasses(),
 		api<ApiCoachReports>('/reports/coach'),
@@ -185,7 +217,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 
 export interface TodayData { todayLabel: string; todayClasses: TodayClass[] }
 export const getToday = async (): Promise<TodayData> => {
-	await requireMyCoach(); // 仍需先確認教練檔案存在(CoachNotFoundError 閘門)，即使 todayClasses 不再需要 coach.id
+	await requireCoach(); // 仍需先確認教練檔案存在(CoachNotFoundError 閘門)，即使 todayClasses 不再需要 coach.id
 	return { todayLabel: todayLabel(), todayClasses: await myTodayClasses() };
 };
 
@@ -245,11 +277,11 @@ export interface AttendanceData {
  *  失敗場次排除於 classes 之外、課名列入 failedClasses 供頁面提示(失敗細節只記錄，
  *  同 member getDashboard 對 best-effort hydrate 失敗的處理精神)；但今日有場次而
  *  「全部」名冊都失敗時，沒有任何可點名的班級，視為整體失敗直接拋出(頁面走 error
- *  state 可重試，而非誤導性的「今日尚無場次」空狀態)。requireMyCoach() 閘門同
+ *  state 可重試，而非誤導性的「今日尚無場次」空狀態)。requireCoach() 閘門同
  *  getToday()(即使本函式主要需要的是 user.name 顯示用，不是 coach.id)——教練檔案
  *  不存在時兩者一致丟 CoachNotFoundError。 */
 export const getAttendance = async (): Promise<AttendanceData> => {
-	const { user } = await requireMyCoach();
+	const { user } = await requireCoach();
 	const sessions = await api<ApiTodaySession[]>('/sessions/today');
 	const results = await Promise.allSettled(
 		sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`))
@@ -311,7 +343,7 @@ export interface CoachScheduleData { courses: SchedCourse[] }
  *  → Mon..Sun key，HH:MM:SS 裁切為 HH:MM 供既有 UI 顯示）；只保留 is_available 的時段
  *  （未開放的時段不是真的可授課，不該顯示成一個假課程區塊）。 */
 export const getSchedule = async (): Promise<CoachScheduleData> => {
-	const { coach } = await requireMyCoach();
+	const { coach } = await requireCoach();
 	const slots = await api<ApiCoachSchedule[]>(`/coaches/${coach.id}/schedule`, { auth: false });
 	return {
 		courses: slots
@@ -400,13 +432,11 @@ export interface ThreadData {
  *  （同 getPendingLeaveRequests 慣例，避免後端預設頁大小截斷長對話串）；total 穿透供
  *  呼叫端誠實呈現截斷狀況。後端依 created_at DESC(新到舊)排序，但對話串泡泡由上到下
  *  應是舊到新時序(同既有 THREAD mock 資料的時序)，故映射後反轉。判斷 who='me'|'them'
- *  需另外知道呼叫者自己的 user id，與訊息列表平行拉取(GET /users/me)。 */
+ *  用登入者自己的 user id——直接讀 authStore，不另打 GET /users/me(C6)。 */
 export const getThread = async (conversationId: string): Promise<ThreadData> => {
-	const [me, res] = await Promise.all([
-		api<ApiUser>('/users/me'),
-		api<ApiMessageListResponse>(`/conversations/${conversationId}/messages?per_page=100`)
-	]);
-	return { messages: res.messages.map((m) => mapMessage(m, me.id)).reverse(), total: res.total };
+	const selfId = get(authStore).member?.id ?? '';
+	const res = await api<ApiMessageListResponse>(`/conversations/${conversationId}/messages?per_page=100`);
+	return { messages: res.messages.map((m) => mapMessage(m, selfId)).reverse(), total: res.total };
 };
 
 /** POST /conversations/{id}/messages（body 1–2000 字，見§3.21）。回應的 sender_id 契約
@@ -493,7 +523,7 @@ function mapStudent(s: ApiMyStudent): Student {
 
 export interface StudentsData { students: Student[] }
 
-/** 無需 requireMyCoach() 閘門——呼叫者掛 coach 角色但查無對應 coaches 資料列時，後端
+/** 無需 requireCoach() 閘門——呼叫者掛 coach 角色但查無對應 coaches 資料列時，後端
  *  本身就回空陣列而非錯誤(同 GET /sessions/today 的慣例，見 §3.19)，不需要前端另外
  *  判斷教練檔案是否存在。 */
 export const getStudents = async (): Promise<StudentsData> => {
@@ -558,7 +588,7 @@ export interface PendingLeaveRequestsData {
 /** GET /leave-requests?status=pending&per_page=100。per_page 顯式帶滿單頁上限
  *  （同 public/api.ts listCourses 的 per_page=100 慣例——後端預設 20 會截斷長清單）；
  *  total 穿透供頁面誠實計數，>100 筆時清單仍截斷，由頁面以 total 對比載入筆數提示。
- *  無需 requireMyCoach() 閘門——同 getStudents() 慣例，呼叫者掛 coach 角色但查無對應
+ *  無需 requireCoach() 閘門——同 getStudents() 慣例，呼叫者掛 coach 角色但查無對應
  *  coaches 資料列時後端本身回空頁而非錯誤（§3.20 引用 §3.18/§3.19 既有慣例）。教練
  *  只會看到自己課程的待審核假單，後端已按 courses.coach_id 過濾，前端不需要另外篩選。 */
 export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsData> => {
@@ -580,16 +610,24 @@ export const decideLeaveRequest = (id: string, status: 'approved' | 'rejected'):
 
 export interface CoachSettingsData { coach: Coach }
 export const getSettings = async (): Promise<CoachSettingsData> => {
-	const { user, coach } = await requireMyCoach();
+	const { user, coach } = await requireCoach();
 	return { coach: mapCoach(user, coach) };
 };
 
 /** ProfileTab 可編輯的欄位裡，只有 name/phone 有對應的後端 PATCH 欄位（avatar_url 目前
  *  沒有 UI 入口，未使用）；email/gender/birth/emergency/bio 後端不支援寫入，維持頁面
- *  本地編輯、不送出(同既有行為)。寫入成功後重新取得最新資料，不直接拼字串回傳。 */
+ *  本地編輯、不送出(同既有行為)。PATCH 回應就是完整的 UserResponse：直接更新教練身分
+ *  快取並 authStore.syncUser(Topbar 等處的姓名跟著變)，不再重抓——重抓失敗曾讓「已存」
+ *  顯示成「儲存失敗」。教練檔案取自快取(設定頁已載入，命中不打 API)。 */
 export const saveSettings = async (fields: { name?: string; phone?: string }): Promise<CoachSettingsData> => {
-	await api('/users/me', { method: 'PATCH', body: JSON.stringify(fields) });
-	const { user, coach } = await requireMyCoach();
+	const { coach } = await requireCoach();
+	const user = await gate.mutate(
+		() => api<ApiUser>('/users/me', { method: 'PATCH', body: JSON.stringify(fields) }),
+		(u) => {
+			identity = { user: u, coach };
+			authStore.syncUser(u);
+		}
+	);
 	return { coach: mapCoach(user, coach) };
 };
 

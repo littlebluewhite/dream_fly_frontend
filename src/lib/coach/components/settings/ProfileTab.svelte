@@ -1,7 +1,8 @@
 <script lang="ts">
   /* 個人資料 tab — edit form + live preview card + danger zone
    * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH,由
-   * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。 */
+   * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。
+   * onSaved(C6):儲存成功後把後端回應映射的 Coach 交回頁面,頁首姓名跟著更新。 */
   import type { Coach } from '$lib/coach/data';
   import { saveSettings } from '$lib/coach/api';
   import { toasts } from '$lib/coach/stores';
@@ -13,6 +14,7 @@
   import CoachAvatar from '$lib/coach/components/CoachAvatar.svelte';
 
   export let coach: Coach;
+  export let onSaved: (coach: Coach) => void;
 
   // Local copies of editable fields
   let name = coach.name;
@@ -30,8 +32,9 @@
   async function save() {
     saving = true;
     try {
-      await saveSettings({ name, phone });
-      toasts.notify('success', '個人資料已儲存', '變更將於下次登入時生效');
+      const saved = await saveSettings({ name, phone });
+      onSaved(saved.coach);
+      toasts.notify('success', '個人資料已儲存');
     } catch {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
     } finally {

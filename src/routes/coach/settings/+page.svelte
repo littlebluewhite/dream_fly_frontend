@@ -105,7 +105,7 @@
   <div>
     <Tabs tabs={TABS} bind:value={activeTab} />
     {#if activeTab === 'profile'}
-      <ProfileTab coach={data.coach} />
+      <ProfileTab coach={data.coach} onSaved={(coach) => { data = { coach }; }} />
     {:else if activeTab === 'credentials'}
       <CredentialsTab coach={data.coach} />
     {:else if activeTab === 'preferences'}

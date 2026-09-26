@@ -299,6 +299,16 @@ describe('/coach/attendance — 三態', () => {
 		await findByText('載入失敗');
 	});
 
+	it('CoachNotFoundError:顯示「此帳號未綁定教練檔案」而非泛用載入失敗(C6)', async () => {
+		const notFound = new Error('此帳號未綁定教練檔案');
+		notFound.name = 'CoachNotFoundError';
+		vi.mocked(getAttendance).mockReset();
+		vi.mocked(getAttendance).mockRejectedValue(notFound);
+		const { findByText, queryByText } = render(AttendancePage);
+		await findByText('請聯繫系統管理員協助設定教練檔案。');
+		expect(queryByText('載入失敗')).toBeNull();
+	});
+
 	it('loading:顯示骨架', () => {
 		vi.mocked(getAttendance).mockReset();
 		vi.mocked(getAttendance).mockReturnValue(new Promise(() => {}));

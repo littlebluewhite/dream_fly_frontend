@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
 import SettingsPage from './+page.svelte';
 import type { Coach } from '$lib/coach/data';
-import { getSettings } from '$lib/coach/api';
+import { getSettings, saveSettings } from '$lib/coach/api';
+import { toasts } from '$lib/coach/stores';
 
-vi.mock('$lib/coach/api', () => ({ getSettings: vi.fn() }));
+vi.mock('$lib/coach/api', () => ({ getSettings: vi.fn(), saveSettings: vi.fn() }));
 
 /* 刻意與真 seed COACH 相異的 fixture — ProfileTab/CredentialsTab/SecurityTab 三個
  * 分頁元件原本各自 module-scope import COACH(元件樹檢查揪出的問題);現在改由此頁
@@ -77,6 +79,22 @@ describe('/coach/settings (+page)', () => {
 		await fireEvent.click(getByText('帳號安全'));
 		const txt = container.textContent ?? '';
 		expect(txt).toContain(FIXTURE_COACH.lastLogin);
+	});
+});
+
+describe('/coach/settings — 儲存個人資料(C6)', () => {
+	it('儲存成功後頁首跟著顯示新姓名;成功 toast 不再宣稱「下次登入時生效」', async () => {
+		const saved: Coach = { ...FIXTURE_COACH, name: '改名教練', full: '改名教練 教練' };
+		vi.mocked(saveSettings).mockResolvedValue({ coach: saved });
+		const { findByText, getByText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+
+		await fireEvent.click(getByText('儲存變更'));
+
+		expect(await findByText('改名教練 教練')).toBeInTheDocument();
+		const toast = get(toasts).find((t) => t.title === '個人資料已儲存');
+		expect(toast).toBeDefined();
+		expect(JSON.stringify(toast)).not.toContain('下次登入');
 	});
 });
 

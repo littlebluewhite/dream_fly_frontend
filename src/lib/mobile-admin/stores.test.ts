@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { ApiError } from '$lib/api/client';
+import { ApiError, api } from '$lib/api/client';
+import { authStore } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
 import { createReadState } from '$lib/stores/read-state';
 import {
 	adminUnread,
@@ -57,6 +59,12 @@ import {
 // mockResolvedValueOnce/mockRejectedValueOnce 覆寫單次行為(race 測試等)。
 // R12 Task 3：ops store 自有寫入動詞(addMember/saveCourse/markOrderPaid…)內部呼叫的
 // 寫入端點一併 mock——否則 passthrough 會打到真 api()。
+// 真 authStore 的 login/logout 走 $lib/api/client 的 api()——只替換這一支(C6 換帳號測試用)。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
 vi.mock('./api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./api')>();
 	return {
@@ -380,6 +388,38 @@ describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
 		await refreshMessages();
 		expect(get(messages)).toEqual(MESSAGES);
 		// restore for other tests
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messagesHydrated.set(false);
+	});
+
+	it('教練 A 水合 → 換教練 B 登入 → 對話列表重置回種子、旗標翻回 false,B 會重新水合(C6:不再看到 A 的對話)', async () => {
+		const user = (id: string, email: string) => ({
+			id, email, name: '教練' + id, phone: null, phone_verified: false, avatar_url: null,
+			is_active: true, created_at: '2024-01-01T00:00:00Z', roles: ['coach']
+		});
+		const login = async (u: ReturnType<typeof user>) => {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({ 'POST /auth/logout': undefined, 'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: u } })
+			);
+			await authStore.login(u.email, 'pw');
+		};
+		await login(user('ua', 'a@dreamfly.test'));
+		const A_THREADS = [{ ...MESSAGES[0], id: 'a-thread', from: '教練 A 的學員家長' }];
+		vi.mocked(getMessages).mockResolvedValueOnce(A_THREADS);
+		await hydrateMessages();
+		expect(get(messages)).toEqual(A_THREADS);
+		expect(get(messagesHydrated)).toBe(true);
+
+		await login(user('ub', 'b@dreamfly.test'));
+
+		expect(get(messages)).toEqual(MESSAGES);
+		expect(get(messagesHydrated)).toBe(false);
+		const calls = vi.mocked(getMessages).mock.calls.length;
+		await hydrateMessages();
+		expect(vi.mocked(getMessages).mock.calls.length).toBe(calls + 1);
+		expect(get(messagesHydrated)).toBe(true);
+		// restore for other tests
+		await authStore.logout();
 		messages.set(MESSAGES.map((m) => ({ ...m })));
 		messagesHydrated.set(false);
 	});

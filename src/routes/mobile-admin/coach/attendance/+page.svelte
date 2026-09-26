@@ -33,7 +33,7 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAttendance, saveAttendance, type AttClassFull, type AttRow, type AttDefault } from '$lib/mobile-admin/api';
+  import { getAttendance, saveAttendance, coachLoadErrorCopy, GENERIC_LOAD_ERROR, type AttClassFull, type AttRow, type AttDefault } from '$lib/mobile-admin/api';
   import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { tally } from '$lib/coach/attendance-tally';
 
@@ -66,6 +66,8 @@
   let noteFor: AttRow | null = null;
   let noteText = '';
 
+  let { errorTitle, errorBody } = GENERIC_LOAD_ERROR;
+
   const gate = createLoadGate({
     fetch: getAttendance,
     onData: (d) => {
@@ -73,6 +75,9 @@
       if (d.failedClasses.length) {
         toasts.notify('warning', '部分場次名冊載入失敗', d.failedClasses.join('、') + ' 暫時無法點名，請稍後重試。');
       }
+    },
+    onError: (e) => {
+      ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
   });
   onMount(() => {
@@ -136,7 +141,7 @@
   }
 </script>
 
-<LoadGate {gate}>
+<LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
   <div class="df-scroll df-view" data-testid="attendance-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;" slot="loading">
     <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:9px;">
       {#each [0, 1, 2, 3] as i (i)}

@@ -5,8 +5,8 @@
  * 一律用真實實作，這樣才是「後端形狀進、UI 形狀出」的端對端斷言，同 admin/api.test.ts
  * 的作法。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { get } from 'svelte/store';
 import {
-	myCoachProfile,
 	getDashboard,
 	getToday,
 	getAttendance,
@@ -29,6 +29,7 @@ import {
 import { api } from '$lib/api/client';
 import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { authStore } from '$lib/stores/authStore';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -58,25 +59,84 @@ const MAPPED_COACH = {
 	chips: ['國家級教練證'], registered: '2019-08-15', lastLogin: '2026-07-04 08:42'
 };
 
-beforeEach(() => {
-	vi.mocked(api).mockReset();
+/* 真 authStore 登入登出的 harness(R13 Task 7·C6):教練身分由模組內的 session 閘門快取,
+ * identity 由真 login/logout 驅動。每個測試先登出再以 ME 登入 → 閘門重置,測試之間不共用
+ * 快取。登入完 mockClear,之後各測試自行掛 fakeRouter(沒登記的請求一律 throw)。 */
+type TestUser = { id: string; email: string; name: string; phone: string | null; last_login: string | null; created_at: string };
+const asLoginUser = (u: TestUser) => ({ ...u, phone_verified: false, avatar_url: null, is_active: true, roles: ['coach'] });
+const authRoutes = (u: TestUser) => ({
+	'POST /auth/logout': undefined,
+	'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: asLoginUser(u) }
 });
 
-describe('myCoachProfile — GET /users/me → GET /coaches → find(user_id === me.id)', () => {
-	it('找到對應教練時回傳該筆 ApiCoach', async () => {
+async function loginAs(u: TestUser) {
+	vi.mocked(api).mockImplementation(fakeRouter(authRoutes(u)));
+	await authStore.login(u.email, 'pw');
+	vi.mocked(api).mockClear();
+}
+
+beforeEach(async () => {
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));
+	await authStore.logout();
+	await loginAs(ME);
+});
+
+const callCount = (path: string, method = 'GET') =>
+	vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
+
+describe('教練身分:每個 session 只解析一次(C6)', () => {
+	it('連續兩個 getter 只打一次 GET /users/me + GET /coaches', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH, MY_COACH] })
+			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH], 'GET /sessions/today': [] })
 		);
-		const coach = await myCoachProfile();
-		expect(coach).toEqual(MY_COACH);
+
+		await getSettings();
+		await getToday();
+
+		expect(callCount('/users/me')).toBe(1);
+		expect(callCount('/coaches')).toBe(1);
 	});
 
-	it('找不到對應教練時回傳 null', async () => {
+	it('併發的 getter 共用同一支在飛解析', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
+			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH], 'GET /sessions/today': [] })
 		);
-		const coach = await myCoachProfile();
-		expect(coach).toBeNull();
+
+		await Promise.all([getSettings(), getToday()]);
+
+		expect(callCount('/users/me')).toBe(1);
+		expect(callCount('/coaches')).toBe(1);
+	});
+
+	it('A → B 換帳號:B 重新解析,不沿用 A 的教練身分', async () => {
+		const USER_B = { ...ME, id: 'u2', email: 'b@dreamfly.com.tw', name: '陳建宏' };
+		let me: typeof ME = ME;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...authRoutes(USER_B), 'GET /users/me': () => me, 'GET /coaches': [MY_COACH, OTHER_COACH] })
+		);
+		expect((await getSettings()).coach.role).toBe('資深體操教練');
+
+		me = USER_B;
+		await authStore.login(USER_B.email, 'pw');
+		const d = await getSettings();
+
+		expect(d.coach.name).toBe('陳建宏');
+		expect(d.coach.role).toBe('跑酷教練');
+		expect(callCount('/users/me')).toBe(2);
+		expect(callCount('/coaches')).toBe(2);
+	});
+
+	it('CoachNotFoundError 之後重試會重新解析(管理員綁定教練檔案後重試即成功)', async () => {
+		let coaches = [OTHER_COACH];
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': () => coaches }));
+		await expect(getSettings()).rejects.toThrow(CoachNotFoundError);
+
+		coaches = [MY_COACH, OTHER_COACH];
+		const d = await getSettings();
+
+		expect(d.coach).toEqual(MAPPED_COACH);
+		expect(callCount('/coaches')).toBe(2);
 	});
 });
 
@@ -94,7 +154,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 		attendance_rate_30d: 0.8
 	};
 
-	it('coach 由 myCoachProfile() 對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room 用 venue(null → 「—」)，level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
+	it('coach 由教練身分(GET /users/me + GET /coaches)對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room 用 venue(null → 「—」)，level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0)); // 09:30 落在 s1 場次(09:00–10:00)中
 		try {
@@ -177,7 +237,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 		expect(d.conversations).toHaveLength(1);
 	});
 
-	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError(不會先打 GET /reports/coach)', async () => {
+	it('找不到教練檔案時拋出 CoachNotFoundError(不會先打 GET /reports/coach)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
@@ -241,7 +301,7 @@ describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabe
 		expect(d.todayClasses).toEqual([]);
 	});
 
-	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
+	it('找不到教練檔案時拋出 CoachNotFoundError', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
@@ -286,7 +346,7 @@ describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 		}
 	});
 
-	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
+	it('找不到教練檔案時拋出 CoachNotFoundError', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
@@ -305,7 +365,7 @@ describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀',
 		expect(d.coach).toEqual(MAPPED_COACH);
 	});
 
-	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
+	it('找不到教練檔案時拋出 CoachNotFoundError', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
@@ -313,25 +373,40 @@ describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀',
 	});
 });
 
-describe('saveSettings — PATCH /users/me，寫入後重新取得最新 Coach 資料', () => {
-	it('送出 { name, phone }；回傳依最新 GET /users/me + GET /coaches 重新映射的 Coach', async () => {
-		const updated = { ...ME, name: '林雅婷(改)', phone: '0900-000-000' };
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'PATCH /users/me': updated,
-				'GET /users/me': updated,
-				'GET /coaches': [MY_COACH]
-			})
-		);
+describe('saveSettings — PATCH /users/me,以回應直接更新教練身分快取(不再重抓)', () => {
+	const updated = { ...ME, name: '林雅婷改', phone: '0900-000-000' };
 
-		const d = await saveSettings({ name: '林雅婷(改)', phone: '0900-000-000' });
+	it('送出 { name, phone };回傳以 PATCH 回應映射的 Coach,並同步 authStore 的 member', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await getSettings();
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /users/me': asLoginUser(updated) }));
+
+		const d = await saveSettings({ name: '林雅婷改', phone: '0900-000-000' });
 
 		expect(api).toHaveBeenCalledWith('/users/me', {
 			method: 'PATCH',
-			body: JSON.stringify({ name: '林雅婷(改)', phone: '0900-000-000' })
+			body: JSON.stringify({ name: '林雅婷改', phone: '0900-000-000' })
 		});
-		expect(d.coach.name).toBe('林雅婷(改)');
-		expect(d.coach.phone).toBe('0900-000-000');
+		expect(d.coach).toEqual({ ...MAPPED_COACH, name: '林雅婷改', full: '林雅婷改 教練', phone: '0900-000-000' });
+		expect(get(authStore).member?.name).toBe('林雅婷改');
+	});
+
+	it('PATCH 成功而 GET /coaches 會失敗時仍回成功(修掉「已存卻顯示儲存失敗」);之後的 getter 讀到新姓名、不重抓', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await getSettings();
+		vi.mocked(api).mockClear();
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'PATCH /users/me': asLoginUser(updated),
+				'GET /users/me': new Error('boom'),
+				'GET /coaches': new Error('boom')
+			})
+		);
+
+		await expect(saveSettings({ name: '林雅婷改' })).resolves.toMatchObject({ coach: { name: '林雅婷改' } });
+		expect((await getSettings()).coach.name).toBe('林雅婷改');
+		expect(callCount('/coaches')).toBe(0);
+		expect(callCount('/users/me')).toBe(0);
 	});
 });
 
@@ -422,7 +497,7 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 		expect(d.failedClasses).toEqual([]);
 	});
 
-	it('myCoachProfile 找不到教練時拋出 CoachNotFoundError', async () => {
+	it('找不到教練檔案時拋出 CoachNotFoundError', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [OTHER_COACH] })
 		);
@@ -507,10 +582,15 @@ describe('getConversations — GET /conversations/me（§3.21，純陣列不分�
 });
 
 describe('getThread — GET /conversations/{id}/messages?per_page=100（§3.21，同 getPendingLeaveRequests 的 per_page=100 穿透模式）', () => {
-	it('who 由 sender_id 與 GET /users/me 比對；API 依 created_at 新到舊，映射後反轉為舊到新；total 穿透', async () => {
+	// 自己的 id 讀 authStore(登入者本人),不再 GET /users/me——fakeRouter 未登記該路由,
+	// 一旦呼叫就 throw(C6)。
+	beforeEach(async () => {
+		await loginAs(ME2);
+	});
+
+	it('who 由 sender_id 與 authStore 的登入者 id 比對(不打 GET /users/me)；API 依 created_at 新到舊，映射後反轉為舊到新；total 穿透', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /users/me': ME2,
 				'GET /conversations/c1/messages?per_page=100': {
 					messages: [
 						{ id: 'm2', sender_id: 'u9', body: '好的，謝謝老師', created_at: '2026-07-05T09:16:00Z', read_at: null },
@@ -533,7 +613,6 @@ describe('getThread — GET /conversations/{id}/messages?per_page=100（§3.21�
 	it('total 大於本頁筆數時原樣穿透（伺服器端總數，較舊訊息被截斷）', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /users/me': ME2,
 				'GET /conversations/c1/messages?per_page=100': {
 					messages: [{ id: 'm1', sender_id: 'u1', body: '嗨', created_at: '2026-07-05T09:10:00Z', read_at: null }],
 					total: 150, page: 1, per_page: 100
@@ -550,7 +629,6 @@ describe('getThread — GET /conversations/{id}/messages?per_page=100（§3.21�
 	it('沒有訊息時回傳空陣列', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /users/me': ME2,
 				'GET /conversations/c1/messages?per_page=100': { messages: [], total: 0, page: 1, per_page: 100 }
 			})
 		);
@@ -562,7 +640,6 @@ describe('getThread — GET /conversations/{id}/messages?per_page=100（§3.21�
 	it('是 async 接縫(回 Promise)', () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
-				'GET /users/me': ME2,
 				'GET /conversations/c1/messages?per_page=100': { messages: [], total: 0, page: 1, per_page: 100 }
 			})
 		);

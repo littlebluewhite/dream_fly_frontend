@@ -6,7 +6,12 @@ import { getAttendance, saveAttendance } from '$lib/mobile-admin/api';
 import { toasts } from '$lib/mobile-admin/stores';
 import type { AttClassFull, AttRow } from '$lib/mobile-admin/api';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getAttendance: vi.fn(), saveAttendance: vi.fn() }));
+// 載入錯誤文案單源用真的(本頁經 $lib/mobile-admin/api 轉出取用,同工作台/個人設定頁)。
+vi.mock('$lib/mobile-admin/api', async () => ({
+	...(await import('$lib/coach/load-error-copy')),
+	getAttendance: vi.fn(),
+	saveAttendance: vi.fn()
+}));
 
 const rosterOf = (over: Partial<AttRow>[]): AttRow[] =>
 	over.map((o, i) => ({ n: String(i + 1).padStart(2, '0'), name: '測試學員' + i, initial: '測', color: '#000', mid: 'T-00' + i, def: 'present', ...o }));
@@ -117,6 +122,15 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		vi.mocked(getAttendance).mockRejectedValue(new Error('boom'));
 		const { findByText } = render(AttendancePage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
+	});
+
+	it('CoachNotFoundError 顯示「此帳號未綁定教練檔案」而非泛用載入失敗(C6)', async () => {
+		const notFound = new Error('此帳號未綁定教練檔案');
+		notFound.name = 'CoachNotFoundError';
+		vi.mocked(getAttendance).mockRejectedValue(notFound);
+		const { findByText, queryByText } = render(AttendancePage);
+		expect(await findByText('請聯繫系統管理員協助設定教練檔案。')).toBeInTheDocument();
+		expect(queryByText('載入失敗')).toBeNull();
 	});
 
 	it('今日無場次(classes 空集合)顯示空狀態，不當機', async () => {
