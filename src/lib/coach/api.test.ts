@@ -307,12 +307,28 @@ describe('getToday — 同 getDashboard 的今日場次來源，只回 todayLabe
 		);
 		await expect(getToday()).rejects.toThrow(CoachNotFoundError);
 	});
+
+	it('venue 為 null 時 room 投影為「—」(mapTodayClass 經 toTodaySession，同 mapAttendanceClass 慣例)', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /users/me': ME,
+				'GET /coaches': [MY_COACH],
+				'GET /sessions/today': [
+					{ id: 's1', course_id: 'c1', course_name: '兒童體操初級班', start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 9, venue: null }
+				]
+			})
+		);
+
+		const d = await getToday();
+
+		expect(d.todayClasses[0].room).toBe('—');
+	});
 });
 
 // C4：牆鐘語意 5 例已搬到 $lib/domain/sessions.test.ts(deriveSessionStatus 本體與
-// wallClockTime 私有輔助函式一併移入該檔，語意零改)。C5：coach/api.ts 不再 re-export
-// deriveSessionStatus(僅內部使用，見 mapTodayClass/mapAttendanceClass)——上方的
-// re-export 參照 pin 隨之退役，沒有其他消費者。
+// wallClockTime 私有輔助函式一併移入該檔，語意零改)。F1(R13 終審)起 mapTodayClass/
+// mapAttendanceClass 改經 toTodaySession 投影(C5)，coach/api.ts 不再直接呼叫
+// deriveSessionStatus——上方的 re-export 參照 pin 隨之退役，沒有其他消費者。
 
 describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 	it('day_of_week 0–6 對映 Sun..Sat key；HH:MM:SS 裁切為 HH:MM；只保留 is_available 的時段', async () => {

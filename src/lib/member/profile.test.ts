@@ -313,6 +313,22 @@ describe('saveProfile', () => {
 		}
 		expect(patchBodies()).toEqual([]);
 	});
+
+	it('未改動的姓名/電話即使不合法也不擋其他欄位的存檔(F3:Google 註冊姓名可能落在 2–100 之外)', async () => {
+		route({ 'GET /users/me': me({}, { ...USER_A, name: 'J' }) });
+		await authStore.logout();
+		await loginAs({ ...USER_A, name: 'J' });
+		vi.mocked(api).mockClear();
+		route({
+			'GET /users/me': me({}, { ...USER_A, name: 'J' }),
+			'PATCH /users/me': me({ birth_date: '2013-05-18' }, { ...USER_A, name: 'J' })
+		});
+
+		const outcome = await saveProfile({ name: 'J', phone: USER_A.phone, birth: '2013-05-18' });
+
+		expect(outcome).toEqual({ kind: 'saved' });
+		expect(patchBodies()).toEqual([{ birth_date: '2013-05-18' }]);
+	});
 });
 
 describe('換帳號:A 排隊的寫入跳過', () => {

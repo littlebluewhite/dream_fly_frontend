@@ -167,8 +167,9 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
   `SESSION_STATUS[t.state]` 的投影。
 - `coach/api.ts` 刪本地 `ApiTodaySession`,改 import wire;`mapTodayClass`/`mapAttendanceClass` 的
   `room` 改讀真 `venue`(原本寫死 `''` 加「P2 無場地欄位」註解)。`deriveSessionStatus` 的活 re-export
-  失去消費者,退役。coach 兩支 mapper 的目標形狀另帶 `level`/`cat`,仍各自投影,只共用 wire 型別與
-  `deriveSessionStatus`。
+  失去消費者,退役(R13 終審修波起,`mapTodayClass`/`mapAttendanceClass` 兩支 mapper 改經
+  `toTodaySession` 投影,不再直接呼叫 `deriveSessionStatus`)。coach 兩支 mapper 的目標形狀另帶
+  `level`/`cat`,疊在 `toTodaySession` 投影結果上,不重算 hhmm/venue 預設值/狀態。
 - mobile-admin:`TodayRow` 加 `state`(型別 `TodayState`,自 `$lib/admin/data` type-only import——
   admin 的 `TodayClass.state` 本來就是這個 5 值超集,避免窄化 cast);`mapTodayClassToRow` 收窄鍵
   `TodayStatus` 直接索引 `SESSION_STATUS`,不再做寬鍵 fallback;`mapAdminTodayRow` 把 `state` 帶過去;
@@ -304,17 +305,28 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
   顯示,不是紅字(`Select` 沒有 `error` prop)。
 - **教練身分快取到登出為止**:管理員改了教練資料,本人要重新登入才看得到。身分切換的同一個
   microtask 窗內,理論上可能誤報一次 `CoachNotFoundError`(旗標翻回 false,下次多抓一次,無害)。
+- **身兼會員的教練,改名後 `$memberProfile` 顯示舊名**:`coach/saveSettings` 存檔成功後呼叫
+  `authStore.syncUser`,`Topbar` 等讀 authStore 的地方立刻更新;但 `member/profile.ts` 自己快取的
+  `me` 沒有被同步刷新,若這位教練同時也用會員 app,`$memberProfile` 要等重新登入或整頁刷新(重新
+  水合)才會看到新名字。兩個 module 的快取各自為政,同上一點的 gate 去重收斂候選,一併留待日後。
 - **會員資料的幾個小缺口**:
   - `EditProfileSheet` 送出的是開啟時快照的 4 個偏好,期間若在別處切過偏好,存檔可能把舊值寫回。
-  - `profileEditError` 也檢查沒改的欄位:舊資料裡不合規的姓名/電話會擋住只改生日的存檔。
+  - ~~`profileEditError` 也檢查沒改的欄位:舊資料裡不合規的姓名/電話會擋住只改生日的存檔。~~
+    已修:R13 終審修波(F3)起只在 trim 後的值真的與目前值不同時才驗證。
   - 試上預約的電話預填只在會員資料已水合時才有值(本畫面刻意不為預填多打一支 GET)。
   - 存檔失敗一律顯示連線錯誤,422 也一樣;生日輸入沒有 `max`。
   - 換帳號後被跳過的寫入,`setPref` 回 `rolledBack`、`saveProfile` 回 `failed`(outcome 型別沒有
     skipped,呼叫端此時通常已卸載)。
 - **`gate.hydrate()` 不合併併發呼叫**:`profile.ts` 與 `coach/api.ts` 各自加了 `inflight`。若出現
   第三處,再考慮收進 session 閘門。
-- **`toTodaySession` 只有一個 production 呼叫端**(admin 的 `mapTodaySession`);coach 兩支 mapper
-  仍自行投影同樣的欄位。wire 型別已單源,投影是否再收斂留待日後。
+- **未來候選:把在飛 hydrate 去重收進 `createSessionGate`**(緊接下方 `pageEntry()` 候選)。
+  `profile.ts` 的 `hydrateProfile()` 與 `coach/api.ts` 的 `hydrateIdentity()` 各自手寫了一份一模
+  一樣的 `inflight` 包裝(見上一點);若閘門本身直接吃下這段去重,兩處呼叫端都能刪掉自己的
+  wrapper。
+- ~~**`toTodaySession` 只有一個 production 呼叫端**(admin 的 `mapTodaySession`);coach 兩支 mapper
+  仍自行投影同樣的欄位。wire 型別已單源,投影是否再收斂留待日後。~~ 已收斂:R13 終審修波起
+  `coach/api.ts` 的 `mapTodayClass`/`mapAttendanceClass` 改經 `toTodaySession` 投影,三 surface
+  同源。
 - **`OrderSheet` 的 `pointsShortfall` 分支目前走不到**(`pending → paid` 不做點數扣回),為 outcome
   窮盡而保留。
 - **mobile-admin `data.ts` 新增對 `$lib/admin/data` 的 type-only import**(`TodayState`),理由見 §6。

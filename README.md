@@ -3,10 +3,11 @@
 Dream Fly（夢飛）是一所**體操與競技啦啦學苑**的前端專案，採 **SvelteKit 2 + Svelte 5（runes-era）+
 TypeScript（strict）** 開發，建置工具為 Vite，測試為 Vitest + Testing Library。後端是姊妹 repo
 **`dream_fly_backend`**（Rust/Axum + PostgreSQL + Redis），提供 `/api/v1` REST API；登入、購物車、結帳、
-會員中心、後台、教練工作台，以及（Round 3 起）兩個 mobile surface 的 seam 目前都已接上真實 API。Mock
-僅保留在少數明確標註 **P2** 的角落（mobile 試上預約／設定頁 toast、會員/mobile 儀表板統計數字、
-mobile-admin 身分小卡與僅第一頁的列表、admin/mobile-admin 教練與場館票券寫入表單、系統設定切換等——這些
-後端尚未提供對應端點，或純屬裝飾性質），完整清單見 [`docs/adr/0006`](docs/adr/0006-real-backend-integration.md)。
+會員中心、後台、教練工作台，以及兩個 mobile surface 的 seam 目前都已接上真實 API。Mock
+僅保留在少數明確標註 **P2** 的角落（mobile-admin 身分小卡、僅第一頁的列表、唯讀場館畫面與示範用票券
+編輯 toast——desktop admin 對應畫面已接真後端；admin 設定頁本機專用的登入裝置清單）——這些後端尚未
+提供對應端點，或本身就無需持久化（session 管理不在範圍內）。會員資料寫入自 R13（`docs/adr/0023`）起已
+接真後端。完整清單見 [`docs/adr/0006`](docs/adr/0006-real-backend-integration.md)。
 
 ## 快速開始（雙 repo 啟動順序）
 

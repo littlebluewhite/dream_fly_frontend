@@ -470,7 +470,8 @@ R8 C4 增補與 `docs/adr/0018` §4 記的承接形,R13 Task 6 改了兩處:
   寬鍵 fallback `(… as Record<string, …>)[t.status] ?? ['neutral', '']` 退役,漏鍵變成編譯錯誤。
   `TodayRow` 另帶 `state`,首頁「上課中」橫幅改依 `state === 'live'` 判斷,不再比對 label 字面。
 - **coach**:`data.ts` 的 `CLASS_STATUS` 合成 label 不變。`coach/api.ts` 對 `deriveSessionStatus`
-  的活 re-export 失去消費者,退役;`mapTodayClass` 仍在本地呼叫它。
+  的活 re-export 失去消費者,退役;`mapTodayClass` 當時仍在本地呼叫它(R13 終審修波起改經
+  `toTodaySession` 投影,見 `docs/adr/0023` 增補)。
 
 ### 3. `domain/sessions.ts` 新增 `toTodaySession`;`domain/order-detail.ts` 入列
 

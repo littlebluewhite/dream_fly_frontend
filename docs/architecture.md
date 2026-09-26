@@ -106,8 +106,9 @@ was hand-copied in member/mine and mobile's `MyCourseDetail`. It lives in an ent
 pure function (`docs/adr/0022`). R13 (`docs/adr/0023`) added two more residents of that kind:
 `domain/sessions.ts`'s `toTodaySession(s, now)` projects the wire `ApiTodaySession` (now single-sourced
 in `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the same
-`deriveSessionStatus` state — admin's `mapTodaySession` builds on it, while coach's mappers still
-project their own richer shape and share only the wire type and `deriveSessionStatus`; and
+`deriveSessionStatus` state — admin's `mapTodaySession` builds on it, and (since the R13 final-review
+fix wave) so do coach's `mapTodayClass`/`mapAttendanceClass`, which layer their own richer `level`/`cat`
+fields on top instead of re-deriving `hhmm`/venue defaults/status themselves; and
 `domain/order-detail.ts`'s `orderDetailRows(o)` is `class-detail.ts`'s sibling for orders — the 13-row
 (14 with a refund reason) detail list `admin`'s `OrderDialog` and `mobile-admin`'s `OrderSheet` used to
 inline separately, typed structurally so it takes both `Order` and `OrderRow`.

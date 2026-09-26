@@ -98,17 +98,24 @@ function toProfile(u: ApiMe): MemberProfile {
 }
 
 /** 表單規則照後端 UpdateProfileRequest:姓名 2–100、電話 8–20(皆以 trim 後計);後端
- *  沒有清空電話的路徑,所以原本有電話的人不能留白。回傳繁中錯誤文案,合法回 null。
- *  兩個編輯 dialog 用它即時提示,saveProfile 也再擋一次。 */
+ *  沒有清空電話的路徑,所以原本有電話的人不能留白。只在值真的改變時才驗證——兩個編輯
+ *  dialog 的 Draft 一律帶入目前值(即使使用者沒有動那個欄位),未改動的欄位不該擋住其他
+ *  欄位的存檔(F3:Google 註冊建立的姓名可能落在 2–100 之外,見 backend auth/service.rs,
+ *  這類使用者原本連生日/偏好都存不了)。回傳繁中錯誤文案,合法回 null。兩個編輯 dialog
+ *  用它即時提示,saveProfile 也再擋一次。 */
 export function profileEditError(edit: ProfileEdit, current: MemberProfile | null): string | null {
 	if (edit.name !== undefined) {
-		const n = edit.name.trim().length;
-		if (n < 2 || n > 100) return '姓名需為 2–100 個字';
+		const name = edit.name.trim();
+		if (name !== current?.name) {
+			if (name.length < 2 || name.length > 100) return '姓名需為 2–100 個字';
+		}
 	}
 	if (edit.phone !== undefined) {
-		const n = edit.phone.trim().length;
-		if (n === 0) return current?.phone ? '聯絡電話無法清空' : null;
-		if (n < 8 || n > 20) return '聯絡電話需為 8–20 碼';
+		const phone = edit.phone.trim();
+		if (phone !== (current?.phone ?? '')) {
+			if (phone.length === 0) return current?.phone ? '聯絡電話無法清空' : null;
+			if (phone.length < 8 || phone.length > 20) return '聯絡電話需為 8–20 碼';
+		}
 	}
 	return null;
 }

@@ -462,7 +462,8 @@ R12 增補的其餘結論不變:mark 仍發生在 PATCH 落定之後,沒有在�
 ### 3. §4(C4)的兩處承接形已退役
 
 - **`coach/api.ts` 的 `deriveSessionStatus` 活 re-export**:production 零消費者(只剩自己的測試釘),
-  R13 Task 6 退役。`mapTodayClass` 仍在本地呼叫它。
+  R13 Task 6 退役。`mapTodayClass` 當時仍在本地呼叫它(R13 終審修波起改經 `toTodaySession` 投影,
+  見 `docs/adr/0023` 增補)。
 - **`mobile-admin/api.ts` 的寬鍵 fallback**:`mapTodayClassToRow` 改收窄鍵 `TodayStatus`,直接
   `SESSION_STATUS[t.status]`,漏鍵成為編譯錯誤。
 - **admin** 改經 `toTodaySession` 取 `state` 再索引 `SESSION_STATUS`。canonical 標籤「上課中」與
