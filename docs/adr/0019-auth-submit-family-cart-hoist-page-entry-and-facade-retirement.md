@@ -360,3 +360,10 @@ R12 增補把「C4 判準句是否延伸到 `mobile/stores.ts` 的 store/動作�
 R14 Task 1(候選 F6)的答案:**C4 判準句仍只適用於 `data.ts` facade**;`docs/adr/0014` §1 管的是 import
 方向,保留;真正退役的是身分釘與源路徑白名單——它們是「`vi.mock` 攔得到」的接線證明,三個按路徑 mock
 的測試改走 fetch adapter 之後失去對象。seam 的轉出本身不退役,判準句的適用範圍不必擴大。
+
+## 增補(2026-09-28,架構深化 R14 補修):進場包行為釘併入讀取器探針
+
+R14 增補 §1「測試守衛的改寫」記的兩支行為釘(`markMutated()` 之後 `hydrate.gen()` +1;
+`hydrate.pendingSettle()` 有尾流回 promise、靜止回 `undefined`)已自 describe「pageEntry(plain gate)」
+刪除(`73f0f34`):斷言完整併入同檔 `docs/adr/0020`/`0021` 的讀取器探針(同樣經 `pageEntry().hydrate`
+讀)。spread 整合釘仍住該 describe。見 `docs/adr/0024`「ADR 點名的測試」表。

@@ -264,12 +264,16 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
   沒有 `invalidate()` 呼叫者,走不到。
 - **其他 minor**:
   - 登出發生在暖機途中時,會記一筆無害的「通知 hydrate 失敗」log。
-  - 沒有測試釘住「admin 進教練分區會暖訊息」這條裁決。
-  - 兩個 TabBar 的「開機沒有角標」測試依賴執行順序,應改 `vi.resetModules` 後重新 import。
+  - 沒有測試釘住「admin 進教練分區會暖訊息」這條裁決。**已解**(R14 補修 `56806b4`:
+    `src/routes/mobile-admin/layout.test.ts` 新增此釘)。
+  - 兩個 TabBar 的「開機沒有角標」測試依賴執行順序,應改 `vi.resetModules` 後重新 import。**已解**
+    (R14 補修 `56806b4`)。
   - `createOwnedHydrationGate` 是公開匯出,「只給 session-gate 用」只寫在註解。
-  - controller 內部名為 `machine` 的 store 現在也帶 coupon/codeErr。
-  - `confirmPay` 與 `hasChargeable` 各查一次 `lines.length`。
-  - `hydration-gate.test.ts` 的 gen/pendingSettle 釘與改寫過的舊釘有部分重疊。
+  - controller 內部名為 `machine` 的 store 現在也帶 coupon/codeErr。**已解**(R14 補修 `93d65a6`:更名 `state`)。
+  - `confirmPay` 與 `hasChargeable` 各查一次 `lines.length`。**已解**(R14 補修 `93d65a6`:同讀一支
+    `hasChargeable(lines)`)。
+  - `hydration-gate.test.ts` 的 gen/pendingSettle 釘與改寫過的舊釘有部分重疊。**已解**(R14 補修 `73f0f34`:
+    刪除重覆的兩支,斷言由 `docs/adr/0020`/`0021` 的讀取器探針涵蓋)。
 
 ## ADR 點名的測試:改寫,不刪(舊 → 新)
 
