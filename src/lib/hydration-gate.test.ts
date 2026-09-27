@@ -608,31 +608,6 @@ describe('pageEntry(plain gate)', () => {
 		page.destroy();
 	});
 
-	it('hydrate.gen 讀的是閘門自己的世代帳:markMutated() 之後 +1', () => {
-		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
-		const entry = gate.pageEntry();
-
-		const before = entry.hydrate.gen();
-		gate.markMutated();
-
-		expect(entry.hydrate.gen()).toBe(before + 1);
-	});
-
-	it('hydrate.pendingSettle 讀的是閘門自己的尾流帳:有尾流回 promise,靜止回 undefined', async () => {
-		const tail = createDeferred<void>();
-		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
-		const entry = gate.pageEntry();
-
-		expect(entry.hydrate.pendingSettle()).toBeUndefined();
-		gate.markMutated(tail.promise);
-		const wait = entry.hydrate.pendingSettle();
-		expect(wait).toBeInstanceOf(Promise);
-
-		tail.resolve();
-		await wait;
-		expect(entry.hydrate.pendingSettle()).toBeUndefined();
-	});
-
 	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {
 		const store = writable<{ v: number } | null>(null);
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: (d) => store.set(d) });

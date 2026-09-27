@@ -276,7 +276,7 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
 | ADR | 位置 | 舊 | 新 |
 | --- | --- | --- | --- |
 | `docs/adr/0017` restored 開機 | `src/lib/session-gate.test.ts` | 「restored 開機單觸發」:reset 恰一次 | 「restored 開機零觸發」:reset 不觸發、store 保留開機值;另加「reset 讀的 let 宣告在 factory 之後也不炸」 |
-| `docs/adr/0019` C3 進場包釘 | `session-gate.test.ts` → `src/lib/hydration-gate.test.ts` | `hydrate.flag`/`into`/`gen`/`pendingSettle` 的同參照釘、spread 整合釘 | describe「pageEntry(plain gate)」的行為釘:`markMutated()` 之後 `hydrate.gen()` +1、`hydrate.pendingSettle()` 有尾流回 promise、靜止回 `undefined`;spread 整合釘搬來。session-gate 只留 epoch 專屬的 stale/retry 兩支,另加「session 閘門的 `pageEntry().fetch` 帶 epoch 核對」 |
+| `docs/adr/0019` C3 進場包釘 | `session-gate.test.ts` → `src/lib/hydration-gate.test.ts` | `hydrate.flag`/`into`/`gen`/`pendingSettle` 的同參照釘、spread 整合釘 | 行為釘:`markMutated()` 之後 `hydrate.gen()` +1、`hydrate.pendingSettle()` 有尾流回 promise、靜止回 `undefined`(修補輪併入下一列的讀取器探針,不另留重覆的兩支);spread 整合釘搬來 describe「pageEntry(plain gate)」。session-gate 只留 epoch 專屬的 stale/retry 兩支,另加「session 閘門的 `pageEntry().fetch` 帶 epoch 核對」 |
 | `docs/adr/0021`/`0020` 讀取器探針 | `src/lib/hydration-gate.test.ts` | 直接讀 `gate.mutationGen()`/`gate.pendingSettle()` | 改經 `pageEntry().hydrate.gen`/`.pendingSettle` 讀,斷言不變 |
 | `docs/adr/0016` C5 付款機 | `src/lib/member/checkout-controller.test.ts` | `confirmPay(input)` 以引數餵輸入 | 改用 `form` + writable 的 `lines`/`points` 驅動,斷言不變;另加 describe「結算輸入與預覽」 |
 
