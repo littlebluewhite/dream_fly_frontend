@@ -74,12 +74,13 @@ export { createCancelLeave } from '$lib/member/cancel-leave';
 // mobile surface 的 production 元件一律經這裡取用 member 側的共用 store 與動作，
 // 不再逐檔直取 $lib/member/*（foundation-contracts.test.ts 的 source-scan 契約
 // 釘住：$lib/mobile/{api,stores,data,auth}.ts 四個 seam 檔之外零 $lib/member
-// import）。源路徑必須精確 '$lib/member/stores'——sheet/overlay 測試 vi.mock 攔
-// 的就是這個字串（佈線證明手段），寫錯路徑 mock 靜默失效＝假綠；同參照保證由
-// stores.test.ts 的 identity pins 釘住。消費者：points/refreshPoints（CartSheet、
-// PointsScreen、account 頁）、pointsLedger/redeemReward/redeemRewardErrorMessage
-// （PointsScreen）、joinWaitlist/joinWaitlistErrorMessage（CourseDetailSheet、
-// 首頁、courses 頁）、leave 家族（LeaveSheet/MakeupSheet/MyCourseDetail）。
+// import）。消費者：points/refreshPoints（CartSheet、PointsScreen、account 頁）、
+// pointsLedger/redeemReward/redeemRewardErrorMessage（PointsScreen）、
+// joinWaitlist/joinWaitlistErrorMessage（CourseDetailSheet、首頁、courses 頁）、
+// leave 家族（LeaveSheet/MakeupSheet/MyCourseDetail，Task 1·架構深化 R14·F6 起
+// 三個測試改打 $lib/api/client + fakeRouter，不再 vi.mock 本檔——身分釘與白名單
+// 測試已隨之退役，單源正確性交由型別系統與 foundation-contracts 的 source-scan
+// 把關）。
 export {
 	points,
 	pointsLedger,

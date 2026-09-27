@@ -60,10 +60,11 @@ describe('route inventory', () => {
 describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/member 直取）', () => {
 	// mobile surface 的 production source（.test.ts/.fixture.svelte 已由 surfaceFiles
 	// 的既有 walker 排除）只允許 api/stores/data/auth 四個 seam 檔 import $lib/member
-	// ——其餘元件/頁面一律經 $lib/mobile/* 接縫取用。測試檔的直取（mobile/api.test.ts
-	// 與四個 sheet/overlay 測試的 vi.mock '$lib/member/stores' 等）是佈線證明手段，
-	// 明文豁免、不在本掃描範圍。掃 `from '$lib/member` 的 import/export-from 子句，
-	// 註解裡的路徑提及不會誤中。
+	// ——其餘元件/頁面一律經 $lib/mobile/* 接縫取用。測試檔本身不在 surfaceFiles 範圍內
+	// （已被 walker 排除），故 LeaveSheet/MakeupSheet/MyCourseDetail 等測試改走
+	// $lib/api/client + fakeRouter（Task 1·架構深化 R14·F6）後零 vi.mock
+	// '$lib/member/stores'，也與本掃描無關。掃 `from '$lib/member` 的
+	// import/export-from 子句，註解裡的路徑提及不會誤中。
 	const MOBILE_SEAM_FILES = ['src/lib/mobile/api.ts', 'src/lib/mobile/stores.ts', 'src/lib/mobile/data.ts', 'src/lib/mobile/auth.ts'].map(r);
 	const MOBILE_DIRS = ['src/lib/mobile', 'src/routes/mobile'].map((d) => r(d) + '/'); // 尾斜線：排除 mobile-admin
 	const MEMBER_DIR = r('src/lib/member');
@@ -90,20 +91,6 @@ describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/memb
 			.filter((f) => importSpecifiers(readFileSync(f, 'utf8')).some((s) => isMemberReach(f, s)))
 			.map((f) => f.replace(ROOT + '/', ''));
 		expect(offenders, `經 $lib/mobile 接縫取用，勿直取 $lib/member：${offenders.join(', ')}`).toEqual([]);
-	});
-
-	// codex R1：identity pin 驗「同參照」驗不出「繞道 barrel 之下的深模組」——若
-	// stores.ts 改從 $lib/member/leave 直接 re-export，參照仍同、但 sheet/overlay
-	// 測試的 vi.mock('$lib/member/stores') 會不再攔截。源路徑白名單補上這一角。
-	it('mobile/stores.ts 的 $lib/member 源路徑僅限白名單五模組（stores/checkout/checkout-controller/leave-form/cancel-leave）', () => {
-		// C2(R11)：checkout-controller 入列——CartSheet 手焊的結帳機退役，改與桌面
-		// CheckoutDialog 共用同一顆工廠（同 leave-form/cancel-leave 的雙生收斂前例）。
-		const ALLOWED = ['$lib/member/stores', '$lib/member/checkout', '$lib/member/checkout-controller', '$lib/member/leave-form', '$lib/member/cancel-leave'];
-		const storesFile = r('src/lib/mobile/stores.ts');
-		const offenders = importSpecifiers(readFileSync(storesFile, 'utf8'))
-			.filter((s) => isMemberReach(storesFile, s))
-			.filter((s) => !ALLOWED.includes(s));
-		expect(offenders, `mobile/stores.ts 出現白名單外的 member 源路徑：${offenders.join(', ')}`).toEqual([]);
 	});
 });
 

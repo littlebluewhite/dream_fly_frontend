@@ -8,5 +8,9 @@
  * 頁），這裡零複製、只轉手。consumeGoogleOauthState 不在這條轉手路徑上：
  * GoogleCallbackCard.svelte（mobile 與 member 共用的 callback 卡）直取
  * $lib/member/google-oauth（見該檔檔頭），Task 1(1.5) 隨死轉出一併退役
- * （ADR-0010「死值不留死出口」）。 */
+ * （ADR-0010「死值不留死出口」）。Task 1(架構深化 R14·F6)：本檔原有的
+ * identity pin 測試（auth.test.ts，釘住兩個轉手符號 toBe 同參照）已退役——
+ * 純轉手 re-export、零邏輯的一行檔案不需要執行期釘子；行為覆蓋見
+ * $lib/member/google-oauth.test.ts，登入頁佈線覆蓋見 routes/mobile/login 兩個
+ * page.test。 */
 export { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';

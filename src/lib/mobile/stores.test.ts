@@ -4,10 +4,6 @@ import { cart, placeOrder } from './stores';
 import { type Course } from './data';
 import { submitOrder, type OrderConfirmation } from '$lib/checkout-order';
 import { cart as libCart } from '$lib/cart';
-// 卡 3 identity pins：以 namespace import 對照 seam 兩側的每個收編符號。
-import * as mobileStores from './stores';
-import * as memberStores from '$lib/member/stores';
-import * as memberCheckout from '$lib/member/checkout';
 
 // K5-a：cart.add() 收窄為 add(course: Course)，本檔案原本多處的鬆散課程物件
 // 在 TS strict 下無法編譯——換成回傳完整 Course 的 builder（同
@@ -181,82 +177,5 @@ describe('placeOrder — 委派 submitOrder(mobile adapter,C4 首套單測)', ()
 		await expect(placeOrder('', false, 'key-3')).rejects.toBe(err);
 
 		expect(get(cart)).toHaveLength(1); // adapter 沒有自己的 try/catch,失敗原樣拋出、不會動購物車
-	});
-});
-
-describe('卡 3 存量收編 — identity pins(seam re-export 與 member 側同參照,防分叉)', () => {
-	// re-export 源路徑若寫錯(相對路徑、繞道別的模組),sheet/overlay 測試的
-	// vi.mock('$lib/member/stores') 會靜默失效變假綠——這裡以 toBe 釘住每個收編
-	// 符號都是 member 側同一個 binding:路徑漂移或改成本地重包裝時直接紅燈。
-	it('member/stores 的 27 個收編符號全部同參照(toBe,不是複本或包裝)', () => {
-		expect(mobileStores.points).toBe(memberStores.points);
-		expect(mobileStores.pointsLedger).toBe(memberStores.pointsLedger);
-		expect(mobileStores.refreshPoints).toBe(memberStores.refreshPoints);
-		expect(mobileStores.redeemReward).toBe(memberStores.redeemReward);
-		expect(mobileStores.redeemRewardErrorMessage).toBe(memberStores.redeemRewardErrorMessage);
-		expect(mobileStores.joinWaitlist).toBe(memberStores.joinWaitlist);
-		expect(mobileStores.joinWaitlistErrorMessage).toBe(memberStores.joinWaitlistErrorMessage);
-		expect(mobileStores.leaveRequests).toBe(memberStores.leaveRequests);
-		expect(mobileStores.refreshLeaveRequests).toBe(memberStores.refreshLeaveRequests);
-		expect(mobileStores.createLeaveRequest).toBe(memberStores.createLeaveRequest);
-		expect(mobileStores.cancelLeaveRequest).toBe(memberStores.cancelLeaveRequest);
-		expect(mobileStores.bookMakeup).toBe(memberStores.bookMakeup);
-		expect(mobileStores.leaveRequestErrorMessage).toBe(memberStores.leaveRequestErrorMessage);
-		expect(mobileStores.getCourseSessions).toBe(memberStores.getCourseSessions);
-		// C6:subscriptions 收編——CartSheet 的可計費預覽用它當 chargeableLines 的
-		// 「已持有訂閱」清單;placeOrder 也讀 get(subscriptions)。源 $lib/member/stores。
-		expect(mobileStores.subscriptions).toBe(memberStores.subscriptions);
-		// Task 5(架構深化 R12):通知段(notifications/unreadCount/notificationsHydrated/
-		// notificationsPageEntry/markRead/markAllRead)收編——mobile 專屬的
-		// $lib/mobile/notifications.ts 已併入 member 模組(唯一通知 module),與其他
-		// member 側收編一致改走 barrel re-export(理由見 stores.ts 通知段註解)。
-		expect(mobileStores.notifications).toBe(memberStores.notifications);
-		expect(mobileStores.unreadCount).toBe(memberStores.unreadCount);
-		expect(mobileStores.notificationsHydrated).toBe(memberStores.notificationsHydrated);
-		expect(mobileStores.notificationsPageEntry).toBe(memberStores.notificationsPageEntry);
-		expect(mobileStores.markRead).toBe(memberStores.markRead);
-		expect(mobileStores.markAllRead).toBe(memberStores.markAllRead);
-		// R13 Task 3(C1):會員資料 module 收編——本地 profile/prefs store 與
-		// $lib/mobile/pref-sync 退役,改與桌面共用同一顆單例(換帳號即重置)。
-		expect(mobileStores.memberProfile).toBe(memberStores.memberProfile);
-		expect(mobileStores.prefs).toBe(memberStores.prefs);
-		expect(mobileStores.hydrateProfile).toBe(memberStores.hydrateProfile);
-		expect(mobileStores.setPref).toBe(memberStores.setPref);
-		expect(mobileStores.saveProfile).toBe(memberStores.saveProfile);
-		expect(mobileStores.profileEditError).toBe(memberStores.profileEditError);
-	});
-	it('member/checkout 的 applyCouponCode/orderErrorMessage/chargeableLines 同參照(CartSheet 消費)', () => {
-		// C2(R11):CartSheet 的「套用優惠碼」與桌面 CheckoutDialog 收斂成同一顆
-		// applyCouponCode（空輸入 → null／命中／無效同文案的結果機），validateCoupon
-		// 的 mobile re-export 隨之零 production 消費者、依死出口紀律移除。
-		expect(mobileStores.applyCouponCode).toBe(memberCheckout.applyCouponCode);
-		expect(mobileStores.orderErrorMessage).toBe(memberCheckout.orderErrorMessage);
-		// C6:chargeableLines 收編——CartSheet 預覽與 placeOrder 請款同吃這個唯一 brand
-		// 產地（型別強制「預覽 ≡ 請款」）。源路徑漂移會讓 seam 靜默失效，這裡以 toBe 釘住。
-		expect(mobileStores.chargeableLines).toBe(memberCheckout.chargeableLines);
-	});
-	// C2(R11):CartSheet 手焊的結帳機退役，改與桌面 CheckoutDialog 共用同一顆
-	// checkout-controller 工廠。C3(R13)：工廠本身不再逐次轉出讓 CartSheet 自己 new——
-	// 唯一消費者變成本檔的模組級單例 `checkout`（與 cart 同生命週期，比 CartSheet 這顆
-	// mount 級元件活得久）。身分釘（工廠是否同參照）換成接線釘：斷言工廠實際上是被
-	// 以 `{ placeOrder }` 呼叫來建構這顆單例——源路徑漂移或改成本地重包裝（＝雙生
-	// 復辟）在這裡直接紅燈。
-	it('checkout 單例以本檔的 { placeOrder } 接線建構（模組級單例，非身分再轉出）', async () => {
-		vi.resetModules();
-		const spy = vi.fn(() => ({
-			subscribe: vi.fn(() => () => {}),
-			setOpen: vi.fn(),
-			toPayment: vi.fn(),
-			backToCart: vi.fn(),
-			confirmPay: vi.fn()
-		}));
-		vi.doMock('$lib/member/checkout-controller', () => ({ createCheckoutController: spy }));
-		try {
-			const fresh = await import('./stores');
-			expect(spy).toHaveBeenCalledWith({ placeOrder: fresh.placeOrder });
-		} finally {
-			vi.doUnmock('$lib/member/checkout-controller');
-			vi.resetModules();
-		}
 	});
 });

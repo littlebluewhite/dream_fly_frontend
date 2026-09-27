@@ -3,8 +3,9 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MyCourseDetail from './MyCourseDetail.svelte';
 import { overlay, toasts } from '$lib/mobile/stores';
-import { leaveRequests, refreshLeaveRequests, cancelLeaveRequest, type LeaveRequest } from '$lib/member/stores';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import type { LeaveRequest } from '$lib/member/stores';
 import { getEnrolmentAttendance } from '$lib/mobile/api';
 import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
 
@@ -17,10 +18,16 @@ import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-a
  * 的 getEnrolmentAttendance()(W3：該函式零映射委派桌面 member/api.ts 同名
  * 函式)。預設值刻意保留一筆 'leave' 紀錄(對齊已退役的
  * ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/聯絡教練兩個
- * 動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。 */
-vi.mock('$lib/member/stores', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/stores')>();
-	return { ...actual, refreshLeaveRequests: vi.fn(), cancelLeaveRequest: vi.fn() };
+ * 動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。
+ *
+ * Task 1(架構深化 R14·F6):「我的請假」改走 $lib/api/client + fakeRouter(寫法照
+ * member/profile.test.ts) —— refreshLeaveRequests/cancelLeaveRequest 不再
+ * vi.mock '$lib/member/stores' 假成 deps，fixture 改由 route 供給
+ * (GET /leave-requests/me、DELETE /leave-requests/{id})，斷言改成「打了哪個
+ * 端點、帶什麼 body」。$lib/mobile/api 的 mock(出席紀錄，非本範圍)保留。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 vi.mock('$lib/mobile/api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
@@ -46,16 +53,25 @@ const PENDING: LeaveRequest = {
 const APPROVED_NO_MAKEUP: LeaveRequest = { ...PENDING, id: 'lr2', status: 'approved' };
 const OTHER_COURSE: LeaveRequest = { ...PENDING, id: 'lr3', course_id: 'c-other' };
 
+type Routes = Record<string, unknown>;
+let routes: Routes;
+function route(extra: Routes) {
+	routes = { ...routes, ...extra };
+}
+function deleteCalls(): string[] {
+	return vi.mocked(api).mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([p]) => p);
+}
+
 beforeEach(() => {
-	vi.mocked(refreshLeaveRequests).mockReset().mockResolvedValue(undefined);
-	vi.mocked(cancelLeaveRequest).mockReset().mockResolvedValue(undefined);
+	routes = { 'GET /leave-requests/me': [] };
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation((path, init) => fakeRouter(routes)(path, init));
 	vi.mocked(getEnrolmentAttendance).mockReset().mockResolvedValue(DEFAULT_ATTENDANCE);
 	overlay.closeAll();
 });
 
 describe('MyCourseDetail — 動作列不再有課程層級「預約補課」按鈕', () => {
 	it('只剩請假/聯絡教練兩個動作', async () => {
-		leaveRequests.set([]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		// getByRole('button')，非 getByText —— 出席紀錄裡也有一筆 state:'leave' 的
 		// Badge 文字同樣是「請假」(非按鈕)，純文字比對會撞到兩個相符元素;
@@ -67,15 +83,14 @@ describe('MyCourseDetail — 動作列不再有課程層級「預約補課」按
 	});
 });
 
-describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收斂到本課程)', () => {
-	it('onMount 觸發 refreshLeaveRequests()', async () => {
-		leaveRequests.set([]);
+describe('MyCourseDetail — 我的請假(GET /leave-requests/me，範圍收斂到本課程)', () => {
+	it('onMount 打 GET /leave-requests/me', async () => {
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
-		expect(refreshLeaveRequests).toHaveBeenCalled();
+		await vi.waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith('/leave-requests/me'));
 	});
 
 	it('只顯示這門課程的請假紀錄，其他課程的不顯示', async () => {
-		leaveRequests.set([PENDING, OTHER_COURSE]);
+		route({ 'GET /leave-requests/me': [PENDING, OTHER_COURSE] });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('待審核')).toBeInTheDocument();
 		// OTHER_COURSE 也是 pending，若沒有 course_id 過濾會出現兩筆「待審核」。
@@ -83,28 +98,29 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 	});
 
 	it('沒有請假紀錄時顯示誠實空狀態文字', async () => {
-		leaveRequests.set([]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('目前沒有這門課程的請假紀錄。')).toBeInTheDocument();
 	});
 
-	it('pending 顯示取消按鈕，點擊呼叫 cancelLeaveRequest', async () => {
-		leaveRequests.set([PENDING]);
+	it('pending 顯示取消按鈕，點擊打 DELETE /leave-requests/{id}', async () => {
+		route({ 'GET /leave-requests/me': [PENDING], 'DELETE /leave-requests/lr1': undefined });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		await fireEvent.click(await screen.findByText('取消'));
-		expect(cancelLeaveRequest).toHaveBeenCalledWith('lr1');
+		await vi.waitFor(() => expect(deleteCalls()).toEqual(['/leave-requests/lr1']));
 	});
 
-	// 卡 6：busy 旗標佈線的可證偽測試——取消 in-flight（deps 未 resolve）期間按鈕
-	// 必須停用；resolve 後旗標復位、按鈕重新可用（mock 的 cancelLeaveRequest 不
-	// 改寫 store，pending 列仍在）。
-	it('取消進行中（cancelLeaveRequest 尚未完成）時「取消」按鈕停用，完成後復位', async () => {
-		leaveRequests.set([PENDING]);
-		let resolveCancel!: () => void;
-		vi.mocked(cancelLeaveRequest).mockImplementation(
-			() => new Promise<void>((res) => { resolveCancel = res; })
-		);
+	// 卡 6：busy 旗標佈線的可證偽測試——取消 in-flight（DELETE 尚未 resolve）期間按鈕
+	// 必須停用；resolve 後 DELETE 真的落地(狀態改 cancelled)，取消按鈕隨之消失
+	// (leaveAction 對 cancelled 不再回傳 'cancel'，同「approved 且已補課」那則的
+	// 既有慣例：非 mock 版不能再靠「resolve 不改狀態」驗證復位，改驗證按鈕本身
+	// 隨真實寫回消失，busy 守衛不再卡住 UI)。
+	it('取消進行中（DELETE 尚未 resolve）時「取消」按鈕停用，完成後真的送出並消失', async () => {
+		let resolveDelete!: () => void;
+		route({
+			'GET /leave-requests/me': [PENDING],
+			'DELETE /leave-requests/lr1': () => new Promise<void>((res) => { resolveDelete = res; })
+		});
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		const btn = await screen.findByText('取消');
@@ -113,15 +129,14 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 		await fireEvent.click(btn);
 
 		await vi.waitFor(() => expect(btn).toBeDisabled());
-		resolveCancel(); // 收尾不留 in-flight
-		await vi.waitFor(() => expect(btn).not.toBeDisabled());
+		resolveDelete(); // 收尾不留 in-flight
+		await vi.waitFor(() => expect(screen.queryByText('取消')).toBeNull());
 	});
 
 	// codex R1：mobile 端此前沒有取消失敗路徑測試——釘住 outcome 攜原始 ApiError →
 	// leaveRequestErrorMessage 透傳 → toast 精確 body 的整條佈線。
 	it('取消失敗（409）→ 顯示精確繁中錯誤 toast，pending 列不變', async () => {
-		leaveRequests.set([PENDING]);
-		vi.mocked(cancelLeaveRequest).mockRejectedValue(new ApiError(409, '僅待審核假單可取消'));
+		route({ 'GET /leave-requests/me': [PENDING], 'DELETE /leave-requests/lr1': new ApiError(409, '僅待審核假單可取消') });
 		const notifySpy = vi.spyOn(toasts, 'notify');
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
@@ -134,7 +149,7 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 	});
 
 	it('approved 且未補課顯示「預約補課」，點擊開啟 makeup sheet 並帶入該筆 leaveRequest', async () => {
-		leaveRequests.set([APPROVED_NO_MAKEUP]);
+		route({ 'GET /leave-requests/me': [APPROVED_NO_MAKEUP] });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		await fireEvent.click(await screen.findByText('預約補課'));
@@ -143,7 +158,7 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 
 	it('approved 且已補課則顯示補課時間文字，不顯示任何按鈕', async () => {
 		const withMakeup: LeaveRequest = { ...APPROVED_NO_MAKEUP, makeup_session_id: 's9', makeup_session_date: '2026-07-15', makeup_start_time: '10:00:00' };
-		leaveRequests.set([withMakeup]);
+		route({ 'GET /leave-requests/me': [withMakeup] });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		expect(await screen.findByText('已預約補課：', { exact: false })).toBeInTheDocument();
@@ -154,21 +169,18 @@ describe('MyCourseDetail — 我的請假(復用 leaveRequests store，範圍收
 
 describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{id}/attendance，§3.12)', () => {
 	it('onMount 呼叫 getEnrolmentAttendance(course.id)', async () => {
-		leaveRequests.set([]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
 		expect(getEnrolmentAttendance).toHaveBeenCalledWith('e1');
 	});
 
 	it('沒有出勤紀錄時顯示「尚無出勤紀錄」空狀態', async () => {
-		leaveRequests.set([]);
 		vi.mocked(getEnrolmentAttendance).mockResolvedValue([]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('尚無出勤紀錄')).toBeInTheDocument();
 	});
 
 	it('依 present/absent/leave 三態渲染出席徽章(late 態已隨後端 enum 收斂移除)', async () => {
-		leaveRequests.set([]);
 		vi.mocked(getEnrolmentAttendance).mockResolvedValue([
 			{ date: '06/06', year: '2026', state: 'present' },
 			{ date: '05/21', year: '2026', state: 'leave' },
@@ -185,14 +197,12 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		leaveRequests.set([]);
 		vi.mocked(getEnrolmentAttendance).mockRejectedValue(new Error('boom'));
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('每筆紀錄顯示自己的 year，不是硬編某一年(pin：2025 年場次顯示 2025，不是 2026)', async () => {
-		leaveRequests.set([]);
 		vi.mocked(getEnrolmentAttendance).mockResolvedValue([{ date: '12/30', year: '2025', state: 'present' }]);
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
