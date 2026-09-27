@@ -203,6 +203,9 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
   `ctrl.send`,`sending` 防連點與失敗 toast 留在 adapter。
 - `markMessageRead` 只做兩件事:本地標已讀、`messagesGate.markMutated()`(不帶尾流)。fire-and-forget
   那段刪除。訊息頁 `openThread` 只做 push,不再樂觀清未讀。
+- **終審修波追加**:`badgeCleared.then(...)` 落在 await 之後,原無身分核對——`load()` 開始時捕捉
+  身分(同 `session-gate.ts`/`messagesGate` 的 identity 源:`authStore` 的 `loggedIn`/`member.id`),
+  ack 落地時若身分已變則不呼叫 `markMessageRead`,ack-gated 語意(F5)不變。
 
 ## 明確不做的事(供未來止步)
 
@@ -255,9 +258,6 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
   `badge: 3`、admin Topbar 的「目前有 3 則新通知」、mobile-admin 的 `ADMIN_NOTIFS`/`COACH_NOTIFS`。
 - **結帳跨登入窗口擴大**:`docs/adr/0023` 記的「A 付款在飛時登出、B 打開購物車看到 A 的付款狀態」,
   自 F4 起帶過去的還有優惠碼、點數折抵與預覽。
-- **付款中才落地的 `applyCode`**:`applyCode` 的序號守衛只擋 freshCheckout。付款中(或 resumedInFlight)
-  才落地的套用回應仍會改寫 coupon 與預覽,而 `placeOrder` 已經送出。這條邊在 mobile 是新的(付款中
-  重開不再重置)。修法是 `paying` 時略過寫入,或在 `confirmPay` 推進序號。
 - **load-gate `applyLoaded` 只查旗標、不比世代(潛在問題)**:`gate.hydrate()` 進場捕捉 mutation 世代、
   落地比對;load-gate 的 `load()` 路徑只看旗標。「load 在飛 → `markMutated` → `invalidate()` → 回應
   落地」時,`load()` 會套用那份舊快照。5 個 mobile-admin 頁面自 F1 起走這條路;ops 與訊息閘門今天

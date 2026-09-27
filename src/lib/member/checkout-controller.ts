@@ -173,7 +173,9 @@ export function createCheckoutController(deps: CheckoutControllerDeps): Checkout
 	async function applyCode(): Promise<void> {
 		const at = epoch;
 		const result = await deps.applyCouponCode(get(form).code);
-		if (!result || at !== epoch) return; // 空輸入不顯示錯誤；freshCheckout 之後才落地的回應丟棄
+		// 空輸入不顯示錯誤；freshCheckout 之後才落地的回應丟棄；付款中（confirmPay 已送出）
+		// 才落地的回應也丟棄——otherwise 會在已送出的訂單之後改寫 coupon/預覽（R14 終審修波）。
+		if (!result || at !== epoch || paying) return;
 		coupon = result.coupon;
 		codeErr = result.codeErr;
 		publish();

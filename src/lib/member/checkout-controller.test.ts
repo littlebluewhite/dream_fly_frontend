@@ -321,6 +321,27 @@ describe('結算輸入與預覽', () => {
 		expect(deps.placeOrder).toHaveBeenCalledWith('DREAMFLY100', true, expect.any(String), 'line_pay');
 	});
 
+	it('付款中：confirmPay 開始後才落地的 applyCode 回應被丟棄（不落地優惠碼/預覽）', async () => {
+		ctrl.setOpen(true);
+		const d = deferred<{ coupon: AppliedCoupon | null; codeErr: string } | null>();
+		deps.applyCouponCode.mockReturnValue(d.promise);
+		ctrl.form.update((f) => ({ ...f, code: 'DREAMFLY100' }));
+		const pending = ctrl.applyCode();
+
+		const pay = deferred<PaidSummary>();
+		deps.placeOrder.mockReturnValue(pay.promise);
+		const payPromise = ctrl.confirmPay();
+		expect(get(ctrl).paying).toBe(true);
+
+		d.resolve({ coupon: COUPON, codeErr: '' });
+		await pending;
+		expect(get(ctrl)).toMatchObject({ coupon: null, codeErr: '' });
+		expect(get(ctrl).preview.couponOff).toBe(0);
+
+		pay.resolve(CONFIRMED);
+		await payPromise;
+	});
+
 	it('序號守衛：freshCheckout 之後才落地的 applyCode 回應被丟棄', async () => {
 		ctrl.setOpen(true);
 		const d = deferred<{ coupon: AppliedCoupon | null; codeErr: string } | null>();

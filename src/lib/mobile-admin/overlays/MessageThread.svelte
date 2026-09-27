@@ -14,6 +14,8 @@
    * fire-and-forget 網路呼叫)；badgeCleared 為 false(markRead 失敗)則不呼叫,角標維持
    * 未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { authStore } from '$lib/stores/authStore';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -39,16 +41,24 @@
   let reply = '';
   let sending = false;
 
+  /** 與 session-gate.ts / messagesGate 的 identity 源逐字相同：loggedIn ? (member?.id
+   *  ?? '') : null（未登入為 null，登入但無 member.id 退化為空字串）。 */
+  function identity(): string | null {
+    const { loggedIn, member } = get(authStore);
+    return loggedIn ? (member?.id ?? '') : null;
+  }
+
   function load() {
     if (!m) { phase = 'error'; return; }
     const target = m;
+    const identityAtLoad = identity(); // load() 開始時捕捉，ack 落地時核對是否仍是同一人
     phase = 'loading';
     const { threadReady, badgeCleared } = ctrl.selectThread(target.id);
     threadReady.then((outcome) => {
       phase = outcome.kind === 'threadLoadFailed' ? 'error' : 'ready';
     });
     badgeCleared.then((cleared) => {
-      if (cleared) markMessageRead(target.id);
+      if (cleared && identity() === identityAtLoad) markMessageRead(target.id);
     });
   }
   onMount(load);
