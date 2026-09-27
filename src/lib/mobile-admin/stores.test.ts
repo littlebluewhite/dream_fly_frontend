@@ -25,7 +25,6 @@ import {
 	refreshOps,
 	messagesHydrated,
 	hydrateMessages,
-	refreshMessages,
 	opsPages,
 	searchCapHint,
 	addMember,
@@ -353,7 +352,7 @@ describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 p
 	});
 });
 
-describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
+describe('hydrateMessages / messagesHydrated', () => {
 	it('messages 保留同步 seed(不因獨立水合而清空);messagesHydrated 起始為 false', () => {
 		expect(get(messages)).toEqual(MESSAGES);
 		expect(get(messagesHydrated)).toBe(false);
@@ -376,17 +375,6 @@ describe('hydrateMessages / refreshMessages / messagesHydrated', () => {
 		markMessageRead(firstUnread.id);
 		await hydrateMessages();
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
-		// restore for other tests
-		messages.set(MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(false);
-	});
-
-	it('refreshMessages() 一律重新 fetch,不受 guard 短路(供重試使用)', async () => {
-		await hydrateMessages();
-		expect(get(messagesHydrated)).toBe(true);
-		messages.set([{ ...MESSAGES[0], from: '水合前的假資料' }]);
-		await refreshMessages();
-		expect(get(messages)).toEqual(MESSAGES);
 		// restore for other tests
 		messages.set(MESSAGES.map((m) => ({ ...m })));
 		messagesHydrated.set(false);

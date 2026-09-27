@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { createHydrationGate } from './hydration-gate';
+import { createLoadGate, type LoadPhase } from './load-gate';
 
 /** 手動控時序的 deferred promise——測 in-flight 競態不用 fake timers（抄
  *  load-gate.test.ts 開頭寫法）。 */
@@ -204,22 +205,23 @@ describe('createHydrationGate', () => {
 		expect(get(gate.hydrated)).toBe(false);
 	});
 
-	it('mutationGen():唯讀單調世代——只有 markMutated 推進,hydrate/refresh 不動它,旗標翻回 false 也不倒退', async () => {
+	it('mutation 世代(經 pageEntry().hydrate.gen 讀):唯讀單調——只有 markMutated 推進,hydrate/refresh 不動它,旗標翻回 false 也不倒退', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const gate = createHydrationGate({ fetch, apply: () => {} });
+		const gen = gate.pageEntry().hydrate.gen!;
 
-		expect(gate.mutationGen()).toBe(0);
+		expect(gen()).toBe(0);
 		await gate.hydrate();
-		expect(gate.mutationGen()).toBe(0); // 水合不是 mutation
+		expect(gen()).toBe(0); // 水合不是 mutation
 		await gate.refresh();
-		expect(gate.mutationGen()).toBe(0); // 重抓也不是
+		expect(gen()).toBe(0); // 重抓也不是
 
 		gate.markMutated();
-		expect(gate.mutationGen()).toBe(1);
+		expect(gen()).toBe(1);
 		gate.hydrated.set(false); // 和解失敗的可重試縫:旗標可翻回,世代只增不減
-		expect(gate.mutationGen()).toBe(1);
+		expect(gen()).toBe(1);
 		gate.markMutated();
-		expect(gate.mutationGen()).toBe(2);
+		expect(gen()).toBe(2);
 	});
 
 	/* R11 第五決策點——mutation settle 訊號。第四決策點(世代穩定)只比對進出場世代,對
@@ -306,7 +308,7 @@ describe('createHydrationGate', () => {
 		gate.markMutated(t1.promise);
 		// 探針:比 refresh 早一步入列的同批等待者,它的 resolve 鏈因此恆比 refresh 的早一拍
 		// ——回呼執行的時點正落在上述窗口內。
-		const probe = gate.pendingSettle();
+		const probe = gate.pageEntry().hydrate.pendingSettle!();
 		let fetchesWhenT3Landed = -1;
 		void probe?.then(() => {
 			fetchesWhenT3Landed = fetch.mock.calls.length;
@@ -401,22 +403,23 @@ describe('createHydrationGate', () => {
 		await p;
 	});
 
-	it('pendingSettle():靜止時同步回 undefined(不得回 resolved promise——多一個 microtask 會鬆掉在飛判準),有未 settle 尾流才回 promise', async () => {
+	it('pendingSettle(經 pageEntry().hydrate.pendingSettle 讀):靜止時同步回 undefined(不得回 resolved promise——多一個 microtask 會鬆掉在飛判準),有未 settle 尾流才回 promise', async () => {
 		const tail = createDeferred<void>();
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
+		const pendingSettle = gate.pageEntry().hydrate.pendingSettle!;
 
-		expect(gate.pendingSettle()).toBeUndefined(); // 開機靜止
+		expect(pendingSettle()).toBeUndefined(); // 開機靜止
 		gate.markMutated();
-		expect(gate.pendingSettle()).toBeUndefined(); // 無尾流的 mutation 不入帳
+		expect(pendingSettle()).toBeUndefined(); // 無尾流的 mutation 不入帳
 
 		gate.markMutated(tail.promise);
-		const wait = gate.pendingSettle();
+		const wait = pendingSettle();
 		expect(wait).toBeInstanceOf(Promise);
 
 		tail.resolve();
 		await wait;
 
-		expect(gate.pendingSettle()).toBeUndefined(); // settle 後回歸靜止
+		expect(pendingSettle()).toBeUndefined(); // settle 後回歸靜止
 	});
 
 	it('markMutated() 把 hydrated 翻 true;hydrated.set(false) 後可再次水合(測試重置縫)', async () => {
@@ -433,5 +436,91 @@ describe('createHydrationGate', () => {
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(apply).toHaveBeenCalledWith({ v: 1 });
 		expect(get(gate.hydrated)).toBe(true);
+	});
+});
+
+describe('pageEntry(plain gate)', () => {
+	/* F1(R14):頁面進場包住在 HydrationGate 本身——ops 閘門是 plain gate(不是 session 閘門),
+	 * mobile-admin 的 4 個 ops 頁原本拿 hydrate/refresh 當 load-gate 的 fetch/refresh:store 閘門
+	 * 自己 apply,load-gate 的 generation/destroyed 守衛管不到寫入。改 spread pageEntry() 之後,
+	 * 寫入交給 load-gate 的 hydrate.into,卸載與後發先至都由 load-gate 擋下。 */
+
+	it('refresh 在飛時 destroy() → 回應落地不寫 store、不翻旗(已卸載的頁面不寫共享 store)', async () => {
+		const d = createDeferred<{ v: number }>();
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch: () => d.promise, apply });
+		const page = createLoadGate({ ...gate.pageEntry() });
+
+		const p = page.refresh();
+		page.destroy();
+		d.resolve({ v: 1 });
+		await p;
+
+		expect(apply).not.toHaveBeenCalled();
+		expect(get(gate.hydrated)).toBe(false);
+	});
+
+	it('連續兩輪 refresh、先發的後到 → 舊快照不寫(只套用後發那一輪)', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+		const page = createLoadGate({ ...gate.pageEntry() });
+
+		const p1 = page.refresh();
+		const p2 = page.refresh();
+		d2.resolve({ v: 2 });
+		await p2;
+		d1.resolve({ v: 1 });
+		await p1;
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+		page.destroy();
+	});
+
+	it('hydrate.gen 讀的是閘門自己的世代帳:markMutated() 之後 +1', () => {
+		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
+		const entry = gate.pageEntry();
+
+		const before = entry.hydrate.gen!();
+		gate.markMutated();
+
+		expect(entry.hydrate.gen!()).toBe(before + 1);
+	});
+
+	it('hydrate.pendingSettle 讀的是閘門自己的尾流帳:有尾流回 promise,靜止回 undefined', async () => {
+		const tail = createDeferred<void>();
+		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
+		const entry = gate.pageEntry();
+
+		expect(entry.hydrate.pendingSettle!()).toBeUndefined();
+		gate.markMutated(tail.promise);
+		const wait = entry.hydrate.pendingSettle!();
+		expect(wait).toBeInstanceOf(Promise);
+
+		tail.resolve();
+		await wait;
+		expect(entry.hydrate.pendingSettle!()).toBeUndefined();
+	});
+
+	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {
+		const store = writable<{ v: number } | null>(null);
+		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: (d) => store.set(d) });
+
+		const page = createLoadGate({ ...gate.pageEntry() });
+		const phases: LoadPhase[] = [];
+		const unsub = page.subscribe((p) => phases.push(p));
+
+		await page.load();
+
+		expect(phases[0]).toBe('loading');
+		expect(phases[phases.length - 1]).toBe('ready');
+		expect(get(store)).toEqual({ v: 1 }); // hydrate.into 寫回的是同一顆共享 store
+		expect(get(gate.hydrated)).toBe(true); // load-gate 的 commit 翻的正是閘門同一顆旗標
+
+		unsub();
+		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy
 	});
 });

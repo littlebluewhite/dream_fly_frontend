@@ -94,6 +94,24 @@ describe('mobile-admin/admin/members 頁', () => {
 		expect(await findByText('測試學員甲')).toBeInTheDocument();
 	});
 
+	it('首次載入失敗 → 重試在飛時卸載 → $members 不被改寫(R14 F1:寫入交給 load-gate,卸載後的回應不落地)', async () => {
+		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('boom'));
+		const { findByText, unmount } = render(MembersPage);
+		await findByText('載入失敗');
+
+		let resolveRetry!: (v: typeof OPS_FIXTURE) => void;
+		vi.mocked(getOpsCollections).mockReturnValueOnce(new Promise((r) => (resolveRetry = r)));
+		await fireEvent.click(await findByText('重新載入'));
+		expect(getOpsCollections).toHaveBeenCalledTimes(2); // 重試真的出發了
+
+		unmount();
+		resolveRetry(OPS_FIXTURE);
+		await new Promise<void>((r) => setTimeout(r, 0));
+
+		expect(get(members)).toEqual(MEMBERS); // 已卸載頁面的重試回應不寫共享 store
+		expect(get(opsHydrated)).toBe(false);
+	});
+
 	it('members 空集合不當機,顯示找不到符合的學員', async () => {
 		vi.mocked(getOpsCollections).mockResolvedValue({ members: [], classes: CLASSES, coaches: COACHES, orders: ORDERS, pages: pagesOf(0, CLASSES.length, ORDERS.length) });
 		const { findByText } = render(MembersPage);

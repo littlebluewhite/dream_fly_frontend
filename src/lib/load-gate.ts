@@ -47,16 +47,17 @@ export interface LoadGateHydrateOptions<T> {
 	flag: Writable<boolean>;
 	/** 成功時套用資料,寫回共享 store。 */
 	into: (data: T) => void;
-	/** 可選:單調 mutation 世代讀取器(生產上是 session/hydration gate 的 gate.mutationGen,
-	 *  經 pageEntry 佈線)。在場時 refresh()/silentRefresh() 改走 $lib/hydration-gate 的
+	/** 可選:單調 mutation 世代讀取器(生產上由水合閘門的 pageEntry() 交出——世代帳由閘門
+	 *  持有、只經這支讀取器外流,見 docs/adr/0020 形 1;session 閘門的進場包繼承自同一處)。
+	 *  在場時 refresh()/silentRefresh() 改走 $lib/hydration-gate 的
 	 *  fetchGenStable——進場捕捉世代、落地比對,飛行窗口內發生的本地 mutation 讓那份快照
 	 *  作廢並原地重抓(refresh 契約:顯式新鮮度,丟棄之後必須補抓)。重抓期間 phase 不回
-	 *  loading、run-generation 也不遞增,故 F1/F5 的重入語意原封;被新一輪 run 取代或已
+	 *  loading、run-generation 也不遞增,故重入防護(F1)／(F5) 原封;被新一輪 run 取代或已
 	 *  卸載即棄追。load() 刻意不走(hydrate 契約:mutation-wins 丟棄了事,本地即真相)。
 	 *  省略時整條路徑與舊碼逐字相同——旗標自持、無世代帳的 plain-flag 消費端保舊語意。 */
 	gen?: () => number;
-	/** 可選:mutation 尾流的 settle 訊號(生產上是 session/hydration gate 的
-	 *  gate.pendingSettle,同樣經 pageEntry 佈線)。在場時 refresh()/silentRefresh() 每次
+	/** 可選:mutation 尾流的 settle 訊號(生產上同樣由水合閘門的 pageEntry() 交出,讀閘門
+	 *  自己的尾流帳)。在場時 refresh()/silentRefresh() 每次
 	 *  出發 fetch 之前先等未 settle 的樂觀 mutation 尾流(mark-before-await 的 PATCH)——
 	 *  關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代又已穩定」的 server-race 窗
 	 *  (ADR 0020 誠實界線,R11 閉合)。等待軸與丟棄軸正交:丟棄仍只看 gen 的進出場比對。

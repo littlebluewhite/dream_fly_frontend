@@ -127,6 +127,11 @@ const opsGate = createHydrationGate({
 export const opsHydrated = opsGate.hydrated;
 export const hydrateOps = opsGate.hydrate;
 export const refreshOps = opsGate.refresh;
+/** 頁面進場包(R14 F1):classes/members/orders 三頁與 CoachesScreen 一律
+ *  `createLoadGate({ ...opsPageEntry })`——寫入交給頁面 load-gate 的 hydrate.into,卸載後
+ *  或被新一輪取代的重整不再寫共享 store。hydrateOps/refreshOps 仍留給首頁與
+ *  refetchAfterWrite。 */
+export const opsPageEntry = opsGate.pageEntry();
 
 /* ---------- 寫入動詞(R12:ops store 擁有自己的寫入) ----------
  * 逐 entity、新增/編輯分兩支(不做跨 entity 的通用 CRUD——ADR-0018 C6;不用 isNew 旗標
@@ -212,8 +217,8 @@ export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unrea
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
  *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。同步 seed 保留
  *  (對齊 mobile notifs 前例);markMessageRead 呼叫 messagesGate.markMutated()
- *  (mutation 即宣告水合真相)。refreshMessages() 保持一律真抓,供重試使用(落地同走
- *  世代穩定重抓,理由與判準見上方 opsGate 註解)。
+ *  (mutation 即宣告水合真相)。訊息頁經 messagesPageEntry 建 load-gate,重試走 load-gate
+ *  的 refresh(一律真抓、落地同走世代穩定重抓,理由與判準見上方 opsGate 註解)。
  *  R13 Task 7(C6):對話列表是**登入教練本人**的資料,改用 createSessionGate——換帳號/
  *  登出即重置回種子、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(原本的 hydration
  *  gate 跨帳號存活,第二位教練會看到前一位的對話列表)。opsGate 是全機構的營運集合,
@@ -230,7 +235,8 @@ const messagesGate = createSessionGate({
 });
 export const messagesHydrated = messagesGate.hydrated;
 export const hydrateMessages = messagesGate.hydrate;
-export const refreshMessages = messagesGate.refresh;
+/** 訊息頁的進場包(R14 F1);fetch 是帶 epoch 核對的那一支(session 閘門繼承自水合閘門)。 */
+export const messagesPageEntry = messagesGate.pageEntry();
 
 /* ---------- Role (current section, synced from the URL by +layout.svelte) ----------
  * Task 20: the demo `session` writable is gone (real login state lives in

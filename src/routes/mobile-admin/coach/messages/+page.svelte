@@ -2,9 +2,9 @@
   /* 教練 · 訊息。port coach.jsx CoachMessagesScreen (213-242)。
    * 點訊息 → overlay.push('messageThread',{m})；onBell → overlay.sheet('notif')。
    *
-   * 資料改由 hydrateMessages()(mock-API 接縫)非同步水合共享 messages store,三態
+   * 資料經 messagesPageEntry(訊息閘門的頁面進場包,R14 F1)非同步水合共享 messages store,三態
    * 閘門(loading/error/ready);messagesHydrated 守衛防止第二次進頁的 fetch 覆寫
-   * markMessageRead 的已讀狀態,refreshMessages() 供 ErrorState 重試(不受守衛短路)。
+   * markMessageRead 的已讀狀態,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。
    * unmount 後解析的 in-flight fetch 由 createLoadGate($lib/load-gate)內建的
    * generation/destroy 機制擋下,不再需要頁面自帶的 alive 旗標。markMessageRead
    * 既有 mutation 不動。 */
@@ -15,16 +15,13 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead, hydrateMessages, refreshMessages } from '$lib/mobile-admin/stores';
+  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead, messagesPageEntry } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MessageRow } from '$lib/mobile-admin/data';
 
   let q = '';
 
-  const gate = createLoadGate({
-    fetch: hydrateMessages,
-    refresh: refreshMessages
-  });
+  const gate = createLoadGate({ ...messagesPageEntry });
   onMount(() => {
     gate.load();
   });

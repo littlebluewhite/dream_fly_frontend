@@ -2,9 +2,10 @@
   /* 管理員 · 學員管理。admin.jsx MembersScreen (116) 的行動版接線改版。
    * 清單由 $members store 提供;tap → sheet('member'),新增 → sheet('memberForm',{m:null})。
    *
-   * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $members store,三態閘門
+   * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $members store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
-   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。
+   * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。寫入交給 load-gate 的
+   * hydrate.into,卸載後才落地的回應不寫共享 store。
    *
    * Task 20：改讀真 GET /users 形狀(MemberRow 已瘦身，同桌面 admin/data.ts 的
    * MemberAccount)——狀態篩選由舊 3 態(在學中/出席偏低/暫停中，出席率導向)改為
@@ -24,7 +25,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MemberRow } from '$lib/mobile-admin/data';
@@ -32,10 +33,7 @@
   import { apiErrorMessage } from '$lib/api/error-text';
   import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';
 
-  const gate = createLoadGate({
-    fetch: hydrateOps,
-    refresh: refreshOps
-  });
+  const gate = createLoadGate({ ...opsPageEntry });
   onMount(() => {
     gate.load();
   });

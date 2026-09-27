@@ -31,7 +31,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coaches as coachesStore, toasts, refreshOps, hydrateOps, addCoach, saveCoach } from '$lib/mobile-admin/stores';
+  import { overlay, coaches as coachesStore, toasts, opsPageEntry, addCoach, saveCoach } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/mobile-admin/api';
@@ -43,18 +43,12 @@
   // R11(C3,LoadGate 三態第五次複製,先例 VenuesScreen):R10 加的 onMount 自保呼叫
   // (hydrateOps().catch(()=>{}))只解決「未曾水合」的個案本身——fetch 失敗時仍永久
   // 停留在 domain seed、沒有 loading 骨架、也沒有重試入口,是 ADR 0016 明文記載的
-  // 風險窗。改建 createLoadGate 三態(loading/error/ready):gate 佈線抄 store-owned
-  // 變體先例(routes/mobile-admin/admin/members/+page.svelte)——fetch/refresh 直接
-  // 是 hydrateOps/refreshOps 本身,兩者已經直寫 $coachesStore,gate 不需要另外的
-  // onData。opsHydrated 為 true(已水合)時 hydrateOps() 內部的 guard 短路,不重打
-  // getOpsCollections,但 gate 仍會經一個 microtask 才從 loading 收斂為 ready(await
-  // 一個已 resolve 的 promise,不是同步)——既有測試「opsHydrated.set(true) 短路」的
-  // 重置縫語意不變,只是斷言需要多等一拍。ScreenHeader(含「新增教練」按鈕)留在
-  // 閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
-  const gate = createLoadGate({
-    fetch: hydrateOps,
-    refresh: refreshOps
-  });
+  // 風險窗。改建 createLoadGate 三態(loading/error/ready)。R14(F1)起佈線改 spread
+  // ops 閘門的頁面進場包 opsPageEntry(同 routes/mobile-admin/admin/members/+page.svelte)
+  // ——hydrate.into 寫 $coachesStore,卸載後才落地的回應不寫。opsHydrated 為 true(已水合)
+  // 時 load-gate 的 guard 命中,同步 ready、不重打 getOpsCollections。ScreenHeader(含
+  // 「新增教練」按鈕)留在閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
+  const gate = createLoadGate({ ...opsPageEntry });
   onMount(() => {
     gate.load();
   });

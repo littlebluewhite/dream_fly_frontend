@@ -505,7 +505,7 @@ describe('hydrate 選項', () => {
 	});
 
 	/* R10（第四決策點）：hydrate 多一個可選的 `gen`（單調 mutation 世代讀取器，生產上
-	 * 由 session-gate 的 pageEntry 佈線 gate.mutationGen）。在場時 refresh()/silentRefresh()
+	 * 由水合閘門的 pageEntry() 交出閘門的世代帳）。在場時 refresh()/silentRefresh()
 	 * 改走 $lib/hydration-gate 的 fetchGenStable：進場捕捉世代、落地比對，飛行窗口內發生的
 	 * 本地 mutation 讓那份快照作廢並原地重抓。load() 不走（hydrate 契約是丟棄了事，不補抓）。
 	 * 上面所有未帶 `gen` 的釘子即 plain-flag 消費端，語意一字不變。 */
@@ -615,7 +615,7 @@ describe('hydrate 選項', () => {
 	});
 
 	/* R11（第五決策點）：hydrate 再多一個可選的 `pendingSettle`（mutation 尾流的 settle
-	 * 訊號，生產上由 session-gate 的 pageEntry 佈線 gate.pendingSettle）。在場時
+	 * 訊號，生產上由水合閘門的 pageEntry() 交出閘門的尾流帳）。在場時
 	 * refresh()/silentRefresh() 每次出發 GET 之前先等未 settle 的樂觀 mutation 尾流
 	 * （PATCH）——關閉「GET 在 PATCH 仍在飛時出發、server 回舊真值」的 server-race 窗。
 	 * 未帶 `pendingSettle` 的釘子（含上方全部）語意一字不變。 */

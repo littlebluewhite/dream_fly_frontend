@@ -514,43 +514,6 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 	// 跨登出/換帳的在飛回應會被 load-gate 無條件套用進共享 store。pageEntry() 把
 	// 「核對過的 fetch + 閘門自己的 hydrate 選項」整包吐給頁面,頁面沒有機會拿到 raw getter。
 
-	it('hydrate.flag 是 gate.hydrated 同一實例、hydrate.into 是 opts.apply 同一函式(頁面與 store 共用同一顆守衛,不是複本)', () => {
-		const store = writable<Item[]>([]);
-		const apply = (d: Item[]) => store.set(d);
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply, reset: () => store.set([]) });
-
-		const entry = gate.pageEntry();
-
-		expect(entry.hydrate.flag).toBe(gate.hydrated);
-		expect(entry.hydrate.into).toBe(apply);
-	});
-
-	it('hydrate.gen 是 gate.mutationGen 同一函式(R10:頁面的 refresh 族與 store 閘門讀同一本世代帳,不是各記各的)', () => {
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		expect(gate.pageEntry().hydrate.gen).toBe(gate.mutationGen);
-	});
-
-	it('hydrate.pendingSettle 是 gate.pendingSettle 同一函式(R11:頁面的 refresh 族與 store 閘門讀同一本 mutation 尾流帳)', () => {
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		expect(typeof gate.pendingSettle).toBe('function'); // 先釘存在,否則 undefined === undefined 是假綠
-		expect(gate.pageEntry().hydrate.pendingSettle).toBe(gate.pendingSettle);
-	});
-
-	it('fetch 只回傳資料、不自行 apply(寫入是 load-gate hydrate 的事,翻旗也是)', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': [{ id: 'x' }] }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await expect(gate.pageEntry().fetch()).resolves.toEqual([{ id: 'x' }]);
-
-		expect(get(store)).toEqual([]); // 沒有寫回共享 store
-		expect(get(gate.hydrated)).toBe(false); // 也沒有翻旗
-	});
-
 	it('stale:fetch 在飛期間登出 → rejects(頁面 load-gate 據此收 error 態,不套用舊帳號資料)', async () => {
 		const d = createDeferred<Item[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
@@ -588,23 +551,30 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 		await expect(entry.fetch()).resolves.toEqual([{ id: 'fresh' }]); // 新 epoch 下重試成功
 	});
 
-	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': [{ id: 'x' }] }));
+	it('session 閘門的 pageEntry().fetch 帶 epoch 核對:真 createLoadGate({ ...gate.pageEntry() }) 在飛登出 → error 態、舊帳號資料不落地', async () => {
+		/* R14 F1:session 閘門不再自己組 pageEntry,而是繼承 HydrationGate 的——它餵給水合閘門的
+		 * fetch 就是 epochFetch,所以繼承下來的進場包自帶 epoch 核對。本釘守住這條繼承:若 session
+		 * 閘門改餵 raw fetch,舊帳號資料會經 load-gate 的 hydrate.into 落回共享 store。 */
+		const d = createDeferred<Item[]>();
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
 		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+		const gate = createSessionGate<Item[]>({ fetch: () => d.promise, apply: (data) => store.set(data), reset: () => store.set([]) });
 
+		await authStore.login('a@dreamfly.test', 'pw');
 		const page = createLoadGate({ ...gate.pageEntry() });
 		const phases: LoadPhase[] = [];
 		const unsub = page.subscribe((p) => phases.push(p));
+		const p = page.load();
+		await authStore.logout(); // 在飛期間登出 → epoch+1
 
-		await page.load();
+		d.resolve([{ id: 'a-item' }]);
+		await p;
 
-		expect(phases[0]).toBe('loading');
-		expect(phases[phases.length - 1]).toBe('ready');
-		expect(get(store)).toEqual([{ id: 'x' }]); // hydrate.into 寫回的是同一顆共享 store
-		expect(get(gate.hydrated)).toBe(true); // load-gate 的 commit 翻的正是閘門同一顆旗標
+		expect(phases[phases.length - 1]).toBe('error');
+		expect(get(store)).toEqual([]); // A 的資料沒有經 hydrate.into 落地
+		expect(get(gate.hydrated)).toBe(false);
 
 		unsub();
-		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy
+		page.destroy();
 	});
 });

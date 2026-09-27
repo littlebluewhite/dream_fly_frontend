@@ -2,9 +2,9 @@
   /* 管理員 · 課程管理。admin.jsx ClassesScreen (202)。
    * 清單由 $classes store 提供;tap → sheet('class'),新增 → sheet('classForm',{k:null})。
    *
-   * 資料改由 hydrateOps()(mock-API 接縫)非同步水合 $classes store,三態閘門
+   * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $classes store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
-   * /編輯,refreshOps() 供 ErrorState 重試(不受守衛短路)。unmount 後解析的
+   * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。unmount 後解析的
    * in-flight fetch 由 createLoadGate($lib/load-gate)內建的 generation/destroy
    * 機制擋下,不再需要頁面自帶的 alive 旗標。
    *
@@ -28,7 +28,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, classes, coaches, adminUnreadCount, toasts, hydrateOps, refreshOps, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
+  import { overlay, classes, coaches, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
   import { createLoadGate } from '$lib/load-gate';
   import type { ClassRow } from '$lib/mobile-admin/data';
@@ -41,10 +41,7 @@
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  const gate = createLoadGate({
-    fetch: hydrateOps,
-    refresh: refreshOps
-  });
+  const gate = createLoadGate({ ...opsPageEntry });
   onMount(() => {
     gate.load();
   });
