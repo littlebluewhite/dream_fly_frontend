@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
 import { getAdminHome, createMember, getOpsCollections } from '$lib/mobile-admin/api';
-import { overlay, toasts, members, opsHydrated } from '$lib/mobile-admin/stores';
+import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
 import { MEMBERS, CLASSES, ORDERS, type Profile, type TodayRow } from '$lib/mobile-admin/data';
 import { COACHES } from '$lib/domain/coaches';
 import type { Activity as ActivityRow } from '$lib/domain/activity';
@@ -56,7 +56,7 @@ beforeEach(() => {
 	vi.mocked(getOpsCollections).mockReset();
 	vi.mocked(getOpsCollections).mockResolvedValue(opsWith(MEMBERS));
 	members.set(MEMBERS);
-	opsHydrated.set(false);
+	resetOpsForTests();
 	overlay.closeAll();
 });
 
@@ -83,12 +83,10 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		// getOpsCollections 故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——
 		// orders store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、
 		// 直接讀 $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
-		let release!: (e: Error) => void;
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise((_, rej) => (release = rej)));
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試動態一'); // 等 getAdminHome 的 ready(與 ops 水合是獨立的兩支請求)
 		expect(queryByText('筆訂單', { exact: false })).toBeNull();
-		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('opsHydrated 落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
@@ -170,8 +168,9 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	it('快速新增學員後重抓 ops 集合($members 含新學員),並顯示成功 toast', async () => {
 		const created = { ...MEMBERS[0], id: 'zz-quick', name: '快速新增的學員' };
 		vi.mocked(createMember).mockResolvedValue({} as never);
+		await hydrateOps(); // 已水合(fetch 替身回舊清單):舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
+		vi.mocked(getOpsCollections).mockClear();
 		vi.mocked(getOpsCollections).mockResolvedValue(opsWith([...MEMBERS, created]));
-		opsHydrated.set(true); // 已水合:舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
 		const { findByText } = render(AdminHomePage);
 		await fireEvent.click(await findByText('新增學員'));
 		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };

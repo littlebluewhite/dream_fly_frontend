@@ -9,7 +9,10 @@ import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints } from './api';
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
-import { points, pointsLedger, subscriptions, memberProfile, notifications, notificationsHydrated, waitlist, waitlistHydrated, leaveRequests, leaveRequestsHydrated } from './stores';
+import { points, pointsLedger, subscriptions, memberProfile, notifications, waitlist, leaveRequests } from './stores';
+import { resetNotificationsForTests } from './notifications';
+import { resetWaitlistForTests } from './waitlist';
+import { resetLeaveRequestsForTests } from './leave';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -32,11 +35,11 @@ beforeEach(() => {
   pointsLedger.set([]);
   subscriptions.set([]);
   notifications.set([]);
-  notificationsHydrated.set(false);
+  resetNotificationsForTests();
   waitlist.set([]);
-  waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 getMine 的旁路 hydrate 短路
+  resetWaitlistForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓 getMine 的旁路 hydrate 短路
   leaveRequests.set([]);
-  leaveRequestsHydrated.set(false);
+  resetLeaveRequestsForTests();
 });
 
 describe('getDashboard', () => {

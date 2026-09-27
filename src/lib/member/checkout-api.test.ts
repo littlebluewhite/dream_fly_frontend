@@ -29,8 +29,11 @@ import {
   hydrateWaitlist,
   joinWaitlist,
   cancelWaitlist,
-  joinWaitlistErrorMessage
+  joinWaitlistErrorMessage,
+  markRead
 } from './stores';
+import { resetWaitlistForTests } from './waitlist';
+import { resetNotificationsForTests } from './notifications';
 import type { CartItem } from '$lib/cart-item';
 import { fakeRouter } from '$lib/testing/fake-router';
 
@@ -92,12 +95,12 @@ beforeEach(() => {
   localStorage.clear();
   cart.clear();
   waitlist.set([]);
-  waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 hydrateWaitlist 短路
+  resetWaitlistForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓 hydrateWaitlist 短路
   subscriptions.set([]);
   points.set(0);
   pointsLedger.set([]);
   notifications.set([]);
-  notificationsHydrated.set(false);
+  resetNotificationsForTests();
   vi.mocked(api).mockReset();
 });
 
@@ -539,9 +542,10 @@ describe('hydrateNotifications(Task 17)', () => {
   });
 
   it('已經 hydrate 過就不重覆抓 —— 避免蓋掉本地已讀狀態(同通知頁 load() 的既有守衛)', async () => {
-    notificationsHydrated.set(true);
-    const sentinel = [{ id: 's1', cat: 'system' as const, icon: 'bell' as const, tone: 'neutral' as const, title: '哨兵', body: '', time: '2026-01-01 00:00', read: true }];
-    notifications.set(sentinel);
+    vi.mocked(api).mockResolvedValue([{ id: 's1', type: 'system', title: '哨兵', message: '', is_read: true, metadata: null, created_at: '2026-01-01T00:00:00Z' }]);
+    await hydrateNotifications(); // 哨兵經真水合落地、旗標 true(旗標唯讀)
+    const sentinel = get(notifications);
+    vi.mocked(api).mockClear();
     vi.mocked(api).mockResolvedValue([{ id: 'n2', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
 
     await hydrateNotifications();
@@ -560,7 +564,7 @@ describe('hydrateNotifications(Task 17)', () => {
       { id: 's2', cat: 'system' as const, icon: 'bell' as const, tone: 'neutral' as const, title: '飛行中寫入', body: '', time: '2026-01-01 00:00', read: true }
     ];
     notifications.set(sentinel); // 模擬 mutation：飛行中已有其他來源寫入
-    notificationsHydrated.set(true);
+    void markRead('s2'); // 真 mutation 翻旗(旗標唯讀;s2 本已讀,store 內容不變)
 
     deferred.resolve([{ id: 'n3', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
     await p;
@@ -652,9 +656,10 @@ describe('hydrateWaitlist', () => {
   });
 
   it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 join/cancel 直寫的狀態（同 hydrateNotifications 的守衛）', async () => {
-    waitlistHydrated.set(true);
+    vi.mocked(api).mockResolvedValue([{ id: 'wl-s', course_id: 'course-uuid-7', course_name: '哨兵課程', status: 'waiting', created_at: '2026-07-01T00:00:00Z' }]);
+    await hydrateWaitlist(); // 哨兵經真水合落地、旗標 true(旗標唯讀)
     const sentinel = [{ id: 'wl-s', course_id: 'course-uuid-7', course_name: '哨兵課程' }];
-    waitlist.set(sentinel);
+    vi.mocked(api).mockClear();
     vi.mocked(api).mockResolvedValue([
       { id: 'wl-x', course_id: 'course-uuid-6', course_name: '不該出現', status: 'waiting', created_at: '2026-07-04T00:00:00Z' }
     ]);

@@ -5,7 +5,8 @@ import { tick } from 'svelte';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
+import { notifications, notificationsHydrated, hydrateNotifications, toasts } from '$lib/member/stores';
+import { resetNotificationsForTests } from '$lib/member/notifications';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 import type { ApiNotification, Notification } from '$lib/member/data';
 import Page from './+page.svelte';
@@ -33,6 +34,16 @@ const FEED_UNSET = () => Promise.reject(new Error('測試未指定 GET /notifica
 /** 本頁只有兩種 api 呼叫:GET /notifications(路徑相等)與 /notifications/{id}/read。 */
 const feedCalls = () => vi.mocked(api).mock.calls.filter(([path]) => path === '/notifications').length;
 
+/** 「已水合」前置(旗標唯讀,R15):fetch 替身回 fixture 真水合、清掉呼叫紀錄,再鋪回 seed
+ *  (n1–n3 未讀、n4–n6 已讀)——各測試的斷言都以 seed 為準。 */
+async function hydrateWithSeed() {
+  feed = async () => WIRE.map((n) => ({ ...n }));
+  await hydrateNotifications();
+  vi.mocked(api).mockClear();
+  feed = FEED_UNSET;
+  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
+}
+
 beforeEach(() => {
   vi.mocked(api).mockReset();
   feed = FEED_UNSET;
@@ -42,15 +53,15 @@ beforeEach(() => {
   get(toasts).forEach((t) => toasts.dismiss(t.id));
   // Reset the load-once guard so each test starts un-hydrated. A store (not a
   // module boolean) so test order can't leak a prior successful hydrate.
-  notificationsHydrated.set(false);
+  resetNotificationsForTests();
   // Re-seed the feed so a prior test's set() doesn't bleed through.
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 afterEach(() => {
   // Ensure shared store is always restored to seed after each test.
+  resetNotificationsForTests();
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
-  notificationsHydrated.set(false);
 });
 
 describe('member/notifications 頁', () => {
@@ -65,7 +76,7 @@ describe('member/notifications 頁', () => {
   });
 
   it('點擊通知(標為已讀)會呼叫 PATCH /notifications/{id}/read(Task 17)', async () => {
-    notificationsHydrated.set(true); // 直接用 store 裡已有的 seed,略過 load()
+    await hydrateWithSeed(); // 直接用 store 裡已有的 seed,略過 load()
     render(Page);
     const row = (await screen.findByText('明日課程提醒')).closest('button')!;
 
@@ -76,7 +87,7 @@ describe('member/notifications 頁', () => {
 
   it('全部標為已讀:對每個未讀通知各發一次 PATCH(已讀的不重發),全部成功後顯示成功 toast', async () => {
     // seed:n1–n3 未讀、n4–n6 已讀(見 NOTIFS_SEED)——只有 n1/n2/n3 該被 PATCH。
-    notificationsHydrated.set(true);
+    await hydrateWithSeed();
     render(Page);
     await screen.findByText('明日課程提醒');
 
@@ -95,7 +106,7 @@ describe('member/notifications 頁', () => {
   });
 
   it('全部標為已讀:任一 PATCH 失敗時改報「部分通知標記失敗」,本地已讀狀態不還原', async () => {
-    notificationsHydrated.set(true);
+    await hydrateWithSeed();
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(api).mockImplementation(async (path: string) => {
       if (path === '/notifications/n2/read') throw new Error('network error');
@@ -115,7 +126,7 @@ describe('member/notifications 頁', () => {
   });
 
   it('PATCH 失敗時只記錄錯誤,樂觀更新的已讀狀態不還原', async () => {
-    notificationsHydrated.set(true);
+    await hydrateWithSeed();
     vi.mocked(api).mockRejectedValue(new Error('network error'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     render(Page);
@@ -135,16 +146,14 @@ describe('member/notifications 頁', () => {
   });
 
   it('loading 分支有可辨識骨架標記(data-testid="notifs-skeleton")', () => {
-    let release!: (e: Error) => void;
-    feed = () => new Promise((_, rej) => (release = rej));
+    feed = () => new Promise(() => {});
     const { container } = render(Page);
     expect(container.querySelector('[data-testid="notifs-skeleton"]')).not.toBeNull();
-    release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
   });
 
   it('load-once 守衛:已 hydrate 則重訪不再 fetch、直接 ready', async () => {
     // 模擬「先前已成功載入」:守衛為 true、store 已有資料。
-    notificationsHydrated.set(true);
+    await hydrateWithSeed();
     render(Page);
     // 直接 ready(seed 已在 store),且未再打 GET /notifications → 不覆寫已讀狀態。
     expect(await screen.findByText('明日課程提醒')).toBeInTheDocument();

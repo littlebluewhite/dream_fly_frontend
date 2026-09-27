@@ -49,6 +49,8 @@ const gate = createSessionGate<WaitlistEntry[]>({
   reset: () => waitlist.set([]) // boot 態(開機值 = reset 值 = [])
 });
 export const waitlistHydrated = gate.hydrated;
+/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
+export const resetWaitlistForTests = gate.reset;
 export const hydrateWaitlist = gate.hydrate;
 
 /** POST /waitlist（帶 course_id）。成功即代表已加入候補：把後端回傳的新 entry

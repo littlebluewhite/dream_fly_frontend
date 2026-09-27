@@ -63,7 +63,7 @@ describe('createHydrationGate', () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const apply = vi.fn();
 		const gate = createHydrationGate({ fetch, apply });
-		gate.hydrated.set(true);
+		gate.markMutated(); // 翻旗 true(旗標唯讀,改走 mutation 宣告水合真相)
 
 		await gate.hydrate();
 
@@ -89,7 +89,7 @@ describe('createHydrationGate', () => {
 		const fetch = vi.fn(async () => data);
 		const apply = vi.fn();
 		const gate = createHydrationGate({ fetch, apply });
-		gate.hydrated.set(true);
+		gate.markMutated(); // 翻旗 true(旗標唯讀,改走 mutation 宣告水合真相)
 
 		await gate.refresh();
 
@@ -355,7 +355,7 @@ describe('createHydrationGate', () => {
 	});
 
 	it('記帳順序:markMutated(尾流) 翻旗的同步通知裡重入 refresh() → GET 不得出發(尾流必須先入帳,再推世代/翻旗)', async () => {
-		/* 半發布狀態:core.commit() 的 hydrated.set(true) 在旗標原為 false 時走 false→true 這道邊沿,
+		/* 半發布狀態:commit() 的翻旗 set(true) 在旗標原為 false 時走 false→true 這道邊沿,
 		 * 會**同步**通知 subscriber(svelte writable 只對 primitive 相同值短路,true→true 才不通知),
 		 * subscriber 若在那個回呼裡同步重入 refresh(),而尾流是在
 		 * commit **之後**才入帳,此刻 pendingSettle() 仍回 undefined —— GET 帶著已遞增的世代
@@ -424,7 +424,7 @@ describe('createHydrationGate', () => {
 		page.destroy();
 	});
 
-	it('markMutated() 把 hydrated 翻 true;hydrated.set(false) 後可再次水合(測試重置縫)', async () => {
+	it('markMutated() 把 hydrated 翻 true;invalidate() 後可再次水合', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const apply = vi.fn();
 		const gate = createHydrationGate({ fetch, apply });
@@ -432,7 +432,7 @@ describe('createHydrationGate', () => {
 		gate.markMutated();
 		expect(get(gate.hydrated)).toBe(true);
 
-		gate.hydrated.set(false);
+		gate.invalidate();
 		await gate.hydrate();
 
 		expect(fetch).toHaveBeenCalledTimes(1);
@@ -643,5 +643,84 @@ describe('pageEntry(plain gate)', () => {
 
 		unsub();
 		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy
+	});
+});
+
+describe('reset()', () => {
+	/* 閘門重置(R15):內容還原開機值(opts.reset)+ 旗標翻 false + 丟在飛合併 GET + 換尾流帳本並
+	 * 喚醒全部等待者。重置之前出發的 GET 一律不寫(進場記 resetEpoch、落地比對)。session 閘門的
+	 * identity 重置與各模組的測試出口 reset…ForTests 走的都是這一支。 */
+
+	it('reset 後不借用舊的在飛 GET:之後進場的 hydrate 重新真抓', async () => {
+		const dOld = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(dOld.promise).mockResolvedValueOnce({ v: 2 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const pOld = gate.hydrate(); // 在飛
+		gate.reset();
+		await gate.hydrate(); // 不得併入重置前那支
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+
+		dOld.resolve({ v: 1 });
+		await pOld;
+		expect(apply).toHaveBeenCalledTimes(1);
+	});
+
+	it('重置前出發的 GET 落地時不寫 store、不翻旗(hydrate 與 refresh 皆然)', async () => {
+		const dHydrate = createDeferred<string>();
+		const dRefresh = createDeferred<string>();
+		const fetch = vi.fn().mockReturnValueOnce(dHydrate.promise).mockReturnValueOnce(dRefresh.promise);
+		const store = writable('boot');
+		const gate = createHydrationGate({ fetch, apply: (v: string) => store.set(v), reset: () => store.set('boot') });
+
+		const pHydrate = gate.hydrate();
+		const pRefresh = gate.refresh();
+		store.set('dirty');
+		gate.reset();
+		expect(get(store)).toBe('boot'); // opts.reset 還原開機值
+
+		dHydrate.resolve('old-h');
+		dRefresh.resolve('old-r');
+		await Promise.all([pHydrate, pRefresh]);
+
+		expect(get(store)).toBe('boot');
+		expect(get(gate.hydrated)).toBe(false);
+	});
+
+	it('reset 喚醒尾流等待者(舊 refresh 不再出發 GET);舊尾流之後 settle 也不再出帳', async () => {
+		const oldTail = createDeferred<void>();
+		const newTail = createDeferred<void>();
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		gate.markMutated(oldTail.promise);
+		const pOld = gate.refresh(); // 等舊尾流
+		gate.reset();
+		await pOld; // 被喚醒即收束(永不 settle 的尾流也擋不住)
+		expect(fetch).not.toHaveBeenCalled();
+		expect(apply).not.toHaveBeenCalled();
+
+		gate.markMutated(newTail.promise); // 新帳本上的尾流
+		oldTail.resolve(); // 舊尾流姍姍來遲——不得把新帳減掉
+		await settleRetry();
+
+		const p = gate.refresh();
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled(); // 新尾流仍在帳上
+
+		newTail.resolve();
+		await p;
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+	});
+
+	it('hydrated 唯讀:不能從外部寫旗標', () => {
+		const gate = createHydrationGate({ fetch: async () => 1, apply: () => {} });
+		// @ts-expect-error hydrated 是 Readable,沒有 set
+		expect(() => gate.hydrated.set(true)).toThrow(TypeError);
 	});
 });

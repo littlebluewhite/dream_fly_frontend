@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { cart, toasts, waitlist, waitlistHydrated } from '$lib/member/stores';
+import { cart, toasts, waitlist } from '$lib/member/stores';
+import { resetWaitlistForTests } from '$lib/member/waitlist';
 import { getCourses } from '$lib/member/api';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -55,7 +56,7 @@ beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter({}, WAITLIST_DEFAULTS));
 	waitlist.set([]);
-	waitlistHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓進頁的 hydrateWaitlist 短路
+	resetWaitlistForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓進頁的 hydrateWaitlist 短路
 });
 
 afterEach(() => {

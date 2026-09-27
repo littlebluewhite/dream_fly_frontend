@@ -115,4 +115,23 @@ describe('匯入掃描器（Import Scan）', () => {
 			.map((f) => f.replace(ROOT + '/', ''));
 		expect(offenders, `production 不得 import 測試支援模組 $lib/testing：${offenders.join(', ')}`).toEqual([]);
 	});
+
+	it('測試出口契約：production 原始碼零引用 *ForTests（定義行除外）', () => {
+		// 閘門重置（R15）：各模組的 reset…ForTests 只給測試重置模組單例，production 呼叫它等於
+		// 繞過身分重置亂清共享 store。定義行＝`export const xForTests =`；註解行不算引用。
+		const productionFiles = ['src/lib', 'src/routes']
+			.map(r)
+			.flatMap(walk)
+			.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte') && !f.startsWith(r('src/lib/testing') + '/'));
+		expect(productionFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
+		const offenders = productionFiles.flatMap((f) =>
+			readFileSync(f, 'utf8')
+				.split('\n')
+				.map((line, i) => ({ line, at: `${f.replace(ROOT + '/', '')}:${i + 1}` }))
+				.filter(({ line }) => /\w+ForTests\b/.test(line))
+				.filter(({ line }) => !/^\s*(\/\/|\/?\*)/.test(line) && !/^export const \w+ForTests\s*=/.test(line))
+				.map(({ at }) => at)
+		);
+		expect(offenders, `production 不得引用 *ForTests：${offenders.join(', ')}`).toEqual([]);
+	});
 });

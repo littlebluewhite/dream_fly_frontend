@@ -14,7 +14,7 @@ import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { createLoadGate } from '$lib/load-gate';
-import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead } from './notifications';
+import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead, hydrateNotifications, resetNotificationsForTests } from './notifications';
 import { mapNotification } from './data';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 // Task 5(架構深化 R12):跨帳號 session 重置的「無登出直接換帳號」釘,自
@@ -52,8 +52,8 @@ beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockResolvedValue(undefined);
   // 夾具: n1–n3 未讀、n4–n6 已讀（見 $lib/testing/seed-fixtures 的 NOTIFS_SEED）。
+  resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
-  notificationsHydrated.set(false);
 });
 
 // R14(候選 F3)誠實開機:開機值 = reset 值 = `[]`——角標在暖機前是 0(UI 在 0 時本來就
@@ -284,8 +284,8 @@ describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () 
     vi.mocked(api).mockReset();
     vi.mocked(api).mockResolvedValue(undefined); // logout best-effort revoke .catch 安全
     await authStore.logout(); // 每個 it 從登出態起跑:立即回呼身分 null == baseline,不誤觸
+    resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
     notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
-    notificationsHydrated.set(false);
   });
 
   // P1″ 換帳號釘(移植自 mobile/notifications.test.ts:186)：A hydrate 後 B 直接
@@ -294,11 +294,14 @@ describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () 
   // 的是「無登出邊沿」這條 member 側原本沒釘到的路徑。
   it('A hydrate 後 B 直接登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知', async () => {
     let logins = 0;
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+      'GET /notifications': [apiNotif(true, 'a1')]
+    }));
 
     await authStore.login('a@dreamfly.test', 'pw');
-    notifications.set([{ id: 'a1', cat: 'system', icon: 'bell', tone: 'info', title: 'A 的通知', body: '', time: '剛才', read: true }]);
-    notificationsHydrated.set(true);
+    await hydrateNotifications(); // A 的通知經真水合落地、旗標 true
+    vi.mocked(api).mockClear();
 
     await authStore.login('b@dreamfly.test', 'pw'); // B 直接登入,無登出邊沿
 
@@ -315,8 +318,8 @@ describe('markAllRead 的 allSettled 尾流(移植自 mobile/notifications.test.
    * 失敗就永久卡住 refresh。 */
   beforeEach(() => {
     vi.mocked(api).mockReset();
+    resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
     notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: false })).slice(0, 2));
-    notificationsHydrated.set(false);
   });
 
   it('markAllRead 的 PATCH 群未 settle → 頁面 refresh 的 GET 不出發;含失敗的 allSettled settle 後照出發', async () => {

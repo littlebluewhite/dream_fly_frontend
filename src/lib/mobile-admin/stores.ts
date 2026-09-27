@@ -124,6 +124,8 @@ const opsGate = createHydrationGate({
 	}
 });
 export const opsHydrated = opsGate.hydrated;
+/** 測試出口:閘門還原開機態(旗標 + 在飛 GET + 尾流帳;ops 未給 opts.reset,集合內容不動)。production 不得引用。 */
+export const resetOpsForTests = opsGate.reset;
 export const hydrateOps = opsGate.hydrate;
 export const refreshOps = opsGate.refresh;
 /** 頁面進場包(R14 F1):classes/members/orders 三頁與 CoachesScreen 一律
@@ -236,6 +238,8 @@ const messagesGate = createSessionGate({
 	}
 });
 export const messagesHydrated = messagesGate.hydrated;
+/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
+export const resetMessagesForTests = messagesGate.reset;
 export const hydrateMessages = messagesGate.hydrate;
 /** 訊息頁的進場包(R14 F1);fetch 是帶 epoch 核對的那一支(session 閘門繼承自水合閘門)。 */
 export const messagesPageEntry = messagesGate.pageEntry();

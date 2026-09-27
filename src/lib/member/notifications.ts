@@ -44,9 +44,10 @@ const gate = createSessionGate<Notification[]>({
 // True once the notifications feed has been hydrated via GET /notifications on
 // the first client mount; lets re-visits skip re-seeding so read-state (and the
 // unread badge) survive navigation. Independent of `notifications`/`unreadCount`
-// so it never affects the badge. Resettable in tests. Same writable instance as
-// gate.hydrated(hydration-gate.ts 的介面明文：呼叫端可直接讀寫，非唯讀投影)。
+// so it never affects the badge. 唯讀投影(R15 閘門重置);測試以 resetNotificationsForTests 重置。
 export const notificationsHydrated = gate.hydrated;
+/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
+export const resetNotificationsForTests = gate.reset;
 export const hydrateNotifications = gate.hydrate;
 /** 通知頁的 load-gate 進場包(閘門的資料來源,抓取帶 epoch 核對),頁面 spread 使用。 */
 export const notificationsPageEntry = gate.pageEntry();

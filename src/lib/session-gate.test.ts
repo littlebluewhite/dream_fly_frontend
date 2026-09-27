@@ -77,7 +77,7 @@ describe('createSessionGate — session 家族', () => {
 		});
 
 		await authStore.login('a@dreamfly.test', 'pw'); // null → u-f1
-		gate.hydrated.set(true); // 模擬已水合
+		gate.markMutated(); // 模擬已水合(旗標唯讀,改走 mutation 翻旗)
 		reset.mockClear(); // 只數登出那次
 
 		await authStore.logout();

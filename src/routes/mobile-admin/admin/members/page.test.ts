@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
 import { getOpsCollections, createMember, updateMember } from '$lib/mobile-admin/api';
-import { classes, members, coaches, orders, overlay, opsHydrated, toasts } from '$lib/mobile-admin/stores';
+import { classes, members, coaches, orders, overlay, opsHydrated, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { MemberRow } from '$lib/mobile-admin/data';
 import { COACHES } from '$lib/domain/coaches';
@@ -44,7 +44,7 @@ beforeEach(() => {
 	vi.mocked(getOpsCollections).mockResolvedValue(OPS_FIXTURE);
 	vi.mocked(createMember).mockReset();
 	vi.mocked(updateMember).mockReset();
-	opsHydrated.set(false);
+	resetOpsForTests();
 	members.set(MEMBERS);
 	classes.set(CLASSES);
 	coaches.set(COACHES);
@@ -53,7 +53,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	opsHydrated.set(false);
+	resetOpsForTests();
 	members.set(MEMBERS);
 	classes.set(CLASSES);
 	coaches.set(COACHES);
@@ -62,11 +62,9 @@ afterEach(() => {
 
 describe('mobile-admin/admin/members 頁', () => {
 	it('loading 分支顯示骨架(data-testid="members-skeleton")', () => {
-		let release!: (e: Error) => void;
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise((_, rej) => (release = rej)));
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
 		const { container } = render(MembersPage);
 		expect(container.querySelector('[data-testid="members-skeleton"]')).not.toBeNull();
-		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('async 水合後顯示 $members store 的學員(相異 fixture)與統計筆數', async () => {

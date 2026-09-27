@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import CoachesScreen from './CoachesScreen.svelte';
 import { createMember, createCoach, updateMember, updateCoach, getOpsCollections } from '$lib/mobile-admin/api';
 import type { CoachFormValues } from '$lib/mobile-admin/api';
-import { overlay, coaches, toasts, opsHydrated } from '$lib/mobile-admin/stores';
+import { overlay, coaches, toasts, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
 import { COACHES } from '$lib/domain/coaches';
 import type { Coach } from '$lib/domain/coaches';
 import { ApiError } from '$lib/api/client';
@@ -48,7 +48,7 @@ const opsFixture = (coachesList: Coach[]) => ({
 	pages: { members: { total: 0, perPage: 20 }, classes: { total: 0, perPage: 20 }, orders: { total: 0, perPage: 20 } }
 });
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.mocked(createMember).mockReset();
 	vi.mocked(createCoach).mockReset();
 	vi.mocked(updateMember).mockReset();
@@ -57,9 +57,11 @@ beforeEach(() => {
 	vi.mocked(getOpsCollections).mockResolvedValue(opsFixture(COACHES));
 	coaches.set(COACHES);
 	overlay.closeAll();
-	// R10：opsHydrated 是明文「測試重置縫」(stores.ts)——設為已水合，讓本頁新加的
-	// onMount hydrateOps() 因 guard 短路直接 return，不干擾既有的呼叫次數斷言。
-	opsHydrated.set(true);
+	// R10：先水合(旗標唯讀,R15 起經 fixture 真水合),讓本頁新加的 onMount hydrateOps()
+	// 因 guard 短路直接 return，不干擾既有的呼叫次數斷言。
+	resetOpsForTests();
+	await hydrateOps();
+	vi.mocked(getOpsCollections).mockClear();
 });
 
 afterEach(() => {
@@ -234,7 +236,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 
 describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁→本 overlay 動線上此前無人呼叫 hydrateOps，$coachesStore 只見 domain seed)', () => {
 	it('opsHydrated 為 false 時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
-		opsHydrated.set(false);
+		resetOpsForTests();
 		const hydratedCoach: Coach = {
 			id: 'c-hydrated',
 			userId: 'u-hydrated',
@@ -269,7 +271,7 @@ function createDeferred<T>() {
 
 describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 getOpsCollections)', () => {
 	it('loading：opsHydrated 為 false 時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
-		opsHydrated.set(false);
+		resetOpsForTests();
 		const d = createDeferred<ReturnType<typeof opsFixture>>();
 		vi.mocked(getOpsCollections).mockReturnValue(d.promise);
 
@@ -288,7 +290,7 @@ describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 ge
 	});
 
 	it('error:getOpsCollections 失敗 → ErrorState「載入失敗」、無編輯鉛筆;點「重新載入」→ refreshOps 重打,成功後列表恢復', async () => {
-		opsHydrated.set(false);
+		resetOpsForTests();
 		// 第一打(hydrateOps)失敗;重試的第二打落回 beforeEach 的 mockResolvedValue(COACHES)。
 		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('network'));
 

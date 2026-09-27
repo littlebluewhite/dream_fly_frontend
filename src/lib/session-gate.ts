@@ -24,9 +24,9 @@
  * `pendingSettle`(mutation settle 訊號)——讓頁面 load-gate 的 refresh 族與 store 閘門讀
  * **同一本**世代帳與**同一本**尾流帳(見 $lib/hydration-gate 的 fetchGenStable)。R14(候選
  * F1)再把 pageEntry() 整個搬進 HydrationGate:本檔已把 epochFetch 當 fetch 餵給水合閘門,
- * 所以繼承下來的進場包自帶 epoch 核對,本檔不再自己組。identity onChange 改呼叫內部工廠
- * createOwnedHydrationGate 交出的 `ownerChanged()`(翻旗 false + 清尾流帳,後者即 R11 終審
- * 修波的跨身分清帳,理由見 createSessionGate 註解)。queueReconcile 與 mutate() 不受影響:
+ * 所以繼承下來的進場包自帶 epoch 核對,本檔不再自己組。identity onChange 呼叫本閘門的
+ * `reset()`(R15 起即水合閘門自帶的 reset() 再加重置兩條鏈;閘門那支翻旗 false + 清尾流帳,
+ * 後者即 R11 終審修波的跨身分清帳,理由見 createSessionGate 註解)。queueReconcile 與 mutate() 不受影響:
  * 前者的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費閉合(見該函式
  * 註解);後者是 await-then-write,天生沒有「寫回時尾流仍在飛」的窗口,不需要入帳(R11 的
  * 缺陷只在四個 mark-before-await 的通知域呼叫點)。
@@ -47,11 +47,11 @@
  * 每次 factory call 一個獨立的 authStore 訂閱(R13 起共八個模組級永生訂閱——六個
  * createSessionGate + 兩個 createSessionRefresher,與現狀同類),
  * 無共享 registry:registry 會違反零副作用憲章、需要新的 registry-reset 測試接縫,
- * 且 epoch 只與自身比較、無跨模組消費者(見 ADR 0016 定案 3)。
+ * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/authStore';
-import { createOwnedHydrationGate, type HydrationGate } from '$lib/hydration-gate';
+import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
@@ -97,10 +97,10 @@ export interface SessionGateOptions<T> {
 }
 
 /**
- * 門 (a) 對外面:HydrationGate<T>(hydrated/hydrate/refresh/markMutated/pageEntry)只多一個
- * mutate。pageEntry() 繼承自閘門(R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠
- * 餵給水合閘門的那一支,不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })`
- * 不再有機會繞過核對。
+ * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/invalidate/reset/markMutated/pageEntry)
+ * 多 mutate 與 queueWrite;reset 覆寫為「閘門 reset + 重置兩條鏈」。pageEntry() 繼承自閘門
+ * (R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠餵給水合閘門的那一支,
+ * 不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })` 不再有機會繞過核對。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
  *   進場快照(await 之前捕捉 wasHydrated + epoch)→ await request → epoch 丟棄(過期即
  *   棄寫,結果仍回傳:server 端事實已成立)→ 寫回時重查完整度(stillIncomplete)→
@@ -112,7 +112,7 @@ export interface SessionGateOptions<T> {
  * `stale()` 供失敗處理判斷(換帳後不得回滾/重抓到新身分身上)。換帳號即重置這條鏈——
  * 舊身分卡住的寫入不得堵住新身分。
  */
-export interface SessionGate<T> extends HydrationGate<T> {
+export interface SessionGate extends HydrationGate {
 	mutate<R>(request: () => Promise<R>, writeBack: (result: R) => void): Promise<R>;
 	queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R>;
 }
@@ -123,12 +123,12 @@ export interface SessionGate<T> extends HydrationGate<T> {
  * hydrate/refresh 時才被呼叫。建構期不觸發 onChange(身分基準見 createSessionCore),
  * 宣告順序不再是契約。
  *
- * onChange = opts.reset() + owned.ownerChanged()(翻旗 false + 丟在飛合併 GET + 清尾流帳——
+ * onChange = reset() = gate.reset()(opts.reset() + 翻旗 false + 丟在飛合併 GET + 清尾流帳——
  * R11 終審修波:舊 session 掛死的 mutation 尾流不得堵住新身分的 refresh,尾流帳的「必然自癒」
  * 前提只在同身分內成立,跨身分時 A 的一筆永不 settle 的 PATCH 會讓 B 的 GET 一次都不出發)+
  * reconcileChain / writeChain 重置(舊 session 卡死的和解或寫入不得堵住新 session 的鏈)。
  */
-export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T> {
+export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 	const epochFetch = async (): Promise<T> => {
 		const epoch = core.epoch();
 		const data = await opts.fetch();
@@ -139,16 +139,15 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		if (epoch !== core.epoch()) throw new Error('stale session: 回應跨登出/換帳號,作廢');
 		return data;
 	};
-	const owned = createOwnedHydrationGate<T>({ fetch: epochFetch, apply: opts.apply });
-	const gate = owned.gate;
+	const gate = createHydrationGate<T>({ fetch: epochFetch, apply: opts.apply, reset: opts.reset });
 	let reconcileChain: Promise<void> = Promise.resolve();
 	let writeChain: Promise<void> = Promise.resolve();
-	const core = createSessionCore(() => {
-		opts.reset();
-		owned.ownerChanged(); // 翻旗 false + 舊身分的在飛 GET 與尾流不得帶給新身分(理由見上方 onChange 說明)
+	function reset(): void {
+		gate.reset(); // 內容還原 + 翻旗 false + 舊身分的在飛 GET 與尾流不得帶給新身分(理由見上方 onChange 說明)
 		reconcileChain = Promise.resolve();
 		writeChain = Promise.resolve();
-	});
+	}
+	const core = createSessionCore(reset);
 
 	/**
 	 * F2′ 和解重抓:序列化 + 失敗可重試 + 幽靈取消。
@@ -203,7 +202,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		return run;
 	}
 
-	return { ...gate, mutate, queueWrite };
+	return { ...gate, reset, mutate, queueWrite };
 }
 
 /**

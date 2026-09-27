@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import { goto, replaceState } from '$app/navigation';
-import { checkoutOpen, notificationsHydrated } from '$lib/member/stores';
+import { checkoutOpen } from '$lib/member/stores';
+import { resetNotificationsForTests } from '$lib/member/notifications';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { authStore } from '$lib/stores/authStore';
@@ -39,7 +40,7 @@ beforeEach(() => {
   localStorage.clear();
   authStore.logout();
   checkoutOpen.set(false);
-  notificationsHydrated.set(false);
+  resetNotificationsForTests();
   vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
 });
 afterEach(() => vi.clearAllMocks());

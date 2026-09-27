@@ -23,6 +23,7 @@ import {
   bookMakeup,
   leaveRequestErrorMessage
 } from './stores';
+import { resetLeaveRequestsForTests } from './leave';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -75,7 +76,7 @@ const API_LR_APPROVED = {
 beforeEach(() => {
   vi.mocked(api).mockReset();
   leaveRequests.set([]);
-  leaveRequestsHydrated.set(false); // 模組單例旗標,不重置會跨 it 洩漏、讓 hydrateLeaveRequests 短路
+  resetLeaveRequestsForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓 hydrateLeaveRequests 短路
 });
 
 /* C1：水合改走 createHydrationGate（guard 短路 + post-await re-check + mutator
@@ -91,8 +92,9 @@ describe('hydrateLeaveRequests — GET /leave-requests/me（guard 短路 + mutat
   });
 
   it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 create/cancel 直寫的狀態', async () => {
-    leaveRequestsHydrated.set(true);
-    leaveRequests.set([API_LR_APPROVED as never]); // 哨兵
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_APPROVED] }));
+    await hydrateLeaveRequests(); // 哨兵經真水合落地(旗標唯讀)
+    vi.mocked(api).mockClear();
     vi.mocked(api).mockImplementation(fakeRouter({})); // 任何呼叫都會丟錯
 
     await hydrateLeaveRequests();
@@ -146,7 +148,9 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
   });
 
   it('旗標 true 仍真抓:refresh 無視 guard（MyCourseDetail 開詳情「刷新最新」語意，= gate.refresh）', async () => {
-    leaveRequestsHydrated.set(true);
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING] }));
+    await hydrateLeaveRequests(); // 旗標 true
+    vi.mocked(api).mockClear();
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_APPROVED] }));
 
     await refreshLeaveRequests();
@@ -184,12 +188,13 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
      * markMutated 正落在窗口內 → 舊快照丟棄、原地重抓 server 已更新的版本。 */
     const deferred = createDeferred<unknown[]>();
     let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING] }));
+    await hydrateLeaveRequests(); // 清單頁已載入過,詳情頁只是要「最新」
+    vi.mocked(api).mockClear();
     vi.mocked(api).mockImplementation(fakeRouter({
       'GET /leave-requests/me': () => (++gets === 1 ? deferred.promise : [{ ...API_LR_PENDING, status: 'cancelled' }]),
       'DELETE /leave-requests/lr-1': undefined
     }));
-    leaveRequests.set([API_LR_PENDING as never]);
-    leaveRequestsHydrated.set(true); // 清單頁已載入過,詳情頁只是要「最新」
 
     const p = refreshLeaveRequests(); // 開詳情的刷新在飛
     await cancelLeaveRequest('lr-1'); // 飛行窗口內取消 → 本地 cancelled + markMutated

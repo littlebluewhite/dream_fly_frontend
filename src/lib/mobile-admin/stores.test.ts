@@ -23,8 +23,10 @@ import {
 	opsHydrated,
 	hydrateOps,
 	refreshOps,
+	resetOpsForTests,
 	messagesHydrated,
 	hydrateMessages,
+	resetMessagesForTests,
 	opsPages,
 	searchCapHint,
 	addMember,
@@ -183,7 +185,7 @@ describe('markOrderPaid', () => {
 		expect(get(opsHydrated)).toBe(true); // opsGate.markMutated()
 		expect(getOpsCollections).not.toHaveBeenCalled();
 		orders.set(ORDERS); // restore the shared singleton for other tests
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	// R13 Task 5(C4):markOrderPaid 改共用 changeOrderStatus,PATCH 失敗不再 throw
@@ -192,7 +194,7 @@ describe('markOrderPaid', () => {
 	it('PATCH 400 → 回傳 illegalTransition,store 與 opsHydrated 皆不動', async () => {
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new ApiError(400, 'cannot transition order'));
-		opsHydrated.set(false);
+		resetOpsForTests();
 
 		const outcome = await markOrderPaid(pending);
 
@@ -209,7 +211,7 @@ describe('markOrderPaid', () => {
 
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('processing');
 		orders.set(ORDERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 });
 
@@ -225,8 +227,8 @@ describe('markMessageRead + coachMsgUnread', () => {
 		markMessageRead(firstUnread.id);
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		expect(get(coachMsgUnread)).toBe(unread0 - 1);
+		resetMessagesForTests(); // markMessageRead now also flips the flag (C1) — reset for other tests
 		messages.set(MESSAGES.map((m) => ({ ...m }))); // restore the shared singleton for other tests
-		messagesHydrated.set(false); // markMessageRead now also flips this (C1) — reset for other tests
 	});
 
 	it('reading an already-read thread is a no-op for the count', () => {
@@ -234,7 +236,7 @@ describe('markMessageRead + coachMsgUnread', () => {
 		const before = get(coachMsgUnread);
 		markMessageRead(read.id);
 		expect(get(coachMsgUnread)).toBe(before);
-		messagesHydrated.set(false); // markMessageRead now also flips this (C1) — reset for other tests
+		resetMessagesForTests(); // markMessageRead now also flips the flag (C1) — reset for other tests
 	});
 });
 
@@ -256,7 +258,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		expect(get(opsHydrated)).toBe(true);
 		// restore for other tests
 		members.set(MEMBERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	it('hydrateOps() 在 guard 為 true 時短路,不會再次覆寫(保護 overlay mutation)', async () => {
@@ -267,7 +269,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		expect(get(classes)).toEqual([{ ...CLASSES[0], name: '使用者剛新增的班級' }]);
 		// restore for other tests
 		classes.set(CLASSES);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	it('refreshOps() 一律重新 fetch,不受 guard 短路(供重試使用)', async () => {
@@ -278,7 +280,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		expect(get(orders)).toEqual(ORDERS);
 		// restore for other tests
 		orders.set(ORDERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	/* R10 關鍵判準守恆釘(ADR-0020 點名;R12 Task 3 改寫成 markOrderPaid(order) 新簽名,
@@ -288,7 +290,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 	 * markOrderPaid 現為先寫後改(await PATCH → 套回 → markMutated() 無尾流,ADR-0021),
 	 * 所以 refresh 也不會因尾流帳而等待。 */
 	it('判準守恆:await markOrderPaid(order) → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
-		opsHydrated.set(false);
+		resetOpsForTests();
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
 		await markOrderPaid(pending); // refresh 進場「之前」的 mutation
@@ -304,7 +306,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 
 		// restore for other tests
 		orders.set(ORDERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	it('hydrateOps()/refreshOps() 把分頁 meta 寫進 opsPages', async () => {
@@ -312,7 +314,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		vi.mocked(getOpsCollections).mockResolvedValueOnce(opsFixture({ pages }));
 		await refreshOps();
 		expect(get(opsPages)).toEqual(pages);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 });
 
@@ -351,8 +353,8 @@ describe('hydrateMessages / messagesHydrated', () => {
 		expect(get(messages)).toEqual(MESSAGES);
 		expect(get(messagesHydrated)).toBe(true);
 		// restore for other tests
+		resetMessagesForTests();
 		messages.set(MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(false);
 	});
 
 	it('hydrateMessages() 在 guard 為 true 時短路,不會覆寫 markMessageRead 的結果', async () => {
@@ -363,8 +365,8 @@ describe('hydrateMessages / messagesHydrated', () => {
 		await hydrateMessages();
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		// restore for other tests
+		resetMessagesForTests();
 		messages.set(MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(false);
 	});
 
 	it('教練 A 水合 → 換教練 B 登入 → 對話列表重置為 `[]`、旗標翻回 false,B 會重新水合(C6:不再看到 A 的對話)', async () => {
@@ -395,8 +397,8 @@ describe('hydrateMessages / messagesHydrated', () => {
 		expect(get(messagesHydrated)).toBe(true);
 		// restore for other tests
 		await authStore.logout();
+		resetMessagesForTests();
 		messages.set(MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(false);
 	});
 });
 
@@ -419,7 +421,7 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 	// (saveCoach 的本地寫入版本已隨 Round 4 Task F5 coaches/users 兩步真寫入移除——
 	// 真寫入成功後改呼叫 refreshOps() 整包重抓,不再是 markMutated 站點。)
 	it('markOrderPaid() 在 hydrateOps() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後不覆寫剛標記的付款狀態,opsHydrated 為 true', async () => {
-		opsHydrated.set(false);
+		resetOpsForTests();
 		const d = createDeferred<OpsCollections>();
 		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise);
 
@@ -439,11 +441,12 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 
 		// restore for other tests
 		orders.set(ORDERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 	});
 
 	it('markMessageRead() 在 hydrateMessages() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後訊息維持已讀,messagesHydrated 為 true', async () => {
-		messagesHydrated.set(false);
+		resetMessagesForTests();
+		messages.set(MESSAGES.map((m) => ({ ...m }))); // reset 還原開機值 [];本段需要有未讀的串列
 		const d = createDeferred<typeof MESSAGES>();
 		vi.mocked(getMessages).mockReturnValueOnce(d.promise);
 
@@ -461,8 +464,8 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 		expect(get(messagesHydrated)).toBe(true);
 
 		// restore for other tests
+		resetMessagesForTests();
 		messages.set(MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(false);
 	});
 });
 
@@ -481,7 +484,7 @@ describe('ops 寫入動詞', () => {
 		classes.set(CLASSES);
 		coaches.set(COACHES);
 		orders.set(ORDERS);
-		opsHydrated.set(false);
+		resetOpsForTests();
 		vi.mocked(getOpsCollections).mockClear();
 	}
 

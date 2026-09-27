@@ -3,7 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { api } from '$lib/api/client';
-import { notifications, notificationsHydrated } from '$lib/mobile/stores';
+import { notifications, notificationsHydrated, hydrateNotifications } from '$lib/mobile/stores';
+import { resetNotificationsForTests } from '$lib/member/notifications';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -54,7 +55,7 @@ beforeEach(() => {
 	// 清掉才能對「某 toast 不得出現」做可靠斷言(同 member 前例)。
 	get(toasts).forEach((t) => toasts.dismiss(t.id));
 	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
-	notificationsHydrated.set(false);
+	resetNotificationsForTests();
 	// 重新灌夾具(store 開機為 `[]`,本檔測試需要有未讀的 feed,比照 member 前例),避免前一
 	// 測試的 set()/markAllRead 滲漏到下一個測試。
 	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
@@ -62,8 +63,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	// 確保共享 store 在每個測試後都還原為 seed。
+	resetNotificationsForTests();
 	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
-	notificationsHydrated.set(false);
 });
 
 describe('mobile/notifications 頁', () => {
@@ -75,11 +76,9 @@ describe('mobile/notifications 頁', () => {
 	});
 
 	it('loading 分支有可辨識骨架標記(data-testid="notifications-skeleton")', () => {
-		let release!: (e: Error) => void;
-		feed = () => new Promise((_, rej) => (release = rej));
+		feed = () => new Promise(() => {});
 		const { container } = render(Page);
 		expect(container.querySelector('[data-testid="notifications-skeleton"]')).not.toBeNull();
-		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
@@ -89,8 +88,10 @@ describe('mobile/notifications 頁', () => {
 	});
 
 	it('load-once 守衛:已 hydrate 則重訪不再 fetch、直接 ready', async () => {
-		// 模擬「先前已成功載入」:守衛為 true(store 已由 beforeEach seed)。
-		notificationsHydrated.set(true);
+		// 模擬「先前已成功載入」:fetch 替身回 seed 的 wire 形真水合,守衛翻 true(旗標唯讀)。
+		feed = async () => NOTIFS_SEED.map(seedToWire);
+		await hydrateNotifications();
+		vi.mocked(api).mockClear();
 		render(Page);
 		// 直接 ready(store 已有資料),且未再呼叫接縫 → 不覆寫已讀狀態。
 		expect(await screen.findByText('明日課程提醒')).toBeInTheDocument();

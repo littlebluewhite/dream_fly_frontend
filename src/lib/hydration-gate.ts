@@ -8,7 +8,7 @@
  * 改建在 session-gate.ts 的 createSessionGate 上（換帳號即重置），仍間接用本 factory。
  *
  * 核心語意：hydrate() 開頭若已水合就短路、不打 API；fetch 進行中若發生 mutation
- * （markMutated()，或呼叫端直接把 hydrated 設 true），await 結束後的 re-check 會
+ * （markMutated()，或併發的另一方先套用並翻旗），await 結束後的 re-check 會
  * 讓 mutation 勝出、放棄套用剛抓回的資料——避免「水合前的本地寫入」被姍姍來遲的
  * 首次水合覆蓋（mobile-admin 的 C1 regression 即此類 bug）。refresh() 略過 guard、
  * 一律真抓，供使用者明確要求的「重新整理」與失敗重試共用；抓回的快照則走**世代穩定
@@ -33,19 +33,23 @@
  *
  * R14(候選 F1):頁面進場包 pageEntry() 自 session-gate 搬進 HydrationGate——plain 閘門
  * (mobile-admin 的 opsGate)與 session 閘門的頁面自此同一條接法
- * `createLoadGate({ ...gate.pageEntry() })`。session-gate 另經內部工廠 createOwnedHydrationGate
- * 拿 ownerChanged()。
+ * `createLoadGate({ ...gate.pageEntry() })`。
  *
  * R14(候選 F2):**hydrate 合併**——hydrate() 與頁面 load-gate 的 load 共用同一支在飛 GET(子頁
  * onMount 先於 layout,暖機與頁面載入必然同時水合)。只共用「同一次 GET」,沒有世代迴圈,
  * 不是 ADR-0020 否決的形 3;refresh 族(refresh()、頁面 load-gate 的 refresh 族)一律真抓、不併入。
- * 同時新增 invalidate():外部 production 把旗標翻回 false 的唯一寫法(內部的 ownerChanged() 也翻,只給 session-gate)。
+ * 同時新增 invalidate():外部 production 把旗標翻回 false 的唯一寫法(reset() 也翻,但它是整顆閘門的重置)。
+ *
+ * R15(候選 閘門重置):閘門自帶 reset()——內容還原開機值(opts.reset)+ 翻旗 false + 丟在飛合併
+ * GET + 換尾流帳本。session-gate 的 identity 重置與各模組的測試出口 reset…ForTests 共用這一支
+ * (取代 R14 只給 session-gate 的內部「擁有者換人」出口);hydrated 自此唯讀(收掉
+ * ADR-0024 D-F2a),測試不再直寫旗標。
  *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
  * fetch rejection 一律原樣拋出、不在此攔截——呼叫端的 load-gate 接手轉 error 態。
  */
-import { writable, get, type Writable } from 'svelte/store';
+import { writable, get, type Readable } from 'svelte/store';
 import type { LoadSource } from './load-gate'; // type-only:零 runtime 邊(執行期只剩單向依賴)
 
 /**
@@ -115,6 +119,8 @@ export interface HydrationGateOptions<T> {
 	fetch: () => Promise<T>;
 	/** 成功時套用資料（通常是寫回呼叫端的共享 store） */
 	apply: (data: T) => void;
+	/** reset() 時把內容還原成開機值(翻旗等閘門自己的帳由 reset() 處理,這裡只管內容)。 */
+	reset?: () => void;
 }
 
 /**
@@ -129,16 +135,19 @@ export interface PageEntry {
 	source: LoadSource;
 }
 
-export interface HydrationGate<T> {
-	/** 是否已水合；曝露同一個 writable 實例(頁面 skip 守衛讀、測試重置縫寫),不是唯讀投影。
-	 *  production 不得直寫;翻 false 走 `invalidate()`(D-F2a:唯讀化遞延)。 */
-	hydrated: Writable<boolean>;
+export interface HydrationGate {
+	/** 是否已水合(唯讀投影)。翻 true 走 markMutated()/水合落地,翻 false 走 `invalidate()`/`reset()`。 */
+	hydrated: Readable<boolean>;
 	/** 併發呼叫(含頁面 load-gate 的 load)共用同一支在飛 GET,settle 即清掉;只併入「同世代出發」
 	 *  的那支——出發後有 mutation 的舊快照不借給之後進場者。 */
 	hydrate(): Promise<void>;
 	refresh(): Promise<void>;
 	/** 只把旗標翻 false(下次 hydrate 重新真抓);不碰世代帳、尾流帳、在飛合併。 */
 	invalidate(): void;
+	/** 整顆閘門還原開機態:opts.reset() → 翻旗 false → 丟在飛合併 GET → 換尾流帳本(resetEpoch)
+	 *  → 清尾流帳 → 喚醒全部等待者。重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
+	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
+	reset(): void;
 	/** `tail` 在場＝這筆 mutation 有網路尾流（樂觀 mutation 的 PATCH）：閘門以
 	 *  `tail.then(done, done)` 記帳,**reject 也算 settle**——失敗路徑出帳是結構保證,不靠
 	 *  呼叫端記得 catch。省略 `tail` ＝無尾流(如 demo mutation),行為與 R11 前完全相同。
@@ -158,30 +167,8 @@ export interface HydrationGate<T> {
 	pageEntry(): PageEntry;
 }
 
-/** 公開工廠:等於 createOwnedHydrationGate(opts).gate——不換擁有者的閘門(如 mobile-admin
- *  的 opsGate,全機構營運集合)拿不到 ownerChanged。 */
-export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate<T> {
-	return createOwnedHydrationGate(opts).gate;
-}
-
-/**
- * 內部工廠:閘門 + `ownerChanged()`。**只給 session-gate 用**(identity onChange)。
- *
- * ownerChanged = 翻旗 false + 丟掉在飛的合併 GET(R14 F2)+ 清尾流帳並喚醒全部等待者(R11
- * 終審修波):資料的擁有者換人之後,舊擁有者一筆掛死的 PATCH 不得讓新擁有者的 refresh 永遠等待(「尾流必然 settle」
- * 這個自癒前提只在同一擁有者內成立)。清帳後在飛的舊尾流 settle 時**不再出帳**(帳本帶
- * 世代戳記),故 `pendingTails >= 0` 恆成立、也不會把重置後新入帳的尾流沖掉。被喚醒的舊
- * refresh 由既有的丟棄軸/epoch 核對處置(不套用跨身分的舊快照),喚醒本身不搬運任何資料。
- *
- * 它是「資料擁有者換人」這個閘門自己的概念,不是 member-auth 維度——誰換人、何時換人
- * 仍只有 session-gate 知道(authStore 訂閱不進本檔),故不違反 ADR-0017「不把 session
- * 維度深化進 hydration-gate」。
- */
-export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
-	gate: HydrationGate<T>;
-	ownerChanged(): void;
-} {
-	const hydrated = writable(false);
+export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
+	const flag = writable(false);
 	// 帳本閉合輪：markMutated 帶單調世代，與「完整度」旗標分離。旗標可被呼叫端翻回
 	// false（如 waitlist/leave 的和解重抓失敗留可重試路徑）——若 mutation-wins 只讀
 	// 旗標當下值，翻回 false 等於拆掉 in-flight hydrate 的武裝，舊快照落地、直寫列
@@ -192,11 +179,11 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	// 與世代帳分離:世代管「丟棄」、尾流帳管「等待」,兩軸正交。
 	let pendingTails = 0;
 	let settleWaiters: Array<() => void> = [];
-	// 尾流帳本的世代(R11 終審修波):ownerChanged() 推進它,在飛舊尾流的出帳回呼據此
-	// 作廢——否則「清帳 → 新尾流入帳 → 舊尾流姍姍來遲地 settle」會把新帳減掉(甚至減成負數),
-	// F2 想關的窗換一個身分原封不動地重開。
-	let tailEpoch = 0;
-	// hydrate 合併(R14 F2):在飛的那支 GET 與它出發時的世代。ownerChanged() 丟掉它。
+	// 重置世代(R11 終審修波的尾流帳本世代,R15 起兼管 hydrate/refresh 落地):reset() 推進它。
+	// 在飛舊尾流的出帳回呼據此作廢——否則「清帳 → 新尾流入帳 → 舊尾流姍姍來遲地 settle」會把
+	// 新帳減掉(甚至減成負數),F2 想關的窗換一個身分原封不動地重開;重置前出發的 GET 落地也據此不寫。
+	let resetEpoch = 0;
+	// hydrate 合併(R14 F2):在飛的那支 GET 與它出發時的世代。reset() 丟掉它。
 	let inflight: { gen: number; data: Promise<T> } | null = null;
 
 	// 水合協定的三個決策點(C1 詞彙,ADR-0016):
@@ -205,9 +192,9 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	//    被直接翻 true(併發的另一方先套用並翻旗),都算 mutation 勝出、放棄套用。只看旗標不夠:
 	//    旗標可被 invalidate() 翻回 false,那等於拆掉在飛那一輪的武裝(見上方 mutationGen 註解)。
 	//  - commit():套用完成(或 mutator 直寫)後翻旗,宣告水合真相成立。
-	const guarded = (): boolean => get(hydrated);
-	const mutationWins = (entered: number): boolean => entered !== mutationGen || get(hydrated);
-	const commit = (): void => hydrated.set(true);
+	const guarded = (): boolean => get(flag);
+	const mutationWins = (entered: number): boolean => entered !== mutationGen || get(flag);
+	const commit = (): void => flag.set(true);
 
 	function coalescedFetch(): Promise<T> {
 		// 只併入同世代出發的那支:出發後有 mutation,那份快照對之後進場者已是舊事實。
@@ -228,8 +215,9 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	async function loadRun(isCurrent: () => boolean): Promise<void> {
 		if (guarded()) return;
 		const entered = mutationGen;
+		const epoch = resetEpoch;
 		const data = await coalescedFetch();
-		if (!isCurrent()) return; // 過期或已卸載:不寫
+		if (!isCurrent() || epoch !== resetEpoch) return; // 過期、已卸載或已重置:不寫
 		// 併發的另一方(另一支 hydrate 或頁面 load-gate)先套用並翻旗,也在這裡短路——只 apply 一次。
 		if (mutationWins(entered)) return;
 		opts.apply(data);
@@ -245,10 +233,12 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	 *  在飛的 hydrate。落地走世代穩定重抓(進場之後才發生的 mutation 讓那份快照作廢、原地補抓),
 	 *  出發前先等自家的 mutation 尾流 settle(第五決策點),見 fetchGenStable。 */
 	async function refreshRun(isCurrent: () => boolean): Promise<void> {
-		const data = await fetchGenStable(opts.fetch, () => mutationGen, { iterate: isCurrent, pendingSettle });
-		// fetchGenStable 回 undefined(棄追)必然是 isCurrent 已翻 false——兩個條件都單向不可逆,
-		// 故這一條同時攔下「過期或已卸載」與棄追,走到下面的 data 必是真快照。
-		if (!isCurrent()) return;
+		const epoch = resetEpoch;
+		const live = (): boolean => isCurrent() && epoch === resetEpoch; // 重置之後這一輪即作廢
+		const data = await fetchGenStable(opts.fetch, () => mutationGen, { iterate: live, pendingSettle });
+		// fetchGenStable 回 undefined(棄追)必然是 live 已翻 false——兩個條件都單向不可逆,
+		// 故這一條同時攔下「過期、已卸載或已重置」與棄追,走到下面的 data 必是真快照。
+		if (!live()) return;
 		opts.apply(data as T);
 		// 重入防護(F5)(codex B0 r1 追補):與 loadRun 對稱——apply 的 subscriber 可能同步重入頁面的
 		// load()(此刻旗標尚未翻,load 不短路);不符即不翻旗。
@@ -260,7 +250,7 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	const refresh = (): Promise<void> => refreshRun(ALWAYS);
 
 	function markMutated(tail?: Promise<unknown>): void {
-		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。commit() 的 hydrated.set(true) 在
+		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。commit() 的翻旗 set(true) 在
 		// 旗標原為 false 時(mutation 前尚未水合、或和解失敗把旗標翻回 false)走的是 false→true
 		// 這道邊沿,會同步通知 subscriber(svelte writable 只對 primitive **相同值**短路,
 		// true→true 才不通知),subscriber 若在那個回呼裡同步
@@ -268,10 +258,10 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 		// 的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住,世代已穩)。
 		// 入帳全程同步(pendingTails += 1 與 then 掛載都不 await),靜止路徑一個 microtask 都不多花。
 		if (tail) {
-			const epoch = tailEpoch; // 這筆尾流記在哪一本帳上
+			const epoch = resetEpoch; // 這筆尾流記在哪一本帳上
 			pendingTails += 1;
 			const settled = (): void => {
-				if (epoch !== tailEpoch) return; // 帳已被清(跨身分重置):這筆不再出帳
+				if (epoch !== resetEpoch) return; // 帳已被清(reset):這筆不再出帳
 				pendingTails -= 1;
 				if (pendingTails > 0) return;
 				const waiters = settleWaiters;
@@ -295,13 +285,18 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 	}
 
 	function invalidate(): void {
-		hydrated.set(false);
+		flag.set(false);
 	}
 
-	function ownerChanged(): void {
-		hydrated.set(false);
-		inflight = null; // 舊擁有者的在飛 GET 不借給新擁有者
-		tailEpoch += 1; // 先換帳本:在飛舊尾流的出帳回呼就此作廢,不會減到下一本帳
+	/** 重置 = 資料擁有者換人(session-gate 的 identity 重置)或測試清單例。清尾流帳並喚醒全部
+	 *  等待者(R11 終審修波):舊擁有者一筆掛死的 PATCH 不得讓新擁有者的 refresh 永遠等待(「尾流
+	 *  必然 settle」這個自癒前提只在同一擁有者內成立)。被喚醒的舊 refresh 見 resetEpoch 已變即
+	 *  收束,喚醒本身不搬運任何資料。 */
+	function reset(): void {
+		opts.reset?.();
+		flag.set(false);
+		inflight = null; // 重置前的在飛 GET 不借給之後進場者
+		resetEpoch += 1; // 先換帳本:在飛舊尾流的出帳回呼、重置前出發的落地就此作廢
 		pendingTails = 0;
 		const waiters = settleWaiters;
 		settleWaiters = []; // 先清空再喚醒:醒來者若重新排隊(新擁有者的尾流),排的是新一批
@@ -312,8 +307,5 @@ export function createOwnedHydrationGate<T>(opts: HydrationGateOptions<T>): {
 		return { source: { guarded, load: loadRun, refresh: refreshRun } };
 	}
 
-	return {
-		gate: { hydrated, hydrate, refresh, invalidate, markMutated, pageEntry },
-		ownerChanged
-	};
+	return { hydrated: { subscribe: flag.subscribe }, hydrate, refresh, invalidate, reset, markMutated, pageEntry };
 }

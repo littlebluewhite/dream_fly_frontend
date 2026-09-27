@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MessagesPage from './+page.svelte';
 import { getMessages } from '$lib/mobile-admin/api';
-import { messages, messagesHydrated, coachMsgUnread, markMessageRead } from '$lib/mobile-admin/stores';
+import { messages, hydrateMessages, resetMessagesForTests, coachMsgUnread, markMessageRead } from '$lib/mobile-admin/stores';
 import { MESSAGES } from '$lib/testing/seed-fixtures';
 import type { MessageRow } from '$lib/mobile-admin/data';
 
@@ -19,22 +19,20 @@ const FIXTURE_MESSAGES: MessageRow[] = [
 beforeEach(() => {
 	vi.mocked(getMessages).mockReset();
 	vi.mocked(getMessages).mockResolvedValue(FIXTURE_MESSAGES.map((m) => ({ ...m })));
-	messagesHydrated.set(false);
+	resetMessagesForTests();
 	messages.set(MESSAGES.map((m) => ({ ...m })));
 });
 
 afterEach(() => {
-	messagesHydrated.set(false);
+	resetMessagesForTests();
 	messages.set(MESSAGES.map((m) => ({ ...m })));
 });
 
 describe('mobile-admin/coach/messages 頁', () => {
 	it('loading 分支顯示骨架(data-testid="messages-skeleton")', () => {
-		let release!: (e: Error) => void;
-		vi.mocked(getMessages).mockReturnValue(new Promise((_, rej) => (release = rej)));
+		vi.mocked(getMessages).mockReturnValue(new Promise(() => {}));
 		const { container } = render(MessagesPage);
 		expect(container.querySelector('[data-testid="messages-skeleton"]')).not.toBeNull();
-		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('async 水合後顯示 $messages store 的訊息(相異 fixture)', async () => {
@@ -68,8 +66,8 @@ describe('mobile-admin/coach/messages 頁', () => {
 
 	it('hydrated 守衛:已水合則重訪不再 fetch,既有 markMessageRead 結果不被覆寫', async () => {
 		// 模擬「先前已成功載入且使用者已讀過一則」。
-		messages.set(FIXTURE_MESSAGES.map((m) => ({ ...m })));
-		messagesHydrated.set(true);
+		await hydrateMessages(); // fetch 替身回 FIXTURE_MESSAGES(旗標唯讀,經真水合翻 true)
+		vi.mocked(getMessages).mockClear();
 		const firstUnread = FIXTURE_MESSAGES.find((m) => m.unread)!;
 		markMessageRead(firstUnread.id);
 
