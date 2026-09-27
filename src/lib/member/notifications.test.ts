@@ -1,8 +1,8 @@
 /* Dream Fly — member/notifications.ts 單測（C1：markRead/markAllRead 從
  * routes/member/notifications/+page.svelte 搬遷進模組後的單元測試）。
  *
- * refreshNotifications/notificationsHydrated 的 gate 語意（guard 短路、post-await
- * re-check、翻旗）已由 checkout-api.test.ts 的「refreshNotifications(Task 17)」
+ * hydrateNotifications/notificationsHydrated 的 gate 語意（guard 短路、post-await
+ * re-check、翻旗）已由 checkout-api.test.ts 的「hydrateNotifications(Task 17)」
  * 三個 it 與 hydration-gate.test.ts 的 createHydrationGate 單測覆蓋——本檔案只補
  * markRead/markAllRead 這兩個新 export 的模組層測試，與 routes/member/notifications/
  * page.test.ts 既有的頁面測試並存、是模組層的第二層覆蓋（樂觀更新、PATCH 佈線、
@@ -15,7 +15,8 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { createLoadGate } from '$lib/load-gate';
 import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead } from './notifications';
-import { NOTIFS_SEED, mapNotification } from './data';
+import { mapNotification } from './data';
+import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 // Task 5(架構深化 R12):跨帳號 session 重置的「無登出直接換帳號」釘,自
 // mobile/notifications.test.ts 移植(mobile module 併入本檔前的獨有覆蓋,見
 // task-5-report.md)。用真 authStore.login 驅動 identity。
@@ -50,9 +51,21 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 beforeEach(() => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockResolvedValue(undefined);
-  // seed: n1–n3 未讀、n4–n6 已讀（見 $lib/domain/member-app 的 NOTIFS_SEED）。
+  // 夾具: n1–n3 未讀、n4–n6 已讀（見 $lib/testing/seed-fixtures 的 NOTIFS_SEED）。
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
   notificationsHydrated.set(false);
+});
+
+// R14(候選 F3)誠實開機:開機值 = reset 值 = `[]`——角標在暖機前是 0(UI 在 0 時本來就
+// 隱藏),不再顯示種子裡的假 3 則。重新載入模組才照得到「開機」那一刻的值(本檔其他 it
+// 都會先 set 夾具)。
+describe('誠實開機(R14 F3)', () => {
+  it('模組開機時 notifications 為 [],unreadCount 為 0', async () => {
+    vi.resetModules();
+    const fresh = await import('./notifications');
+    expect(get(fresh.notifications)).toEqual([]);
+    expect(get(fresh.unreadCount)).toBe(0);
+  });
 });
 
 // Task 5(架構深化 R12):member/api.ts 的 getNotifications() 因零 production 消費者
@@ -254,7 +267,7 @@ describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () 
 
   // P1″ 換帳號釘(移植自 mobile/notifications.test.ts:186)：A hydrate 後 B 直接
   // 登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知。登出重置本身已由
-  // checkout-api.test.ts 的「refreshNotifications(Task 17)」F1 系列覆蓋,這裡補
+  // checkout-api.test.ts 的「hydrateNotifications(Task 17)」F1 系列覆蓋,這裡補
   // 的是「無登出邊沿」這條 member 側原本沒釘到的路徑。
   it('A hydrate 後 B 直接登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知', async () => {
     let logins = 0;
@@ -267,7 +280,7 @@ describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () 
     await authStore.login('b@dreamfly.test', 'pw'); // B 直接登入,無登出邊沿
 
     expect(get(notificationsHydrated)).toBe(false);
-    expect(get(notifications)).toEqual(NOTIFS_SEED); // A 的通知即刻清空為 seed
+    expect(get(notifications)).toEqual([]); // A 的通知即刻清空為 boot 態 `[]`
   });
 });
 

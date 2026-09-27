@@ -3,16 +3,17 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
-import { POINTS_LEDGER, type LedgerEntry, type LedgerType } from '$lib/domain/member-app';
+import type { LedgerEntry, LedgerType } from '$lib/domain/member-app';
 
 /* ---- Points ----
  * 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由
- * refreshPoints 水合：getDashboard / getAccount / getPoints 進頁時，以及
+ * refreshPoints 水合：getAccount / getPoints 進頁時，以及
  * CheckoutDialog 每次開啟時都會觸發。 */
 export const points = writable<number>(0);
 // Ledger lives in a store too, so a redemption (which lowers `points`) stays in
-// sync with the visible history across route navigation.
-export const pointsLedger = writable<LedgerEntry[]>(POINTS_LEDGER.map((e) => ({ ...e })));
+// sync with the visible history across route navigation. 誠實開機(R14 候選 F3):開機值 =
+// reset 值 = `[]`,由 refreshPoints 水合成真明細。
+export const pointsLedger = writable<LedgerEntry[]>([]);
 
 export interface ApiLedgerEntry {
   id: string;
@@ -54,7 +55,7 @@ function describeLedgerReason(reason: string, delta: number): { type: LedgerType
  *  points 頁的「本月累積」依 `date.startsWith(當月 YYYY/MM prefix)` 篩選
  *  （見 points/+page.svelte），格式依賴仍在 —— 換成 ISO 會讓那段篩選永遠不
  *  match、悄悄把統計歸零。
- *  C1（架構深化 R7）抬升為 createSessionRefresher:保留「無條件重抓」語意(getDashboard/
+ *  C1（架構深化 R7）抬升為 createSessionRefresher:保留「無條件重抓」語意(
  *  getAccount/getPoints 進頁 + CheckoutDialog/CartSheet 每次開啟 + placeOrder afterOrder
  *  都依賴每次真抓,不套 guard),只加 identity 清空(reset:歸 boot 態)+ 在飛換帳「靜默
  *  丟棄」(不 throw——redeemReward/placeOrder 會傳播 rejection,不得新增換帳失敗模式)。
@@ -72,7 +73,7 @@ export const refreshPoints = createSessionRefresher<ApiPointsMe>({
   },
   reset: () => {
     points.set(0);
-    pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e }))); // boot 態 = seed clone
+    pointsLedger.set([]); // boot 態(開機值 = reset 值 = [])
   }
 });
 

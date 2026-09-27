@@ -1,7 +1,7 @@
 /* Dream Fly — member/api.ts 單測(Task 17：8 個 getter 換真 API)。
  *
  * 只 mock $lib/api/client 的 api() 與 $lib/public/api 的 listCourses/listCoaches ——
- * 其餘(stores.ts 的 refreshPoints/refreshSubscriptions/refreshNotifications、
+ * 其餘(stores.ts 的 refreshPoints/refreshSubscriptions/hydrateNotifications、
  * data.ts 的 mapNotification)一律用真實實作，這樣才是「後端形狀進、UI 形狀出」
  * 的端對端斷言，而不是把邏輯也一起 mock 掉。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -62,9 +62,7 @@ describe('getDashboard', () => {
           { id: 'e1', course_id: 'c1', course_name: '競技啦啦隊 進階班', course_level: 'advanced', schedule_text: '週二 / 週四 19:00–20:30', status: 'active', enrolled_at: '2026-06-01T00:00:00Z' },
           { id: 'e2', course_id: 'c2', course_name: '已取消課程', course_level: 'beginner', schedule_text: '週三 10:00', status: 'cancelled', enrolled_at: '2026-01-01T00:00:00Z' }
         ],
-        'GET /reports/me': STATS_API,
-        'GET /points/me': { balance: 500, ledger: [] },
-        'GET /notifications': []
+        'GET /reports/me': STATS_API
       })
     );
 
@@ -86,9 +84,7 @@ describe('getDashboard', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': { balance: 0, ledger: [] },
-        'GET /notifications': []
+        'GET /reports/me': EMPTY_STATS_API
       })
     );
 
@@ -100,9 +96,7 @@ describe('getDashboard', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': { balance: 0, ledger: [] },
-        'GET /notifications': []
+        'GET /reports/me': EMPTY_STATS_API
       })
     );
 
@@ -110,66 +104,28 @@ describe('getDashboard', () => {
     expect(d.nextClass).toBe('');
   });
 
-  it('順手 hydrate points/notifications store(Topbar/Sidebar 角標一開始就是真資料)', async () => {
+  // R14(候選 F3):會員首頁沒有讀點數的地方、通知改由 layout 暖機(見 $lib/store-warm 與
+  // routes/member/+layout.svelte),getDashboard 不再順手水合任何共享 store。
+  it('不打 GET /points/me、GET /notifications(順手水合退役)', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': { balance: 777, ledger: [] },
-        'GET /notifications': [
-          { id: 'n1', type: 'order_placed', title: '付款成功', message: '訂單已完成', is_read: false, metadata: null, created_at: '2026-07-04T06:00:00Z' }
-        ]
+        'GET /reports/me': EMPTY_STATS_API
       })
     );
 
     await getDashboard();
 
-    expect(get(points)).toBe(777);
-    expect(get(notifications)).toHaveLength(1);
-    expect(get(notificationsHydrated)).toBe(true);
-  });
-
-  it('points/notifications hydrate 失敗不影響 dashboard 本身(仍正常回傳，只記錄錯誤)', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': new Error('network down'),
-        'GET /notifications': []
-      })
-    );
-
-    const d = await getDashboard();
-    expect(d.nextClass).toBe('');
-  });
-
-  it('points/notifications hydrate 失敗時 console.error 記錄「getDashboard: <資源> hydrate 失敗」+ reason（雙端點皆失敗，逐字格式釘）', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const pointsError = new Error('points network down');
-    const notifError = new Error('notifications network down');
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': pointsError,
-        'GET /notifications': notifError
-      })
-    );
-
-    await getDashboard();
-
-    expect(errorSpy).toHaveBeenCalledWith('getDashboard: 點數 hydrate 失敗', pointsError);
-    expect(errorSpy).toHaveBeenCalledWith('getDashboard: 通知 hydrate 失敗', notifError);
+    const paths = vi.mocked(api).mock.calls.map(([p]) => p);
+    expect(paths).not.toContain('/points/me');
+    expect(paths).not.toContain('/notifications');
   });
 
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [],
-        'GET /reports/me': EMPTY_STATS_API,
-        'GET /points/me': { balance: 0, ledger: [] },
-        'GET /notifications': []
+        'GET /reports/me': EMPTY_STATS_API
       })
     );
     expect(getDashboard()).toBeInstanceOf(Promise);

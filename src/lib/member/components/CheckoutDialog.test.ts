@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import CheckoutDialog from './CheckoutDialog.svelte';
 import { cart, subscriptions, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-import { POINTS_LEDGER } from '$lib/domain/member-app';
+import { POINTS_LEDGER } from '$lib/testing/seed-fixtures';
 
 // R13 Task 3:mock 會員 ME 退役;本地 points 的 mock 殘值改用本地常數。
 const SEED_POINTS = 1250;

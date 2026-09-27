@@ -46,7 +46,7 @@ const gate = createSessionGate<WaitlistEntry[]>({
     return list.filter((w) => w.status === 'waiting').map(toWaitlistEntry);
   },
   apply: (list) => waitlist.set(list),
-  reset: () => waitlist.set([]) // boot 態 = 空(開機空,值冪等)
+  reset: () => waitlist.set([]) // boot 態(開機值 = reset 值 = [])
 });
 export const waitlistHydrated = gate.hydrated;
 export const hydrateWaitlist = gate.hydrate;

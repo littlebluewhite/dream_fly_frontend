@@ -4,15 +4,15 @@ import { get } from 'svelte/store';
 import MessagesPage from './+page.svelte';
 import { getMessages } from '$lib/mobile-admin/api';
 import { messages, messagesHydrated, coachMsgUnread, markMessageRead } from '$lib/mobile-admin/stores';
-import { MESSAGES } from '$lib/mobile-admin/data';
+import { MESSAGES } from '$lib/testing/seed-fixtures';
 import type { MessageRow } from '$lib/mobile-admin/data';
 
 // Task 20：markMessageRead(stores.ts)現也 best-effort 呼叫真 markRead(id)——一併
 // mock，否則呼叫到未定義的匯出會拋錯(見該函式的 fire-and-forget 附註)。
 vi.mock('$lib/mobile-admin/api', () => ({ getMessages: vi.fn(), markRead: vi.fn().mockResolvedValue({ updated: 0 }) }));
 
-// 與 seed 相異的 fixture(家長姓名、預覽內容皆改過),證明頁面讀 hydrateMessages()
-// 水合後的 $messages store,而非殘留的同步 seed 巧合通過。
+// 與種子夾具 MESSAGES 相異的 fixture(家長姓名、預覽內容皆改過),證明頁面讀 hydrateMessages()
+// 水合後的 $messages store,而非殘留的夾具巧合通過。
 const FIXTURE_MESSAGES: MessageRow[] = [
 	{ id: 'zz1', from: '測試家長甲', initial: '甲', color: '#000', preview: '測試預覽甲', time: '剛剛', unread: true },
 	{ id: 'zz2', from: '測試家長乙', initial: '乙', color: '#000', preview: '測試預覽乙', time: '5 分鐘前', unread: false }

@@ -10,7 +10,8 @@ import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$li
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import { refreshPoints, refreshSubscriptions, refreshNotifications, hydrateWaitlist, hydrateLeaveRequests, hydrateProfile } from './stores';
+import { refreshPoints, refreshSubscriptions, hydrateWaitlist, hydrateLeaveRequests, hydrateProfile } from './stores';
+import { warmStores } from '$lib/store-warm';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
@@ -44,48 +45,16 @@ async function activeEnrolments(): Promise<ApiEnrolment[]> {
   return list.filter((e) => e.status === 'active');
 }
 
-/** getDashboard/getAccount 進頁時「順手」把共享 store(points/notifications/
- *  subscriptions)水合成真資料——這兩支 getter 本身的回傳值(DashboardData/
- *  AccountData)不含這些欄位，呼叫端(Topbar/Sidebar 的未讀角標、CheckoutDialog
- *  的 $points)是直接讀對應 store，不是讀 getter 的回傳值。
- *
- *  best-effort 語意：tasks 彼此獨立，用 Promise.allSettled 平行執行，單項失敗
- *  只 console.error 記錄、不 throw——不讓一個非核心 store 的暫時性失敗擋住整頁。
- *  呼叫端的主資料(profile/orders/stats 等)已經由各自的 Promise.all fail-hard
- *  取得，這裡的 store hydrate 只是「順便」；失敗時 store 保留前值，頁面仍可
- *  正常顯示。
- *
- *  與 getPoints() 刻意不同：getPoints 的 refreshPoints() 是用 Promise.all(fail-
- *  hard)——那裡的 rewards 目錄跟 points store 是同一次「進頁必要資料」的並行
- *  副產品，失敗即代表頁面本身也拿不到資料，理應讓錯誤浮上去；這裡的 tasks 則是
- *  「頁面主資料以外」的順手動作，兩者語意刻意不同，不要合流。
- *
- *  tuple 形而非物件形：[中文資源名, hydrate 函式] 讓 label 留在呼叫端視野，
- *  一眼看出 log 會印出什麼資源名。
- *
- *  @param caller 呼叫端函式名，作為 log 前綴(如 'getDashboard')
- *  @param tasks [中文資源名, hydrate 函式] tuple 陣列 */
-async function hydrateSessionStores(
-  caller: string,
-  tasks: ReadonlyArray<readonly [label: string, hydrate: () => Promise<void>]>
-): Promise<void> {
-  const results = await Promise.allSettled(tasks.map(([, hydrate]) => hydrate()));
-  results.forEach((result, i) => {
-    if (result.status === 'rejected') console.error(`${caller}: ${tasks[i][0]} hydrate 失敗`, result.reason);
-  });
-}
-
 /** 儀表板 — nextClass 來自最新一筆有效報名的 schedule_text（沒有報名則空字串）；
  *  track 後端無對應資料，一律空字串。stats 三卡(報名課程數/本月出席率/會員點數)
  *  改接 GET /reports/me(經 getReportStats() 映射,§3.24)——只換 value,icon/tint/
  *  color/label 沿用既有 STATS 版型；attendanceRate 為 null(無點名資料,裁決 3)
  *  顯示「—」,不是 0%(0% 會誤導成「有資料、出席率為零」)。skills/upcoming/announce
  *  不在本次映射範圍內(無後端資料源、頁面也不直接讀 store),沿用 mock。
- *  順手 hydrate points/notifications store(best-effort 語意，見 hydrateSessionStores()
- *  檔頭)。 */
+ *  R14(候選 F3):不再順手水合任何共享 store——首頁沒有讀點數的地方,通知改由 layout
+ *  暖機(見 $lib/store-warm)。 */
 export const getDashboard = async (): Promise<DashboardData> => {
   const [active, stats] = await Promise.all([activeEnrolments(), getReportStats()]);
-  await hydrateSessionStores('getDashboard', [['點數', refreshPoints], ['通知', refreshNotifications]]);
   return {
     stats: [
       { ...STATS[0], value: String(stats.activeEnrolments) },
@@ -262,14 +231,14 @@ export interface MineData {
  *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。
  *
  *  卡 6：順手 hydrate waitlist/leaveRequests store(best-effort 語意，見
- *  hydrateSessionStores() 檔頭)——原本焊在 mine 頁 gate 的旁路 Promise.all 收進
- *  接縫。與 getDashboard/getAccount 的尾端序列 await 刻意不同：mine 現況本就是
+ *  $lib/store-warm 的 warmStores() 檔頭)——原本焊在 mine 頁 gate 的旁路 Promise.all 收進
+ *  接縫。與 getAccount 的尾端序列 await 刻意不同：mine 現況本就是
  *  主 fetch 與旁路水合「並行」，等價優先，故這裡與主 fetch 同一個 Promise.all
- *  (hydrateSessionStores 內建 allSettled，不會讓 Promise.all reject)。 */
+ *  (warmStores 內建 allSettled，不會讓 Promise.all reject)。 */
 export const getMine = async (): Promise<MineData> => {
   const [active] = await Promise.all([
     activeEnrolments(),
-    hydrateSessionStores('getMine', [['候補清單', hydrateWaitlist], ['我的請假', hydrateLeaveRequests]])
+    warmStores('getMine', [['候補清單', hydrateWaitlist], ['我的請假', hydrateLeaveRequests]])
   ]);
   const courses: EnrolledCourse[] = active.map((e) => ({
     id: e.id,
@@ -354,14 +323,14 @@ function mapOrder(o: ApiOrderSummary): Order {
  *  的既有慣例)——後端預設 per_page=20 會把訂單較多的會員截斷成只看到最近 20 筆；
  *  ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/OrdersScreen)顯示的
  *  「N 筆報名紀錄」不會被這個截斷誤導成 20。
- *  順手 hydrate points/subscriptions store(best-effort 語意，見 hydrateSessionStores()
+ *  順手 hydrate points/subscriptions store(best-effort 語意，見 $lib/store-warm 的 warmStores()
  *  檔頭)——帳戶頁直接讀 $points / $subscriptions store(不是這裡的回傳值)。 */
 export const getAccount = async (): Promise<AccountData> => {
   const [orderList] = await Promise.all([
     api<ApiOrderListResponse>('/orders/me?per_page=100'),
     hydrateProfile()
   ]);
-  await hydrateSessionStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
+  await warmStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
   return {
     orders: orderList.orders.map(mapOrder),
     ordersTotal: orderList.total

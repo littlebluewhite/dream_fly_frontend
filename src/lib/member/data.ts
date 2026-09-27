@@ -17,9 +17,11 @@ import type { Tone } from '$lib/api/wire';
 // center」段落)十一組 domain/member-app 純轉手匯出——不攜帶本檔型別事實、不做值
 // 變形——整批退役;消費端改直取 $lib/domain/member-app 同名同型符號(本批兩側符號
 // 名一致,無改名,故無 import-site alias)。LedgerType 型別本檔仍在內部使用(PT_TYPE
-// 下方),保留 import、拿掉對外轉出。UPCOMING/NOTIFS_SEED/LEAVE_STATUS 不在此列——
-// 三者匯入基底值後純註記收窄回本檔案自己較嚴格的型別(status/tone 欄位 member 用
+// 下方),保留 import、拿掉對外轉出。UPCOMING/LEAVE_STATUS 不在此列——
+// 兩者匯入基底值後純註記收窄回本檔案自己較嚴格的型別(status/tone 欄位 member 用
 // 嚴格 Tone、domain 存寬鬆 string),攜帶本檔型別事實,繼續保留。
+// NOTIFS_SEED(原同列續存的收窄 facade)於 R14 候選 F3 退役:通知 store 誠實開機為 `[]`,
+// 種子已無 production 讀者,值逐字搬進測試專用的 $lib/testing/seed-fixtures(ADR 0010)。
 // CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
 // getCourses()，回傳 $lib/public/adapters 的 CatalogCourse，非這份 domain mock），這份
 // facade 再匯出已無 runtime 消費者(Task 11 P2 清理)。domain/member-app.ts 本體的
@@ -35,7 +37,6 @@ import { type LedgerType } from '$lib/domain/member-app';
 // (declared at its original spot below) where the const is (re-)declared.
 import {
   UPCOMING as UPCOMING_BASE,
-  NOTIFS_SEED as NOTIFS_SEED_BASE,
   LEAVE_STATUS as LEAVE_STATUS_BASE
 } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
@@ -126,7 +127,7 @@ export const ATT_STATE: Record<AttState, [Tone, string]> = {
  * +page.svelte 用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值。
  * 卡 3：值升遷 $lib/domain/member-app 單源（mobile 的 MyCourseDetail 原直取本檔，
  * 改經 mobile/data facade）——這裡以本檔嚴格 [Tone, string] 對同一參照純註記收窄
- * （domain 宣告處 satisfies 明列 tone 字面聯集，NOTIFS_SEED 同型），零斷言。 */
+ * （domain 宣告處 satisfies 明列 tone 字面聯集），零斷言。 */
 export const LEAVE_STATUS: Record<string, [Tone, string]> = LEAVE_STATUS_BASE;
 
 // 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
@@ -149,12 +150,7 @@ export const ANNOUNCE: Announcement[] = [
 // getAccount()，經 mapOrder 映射回上方的 Order interface；interface 本身保留供該映射
 // 使用），這份 mock 值已無 runtime 消費者(Task 11 P2 清理)。
 
-/* Notification center (通知中心) — tone is Tone-typed here。T12 codex 終審修正:
- * 原整陣列 `as Notification[]` 會把所有欄位(含 icon: IconName)一併豁免型別檢查
- * ——domain 宣告改以 satisfies 保留 tone/icon 字面型別(見該檔宣告處註解)後,
- * 這裡用純型別註記把「同一個參照」(單源契約,domain/member-app.test.ts 以 toBe
- * 釘住——不能重建陣列)逐元素實檢收窄回本檔的嚴格 Tone,零斷言。 */
-export const NOTIFS_SEED: Notification[] = NOTIFS_SEED_BASE;
+/* Notification center (通知中心) — tone 色票查表。 */
 export const NOTIF_TONE_BG: Record<string, string> = {
   primary: 'var(--df-primary-bg)',
   info: 'var(--df-info-bg)',
@@ -171,7 +167,7 @@ export const NOTIF_TONE_FG: Record<string, string> = {
 };
 
 /* ---- 通知中心：後端形狀 → 前端形狀（Task 17）----
- * 唯一消費者是 member/notifications.ts 通知閘門的 fetch(refreshNotifications 與通知頁
+ * 唯一消費者是 member/notifications.ts 通知閘門的 fetch(hydrateNotifications 與通知頁
  * 進場包共用；member 與 mobile 自 R12 起共用這一個通知 module)。原本另一個消費者
  * member/api.ts 的 getNotifications() 已於 R12 退役(零 production 呼叫端)。
  * 後端沒有「教練訊息」型別 → 'coach' 分類目前恆為空,是已知落差,非本次範圍。 */

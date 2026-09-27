@@ -21,7 +21,8 @@
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import { authStore } from '$lib/stores/authStore';
-  import { overlay, role, toasts } from '$lib/mobile-admin/stores';
+  import { overlay, role, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
+  import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';
   import { mobileAdminGuardTarget } from './guard';
   import TabBar from '$lib/mobile-admin/components/TabBar.svelte';
@@ -36,6 +37,18 @@
     const target = mobileAdminGuardTarget($page.url.pathname, $authStore.loggedIn, $authStore.roles);
     if (target) goto(target);
   }
+
+  // 暖機清單(R14 候選 F3):只有教練分區有角標 store——訊息(TabBar 的未讀角標)。admin 分區
+  // 的通知角標是沒有後端的 mock,不在清單內。已登入、守門不導走且位於教練分區時 key 為
+  // member.id,否則 null;每個身分只打一次 GET(閘門守衛擋重訪、在飛合併擋掉訊息頁 load 的
+  // 重複、換身分時閘門自己重置)。
+  $: warmKey =
+    currentRole === 'coach' &&
+    $authStore.loggedIn &&
+    mobileAdminGuardTarget($page.url.pathname, $authStore.loggedIn, $authStore.roles) === null
+      ? ($authStore.member?.id ?? '')
+      : null;
+  $: if (browser && warmKey !== null) void warmStores('mobile-admin +layout', [['訊息', hydrateMessages]]);
 
   afterNavigate(() => overlay.closeAll());
 </script>

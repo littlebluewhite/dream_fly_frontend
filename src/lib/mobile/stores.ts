@@ -182,6 +182,7 @@ export {
 	unreadCount,
 	notificationsHydrated,
 	notificationsPageEntry,
+	hydrateNotifications,
 	markRead,
 	markAllRead
 } from '$lib/member/stores';

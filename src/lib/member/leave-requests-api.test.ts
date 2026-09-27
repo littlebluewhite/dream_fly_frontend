@@ -79,7 +79,7 @@ beforeEach(() => {
 });
 
 /* C1：水合改走 createHydrationGate（guard 短路 + post-await re-check + mutator
- * 翻旗，同 checkout-api.test.ts 的 refreshNotifications/hydrateWaitlist 協定）。 */
+ * 翻旗，同 checkout-api.test.ts 的 hydrateNotifications/hydrateWaitlist 協定）。 */
 describe('hydrateLeaveRequests — GET /leave-requests/me（guard 短路 + mutation 勝出）', () => {
   it('hydrates the store from the API response，並把 leaveRequestsHydrated 翻 true', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING, API_LR_APPROVED] }));

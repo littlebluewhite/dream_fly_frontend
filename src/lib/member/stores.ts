@@ -48,7 +48,7 @@ export type { ApiSubscription } from './subscriptions';
 export { placeOrder } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
-export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, refreshNotifications, markRead, markAllRead } from './notifications';
+export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';
 
 export { memberProfile, prefs, hydrateProfile, setPref, saveProfile, profileEditError } from './profile';
 export type { MemberProfile, Prefs, ProfileEdit, PrefSetOutcome, ProfileSaveOutcome } from './profile';

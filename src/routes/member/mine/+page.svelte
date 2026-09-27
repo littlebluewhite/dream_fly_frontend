@@ -52,7 +52,7 @@
   $: ({ active, attState, attendance, cancellingId } = $ctrl);
 
   // 候補清單/我的請假的 best-effort 旁路 hydrate 已收進 getMine() 接縫本身
-  // （卡 6，見 member/api.ts 的 getMine 註解與 hydrateSessionStores 檔頭）——
+  // （卡 6，見 member/api.ts 的 getMine 註解與 $lib/store-warm 的 warmStores 檔頭）——
   // 失敗只記錄、不擋主要的「我的課程」資料流程，頁面只剩單一 fetch 接縫。
   const gate = createLoadGate({
     fetch: getMine,

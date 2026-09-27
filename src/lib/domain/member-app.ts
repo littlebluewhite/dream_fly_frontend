@@ -8,16 +8,20 @@
  *
  * 型別策略:形狀完全相同(同名或僅名稱不同)的 interface 直接上移，兩側 facade
  * pass-through(名稱不同時用 `export type { X as Y }` 別名)。形狀有出入的
- * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED 的 tone 相關欄位 member 端是嚴格
+ * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED(R14 F3 退役)的 tone 相關欄位 member 端是嚴格
  * `Tone` 型別、mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的
  * 一側保留自己原本的 interface 宣告、只從這裡匯入值並自行斷言回自己的型別。
- * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(NOTIFS_SEED 前例)。
+ * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(LEAVE_STATUS 為現存實例)。
  *
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS 五組(值+
  * interface)、以及 MY_COURSES/SCHEDULE/ORDERS 三組的值,經確認無 runtime 消費者
  * (member/mobile 兩側頁面皆已改走真後端 API)後整批退役;MY_COURSES/SCHEDULE/
  * ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)因仍供 api.ts 型別標註
- * 使用而保留。既有測試改為檔內 inline fixture,不再從這裡 import 死值。 */
+ * 使用而保留。既有測試改為檔內 inline fixture,不再從這裡 import 死值。
+ *
+ * R14 候選 F3(誠實開機):通知/點數明細 store 開機值改為 `[]`,NOTIFS_SEED(連同只為它存在的
+ * Notification interface)與 POINTS_LEDGER 的值退役,逐字搬進測試專用的 $lib/testing/seed-fixtures。
+ * LedgerEntry/LedgerType 仍供 member/points.ts 型別標註使用而保留。 */
 
 import type { IconName } from '$lib/icon-registry';
 
@@ -120,7 +124,7 @@ export interface AttRecord {
  * 收斂進 domain 單源後兩側 facade 各自以自身 Tone 型別對同一參照純註記收窄。未知值
  * fallback 為原字串(同 api.ts 的 ORDER_STATUS 慣例)——消費端用
  * `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值(mine/+page.svelte、
- * MyCourseDetail.svelte)。satisfies 目標明列 tone 字面聯集(NOTIFS_SEED 前例:
+ * MyCourseDetail.svelte)。satisfies 目標明列 tone 字面聯集(R14 前 NOTIFS_SEED 首開此例:
  * 值衍生、零 import;Tone 型別本身依檔頭決策仍不進 domain),tuple 首元素才保得住
  * 字面型別,窄側 facade 得以零斷言收窄;新增列若用到新 tone,把它補進聯集即可。 */
 export const LEAVE_STATUS = {
@@ -178,35 +182,6 @@ export const COACH_REPLIES: string[] = [
 	'了解～這部分我會特別注意。'
 ];
 
-/* ---- 通知中心 ----
- * tone 兩側型別不同，處理同 SCHEDULE。cat 兩側是同一組四個字面值的 union(僅宣告
- * 順序不同)，結構相同，直接內縮不另外具名匯出。 */
-export interface Notification {
-	id: string;
-	cat: 'class' | 'order' | 'coach' | 'system';
-	icon: IconName;
-	tone: string;
-	title: string;
-	body: string;
-	time: string;
-	read: boolean;
-}
-
-/* Notification center (通知中心)
- * T12 codex 終審連帶:改 satisfies 宣告(原 `: Notification[]` 註記會把 tone 字面
- * 抹寬成 string,member facade 只能靠整陣列 `as` 斷言收窄——不驗字面)。satisfies
- * 目標的 tone 聯集是本 seed 實際用到的值(值衍生、零 import;Tone 型別本身依檔頭
- * 決策仍不進 domain),tone/icon 字面自此在本宣告處逐一實檢,member facade 得以
- * 用純型別註記(零斷言)收窄同一個參照。新增列若用到新 tone,把它補進聯集即可。 */
-export const NOTIFS_SEED = [
-	{ id: 'n1', cat: 'class', icon: 'calendar-clock', tone: 'primary', title: '明日課程提醒', body: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館，記得提前 10 分鐘到館熱身。', time: '1 小時前', read: false },
-	{ id: 'n2', cat: 'coach', icon: 'message-circle', tone: 'info', title: '林雅婷 教練回覆了你的訊息', body: '承恩這週的後手翻進步很多，下週我們來加上連續動作。', time: '3 小時前', read: false },
-	{ id: 'n3', cat: 'order', icon: 'credit-card', tone: 'success', title: '報名付款成功', body: '訂單 DF-24061 · 競技啦啦隊 進階班 · 2026 春季 NT$4,800 已完成付款。', time: '昨天', read: false },
-	{ id: 'n4', cat: 'class', icon: 'rotate-cw', tone: 'info', title: '補課時段已開放', body: '5/21 請假的「競技體操 選手班」可於 6/13 10:00 補課，請於我的課程預約。', time: '2 天前', read: true },
-	{ id: 'n5', cat: 'system', icon: 'award', tone: 'accent', title: '獲得會員點數 +120', body: '完課獎勵點數已入帳，目前可用點數 1,250 點。', time: '3 天前', read: true },
-	{ id: 'n6', cat: 'system', icon: 'calendar-off', tone: 'warning', title: '端午連假停課公告', body: '6/14–6/16 全館停課，相關課程將安排補課，請留意通知。', time: '5 天前', read: true }
-] satisfies (Notification & { tone: 'primary' | 'info' | 'success' | 'warning' | 'accent' })[];
-
 /* 通知分類 tab(all/class/order/coach/system;兩側逐位元組相等) */
 export const NOTIF_CATS: [string, string][] = [
 	['all', '全部'],
@@ -226,14 +201,4 @@ export interface LedgerEntry {
 	type: LedgerType;
 	delta: number;
 }
-
-/* Member points (點數明細與兌換) */
-export const POINTS_LEDGER: LedgerEntry[] = [
-	{ id: 'pl1', date: '2026/06/05', desc: '完課獎勵 · 競技啦啦隊 進階班', type: 'earn', delta: 120 },
-	{ id: 'pl2', date: '2026/05/20', desc: '折抵報名費 · 競技體操 選手班', type: 'redeem', delta: -300 },
-	{ id: 'pl3', date: '2026/05/01', desc: '生日禮金點數', type: 'earn', delta: 200 },
-	{ id: 'pl4', date: '2026/04/12', desc: '推薦好友報名獎勵', type: 'earn', delta: 150 },
-	{ id: 'pl5', date: '2026/03/01', desc: '完課獎勵 · 兒童翻滾 技巧班', type: 'earn', delta: 120 },
-	{ id: 'pl6', date: '2026/02/15', desc: '未使用點數到期', type: 'expire', delta: -50 }
-];
 

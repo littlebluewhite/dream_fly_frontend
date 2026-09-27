@@ -181,7 +181,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 		myTodayClasses(),
 		api<ApiCoachReports>('/reports/coach'),
 		// conversations 為 best-effort：訊息中心暫時失敗只降級為空陣列，不讓非核心的
-		// 最新訊息面板擋住整頁 KPI/今日課程(同 member/api.ts hydrateSessionStores 的
+		// 最新訊息面板擋住整頁 KPI/今日課程(同 $lib/store-warm 的 warmStores
 		// best-effort 語意——主資料 fail-hard、順手資料失敗只記錄)。
 		getConversations()
 			.then((c) => c.conversations)

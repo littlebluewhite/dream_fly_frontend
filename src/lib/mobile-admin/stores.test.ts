@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { ApiError, api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
@@ -34,7 +34,8 @@ import {
 	addCoach,
 	saveCoach
 } from './stores';
-import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS } from './data';
+import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS } from './data';
+import { MESSAGES } from '$lib/testing/seed-fixtures';
 import { COACHES } from '$lib/domain/coaches';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import {
@@ -215,6 +216,8 @@ describe('markOrderPaid', () => {
 });
 
 describe('markMessageRead + coachMsgUnread', () => {
+	// R14(候選 F3):messages 開機為 `[]`——本段需要有未讀的串列,先灌夾具。
+	beforeEach(() => messages.set(MESSAGES.map((m) => ({ ...m }))));
 	// Regression: the coach 訊息 badge + row highlight read a static seed, so opening
 	// a thread never lowered the unread count — it stayed frozen for the session.
 	it('clears a thread unread flag and lowers the derived coach badge count', () => {
@@ -353,9 +356,13 @@ describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 p
 });
 
 describe('hydrateMessages / messagesHydrated', () => {
-	it('messages 保留同步 seed(不因獨立水合而清空);messagesHydrated 起始為 false', () => {
-		expect(get(messages)).toEqual(MESSAGES);
-		expect(get(messagesHydrated)).toBe(false);
+	// R14(候選 F3)誠實開機:開機值 = reset 值 = `[]`(本檔其他 it 會 set 夾具,重新載入模組
+	// 才照得到開機那一刻)。
+	it('messages 開機為 [](誠實開機);messagesHydrated 起始為 false', async () => {
+		vi.resetModules();
+		const fresh = await import('./stores');
+		expect(get(fresh.messages)).toEqual([]);
+		expect(get(fresh.messagesHydrated)).toBe(false);
 	});
 
 	it('hydrateMessages() 在 guard 為 false 時實際觸發水合(覆寫先前的假資料)', async () => {
@@ -380,7 +387,7 @@ describe('hydrateMessages / messagesHydrated', () => {
 		messagesHydrated.set(false);
 	});
 
-	it('教練 A 水合 → 換教練 B 登入 → 對話列表重置回種子、旗標翻回 false,B 會重新水合(C6:不再看到 A 的對話)', async () => {
+	it('教練 A 水合 → 換教練 B 登入 → 對話列表重置為 `[]`、旗標翻回 false,B 會重新水合(C6:不再看到 A 的對話)', async () => {
 		const user = (id: string, email: string) => ({
 			id, email, name: '教練' + id, phone: null, phone_verified: false, avatar_url: null,
 			is_active: true, created_at: '2024-01-01T00:00:00Z', roles: ['coach']
@@ -400,7 +407,7 @@ describe('hydrateMessages / messagesHydrated', () => {
 
 		await login(user('ub', 'b@dreamfly.test'));
 
-		expect(get(messages)).toEqual(MESSAGES);
+		expect(get(messages)).toEqual([]);
 		expect(get(messagesHydrated)).toBe(false);
 		const calls = vi.mocked(getMessages).mock.calls.length;
 		await hydrateMessages();

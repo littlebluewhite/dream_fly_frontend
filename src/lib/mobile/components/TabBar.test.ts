@@ -3,7 +3,8 @@ import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import MobileTabBar from './TabBar.svelte';
 import { TABS, mobilePath } from '$lib/mobile/nav';
-import { markAllRead, unreadCount } from '$lib/mobile/stores';
+import { markAllRead, notifications, unreadCount } from '$lib/mobile/stores';
+import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile') })
@@ -17,12 +18,22 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
-	// Reset notifs to ensure unread count is back to the seeded value for other tests.
-	// createNotifs DOES expose set() (added for hydration), but we leave the store
-	// as-is here — each test controls it as needed for its assertions.
+	// 不在這裡還原 notifications——每個 it 自己 set 需要的狀態。
 });
 
 describe('mobile TabBar adapter — smoke tests', () => {
+	// R14(候選 F3)誠實開機:通知 store 開機為 `[]` → 未讀 0 → 沒有角標(不再顯示種子的假 3 則)。
+	// 必須排在本檔第一支、任何 set 之前——vitest 每檔各自一份模組實例,這裡讀到的就是開機值。
+	it('開機沒有角標(通知 store 開機為空)', () => {
+		expect(get(unreadCount)).toBe(0);
+
+		render(MobileTabBar);
+
+		for (const link of screen.getAllByRole('link')) {
+			expect(link.querySelector('span[style*="border-radius:999px"]')).toBeNull();
+		}
+	});
+
 	it('renders all 5 TABS with correct labels', () => {
 		render(MobileTabBar);
 
@@ -49,11 +60,10 @@ describe('mobile TabBar adapter — smoke tests', () => {
 	});
 
 	it('notifications badge shows the unread count when unread > 0', () => {
-		// NOTIFS_SEED has 3 unread items out of the box, so get() should be > 0.
-		// If a previous test called markAllRead() we need at least one unread item.
-		// Use the current live value — whatever the seed gives us.
+		// 夾具 NOTIFS_SEED 有 3 則未讀(開機是空的,先灌進 store)。
+		notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 		const currentUnread = get(unreadCount);
-		expect(currentUnread).toBeGreaterThan(0); // precondition: seed has unread items
+		expect(currentUnread).toBeGreaterThan(0); // precondition: fixture has unread items
 
 		render(MobileTabBar);
 

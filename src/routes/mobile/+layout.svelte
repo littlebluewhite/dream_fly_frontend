@@ -15,8 +15,9 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { isLoggedIn } from '$lib/stores/authStore';
-  import { overlay, toasts } from '$lib/mobile/stores';
+  import { authStore, isLoggedIn } from '$lib/stores/authStore';
+  import { overlay, toasts, hydrateNotifications } from '$lib/mobile/stores';
+  import { warmStores } from '$lib/store-warm';
   import { mobileGuardTarget } from './guard';
   import TabBar from '$lib/mobile/components/TabBar.svelte';
   import OverlayHost from '$lib/mobile/OverlayHost.svelte';
@@ -27,6 +28,11 @@
     const target = mobileGuardTarget($page.url.pathname, $isLoggedIn);
     if (target) goto(target);
   }
+
+  // 暖機清單(R14 候選 F3):通知(TabBar 的未讀角標),與 member +layout 同一份宣告、同一顆閘門。
+  // 已登入(守門此時不導走)時 key 為 member.id,否則 null;每個身分只打一次 GET。
+  $: warmKey = $authStore.loggedIn ? ($authStore.member?.id ?? '') : null;
+  $: if (browser && warmKey !== null) void warmStores('mobile +layout', [['通知', hydrateNotifications]]);
 
   afterNavigate(() => overlay.closeAll());
 </script>

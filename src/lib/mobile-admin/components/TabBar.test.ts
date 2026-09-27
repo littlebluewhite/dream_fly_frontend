@@ -4,6 +4,7 @@ import { readable, get } from 'svelte/store';
 import AdminTabBar from './TabBar.svelte';
 import { ADMIN_TABS, COACH_TABS, adminPath } from '$lib/mobile-admin/nav';
 import { messages, coachMsgUnread } from '$lib/mobile-admin/stores';
+import { MESSAGES } from '$lib/testing/seed-fixtures';
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile-admin/admin') })
@@ -14,6 +15,18 @@ afterEach(() => {
 });
 
 describe('m-admin TabBar adapter — smoke tests', () => {
+	// R14(候選 F3)誠實開機:訊息 store 開機為 `[]` → coachMsgUnread 0 → 教練分頁沒有角標。
+	// 必須排在本檔第一支、任何 set 之前——vitest 每檔各自一份模組實例,這裡讀到的就是開機值。
+	it('開機沒有角標(role=coach,訊息 store 開機為空)', () => {
+		expect(get(coachMsgUnread)).toBe(0);
+
+		render(AdminTabBar, { role: 'coach' });
+
+		for (const link of screen.getAllByRole('link')) {
+			expect(link.querySelector('span[style*="border-radius:999px"]')).toBeNull();
+		}
+	});
+
 	it('role=admin renders admin tab set (5 tabs: 總覽/學員/課程/訂單/更多)', () => {
 		render(AdminTabBar, { role: 'admin' });
 
@@ -74,7 +87,8 @@ describe('m-admin TabBar adapter — smoke tests', () => {
 	});
 
 	it('role=coach: messages badge shows coachMsgUnread count when > 0', () => {
-		// MESSAGES seed has 3 unread items — verify adapter wires the badge.
+		// 夾具 MESSAGES 有 3 則未讀(開機是空的,先灌進 store)——verify adapter wires the badge.
+		messages.set(MESSAGES.map((m) => ({ ...m })));
 		const currentUnread = get(coachMsgUnread);
 		expect(currentUnread).toBeGreaterThan(0); // precondition: seed has unread messages
 
@@ -98,6 +112,7 @@ describe('m-admin TabBar adapter — smoke tests', () => {
 
 	it('role=admin: no messages badge regardless of coachMsgUnread (admin badges={} by design)', () => {
 		// Even if messages exist, admin role injects badges={} — no badge should appear.
+		messages.set(MESSAGES.map((m) => ({ ...m })));
 		const currentUnread = get(coachMsgUnread);
 		expect(currentUnread).toBeGreaterThan(0); // precondition: there ARE unread messages
 

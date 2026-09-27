@@ -1,8 +1,8 @@
 /* Dream Fly — member 結帳「真訂單」API 層單測（Task 16；Task 17 加了 refreshPoints
- * 的 ledger 映射與 refreshNotifications）
+ * 的 ledger 映射與 hydrateNotifications）
  *
  * 覆蓋 member 結帳網路層：$lib/checkout-order 的 syncCartToServer，以及 stores.ts barrel
- * 轉出的 placeOrder / refreshSubscriptions / refreshPoints / refreshNotifications。只替換
+ * 轉出的 placeOrder / refreshSubscriptions / refreshPoints / hydrateNotifications。只替換
  * $lib/api/client 的 api()，ApiError
  * 用回真實類別（判斷 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→
  * POST /orders→GET×2）是這裡的核心斷言，不是只驗證最終 state。 */
@@ -25,15 +25,13 @@ import {
   placeOrder,
   refreshSubscriptions,
   refreshPoints,
-  refreshNotifications,
+  hydrateNotifications,
   hydrateWaitlist,
   joinWaitlist,
   cancelWaitlist,
   joinWaitlistErrorMessage
 } from './stores';
 import type { CartItem } from '$lib/cart-item';
-import { NOTIFS_SEED } from './data';
-import { POINTS_LEDGER } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -484,7 +482,7 @@ describe('refreshPoints', () => {
     ]);
   });
 
-  it('F1 跨登入洩漏釘:refreshPoints 後登出 → points/ledger 重置為 boot 態(0 / POINTS_LEDGER seed),換帳不殘留 A 的餘額', async () => {
+  it('F1 跨登入洩漏釘:refreshPoints 後登出 → points/ledger 重置為 boot 態(0 / `[]`),換帳不殘留 A 的餘額', async () => {
     /* C1 抬升:points 原本全無守衛,換帳後 A 的餘額殘留(殘影窗口)。createSessionRefresher
      * 的 reset 在 identity 變更時把 points/ledger 歸 boot 態。 */
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -501,8 +499,7 @@ describe('refreshPoints', () => {
     await authStore.logout();
 
     expect(get(points)).toBe(0); // 重置為 boot 態
-    expect(get(pointsLedger)).toEqual(POINTS_LEDGER); // 重置為 seed(non-empty boot 態)
-    expect(get(pointsLedger)[0]).not.toBe(POINTS_LEDGER[0]); // clone,非共享參照
+    expect(get(pointsLedger)).toEqual([]); // 重置為 boot 態(R14 F3:誠實開機,開機值 = reset 值 = `[]`)
   });
 
   it('P1′ 在飛作廢釘:refreshPoints in-flight 期間登出 → 回應靜默丟棄(不套用、不 throw),不新增換帳失敗模式', async () => {
@@ -526,13 +523,13 @@ describe('refreshPoints', () => {
   });
 });
 
-describe('refreshNotifications(Task 17)', () => {
+describe('hydrateNotifications(Task 17)', () => {
   it('把 GET /notifications 映射後寫入 notifications store，並把 notificationsHydrated 設為 true', async () => {
     vi.mocked(api).mockResolvedValue([
       { id: 'n1', type: 'order_placed', title: '付款成功', message: '訂單已完成付款', is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' }
     ]);
 
-    await refreshNotifications();
+    await hydrateNotifications();
 
     expect(get(notifications)).toEqual([
       { id: 'n1', cat: 'order', icon: 'credit-card', tone: 'success', title: '付款成功', body: '訂單已完成付款', time: '2026-07-04 06:30', read: false }
@@ -547,7 +544,7 @@ describe('refreshNotifications(Task 17)', () => {
     notifications.set(sentinel);
     vi.mocked(api).mockResolvedValue([{ id: 'n2', type: 'system', title: '不該出現', message: '', is_read: false, metadata: null, created_at: '2026-07-04T00:00:00Z' }]);
 
-    await refreshNotifications();
+    await hydrateNotifications();
 
     expect(api).not.toHaveBeenCalled();
     expect(get(notifications)).toEqual(sentinel); // 未被覆寫
@@ -557,7 +554,7 @@ describe('refreshNotifications(Task 17)', () => {
     const deferred = createDeferred<unknown[]>();
     vi.mocked(api).mockImplementation(async () => deferred.promise);
 
-    const p = refreshNotifications(); // 通過 top guard（hydrated=false），fetch 掛起中
+    const p = hydrateNotifications(); // 通過 top guard（hydrated=false），fetch 掛起中
 
     const sentinel = [
       { id: 's2', cat: 'system' as const, icon: 'bell' as const, tone: 'neutral' as const, title: '飛行中寫入', body: '', time: '2026-01-01 00:00', read: true }
@@ -572,10 +569,10 @@ describe('refreshNotifications(Task 17)', () => {
     expect(get(notificationsHydrated)).toBe(true);
   });
 
-  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + 通知重置為 seed,下一個帳號 refresh 重新真抓', async () => {
+  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + 通知重置為 `[]`,下一個帳號 refresh 重新真抓', async () => {
     /* C1 抬升:notificationsHydrated 原本跨帳號存活(真缺陷)——SPA 登出無整頁重載,
-     * B 帳號的 getDashboard → refreshNotifications 被 guarded() 短路,直接讀到 A 的通知。
-     * 改走 createSessionGate 後 identity 變更即 reset(旗標 false + 通知回 seed)。 */
+     * B 帳號的 getDashboard → hydrateNotifications 被 guarded() 短路,直接讀到 A 的通知。
+     * 改走 createSessionGate 後 identity 變更即 reset(旗標 false + 通知回 boot 態 `[]`)。 */
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /auth/login': AUTH_RES,
       'POST /auth/logout': undefined,
@@ -585,19 +582,18 @@ describe('refreshNotifications(Task 17)', () => {
     }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
-    await refreshNotifications();
+    await hydrateNotifications();
     expect(get(notifications).map((n) => n.id)).toEqual(['na']);
     expect(get(notificationsHydrated)).toBe(true);
 
     await authStore.logout(); // 「登入 → 登出」邊沿
 
     expect(get(notificationsHydrated)).toBe(false); // 旗標重置,guarded() 不再短路
-    expect(get(notifications)).toEqual(NOTIFS_SEED); // A 的通知不留給 B,重置為 seed(boot 態)
-    expect(get(notifications)[0]).not.toBe(NOTIFS_SEED[0]); // clone,非共享參照
+    expect(get(notifications)).toEqual([]); // A 的通知不留給 B,重置為 boot 態 `[]`
 
     const gets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/notifications').length;
     const before = gets();
-    await refreshNotifications(); // 帳號 B 再水合 → 真的重新 fetch
+    await hydrateNotifications(); // 帳號 B 再水合 → 真的重新 fetch
     expect(gets()).toBe(before + 1);
   });
 
@@ -610,7 +606,7 @@ describe('refreshNotifications(Task 17)', () => {
     }, CART_DEFAULTS));
 
     await authStore.login('a@dreamfly.test', 'pw');
-    const p = refreshNotifications(); // A 的 GET 掛起中
+    const p = hydrateNotifications(); // A 的 GET 掛起中
     await authStore.logout(); // 在飛期間登出
 
     deferred.resolve([
@@ -618,7 +614,7 @@ describe('refreshNotifications(Task 17)', () => {
     ]);
     await expect(p).rejects.toThrow(); // 過期 fetch 作廢(gate 不套用、不 commit)
 
-    expect(get(notifications)).toEqual(NOTIFS_SEED); // A 的通知沒有落地(維持 logout reset 的 seed)
+    expect(get(notifications)).toEqual([]); // A 的通知沒有落地(維持 logout reset 的 `[]`)
     expect(get(notificationsHydrated)).toBe(false); // B 的 refresh 不會被短路
   });
 });
@@ -627,7 +623,7 @@ describe('refreshNotifications(Task 17)', () => {
  * 覆蓋 stores.ts 新增的 hydrateWaitlist / joinWaitlist / cancelWaitlist 網路層，
  * 與 joinWaitlistErrorMessage 這個純函式（同 checkout.ts 的 orderErrorMessage
  * 慣例：只對後端已知的單一 409 原因給專屬文案，其餘落回通用 fallback）。
- * C1（架構深化 R7）：水合改走 createSessionGate（同上方 refreshNotifications 的
+ * C1（架構深化 R7）：水合改走 createSessionGate（同上方 hydrateNotifications 的
  * session 協定 its）；泛型深層協定已移入 session-gate.test，本檔僅留薄 adapter 釘
  * （guard 短路 + F1 跨登入 + 每 mutator happy-path + F2 完整性）。 */
 describe('hydrateWaitlist', () => {
@@ -655,7 +651,7 @@ describe('hydrateWaitlist', () => {
     expect(get(waitlist)).toEqual([]);
   });
 
-  it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 join/cancel 直寫的狀態（同 refreshNotifications 的守衛）', async () => {
+  it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 join/cancel 直寫的狀態（同 hydrateNotifications 的守衛）', async () => {
     waitlistHydrated.set(true);
     const sentinel = [{ id: 'wl-s', course_id: 'course-uuid-7', course_name: '哨兵課程' }];
     waitlist.set(sentinel);

@@ -38,7 +38,7 @@
  * R14(候選 F2):**hydrate 合併**——hydrate() 與 pageEntry().fetch 共用同一支在飛 GET(子頁
  * onMount 先於 layout,暖機與頁面載入必然同時水合)。只共用「同一次 GET」,沒有世代迴圈,
  * 不是 ADR-0020 否決的形 3;refresh 族(refresh()、pageEntry().refresh)一律真抓、不併入。
- * 同時新增 invalidate():production 把旗標翻回 false 的唯一寫法。
+ * 同時新增 invalidate():外部 production 把旗標翻回 false 的唯一寫法(內部的 ownerChanged() 也翻,只給 session-gate)。
  *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。

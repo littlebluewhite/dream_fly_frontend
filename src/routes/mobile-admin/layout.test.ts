@@ -25,12 +25,23 @@ vi.mock('$lib/stores/authStore', async () => {
 	return makeAuthMockA({ roleFor: (email) => (email.includes('coach') ? ['coach'] : ['admin']) });
 });
 
+// R14(候選 F3)暖機清單:教練分區以身分為 key 暖訊息——只替換 api(),數 GET /conversations/me。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { messagesHydrated } from '$lib/mobile-admin/stores';
 import { authStore } from '$lib/stores/authStore';
 import Layout from './+layout.svelte';
 
 beforeEach(() => {
 	mockUrl = new URL('http://localhost/mobile-admin/admin');
 	authStore.logout();
+	messagesHydrated.set(false);
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -64,5 +75,37 @@ describe('mobile-admin +layout — real auth + role guard (Task 20, replaces df_
 		authStore.login('coach@test.com', 'password123');
 		render(Layout);
 		expect(goto).not.toHaveBeenCalled();
+	});
+});
+
+describe('mobile-admin +layout — 暖機清單(R14 F3)', () => {
+	const convGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/conversations/me').length;
+	const settle = () => new Promise((r) => setTimeout(r, 0));
+
+	it('coach 角色(/mobile-admin/coach)打 GET /conversations/me 恰好一次;重新 render 不再打', async () => {
+		mockUrl = new URL('http://localhost/mobile-admin/coach');
+		authStore.login('coach@test.com', 'password123');
+		const first = render(Layout);
+		await settle();
+		expect(convGets()).toBe(1);
+
+		first.unmount();
+		render(Layout);
+		await settle();
+		expect(convGets()).toBe(1);
+	});
+
+	it('admin 角色(/mobile-admin/admin)零次', async () => {
+		authStore.login('admin@test.com', 'password123');
+		render(Layout);
+		await settle();
+		expect(convGets()).toBe(0);
+	});
+
+	it('未登入零次(守門導走)', async () => {
+		mockUrl = new URL('http://localhost/mobile-admin/coach');
+		render(Layout);
+		await settle();
+		expect(convGets()).toBe(0);
 	});
 });

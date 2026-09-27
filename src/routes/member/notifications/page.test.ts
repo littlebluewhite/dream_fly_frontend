@@ -6,7 +6,7 @@ import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { notifications, notificationsHydrated, toasts } from '$lib/member/stores';
-import { NOTIFS_SEED } from '$lib/member/data';
+import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 import type { ApiNotification, Notification } from '$lib/member/data';
 import Page from './+page.svelte';
 
@@ -227,12 +227,12 @@ describe('member/notifications 頁', () => {
     await authStore.login('a@dreamfly.test', 'pw');
     render(Page); // A 的 fetch 掛起中(phase=loading)
 
-    await authStore.logout(); // 在飛期間登出 → 閘門 epoch+1、reset 把 store 歸 boot seed
+    await authStore.logout(); // 在飛期間登出 → 閘門 epoch+1、reset 把 store 歸 boot 態 `[]`
 
     resolveA([{ id: 'a-only', type: 'system', title: 'A 帳號的通知', message: '', is_read: true, metadata: null, created_at: '2026-06-01T08:00:00Z' }]);
 
     expect(await screen.findByText('載入失敗')).toBeInTheDocument();
     expect(screen.queryByText('A 帳號的通知')).toBeNull();
-    expect(get(notifications)).toEqual(NOTIFS_SEED); // 舊帳號資料沒有寫進共享 store
+    expect(get(notifications)).toEqual([]); // 舊帳號資料沒有寫進共享 store(維持 reset 的 `[]`)
   });
 });

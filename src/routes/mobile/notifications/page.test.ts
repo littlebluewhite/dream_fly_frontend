@@ -7,7 +7,7 @@ import { notifications, notificationsHydrated } from '$lib/mobile/stores';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { NOTIFS_SEED } from '$lib/domain/member-app';
+import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 // notifications store 現在是 member 的 Notification(tone: Tone 窄型別)——sentinel fixture
 // 寫入 store 需要窄型別,不能用 domain 的寬鬆型別(tone: string)註記(合一後單向可指派:
 // member → domain,反過來不行,見 task-5-report.md)。
@@ -35,7 +35,7 @@ function apiNotif(id: string, read: boolean, title = '系統公告', message = '
 	};
 }
 
-/** 把 domain NOTIFS_SEED 的一筆轉成對應的後端 wire 形(type 一律 'system'——本頁測試
+/** 把夾具 NOTIFS_SEED 的一筆轉成對應的後端 wire 形(type 一律 'system'——本頁測試
  *  不驗證 cat/icon/tone 的映射表,那是 member/notifications.test.ts 的 mapNotification
  *  覆蓋範圍;這裡只需要標題/內文/已讀狀態能在畫面上被斷言到)。 */
 const seedToWire = (n: (typeof NOTIFS_SEED)[number]) => apiNotif(n.id, n.read, n.title, n.body);
@@ -55,7 +55,7 @@ beforeEach(() => {
 	get(toasts).forEach((t) => toasts.dismiss(t.id));
 	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
 	notificationsHydrated.set(false);
-	// 重新 seed 共享 feed(store 同步 seed 起始,比照 member 前例),避免前一
+	// 重新灌夾具(store 開機為 `[]`,本檔測試需要有未讀的 feed,比照 member 前例),避免前一
 	// 測試的 set()/markAllRead 滲漏到下一個測試。
 	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
@@ -173,13 +173,13 @@ describe('mobile/notifications 頁', () => {
 		await authStore.login('a@dreamfly.test', 'pw');
 		render(Page); // A 的 fetch 掛起中(phase=loading)
 
-		await authStore.logout(); // 在飛期間登出 → 閘門 epoch+1、reset 把 store 歸 boot seed
+		await authStore.logout(); // 在飛期間登出 → 閘門 epoch+1、reset 把 store 歸 boot 態 `[]`
 
 		resolveA([apiNotif('a-only', true, 'A 帳號的通知')]);
 
 		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
 		expect(screen.queryByText('A 帳號的通知')).toBeNull();
-		expect(get(notifications)).toEqual(NOTIFS_SEED); // 舊帳號資料沒有寫進共享 store
+		expect(get(notifications)).toEqual([]); // 舊帳號資料沒有寫進共享 store(維持 reset 的 `[]`)
 	});
 
 	it('分類清單為空時顯示 MEmpty,不留白', async () => {

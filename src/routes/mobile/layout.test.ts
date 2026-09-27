@@ -19,12 +19,23 @@ vi.mock('$lib/stores/authStore', async () => {
   return makeAuthMockA();
 });
 
+// R14(候選 F3)暖機清單:layout 以身分為 key 暖通知——只替換 api(),數 GET /notifications。
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
+
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { notificationsHydrated } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import Layout from './+layout.svelte';
 
 beforeEach(() => {
   mockUrl = new URL('http://localhost/mobile');
   authStore.logout();
+  notificationsHydrated.set(false);
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -38,5 +49,28 @@ describe('mobile +layout — real auth guard (Task 19, replaces df_mobile_sessio
     authStore.login('member@test.com', 'password123');
     render(Layout);
     expect(goto).not.toHaveBeenCalled();
+  });
+});
+
+describe('mobile +layout — 暖機清單(R14 F3)', () => {
+  const notifGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/notifications').length;
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('登入後 GET /notifications 恰好一次;重新 render 不再打(閘門守衛擋重訪)', async () => {
+    authStore.login('member@test.com', 'password123');
+    const first = render(Layout);
+    await settle();
+    expect(notifGets()).toBe(1);
+
+    first.unmount();
+    render(Layout);
+    await settle();
+    expect(notifGets()).toBe(1);
+  });
+
+  it('未登入零次(守門導走)', async () => {
+    render(Layout);
+    await settle();
+    expect(notifGets()).toBe(0);
   });
 });

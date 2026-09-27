@@ -22,7 +22,7 @@ import type { Role } from './nav';
 // C4 批3(facade 純轉手退役):COACHES/type Coach 改直取 $lib/domain/coaches(原經
 // ./data 純轉手,零附加型別事實)——這裡是 coaches store 的同步種子值(見下方),
 // 非 test-only 消費。
-import { MEMBERS, CLASSES, ORDERS, MESSAGES, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
+import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
 import { COACHES, type Coach } from '$lib/domain/coaches';
 import {
 	getOpsCollections,
@@ -199,8 +199,9 @@ export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusO
 
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from
  *  this store, so reading a thread updates both — the static seed only ever showed
- *  the original unread count for the whole session. */
-export const messages = writable<MessageRow[]>(MESSAGES.map((m) => ({ ...m })));
+ *  the original unread count for the whole session. 誠實開機(R14 候選 F3):開機值 =
+ *  reset 值 = `[]`,教練分區的 layout 暖機後才顯示真數(不再顯示種子的假 3 則)。 */
+export const messages = writable<MessageRow[]>([]);
 /** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
  *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
  *  覆寫)。Task 20：本地立即翻已讀(樂觀更新，同既有 UX)之餘，一併 best-effort 打真
@@ -215,14 +216,16 @@ export function markMessageRead(id: string) {
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
- *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。同步 seed 保留
- *  (對齊 mobile notifs 前例);markMessageRead 呼叫 messagesGate.markMutated()
+ *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。開機為 `[]`(R14 F3
+ *  誠實開機;原同步 seed 退役,值搬進 $lib/testing/seed-fixtures);markMessageRead 呼叫 messagesGate.markMutated()
  *  (mutation 即宣告水合真相)。訊息頁經 messagesPageEntry 建 load-gate,重試走 load-gate
  *  的 refresh(一律真抓、落地同走世代穩定重抓,理由與判準見上方 opsGate 註解)。
  *  R13 Task 7(C6):對話列表是**登入教練本人**的資料,改用 createSessionGate——換帳號/
- *  登出即重置回種子、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(原本的 hydration
+ *  登出即重置回 boot 態、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(原本的 hydration
  *  gate 跨帳號存活,第二位教練會看到前一位的對話列表)。opsGate 是全機構的營運集合,
- *  不涉個人隱私,維持不動。reset 回種子 clone 滿足 boot-parity(store 開機即帶種子)。
+ *  不涉個人隱私,維持不動。reset 回 `[]` 滿足 boot-parity(開機值 = reset 值)。
+ *  暖機:routes/mobile-admin/+layout.svelte 只在教練分區以身分為 key 呼叫 hydrateMessages
+ *  (見 $lib/store-warm)。
  *  fetch 包一層箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */
 const messagesGate = createSessionGate({
 	fetch: () => getMessages(),
@@ -230,7 +233,7 @@ const messagesGate = createSessionGate({
 		messages.set(d);
 	},
 	reset: () => {
-		messages.set(MESSAGES.map((m) => ({ ...m })));
+		messages.set([]);
 	}
 });
 export const messagesHydrated = messagesGate.hydrated;
