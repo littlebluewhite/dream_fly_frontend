@@ -1,37 +1,90 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import OrdersPage from './+page.svelte';
-import { getOpsCollections } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, resetOpsForTests } from '$lib/mobile-admin/stores';
 import { fmtNT } from '$lib/format';
 import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { OrderRow } from '$lib/mobile-admin/data';
 import { COACHES } from '$lib/domain/coaches';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { OPS_ROUTES } from '$lib/testing/ops-routes';
+import { ntd, orderItemsSummary } from '$lib/public/adapters';
+import { initialOf, isoDate, orderIdentity, taxFromGross, type OrderStatus } from '$lib/api/wire';
+import { MEMBER_COLORS } from '$lib/admin/data';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getOpsCollections: vi.fn() }));
-
-const mkOrder = (over: Partial<OrderRow>): OrderRow => ({
-	id: 'DF-X', orderId: 'uuid-x', member: 'X', initial: 'X', color: '#000', item: '測試項目', amount: 1000,
-	status: 'paid', method: '信用卡', date: '2026/01/01', invoice: '', discount: '',
-	handler: '', campus: '', tax: 0, net: 1000, paidAt: '2026/01/01', taxId: '—', ...over
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections
+ * (組合器，3b 留任)走真實 fetch adapter。FIXTURE_ORDERS 改為 wire 形狀，經
+ * mapOrder()(鏡射 admin/api.ts 私有 mapAdminOrder()，同一組 wire 知識原子
+ * ntd/orderIdentity/taxFromGross/initialOf/isoDate/orderItemsSummary/MEMBER_COLORS)
+ * 映射，而非手造已映射的 OrderRow。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
+
+interface WireOrder {
+	id: string;
+	order_number: string;
+	user_name: string;
+	user_email: string;
+	status: OrderStatus;
+	total_cents: number;
+	points_used: number;
+	coupon_code: string | null;
+	created_at: string;
+	items: { name: string; quantity: number }[];
+}
+
+const mkWireOrder = (over: Partial<WireOrder>): WireOrder => ({
+	id: 'uuid-x', order_number: 'DF-X', user_name: 'X', user_email: 'x@test.com', status: 'paid',
+	total_cents: 100000, points_used: 0, coupon_code: null, created_at: '2026-01-01T00:00:00Z',
+	items: [], ...over
+});
+
+/** 鏡射 admin/api.ts 私有 mapAdminOrder()。 */
+function mapOrder(o: WireOrder, i: number): OrderRow {
+	const amount = ntd(o.total_cents);
+	const { tax, net } = taxFromGross(amount);
+	const { display, uuid } = orderIdentity(o);
+	return {
+		id: display,
+		orderId: uuid,
+		member: o.user_name,
+		initial: initialOf(o.user_name),
+		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+		item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
+		amount,
+		status: o.status,
+		method: '線上',
+		date: isoDate(o.created_at),
+		invoice: '—',
+		discount: o.coupon_code ?? '',
+		handler: '—',
+		campus: '—',
+		tax,
+		net,
+		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
+		taxId: '—'
+	};
+}
+
 // 與 seed 相異的 fixture(訂單編號/金額皆改過),證明頁面讀 hydrateOps() 水合後
 // 的 $orders store。
-const FIXTURE_ORDERS: OrderRow[] = [
-	mkOrder({ id: 'DF-TEST01', member: '測試學員甲', amount: 12345, status: 'paid' }),
-	mkOrder({ id: 'DF-TEST02', member: '測試學員乙', amount: 500, status: 'pending' })
+const WIRE_ORDERS: WireOrder[] = [
+	mkWireOrder({ id: 'uuid-test01', order_number: 'DF-TEST01', user_name: '測試學員甲', total_cents: 1234500, status: 'paid' }),
+	mkWireOrder({ id: 'uuid-test02', order_number: 'DF-TEST02', user_name: '測試學員乙', total_cents: 50000, status: 'pending' })
 ];
-/** getOpsCollections 的分頁 meta(R12 Task 3:header 顯示 total、total > perPage 出搜尋提示)。 */
-const pagesOf = (members: number, classes: number, orders: number) => ({
-	members: { total: members, perPage: 20 },
-	classes: { total: classes, perPage: 20 },
-	orders: { total: orders, perPage: 20 }
+const FIXTURE_ORDERS: OrderRow[] = WIRE_ORDERS.map(mapOrder);
+
+const opsRoutes = (wireOrders: WireOrder[], total = wireOrders.length) => ({
+	...OPS_ROUTES,
+	'GET /orders?page=1': { orders: wireOrders, total, page: 1, per_page: 20 }
 });
-const OPS_FIXTURE = { members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: FIXTURE_ORDERS, pages: pagesOf(MEMBERS.length, CLASSES.length, 2) };
 
 beforeEach(() => {
-	vi.mocked(getOpsCollections).mockReset();
-	vi.mocked(getOpsCollections).mockResolvedValue(OPS_FIXTURE);
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_ORDERS)));
 	resetOpsForTests();
 	members.set(MEMBERS);
 	classes.set(CLASSES);
@@ -49,7 +102,7 @@ afterEach(() => {
 
 describe('mobile-admin/admin/orders 頁', () => {
 	it('loading 分支顯示骨架(data-testid="orders-skeleton")', () => {
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(OrdersPage);
 		expect(container.querySelector('[data-testid="orders-skeleton"]')).not.toBeNull();
 	});
@@ -64,24 +117,33 @@ describe('mobile-admin/admin/orders 頁', () => {
 	});
 
 	it('載入失敗顯示 ErrorState,且重試會真正重新 fetch(不受 hydrated 守衛短路)', async () => {
-		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('boom'));
+		let call = 0;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...opsRoutes(WIRE_ORDERS),
+				'GET /orders?page=1': () => {
+					call += 1;
+					if (call === 1) throw new Error('boom');
+					return { orders: WIRE_ORDERS, total: WIRE_ORDERS.length, page: 1, per_page: 20 };
+				}
+			})
+		);
 		const { findByText } = render(OrdersPage);
 		await findByText('載入失敗');
 
-		vi.mocked(getOpsCollections).mockResolvedValueOnce(OPS_FIXTURE);
 		await fireEvent.click(await findByText('重新載入'));
 		expect(await findByText('測試學員甲')).toBeInTheDocument();
 	});
 
 	it('orders 空集合不當機,顯示找不到符合的訂單', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [], pages: pagesOf(MEMBERS.length, CLASSES.length, 0) });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([], 0)));
 		const { findByText } = render(OrdersPage);
 		expect(await findByText('找不到符合的訂單')).toBeInTheDocument();
 	});
 
 	it('未知 status(契約若擴出新值) → 該筆訂單降級為 neutral 徽章 + 原字串，不會炸掉(orderStatusBadge fallback)', async () => {
-		const unknownOrder = mkOrder({ id: 'DF-TEST03', member: '測試學員丙', status: 'future_status' as OrderRow['status'] });
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: CLASSES, coaches: COACHES, orders: [unknownOrder], pages: pagesOf(MEMBERS.length, CLASSES.length, 1) });
+		const unknownOrder = mkWireOrder({ id: 'uuid-test03', order_number: 'DF-TEST03', user_name: '測試學員丙', status: 'future_status' as OrderStatus });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([unknownOrder])));
 
 		const { container, findByText } = render(OrdersPage);
 		expect(await findByText('測試學員丙')).toBeInTheDocument();
@@ -111,7 +173,7 @@ describe('mobile-admin/admin/orders 頁', () => {
 
 describe('mobile-admin/admin/orders 頁 — 分頁誠實(R12 Task 3)', () => {
 	it('header 顯示後端 total;total > perPage 時搜尋區提示僅搜尋前 N 筆', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ ...OPS_FIXTURE, pages: pagesOf(MEMBERS.length, CLASSES.length, 120) });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_ORDERS, 120)));
 		const { findByText } = render(OrdersPage);
 		expect(await findByText('共 120 筆報名繳費紀錄')).toBeInTheDocument();
 		expect(await findByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeInTheDocument();

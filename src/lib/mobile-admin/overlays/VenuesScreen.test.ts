@@ -1,47 +1,48 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import VenuesScreen from './VenuesScreen.svelte';
-import { getVenues } from '$lib/mobile-admin/api';
-import type { Venue } from '$lib/domain/venues';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import type { ApiVenue } from '$lib/public/api';
 
 /* 場館管理 push screen — C4：接真 GET /venues(復用桌面 admin/api.ts 的 getVenues()，見
  * $lib/mobile-admin/api 薄委派 re-export)。fixture 刻意異於 domain/venues.ts seed(場地
  * 名/型態/器材皆改過)，證明畫面讀 getVenues() payload 而非殘留的 VENUES import；id 是
- * UUID 形、方塊改顯示 slug——斷言 UUID 不出現於版面、slug 出現(鏡射桌面 F4 裁決)。 */
-vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
-	return { ...actual, getVenues: vi.fn() };
+ * UUID 形、方塊改顯示 slug——斷言 UUID 不出現於版面、slug 出現(鏡射桌面 F4 裁決)。
+ * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，走真實 getVenues()
+ * (listVenues() → GET /venues, auth:false)+ mapVenue()。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 
 const UUID_A = '3f9a1c02-7b4e-4d1a-9c88-000000000001';
 const UUID_B = '3f9a1c02-7b4e-4d1a-9c88-000000000002';
-const PAYLOAD: { venues: Venue[] } = {
-	venues: [
-		{ id: UUID_A, slug: 'zeta-hall', name: 'Zeta 訓練場', type: '測試競技場', equip: ['測試彈翻床', '測試單槓'], status: 'available' },
-		{ id: UUID_B, slug: 'omega-room', name: 'Omega 教室', type: '測試律動室', equip: ['測試地墊'], status: 'maintenance' }
-	]
-};
+const PAYLOAD: ApiVenue[] = [
+	{ id: UUID_A, category_id: null, slug: 'zeta-hall', name: 'Zeta 訓練場', description: '測試競技場', features: ['測試彈翻床', '測試單槓'], image_url: null, is_active: true, created_at: '' },
+	{ id: UUID_B, category_id: null, slug: 'omega-room', name: 'Omega 教室', description: '測試律動室', features: ['測試地墊'], image_url: null, is_active: false, created_at: '' }
+];
 
 beforeEach(() => {
-	vi.mocked(getVenues).mockReset();
-	vi.mocked(getVenues).mockResolvedValue(PAYLOAD);
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /venues': PAYLOAD }));
 });
 
 describe('VenuesScreen — 載入(GET /venues)', () => {
 	it('loading：顯示骨架', () => {
-		vi.mocked(getVenues).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(VenuesScreen, { props: { onBack: () => {} } });
 		expect(getByTestId('venues-skeleton')).toBeTruthy();
 	});
 
 	it('error：顯示「載入失敗」', async () => {
-		vi.mocked(getVenues).mockRejectedValue(new Error('network'));
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /venues': new Error('network') }));
 		const { findByText } = render(VenuesScreen, { props: { onBack: () => {} } });
 		await findByText('載入失敗');
 	});
 
 	it('loading 期副標不誤導顯示「0 個場地」', () => {
-		vi.mocked(getVenues).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(VenuesScreen, { props: { onBack: () => {} } });
 		expect(container.textContent ?? '').not.toContain('0 個場地');
 	});

@@ -2,37 +2,69 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AttendancePage from './+page.svelte';
-import { getAttendance, saveAttendance } from '$lib/mobile-admin/api';
 import { toasts } from '$lib/mobile-admin/stores';
-import type { AttClassFull, AttRow } from '$lib/mobile-admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginAs, type TestUser } from '$lib/testing/coach-session';
+import { authStore } from '$lib/stores/authStore';
+import type { ApiCoach } from '$lib/public/api';
+import type { ApiTodaySession } from '$lib/api/wire';
 
-// 載入錯誤文案單源用真的(本頁經 $lib/mobile-admin/api 轉出取用,同工作台/個人設定頁)。
-vi.mock('$lib/mobile-admin/api', async () => ({
-	...(await import('$lib/coach/load-error-copy')),
-	getAttendance: vi.fn(),
-	saveAttendance: vi.fn()
-}));
+/* R15 Task 3a(候選 轉手退役)：getAttendance/saveAttendance 在 mobile-admin/api.ts 是零映射
+ * re-export(桌面 coach/api.ts 的實作)，改 mock $lib/api/client 的 api()，讓它們走真實
+ * fetch adapter；教練身分(requireCoach)真經 loginAs() 驅動，每個測試先登出再登入避免
+ * session 閘門快取跨測試殘留(同 coach/page.test.ts 慣例)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-const rosterOf = (over: Partial<AttRow>[]): AttRow[] =>
-	over.map((o, i) => ({ n: String(i + 1).padStart(2, '0'), name: '測試學員' + i, initial: '測', color: '#000', mid: 'T-00' + i, def: 'present', ...o }));
+const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', phone: null, last_login: null, created_at: '2026-01-01T00:00:00Z' };
+const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
+
+interface WireRosterEntry { enrolment_id: string; user_id: string; user_name: string; attendance_status: 'present' | 'absent' | 'leave' | null }
 
 // 兩堂課同一天，證明「切換班級」FilterChips 恢復多選功能(舊 mock 因限制只給一堂課)。
-// time 形如桌面 AttClassFull("今日 HH:MM–HH:MM")，start 為起始 HH:MM；sessionChipLabel
-// 取 start + 課名組成 FilterChips 顯示字串，同原本映射層算好的 label 斷言不變。
-const FIXTURE_CLASSES: AttClassFull[] = [
-	{ id: 's1', name: '測試班甲', time: '今日 19:00–20:30', start: '19:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'present' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]) },
-	{ id: 's2', name: '測試班乙', time: '今日 20:00–21:00', start: '20:00', room: '', coach: '', roster: rosterOf([{ mid: 'T-003', name: '測試學員丙', def: 'absent' }]) }
+const SESSION_1: ApiTodaySession = { id: 's1', course_id: 'c1', course_name: '測試班甲', coach_name: null, start_time: '19:00:00', end_time: '20:30:00', enrolled_count: 2, venue: null };
+const SESSION_2: ApiTodaySession = { id: 's2', course_id: 'c2', course_name: '測試班乙', coach_name: null, start_time: '20:00:00', end_time: '21:00:00', enrolled_count: 1, venue: null };
+const ROSTER_1: WireRosterEntry[] = [
+	{ enrolment_id: 'T-001', user_id: 'zu1', user_name: '測試學員甲', attendance_status: 'present' },
+	{ enrolment_id: 'T-002', user_id: 'zu2', user_name: '測試學員乙', attendance_status: 'leave' }
 ];
+const ROSTER_2: WireRosterEntry[] = [{ enrolment_id: 'T-003', user_id: 'zu3', user_name: '測試學員丙', attendance_status: 'absent' }];
 
-beforeEach(() => {
-	vi.mocked(getAttendance).mockReset();
-	vi.mocked(getAttendance).mockResolvedValue({ classes: FIXTURE_CLASSES, failedClasses: [] });
-	vi.mocked(saveAttendance).mockReset();
+const defaultRoutes = (sessions: ApiTodaySession[] = [SESSION_1, SESSION_2]) => ({
+	'GET /users/me': ME,
+	'GET /coaches': [MY_COACH],
+	'GET /sessions/today': sessions,
+	'GET /sessions/s1/roster': ROSTER_1,
+	'GET /sessions/s2/roster': ROSTER_2
+});
+
+/** PUT /sessions/{id}/attendance 送出的 body({records:[{enrolment_id,status}]})——取代
+ *  原本直接斷言 saveAttendance(對現在的真實函式)呼叫參數的作法。 */
+function putBody(path: string): { records: { enrolment_id: string; status: string }[] } | undefined {
+	const call = vi.mocked(api).mock.calls.find(([p, init]) => p === path && init?.method === 'PUT');
+	return call ? JSON.parse((call[1]?.body as string) ?? '{}') : undefined;
+}
+
+// 每個測試先登出再登入(同 coach/page.test.ts 慣例):避免同一個 ME 連續 loginAs 不觸發
+// identity 變更、教練身分閘門快取跨測試殘留。
+beforeEach(async () => {
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));
+	await authStore.logout();
+	await loginAs(ME);
+	vi.mocked(api).mockImplementation(fakeRouter(defaultRoutes()));
 });
 
 describe('mobile-admin/coach/attendance 頁', () => {
 	it('loading 分支顯示骨架(data-testid="attendance-skeleton")', () => {
-		vi.mocked(getAttendance).mockReturnValue(new Promise(() => {}));
+		// 只讓兩支名冊端點卡住(身分/今日場次照常回應，理由同 coach/page.test.ts 的
+		// loading 測試註解——避免教練身分閘門的在飛 hydrate() 被卡死拖累後續測試)。
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...defaultRoutes(), 'GET /sessions/s1/roster': () => new Promise(() => {}), 'GET /sessions/s2/roster': () => new Promise(() => {}) })
+		);
 		const { container } = render(AttendancePage);
 		expect(container.querySelector('[data-testid="attendance-skeleton"]')).not.toBeNull();
 	});
@@ -55,10 +87,7 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('同日兩場同課名：第二場 chip 可選取並切到其名冊(selectClass 走 session id，0014 限制撤銷)', async () => {
-		vi.mocked(getAttendance).mockResolvedValue({
-			classes: [FIXTURE_CLASSES[0], { ...FIXTURE_CLASSES[1], name: '測試班甲' }],
-			failedClasses: []
-		});
+		vi.mocked(api).mockImplementation(fakeRouter(defaultRoutes([SESSION_1, { ...SESSION_2, course_name: '測試班甲' }])));
 		const { findByText, getByText, queryByText } = render(AttendancePage);
 		await findByText('測試學員甲');
 		// 兩顆 chip 同課名，靠 labelOf 的時間前綴區分顯示；選取靠 session id 分流。
@@ -75,8 +104,11 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('儲存點名真打 PUT /sessions/{id}/attendance(saveAttendance)，並以伺服器回傳名冊同步', async () => {
-		const savedRoster = rosterOf([{ mid: 'T-001', name: '測試學員甲', def: 'absent' }, { mid: 'T-002', name: '測試學員乙', def: 'leave' }]);
-		vi.mocked(saveAttendance).mockResolvedValue(savedRoster);
+		const savedRoster: WireRosterEntry[] = [
+			{ enrolment_id: 'T-001', user_id: 'zu1', user_name: '測試學員甲', attendance_status: 'absent' },
+			{ enrolment_id: 'T-002', user_id: 'zu2', user_name: '測試學員乙', attendance_status: 'leave' }
+		];
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': savedRoster }));
 		const { findByText, getByText, getAllByText } = render(AttendancePage);
 		await findByText('測試學員甲');
 
@@ -86,14 +118,14 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		await fireEvent.click(getByText('儲存點名'));
 
 		expect(await findByText('點名已儲存')).toBeInTheDocument();
-		expect(saveAttendance).toHaveBeenCalledWith('s1', expect.objectContaining({ 'T-001': 'absent' }));
+		expect(putBody('/sessions/s1/attendance')?.records).toContainEqual({ enrolment_id: 'T-001', status: 'absent' });
 		// 釘住完整成功 toast 文案（含時間前綴，同舊版格式）——防止日後把 label 換回
 		// SaveOutcome.className（只有課名、沒有時間）而悄悄漂移。
 		expect(get(toasts).some((t) => t.title === '點名已儲存' && t.body === '19:00 測試班甲 · 2 位學員出勤已記錄。')).toBe(true);
 	});
 
 	it('備註 Sheet 明示「僅存本機，重新整理後會消失」；已儲存後只改備註仍顯示「點名已儲存」(D1)', async () => {
-		vi.mocked(saveAttendance).mockResolvedValue(FIXTURE_CLASSES[0].roster);
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': ROSTER_1 }));
 		const { findByText, getByText, getAllByText, getByPlaceholderText } = render(AttendancePage);
 		await findByText('測試學員甲');
 		await fireEvent.click(getByText('儲存點名'));
@@ -109,7 +141,7 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('儲存失敗顯示錯誤提示，不假裝成功', async () => {
-		vi.mocked(saveAttendance).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': new Error('boom') }));
 		const { findByText, getByText } = render(AttendancePage);
 		await findByText('測試學員甲');
 
@@ -119,35 +151,36 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		vi.mocked(getAttendance).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'GET /sessions/today': new Error('boom') }));
 		const { findByText } = render(AttendancePage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('CoachNotFoundError 顯示「此帳號未綁定教練檔案」而非泛用載入失敗(C6)', async () => {
-		const notFound = new Error('此帳號未綁定教練檔案');
-		notFound.name = 'CoachNotFoundError';
-		vi.mocked(getAttendance).mockRejectedValue(notFound);
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [] }));
 		const { findByText, queryByText } = render(AttendancePage);
 		expect(await findByText('請聯繫系統管理員協助設定教練檔案。')).toBeInTheDocument();
 		expect(queryByText('載入失敗')).toBeNull();
 	});
 
 	it('今日無場次(classes 空集合)顯示空狀態，不當機', async () => {
-		vi.mocked(getAttendance).mockResolvedValue({ classes: [], failedClasses: [] });
+		vi.mocked(api).mockImplementation(fakeRouter(defaultRoutes([])));
 		const { findByText } = render(AttendancePage);
 		expect(await findByText('今日尚無場次')).toBeInTheDocument();
 	});
 
 	it('部分場次名冊載入失敗時顯示提示 toast，其餘場次仍可點名', async () => {
-		vi.mocked(getAttendance).mockResolvedValue({ classes: FIXTURE_CLASSES, failedClasses: ['測試班丙'] });
+		const SESSION_3: ApiTodaySession = { id: 's3', course_id: 'c3', course_name: '測試班丙', coach_name: null, start_time: '08:00:00', end_time: '09:00:00', enrolled_count: 1, venue: null };
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...defaultRoutes([SESSION_1, SESSION_2, SESSION_3]), 'GET /sessions/s3/roster': new Error('boom') })
+		);
 		const { findByText } = render(AttendancePage);
 		expect(await findByText('測試學員甲')).toBeInTheDocument();
 		expect(get(toasts).some((t) => t.title === '部分場次名冊載入失敗')).toBe(true);
 	});
 
 	it('切班保留未存草稿(甲班點缺席→切乙班→切回甲班，選取仍在且未觸發 save)', async () => {
-		vi.mocked(saveAttendance).mockResolvedValue([]);
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': [] }));
 		const { getByText, getAllByText, findByText } = render(AttendancePage);
 		await findByText('測試學員甲');
 
@@ -162,13 +195,15 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		await findByText('測試學員甲');
 
 		// 切班本身未觸發 save；儲存後草稿(缺席)仍在，證明切班沒有丟棄未存變更。
-		expect(saveAttendance).not.toHaveBeenCalled();
+		expect(putBody('/sessions/s1/attendance')).toBeUndefined();
 		await fireEvent.click(getByText('儲存點名'));
-		expect(saveAttendance).toHaveBeenCalledWith('s1', expect.objectContaining({ 'T-001': 'absent' }));
+		expect(putBody('/sessions/s1/attendance')?.records).toContainEqual({ enrolment_id: 'T-001', status: 'absent' });
 	});
 
 	it('儲存中切班被擋(save pending 時點乙班 chip → 仍顯示甲班名冊 + info toast)', async () => {
-		vi.mocked(saveAttendance).mockReturnValue(new Promise(() => {})); // 模擬請求進行中，永不 resolve
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': () => new Promise(() => {}) }) // 模擬請求進行中，永不 resolve
+		);
 		const { getByText, queryByText, findByText } = render(AttendancePage);
 		await findByText('測試學員甲');
 

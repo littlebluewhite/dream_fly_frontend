@@ -1,49 +1,45 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import CsettingsPage from './+page.svelte';
-import { getCsettings, saveSettings, CoachNotFoundError } from '$lib/mobile-admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginAs, type TestUser } from '$lib/testing/coach-session';
+import { authStore } from '$lib/stores/authStore';
+import type { ApiCoach } from '$lib/public/api';
 
-vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
-	return { ...actual, getCsettings: vi.fn(), saveSettings: vi.fn() };
+/* R15 Task 3a(候選 轉手退役)：getCsettings/saveSettings/CoachNotFoundError 在
+ * mobile-admin/api.ts 是零映射 re-export，改 mock $lib/api/client 的 api()，走真實
+ * fetch adapter；教練身分真經 loginAs() 驅動(同 coach/page.test.ts 慣例)。改用真
+ * authStore(不再 module mock 它)——本頁的「登出」本就是要驗證真 authStore.logout()
+ * 有被呼叫，mock 掉它反而測不到接線本身。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
-vi.mock('$lib/stores/authStore', () => ({
-	// subscribe 防禦性提供:member/waitlist+leave 於模組頂層訂閱 authStore(登出重置),
-	// 若未來本頁的 import 圖間接載入該深模組,缺 subscribe 會炸 module-load。
-	authStore: { logout: vi.fn().mockResolvedValue(undefined), subscribe: vi.fn(() => () => {}) }
-}));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 // 與桌面 PROFILES.coach mock(林雅婷)刻意不同的真實教練 fixture，證明頁面讀
-// getCsettings() 的真 Coach 物件，而非殘留的 mock 對照。
-const FIXTURE_COACH = {
-	name: '測試教練',
-	display: '測教練',
-	full: '測試教練 教練',
-	en: '',
-	initial: '測',
-	role: '測試特級教練',
-	id: 'coach-1',
-	email: 'test.coach@dreamfly.tw',
-	phone: '0900-000-000',
-	gender: '',
-	birth: '',
-	emergency: '',
-	bio: '測試簡介',
-	chips: ['測試專長'],
-	registered: '2020-01-01',
-	lastLogin: ''
+// getCsettings() 的真 Coach 物件(經真 mapCoach() 映射)，而非殘留的 mock 對照。
+const ME: TestUser = { id: 'u-c1', email: 'test.coach@dreamfly.tw', name: '測試教練', phone: '0900-000-000', last_login: null, created_at: '2026-01-01T00:00:00Z' };
+const MY_COACH: ApiCoach = {
+	id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試特級教練', bio: '測試簡介', experience: null,
+	specialties: [], certifications: ['測試專長'], is_active: true, display_order: 1, slug: null, photo_url: null,
+	created_at: '2020-01-01T00:00:00Z'
 };
 
-beforeEach(() => {
-	vi.mocked(getCsettings).mockReset();
-	vi.mocked(getCsettings).mockResolvedValue({ coach: FIXTURE_COACH });
-	vi.mocked(saveSettings).mockReset();
+const settingsRoutes = () => ({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] });
+
+beforeEach(async () => {
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));
+	await authStore.logout();
+	await loginAs(ME);
+	vi.mocked(api).mockImplementation(fakeRouter(settingsRoutes()));
 });
 
 describe('mobile-admin/coach/csettings 頁', () => {
 	it('loading 分支顯示骨架(data-testid="csettings-skeleton")', () => {
-		vi.mocked(getCsettings).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(CsettingsPage);
 		expect(container.querySelector('[data-testid="csettings-skeleton"]')).not.toBeNull();
 	});
@@ -65,7 +61,9 @@ describe('mobile-admin/coach/csettings 頁', () => {
 	});
 
 	it('儲存變更真打 PATCH /users/me(saveSettings)，只送 name/phone', async () => {
-		vi.mocked(saveSettings).mockResolvedValue({ coach: { ...FIXTURE_COACH, name: '改名教練', full: '改名教練 教練' } });
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...settingsRoutes(), 'PATCH /users/me': { ...ME, name: '改名教練' } })
+		);
 		const { findByText, getByText } = render(CsettingsPage);
 		await screen.findByDisplayValue('測試教練');
 
@@ -73,27 +71,27 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		await fireEvent.input(nameInput, { target: { value: '改名教練' } });
 		await fireEvent.click(getByText('儲存變更'));
 
-		expect(saveSettings).toHaveBeenCalledWith({ name: '改名教練', phone: '0900-000-000' });
+		expect(api).toHaveBeenCalledWith('/users/me', { method: 'PATCH', body: JSON.stringify({ name: '改名教練', phone: '0900-000-000' }) });
 		expect(await findByText('改名教練 教練')).toBeInTheDocument();
 	});
 
 	it('登出真呼叫 authStore.logout()（不再是 localStorage 旗標清除）', async () => {
+		const logoutSpy = vi.spyOn(authStore, 'logout');
 		const { getByText } = render(CsettingsPage);
 		await screen.findByDisplayValue('測試教練');
 
-		const { authStore } = await import('$lib/stores/authStore');
 		await fireEvent.click(getByText('登出'));
-		expect(authStore.logout).toHaveBeenCalled();
+		expect(logoutSpy).toHaveBeenCalled();
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		vi.mocked(getCsettings).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...settingsRoutes(), 'GET /coaches': new Error('boom') }));
 		const { findByText } = render(CsettingsPage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('找不到教練檔案(CoachNotFoundError)顯示對應錯誤，不當機', async () => {
-		vi.mocked(getCsettings).mockRejectedValue(new CoachNotFoundError());
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [] }));
 		const { findByText } = render(CsettingsPage);
 		expect(await findByText('此帳號未綁定教練檔案')).toBeInTheDocument();
 	});

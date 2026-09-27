@@ -1,57 +1,60 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import ReportsScreen from './ReportsScreen.svelte';
-import { getReports } from '$lib/mobile-admin/api';
-import type { ReportsData } from '$lib/mobile-admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 /* 報表分析 push screen — Task P4-F3：接真 GET /reports/admin(復用桌面 admin/api.ts，
  * 見 $lib/mobile-admin/api 零映射 re-export)。刻意用與 KpiCard 顯示格式吻合、可精確
  * 驗算的 fixture 數字(同桌面 admin/reports/page.test.ts 的驗算慣例)，證明畫面讀的是
- * getReports() payload 並用 report-math/format 正確換算，而非殘留的舊 mock 常數。 */
-vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
-	return { ...actual, getReports: vi.fn() };
+ * getReports() payload 並用 report-math/format 正確換算，而非殘留的舊 mock 常數。
+ * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，fixture 改為 GET
+ * /reports/admin 的 wire 形狀(snake_case + cents)，走真實 reports-api.ts getReports()
+ * 映射，同 admin/reports-api.test.ts 慣例。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 
-const PAYLOAD: ReportsData = {
+const WIRE_PAYLOAD = {
 	revenue: {
-		thisMonth: 458200,
-		lastMonth: 400000,
+		this_month_cents: 45820000,
+		last_month_cents: 40000000,
 		trend: [
-			{ m: '2025-08', h: 300000 },
-			{ m: '2025-09', h: 320000 },
-			{ m: '2025-10', h: 458200 }
+			{ month: '2025-08', revenue_cents: 30000000 },
+			{ month: '2025-09', revenue_cents: 32000000 },
+			{ month: '2025-10', revenue_cents: 45820000 }
 		]
 	},
 	kpis: {
-		newMembers: { thisMonth: 8, lastMonth: 5 },
-		newEnrolments: { thisMonth: 14, lastMonth: 10 },
-		paidOrdersCount: { thisMonth: 30, lastMonth: 60 },
-		attendanceRate: { thisMonth: 0.92, lastMonth: 0.8 }
+		new_members: { this_month: 8, last_month: 5 },
+		new_enrolments: { this_month: 14, last_month: 10 },
+		paid_orders_count: { this_month: 30, last_month: 60 },
+		attendance_rate: { this_month: 0.92, last_month: 0.8 }
 	},
-	revenueBreakdown: [
-		{ source: 'course', grossCents: 31200000, ordersCount: 142, units: 150 },
-		{ source: 'ticket', grossCents: 9840000, ordersCount: 60, units: 234 }
+	revenue_breakdown: [
+		{ source: 'course', gross_cents: 31200000, orders_count: 142, units: 150 },
+		{ source: 'ticket', gross_cents: 9840000, orders_count: 60, units: 234 }
 	],
-	incomeSources12m: [
-		{ month: '2025-09', source: 'course', grossCents: 100000, ordersCount: 1, units: 1 },
-		{ month: '2025-10', source: 'course', grossCents: 200000, ordersCount: 2, units: 2 }
+	income_sources_12m: [
+		{ month: '2025-09', source: 'course', gross_cents: 100000, orders_count: 1, units: 1 },
+		{ month: '2025-10', source: 'course', gross_cents: 200000, orders_count: 2, units: 2 }
 	],
-	categorySplit: [
-		{ source: 'course', grossCents: 31200000, ratio: 0.6 },
-		{ source: 'ticket', grossCents: 9840000, ratio: 0.2 }
+	category_split: [
+		{ source: 'course', gross_cents: 31200000, ratio: 0.6 },
+		{ source: 'ticket', gross_cents: 9840000, ratio: 0.2 }
 	],
-	paymentSplit: [
+	payment_split: [
 		{ method: 'credit_card', count: 46 },
 		{ method: 'line_pay', count: 24 }
 	],
-	attendanceDistribution: [
+	attendance_distribution: [
 		{ bucket: 'gte_95', count: 11 },
 		{ bucket: '85_94', count: 10 },
 		{ bucket: '75_84', count: 5 },
 		{ bucket: 'lt_75', count: 6 }
 	],
-	ageDistribution: [
+	age_distribution: [
 		{ bucket: '0-6', count: 22 },
 		{ bucket: '7-12', count: 34 },
 		{ bucket: '13-17', count: 28 },
@@ -59,69 +62,69 @@ const PAYLOAD: ReportsData = {
 		{ bucket: '26-40', count: 0 },
 		{ bucket: '41+', count: 0 }
 	],
-	tierDistribution: [
+	tier_distribution: [
 		{ bucket: 'regular', count: 10 },
 		{ bucket: 'bronze', count: 16 },
 		{ bucket: 'silver', count: 13 },
 		{ bucket: 'gold', count: 9 }
 	],
 	retention: [
-		{ month: '2025-05', newCount: 14, returningCount: 38, rate: null },
-		{ month: '2025-10', newCount: 24, returningCount: 52, rate: 0.884 }
+		{ month: '2025-05', new_count: 14, returning_count: 38, rate: null },
+		{ month: '2025-10', new_count: 24, returning_count: 52, rate: 0.884 }
 	],
-	funnel: { trialInquiries: 318, newEnrolments: 142 },
-	weekdayLoad: [9, 8, 11, 9, 12, 10, 14].map((presentCount, weekday) => ({ weekday, presentCount })),
-	venueUsage: [
+	funnel: { trial_inquiries: 318, new_enrolments: 142 },
+	weekday_load: [9, 8, 11, 9, 12, 10, 14].map((present_count, weekday) => ({ weekday, present_count })),
+	venue_usage: [
 		{ venue: 'A 訓練館', minutes: 150 },
 		{ venue: 'B 教室', minutes: 60 }
 	],
-	members: { total: 120, newThisMonth: 8, active: 96 },
+	members: { total: 120, new_this_month: 8, active: 96 },
 	courses: [
-		{ id: 'c1', name: '競技體操 選手班', enrolled: 12, maxStudents: 12, fillRate: 1, waitlistCount: 4 },
-		{ id: 'c2', name: '兒童基礎 B 班', enrolled: 7, maxStudents: 10, fillRate: 0.7, waitlistCount: 0 }
+		{ course_id: 'c1', name: '競技體操 選手班', enrolled: 12, max_students: 12, fill_rate: 1, waitlist_count: 4 },
+		{ course_id: 'c2', name: '兒童基礎 B 班', enrolled: 7, max_students: 10, fill_rate: 0.7, waitlist_count: 0 }
 	],
-	coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28, revenueCents12m: 85000000, attendanceRate: 0.92 }]
+	coaches: [{ coach_id: 'co1', name: '林雅婷', course_count: 3, student_count: 28, revenue_cents_12m: 85000000, attendance_rate: 0.92 }]
 };
 
 // 空庫形狀：固定桶零填/開放集合空陣列皆須不炸(同桌面「空庫」段落的防禦性驗證)。
-const EMPTY_PAYLOAD: ReportsData = {
-	revenue: { thisMonth: 0, lastMonth: 0, trend: Array.from({ length: 12 }, (_, i) => ({ m: `2025-${String(i + 1).padStart(2, '0')}`, h: 0 })) },
+const WIRE_EMPTY = {
+	revenue: { this_month_cents: 0, last_month_cents: 0, trend: Array.from({ length: 12 }, (_, i) => ({ month: `2025-${String(i + 1).padStart(2, '0')}`, revenue_cents: 0 })) },
 	kpis: {
-		newMembers: { thisMonth: 0, lastMonth: 0 },
-		newEnrolments: { thisMonth: 0, lastMonth: 0 },
-		paidOrdersCount: { thisMonth: 0, lastMonth: 0 },
-		attendanceRate: { thisMonth: null, lastMonth: null }
+		new_members: { this_month: 0, last_month: 0 },
+		new_enrolments: { this_month: 0, last_month: 0 },
+		paid_orders_count: { this_month: 0, last_month: 0 },
+		attendance_rate: { this_month: null, last_month: null }
 	},
-	revenueBreakdown: [],
-	incomeSources12m: [],
-	categorySplit: [],
-	paymentSplit: [],
-	attendanceDistribution: [],
-	ageDistribution: [],
-	tierDistribution: [],
+	revenue_breakdown: [],
+	income_sources_12m: [],
+	category_split: [],
+	payment_split: [],
+	attendance_distribution: [],
+	age_distribution: [],
+	tier_distribution: [],
 	retention: [],
-	funnel: { trialInquiries: 0, newEnrolments: 0 },
-	weekdayLoad: [],
-	venueUsage: [],
-	members: { total: 0, newThisMonth: 0, active: 0 },
+	funnel: { trial_inquiries: 0, new_enrolments: 0 },
+	weekday_load: [],
+	venue_usage: [],
+	members: { total: 0, new_this_month: 0, active: 0 },
 	courses: [],
 	coaches: []
 };
 
 beforeEach(() => {
-	vi.mocked(getReports).mockReset();
-	vi.mocked(getReports).mockResolvedValue(PAYLOAD);
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin': WIRE_PAYLOAD }));
 });
 
 describe('ReportsScreen — 載入(GET /reports/admin)', () => {
 	it('loading：顯示骨架', () => {
-		vi.mocked(getReports).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(ReportsScreen, { props: { onBack: () => {} } });
 		expect(getByTestId('reports-skeleton')).toBeTruthy();
 	});
 
 	it('error：顯示「載入失敗」，重試呼叫 gate.refresh', async () => {
-		vi.mocked(getReports).mockRejectedValue(new Error('network'));
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin': new Error('network') }));
 		const { findByText } = render(ReportsScreen, { props: { onBack: () => {} } });
 		await findByText('載入失敗');
 	});
@@ -216,7 +219,7 @@ describe('ReportsScreen — 面板(接真 ReportsData 各段)', () => {
 
 describe('ReportsScreen — 空庫', () => {
 	it('全 section 空/零時仍渲染：KPI NT$0、開放集合面板空清單提示、無 NaN、不崩潰', async () => {
-		vi.mocked(getReports).mockResolvedValue(EMPTY_PAYLOAD);
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin': WIRE_EMPTY }));
 		const { findByText, container } = render(ReportsScreen, { props: { onBack: () => {} } });
 		await findByText('本月營收');
 		const txt = container.textContent ?? '';

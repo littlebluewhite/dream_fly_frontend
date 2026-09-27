@@ -2,48 +2,46 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
-import { getOpsCollections, createMember, updateMember } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, overlay, opsHydrated, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { MemberRow } from '$lib/mobile-admin/data';
 import { COACHES } from '$lib/domain/coaches';
+import { mapMemberAccount } from '$lib/admin/data';
+import type { ApiUserAccount } from '$lib/admin/data';
 import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
-vi.mock('$lib/mobile-admin/api', () => ({
-	getOpsCollections: vi.fn(),
-	createMember: vi.fn(),
-	updateMember: vi.fn()
-}));
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
+ * createMember/updateMember(經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實
+ * fetch adapter。FIXTURE_MEMBERS 改為 wire 形狀(ApiUserAccount)，經真實
+ * mapMemberAccount() 映射，而非手造已映射的 MemberRow。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-const mkMember = (over: Partial<MemberRow>): MemberRow => ({
-	id: 'X',
-	name: 'X',
-	initial: 'X',
-	phone: '',
-	joined: '2026/01/01',
-	status: 'active',
-	points: 0,
+const mkWireUser = (over: Partial<ApiUserAccount>): ApiUserAccount => ({
+	id: 'X', name: 'X', phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: 0,
 	...over
 });
 // 與 seed 相異的 fixture(人名、狀態組成皆改過),證明頁面讀 hydrateOps() 水合後
 // 的 $members store。
-const FIXTURE_MEMBERS: MemberRow[] = [
-	mkMember({ id: 'zz1', name: '測試學員甲', status: 'active' }),
-	mkMember({ id: 'zz2', name: '測試學員乙', status: 'inactive' })
+const WIRE_MEMBERS: ApiUserAccount[] = [
+	mkWireUser({ id: 'zz1', name: '測試學員甲', is_active: true }),
+	mkWireUser({ id: 'zz2', name: '測試學員乙', is_active: false })
 ];
-/** getOpsCollections 的分頁 meta(R12 Task 3:header 顯示 total、total > perPage 出搜尋提示)。 */
-const pagesOf = (members: number, classes: number, orders: number) => ({
-	members: { total: members, perPage: 20 },
-	classes: { total: classes, perPage: 20 },
-	orders: { total: orders, perPage: 20 }
+const FIXTURE_MEMBERS: MemberRow[] = WIRE_MEMBERS.map(mapMemberAccount);
+
+const opsRoutes = (wireMembers: ApiUserAccount[], total = wireMembers.length) => ({
+	...OPS_ROUTES,
+	'GET /users?page=1': { users: wireMembers, total, page: 1, per_page: 20 }
 });
-const OPS_FIXTURE = { members: FIXTURE_MEMBERS, classes: CLASSES, coaches: COACHES, orders: ORDERS, pages: pagesOf(2, CLASSES.length, ORDERS.length) };
 
 beforeEach(() => {
-	vi.mocked(getOpsCollections).mockReset();
-	vi.mocked(getOpsCollections).mockResolvedValue(OPS_FIXTURE);
-	vi.mocked(createMember).mockReset();
-	vi.mocked(updateMember).mockReset();
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_MEMBERS)));
 	resetOpsForTests();
 	members.set(MEMBERS);
 	classes.set(CLASSES);
@@ -62,7 +60,7 @@ afterEach(() => {
 
 describe('mobile-admin/admin/members 頁', () => {
 	it('loading 分支顯示骨架(data-testid="members-skeleton")', () => {
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(MembersPage);
 		expect(container.querySelector('[data-testid="members-skeleton"]')).not.toBeNull();
 	});
@@ -85,27 +83,45 @@ describe('mobile-admin/admin/members 頁', () => {
 	});
 
 	it('載入失敗顯示 ErrorState,且重試會真正重新 fetch(不受 hydrated 守衛短路)', async () => {
-		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('boom'));
+		let call = 0;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...opsRoutes(WIRE_MEMBERS),
+				'GET /users?page=1': () => {
+					call += 1;
+					if (call === 1) throw new Error('boom');
+					return { users: WIRE_MEMBERS, total: WIRE_MEMBERS.length, page: 1, per_page: 20 };
+				}
+			})
+		);
 		const { findByText } = render(MembersPage);
 		await findByText('載入失敗');
 
-		vi.mocked(getOpsCollections).mockResolvedValueOnce(OPS_FIXTURE);
 		await fireEvent.click(await findByText('重新載入'));
 		expect(await findByText('測試學員甲')).toBeInTheDocument();
 	});
 
 	it('首次載入失敗 → 重試在飛時卸載 → $members 不被改寫(R14 F1:寫入交給 load-gate,卸載後的回應不落地)', async () => {
-		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('boom'));
+		let call = 0;
+		let resolveRetry!: (v: unknown) => void;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...opsRoutes(WIRE_MEMBERS),
+				'GET /users?page=1': () => {
+					call += 1;
+					if (call === 1) throw new Error('boom');
+					return new Promise((r) => (resolveRetry = r));
+				}
+			})
+		);
 		const { findByText, unmount } = render(MembersPage);
 		await findByText('載入失敗');
 
-		let resolveRetry!: (v: typeof OPS_FIXTURE) => void;
-		vi.mocked(getOpsCollections).mockReturnValueOnce(new Promise((r) => (resolveRetry = r)));
 		await fireEvent.click(await findByText('重新載入'));
-		expect(getOpsCollections).toHaveBeenCalledTimes(2); // 重試真的出發了
+		expect(call).toBe(2); // 重試真的出發了
 
 		unmount();
-		resolveRetry(OPS_FIXTURE);
+		resolveRetry({ users: WIRE_MEMBERS, total: WIRE_MEMBERS.length, page: 1, per_page: 20 });
 		await new Promise<void>((r) => setTimeout(r, 0));
 
 		expect(get(members)).toEqual(MEMBERS); // 已卸載頁面的重試回應不寫共享 store
@@ -113,7 +129,7 @@ describe('mobile-admin/admin/members 頁', () => {
 	});
 
 	it('members 空集合不當機,顯示找不到符合的學員', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: [], classes: CLASSES, coaches: COACHES, orders: ORDERS, pages: pagesOf(0, CLASSES.length, ORDERS.length) });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([], 0)));
 		const { findByText } = render(MembersPage);
 		expect(await findByText('找不到符合的學員')).toBeInTheDocument();
 	});
@@ -122,8 +138,12 @@ describe('mobile-admin/admin/members 頁', () => {
 	 * mobile 的 overlay 是全域 store，MemberForm 由另一個 OverlayHost 渲染——這裡
 	 * 直接呼叫「新增學員」/「編輯」開出的 sheet 帶入的 onSave（頁面自己的閉包），
 	 * 驗證它真的打 createMember/updateMember，同 ClassesPage 的驗證慣例。 */
+	function callCount(method: string, path: string): number {
+		return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
+	}
+
 	it('「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onSave', async () => {
-		vi.mocked(createMember).mockResolvedValue({} as never);
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_MEMBERS), 'POST /users': mkWireUser({ id: 'u-new', name: '新學員' }) }));
 		const { findByText, getByLabelText } = render(MembersPage);
 		await findByText('測試學員甲');
 
@@ -136,13 +156,13 @@ describe('mobile-admin/admin/members 頁', () => {
 		const body: CreateMemberBody = { email: 'a@test.com', name: '新學員', password: 'password123' };
 		await sheetProps.onSave(body);
 
-		expect(createMember).toHaveBeenCalledWith(body);
-		expect(updateMember).not.toHaveBeenCalled();
+		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
+		expect(callCount('PATCH', '/users/zz1')).toBe(0);
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});
 
 	it('點學員卡片 → 編輯 開出的 sheet 帶入呼叫 updateMember(id, …) 的 onSave', async () => {
-		vi.mocked(updateMember).mockResolvedValue({} as never);
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_MEMBERS), 'PATCH /users/zz1': mkWireUser({ id: 'zz1', name: '改名後' }) }));
 		const { findByText } = render(MembersPage);
 		await findByText('測試學員甲');
 
@@ -162,12 +182,12 @@ describe('mobile-admin/admin/members 頁', () => {
 		const body: UpdateMemberBody = { name: '改名後', is_active: true };
 		await sheetProps.onSave(body);
 
-		expect(updateMember).toHaveBeenCalledWith('zz1', body);
-		expect(createMember).not.toHaveBeenCalled();
+		expect(api).toHaveBeenCalledWith('/users/zz1', { method: 'PATCH', body: JSON.stringify(body) });
+		expect(callCount('POST', '/users')).toBe(0);
 	});
 
 	it('新增失敗顯示錯誤 toast（透傳後端訊息）', async () => {
-		vi.mocked(createMember).mockRejectedValue(new Error('Email 已被使用'));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_MEMBERS), 'POST /users': new Error('Email 已被使用') }));
 		const { findByText, getByLabelText } = render(MembersPage);
 		await findByText('測試學員甲');
 
@@ -198,7 +218,7 @@ describe('mobile-admin/admin/members 頁', () => {
 
 describe('mobile-admin/admin/members 頁 — 分頁誠實(R12 Task 3)', () => {
 	it('header 顯示後端 total(非已抓筆數);total > perPage 時搜尋區提示僅搜尋前 N 筆', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ ...OPS_FIXTURE, pages: pagesOf(57, CLASSES.length, ORDERS.length) });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_MEMBERS, 57)));
 		const { findByText } = render(MembersPage);
 		expect(await findByText('57 位學員')).toBeInTheDocument();
 		expect(await findByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeInTheDocument();

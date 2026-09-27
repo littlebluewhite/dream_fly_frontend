@@ -2,33 +2,65 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import StudentsPage from './+page.svelte';
-import { getStudents } from '$lib/mobile-admin/api';
 import { overlay } from '$lib/mobile-admin/stores';
 import type { Student } from '$lib/coach/data';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
 
-vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
-	return { ...actual, getStudents: vi.fn() };
+/* R15 Task 3a(候選 轉手退役)：getStudents() 在 mobile-admin/api.ts 是零映射
+ * re-export(桌面 coach/api.ts 的 GET /coaches/me/students)，改 mock $lib/api/client
+ * 的 api()，走真實 fetch adapter。不需要 loginAs()——getStudents() 無 requireCoach()
+ * 閘門(呼叫者查無教練資料時後端本身回空陣列，見 coach/api.ts 附註)。
+ *
+ * Deviation：真 mapStudent()(coach/api.ts 私有)裡 level/skill/pct/att 四欄皆是 P2
+ * 佔位值('初階'/''/0/0)——MyStudentResponse 本就無技能評量/出勤統計欄位，不是「真
+ * 後端唯一欄位」（舊測試註解的前提已不成立）。原測試斷言 fixture 自訂的 92%/測試動作
+ * 已無法經 wire 構造，改斷言「熟練度數字固定是 P2 佔位值 0%，不是隨 fixture 個人化的
+ * 假數字」，回歸精神不變：接線讀 payload、不是頁面自己編。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
+
+interface WireStudentCourse { course_id: string; course_name: string; enrolment_id: string }
+interface WireStudent { user_id: string; name: string; phone: string | null; courses: WireStudentCourse[] }
+
+/** 鏡射 coach/api.ts 私有 mapStudent()。 */
+function mapStudent(s: WireStudent): Student {
+	return {
+		user_id: s.user_id,
+		name: s.name,
+		initial: initialOf(s.name),
+		color: BRAND_PRIMARY_HEX,
+		cls: s.courses.map((c) => c.course_name).join('、'),
+		courses: s.courses,
+		level: '初階',
+		skill: '',
+		pct: 0,
+		att: 0
+	};
+}
 
 // Task 20：getStudents() 現直接復用 coach/api.ts 的 GET /coaches/me/students，後端
 // 本身只回「這位教練名下的學員」——不再需要頁面自己用姓名字串比對 coach 欄位篩選
 // (舊 mock 需要，因為它讀的是全體 MEMBERS)。fixture 刻意不含任何「非本教練」的
 // 學員，證明頁面不再做這層篩選也是正確的(信任後端範疇)。
-const FIXTURE_STUDENTS: Student[] = [
-	{ user_id: 'u1', name: '測試學員甲', initial: '測', color: '#000', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c1', course_name: '兒童體操初階 B 班', enrolment_id: 'en-1' }], level: '初階', skill: '測試動作', pct: 92, att: 88 },
-	{ user_id: 'u2', name: '測試學員乙', initial: '測', color: '#000', cls: '兒童體操中階 A 班', courses: [{ course_id: 'c2', course_name: '兒童體操中階 A 班', enrolment_id: 'en-2' }], level: '中階', skill: '後手翻', pct: 70, att: 60 }
+const WIRE_STUDENTS: WireStudent[] = [
+	{ user_id: 'u1', name: '測試學員甲', phone: null, courses: [{ course_id: 'c1', course_name: '兒童體操初階 B 班', enrolment_id: 'en-1' }] },
+	{ user_id: 'u2', name: '測試學員乙', phone: null, courses: [{ course_id: 'c2', course_name: '兒童體操中階 A 班', enrolment_id: 'en-2' }] }
 ];
+const FIXTURE_STUDENTS: Student[] = WIRE_STUDENTS.map(mapStudent);
 
 beforeEach(() => {
-	vi.mocked(getStudents).mockReset();
-	vi.mocked(getStudents).mockResolvedValue({ students: FIXTURE_STUDENTS });
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /coaches/me/students': WIRE_STUDENTS }));
 	overlay.closeAll();
 });
 
 describe('mobile-admin/coach/students 頁', () => {
 	it('loading 分支顯示骨架(data-testid="students-skeleton")', () => {
-		vi.mocked(getStudents).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(StudentsPage);
 		expect(container.querySelector('[data-testid="students-skeleton"]')).not.toBeNull();
 	});
@@ -40,11 +72,12 @@ describe('mobile-admin/coach/students 頁', () => {
 		expect(await findByText('2 位學員')).toBeInTheDocument();
 	});
 
-	it('技能熟練度直接讀 Student.skill/pct(真後端唯一欄位)，不再有獨立 SKILLS 對照表', async () => {
-		const { findByText } = render(StudentsPage);
-		await findByText('測試學員甲');
-		expect(await findByText('測試動作熟練度')).toBeInTheDocument();
-		expect(await findByText('92%')).toBeInTheDocument();
+	it('技能熟練度為 P2 佔位值(MyStudentResponse 無對應欄位，getStudents() 一律給空字串/0，不假造個人化數字)', async () => {
+		const { findAllByText } = render(StudentsPage);
+		await findAllByText('熟練度');
+		// '0%' 同時出現在熟練度與(若頁面另有顯示)其他 P2 佔位百分比欄位，故只驗證
+		// 至少每位學員的熟練度都落地成 0%，不鎖死總命中數。
+		expect((await findAllByText('0%')).length).toBeGreaterThanOrEqual(FIXTURE_STUDENTS.length);
 	});
 
 	it('搜尋篩選仍正常運作', async () => {
@@ -82,13 +115,13 @@ describe('mobile-admin/coach/students 頁', () => {
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		vi.mocked(getStudents).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /coaches/me/students': new Error('boom') }));
 		const { findByText } = render(StudentsPage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('students 空集合不當機,顯示既有的找不到符合的學員空狀態', async () => {
-		vi.mocked(getStudents).mockResolvedValue({ students: [] });
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /coaches/me/students': [] }));
 		const { findByText } = render(StudentsPage);
 		expect(await findByText('找不到符合的學員')).toBeInTheDocument();
 	});

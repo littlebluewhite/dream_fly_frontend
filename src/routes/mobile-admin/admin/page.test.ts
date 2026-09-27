@@ -2,67 +2,98 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
-import { getAdminHome, createMember, getOpsCollections } from '$lib/mobile-admin/api';
 import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
-import { MEMBERS, CLASSES, ORDERS, type Profile, type TodayRow } from '$lib/mobile-admin/data';
-import { COACHES } from '$lib/domain/coaches';
-import type { Activity as ActivityRow } from '$lib/domain/activity';
+import { MEMBERS } from '$lib/mobile-admin/data';
 import type { CreateMemberBody } from '$lib/mobile-admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { OPS_ROUTES } from '$lib/testing/ops-routes';
+import type { ApiTodaySession } from '$lib/api/wire';
 
-vi.mock('$lib/mobile-admin/api', () => ({ getAdminHome: vi.fn(), createMember: vi.fn(), getOpsCollections: vi.fn() }));
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getAdminHome/
+ * createMember/getOpsCollections(getAdminHome 為組合器，3b 留任)走真實 fetch
+ * adapter。今日課表的 tone/label 現一律由真實 SESSION_STATUS 查表(依 state)推導,
+ * 不再是呼叫端可任意指定的獨立欄位——「label 與 state 脫鉤」這兩則舊回歸測試在
+ * wire 層已無法構造出矛盾輸入(SESSION_STATUS 是唯一來源),故改測「只有 state 才
+ * 決定橫幅、tone/label 不是頁面自己判斷」這件事仍成立即可(見下方兩則同義測試)。
+ * state 由 deriveSessionStatus() 依牆鐘時間比較 start_time/end_time 推導(見
+ * $lib/domain/sessions)：用極端時間窗規避跑測試當下實際時刻，不需要 fake timers
+ * (元件測試混 fake timers 容易卡住 @testing-library 的 waitFor 輪詢)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-const FIXTURE_PROFILES: Record<'admin' | 'coach', Profile> = {
-	admin: { name: '測試管理員', initial: '測', role: '測試角色', desc: '', color: '#000', id: 'T-1' },
-	coach: { name: '測試教練', initial: '測', role: '測試教練職稱', desc: '', color: '#000', id: 'T-2' }
-};
-// C5：liveNow 改比對 state(TodayStatus 窄型別)，不再比對 label 字面——fixture 的
-// label 因此刻意跟 state 脫鉤(見下方「state/label 脫鉤」兩則回歸測試)，證明橫幅
-// 真的是看 state，不是巧合地看到某個字面。
-const FIXTURE_TODAY: TodayRow[] = [
-	{ time: '08:00', name: '測試進行中班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'live', tone: 'success', label: '上課中' },
-	{ time: '10:00', name: '測試備課班', coach: '測試教練乙', room: '測試教室2', count: 3, state: 'wait', tone: 'info', label: '備課中' }
+// 00:00:00–23:59:59 幾乎必然落在「進行中」；23:59:58–23:59:59 幾乎必然「尚未開始」
+// (deriveSessionStatus 依目前牆鐘時間比較,見上方模組註解)。
+const LIVE_SESSION: ApiTodaySession = { id: 's-live', course_id: 'c-live', course_name: '測試進行中班', coach_name: '測試教練甲', start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 5, venue: '測試教室' };
+const WAIT_SESSION: ApiTodaySession = { id: 's-wait', course_id: 'c-wait', course_name: '測試備課班', coach_name: '測試教練乙', start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 3, venue: '測試教室2' };
+
+const ACTIVITY_ITEMS = [
+	{ kind: 'user' as const, label: '測試動態一', occurred_at: '2026-01-01T00:00:00Z' },
+	{ kind: 'order' as const, label: '測試動態二', occurred_at: '2026-01-01T00:00:00Z' }
 ];
-const FIXTURE_ACTIVITY: ActivityRow[] = [
-	{ icon: 'user-plus', tone: '#000', bg: '#fff', text: '測試動態一', time: '剛剛' },
-	{ icon: 'credit-card', tone: '#000', bg: '#fff', text: '測試動態二', time: '5 分鐘前' }
-];
+
 // enrolledValue/revenueMonthValue 刻意與 seed 相異，證明頁面讀 payload（真
-// GET /reports/admin），不是殘留的舊硬編字面(248 / NT$182K)。
-const FIXTURE = {
-	profiles: FIXTURE_PROFILES,
-	today: FIXTURE_TODAY,
-	activity: FIXTURE_ACTIVITY,
-	enrolledValue: '999',
-	revenueMonthValue: 'NT$999,000'
+// GET /reports/admin），不是殘留的舊硬編字面(248 / NT$182K)。members.active=999、
+// revenue.this_month_cents=99900000(ntd 後 999,000)。
+const WIRE_REPORTS = {
+	revenue: { this_month_cents: 99900000, last_month_cents: 0, trend: [] },
+	kpis: {
+		new_members: { this_month: 0, last_month: 0 },
+		new_enrolments: { this_month: 0, last_month: 0 },
+		paid_orders_count: { this_month: 0, last_month: 0 },
+		attendance_rate: { this_month: null, last_month: null }
+	},
+	revenue_breakdown: [],
+	income_sources_12m: [],
+	category_split: [],
+	payment_split: [],
+	attendance_distribution: [],
+	age_distribution: [],
+	tier_distribution: [],
+	retention: [],
+	funnel: { trial_inquiries: 0, new_enrolments: 0 },
+	weekday_load: [],
+	venue_usage: [],
+	members: { total: 999, new_this_month: 0, active: 999 },
+	courses: [],
+	coaches: []
 };
 
-/** getOpsCollections 回傳(新增學員走 store 的 addMember,寫入成功後會重抓 ops 集合)。 */
+const homeRoutes = (sessions: ApiTodaySession[], items: typeof ACTIVITY_ITEMS) => ({
+	'GET /reports/admin': WIRE_REPORTS,
+	'GET /sessions/today': sessions,
+	'GET /reports/admin/activity': { items }
+});
+
+/** getOpsCollections 回傳(新增學員走 store 的 addMember,寫入成功後會重抓 ops 集合)。
+ *  只需要 GET /users?page=1 隨 memberRows 變化，其餘三路沿用 OPS_ROUTES 預設值。 */
 const opsWith = (memberRows: typeof MEMBERS) => ({
-	members: memberRows,
-	classes: CLASSES,
-	coaches: COACHES,
-	orders: ORDERS,
-	pages: {
-		members: { total: memberRows.length, perPage: 20 },
-		classes: { total: CLASSES.length, perPage: 20 },
-		orders: { total: ORDERS.length, perPage: 20 }
-	}
+	...OPS_ROUTES,
+	'GET /users?page=1': { users: memberRows.map((m) => ({ id: m.id, name: m.name, phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: m.points })), total: memberRows.length, page: 1, per_page: 20 }
 });
 
 beforeEach(() => {
-	vi.mocked(getAdminHome).mockReset();
-	vi.mocked(getAdminHome).mockResolvedValue(FIXTURE);
-	vi.mocked(createMember).mockReset();
-	vi.mocked(getOpsCollections).mockReset();
-	vi.mocked(getOpsCollections).mockResolvedValue(opsWith(MEMBERS));
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(
+		fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) })
+	);
 	members.set(MEMBERS);
 	resetOpsForTests();
 	overlay.closeAll();
 });
 
 describe('mobile-admin/admin 頁(總覽首頁)', () => {
+	function callCount(method: string, path: string): number {
+		return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
+	}
+	const wireMember = (over: Partial<{ id: string; name: string }>) => ({
+		id: 'zz-quick', name: '新學員', phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: 0, ...over
+	});
+
 	it('loading 分支顯示骨架(data-testid="madmin-home-skeleton")', () => {
-		vi.mocked(getAdminHome).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(AdminHomePage);
 		expect(container.querySelector('[data-testid="madmin-home-skeleton"]')).not.toBeNull();
 	});
@@ -80,10 +111,18 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	});
 
 	it('opsHydrated 未落地時，待付款橫幅不出現，即使 $orders 仍是同步 seed(有 pending 訂單)', async () => {
-		// getOpsCollections 故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——
-		// orders store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、
-		// 直接讀 $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		// 四路 ops 端點故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——orders
+		// store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、直接讀
+		// $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
+				'GET /users?page=1': () => new Promise(() => {}),
+				'GET /courses?page=1': () => new Promise(() => {}),
+				'GET /coaches': () => new Promise(() => {}),
+				'GET /orders?page=1': () => new Promise(() => {})
+			})
+		);
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試動態一'); // 等 getAdminHome 的 ready(與 ops 水合是獨立的兩支請求)
 		expect(queryByText('筆訂單', { exact: false })).toBeNull();
@@ -106,24 +145,21 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect(await findByText('測試備課班')).toBeInTheDocument();
 	});
 
-	/* C5 回歸(pin-first)：liveNow 改比對 state，不再比對 label 字面——以下兩則證明
-	 * label 的字面內容跟橫幅是否出現無關，只有 state === 'live' 才算數。 */
-	it('state=live 但 label 隨便填任意字面時，橫幅仍出現', async () => {
-		vi.mocked(getAdminHome).mockResolvedValue({
-			...FIXTURE,
-			today: [{ time: '08:00', name: '測試任意標籤班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'live', tone: 'success', label: '隨便亂填的字面' }]
-		});
+	/* C5 回歸(pin-first)：liveNow 原本比對 payload 自帶的獨立 label 欄位——wire 邊界
+	 * 已無「label」可餵(tone/label 一律由 SESSION_STATUS 查表依 state 推導,見上方模組
+	 * 註解),「label 與 state 脫鉤」這個矛盾輸入在 wire 層構造不出來，故以下兩則改為
+	 * 直接驗證：橫幅只認 state(由極端 start_time/end_time 推導)，不是任何呼叫端可
+	 * 另外指定的欄位——回歸精神不變，構造方式改走 wire。 */
+	it('state 推導為 live 的課堂 → 進行中課堂橫幅出現', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) }));
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 	});
 
-	it('label 寫「上課中」但 state=wait 時，橫幅不出現', async () => {
-		vi.mocked(getAdminHome).mockResolvedValue({
-			...FIXTURE,
-			today: [{ time: '08:00', name: '測試尚未開始班', coach: '測試教練甲', room: '測試教室', count: 5, state: 'wait', tone: 'success', label: '上課中' }]
-		});
+	it('state 推導為 wait 的課堂 → 進行中課堂橫幅不出現', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) }));
 		const { findByText, queryByText } = render(AdminHomePage);
-		await findByText('測試尚未開始班'); // 等今日課表清單渲染完成
+		await findByText('測試備課班');
 		expect(queryByText('● 進行中課堂')).toBeNull();
 	});
 
@@ -134,13 +170,15 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		vi.mocked(getAdminHome).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS), 'GET /reports/admin': new Error('boom') })
+		);
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('today/activity 空集合不當機,且沒有進行中課堂橫幅', async () => {
-		vi.mocked(getAdminHome).mockResolvedValue({ ...FIXTURE, today: [], activity: [] });
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([], []), ...opsWith(MEMBERS) }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('營運總覽');
 		expect(queryByText('進行中課堂')).toBeNull();
@@ -148,7 +186,9 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 
 	/* Task 20 — 快速操作「新增學員」改開真表單並接 createMember，不再是本地假寫入。 */
 	it('快速操作「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onSave', async () => {
-		vi.mocked(createMember).mockResolvedValue({} as never);
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS), 'POST /users': wireMember({}) })
+		);
 		const { findByText } = render(AdminHomePage);
 		await findByText('新增學員');
 
@@ -156,9 +196,10 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };
 		expect(sheetProps).toBeTruthy();
 
-		await sheetProps.onSave({ email: 'a@test.com', name: '新學員', password: 'password123' });
+		const body: CreateMemberBody = { email: 'a@test.com', name: '新學員', password: 'password123' };
+		await sheetProps.onSave(body);
 
-		expect(createMember).toHaveBeenCalledWith({ email: 'a@test.com', name: '新學員', password: 'password123' });
+		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});
 
@@ -167,17 +208,22 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	 * store 的 addMember() 後,寫入成功即 await refreshOps()。 */
 	it('快速新增學員後重抓 ops 集合($members 含新學員),並顯示成功 toast', async () => {
 		const created = { ...MEMBERS[0], id: 'zz-quick', name: '快速新增的學員' };
-		vi.mocked(createMember).mockResolvedValue({} as never);
 		await hydrateOps(); // 已水合(fetch 替身回舊清單):舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
-		vi.mocked(getOpsCollections).mockClear();
-		vi.mocked(getOpsCollections).mockResolvedValue(opsWith([...MEMBERS, created]));
+		const usersCallsBefore = callCount('GET', '/users?page=1');
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
+				...opsWith([...MEMBERS, created]),
+				'POST /users': wireMember({ name: '快速新增的學員' })
+			})
+		);
 		const { findByText } = render(AdminHomePage);
 		await fireEvent.click(await findByText('新增學員'));
 		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };
 
 		await sheetProps.onSave({ email: 'q@test.com', name: '快速新增的學員', password: 'password123' });
 
-		expect(getOpsCollections).toHaveBeenCalledTimes(1);
+		expect(callCount('GET', '/users?page=1')).toBeGreaterThan(usersCallsBefore); // 寫入成功後真的 refreshOps()
 		expect(get(members).some((m) => m.id === 'zz-quick')).toBe(true);
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});

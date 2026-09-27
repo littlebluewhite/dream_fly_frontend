@@ -2,43 +2,46 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
-import { getOpsCollections, createCourse, updateCourse } from '$lib/mobile-admin/api';
 import { classes, members, coaches, orders, overlay, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
-import type { ClassRow } from '$lib/mobile-admin/data';
 import type { ValidCourse } from '$lib/admin/components/course-request';
+import { mapCourse } from '$lib/admin/api';
+import type { ApiCourse, ApiCoach } from '$lib/public/api';
 import { COACHES } from '$lib/domain/coaches';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
-vi.mock('$lib/mobile-admin/api', () => ({
-	getOpsCollections: vi.fn(),
-	createCourse: vi.fn(),
-	updateCourse: vi.fn()
-}));
-
-// 與 seed 相異的 fixture(班級名稱皆改過),證明頁面讀 hydrateOps() 水合後的
-// $classes store,而非殘留的同步 seed 巧合通過。R13 Task 4:教練名對上 COACHES[0]
-// (ClassForm 會驗證教練在清單裡)。
-const FIXTURE_CLASSES: ClassRow[] = [
-	{
-		id: 'zz1', name: '測試班級甲', level: '基礎', cat: '幼兒體操', coach: COACHES[0].name, room: '測試教室',
-		day: '一', time: '10:00', enrolled: 5, cap: 10, age: '3–5 歲', price: 1000, status: '招生中',
-		wait: 0, term: '2026 春季', sessions: 12, startDate: '2026/03/01', checkinRate: 90, makeup: 0,
-		durationMinutes: 90
-	}
-];
-/** getOpsCollections 的分頁 meta(R12 Task 3:header 顯示 total、total > perPage 出搜尋提示)。 */
-const pagesOf = (members: number, classes: number, orders: number) => ({
-	members: { total: members, perPage: 20 },
-	classes: { total: classes, perPage: 20 },
-	orders: { total: orders, perPage: 20 }
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
+ * createCourse/updateCourse(經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實
+ * fetch adapter。FIXTURE_CLASS 改為 wire 形狀(ApiCourse)，經真實 mapCourse() 映射，
+ * 而非手造已映射的 ClassRow——term/sessions/startDate/checkinRate/makeup 五個 P2
+ * 欄位由 mapCourse() 一律給預設值('',0,'',0,0)，不再手填假數字(本頁清單也不顯示
+ * 這幾欄，見 mapCourse() 註解)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
-const OPS_FIXTURE = { members: MEMBERS, classes: FIXTURE_CLASSES, coaches: COACHES, orders: ORDERS, pages: pagesOf(MEMBERS.length, 1, ORDERS.length) };
+
+const WIRE_COACH: ApiCoach = { id: 'co-fixture', user_id: 'u-fixture', name: COACHES[0].name, title: COACHES[0].title, bio: null, experience: null, specialties: COACHES[0].tags, certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
+const WIRE_CLASS: ApiCourse = {
+	id: 'zz1', name: '測試班級甲', slug: 'zz1', level: 'intermediate', description: null,
+	duration_minutes: 90, price_cents: 100000, max_students: 10, min_age: 3, max_age: 5,
+	features: [], is_active: true, coach_id: WIRE_COACH.id, category: '幼兒體操',
+	schedule_text: '一 10:00', is_highlighted: false, created_at: '', updated_at: '',
+	enrolled_count: 5, waitlist_count: 0
+};
+const FIXTURE_CLASSES = [mapCourse(WIRE_CLASS, new Map([[WIRE_COACH.id, WIRE_COACH.name]]))];
+
+const opsRoutes = (wireClasses: ApiCourse[], wireCoaches: ApiCoach[] = [WIRE_COACH]) => ({
+	...OPS_ROUTES,
+	'GET /courses?page=1': { courses: wireClasses, total: wireClasses.length, page: 1, per_page: 100 },
+	'GET /coaches': wireCoaches
+});
 
 beforeEach(() => {
-	vi.mocked(getOpsCollections).mockReset();
-	vi.mocked(getOpsCollections).mockResolvedValue(OPS_FIXTURE);
-	vi.mocked(createCourse).mockReset();
-	vi.mocked(updateCourse).mockReset();
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([WIRE_CLASS])));
 	resetOpsForTests();
 	members.set(MEMBERS);
 	classes.set(CLASSES);
@@ -57,7 +60,7 @@ afterEach(() => {
 
 describe('mobile-admin/admin/classes 頁', () => {
 	it('loading 分支顯示骨架(data-testid="classes-skeleton")', () => {
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { container } = render(ClassesPage);
 		expect(container.querySelector('[data-testid="classes-skeleton"]')).not.toBeNull();
 	});
@@ -69,17 +72,26 @@ describe('mobile-admin/admin/classes 頁', () => {
 	});
 
 	it('載入失敗顯示 ErrorState,且重試會真正重新 fetch(不受 hydrated 守衛短路)', async () => {
-		vi.mocked(getOpsCollections).mockRejectedValueOnce(new Error('boom'));
+		let call = 0;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...opsRoutes([WIRE_CLASS]),
+				'GET /courses?page=1': () => {
+					call += 1;
+					if (call === 1) throw new Error('boom');
+					return { courses: [WIRE_CLASS], total: 1, page: 1, per_page: 100 };
+				}
+			})
+		);
 		const { findByText } = render(ClassesPage);
 		await findByText('載入失敗');
 
-		vi.mocked(getOpsCollections).mockResolvedValueOnce(OPS_FIXTURE);
 		await fireEvent.click(await findByText('重新載入'));
 		expect(await findByText('測試班級甲')).toBeInTheDocument();
 	});
 
 	it('classes 空集合不當機,顯示找不到符合的課程', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ members: MEMBERS, classes: [], coaches: COACHES, orders: ORDERS, pages: pagesOf(MEMBERS.length, 0, ORDERS.length) });
+		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([])));
 		const { findByText } = render(ClassesPage);
 		expect(await findByText('找不到符合的課程')).toBeInTheDocument();
 	});
@@ -96,8 +108,12 @@ describe('mobile-admin/admin/classes 頁', () => {
 	};
 	type SheetSave = { onSave: (c: ValidCourse, isNew: boolean) => Promise<void> };
 
+	function callCount(method: string, path: string): number {
+		return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
+	}
+
 	it('「新增班級」開出的 sheet 帶入真正呼叫 createCourse 的 onSave（不是本地假寫入）', async () => {
-		vi.mocked(createCourse).mockResolvedValue({ id: 'new-1' } as never);
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes([WIRE_CLASS]), 'POST /courses': { id: 'new-1' } }));
 		const { findByText, getByLabelText } = render(ClassesPage);
 		await findByText('測試班級甲');
 
@@ -107,13 +123,16 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 		await sheetProps.onSave(COURSE, true);
 
-		expect(createCourse).toHaveBeenCalledTimes(1);
-		expect(vi.mocked(createCourse).mock.calls[0][0]).toMatchObject({ name: '新班級', duration_minutes: 60 });
-		expect(updateCourse).not.toHaveBeenCalled();
+		expect(callCount('POST', '/courses')).toBe(1);
+		const body = JSON.parse(vi.mocked(api).mock.calls.find(([p, init]) => p === '/courses' && init?.method === 'POST')![1]!.body as string);
+		expect(body).toMatchObject({ name: '新班級', duration_minutes: 60 });
+		expect(callCount('PATCH', `/courses/${FIXTURE_CLASSES[0].id}`)).toBe(0);
 	});
 
 	it('編輯既有班級的 sheet 帶入呼叫 updateCourse(id, …) 的 onSave', async () => {
-		vi.mocked(updateCourse).mockResolvedValue({ id: FIXTURE_CLASSES[0].id } as never);
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...opsRoutes([WIRE_CLASS]), [`PATCH /courses/${FIXTURE_CLASSES[0].id}`]: { id: FIXTURE_CLASSES[0].id } })
+		);
 		const { findByText } = render(ClassesPage);
 		await findByText('測試班級甲');
 
@@ -123,13 +142,16 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 		await sheetProps.onSave({ ...COURSE, name: '改名後的班級' }, false);
 
-		expect(updateCourse).toHaveBeenCalledTimes(1);
-		expect(updateCourse).toHaveBeenCalledWith(FIXTURE_CLASSES[0].id, expect.objectContaining({ name: '改名後的班級' }));
-		expect(createCourse).not.toHaveBeenCalled();
+		expect(callCount('PATCH', `/courses/${FIXTURE_CLASSES[0].id}`)).toBe(1);
+		expect(api).toHaveBeenCalledWith(`/courses/${FIXTURE_CLASSES[0].id}`, {
+			method: 'PATCH',
+			body: expect.stringContaining('"name":"改名後的班級"')
+		});
+		expect(callCount('POST', '/courses')).toBe(0);
 	});
 
 	it('儲存失敗時顯示錯誤 toast，不吞掉例外', async () => {
-		vi.mocked(createCourse).mockRejectedValue(new Error('boom'));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes([WIRE_CLASS]), 'POST /courses': new Error('boom') }));
 		const { findByText, getByLabelText } = render(ClassesPage);
 		await findByText('測試班級甲');
 
@@ -145,13 +167,9 @@ describe('mobile-admin/admin/classes 頁', () => {
 	 * 共用 fixture 只有一筆,無法區分「過濾後剩一筆」與「沒過濾」,故本 it 局部
 	 * mock 兩筆。 */
 	it('搜尋框退化查詢走桌面 filterClasses 的 trim 語意:padded 命中、純空白回全部', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({
-			members: MEMBERS,
-			classes: [FIXTURE_CLASSES[0], { ...FIXTURE_CLASSES[0], id: 'zz2', name: '測試班級乙' }],
-			coaches: COACHES,
-			orders: ORDERS,
-			pages: pagesOf(MEMBERS.length, 2, ORDERS.length)
-		});
+		vi.mocked(api).mockImplementation(
+			fakeRouter(opsRoutes([WIRE_CLASS, { ...WIRE_CLASS, id: 'zz2', name: '測試班級乙' }]))
+		);
 		const { findByText, queryByText, getByPlaceholderText } = render(ClassesPage);
 		await findByText('測試班級甲');
 
@@ -167,7 +185,9 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 describe('mobile-admin/admin/classes 頁 — 分頁誠實(R12 Task 3)', () => {
 	it('header 顯示後端 total;total > perPage 時搜尋區提示僅搜尋前 N 筆', async () => {
-		vi.mocked(getOpsCollections).mockResolvedValue({ ...OPS_FIXTURE, pages: pagesOf(MEMBERS.length, 33, ORDERS.length) });
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ ...opsRoutes([WIRE_CLASS]), 'GET /courses?page=1': { courses: [WIRE_CLASS], total: 33, page: 1, per_page: 20 } })
+		);
 		const { findByText } = render(ClassesPage);
 		expect(await findByText('33 個開課班級 · 本季招生中')).toBeInTheDocument();
 		expect(await findByText('僅搜尋前 20 筆，完整清單請至桌面後台')).toBeInTheDocument();

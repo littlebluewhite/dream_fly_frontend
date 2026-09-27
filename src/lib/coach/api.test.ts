@@ -30,6 +30,7 @@ import { api } from '$lib/api/client';
 import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { authStore } from '$lib/stores/authStore';
+import { loginAs, asLoginUser, authRoutes } from '$lib/testing/coach-session';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -59,22 +60,10 @@ const MAPPED_COACH = {
 	chips: ['國家級教練證'], registered: '2019-08-15', lastLogin: '2026-07-04 08:42'
 };
 
-/* 真 authStore 登入登出的 harness(R13 Task 7·C6):教練身分由模組內的 session 閘門快取,
- * identity 由真 login/logout 驅動。每個測試先登出再以 ME 登入 → 閘門重置,測試之間不共用
- * 快取。登入完 mockClear,之後各測試自行掛 fakeRouter(沒登記的請求一律 throw)。 */
-type TestUser = { id: string; email: string; name: string; phone: string | null; last_login: string | null; created_at: string };
-const asLoginUser = (u: TestUser) => ({ ...u, phone_verified: false, avatar_url: null, is_active: true, roles: ['coach'] });
-const authRoutes = (u: TestUser) => ({
-	'POST /auth/logout': undefined,
-	'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: asLoginUser(u) }
-});
-
-async function loginAs(u: TestUser) {
-	vi.mocked(api).mockImplementation(fakeRouter(authRoutes(u)));
-	await authStore.login(u.email, 'pw');
-	vi.mocked(api).mockClear();
-}
-
+/* 真 authStore 登入登出:教練身分由模組內的 session 閘門快取,identity 由真
+ * login/logout 驅動。每個測試先登出再以 ME 登入 → 閘門重置,測試之間不共用快取。
+ * loginAs()登入完 mockClear,之後各測試自行掛 fakeRouter(沒登記的請求一律 throw)。
+ * harness 本體(R13 Task 7·C6)已搬至 $lib/testing/coach-session.ts(R15 Task 3a)。 */
 beforeEach(async () => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));

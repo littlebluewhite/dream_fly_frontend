@@ -3,43 +3,53 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import OrderSheet from './OrderSheet.svelte';
 import { orders, toasts } from '$lib/mobile-admin/stores';
-import { updateOrderStatus } from '$lib/mobile-admin/api';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
 import type { OrderRow } from '$lib/mobile-admin/data';
 
-vi.mock('$lib/mobile-admin/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/api')>();
-	return { ...actual, updateOrderStatus: vi.fn() };
+/* R15 Task 3a(候選 轉手退役):改 mock $lib/api/client 的 api(),讓 updateOrderStatus
+ * (經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實 PATCH /orders/{id}/status
+ * 呼叫,同 CertificateDialog.test.ts 慣例。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 
 beforeEach(() => {
-	vi.mocked(updateOrderStatus).mockReset();
+	vi.mocked(api).mockReset();
 });
 
 describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, admin/api.ts)', () => {
-	it('真打 updateOrderStatus(orderId, "paid")(真實後端 UUID，非顯示用 order_number)並更新 store', async () => {
-		vi.mocked(updateOrderStatus).mockResolvedValue({ id: 'uuid-x', order_number: 'DF-X', status: 'paid' });
+	it('真打 PATCH /orders/{orderId}/status(真實後端 UUID，非顯示用 order_number)並更新 store', async () => {
 		const pending = get(orders).find((o) => o.status === 'pending');
 		expect(pending, 'seed should contain a pending order').toBeTruthy();
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ [`PATCH /orders/${pending!.orderId}/status`]: { id: pending!.orderId, order_number: 'DF-X', status: 'paid' } })
+		);
 
 		const { getByText } = render(OrderSheet, { props: { onClose: () => {}, o: pending } });
 		await fireEvent.click(getByText('標記已付款'));
 
-		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalledWith(pending!.orderId, 'paid'));
-		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('paid');
+		await vi.waitFor(() => expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('paid'));
+		expect(api).toHaveBeenCalledWith(`/orders/${pending!.orderId}/status`, {
+			method: 'PATCH',
+			body: JSON.stringify({ status: 'paid' })
+		});
 		// R12 Task 3:store 經桌面 applyStatusChange 套回——paidAt 取訂單日期,不再是「剛剛」。
 		expect(get(orders).find((o) => o.id === pending!.id)?.paidAt).toBe(pending!.date);
 	});
 
 	it('API 失敗時不更動 store 狀態，也不關閉 sheet（不假裝成功）', async () => {
-		vi.mocked(updateOrderStatus).mockRejectedValue(new Error('boom'));
 		const pending = get(orders).find((o) => o.status === 'pending');
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ [`PATCH /orders/${pending!.orderId}/status`]: new Error('boom') })
+		);
 		const onClose = vi.fn();
 
 		const { getByText } = render(OrderSheet, { props: { onClose, o: pending } });
 		await fireEvent.click(getByText('標記已付款'));
 
-		await vi.waitFor(() => expect(updateOrderStatus).toHaveBeenCalled());
+		await vi.waitFor(() => expect(api).toHaveBeenCalled());
 		expect(get(orders).find((o) => o.id === pending!.id)?.status).toBe('pending');
 		expect(onClose).not.toHaveBeenCalled();
 	});
@@ -48,8 +58,10 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 	 * 後端 update_order_status，非法轉換/並發衝突一律 400）。這裡釘住 400 →
 	 * illegalTransition 分支顯示這句、store 不動、sheet 不關。 */
 	it('PATCH 400（illegalTransition）→ 顯示「訂單狀態已變更…」，store 不動，sheet 不關', async () => {
-		vi.mocked(updateOrderStatus).mockRejectedValue(new ApiError(400, 'cannot transition order'));
 		const pending = get(orders).find((o) => o.status === 'pending');
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ [`PATCH /orders/${pending!.orderId}/status`]: new ApiError(400, 'cannot transition order') })
+		);
 		const onClose = vi.fn();
 
 		const { getByText } = render(OrderSheet, { props: { onClose, o: pending } });
