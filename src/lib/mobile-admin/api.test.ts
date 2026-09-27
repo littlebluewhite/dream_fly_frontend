@@ -21,13 +21,84 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { OPS_ROUTES } from '$lib/testing/ops-routes';
+import { OPS_ROUTES, USERS_FIXTURE, COURSES_FIXTURE, COACHES_FIXTURE, ORDERS_FIXTURE } from '$lib/testing/ops-routes';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import type { ApiTodaySession } from '$lib/api/wire';
+import { initialOf, isoDate, orderIdentity, taxFromGross } from '$lib/api/wire';
+import { ntd, orderItemsSummary } from '$lib/public/adapters';
+import { mapMemberAccount, MEMBER_COLORS } from '$lib/admin/data';
+import { mapCourse } from '$lib/admin/api';
 import { getMore, getCoachHome, getAdminHome, getOpsCollections, getMessages } from './api';
 import { PROFILES } from './data';
+
+/* Task 3 修正回合 1(Important)：getMore/getOpsCollections 原本只斷言 .length > 0，
+ * 會漏抓集合互換(例如 classes↔coaches)這類 wiring bug。這裡鏡射 admin/api.ts 私有的
+ * mapCoach()/mapVenue()/mapProduct()/mapAdminOrder()(皆未 export，同
+ * CoachesScreen.test.ts 的 expectedFromWire() precedent)，把每個 wire fixture 經
+ * 「真實映射邏輯」算出精確期望值，斷言改回 toEqual(逐欄位，含 pages)。mapCourse()
+ * 本身有 export，直接沿用(同 admin/classes/page.test.ts 的 FIXTURE_CLASSES 慣例)。 */
+function expectedCoach(c: ApiCoach, i: number) {
+	return {
+		id: c.id,
+		userId: c.user_id,
+		name: c.name,
+		initial: initialOf(c.name),
+		title: c.title,
+		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+		tags: c.specialties,
+		isActive: c.is_active
+	};
+}
+function expectedVenue(v: ApiVenue) {
+	return {
+		id: v.id,
+		slug: v.slug,
+		name: v.name,
+		type: v.description ?? '',
+		equip: v.features,
+		status: v.is_active ? 'available' : 'maintenance'
+	};
+}
+function expectedTicket(p: ApiProduct, i: number) {
+	return {
+		id: p.id,
+		name: p.name,
+		type: p.product_type,
+		price: ntd(p.price_cents),
+		sold: p.sold,
+		quota: p.quota,
+		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+		icon: 'ticket',
+		desc: p.description ?? ''
+	};
+}
+function expectedOrder(o: (typeof ORDERS_FIXTURE)[number], i: number) {
+	const amount = ntd(o.total_cents);
+	const { tax, net } = taxFromGross(amount);
+	const { display, uuid } = orderIdentity(o);
+	return {
+		id: display,
+		orderId: uuid,
+		member: o.user_name,
+		initial: initialOf(o.user_name),
+		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+		item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
+		amount,
+		status: o.status,
+		method: '線上',
+		date: isoDate(o.created_at),
+		invoice: '—',
+		discount: o.coupon_code ?? '',
+		handler: '—',
+		campus: '—',
+		tax,
+		net,
+		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
+		taxId: '—'
+	};
+}
 
 const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', phone: null, last_login: null, created_at: '2026-01-01T00:00:00Z' };
 const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
@@ -54,10 +125,12 @@ describe('getMore', () => {
 
 		const d = await getMore();
 
-		expect(d.profiles).toEqual(PROFILES);
-		expect(d.coaches).toHaveLength(1);
-		expect(d.venues).toHaveLength(1);
-		expect(d.tickets).toHaveLength(1);
+		expect(d).toEqual({
+			profiles: PROFILES,
+			coaches: coaches.map(expectedCoach),
+			venues: venues.map(expectedVenue),
+			tickets: products.map(expectedTicket)
+		});
 	});
 });
 
@@ -138,13 +211,24 @@ describe('getOpsCollections', () => {
 
 		const d = await getOpsCollections();
 
-		expect(d.members.length).toBeGreaterThan(0);
-		expect(d.classes.length).toBeGreaterThan(0);
-		expect(d.coaches.length).toBeGreaterThan(0);
-		expect(d.orders.length).toBeGreaterThan(0);
-		expect(d.pages.members.perPage).toBe(100);
 		// coaches 取自 GET /courses?page=1 回應裡的 coaches(getClasses 內部組出)——
-		// GET /coaches 只在這裡沒被叫過(呼叫次數斷言留給 admin/api.test.ts)。
+		// GET /coaches 只在這裡沒被叫過(呼叫次數斷言留給 admin/api.test.ts)，故 coaches
+		// 期望值鏡射 COACHES_FIXTURE(getClasses() 內平行拉的 listCoaches() 回應)而非
+		// 另一份 GET /coaches fixture。
+		const expectedCoaches = COACHES_FIXTURE.map(expectedCoach);
+		const coachNameById = new Map(expectedCoaches.map((c) => [c.id, c.name]));
+
+		expect(d).toEqual({
+			members: USERS_FIXTURE.map(mapMemberAccount),
+			classes: COURSES_FIXTURE.map((c) => mapCourse(c, coachNameById)),
+			coaches: expectedCoaches,
+			orders: ORDERS_FIXTURE.map(expectedOrder),
+			pages: {
+				members: { total: USERS_FIXTURE.length, perPage: 100 },
+				classes: { total: COURSES_FIXTURE.length, perPage: 100 },
+				orders: { total: ORDERS_FIXTURE.length, perPage: 100 }
+			}
+		});
 	});
 });
 
