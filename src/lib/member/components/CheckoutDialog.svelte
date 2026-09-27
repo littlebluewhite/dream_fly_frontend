@@ -13,9 +13,9 @@
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
   import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints, type PaymentMethod } from '$lib/member/stores';
+  import { derived } from 'svelte/store';
   import { fmtNT } from '$lib/format';
   import { chargeableLines, applyCouponCode, orderErrorMessage } from '$lib/member/checkout';
-  import { checkoutMath } from '$lib/checkout-math';
   import { createCheckoutController } from '$lib/member/checkout-controller';
 
   // 付款方式(Round 4 Task P4-F4;integration-contract.md §1.8/§3.10)——單選、
@@ -30,34 +30,32 @@
   ];
 
   /* ── 付款狀態機（step/paying/paid、idempotencyKey 生命週期、閉→開邊沿偵測、
-   * 防重複扣款守衛）在 checkout-controller（deps 注入，可無渲染單測）；本元件退化
-   * 為快照解構鏡射 + 表單/預覽輸入 + outcome → toast 文案的薄 adapter。 ── */
-  const checkout = createCheckoutController({ placeOrder });
+   * 防重複扣款守衛）在 checkout-controller（deps 注入，可無渲染單測）。Task 5(R14·F4)
+   * 起結算輸入（優惠碼/點數折抵/付款方式）與預覽也住 controller；本元件退化為快照鏡射
+   * + 表單 bind + outcome → toast 文案的薄 adapter。lines 與請款同吃 chargeableLines
+   * （預覽 ≡ 請款，避免計算漂移）；成交金額以 API 回應（paid.*）為準，見 confirmPay。 ── */
+  const checkout = createCheckoutController({
+    placeOrder,
+    applyCouponCode,
+    lines: derived([cart, subscriptions], ([c, s]) => chargeableLines(c, s)),
+    points
+  });
+  const form = checkout.form;
   let step = 0;
   let paying = false;
   // paid：付款時的成交快照（金額/點數以 API 的 OrderResponse 為準，非本地試算），
   // 購物車清空後成功步仍照快照顯示；付款前的預覽（下方 m）才是本地計算。
   let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
   $: ({ step, paying, paid } = $checkout);
+  $: m = $checkout.preview;
 
-  // 表單/預覽輸入是預覽關注，留元件；confirmPay 時以引數傳入（呼叫瞬間讀取一次）。
-  let code = '';
-  let coupon: { code: string; off: number } | null = null;
-  let codeErr = '';
-  let usePoints = false;
-  let paymentMethod: PaymentMethod = 'credit_card';
-
-  // dialog 閉→開邊沿的重置佈線：controller 收付款生命週期（step 歸 0、成交快照歸零、
-  // idempotencyKey 換發；付款飛行中不重置——見 checkout-controller 檔頭），元件收
-  // 表單重置與開啟即水合。反應塊只讀 $checkoutOpen、不讀 $checkout，無自迴圈。
+  // dialog 閉→開邊沿的重置佈線：controller 收付款生命週期與結算輸入（step 歸 0、成交
+  // 快照歸零、idempotencyKey 換發、表單與優惠碼重置；付款飛行中不重置——見
+  // checkout-controller 檔頭），元件只收開啟即水合。反應塊只讀 $checkoutOpen、不讀
+  // $checkout，無自迴圈。
   $: {
     const outcome = checkout.setOpen($checkoutOpen);
     if (outcome.kind === 'freshCheckout') {
-      code = '';
-      coupon = null;
-      codeErr = '';
-      usePoints = false;
-      paymentMethod = 'credit_card';
       // 開啟即水合「已持有訂閱」與「點數餘額」：chargeableLines 的持有判斷與
       // 折抵預覽的可用點數都必須來自後端（本地 points 種子是 0 的 fail-safe，
       // 訂閱殘值可能過期）。best-effort——失敗（未登入、離線）就沿用本地現值，
@@ -68,17 +66,6 @@
   }
 
   $: items = $cart;
-  // chargeableLines + checkoutMath：顯示用預覽，與送單前同源，避免計算漂移；
-  // 成交金額改以 API 回應（paid.*）為準，見 confirmPay。
-  $: chargeable = chargeableLines($cart, $subscriptions);
-  $: m = checkoutMath(chargeable, coupon, $points, usePoints);
-
-  async function applyCode() {
-    const result = await applyCouponCode(code);
-    if (!result) return;                         // 空輸入按「套用」不顯示錯誤（決策 #4）
-    coupon = result.coupon;
-    codeErr = result.codeErr;
-  }
   function close() {
     // 付款請求飛行中不可關閉（X／overlay／Escape 都走這裡）：關閉→重開會走
     // open-reset，即使有 !paying 守衛擋住重置，允許關閉也只是把使用者跟進行中
@@ -94,16 +81,11 @@
   // final 完成 button — otherwise closing the success step via X/overlay/Escape
   // would leave the cart and points uncommitted while the UI says 已付款.
   // 送單機器（placeOrder 打真實 POST /orders、任何失敗不清購物車、重試沿用同一把
-  // idempotencyKey）在 controller；這裡把表單值在呼叫瞬間讀一次傳入，並把 outcome
+  // idempotencyKey，送單讀它自己那份表單與優惠碼）在 controller；這裡只把 outcome
   // 轉 toast 文案。alreadyPaying／nothingChargeable 是按鈕 disabled 之外的第二道
   // 防線，靜默返回。
   async function confirmPay() {
-    const outcome = await checkout.confirmPay({
-      coupon: coupon?.code ?? '',
-      usePoints,
-      paymentMethod,
-      hasChargeable: chargeable.length > 0
-    });
+    const outcome = await checkout.confirmPay();
     if (outcome.kind === 'orderPlaced') {
       const done = outcome.paid;
       const redeemNote = done.ptRedeem > 0 ? '，使用 ' + done.ptRedeem + ' 點折抵' : '';
@@ -158,13 +140,13 @@
               <div>
                 <div class="extras-label">優惠碼</div>
                 <div class="coupon-row">
-                  <Input placeholder="輸入優惠碼（如 DREAMFLY100）" bind:value={code} error={codeErr} on:input={() => (codeErr = '')} style="flex:1" />
-                  <Button variant="secondary" on:click={applyCode} style="height:44px">套用</Button>
+                  <Input placeholder="輸入優惠碼（如 DREAMFLY100）" bind:value={$form.code} error={$checkout.codeErr} on:input={checkout.clearCodeErr} style="flex:1" />
+                  <Button variant="secondary" on:click={checkout.applyCode} style="height:44px">套用</Button>
                 </div>
-                {#if coupon}
+                {#if $checkout.coupon}
                   <div class="coupon-ok">
-                    <Icon name="badge-check" size={15} color="var(--df-success)" /> 已套用 {coupon.code}，折抵 {fmtNT(m.couponOff)}
-                    <button class="link" on:click={() => { coupon = null; code = ''; }}>移除</button>
+                    <Icon name="badge-check" size={15} color="var(--df-success)" /> 已套用 {$checkout.coupon.code}，折抵 {fmtNT(m.couponOff)}
+                    <button class="link" on:click={checkout.removeCoupon}>移除</button>
                   </div>
                 {/if}
               </div>
@@ -173,10 +155,10 @@
                   <Icon name="star" size={18} color="var(--df-accent-dark)" />
                   <div>
                     <div class="pr-title">使用會員點數折抵</div>
-                    <div class="pr-sub">可用 {$points.toLocaleString()} 點{usePoints && m.ptRedeem > 0 ? '，此單折抵 ' + fmtNT(m.ptRedeem) : '（1 點 = NT$1）'}</div>
+                    <div class="pr-sub">可用 {$points.toLocaleString()} 點{$form.usePoints && m.ptRedeem > 0 ? '，此單折抵 ' + fmtNT(m.ptRedeem) : '（1 點 = NT$1）'}</div>
                   </div>
                 </div>
-                <Switch bind:checked={usePoints} />
+                <Switch bind:checked={$form.usePoints} />
               </div>
             </div>
           {/if}
@@ -186,7 +168,7 @@
               <div class="extras-label">付款方式</div>
               <div class="pm-group">
                 {#each PAYMENT_METHODS as pm (pm.value)}
-                  <Radio label={pm.label} value={pm.value} bind:group={paymentMethod} name="checkout-payment-method" />
+                  <Radio label={pm.label} value={pm.value} bind:group={$form.paymentMethod} name="checkout-payment-method" />
                 {/each}
               </div>
             </div>
@@ -198,10 +180,10 @@
             </div>
             <div class="summary">
               <div class="sum-row"><span>小計</span><span class="mono">{fmtNT(m.subtotal)}</span></div>
-              {#if m.couponOff > 0}<div class="sum-row ok"><span>優惠碼 {coupon?.code}</span><span class="mono">−{fmtNT(m.couponOff)}</span></div>{/if}
+              {#if m.couponOff > 0}<div class="sum-row ok"><span>優惠碼 {$checkout.coupon?.code}</span><span class="mono">−{fmtNT(m.couponOff)}</span></div>{/if}
               {#if m.ptRedeem > 0}<div class="sum-row ok"><span>點數折抵</span><span class="mono">−{fmtNT(m.ptRedeem)}</span></div>{/if}
             </div>
-            {#if chargeable.length === 0}
+            {#if !$checkout.hasChargeable}
               <div class="ssl"><Icon name="badge-check" size={16} color="var(--df-success)" /> 購物車內的方案皆已持有，無需重複付款。</div>
             {:else}
               <div class="ssl"><Icon name="shield-check" size={16} color="var(--df-success)" /> 付款採 SSL 加密，資料安全無虞。</div>
@@ -224,7 +206,7 @@
         {:else if step === 1}
           <div class="foot-actions">
             <Button variant="secondary" disabled={paying} on:click={checkout.backToCart}>返回</Button>
-            <Button variant="primary" disabled={paying || chargeable.length === 0} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
+            <Button variant="primary" disabled={paying || !$checkout.hasChargeable} on:click={confirmPay}>{paying ? '處理中…' : '確認付款'}</Button>
           </div>
         {:else}
           <Button variant="primary" on:click={close}>完成</Button>

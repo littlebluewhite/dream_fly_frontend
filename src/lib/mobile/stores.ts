@@ -19,13 +19,13 @@
  * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律
  * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
 
-import { get } from 'svelte/store';
+import { derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobilePushRegistry, MobileSheetRegistry } from './overlay-registry';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
-import { refreshPoints, subscriptions } from '$lib/member/stores';
-import { chargeableLines } from '$lib/member/checkout';
+import { points, refreshPoints, subscriptions } from '$lib/member/stores';
+import { applyCouponCode, chargeableLines } from '$lib/member/checkout';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
 import { type Course } from './data';
@@ -98,18 +98,13 @@ export {
 	getCourseSessions
 } from '$lib/member/stores';
 export type { LeaveRequest, CourseSession } from '$lib/member/stores';
-// 結帳輔助（CartSheet 的優惠碼套用與錯誤文案映射）——同上，經 seam 收編。C6 起
-// 再收編 chargeableLines:CartSheet 的可計費預覽（見該檔 $: chargeable）與 placeOrder
-// 的請款（見下方）同吃這個唯一 brand 產地，型別強制「預覽 ≡ 請款」。C2(R11) 起轉出的
-// 是 applyCouponCode（「套用」按鈕的結果機，與桌面 CheckoutDialog 共用）而非其內層的
-// validateCoupon——後者收斂後零 mobile 消費者，死出口不留（ADR 0010 精神）。
-export { applyCouponCode, orderErrorMessage, chargeableLines } from '$lib/member/checkout';
-// C6:CartSheet 過濾可計費項目時，chargeableLines 的第二參數是「已持有訂閱」清單——
-// subscriptions store 經 seam 收編（源 $lib/member/stores，foundation-contracts 白名單
-// 既有）。mobile 購物車只產 course（cart.add 只收 Course；帳戶頁 getAccount() 副作用
-// 仍可能水合 subscriptions，不可視為恆空），此過濾今日
-// 恆 no-op;收進 seam 是為了讓型別強制的「預覽 ≡ 請款」在 mobile 也一體成立。
-export { subscriptions } from '$lib/member/stores';
+// 結帳輔助（CartSheet 的錯誤文案映射）——同上，經 seam 收編。Task 5(R14·F4) 起
+// applyCouponCode／chargeableLines／subscriptions 三個轉出隨 CartSheet 的優惠碼套用與
+// 可計費預覽收進 checkout 單例（見下方 deps）而失去唯一消費者，死出口不留（ADR 0010
+// 精神）。mobile 購物車只產 course（cart.add 只收 Course；帳戶頁 getAccount() 副作用
+// 仍可能水合 subscriptions，不可視為恆空），可計費過濾今日恆 no-op;照樣過濾是為了
+// 讓型別強制的「預覽 ≡ 請款」在 mobile 也一體成立。
+export { orderErrorMessage } from '$lib/member/checkout';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** C2(架構深化 R9)：工廠本體上移為 lib-root 共用模組 $lib/cart（member 側也
@@ -129,10 +124,17 @@ export const cart = { // 介面不膨脹:只出 4 個成員
 };
 
 // C3/R13：checkout 與 cart 同生命週期（模組級單例，比 CartSheet 這顆 mount 級元件
-// 活得久）——deps 只有 placeOrder 一支，即下方緊接著的 placeOrder（函式宣告已提升，
-// 這裡引用它先於其文字定義出現不影響執行期）。詳見上方段落註解與 checkout-controller
+// 活得久）——placeOrder 即下方緊接著的 placeOrder（函式宣告已提升，這裡引用它先於
+// 其文字定義出現不影響執行期）。Task 5(R14·F4)：結算輸入與預覽也住進單例，deps 補齊
+// applyCouponCode 與兩個唯讀來源——lines 與 placeOrder 的請款同吃 chargeableLines
+// （預覽 ≡ 請款），points 是 member 側的真餘額。詳見上方段落註解與 checkout-controller
 // 檔頭。
-export const checkout = createCheckoutController({ placeOrder });
+export const checkout = createCheckoutController({
+	placeOrder,
+	applyCouponCode,
+	lines: derived([cart, subscriptions], ([c, s]) => chargeableLines(c, s)),
+	points
+});
 
 /* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
  * C4 收斂：原本焊在這裡的「同步購物車 → POST /orders → 下單後刷新 → 清購物車」
@@ -149,7 +151,7 @@ export const checkout = createCheckoutController({ placeOrder });
  *  C6(反轉 K5-b):submitOrder 的 lines 收窄為 ChargeableLine[](可計費約束 brand，
  *  見 $lib/cart-item)，唯一產地是 chargeableLines()。K5-b 曾裁定 mobile「不需要
  *  過濾、直傳 get(cart)」——理由是 course-only 購物車的過濾恆 no-op;C6 反轉這個
- *  決定，改讓型別強制過濾:預覽(CartSheet 的 checkoutMath)與請款(此處 submitOrder)
+ *  決定，改讓型別強制過濾:預覽(checkout 單例的 preview)與請款(此處 submitOrder)
  *  兩個終點同吃 chargeableLines 的輸出，「預覽合計 ≡ 實際請款」不再靠呼叫端記憶、
  *  而是編譯期保證。對今日 course-only 購物車行為零變動(空訂閱、course 恆保留)，
  *  未來若方案購買動線上架，過濾已就位、自動安全。 */

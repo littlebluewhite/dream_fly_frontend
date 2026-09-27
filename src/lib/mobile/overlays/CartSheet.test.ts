@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, onTestFinished } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CartSheet from './CartSheet.svelte';
-import { cart, toasts } from '$lib/mobile/stores';
+import { cart, toasts, checkout } from '$lib/mobile/stores';
 import { points } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import type { Course } from '$lib/mobile/data';
@@ -248,6 +248,85 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
 
     resolveOrder(SAMPLE_ORDER);
     await vi.waitFor(() => expect(reopened.getByText('報名完成！')).toBeInTheDocument());
+  });
+
+  /* Task 5(R14·F4)：結算輸入（優惠碼／點數折抵）與預覽改住 checkout 單例——付款飛行中
+   * 卸載再重開走 resumedInFlight，輸入全部保留；落定失敗後重試照原本的輸入送單。 */
+  it('付款中卸載再重開：優惠碼、折抵、預覽總額相同', async () => {
+    cart.add(COURSE);
+    const d = deferred<unknown>();
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/orders' && method === 'POST') return d.promise;
+      if (path === '/points/me') return { balance: 300, ledger: [] };
+      if (path.startsWith('/coupons/')) return { code: 'DREAMFLY100', discount_cents: 10000 };
+      return undefined;
+    });
+    // 斷言中途失敗也要讓 in-flight 落地——checkout 是跨測試共用的單例，殘留的
+    // paying=true 會污染後面的 it。
+    let settled = false;
+    const failOrder = () => {
+      if (settled) return; // 只建一次 rejected promise，避免多餘的 unhandled rejection
+      settled = true;
+      d.resolve(Promise.reject(new ApiError(409, 'course is full')));
+    };
+    onTestFinished(async () => {
+      failOrder();
+      await vi.waitFor(() => expect(get(checkout).paying).toBe(false));
+    });
+    const first = render(CartSheet, { props: { onClose: () => {} } });
+    await vi.waitFor(() => expect(first.getByText(/可用 300 點/)).toBeInTheDocument());
+    await fireEvent.input(first.getByPlaceholderText('如 DREAMFLY100'), { target: { value: 'DREAMFLY100' } });
+    await fireEvent.click(first.getByText('套用'));
+    await vi.waitFor(() => expect(first.getByText(/已套用 DREAMFLY100/)).toBeInTheDocument());
+    await fireEvent.click(first.getByRole('switch'));
+    await fireEvent.click(first.getByText(/前往付款/));
+    expect(first.getByText('確認付款 NT$4,400')).toBeInTheDocument(); // 4800 − 100 − 300
+    await fireEvent.click(first.getByText(/確認付款/));
+    await vi.waitFor(() => expect(first.getByText('處理中…')).toBeInTheDocument());
+    first.unmount(); // 導航觸發的 closeAll：不經 close() 守衛直接卸載
+
+    const reopened = render(CartSheet, { props: { onClose: () => {} } });
+    expect(reopened.getByText('優惠碼 DREAMFLY100')).toBeInTheDocument();
+    expect(reopened.getByText('−NT$100')).toBeInTheDocument();
+    expect(reopened.getByText('點數折抵')).toBeInTheDocument();
+    expect(reopened.getByText('−NT$300')).toBeInTheDocument();
+
+    // 讓飛行中的單以 409 落地——按鈕復位後顯示預覽總額，與卸載前相同。
+    failOrder();
+    await vi.waitFor(() => expect(reopened.getByText('確認付款 NT$4,400')).toBeInTheDocument());
+    await fireEvent.click(reopened.getByText('返回'));
+    expect((reopened.getByPlaceholderText('如 DREAMFLY100') as HTMLInputElement).value).toBe('DREAMFLY100');
+    expect(reopened.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('付款成功後重開：輸入全部重置', async () => {
+    cart.add(COURSE);
+    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
+      const method = (init.method ?? 'GET').toString().toUpperCase();
+      if (path === '/orders' && method === 'POST') return SAMPLE_ORDER;
+      if (path === '/points/me') return { balance: 300, ledger: [] };
+      if (path.startsWith('/coupons/')) return { code: 'DREAMFLY100', discount_cents: 10000 };
+      return undefined;
+    });
+    const first = render(CartSheet, { props: { onClose: () => {} } });
+    await vi.waitFor(() => expect(first.getByText(/可用 300 點/)).toBeInTheDocument());
+    await fireEvent.input(first.getByPlaceholderText('如 DREAMFLY100'), { target: { value: 'DREAMFLY100' } });
+    await fireEvent.click(first.getByText('套用'));
+    await vi.waitFor(() => expect(first.getByText(/已套用 DREAMFLY100/)).toBeInTheDocument());
+    await fireEvent.click(first.getByRole('switch'));
+    await fireEvent.click(first.getByText(/前往付款/));
+    await fireEvent.click(first.getByText(/確認付款/));
+    await vi.waitFor(() => expect(first.getByText('報名完成！')).toBeInTheDocument());
+    first.unmount();
+
+    cart.add(COURSE);
+    const second = render(CartSheet, { props: { onClose: () => {} } });
+    expect((second.getByPlaceholderText('如 DREAMFLY100') as HTMLInputElement).value).toBe('');
+    expect(second.queryByText(/已套用/)).toBeNull();
+    expect(second.getByRole('switch').getAttribute('aria-checked')).toBe('false');
+    await fireEvent.click(second.getByText(/前往付款/));
+    expect(second.getByText('確認付款 NT$4,800')).toBeInTheDocument();
   });
 
   it('409 之後重試沿用同一個 Idempotency-Key', async () => {

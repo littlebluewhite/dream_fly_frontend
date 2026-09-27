@@ -1,18 +1,21 @@
-/* checkout-controller.ts — 結帳付款狀態機的單元測試。deps（placeOrder）注入
- * mock，可控 promise resolve 時序驗 paying 生命週期與「付款飛行中外力關閉再重開」
- * （resumedInFlight）的機器面；idempotencyKey 生命週期（失敗重試沿用同一把／
- * freshCheckout 換發）經 placeOrder mock 的引數捕捉斷言（不注入 keygen dep）。
- * outcome → toast 文案／表單重置／水合佈線由 CheckoutDialog.test.ts 的既有 render
- * its 覆蓋。 */
+/* checkout-controller.ts — 結帳付款狀態機的單元測試。deps（placeOrder/applyCouponCode）
+ * 注入 mock、唯讀來源（lines/points）注入 writable 驅動，可控 promise resolve 時序驗
+ * paying 生命週期與「付款飛行中外力關閉再重開」（resumedInFlight）的機器面；
+ * idempotencyKey 生命週期（失敗重試沿用同一把／freshCheckout 換發）經 placeOrder mock
+ * 的引數捕捉斷言（不注入 keygen dep）。Task 5(R14·F4) 起結算輸入（form/coupon/codeErr）
+ * 與預覽也在 controller，重置/保留規則與預覽重算在此釘住；outcome → toast 文案／水合
+ * 佈線由 CheckoutDialog.test.ts 與 CartSheet.test.ts 的 render its 覆蓋。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import {
 	createCheckoutController,
+	type AppliedCoupon,
 	type CheckoutController,
-	type ConfirmPayInput,
 	type PaidSummary
 } from './checkout-controller';
 import type { PaymentMethod } from '$lib/checkout-order';
+import type { ChargeableLine } from '$lib/cart-item';
+import { chargeableLines } from './checkout';
 
 /** 手動控制 resolve/reject 時序的 promise，用於驗 await 前/後的狀態語意。 */
 function deferred<T>() {
@@ -28,15 +31,26 @@ function deferred<T>() {
 const EMPTY_PAID: PaidSummary = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
 const CONFIRMED: PaidSummary = { total: 4800, earned: 240, ptRedeem: 100, hasCourse: true, hasPass: false, orderNumber: 'DF-0001' };
 
-/** confirmPay 的表單輸入預設值——單測只在乎透傳與守衛，內容按情境覆寫。 */
-function input(overrides: Partial<ConfirmPayInput> = {}): ConfirmPayInput {
-	return { coupon: '', usePoints: false, paymentMethod: 'credit_card', hasChargeable: true, ...overrides };
-}
+/** 一行可計費項目（NT$4,800 課程）——經唯一 brand 產地 chargeableLines 產出。 */
+const LINES: ChargeableLine[] = chargeableLines(
+	[{ id: 'course-1', type: 'course', name: '競技啦啦隊 進階班', price: 4800, qty: 1, icon: 'sparkles' }],
+	[]
+);
+const COUPON: AppliedCoupon = { code: 'DREAMFLY100', off: 100 };
 
 function makeDeps() {
 	return {
-		placeOrder: vi.fn<(coupon: string, usePoints: boolean, idempotencyKey: string, paymentMethod: PaymentMethod) => Promise<PaidSummary>>()
+		placeOrder: vi.fn<(coupon: string, usePoints: boolean, idempotencyKey: string, paymentMethod: PaymentMethod) => Promise<PaidSummary>>(),
+		applyCouponCode: vi.fn<(code: string) => Promise<{ coupon: AppliedCoupon | null; codeErr: string } | null>>(),
+		lines: writable<ChargeableLine[]>(LINES),
+		points: writable(0)
 	};
+}
+
+/** 付款生命週期三欄（快照的其餘欄位是結算輸入/預覽，另有專屬 describe）。 */
+function machine(c: CheckoutController) {
+	const { step, paying, paid } = get(c);
+	return { step, paying, paid };
 }
 
 let deps: ReturnType<typeof makeDeps>;
@@ -55,20 +69,30 @@ function keyOfCall(n: number): string {
 }
 
 describe('createCheckoutController — 建構 / setOpen 邊沿', () => {
-	it('建構零副作用：初始視圖在購物車步、非付款中、成交快照為空，不觸發 placeOrder（SSR 安全）', () => {
-		expect(get(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
+	it('建構零副作用：初始視圖在購物車步、非付款中、成交快照為空、表單為預設，不觸發任何 dep（SSR 安全）', () => {
+		expect(get(ctrl)).toEqual({
+			step: 0,
+			paying: false,
+			paid: EMPTY_PAID,
+			coupon: null,
+			codeErr: '',
+			preview: { subtotal: 4800, couponOff: 0, ptRedeem: 0, total: 4800, earned: 240 },
+			hasChargeable: true
+		});
+		expect(get(ctrl.form)).toEqual({ code: '', usePoints: false, paymentMethod: 'credit_card' });
 		expect(deps.placeOrder).not.toHaveBeenCalled();
+		expect(deps.applyCouponCode).not.toHaveBeenCalled();
 	});
 
 	it('閉→開邊沿（無飛行）：freshCheckout——成功結帳後重開，step 歸 0、成交快照歸零', async () => {
 		deps.placeOrder.mockResolvedValue(CONFIRMED);
 		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
 		ctrl.toPayment();
-		await ctrl.confirmPay(input());
-		expect(get(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED }); // 上一單的殘留狀態
+		await ctrl.confirmPay();
+		expect(machine(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED }); // 上一單的殘留狀態
 		expect(ctrl.setOpen(false)).toEqual({ kind: 'noop' });
 		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
-		expect(get(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
+		expect(machine(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
 	});
 
 	it('非閉→開邊沿一律 noop：開→開不重複重置、開→閉不重置', () => {
@@ -85,19 +109,19 @@ describe('createCheckoutController — 建構 / setOpen 邊沿', () => {
 		deps.placeOrder.mockReturnValue(d.promise);
 		ctrl.setOpen(true);
 		ctrl.toPayment();
-		const p = ctrl.confirmPay(input());
-		expect(get(ctrl)).toEqual({ step: 1, paying: true, paid: EMPTY_PAID });
+		const p = ctrl.confirmPay();
+		expect(machine(ctrl)).toEqual({ step: 1, paying: true, paid: EMPTY_PAID });
 		// prevOpen 含飛行中都更新：關閉（noop）後重開才偵測得到閉→開邊沿。
 		expect(ctrl.setOpen(false)).toEqual({ kind: 'noop' });
 		expect(ctrl.setOpen(true)).toEqual({ kind: 'resumedInFlight' });
-		expect(get(ctrl)).toEqual({ step: 1, paying: true, paid: EMPTY_PAID }); // 延續同一結帳流程
+		expect(machine(ctrl)).toEqual({ step: 1, paying: true, paid: EMPTY_PAID }); // 延續同一結帳流程
 		d.resolve(CONFIRMED);
 		await expect(p).resolves.toEqual({ kind: 'orderPlaced', paid: CONFIRMED });
-		expect(get(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
+		expect(machine(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
 		// promise 落定後，下一次閉→開才允許重置。
 		ctrl.setOpen(false);
 		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
-		expect(get(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
+		expect(machine(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
 	});
 });
 
@@ -111,28 +135,31 @@ describe('步驟流轉 — toPayment / backToCart', () => {
 		const d = deferred<PaidSummary>();
 		deps.placeOrder.mockReturnValue(d.promise);
 		ctrl.toPayment();
-		const p = ctrl.confirmPay(input());
+		const p = ctrl.confirmPay();
 		ctrl.backToCart();
-		expect(get(ctrl)).toEqual({ step: 0, paying: true, paid: EMPTY_PAID });
+		expect(machine(ctrl)).toEqual({ step: 0, paying: true, paid: EMPTY_PAID });
 		d.resolve(CONFIRMED);
 		await p;
-		expect(get(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
+		expect(machine(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
 	});
 });
 
 describe('confirmPay — 生命週期與守衛', () => {
-	it('成功：表單輸入呼叫瞬間透傳 placeOrder，outcome orderPlaced 攜帶成交快照，視圖轉完成步', async () => {
+	it('成功：自己那份表單與已套用優惠碼透傳 placeOrder，outcome orderPlaced 攜帶成交快照，視圖轉完成步', async () => {
 		deps.placeOrder.mockResolvedValue(CONFIRMED);
-		const outcome = await ctrl.confirmPay(input({ coupon: 'DREAMFLY100', usePoints: true, paymentMethod: 'line_pay' }));
+		deps.applyCouponCode.mockResolvedValue({ coupon: COUPON, codeErr: '' });
+		ctrl.form.set({ code: 'dreamfly100', usePoints: true, paymentMethod: 'line_pay' });
+		await ctrl.applyCode();
+		const outcome = await ctrl.confirmPay();
 		expect(deps.placeOrder).toHaveBeenCalledWith('DREAMFLY100', true, expect.any(String), 'line_pay');
 		expect(outcome).toEqual({ kind: 'orderPlaced', paid: CONFIRMED });
-		expect(get(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
+		expect(machine(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
 	});
 
 	it('paying 生命週期：起飛同步發佈 paying true（不等 resolve），落地復位', async () => {
 		const d = deferred<PaidSummary>();
 		deps.placeOrder.mockReturnValue(d.promise);
-		const p = ctrl.confirmPay(input());
+		const p = ctrl.confirmPay();
 		expect(get(ctrl).paying).toBe(true); // 同步進行中
 		d.resolve(CONFIRMED);
 		await p;
@@ -142,30 +169,32 @@ describe('confirmPay — 生命週期與守衛', () => {
 	it('alreadyPaying：飛行中重入立即返回，不發第二次 placeOrder', async () => {
 		const d = deferred<PaidSummary>();
 		deps.placeOrder.mockReturnValue(d.promise);
-		const p = ctrl.confirmPay(input());
-		const reentry = await ctrl.confirmPay(input());
+		const p = ctrl.confirmPay();
+		const reentry = await ctrl.confirmPay();
 		expect(reentry).toEqual({ kind: 'alreadyPaying' });
 		expect(deps.placeOrder).toHaveBeenCalledTimes(1);
 		d.resolve(CONFIRMED);
 		await p;
 	});
 
-	it('nothingChargeable：無可計費項目不送單——placeOrder 零呼叫、狀態不動', async () => {
-		const outcome = await ctrl.confirmPay(input({ hasChargeable: false }));
+	it('nothingChargeable：lines 為空（hasChargeable=false）不送單——placeOrder 零呼叫、狀態不動', async () => {
+		deps.lines.set([]);
+		expect(get(ctrl).hasChargeable).toBe(false);
+		const outcome = await ctrl.confirmPay();
 		expect(outcome).toEqual({ kind: 'nothingChargeable' });
 		expect(deps.placeOrder).not.toHaveBeenCalled();
-		expect(get(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
+		expect(machine(ctrl)).toEqual({ step: 0, paying: false, paid: EMPTY_PAID });
 	});
 
 	it('失敗：orderFailed 透傳原始拋出物（同一物件識別），step 停在原地、paying 復位、成交快照不寫', async () => {
 		const err = new Error('network down');
 		deps.placeOrder.mockRejectedValue(err);
 		ctrl.toPayment();
-		const outcome = await ctrl.confirmPay(input());
+		const outcome = await ctrl.confirmPay();
 		expect(outcome).toEqual({ kind: 'orderFailed', error: err });
 		// 同一物件識別（非僅結構等價）——元件的 orderErrorMessage 靠 instanceof 分類。
 		expect(outcome.kind === 'orderFailed' ? outcome.error : null).toBe(err);
-		expect(get(ctrl)).toEqual({ step: 1, paying: false, paid: EMPTY_PAID });
+		expect(machine(ctrl)).toEqual({ step: 1, paying: false, paid: EMPTY_PAID });
 	});
 });
 
@@ -173,8 +202,8 @@ describe('idempotencyKey 生命週期（機器面——render 測試從未斷言
 	it('失敗重試沿用同一把 key（後端辨識重放、不重複扣款的前提）', async () => {
 		deps.placeOrder.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(CONFIRMED);
 		ctrl.setOpen(true);
-		expect((await ctrl.confirmPay(input())).kind).toBe('orderFailed');
-		expect((await ctrl.confirmPay(input())).kind).toBe('orderPlaced');
+		expect((await ctrl.confirmPay()).kind).toBe('orderFailed');
+		expect((await ctrl.confirmPay()).kind).toBe('orderPlaced');
 		expect(keyOfCall(0)).not.toBe('');
 		expect(keyOfCall(1)).toBe(keyOfCall(0)); // 重試沿用同一把
 	});
@@ -182,10 +211,10 @@ describe('idempotencyKey 生命週期（機器面——render 測試從未斷言
 	it('freshCheckout 換發：成功結帳關閉重開後，下一單用不同的 key', async () => {
 		deps.placeOrder.mockResolvedValue(CONFIRMED);
 		ctrl.setOpen(true);
-		await ctrl.confirmPay(input());
+		await ctrl.confirmPay();
 		ctrl.setOpen(false);
 		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
-		await ctrl.confirmPay(input());
+		await ctrl.confirmPay();
 		expect(keyOfCall(0)).not.toBe('');
 		expect(keyOfCall(1)).not.toBe('');
 		expect(keyOfCall(1)).not.toBe(keyOfCall(0)); // 新結帳流程 = 新 key
@@ -200,8 +229,8 @@ describe('idempotencyKey 生命週期（機器面——render 測試從未斷言
 describe('建構期即備妥可用 key（不呼叫 setOpen 的消費者）', () => {
 	it('不呼叫 setOpen 也能送單：建構期產生的 key 直接可用，失敗重試沿用同一把', async () => {
 		deps.placeOrder.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(CONFIRMED);
-		expect((await ctrl.confirmPay(input())).kind).toBe('orderFailed');
-		expect((await ctrl.confirmPay(input())).kind).toBe('orderPlaced');
+		expect((await ctrl.confirmPay()).kind).toBe('orderFailed');
+		expect((await ctrl.confirmPay()).kind).toBe('orderPlaced');
 		expect(keyOfCall(0)).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 		expect(keyOfCall(1)).toBe(keyOfCall(0)); // 重試沿用同一把（後端辨識重放）
 	});
@@ -211,10 +240,98 @@ describe('建構期即備妥可用 key（不呼叫 setOpen 的消費者）', () 
 		const other = createCheckoutController(otherDeps);
 		deps.placeOrder.mockResolvedValue(CONFIRMED);
 		otherDeps.placeOrder.mockResolvedValue(CONFIRMED);
-		await ctrl.confirmPay(input());
-		await other.confirmPay(input());
+		await ctrl.confirmPay();
+		await other.confirmPay();
 		const otherKey = otherDeps.placeOrder.mock.calls[0]?.[2];
 		expect(otherKey).not.toBe('');
 		expect(otherKey).not.toBe(keyOfCall(0));
+	});
+});
+
+/* Task 5(R14·F4)：結算輸入（form/coupon/codeErr）與預覽住 controller——跟著付款生命週期
+ * 重置或保留，預覽隨輸入與唯讀來源重算。 */
+describe('結算輸入與預覽', () => {
+	/** 填一組完整輸入：套用優惠碼、開點數折抵、選 LINE Pay。 */
+	async function fillInputs() {
+		deps.applyCouponCode.mockResolvedValue({ coupon: COUPON, codeErr: '' });
+		ctrl.form.set({ code: 'DREAMFLY100', usePoints: true, paymentMethod: 'line_pay' });
+		await ctrl.applyCode();
+	}
+
+	it('preview 隨 lines／points／usePoints／coupon 重算（checkoutMath）', async () => {
+		deps.points.set(300);
+		expect(get(ctrl).preview.total).toBe(4800); // usePoints 關閉
+		ctrl.form.update((f) => ({ ...f, usePoints: true }));
+		expect(get(ctrl).preview).toMatchObject({ ptRedeem: 300, total: 4500 });
+		deps.applyCouponCode.mockResolvedValue({ coupon: COUPON, codeErr: '' });
+		ctrl.form.update((f) => ({ ...f, code: 'DREAMFLY100' }));
+		await ctrl.applyCode();
+		expect(deps.applyCouponCode).toHaveBeenCalledWith('DREAMFLY100');
+		expect(get(ctrl).preview).toMatchObject({ couponOff: 100, ptRedeem: 300, total: 4400 });
+		deps.points.set(50);
+		expect(get(ctrl).preview).toMatchObject({ ptRedeem: 50, total: 4650 });
+		deps.lines.set([]);
+		expect(get(ctrl).preview).toMatchObject({ subtotal: 0, couponOff: 0, ptRedeem: 0, total: 0 });
+		expect(get(ctrl).hasChargeable).toBe(false);
+	});
+
+	it('applyCode：空輸入（dep 回 null）不動狀態；無效碼寫 codeErr（文字來自 dep）；clearCodeErr 清掉', async () => {
+		deps.applyCouponCode.mockResolvedValueOnce(null);
+		await ctrl.applyCode();
+		expect(get(ctrl)).toMatchObject({ coupon: null, codeErr: '' });
+		deps.applyCouponCode.mockResolvedValueOnce({ coupon: null, codeErr: '注入的文案' });
+		ctrl.form.update((f) => ({ ...f, code: 'NOPE' }));
+		await ctrl.applyCode();
+		expect(get(ctrl)).toMatchObject({ coupon: null, codeErr: '注入的文案' });
+		ctrl.clearCodeErr();
+		expect(get(ctrl).codeErr).toBe('');
+	});
+
+	it('removeCoupon：清掉已套用的優惠碼與輸入框', async () => {
+		await fillInputs();
+		ctrl.removeCoupon();
+		expect(get(ctrl).coupon).toBeNull();
+		expect(get(ctrl.form)).toEqual({ code: '', usePoints: true, paymentMethod: 'line_pay' });
+	});
+
+	it('freshCheckout 重置表單與 coupon/codeErr', async () => {
+		ctrl.setOpen(true);
+		await fillInputs();
+		ctrl.setOpen(false);
+		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
+		expect(get(ctrl.form)).toEqual({ code: '', usePoints: false, paymentMethod: 'credit_card' });
+		expect(get(ctrl)).toMatchObject({ coupon: null, codeErr: '' });
+	});
+
+	it('resumedInFlight 全部保留：表單、優惠碼、預覽與關閉前相同', async () => {
+		deps.points.set(300);
+		ctrl.setOpen(true);
+		await fillInputs();
+		const before = get(ctrl);
+		const d = deferred<PaidSummary>();
+		deps.placeOrder.mockReturnValue(d.promise);
+		const p = ctrl.confirmPay();
+		ctrl.setOpen(false);
+		expect(ctrl.setOpen(true)).toEqual({ kind: 'resumedInFlight' });
+		expect(get(ctrl.form)).toEqual({ code: 'DREAMFLY100', usePoints: true, paymentMethod: 'line_pay' });
+		expect(get(ctrl)).toMatchObject({ coupon: COUPON, codeErr: '', preview: before.preview });
+		expect(get(ctrl).preview.total).toBe(4400);
+		d.resolve(CONFIRMED);
+		await p;
+		expect(deps.placeOrder).toHaveBeenCalledWith('DREAMFLY100', true, expect.any(String), 'line_pay');
+	});
+
+	it('序號守衛：freshCheckout 之後才落地的 applyCode 回應被丟棄', async () => {
+		ctrl.setOpen(true);
+		const d = deferred<{ coupon: AppliedCoupon | null; codeErr: string } | null>();
+		deps.applyCouponCode.mockReturnValue(d.promise);
+		ctrl.form.update((f) => ({ ...f, code: 'DREAMFLY100' }));
+		const pending = ctrl.applyCode();
+		ctrl.setOpen(false);
+		expect(ctrl.setOpen(true)).toEqual({ kind: 'freshCheckout' });
+		d.resolve({ coupon: COUPON, codeErr: '' });
+		await pending;
+		expect(get(ctrl)).toMatchObject({ coupon: null, codeErr: '' });
+		expect(get(ctrl).preview.couponOff).toBe(0);
 	});
 });

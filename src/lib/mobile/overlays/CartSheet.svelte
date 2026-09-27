@@ -19,21 +19,20 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount, onDestroy } from 'svelte';
-  // 卡 3：points/refreshPoints（member/stores）與 applyCouponCode/orderErrorMessage
-  // （member/checkout）改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
-  // C6：再取用 subscriptions/chargeableLines（同經 seam），供可計費預覽過濾。
+  // 卡 3：points/refreshPoints（member/stores）與 orderErrorMessage（member/checkout）
+  // 改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
   // C2(R11)/C3(R13)：checkout 同經 seam 取用——付款狀態機與桌面共用同一份機器，這裡
-  // 拿的是 stores.ts 的模組級單例（見下方）。
-  import { cart, toasts, points, refreshPoints, applyCouponCode, orderErrorMessage, subscriptions, chargeableLines, checkout } from '$lib/mobile/stores';
+  // 拿的是 stores.ts 的模組級單例（見下方）。Task 5(R14·F4)：優惠碼套用與可計費預覽
+  // （chargeableLines + checkoutMath）也收進該單例，本元件只讀 $checkout.preview。
+  import { cart, toasts, points, refreshPoints, orderErrorMessage, checkout } from '$lib/mobile/stores';
   import { fmtNT } from '$lib/format';
   import { authStore } from '$lib/stores/authStore';
-  import { checkoutMath } from '$lib/checkout-math';
 
   export let onClose: () => void;
 
   /* ── 付款狀態機（step/paying/paid、idempotencyKey 生命週期、防重複扣款守衛）與桌面
    * CheckoutDialog 共用同一顆 checkout-controller（C2/R11 雙生收斂，經 seam 取用）；
-   * 本元件退化為快照解構鏡射 + 表單/預覽輸入 + outcome → toast 文案的薄 adapter。
+   * 本元件退化為快照鏡射 + 表單 bind + outcome → toast 文案的薄 adapter。
    *
    * C3/R13：controller 改為 stores.ts 的模組級單例，生命週期比本元件（CartSheet 隨
    * sheet 開關掛載/卸載，見 OverlayHost：`{#if $overlay.sheet} <svelte:component .../>`）
@@ -48,12 +47,12 @@
   // 不到 hasCourse/hasPass（購物車只產 course，無方案動線，文案不分支）。
   let paid = { total: 0, earned: 0, ptRedeem: 0, hasCourse: false, hasPass: false, orderNumber: '' };
   $: ({ step, paying, paid } = $checkout);
+  // m：本地預覽（chargeableLines + checkoutMath，由 controller 算）。
+  $: m = $checkout.preview;
 
-  // 表單/預覽輸入是預覽關注，留元件；confirmPay 時以引數傳入（呼叫瞬間讀取一次）。
-  let code = '';
-  let coupon: { code: string; off: number } | null = null;
-  let codeErr = '';
-  let usePoints = false;
+  // Task 5(R14·F4)：結算表單住 controller（checkout.form），付款飛行中卸載再重開仍保留
+  // （resumedInFlight），freshCheckout 才重置——見 checkout-controller 檔頭。
+  const form = checkout.form;
 
   // 掛載 = setOpen(true)、卸載 = setOpen(false)（C3/R13：controller 是模組級單例，
   // 靠這兩個邊沿讓機器知道「本次是哪一次結帳嘗試」）。只在 freshCheckout（無飛行中）
@@ -71,38 +70,24 @@
     checkout.setOpen(false);
   });
 
-  // C6：預覽金額只算「可計費項目」——chargeableLines 濾掉已持有的 pass，與請款
-  // （placeOrder → submitOrder）同一產地，型別強制「預覽合計 ≡ 實際請款」。下方
-  // 明細列表（{#each $cart}）仍照舊渲染整車，對照 desktop CheckoutDialog 同款:
+  // C6：預覽金額只算「可計費項目」——checkout 單例的 lines（stores.ts）是 chargeableLines
+  // 的輸出，與請款（placeOrder → submitOrder）同一產地，型別強制「預覽合計 ≡ 實際請款」。
+  // 下方明細列表（{#each $cart}）仍照舊渲染整車，對照 desktop CheckoutDialog 同款:
   // 使用者看得到自己加了什麼，只是合計不把已持有的 pass 重複計費。
   // 刻意不在 onMount 加 refreshSubscriptions():mobile 購物車只產 course
   // （cart.add 只收 Course），過濾恆 no-op 的保證來自這裡——並非 subscriptions 恆空
   // （帳戶頁 getAccount() 副作用可水合它）;未來方案動線上架時，在上方 onMount 補一次 refreshSubscriptions() 水合
   // 即可（座標留此，desktop CheckoutDialog 開啟即水合訂閱是既有先例）。
-  $: chargeable = chargeableLines($cart, $subscriptions);
-  $: m = checkoutMath(chargeable, coupon, $points, usePoints);
-
-  async function applyCode() {
-    const result = await applyCouponCode(code);
-    if (!result) return; // 空輸入按「套用」不顯示錯誤（同桌面 CheckoutDialog 的決策）
-    coupon = result.coupon;
-    codeErr = result.codeErr;
-  }
 
   /* 確認付款 → 真下單（placeOrder：同步購物車 → POST /orders → 水合真點數 →
-   * 清空購物車）。送單機器與「成功才進 step 2」在 controller；這裡把表單值在呼叫
-   * 瞬間讀一次傳入，並把 outcome 轉 toast 文案。顯示的金額/點數/訂單編號一律來自
+   * 清空購物車）。送單機器與「成功才進 step 2」在 controller（送單讀它
+   * 自己那份表單與優惠碼）；這裡只把 outcome 轉 toast 文案。顯示的金額/點數/訂單編號一律來自
    * 真實 API 回應（paid.*），不是本地預覽（m.*）。失敗顯示後端錯誤訊息轉繁中，購物車
    * 不清空，讓使用者可以直接重試（沿用同一把 idempotencyKey，不會重複扣款）。
-   * 行動版不做付款方式選擇 UI（Round 4 P4-F4 裁決），一律帶預設 credit_card；
+   * 行動版不做付款方式選擇 UI（Round 4 P4-F4 裁決），form 的付款方式恆為預設 credit_card；
    * alreadyPaying／nothingChargeable 是按鈕 disabled 之外的第二道防線，靜默返回。 */
   async function confirmPayment() {
-    const outcome = await checkout.confirmPay({
-      coupon: coupon?.code ?? '',
-      usePoints,
-      paymentMethod: 'credit_card',
-      hasChargeable: chargeable.length > 0
-    });
+    const outcome = await checkout.confirmPay();
     if (outcome.kind === 'orderPlaced') {
       const { earned, ptRedeem } = outcome.paid;
       const redeemNote = ptRedeem > 0 ? `，使用 ${ptRedeem} 點折抵` : '';
@@ -168,12 +153,12 @@
         <div>
           <div style="font-size:13px; font-weight:600; color:var(--df-text-dark); margin-bottom:7px;">優惠碼</div>
           <div style="display:flex; gap:9px;">
-            <Input placeholder="如 DREAMFLY100" bind:value={code} error={codeErr} on:input={() => (codeErr = '')} style="flex:1;" />
-            <Button variant="secondary" on:click={applyCode} style="height:44px;">套用</Button>
+            <Input placeholder="如 DREAMFLY100" bind:value={$form.code} error={$checkout.codeErr} on:input={checkout.clearCodeErr} style="flex:1;" />
+            <Button variant="secondary" on:click={checkout.applyCode} style="height:44px;">套用</Button>
           </div>
-          {#if coupon}
+          {#if $checkout.coupon}
             <div style="margin-top:8px; display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--df-success);">
-              <Icon name="badge-check" size={15} color="var(--df-success)" />已套用 {coupon.code}，折抵 {fmtNT(m.couponOff)}
+              <Icon name="badge-check" size={15} color="var(--df-success)" />已套用 {$checkout.coupon.code}，折抵 {fmtNT(m.couponOff)}
             </div>
           {/if}
         </div>
@@ -185,7 +170,7 @@
               <div style="font-size:12px; color:var(--df-text-light);">可用 {$points.toLocaleString()} 點 (1 點 = NT$1)</div>
             </div>
           </div>
-          <Switch bind:checked={usePoints} />
+          <Switch bind:checked={$form.usePoints} />
         </div>
       {/if}
     {/if}
@@ -201,7 +186,7 @@
         <div style="border-top:1px solid var(--df-border); padding-top:13px; display:flex; flex-direction:column; gap:7px; font-size:13.5px;">
           <div style="display:flex; justify-content:space-between; color:var(--df-text-light);"><span>小計</span><span style="font-family:var(--df-font-mono);">{fmtNT(m.subtotal)}</span></div>
           {#if m.couponOff > 0}
-            <div style="display:flex; justify-content:space-between; color:var(--df-success);"><span>優惠碼 {coupon?.code}</span><span style="font-family:var(--df-font-mono);">−{fmtNT(m.couponOff)}</span></div>
+            <div style="display:flex; justify-content:space-between; color:var(--df-success);"><span>優惠碼 {$checkout.coupon?.code}</span><span style="font-family:var(--df-font-mono);">−{fmtNT(m.couponOff)}</span></div>
           {/if}
           {#if m.ptRedeem > 0}
             <div style="display:flex; justify-content:space-between; color:var(--df-success);"><span>點數折抵</span><span style="font-family:var(--df-font-mono);">−{fmtNT(m.ptRedeem)}</span></div>
