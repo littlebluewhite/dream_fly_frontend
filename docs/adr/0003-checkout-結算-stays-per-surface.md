@@ -62,3 +62,16 @@ mobile 在自家 seam 建自己的**非持久**實例、只對外露出四個成
 `icon` 覆寫由 mobile 自組 `addItem` 輸入表達。該節第一點所護的事實(兩 surface 是不同的 store 實例
 與不同的資料模型)因此原樣成立,不因工廠同源而動搖;mobile 仍無 `Subscription`/`pointsLedger`,
 `placeOrder` 仍是各自注入的薄 adapter。
+
+## 增補(2026-09-27,架構深化 R14):結算預覽進 checkout controller,仍屬共用純數學
+
+完整背景見 `docs/adr/0024` §5。R14 Task 5(候選 F4)把結算輸入(優惠碼、點數折抵、付款方式)與預覽
+搬進 `src/lib/member/checkout-controller.ts`:快照多發 `preview` = `checkoutMath(lines, coupon, points,
+usePoints)`。這不違本 ADR:
+
+- controller 呼叫的仍是 lib-root 的純數學 `checkout-math.ts`,沒有新增任何業務規則。預覽只是本地試算,
+  成交金額仍以 `placeOrder` 的回應(`paid`)為準。
+- controller 不 import 任何 surface 的 store。兩個 surface 各自注入自己的來源:`lines` 都是
+  `derived([cart, subscriptions], … chargeableLines)`,由 `CheckoutDialog` 與 `mobile/stores.ts` 的單例
+  各建一份;`points` 取 member 的點數 store。
+- 上兩節附錄的句式照舊成立:共用的是付款機與純數學,不是結算,也不是 store 實例。

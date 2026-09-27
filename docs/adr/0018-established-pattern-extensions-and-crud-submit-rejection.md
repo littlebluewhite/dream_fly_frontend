@@ -468,3 +468,21 @@ R12 增補的其餘結論不變:mark 仍發生在 PATCH 落定之後,沒有在�
   `SESSION_STATUS[t.status]`,漏鍵成為編譯錯誤。
 - **admin** 改經 `toTodaySession` 取 `state` 再索引 `SESSION_STATUS`。canonical 標籤「上課中」與
   「色彩留 surface」的裁決不變。見 `docs/adr/0013` 增補。
+
+## 增補(2026-09-27,架構深化 R14):C7 已決——不合併,各自歸隊
+
+完整背景見 `docs/adr/0024` §6。
+
+§7 遞延的「通知已讀 mutator 雙生(member/mobile-admin)收斂」,R11 增補已確認兩族不同構。R14 給出結論:
+**不合併這一對,兩側各自和自己真正的雙生收斂**。
+
+- **mobile-admin 側**:R14 Task 6(候選 F5)讓 `MessageThread` 改接桌面的 `messages-controller`
+  (`docs/adr/0014` §2 雙生)。已讀改為**送完再寫**:controller 的 `selectThread` 打 `markRead`,
+  `badgeCleared` 為 true 才呼叫 `markMessageRead`;後者只做本地標已讀 + `messagesGate.markMutated()`,
+  fire-and-forget 那段刪除。它的真雙生是桌面教練訊息頁,不是 member 通知。
+- **member 側**:`markRead`/`markAllRead` 仍是 mark-before-await 的樂觀 mutation,帶尾流入帳;R12 已把
+  mobile 的那一份併進來。
+
+R11/R12/R13 增補記的「`markMessageRead` 的 fire-and-forget 是既有裁決」自此不成立(使用者裁決 F5)。
+「在同一支 mutator 裡同時表達入帳與刻意不入帳 = 行為旗標寬介面」的警語仍然有效,也正是這一對沒有合併的
+原因。`markOrderPaid` 不受影響。

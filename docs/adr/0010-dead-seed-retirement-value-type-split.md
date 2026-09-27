@@ -200,3 +200,26 @@ C4 之後這句話的含意更精確：差異不再來自「哪個 facade 順手
 - **Task 7**：`coach/api.ts` 的 `myCoachProfile`（只剩自己的測試）與本地窄化 `ApiUser`。
 
 「死值不留死出口」照舊：上列轉出一律與其值同批移除，不留空殼 re-export。
+
+## 增補(2026-09-27,架構深化 R14):三個 store 種子退役
+
+完整背景見 `docs/adr/0024` §4。R14 Task 4(候選 F3,誠實開機)把 `notifications`、`pointsLedger`、
+mobile-admin `messages` 的開機值與 reset 值都改成 `[]`,三組種子因此失去 production 讀者。每個符號刪除前
+都照第 1 節重新 grep 全部消費者:
+
+- **`domain/member-app.ts`**:`NOTIFS_SEED`(連同只為它存在的 domain `Notification` interface)與
+  `POINTS_LEDGER`。**型別留下**:`LedgerEntry`/`LedgerType`,仍替 `member/points.ts` 背書(第 2 節判準)。
+  常數計數 11 → 9。
+- **`member/data.ts`**:`NOTIFS_SEED` 的收窄 facade(`NOTIFS_SEED as NOTIFS_SEED_BASE` import 與轉出)。
+- **`mobile-admin/data.ts`**:`MESSAGES`。**型別留下**:`MessageRow`。
+
+三組值逐字搬進測試專用的 `src/lib/testing/seed-fixtures.ts`,供測試 `store.set(fixture)` 灌一份有未讀、
+有明細的狀態。這是第 3 節「測試自帶 fixture」的延伸:夾具集中在 `$lib/testing`,production 檔不得 import
+它。同輪另有兩批死出口,同樣與其值同批移除:
+
+- **Task 2**:`mobile-admin/stores.ts` 的 `refreshMessages` 轉出(訊息頁改經 `messagesPageEntry`)。
+- **Task 5**:`mobile/stores.ts` 的 `applyCouponCode`/`chargeableLines`/`subscriptions` 轉出(`CartSheet`
+  的優惠碼套用與預覽收進 checkout 單例)。
+
+「已知後續」的 mobile-admin 種子只退了 `MESSAGES`。ops 四個集合與 `*_BASE` 仍是活種子,記為
+`docs/adr/0024` 的遞延。

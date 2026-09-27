@@ -481,3 +481,18 @@ R8 C4 增補與 `docs/adr/0018` §4 記的承接形,R13 Task 6 改了兩處:
   桌面 `OrderDialog` 與 mobile-admin `OrderSheet` 原本各自內嵌的 13 列訂單明細(有退款原因時 14 列),
   以結構型別 `OrderDetailSource` 同時吃 `Order` 與 `OrderRow`。不對應後端 enum、不產出 `Tone`,
   不算第七個顯示查表。
+
+## 增補(2026-09-27,架構深化 R14):Form 3 的前例改指 `LEAVE_STATUS`
+
+完整背景見 `docs/adr/0024` §4。本篇原文不改寫,以下以本節為準。
+
+§「三種 facade 形」第 3 點與「member-app 章程部分重開原文」都以 `NOTIFS_SEED` 為前例(domain 宣告處用
+`satisfies` 鎖住 tone 字面,facade 端才能純註記收窄而不需要斷言)。R14 Task 4(候選 F3)讓通知 store
+誠實開機為 `[]`,`NOTIFS_SEED` 失去 production 讀者,連同 `member/data.ts` 的收窄 facade 一併退役
+(`docs/adr/0010` 增補)。
+
+- **現存實例是 `LEAVE_STATUS`**:`domain/member-app.ts` 以 `satisfies Record<string, ['warning' |
+  'success' | 'error' | 'neutral', string]>` 宣告,`member/data.ts` 以 `Record<string, [Tone, string]>`
+  對同一參照純註記收窄。`domain/member-app.ts` 檔頭的 `Tone` 條款已改寫為「`LEAVE_STATUS` 為現存實例」。
+- Form 3 的定義與「satisfies 目標必須明列 tone 字面聯集」的陷阱(`docs/adr/0014` §1)不變。
+- `member/data.ts` 的收窄 re-assert 自此只剩 `UPCOMING`(`as` 斷言)與 `LEAVE_STATUS`/`LEVEL_TONE`。

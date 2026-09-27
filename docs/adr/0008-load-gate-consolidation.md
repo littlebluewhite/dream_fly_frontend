@@ -205,3 +205,20 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
   快照作廢並原地重抓。也就是說「無條件」描述的是 apply 那一步，世代穩定發生在上游的 `run()`。
   省略 `gen` 的 plain-flag 消費端（生產上目前除 `pageEntry()` 之外全部）語意逐字不變。完整判準與
   契約見 `docs/adr/0020`。
+
+## 增補(2026-09-27,架構深化 R14):`pageEntry()` 改由任何水合閘門供給
+
+完整背景見 `docs/adr/0024` §2、§3。上節末段寫 `hydrate.gen`「由 `session-gate` 的 `pageEntry()` 佈線」,
+並說 plain-flag 消費端「生產上目前除 `pageEntry()` 之外全部」。R14 起以下列為準:
+
+- **`pageEntry()` 住 `HydrationGate`**(Task 2,候選 F1):plain 閘門與 session 閘門都交出同一形的進場包
+  `{ fetch, refresh, hydrate: { flag, into, gen, pendingSettle } }`。session 閘門繼承它,`fetch`/`refresh`
+  自帶 epoch 核對。mobile-admin 的 ops 三頁、`CoachesScreen` 與訊息頁改寫成
+  `createLoadGate({ ...opsPageEntry })`/`createLoadGate({ ...messagesPageEntry })`,與通知頁同一條接法。
+- **`fetch` 與閘門的 `hydrate()` 共用在飛 GET**(Task 3,候選 F2):只併入同世代出發的那支。`refresh`
+  是不合併的另一支,load-gate 的 `refresh()`/`silentRefresh()` 本來就優先用它。
+- 本篇的 load-gate 公開介面、`hydrate` 選項語意與 `applyLoaded`/`applyRefreshed` 的重入重查都未被觸碰。
+  「plain-flag 消費端」自此指的是頁面自帶 writable、不經任何閘門的呼叫端。
+- **名稱**:上文提到的 `refreshMessages` 已退役(訊息頁改經 `messagesPageEntry`,重試走
+  load-gate 的 `refresh`);`refreshNotifications()` 更名為 `hydrateNotifications()`,仍是通知閘門的
+  `gate.hydrate`。`hydrateOps`/`refreshOps` 保留,供 mobile-admin 首頁與寫後重抓使用。

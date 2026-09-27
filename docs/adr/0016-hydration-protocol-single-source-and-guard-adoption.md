@@ -314,3 +314,36 @@ R13 架構審查的候選 07 提議反方向收斂:讓 session 閘門的 `pageEn
 目前以那一對接 load-gate 的有 5 個呼叫端(mobile-admin 的 4 個 `hydrateOps` 呼叫端與訊息頁),它們
 本來就拿不到這四項。收斂成一種接法的方向應是反過來:給 `HydrationGate` 加 `pageEntry()`,讓這 5 個
 呼叫端也改走 `hydrate` 選項。記為未來候選,本輪不動碼。
+
+## 增補(2026-09-27,架構深化 R14):決定一的「interface 零變動」被取代;附記 C5 被推翻;R13 候選落地
+
+完整背景見 `docs/adr/0024` §2、§3、§5。本篇原文不改寫,以下各點以本節為準。
+
+**1. 決定一的「`HydrationGate` interface 零變動」被取代,決定一本身不變。** R14 改了閘門的公開面:
+
+- `HydrationGate<T>` 改為泛型,公開面是 `hydrated`/`hydrate()`/`refresh()`/`invalidate()`/
+  `markMutated(tail?)`/`pageEntry()`。`mutationGen`、`pendingSettle` 與 `clearPendingTails` 退出公開面,
+  讀取器只經 `pageEntry().hydrate` 交出;清帳改由內部工廠 `createOwnedHydrationGate` 的
+  `ownerChanged()` 承擔,只給 session-gate 用。
+- `hydrate()` 與 `pageEntry().fetch` 共用在飛 GET(只併入同世代出發的那支);`invalidate()` 只翻旗
+  false。
+
+決定一的核心——不做 gate 互相委派、三決策點單源在 `HydrationCore`、重入防護(F1)/(F5)留在
+load-gate——原樣有效。`HydrationCore`、`fetchGenStable` 與 load-gate 的 `applyLoaded`/
+`applyRefreshed`/`run()` 本輪都沒有動。
+
+**2. 附記 C5 的「表單/預覽輸入留元件、deps 只有 `placeOrder`」被推翻。** R14 Task 5(候選 F4)把
+`code`/`usePoints`/`paymentMethod`(`checkout.form`)、`coupon`/`codeErr` 與預覽都搬進 controller,
+`confirmPay()` 不再收引數,deps 增為 `{ placeOrder, applyCouponCode, lines, points }`。理由:mobile 的
+controller 是活得比 `CartSheet` 久的單例,輸入留在 mount 級元件,付款中重開就會輸入歸零、付款狀態卻
+延續。附記其餘各點(0012 判準核對、0015/0003 劃界、對 0008 的取代裁決)不受影響。判準②的澄清見
+`docs/adr/0012` 增補。
+
+**3. R13 增補記的未來候選已落地。** R13 否決「`pageEntry()` 改交 store 自持那一對」,並把反方向——給
+`HydrationGate` 加 `pageEntry()`——記為未來候選。R14 Task 2(候選 F1)照做:5 個呼叫端(mobile-admin
+的 ops 三頁、`CoachesScreen`、訊息頁)改走 `createLoadGate({ ...xPageEntry })`,拿到四項保護。R11 增補
+第 1 點記的 `CoachesScreen` 佈線 `createLoadGate({ fetch: hydrateOps, refresh: refreshOps })` 與「多花
+一個 microtask」自此都不成立:guard 命中時同步 ready。
+
+**4. 名稱。** 決定二表格裡的 `hydrateSessionStores` 自 R14 起是 `$lib/store-warm` 的 `warmStores`
+(`docs/adr/0012` 增補)。

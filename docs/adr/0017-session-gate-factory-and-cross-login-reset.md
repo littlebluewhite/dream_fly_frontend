@@ -225,3 +225,52 @@ mobile-admin 登入頁同樣寫入它,identity key(`member.id`)就是 user id。
 - mobile-admin 訊息頁仍以 `{ fetch: hydrateMessages, refresh: refreshMessages }` 接 load-gate,不是
   `pageEntry()`。換帳號當下在飛的 `hydrateMessages` 會因 epoch 核對拋出,頁面落到 error 態、重試即恢復,
   與 `docs/adr/0019` C3 的語意一致。
+
+## 增補(2026-09-27,架構深化 R14):建構順序契約失效;seed teaser 條款消失;閘門收下合併與寫入鏈
+
+完整背景見 `docs/adr/0024` §2、§3、§4。本篇原文不改寫,以下各點以本節為準。
+
+### 1. 身分基準在建構當下決定,restored 開機零觸發;建構順序契約失效
+
+「決定」節的「內部建構順序為契約」(與 R9 增補補上的第 0 步)存在的原因是:restored session 開機時,
+訂閱的立即回呼會當場觸發 `onChange`。R14 Task 3(候選 F2)起,`createSessionCore` 的立即回呼只記
+`lastIdentity`(身分基準),不觸發 `onChange`、不推 epoch;restored 與訪客開機一律零觸發。
+
+- 建構期間不會呼叫任何 reset,宣告順序不再是契約;消費端(`profile.ts`、`coach/api.ts`)的「let 必須
+  宣告在前」註解一併退役。`session-gate.test.ts` 的「restored 開機單觸發」改寫為「零觸發」,另加
+  「reset 讀的 let 宣告在 factory 之後也不炸」。
+- `createSessionRefresher` 共用同一顆 core,所以 points/subscriptions 的 reset 在 restored 開機也不再跑。
+- 這靠的是本篇「reset 值 = 開機值」的保證:開機不重置,畫面也沒有差別。
+
+### 2. 「`reset` 值必須冪等」的 seed teaser 條款消失
+
+`mutate()` 節末段要求 reset 還原成開機初值(「store 帶 seed 開機 → reset 也要還原成 seed clone」),
+以免 restored 開機的重置抹掉通知角標的 seed teaser;R9 增補把 `NOTIFS_SEED` clone 當作這條規則的實例。
+R14 起兩個前提都不在了:
+
+- restored 開機不再觸發 reset(上一點)。
+- R14 Task 4(候選 F3,誠實開機):`notifications`、`pointsLedger`、mobile-admin `messages` 的開機值與
+  reset 值都是 `[]`,`NOTIFS_SEED`/`POINTS_LEDGER`/`MESSAGES` 種子退役(`docs/adr/0010` 增補)。角標在
+  暖機前空白,沒有 teaser 可抹。
+
+「reset 值 = 開機值」仍是規則,只是理由換成「開機不觸發也不會有差別」。R12 增補「reset 由共用閘門的
+`NOTIFS_SEED` clone 承擔」、R13 增補「mobile-admin 訊息 `reset` 回 `MESSAGES` 種子」兩句自此都讀作 `[]`。
+
+### 3. `createSessionGate` 的現況形狀
+
+- **`pageEntry()` 繼承自 `HydrationGate`**(R14 Task 2,候選 F1):本檔已把 `epochFetch` 當 fetch 餵給
+  水合閘門,繼承下來的進場包自帶 epoch 核對,本檔不再自己組。`SessionGate<T>` 只比 `HydrationGate<T>`
+  多 `mutate` 與 `queueWrite`。
+- **identity `onChange`** = `opts.reset()` + `owned.ownerChanged()`(內部工廠 `createOwnedHydrationGate`
+  交出:翻旗 false、丟在飛合併 GET、清尾流帳)+ 和解鏈與寫入鏈重置。R11 的 `clearPendingTails()` 一行
+  已併入 `ownerChanged()`。
+- **在飛合併**:`hydrate()` 與 `pageEntry().fetch` 共用在飛 GET(住 `hydration-gate.ts`)。R13 增補觀察
+  到的「`gate.hydrate()` 不合併併發呼叫」已關閉,`profile.ts` 與 `coach/api.ts` 的 `inflight` 刪除。
+- **`queueWrite(task, skipped)`**:寫入鏈收進閘門,語意逐字取自 `profile.ts` 原 `enqueue`。
+- **`invalidate()`**:和解失敗與 `coach/api.ts` 查無教練時的「翻旗 false」改走它,production 不再直寫旗標。
+
+消費者計數不變:六個 `createSessionGate` + 兩個 `createSessionRefresher`,共八個 `authStore` 訂閱。
+R13 增補的另一條觀察(mobile-admin 訊息頁以 `{ fetch: hydrateMessages, refresh: refreshMessages }` 接
+load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry })`,`refreshMessages` 退役。
+「刻意不把 session 維度深化進 `hydration-gate.ts`」的邊界原樣有效:`ownerChanged()` 是「資料擁有者換人」
+這個閘門自己的概念,誰換人、何時換人仍只有本檔知道。

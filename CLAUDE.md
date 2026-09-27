@@ -21,11 +21,16 @@ reports page (13 restored panels + the always-live revenue trend; see `docs/adr/
 on `mobile`. Mock data remains only in a
 handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
 of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
-read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), and the
-admin settings page's local-only login-device list. (The member profile — name/phone/birthday and the
+read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
+admin settings page's local-only login-device list, and the shell badges that have no backend feed
+(coach Topbar's `NOTIFS` bell, the hardcoded `badge: 3` on coach's 訊息中心 nav item, admin Topbar's
+「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`). (The member profile — name/phone/birthday and the
 notification preferences — is real on both `member` and `mobile` since Round 13: one module,
 `src/lib/member/profile.ts`, writes it via `PATCH /users/me`; fields the backend has no column for, such as
-member number, parent contact and avatar colour, were removed rather than faked — see `docs/adr/0023`.)
+member number, parent contact and avatar colour, were removed rather than faked — see `docs/adr/0023`.
+Since Round 14 shared stores boot honestly: the notifications and mobile-admin coach-messages stores behind
+the real badges start empty and show real counts once each surface's layout warms them, and the points
+ledger starts empty too, instead of showing seed data first — see `docs/adr/0024`.)
 Google OAuth login is wired for `member` and (since Round 4) `mobile` — `staff` and
 `mobile-admin` still have no Google option, because the backend's Google flow only ever grants the
 `member` role. See `docs/adr/0006` for the full inventory.

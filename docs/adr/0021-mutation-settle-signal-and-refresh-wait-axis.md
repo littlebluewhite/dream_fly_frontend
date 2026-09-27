@@ -307,3 +307,32 @@ hydrate 則被 post-await 的 mutation-wins 丟棄。故第 3 層兩條釘打的
 - 兩者一起移到 `src/lib/member/notifications.test.ts` 的 describe「markAllRead 的 allSettled 尾流」,
   斷言不變,並在刪除舊檔之前先對 member 模組跑綠。
 - member 側原有的那支第 3 層釘仍在同檔。
+
+## 增補(2026-09-27,架構深化 R14):`markMessageRead` 改為送完再寫;讀取器與清帳的新住所
+
+完整背景見 `docs/adr/0024` §2、§6。本篇原文不改寫,以下各點以本節為準。
+
+**1. 刻意不入帳名單:`markMessageRead` 仍不入帳,理由改變。** 原文寫它的 fire-and-forget 是既有裁決,
+入帳會讓 `refreshMessages()` 開始等已讀回條。R14 Task 6(候選 F5,使用者裁決)起:
+
+- mobile-admin `MessageThread` 改接 `messages-controller`,`markRead` 由 controller 的 `selectThread`
+  打出;`badgeCleared`(PATCH 的 ack)為 true 才呼叫 `markMessageRead(id)`。
+- `markMessageRead` 只做本地標已讀 + `messagesGate.markMutated()`,fire-and-forget 刪除。mark 發生在
+  PATCH **已落定之後**(送完再寫,同 `markOrderPaid` 與 `session-gate.mutate()`),沒有在飛尾流可入帳,
+  所以仍走無 `tail` 路徑。
+- `refreshMessages()` 已退役(`docs/adr/0020` 增補)。
+
+尾流入帳的呼叫點仍只有 `member/notifications.ts` 的 `markRead`/`markAllRead` 兩處。
+
+**2. 「佈線事實」第 2 層的新住所。** R14 Task 2(候選 F1)起:
+
+- `pageEntry()` 的 hydrate 包住 `hydration-gate.ts`,`pendingSettle` 是閘門閉包內同一支函式;它不再是
+  閘門的公開成員,只經 `pageEntry().hydrate.pendingSettle` 交出。
+- identity `onChange` 的 `gate.clearPendingTails()` 改為內部工廠 `createOwnedHydrationGate` 交出的
+  `ownerChanged()`:翻旗 false + 清尾流帳並喚醒全部等待者(R14 Task 3 再加丟掉在飛合併 GET)。誠實界線 ④
+  的語意(跨身分清帳、清帳不沖新帳、喚醒不搬運資料)逐字不變。
+- 機制本體的 `pendingSettle()` 探針改經 `pageEntry().hydrate.pendingSettle` 讀,斷言不變;第 2 層的恆等釘
+  改寫為「有尾流回 promise、靜止回 `undefined`」的行為釘,住 `hydration-gate.test.ts`。
+
+**3. 名稱。** 「測試落點」末段的 `refreshNotifications` 自 R14 起更名 `hydrateNotifications`(仍是
+`gate.hydrate`),該段論證不變。

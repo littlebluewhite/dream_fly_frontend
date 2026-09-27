@@ -391,3 +391,49 @@ R11 增補把 `checkout-controller` 列入 §2 雙生核可類時,記下兩個�
 只在 `freshCheckout` 時 `refreshPoints()`,同桌面。差異仍只在接線,機器零 diff。
 
 §1 的不變量一字未改。`docs/adr/0022` 記的 D2 張力(本篇 §1 vs `docs/adr/0019` C4 判準)本輪沒有重提。
+
+## 增補(2026-09-27,架構深化 R14):§1 身分釘與白名單退役、seam 轉出增減;§2 新增行動訊息雙生
+
+完整背景見 `docs/adr/0024` §1、§5、§6。本篇原文不改寫,以下各點以本節為準。
+
+### 1. §1:import 方向規則保留,身分釘與白名單退役
+
+R14 Task 1(候選 F6)。§1「不變量與守衛」寫的兩層守衛——`toBe` 同參照的 identity pins 與
+foundation-contracts 的源路徑白名單——都是為「測試 `vi.mock` 精確源路徑才是佈線證明」而存在。
+
+- **三個按路徑 mock `$lib/member/stores` 的測試**(`LeaveSheet`/`MakeupSheet`/`MyCourseDetail`)改用
+  `$lib/api/client` + `fakeRouter`,斷言打了哪個端點、帶什麼 body。佈線證明改由真端點給。
+- **退役**:`mobile/stores.test.ts` 的身分釘整段(R13 增補記的 27 個 `$lib/member/stores` 符號,加上
+  3 個 `member/checkout` 符號,共 30 個 `toBe`,以及 R13 §2 的結帳接線釘);整個 `mobile/auth.test.ts`
+  (2 個);`foundation-contracts.test.ts` 的 `ALLOWED` 白名單 it。
+- **保留**:四個 seam 檔,以及 import 方向掃描(mobile production 碼在四檔之外零 `$lib/member` import)。
+  §1 的不變量本身一字未改。
+- 「測試檔明文豁免」仍成立,但理由改寫:掃描的 walker 本來就排除測試檔,與測試 mock 什麼無關,
+  不再倚賴「mock 精確源路徑是佈線證明」這句話。
+- **`docs/adr/0022` 的 D2 張力就此解開**:§1 管的是 import 方向,保留;`docs/adr/0019` C4 判準句仍只
+  適用於 `data.ts` facade;真正退役的是身分釘與白名單。seam 的轉出本身不退役。見 `docs/adr/0024` §1。
+
+### 2. §1 seam 轉出增減
+
+- **新增**:`mobile/stores.ts` 自 `$lib/member/stores` 轉出 `hydrateNotifications`(R14 Task 4;原
+  `refreshNotifications` 更名,供 mobile layout 的暖機清單)。
+- **退役**(`docs/adr/0010`,死值不留死出口):`applyCouponCode`/`chargeableLines`/`subscriptions` 三個
+  轉出(R14 Task 5)。`CartSheet` 的優惠碼套用與可計費預覽收進 `checkout` 單例,單例的 deps 在
+  `stores.ts` 內部直接 import 這些來源。`orderErrorMessage` 轉出保留。
+- **`checkout` 單例的 deps 補齊**:`createCheckoutController({ placeOrder, applyCouponCode, lines:
+  derived([cart, subscriptions], … chargeableLines), points })`。
+- §1 原文「mine 單一接縫」提到的 `hydrateSessionStores`,自 R14 起是 `$lib/store-warm` 的
+  `warmStores`,並行形不變(`docs/adr/0012` 增補)。
+
+### 3. §2 雙生核可類新例:mobile-admin `MessageThread` 接回 `messages-controller`
+
+R14 Task 6(候選 F5),照 R10 B 案(`718844b`)的前例。三條件逐條核對:
+
+- **deps 完全相同**:`mobile-admin/api.ts` 補轉出 `createConversation`(並刪掉「刻意不轉出」的註解),
+  `MessageThread` 以 `{ getThread, sendMessage, markRead, getStudents, createConversation }` 建
+  controller,與桌面 `coach/messages/+page.svelte` 逐字相同。
+- **零行為旗標參數**:`messages-controller.ts` 與其測試零 diff。
+- **編排逐字重複**:原本的本地 getThread/sendMessage 狀態機退役。
+
+接線差異只在 adapter:`badgeCleared` 為 true 才呼叫 `markMessageRead(m.id)`(使用者裁決:等後端確認
+已讀才清角標);`sending` 防連點與失敗 toast 留在 `MessageThread`。判準②③④照舊一條不鬆。

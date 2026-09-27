@@ -376,3 +376,29 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
 - **`docs/adr/0019`**:C3 的成環論證完全失效(增補)。
 - **`docs/adr/0022`**:undo 那條已在 `157a70d` 修掉;防連點項關閉;`markOrderPaid` 改回傳 outcome;
   `CLASS_STATUS`/`buildCourseBody`/`prefSync` 的現況(增補)。
+
+## 增補(2026-09-27,架構深化 R14):兩條未來候選已關閉,及三處現況
+
+完整背景見 `docs/adr/0024`。本篇原文不改寫,以下各點以本節為準。
+
+### 1. 「已知、刻意遞延」的兩條未來候選已落地
+
+- **「未來候選:給 `HydrationGate` 加 `pageEntry()`」**:R14 Task 2(候選 F1)照做。`pageEntry()` 住
+  `HydrationGate`,mobile-admin 的 4 個 `hydrateOps` 呼叫端與訊息頁改寫成
+  `createLoadGate({ ...opsPageEntry })`/`createLoadGate({ ...messagesPageEntry })`,拿到「明確不做」
+  節列的四項保護。該節的否決(`pageEntry()` 不改交 store 自持那一對)原樣有效,這正是它指出的方向。
+- **「未來候選:把在飛 hydrate 去重收進 `createSessionGate`」**(連同上一條「`gate.hydrate()` 不合併
+  併發呼叫」):R14 Task 3(候選 F2)收進閘門,而且住在 `HydrationGate`——`hydrate()` 與
+  `pageEntry().fetch` 共用在飛 GET,只併入同世代出發的那支。`profile.ts` 與 `coach/api.ts` 的
+  `inflight`、`hydrateIdentity` 刪除。本篇寫的是「若出現第三處再說」;R14 重開的理由是那幾個 `let`
+  重抄的是閘門私有的 epoch 與在飛狀態,跟出現幾次無關。寫入鏈同批收成 `gate.queueWrite`。
+
+### 2. 三處現況校正
+
+- **§2 會員資料**:「`hydrateProfile()` 自帶 `inflight` 合併」與「單一寫入鏈」自 R14 起由閘門提供
+  (`hydrateProfile = gate.hydrate`,`setPref`/`saveProfile` 走 `gate.queueWrite`),語意逐字不變。
+- **§7 教練身分與訊息**:查無教練時「把 `gate.hydrated` 翻回 `false`」改走 `gate.invalidate()`;
+  `messagesGate` 的 `reset` 回 `[]`,不再是 `MESSAGES` 種子(R14 Task 4 誠實開機,`docs/adr/0010` 增補)。
+- **「結帳跨登入在飛窗口」擴大**:R14 Task 5(候選 F4)起結算輸入住 `checkout` 單例,付款中重開保留
+  優惠碼、點數折抵與預覽。A 付款在飛時 B 打開購物車,帶過去的除了付款狀態,還有這三樣。仍記為遞延
+  (`docs/adr/0024`)。

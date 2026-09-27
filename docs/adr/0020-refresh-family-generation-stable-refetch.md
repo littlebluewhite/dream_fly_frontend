@@ -260,3 +260,28 @@ R12 Task 3(`docs/adr/0022` §1)把 `mobile-admin/stores.ts` 的 `markOrderPaid` 
 - 所以「寫入 → 重抓」恰一次 fetch、快照照常套用,正是這條判準要守的形狀。
 
 行為變更第 3 條(`markOrderPaid` 在 `refreshOps()` 在飛期間不再閃回)依然成立。
+
+## 增補(2026-09-27,架構深化 R14):世代讀取器只經 `pageEntry()` 交出;`refreshMessages` 退役
+
+完整背景見 `docs/adr/0024` §2、§3。本篇原文不改寫,以下各點以本節為準。
+
+**1. 「三個整合點」第三點改寫。** 原文寫 `session-gate.ts` 的 `pageEntry()` 一行 `gen: gate.mutationGen`,
+`HydrationGate` 因此 additive 增一支唯讀的 `mutationGen(): number`。R14 Task 2(候選 F1)起:
+
+- `pageEntry()` 住 `HydrationGate` 本身,`hydrate.gen` 是閘門閉包內的 `() => mutationGen`。
+- `mutationGen` **不再是閘門的公開成員**,世代讀取器只經 `pageEntry().hydrate.gen` 交出。這仍是形 1
+  (世代由閘門持有、經讀取器交出),只是交出的出口收成一個。
+- 遞增仍只走 `markMutated()`。plain 閘門(mobile-admin 的 `opsGate`)的頁面自此也讀同一本世代帳,
+  不再只有 session 閘門的頁面。
+- 「測試落點」的 `mutationGen()` 唯讀單調薄釘改經 `pageEntry().hydrate.gen` 讀,斷言不變;第 2 層的
+  「`hydrate.gen` 是 `gate.mutationGen` 同一函式」恆等釘改寫為「`markMutated()` 之後 `hydrate.gen()`
+  +1」的行為釘,住 `hydration-gate.test.ts`。
+
+**2. hydrate 合併不是形 3。** R14 Task 3(候選 F2)讓 `hydrate()` 與 `pageEntry().fetch` 共用在飛 GET。
+它只共用同一次 GET,沒有把世代迴圈包進 fetch;refresh 族(`refresh()`、`pageEntry().refresh`)一律
+真抓、不合併,世代穩定重抓仍在 load-gate 的 `run()`/`silentRefresh()` 看得見的地方發生。形 3 的否決理由
+原樣有效。
+
+**3. 行為變更第 3 條的 `refreshMessages()`。** 該轉出已於 R14 Task 2 退役:訊息頁改寫成
+`createLoadGate({ ...messagesPageEntry })`,重試走 load-gate 的 `refresh`,同樣經 `fetchGenStable` 讀
+閘門的世代與尾流帳。「標記已讀不閃回」照舊成立。判準句、反例與兩支守恆/競態釘逐字不變。

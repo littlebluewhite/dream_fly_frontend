@@ -348,3 +348,38 @@ invalid{errors}`，驗證文案以 exported const（`COACH_*_ERROR`）住 module
 `checkout`，`CartSheet` 掛載時 `setOpen(true)`、卸載時 `setOpen(false)`，兩端都走邊沿語意。controller
 本身零 diff；「建構期即備妥可用 key」的機器面保證仍由 `checkout-controller.test.ts` 釘住（describe
 已改名，見 `docs/adr/0023` 測試對照表）。
+
+## 增補(2026-09-27,架構深化 R14):K7 重開、只剩殘餘;判準②的澄清;結帳 controller 收下結算輸入
+
+完整背景見 `docs/adr/0024` §4、§5。本篇原文不改寫,以下各點以本節為準。
+
+**1. K7 重開:「頁面顯式水合」改由 layout 的暖機清單落地,只剩 `getMine`/`getAccount` 的殘餘。**
+§4 遞延的理由是「呼叫端預期呼叫 getter 就會連帶水合共享 store」。R14 Task 4(候選 F3)核對後,這個前提
+對 `getDashboard` 已不成立:會員首頁沒有讀點數的地方,`refreshPoints` 沒有讀者;通知角標住在外殼,不該
+靠某一頁的 getter 順手水合。
+
+- `getDashboard` 刪掉整行水合,不再打 `/points/me`、`/notifications`。
+- 外殼角標改由各 surface 的 layout 宣告**暖機清單**,以身分為 key 呼叫:member/mobile 暖通知,
+  mobile-admin 教練分區暖訊息。每個身分只打一次 GET。
+- §4 的具名 helper `hydrateSessionStores` 升格為 `src/lib/store-warm.ts` 的公開 `warmStores(caller,
+  tasks)`,語意與 log 格式(`${caller}: ${label} hydrate 失敗`)逐字不變;`getPoints()` 的 fail-hard
+  不合流照舊。
+- **K7 殘餘**:`getMine`(候補清單 + 我的請假,並行形)與 `getAccount`(點數 + 訂閱)仍順手水合,改呼叫
+  `warmStores`。它們服務的是所在那一頁自己的讀取,本輪不動。
+
+**2. 判準②的澄清:注入唯讀資料來源不是行為旗標。** R14 Task 5(候選 F4)的
+`CheckoutControllerDeps` 是 `{ placeOrder, applyCouponCode, lines: Readable<ChargeableLine[]>,
+points: Readable<number> }`。判準②要擋的是 `mode`/`variant` 這類切換內部控制流的選項;`lines`/`points`
+是資料,不是開關,前例是 `attendance-controller` 的 `now`(壁鐘讀取)。R11 增補寫的「deps 仍只有
+`placeOrder`」自此不成立;判準③④不受影響:outcome 詞彙不變,controller 仍零 import toast 與錯誤文案,
+`codeErr` 的文字來自注入的 `applyCouponCode`。
+
+**3. `checkout-controller` 收下結算輸入與預覽。** `checkout.form`(`code`/`usePoints`/`paymentMethod`)
+與快照裡的 `coupon`/`codeErr`/`preview`/`hasChargeable` 都住 controller;`confirmPay()` 不再收引數,
+`ConfirmPayInput` 刪除。freshCheckout 重置 form 與 coupon/codeErr,resumedInFlight 全部保留。
+coupon/codeErr 的寫入者是 `applyCode()`、`clearCodeErr()`、`removeCoupon()` 與 freshCheckout 重置四個。
+`removeCoupon()` 是實作時補的:桌面「移除」連結要清掉已套用的優惠碼與輸入框,而 `applyCode()` 對空輸入
+刻意 no-op。元件不再直接寫 coupon。
+
+**4. 名冊與雙生。** 單頁 controller 名冊仍是 8 例。`messages-controller` 的呼叫端 1 → 2:mobile-admin
+`MessageThread` 經 `docs/adr/0014` §2 的雙生核可類接上,deps 與桌面逐字相同(見該篇增補)。

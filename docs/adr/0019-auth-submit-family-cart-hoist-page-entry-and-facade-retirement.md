@@ -330,3 +330,33 @@ R12 拿掉了前一半;R13 Task 3 拿掉了後一半:
 `mobile/api.ts` 自此**零** `mobile/stores.ts` import,`stores ⇄ api` 這條邊不存在。C3「葉模組、不得
 re-export」那段論證因此沒有任何殘餘前提;日後若有 mobile 模組想從 `stores.ts` 轉出,不必再為這個環
 另開葉模組。`pageEntry()` 的交付形狀與「epoch 知識只住 `session-gate.ts`」的判準不受影響。
+
+## 增補(2026-09-27,架構深化 R14):C3 的進場包下移到水合閘門;C4 與 `docs/adr/0014` 的張力已解
+
+完整背景見 `docs/adr/0024` §1、§2。本篇原文不改寫,以下各點以本節為準。
+
+### 1. C3:`pageEntry()` 自 `SessionGate` 下移到 `HydrationGate`
+
+R14 Task 2(候選 F1)把 `PageEntry<T>` 與 `pageEntry()` 搬進 `src/lib/hydration-gate.ts`。原因是
+mobile-admin 的 ops 頁接的是 plain 閘門,進場包若只住 session 閘門,它們只能拿那一對接 load-gate,
+拿不到 `hydrate` 選項才有的四項保護。
+
+- **交付形狀**:`{ fetch, refresh, hydrate: { flag, into, gen, pendingSettle } }`。`refresh` 是 R14
+  Task 3 加的不合併那支;`fetch` 與閘門的 `hydrate()` 共用在飛 GET。
+- **epoch 知識仍只住 `session-gate.ts`**:它把 `epochFetch` 當 fetch 餵給水合閘門,繼承下來的進場包
+  `fetch`/`refresh` 都自帶 epoch 核對。「零新程式路徑」原樣成立。`PageEntry` 對 load-gate 的依賴仍是
+  `import type`,只是住所換到 `hydration-gate.ts`。
+- C3 所記「建構順序契約補上第 0 步」已隨 R14 Task 3 的「身分基準在建構當下決定」失效(`docs/adr/0017`
+  增補)。
+- **測試守衛的改寫**:C3 的「pageEntry 頁面進場包」describe 裡,flag/into/gen/pendingSettle 的同參照
+  釘改寫為 `hydration-gate.test.ts` describe「pageEntry(plain gate)」的行為釘(`markMutated()` 之後
+  `hydrate.gen()` +1;`hydrate.pendingSettle()` 有尾流回 promise、靜止回 `undefined`),spread 整合釘
+  一併搬過去。`session-gate.test.ts` 只留 epoch 專屬的 stale/retry 兩支,另加「session 閘門的
+  `pageEntry().fetch` 帶 epoch 核對」(真 load-gate、在飛登出 → error 態、store 不被寫)。
+
+### 2. C4 與 `docs/adr/0014` 的張力:已解
+
+R12 增補把「C4 判準句是否延伸到 `mobile/stores.ts` 的 store/動作純轉手」記為張力(`docs/adr/0022` D2)。
+R14 Task 1(候選 F6)的答案:**C4 判準句仍只適用於 `data.ts` facade**;`docs/adr/0014` §1 管的是 import
+方向,保留;真正退役的是身分釘與源路徑白名單——它們是「`vi.mock` 攔得到」的接線證明,三個按路徑 mock
+的測試改走 fetch adapter 之後失去對象。seam 的轉出本身不退役,判準句的適用範圍不必擴大。

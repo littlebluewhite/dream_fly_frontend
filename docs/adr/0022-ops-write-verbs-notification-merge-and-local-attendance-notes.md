@@ -313,3 +313,22 @@ seam,seam 的可見性收益只落在 production import 面。
   `admin/data.ts` 的 `CATS` 為單一來源。
 - **§7 的 `prefSync` 單例**:隨 `pref-sync.ts` 退役,偏好寫入改走 `$lib/member/profile` 的 `setPref`,
   與 `saveProfile` 共用一條寫入鏈。「先水合再編輯」由該 module 結構保證。
+
+## 增補(2026-09-27,架構深化 R14):D2 張力已解
+
+完整背景見 `docs/adr/0024` §1。本篇原文不改寫,以下以本節為準。
+
+「D2 與 `docs/adr/0014` 轉手規則 vs `docs/adr/0019` 純轉手判準的張力」一節留下的問題——0019 判準句的
+「型別事實」軸是否也適用於 0014 §1 以「效應/動作」軸決定的 store 轉手——R14 Task 1(候選 F6)給出答案:
+
+- **`docs/adr/0014` §1 管的是 import 方向**:mobile production 碼只經四個 seam 檔碰 `$lib/member`。
+  這條保留,由 foundation-contracts 的 import 方向掃描釘住。
+- **`docs/adr/0019` C4 判準句仍只適用於 `data.ts` facade**,不延伸到 `mobile/stores.ts` 的 store/動作
+  轉手。兩條判準看的是不同的東西,不必排優先序。
+- **真正退役的是身分釘和白名單**。該節末句已點出:測試本來就 `vi.mock` 源頭而非 seam,seam 的收益只
+  落在 production import 面。R14 把最後三個按路徑 mock `$lib/member/stores` 的測試改走 fetch adapter,
+  「mock 精確源路徑是佈線證明」失去對象,`mobile/stores.test.ts` 的 30 個 `toBe` 身分釘、
+  `mobile/auth.test.ts` 的 2 個與 `ALLOWED` 白名單一併刪除。
+
+seam 的轉出本身不退役。審查候選 07 當年要消除的「每收斂一對雙生就得 re-export + 身分釘 + 白名單三檔
+同改」,自此只剩 re-export 一檔。
