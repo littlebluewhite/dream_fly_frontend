@@ -49,9 +49,11 @@ afterEach(() => {
 
 describe('mobile-admin/admin/orders 頁', () => {
 	it('loading 分支顯示骨架(data-testid="orders-skeleton")', () => {
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		let release!: (e: Error) => void;
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise((_, rej) => (release = rej)));
 		const { container } = render(OrdersPage);
 		expect(container.querySelector('[data-testid="orders-skeleton"]')).not.toBeNull();
+		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('async 水合後顯示 $orders store 的訂單(相異 fixture)與本月已收金額', async () => {

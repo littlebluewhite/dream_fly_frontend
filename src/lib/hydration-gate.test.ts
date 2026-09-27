@@ -50,7 +50,7 @@ describe('createHydrationGate', () => {
 
 		const hydratePromise = gate.hydrate(); // in-flight
 		gate.markMutated(); // mutation 發生
-		gate.hydrated.set(false); // 和解失敗把旗標翻回 false(可重試)——不可因此拆掉 mutation-wins
+		gate.invalidate(); // 和解失敗把旗標翻回 false(可重試)——不可因此拆掉 mutation-wins
 
 		d.resolve({ v: 1 });
 		await hydratePromise;
@@ -208,7 +208,7 @@ describe('createHydrationGate', () => {
 	it('mutation 世代(經 pageEntry().hydrate.gen 讀):唯讀單調——只有 markMutated 推進,hydrate/refresh 不動它,旗標翻回 false 也不倒退', async () => {
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const gate = createHydrationGate({ fetch, apply: () => {} });
-		const gen = gate.pageEntry().hydrate.gen!;
+		const gen = gate.pageEntry().hydrate.gen;
 
 		expect(gen()).toBe(0);
 		await gate.hydrate();
@@ -308,7 +308,7 @@ describe('createHydrationGate', () => {
 		gate.markMutated(t1.promise);
 		// 探針:比 refresh 早一步入列的同批等待者,它的 resolve 鏈因此恆比 refresh 的早一拍
 		// ——回呼執行的時點正落在上述窗口內。
-		const probe = gate.pageEntry().hydrate.pendingSettle!();
+		const probe = gate.pageEntry().hydrate.pendingSettle();
 		let fetchesWhenT3Landed = -1;
 		void probe?.then(() => {
 			fetchesWhenT3Landed = fetch.mock.calls.length;
@@ -406,7 +406,7 @@ describe('createHydrationGate', () => {
 	it('pendingSettle(經 pageEntry().hydrate.pendingSettle 讀):靜止時同步回 undefined(不得回 resolved promise——多一個 microtask 會鬆掉在飛判準),有未 settle 尾流才回 promise', async () => {
 		const tail = createDeferred<void>();
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
-		const pendingSettle = gate.pageEntry().hydrate.pendingSettle!;
+		const pendingSettle = gate.pageEntry().hydrate.pendingSettle;
 
 		expect(pendingSettle()).toBeUndefined(); // 開機靜止
 		gate.markMutated();
@@ -436,6 +436,134 @@ describe('createHydrationGate', () => {
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(apply).toHaveBeenCalledWith({ v: 1 });
 		expect(get(gate.hydrated)).toBe(true);
+	});
+});
+
+describe('hydrate 合併(R14 F2)', () => {
+	/* F2:hydrate() 與 pageEntry().fetch 共用同一支在飛 GET——子頁 onMount 先於 layout,
+	 * 暖機與頁面載入必然同時水合,不合併就打兩次 GET。只共用 GET,沒有世代迴圈(不是 ADR-0020
+	 * 否決的形 3);refresh 族一律真抓、不併入。 */
+
+	it('併發兩次 hydrate() 只 fetch 一次、apply 一次', async () => {
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn(() => d.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const p1 = gate.hydrate();
+		const p2 = gate.hydrate();
+		d.resolve({ v: 1 });
+		await Promise.all([p1, p2]);
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(get(gate.hydrated)).toBe(true);
+	});
+
+	it('pageEntry().fetch(頁面 load-gate)與 hydrate()(暖機)併發 → 只 fetch 一次、apply 一次', async () => {
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn(() => d.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+		const page = createLoadGate({ ...gate.pageEntry() });
+
+		const pPage = page.load();
+		const pWarm = gate.hydrate();
+		d.resolve({ v: 1 });
+		await Promise.all([pPage, pWarm]);
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(get(page)).toBe('ready');
+		page.destroy();
+	});
+
+	it('refresh 族不併入在飛的 hydrate:gate.refresh() 與 pageEntry().refresh 都真抓', async () => {
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d.promise).mockResolvedValue({ v: 2 });
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+
+		const pHydrate = gate.hydrate(); // 在飛
+		await gate.refresh();
+		await gate.pageEntry().refresh();
+		expect(fetch).toHaveBeenCalledTimes(3);
+
+		d.resolve({ v: 1 });
+		await pHydrate;
+	});
+
+	it('在飛的 hydrate reject 之後,下一次 hydrate 重新 GET(合併的 promise settle 即清掉)', async () => {
+		const fetch = vi.fn().mockRejectedValueOnce(new Error('網路失敗')).mockResolvedValueOnce({ v: 1 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		await expect(gate.hydrate()).rejects.toThrow('網路失敗');
+		await gate.hydrate();
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+	});
+
+	it('出發後有 mutation 的在飛 GET 不借給之後進場的 hydrate(旗標被 invalidate 翻回 false 也一樣)——舊快照不得蓋掉 mutation', async () => {
+		const dOld = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(dOld.promise).mockResolvedValueOnce({ v: 2 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const pOld = gate.hydrate(); // 世代 0 出發
+		gate.markMutated();
+		gate.invalidate(); // 和解失敗:旗標翻回 false
+		const pNew = gate.hydrate(); // 世代 1 進場:不得併入世代 0 的那支
+
+		dOld.resolve({ v: 1 });
+		await Promise.all([pOld, pNew]);
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+	});
+});
+
+describe('invalidate()(R14 F2)', () => {
+	it('只翻旗 false:之後 hydrate 重新真抓', async () => {
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+		await gate.hydrate();
+
+		gate.invalidate();
+		expect(get(gate.hydrated)).toBe(false);
+		await gate.hydrate();
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('不碰世代帳與尾流帳', () => {
+		const tail = createDeferred<void>();
+		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
+		const entry = gate.pageEntry();
+		gate.markMutated(tail.promise);
+		const gen = entry.hydrate.gen();
+
+		gate.invalidate();
+
+		expect(entry.hydrate.gen()).toBe(gen);
+		expect(entry.hydrate.pendingSettle()).toBeInstanceOf(Promise); // 尾流仍在帳上
+	});
+
+	it('不碰在飛合併:同世代 invalidate 之後進場的 hydrate 仍併入在飛那支', async () => {
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn(() => d.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const p1 = gate.hydrate();
+		gate.invalidate();
+		const p2 = gate.hydrate();
+		d.resolve({ v: 1 });
+		await Promise.all([p1, p2]);
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -484,10 +612,10 @@ describe('pageEntry(plain gate)', () => {
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
 		const entry = gate.pageEntry();
 
-		const before = entry.hydrate.gen!();
+		const before = entry.hydrate.gen();
 		gate.markMutated();
 
-		expect(entry.hydrate.gen!()).toBe(before + 1);
+		expect(entry.hydrate.gen()).toBe(before + 1);
 	});
 
 	it('hydrate.pendingSettle 讀的是閘門自己的尾流帳:有尾流回 promise,靜止回 undefined', async () => {
@@ -495,14 +623,14 @@ describe('pageEntry(plain gate)', () => {
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
 		const entry = gate.pageEntry();
 
-		expect(entry.hydrate.pendingSettle!()).toBeUndefined();
+		expect(entry.hydrate.pendingSettle()).toBeUndefined();
 		gate.markMutated(tail.promise);
-		const wait = entry.hydrate.pendingSettle!();
+		const wait = entry.hydrate.pendingSettle();
 		expect(wait).toBeInstanceOf(Promise);
 
 		tail.resolve();
 		await wait;
-		expect(entry.hydrate.pendingSettle!()).toBeUndefined();
+		expect(entry.hydrate.pendingSettle()).toBeUndefined();
 	});
 
 	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {

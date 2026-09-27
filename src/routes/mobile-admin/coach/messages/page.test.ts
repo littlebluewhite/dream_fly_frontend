@@ -32,9 +32,11 @@ afterEach(() => {
 
 describe('mobile-admin/coach/messages 頁', () => {
 	it('loading 分支顯示骨架(data-testid="messages-skeleton")', () => {
-		vi.mocked(getMessages).mockReturnValue(new Promise(() => {}));
+		let release!: (e: Error) => void;
+		vi.mocked(getMessages).mockReturnValue(new Promise((_, rej) => (release = rej)));
 		const { container } = render(MessagesPage);
 		expect(container.querySelector('[data-testid="messages-skeleton"]')).not.toBeNull();
+		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('async 水合後顯示 $messages store 的訊息(相異 fixture)', async () => {

@@ -56,10 +56,7 @@ async function fetchMe(): Promise<CoachIdentity> {
 	return { user, coach: coaches.find((c) => c.user_id === user.id) ?? null };
 }
 
-// 以下兩個 let 必須宣告在 createSessionGate 之前:restored session 開機時 gate 建構當下
-// 就會呼叫 reset(見 session-gate 的建構順序契約)。
 let identity: CoachIdentity | null = null;
-let inflight: Promise<void> | null = null;
 
 /** 每個登入身分只解析一次;換帳號/登出(authStore identity 變更)即清空,在飛的舊回應由
  *  閘門的 epoch 核對作廢。 */
@@ -70,28 +67,17 @@ const gate = createSessionGate<CoachIdentity>({
 	},
 	reset: () => {
 		identity = null;
-		inflight = null;
 	}
 });
 
-/** 併發呼叫共用同一支在飛解析(gate.hydrate 本身不去重)。 */
-function hydrateIdentity(): Promise<void> {
-	if (!inflight) {
-		const p: Promise<void> = gate.hydrate().finally(() => {
-			if (inflight === p) inflight = null;
-		});
-		inflight = p;
-	}
-	return inflight;
-}
-
-/** 教練身分(快取命中不打 API)。沒有教練檔案時把 hydrated 翻回 false 再拋
- *  CoachNotFoundError——管理員綁定教練檔案後,使用者按重試就會重新解析。 */
+/** 教練身分(快取命中不打 API;併發呼叫共用同一支在飛解析——閘門的 hydrate 合併)。沒有
+ *  教練檔案時 invalidate 再拋 CoachNotFoundError——管理員綁定教練檔案後,使用者按重試就會
+ *  重新解析。 */
 async function requireCoach(): Promise<{ user: ApiUser; coach: ApiCoach }> {
-	await hydrateIdentity();
+	await gate.hydrate();
 	const me = identity;
 	if (!me?.coach) {
-		gate.hydrated.set(false);
+		gate.invalidate();
 		throw new CoachNotFoundError();
 	}
 	return { user: me.user, coach: me.coach };

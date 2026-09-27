@@ -2,7 +2,7 @@
  * onSessionReset 退役,pageEntry 進場包入列)。
  *
  * 泛型 session 協定的**單源**測試:F1 登出重置 / P1′ 在飛作廢 / P1″ A→B 直換 /
- * mutate 在飛丟棄 / 訪客·restored 開機觸發次數 / F2 序列化可重試和解鏈家族 /
+ * mutate 在飛丟棄 / 訪客·restored 開機零觸發 / F2 序列化可重試和解鏈家族 / queueWrite 寫入鏈 /
  * refresher 無條件套用 + 靜默丟棄 / pageEntry 進場包。六個 domain store 各自只留薄
  * adapter 釘(證明本 store 已註冊 + endpoint/writeBack 接對),不再逐檔手抄整套協定
  * 鏡射(原 checkout-api/leave-requests-api 兩檔的深層鏡射家族已移入本檔)。
@@ -61,7 +61,7 @@ beforeEach(async () => {
 	localStorage.clear();
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockResolvedValue(undefined); // logout 的 best-effort revoke .catch 安全
-	// 每個 it 從登出態起跑:之後新建的 factory,其立即回呼身分 null == baseline,不誤觸 onChange。
+	// 每個 it 從登出態起跑:之後新建的 factory 以 null 為身分基準(建構當下決定)。
 	await authStore.logout();
 });
 
@@ -254,29 +254,122 @@ describe('createSessionGate — session 家族', () => {
 		expect(get(store)).toEqual([{ id: 'b' }]);
 	});
 
-	it('訪客開機零觸發:未登入下建立 factory,立即回呼身分 null == baseline,reset 不觸發', () => {
+	it('訪客開機零觸發:未登入下建立 factory,身分基準 null,reset 不觸發', () => {
 		// beforeEach 已 await logout,authStore 為登出態。
 		const reset = vi.fn();
 		createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset });
 		expect(reset).not.toHaveBeenCalled();
 	});
 
-	it('restored 開機單觸發:已登入下建立 factory 不炸(建構順序契約)+ 立即回呼觸 reset 恰一次(值冪等)', async () => {
+	it('restored 開機零觸發:已登入下建立 factory,建構當下只記身分基準——reset 不觸發、store 保留開機值', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES }));
 		await authStore.login('a@dreamfly.test', 'pw'); // 先登入 → restored session 態
 
 		const reset = vi.fn();
 		const store = writable<Item[]>([{ id: 'seed' }]); // 開機帶 seed
-		// 建構期:createHydrationGate → chain → core 訂閱,立即回呼觸 onChange 時 gate/chain 已存在,不炸。
 		const gate = createSessionGate<Item[]>({
 			fetch: async () => [],
 			apply: (d) => store.set(d),
-			reset: () => { reset(); store.set([{ id: 'seed' }]); } // 值冪等:seed → seed clone
+			reset: () => { reset(); store.set([]); }
 		});
 
-		expect(reset).toHaveBeenCalledTimes(1); // 立即回呼恰一次
+		expect(reset).not.toHaveBeenCalled(); // 身分基準 = 建構當下的身分,零觸發
 		expect(get(gate.hydrated)).toBe(false);
-		expect(get(store)).toEqual([{ id: 'seed' }]); // 首繪 teaser 保留
+		expect(get(store)).toEqual([{ id: 'seed' }]);
+	});
+
+	it('restored 開機:reset 讀的 let 宣告在 factory 之後也不炸(建構期不呼叫 reset,無 TDZ)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
+		await authStore.login('a@dreamfly.test', 'pw');
+
+		const gate = createSessionGate<Item[]>({
+			fetch: async () => [],
+			apply: () => {},
+			reset: () => { resets += 1; }
+		});
+		let resets = 0; // 宣告在 factory 之後
+
+		expect(get(gate.hydrated)).toBe(false);
+		await authStore.logout(); // 真的換身分才觸發
+		expect(resets).toBe(1);
+	});
+
+	it('A 的 hydrate 在飛時換成 B → B 的 hydrate 重新 GET(不併入 A 那支),套用 B 的清單', async () => {
+		const dA = createDeferred<Item[]>();
+		let logins = 0;
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({
+			'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
+			'GET /list': () => (++gets === 1 ? dA.promise : [{ id: 'b' }])
+		}));
+		const store = writable<Item[]>([]);
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		await authStore.login('a@dreamfly.test', 'pw');
+		const pA = gate.hydrate(); // A 在飛
+		await authStore.login('b@dreamfly.test', 'pw'); // A→B 直換
+
+		await gate.hydrate(); // B
+		expect(gets).toBe(2);
+		expect(get(store)).toEqual([{ id: 'b' }]);
+
+		dA.resolve([{ id: 'a' }]);
+		await expect(pA).rejects.toThrow(); // A 那支落地即作廢
+		expect(get(store)).toEqual([{ id: 'b' }]);
+	});
+});
+
+describe('createSessionGate — queueWrite 寫入鏈', () => {
+	it('排隊中換帳號 → 輪到時回 skipped、task 不執行', async () => {
+		let logins = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
+		await authStore.login('a@dreamfly.test', 'pw');
+
+		const d = createDeferred<string>();
+		const second = vi.fn(async () => 'ran');
+		const p1 = gate.queueWrite(() => d.promise, 'skipped');
+		const p2 = gate.queueWrite(second, 'skipped'); // 排在 p1 後面
+		await authStore.login('b@dreamfly.test', 'pw');
+		d.resolve('first');
+
+		await expect(p1).resolves.toBe('first');
+		await expect(p2).resolves.toBe('skipped');
+		expect(second).not.toHaveBeenCalled();
+	});
+
+	it('stale() 看得見執行中途的換帳號', async () => {
+		let logins = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
+		await authStore.login('a@dreamfly.test', 'pw');
+
+		const d = createDeferred<void>();
+		const seen: boolean[] = [];
+		const p = gate.queueWrite(async (stale) => {
+			seen.push(stale());
+			await d.promise;
+			seen.push(stale());
+			return 'done';
+		}, 'skipped');
+		await Promise.resolve();
+		await authStore.login('b@dreamfly.test', 'pw');
+		d.resolve();
+
+		await expect(p).resolves.toBe('done');
+		expect(seen).toEqual([false, true]);
+	});
+
+	it('A 的寫入卡住不影響 B:換帳號即重置寫入鏈', async () => {
+		let logins = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
+		await authStore.login('a@dreamfly.test', 'pw');
+
+		void gate.queueWrite(() => new Promise<string>(() => {}), 'skipped'); // A 的 PATCH 掛死
+		await authStore.login('b@dreamfly.test', 'pw');
+
+		await expect(gate.queueWrite(async () => 'b-saved', 'skipped')).resolves.toBe('b-saved');
 	});
 });
 

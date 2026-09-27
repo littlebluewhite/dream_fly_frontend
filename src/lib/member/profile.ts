@@ -9,8 +9,8 @@
  *
  * 結構保證:
  *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(修掉 prefs 與
- *    profile 跨登入殘留)。併發的 hydrateProfile() 共用同一支在飛 GET。
- *  - 所有 PATCH 走同一條寫入鏈 writeChain;每一筆輪到時:session 變了就跳過 →
+ *    profile 跨登入殘留)。併發的 hydrateProfile() 共用同一支在飛 GET(閘門的 hydrate 合併)。
+ *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite;每一筆輪到時:session 變了就跳過 →
  *    await 水合(「寫前先水合」不再是呼叫端的義務)→ gate.mutate(PATCH, ...)。
  *  - 後端對 preferences 是整包覆寫,送出時 = 後端原始物件 + 本地 4 鍵,前端不認識的
  *    鍵也保得住。
@@ -121,12 +121,6 @@ export function profileEditError(edit: ProfileEdit, current: MemberProfile | nul
 }
 
 /* ---- 狀態 ---- */
-// 以下三個 let 必須宣告在 createSessionGate 之前:restored session 開機時 gate 建構當下
-// 就會呼叫 reset(見 session-gate 的建構順序契約)。
-let session = 0; // 本模組的 identity 世代:reset 一次 +1,寫入鏈用它判斷「排隊時的人還在不在」
-let writeChain: Promise<void> = Promise.resolve();
-let inflight: Promise<void> | null = null;
-
 const me = writable<ApiMe | null>(null);
 const prefsStore = writable<Prefs>({ ...PREFS_DEFAULT });
 
@@ -147,37 +141,13 @@ const gate = createSessionGate<ApiMe>({
 	reset: () => {
 		me.set(null);
 		prefsStore.set({ ...PREFS_DEFAULT });
-		session += 1;
-		writeChain = Promise.resolve(); // 舊身分卡住的寫入不得堵住新身分的鏈
-		inflight = null;
 	}
 });
 
 /** 觸發水合(每個 identity 只 GET 一次;併發呼叫共用同一支在飛 GET)。失敗原樣拋出,
  *  下次呼叫會重試——要 fail-hard 的呼叫端(帳戶頁 getAccount)直接 await,背景水合的
  *  呼叫端自行 catch。 */
-export function hydrateProfile(): Promise<void> {
-	if (!inflight) {
-		const p: Promise<void> = gate.hydrate().finally(() => {
-			if (inflight === p) inflight = null;
-		});
-		inflight = p;
-	}
-	return inflight;
-}
-
-/** 排進寫入鏈;輪到時 session 已換就回 skipped、不執行。task 拿到 stale() 供失敗處理
- *  判斷(換帳後不得回滾/重抓到新身分身上)。 */
-function enqueue<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R> {
-	const mine = session;
-	const stale = () => mine !== session;
-	const run = writeChain.then(() => (stale() ? skipped : task(stale)));
-	writeChain = run.then(
-		() => {},
-		() => {}
-	);
-	return run;
-}
+export const hydrateProfile = gate.hydrate;
 
 function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {
 	return gate.mutate(() => api<ApiMe>('/users/me', { method: 'PATCH', body: JSON.stringify(body) }), writeBack);
@@ -191,7 +161,7 @@ export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 	const before = get(prefsStore)[k];
 	const wasHydrated = get(gate.hydrated);
 	prefsStore.update((p) => ({ ...p, [k]: v }));
-	return enqueue<PrefSetOutcome>(async (stale) => {
+	return gate.queueWrite<PrefSetOutcome>(async (stale) => {
 		try {
 			await hydrateProfile();
 			// 切換發生在水合落地之前:水合的 apply 已用後端值蓋掉這次樂觀切換,補回。
@@ -217,10 +187,10 @@ export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 /** 存個人資料(姓名/電話/生日/偏好)。不做樂觀更新;只送與目前值不同的欄位,全部相同
  *  就不發請求;birth 為 '' 送 null(後端 double-option:顯式清空)。偏好有改時送整包。 */
 export function saveProfile(edit: ProfileEdit): Promise<ProfileSaveOutcome> {
-	return enqueue<ProfileSaveOutcome>(async () => {
+	return gate.queueWrite<ProfileSaveOutcome>(async () => {
 		try {
 			await hydrateProfile();
-			const cur = get(me)!; // 水合成功且同一 session(enqueue 已核對)→ 必有值
+			const cur = get(me)!; // 水合成功且同一 session(queueWrite 已核對)→ 必有值
 			const invalid = profileEditError(edit, toProfile(cur));
 			if (invalid) return { kind: 'failed', error: new Error(invalid) };
 

@@ -31,6 +31,11 @@
  * 註解);後者是 await-then-write,天生沒有「寫回時尾流仍在飛」的窗口,不需要入帳(R11 的
  * 缺陷只在四個 mark-before-await 的通知域呼叫點)。
  *
+ * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
+ * session 世代收進閘門——合併住 HydrationGate(hydrate 與 pageEntry().fetch 共用在飛 GET),
+ * 寫入鏈住本檔(queueWrite)。身分基準改在建構當下決定:restored 開機零觸發,建構順序契約
+ * 與消費端「let 必須宣告在前」的註解一併退役。
+ *
  * 座落位置:authStore 與 domain store 之間。刻意**不**深化 hydration-gate——後者被
  * ~49 頁全 surface 的 load-gate 消費(含 staff 面,其 identity 源非 member authStore),
  * 若把 member auth 維度打進那顆 core,等於把錯向依賴灌進 repo 最寬的 seam;且
@@ -52,9 +57,9 @@ import { createOwnedHydrationGate, type HydrationGate } from '$lib/hydration-gat
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
  * 這唯一決策收成一處。
  *
- * baseline 從 null 起 —— restored session 開機時 subscribe 的立即回呼會以「已登入」
- * 身分觸發一次 onChange(與現行 waitlist/leave 的模組級訂閱行為逐字相同);訪客開機
- * 身分為 null == baseline,零觸發。identity key = loggedIn ? (member?.id ?? '') : null
+ * 身分基準在建構當下決定(R14 F2):subscribe 的立即回呼只記 lastIdentity、不觸發
+ * onChange——restored 與訪客開機一律零觸發(ADR-0017 的「reset 值 = 開機值」保證畫面無差別),
+ * 故建構期間不會呼叫任何 reset,呼叫端的 let 宣告在哪都不炸。identity key = loggedIn ? (member?.id ?? '') : null
  * (現行慣例逐字:未登入為 null,登入但無 member.id 退化為空字串)。
  *
  * 回傳 epoch():單調遞增的 session 世代,身分每變一次 +1;fetch/mutate 出發時捕捉、
@@ -63,8 +68,14 @@ import { createOwnedHydrationGate, type HydrationGate } from '$lib/hydration-gat
 function createSessionCore(onChange: () => void): { epoch: () => number } {
 	let sessionEpoch = 0;
 	let lastIdentity: string | null = null;
+	let baselined = false;
 	authStore.subscribe(({ loggedIn, member }) => {
 		const identity = loggedIn ? (member?.id ?? '') : null;
+		if (!baselined) {
+			baselined = true; // 立即回呼:只記身分基準
+			lastIdentity = identity;
+			return;
+		}
 		if (identity !== lastIdentity) {
 			sessionEpoch += 1;
 			lastIdentity = identity;
@@ -80,9 +91,8 @@ export interface SessionGateOptions<T> {
 	fetch: () => Promise<T>;
 	/** 成功時套用資料(通常寫回呼叫端的共享 store)。 */
 	apply: (data: T) => void;
-	/** identity 變更時還原 boot 態(翻旗是工廠的事,reset 只管內容)。boot-parity:
-	 *  restored session 開機的立即回呼會打一次 reset,故 reset 須值冪等(store 開機帶
-	 *  seed → reset 成 seed clone;開機空 → reset 空),否則首繪 badge teaser 被抹。 */
+	/** identity 變更時還原 boot 態(翻旗是工廠的事,reset 只管內容)。開機不觸發(R14 F2:
+	 *  建構當下只記身分基準)。 */
 	reset: () => void;
 }
 
@@ -97,32 +107,28 @@ export interface SessionGateOptions<T> {
  *   writeBack → markMutated → 條件式序列化和解。
  * 樂觀 mutator(notifications markRead/markAllRead:先寫後 await、失敗不還原)刻意
  * 不走 mutate(),繼續直接呼叫 markMutated()——故 markMutated 留在 interface。
+ * queueWrite(R14 F2,語意逐字取自 profile.ts 原 enqueue):排進本閘門的寫入鏈,前一筆
+ * settle(成敗皆可)才輪到;輪到時 session 已換就回 `skipped`、task 不執行。task 拿到
+ * `stale()` 供失敗處理判斷(換帳後不得回滾/重抓到新身分身上)。換帳號即重置這條鏈——
+ * 舊身分卡住的寫入不得堵住新身分。
  */
 export interface SessionGate<T> extends HydrationGate<T> {
 	mutate<R>(request: () => Promise<R>, writeBack: (result: R) => void): Promise<R>;
+	queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R>;
 }
 
 /**
- * 建立完整 session gate。**內部建構順序為契約**(單一稽核點,構造性消滅 TDZ/未初始化
- * 風險):
- *   0) epochFetch 抽名宣告 —— 純 const 宣告、零呼叫,對 core 與 1) 相同是 closure
- *      前向參照。抽名是為了讓閘門的 pageEntry() 把**同一支**核對過的 fetch 交給頁面的
- *      load-gate(不是複製第二份判斷)。
- *   1) createOwnedHydrationGate 先建 —— fetch(= epochFetch)內對 core.epoch() 是 closure
- *      前向參照,fetch 只在 hydrate/refresh 時才被呼叫,屆時 core 已就緒。
- *   2) reconcileChain 宣告。
- *   3) createSessionCore 訂閱 —— restored session 的立即回呼在此觸 onChange,而
- *      onChange 讀 gate 與 reconcileChain,兩者至此都已存在。順序若倒過來(先訂閱),
- *      立即回呼會在 gate 尚未建好時觸 onChange → 炸 module-load(waitlist/leave 原本
- *      各自靠「reconcileChain 宣告在 subscribe 之前」的 TDZ 註解手動維持,現收成一處)。
+ * 建立完整 session gate。epochFetch 抽名,讓閘門的 pageEntry() 把**同一支**核對過的 fetch
+ * 交給頁面的 load-gate(不是複製第二份判斷);它對 core 是 closure 前向參照,只在
+ * hydrate/refresh 時才被呼叫。建構期不觸發 onChange(身分基準見 createSessionCore),
+ * 宣告順序不再是契約。
  *
- * onChange = opts.reset() + owned.ownerChanged()(翻旗 false + 清尾流帳——R11 終審修波:
- * 舊 session 掛死的 mutation 尾流不得堵住新身分的 refresh,尾流帳的「必然自癒」前提只在
- * 同身分內成立,跨身分時 A 的一筆永不 settle 的 PATCH 會讓 B 的 GET 一次都不出發)+
- * reconcileChain 重置(舊 session 卡死的和解不得堵住新 session 的鏈)。
+ * onChange = opts.reset() + owned.ownerChanged()(翻旗 false + 丟在飛合併 GET + 清尾流帳——
+ * R11 終審修波:舊 session 掛死的 mutation 尾流不得堵住新身分的 refresh,尾流帳的「必然自癒」
+ * 前提只在同身分內成立,跨身分時 A 的一筆永不 settle 的 PATCH 會讓 B 的 GET 一次都不出發)+
+ * reconcileChain / writeChain 重置(舊 session 卡死的和解或寫入不得堵住新 session 的鏈)。
  */
 export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T> {
-	// 0) epochFetch 抽名。對 core 的前向參照見上方契約說明。
 	const epochFetch = async (): Promise<T> => {
 		const epoch = core.epoch();
 		const data = await opts.fetch();
@@ -133,16 +139,15 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		if (epoch !== core.epoch()) throw new Error('stale session: 回應跨登出/換帳號,作廢');
 		return data;
 	};
-	// 1) gate 先建。
 	const owned = createOwnedHydrationGate<T>({ fetch: epochFetch, apply: opts.apply });
 	const gate = owned.gate;
-	// 2) reconcileChain 宣告。
 	let reconcileChain: Promise<void> = Promise.resolve();
-	// 3) core 訂閱。立即回呼(restored session)在此觸 onChange;gate 與 chain 已存在。
+	let writeChain: Promise<void> = Promise.resolve();
 	const core = createSessionCore(() => {
 		opts.reset();
-		owned.ownerChanged(); // 翻旗 false + 舊身分的尾流不得堵住新身分的 refresh(理由見上方 onChange 說明)
+		owned.ownerChanged(); // 翻旗 false + 舊身分的在飛 GET 與尾流不得帶給新身分(理由見上方 onChange 說明)
 		reconcileChain = Promise.resolve();
+		writeChain = Promise.resolve();
 	});
 
 	/**
@@ -163,7 +168,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		reconcileChain = reconcileChain.then(() => {
 			if (epoch !== core.epoch()) return; // 幽靈和解:排隊時的 session 已結束
 			return gate.refresh().catch(() => {
-				if (epoch === core.epoch()) gate.hydrated.set(false);
+				if (epoch === core.epoch()) gate.invalidate();
 			});
 		});
 	}
@@ -187,7 +192,18 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		return result;
 	}
 
-	return { ...gate, mutate };
+	function queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R> {
+		const mine = core.epoch();
+		const stale = () => mine !== core.epoch();
+		const run = writeChain.then(() => (stale() ? skipped : task(stale)));
+		writeChain = run.then(
+			() => {},
+			() => {}
+		);
+		return run;
+	}
+
+	return { ...gate, mutate, queueWrite };
 }
 
 /**

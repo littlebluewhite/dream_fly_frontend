@@ -62,9 +62,11 @@ afterEach(() => {
 
 describe('mobile-admin/admin/members 頁', () => {
 	it('loading 分支顯示骨架(data-testid="members-skeleton")', () => {
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		let release!: (e: Error) => void;
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise((_, rej) => (release = rej)));
 		const { container } = render(MembersPage);
 		expect(container.querySelector('[data-testid="members-skeleton"]')).not.toBeNull();
+		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('async 水合後顯示 $members store 的學員(相異 fixture)與統計筆數', async () => {

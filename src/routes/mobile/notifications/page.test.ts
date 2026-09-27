@@ -75,9 +75,11 @@ describe('mobile/notifications 頁', () => {
 	});
 
 	it('loading 分支有可辨識骨架標記(data-testid="notifications-skeleton")', () => {
-		feed = () => new Promise(() => {});
+		let release!: (e: Error) => void;
+		feed = () => new Promise((_, rej) => (release = rej));
 		const { container } = render(Page);
 		expect(container.querySelector('[data-testid="notifications-skeleton"]')).not.toBeNull();
+		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {

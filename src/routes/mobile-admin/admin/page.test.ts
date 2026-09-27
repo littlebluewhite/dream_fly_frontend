@@ -83,10 +83,12 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		// getOpsCollections 故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——
 		// orders store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、
 		// 直接讀 $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
-		vi.mocked(getOpsCollections).mockReturnValue(new Promise(() => {}));
+		let release!: (e: Error) => void;
+		vi.mocked(getOpsCollections).mockReturnValue(new Promise((_, rej) => (release = rej)));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試動態一'); // 等 getAdminHome 的 ready(與 ops 水合是獨立的兩支請求)
 		expect(queryByText('筆訂單', { exact: false })).toBeNull();
+		release(new Error('測試收尾')); // R14 F2:合併的在飛 GET 必須 settle,否則下一個測試的 load 會併入這支永不落地的 GET
 	});
 
 	it('opsHydrated 落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
