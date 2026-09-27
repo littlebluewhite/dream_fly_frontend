@@ -1,12 +1,18 @@
 <script lang="ts">
   /* 訊息對話 push screen。port coach.jsx MessageThread (244-273)。
    *
-   * Task 20：改讀真 GET /conversations/{id}/messages(getThread)、送出改真打
-   * POST /conversations/{id}/messages(sendMessage)——取代舊版「送出為本地 echo，
-   * 家長泡泡永遠是同一句 m.preview」的假聊天室(coach/api.ts，Task 12，
-   * integration-contract.md §3.21)。m.id 即 conversation id(見 mobile-admin/api.ts
-   * 的 getMessages() 映射，Conversation.id 穿透為 MessageRow.id)。已讀標記
-   * (markRead)由列表頁點擊當下觸發(markMessageRead，stores.ts)，本畫面不重複呼叫。 */
+   * R14(候選 F5，ADR-0014 §2)：改接桌面同一套 $lib/coach/messages-controller(仿 R10 B
+   * 案 attendance-controller 前例,commit 718844b)——取代本檔原本自管的
+   * getThread/sendMessage 本地狀態機。deps(getThread/sendMessage/markRead/
+   * getStudents/createConversation)已與桌面逐字相同(mobile-admin/api.ts 現亦轉出
+   * createConversation),controller 不必為行動版加行為旗標。
+   *
+   * 已讀角標改成「等後端 markRead ack 才清」(使用者裁決 F5,跟桌面一樣)：onMount 呼叫
+   * ctrl.selectThread(m.id)取回 threadReady/badgeCleared 兩條互不等待的 promise——
+   * threadReady 決定畫面顯示/失敗 ErrorState,badgeCleared 為 true 才呼叫
+   * markMessageRead(m.id)(stores.ts,現只做本地標記 + gate.markMutated(),不再自帶
+   * fire-and-forget 網路呼叫)；badgeCleared 為 false(markRead 失敗)則不呼叫,角標維持
+   * 未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -14,38 +20,50 @@
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import { ErrorState, Skeleton } from '$lib/components/ui';
-  import { toasts } from '$lib/mobile-admin/stores';
-  import { getThread, sendMessage, type ThreadMsg } from '$lib/mobile-admin/api';
+  import { toasts, markMessageRead } from '$lib/mobile-admin/stores';
+  import { getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/mobile-admin/api';
+  import { createMessagesController } from '$lib/coach/messages-controller';
+  import type { ThreadMsg } from '$lib/coach/data';
   import type { MessageRow } from '$lib/mobile-admin/data';
 
   export let onBack: () => void;
   export let m: MessageRow | null = null;
 
+  const ctrl = createMessagesController({ getThread, sendMessage, markRead, getStudents, createConversation });
+
+  let thread: ThreadMsg[] | null = null;
+  $: ({ thread } = $ctrl);
+  $: msgs = thread ?? [];
+
   let phase: 'loading' | 'error' | 'ready' = 'loading';
-  let messages: ThreadMsg[] = [];
   let reply = '';
   let sending = false;
 
   function load() {
     if (!m) { phase = 'error'; return; }
-    const conversationId = m.id;
+    const target = m;
     phase = 'loading';
-    getThread(conversationId)
-      .then((d) => { messages = d.messages; phase = 'ready'; })
-      .catch(() => { phase = 'error'; });
+    const { threadReady, badgeCleared } = ctrl.selectThread(target.id);
+    threadReady.then((outcome) => {
+      phase = outcome.kind === 'threadLoadFailed' ? 'error' : 'ready';
+    });
+    badgeCleared.then((cleared) => {
+      if (cleared) markMessageRead(target.id);
+    });
   }
   onMount(load);
 
   async function send() {
     if (!m || !reply.trim() || sending) return;
-    const body = reply.trim();
+    const text = reply.trim();
     sending = true;
     try {
-      const msg = await sendMessage(m.id, body);
-      messages = [...messages, msg];
-      reply = '';
-    } catch {
-      toasts.notify('error', '傳送失敗', '連線發生問題，請稍後再試。');
+      const outcome = await ctrl.send(text);
+      if (outcome.kind === 'messageSent') {
+        reply = '';
+      } else {
+        toasts.notify('error', '傳送失敗', '連線發生問題，請稍後再試。');
+      }
     } finally {
       sending = false;
     }
@@ -64,7 +82,7 @@
   {#if phase === 'ready'}
     <div class="df-scroll" style="background:var(--df-bg-light);">
       <div style="padding:16px; display:flex; flex-direction:column; gap:12px;">
-        {#each messages as msg, i (i)}
+        {#each msgs as msg, i (i)}
           {#if msg.who === 'them'}
             <div style="display:flex; gap:9px; align-items:flex-end;">
               <Avatar name={m ? m.initial : '?'} size="sm" color={m ? m.color : 'var(--df-primary)'} />
@@ -76,7 +94,7 @@
             </div>
           {/if}
         {/each}
-        {#if messages.length === 0}
+        {#if msgs.length === 0}
           <div style="text-align:center; font-size:12.5px; color:var(--df-text-muted); padding:24px 0;">尚無訊息，開始對話吧。</div>
         {/if}
       </div>

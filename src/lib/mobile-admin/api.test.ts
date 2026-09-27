@@ -36,6 +36,7 @@ vi.mock('$lib/coach/api', () => ({
 	getThread: vi.fn(),
 	sendMessage: vi.fn(),
 	markRead: vi.fn(),
+	createConversation: vi.fn(),
 	createCertificate: vi.fn(),
 	createReportCard: vi.fn(),
 	CoachNotFoundError: class CoachNotFoundError extends Error {}
@@ -53,6 +54,7 @@ import {
 	getAdminHome,
 	getOpsCollections,
 	getMessages,
+	createConversation,
 	getSettings,
 	putSettings,
 	getVenues,
@@ -247,6 +249,18 @@ describe('getMessages', () => {
 			{ id: 'c1', from: '王媽媽', initial: '王', color: '#000', preview: '哈囉', time: '09:10', unread: true },
 			{ id: 'c2', from: '陳爸爸', initial: '陳', color: '#000', preview: '謝謝', time: '昨天', unread: false }
 		]);
+	});
+});
+
+describe('createConversation — 零映射 re-export（R14 候選 F5：POST /conversations，行動訊息對話串改接 $lib/coach/messages-controller，deps 需與桌面逐字相同）', () => {
+	it('createConversation 直接委派給桌面 coach/api.ts 的 createConversation，參數與回傳皆 verbatim', async () => {
+		const payload = { id: 'c1', name: '王小明', initial: '王', color: '#000', kind: '會員', time: '剛剛', badge: 0, preview: '' };
+		vi.mocked(coachApi.createConversation).mockResolvedValue(payload as never);
+
+		const result = await createConversation('u1', '王小明');
+
+		expect(coachApi.createConversation).toHaveBeenCalledWith('u1', '王小明');
+		expect(result).toBe(payload);
 	});
 });
 

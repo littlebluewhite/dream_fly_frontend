@@ -41,7 +41,6 @@ import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '
 import {
 	getOpsCollections,
 	getMessages,
-	markRead,
 	updateOrderStatus,
 	createMember,
 	updateMember,
@@ -71,7 +70,6 @@ vi.mock('./api', async (importOriginal) => {
 		...actual,
 		getOpsCollections: vi.fn(async () => opsFixture()),
 		getMessages: vi.fn(async () => MESSAGES.map((m) => ({ ...m }))),
-		markRead: vi.fn(async () => ({ updated: 0 })),
 		updateOrderStatus: vi.fn(),
 		createMember: vi.fn(),
 		updateMember: vi.fn(),
@@ -231,24 +229,6 @@ describe('markMessageRead + coachMsgUnread', () => {
 		messagesHydrated.set(false); // markMessageRead now also flips this (C1) — reset for other tests
 	});
 
-	// Task 20：markMessageRead 除本地樂觀更新外，也 best-effort 打真
-	// PATCH /conversations/{id}/read(markRead)——這裡驗證真的有呼叫到，而失敗
-	// 不影響本地已讀狀態(fire-and-forget，見 stores.ts 附註)。
-	it('best-effort 呼叫真 markRead(id)；該呼叫失敗也不影響本地已讀狀態', async () => {
-		vi.mocked(markRead).mockReset();
-		vi.mocked(markRead).mockRejectedValueOnce(new Error('network'));
-		const firstUnread = get(messages).find((m) => m.unread)!;
-
-		markMessageRead(firstUnread.id);
-
-		expect(markRead).toHaveBeenCalledWith(firstUnread.id);
-		await new Promise((r) => setTimeout(r, 0)); // let the rejected promise's .catch flush
-		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
-		messages.set(MESSAGES.map((m) => ({ ...m }))); // restore the shared singleton for other tests
-		messagesHydrated.set(false);
-		vi.mocked(markRead).mockReset();
-		vi.mocked(markRead).mockResolvedValue({ updated: 0 });
-	});
 	it('reading an already-read thread is a no-op for the count', () => {
 		const read = get(messages).find((m) => !m.unread)!;
 		const before = get(coachMsgUnread);

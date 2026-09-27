@@ -7,9 +7,7 @@ import { messages, messagesHydrated, coachMsgUnread, markMessageRead } from '$li
 import { MESSAGES } from '$lib/testing/seed-fixtures';
 import type { MessageRow } from '$lib/mobile-admin/data';
 
-// Task 20：markMessageRead(stores.ts)現也 best-effort 呼叫真 markRead(id)——一併
-// mock，否則呼叫到未定義的匯出會拋錯(見該函式的 fire-and-forget 附註)。
-vi.mock('$lib/mobile-admin/api', () => ({ getMessages: vi.fn(), markRead: vi.fn().mockResolvedValue({ updated: 0 }) }));
+vi.mock('$lib/mobile-admin/api', () => ({ getMessages: vi.fn() }));
 
 // 與種子夾具 MESSAGES 相異的 fixture(家長姓名、預覽內容皆改過),證明頁面讀 hydrateMessages()
 // 水合後的 $messages store,而非殘留的夾具巧合通過。
@@ -45,7 +43,7 @@ describe('mobile-admin/coach/messages 頁', () => {
 		expect(await findByText('測試家長乙')).toBeInTheDocument();
 	});
 
-	it('點擊未讀訊息會標記已讀並降低教練端未讀徽章(codex P2 regression,適配非同步水合)', async () => {
+	it('點擊訊息不樂觀清未讀(R14 候選 F5：已讀改由 MessageThread.svelte 等後端 markRead ack 才清)', async () => {
 		const { findByText } = render(MessagesPage);
 		const firstUnread = FIXTURE_MESSAGES.find((m) => m.unread)!;
 		await findByText(firstUnread.from);
@@ -53,7 +51,7 @@ describe('mobile-admin/coach/messages 頁', () => {
 
 		await fireEvent.click(await findByText(firstUnread.from));
 
-		expect(get(coachMsgUnread)).toBe(before - 1);
+		expect(get(coachMsgUnread)).toBe(before);
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {

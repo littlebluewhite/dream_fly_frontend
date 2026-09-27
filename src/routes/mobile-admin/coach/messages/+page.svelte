@@ -6,8 +6,11 @@
    * 閘門(loading/error/ready);messagesHydrated 守衛防止第二次進頁的 fetch 覆寫
    * markMessageRead 的已讀狀態,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。
    * unmount 後解析的 in-flight fetch 由 createLoadGate($lib/load-gate)內建的
-   * generation/destroy 機制擋下,不再需要頁面自帶的 alive 旗標。markMessageRead
-   * 既有 mutation 不動。 */
+   * generation/destroy 機制擋下,不再需要頁面自帶的 alive 旗標。
+   *
+   * R14(候選 F5)：openThread 不再樂觀清未讀——本頁只做 push,改由 MessageThread.svelte
+   * 開啟對話串後等後端 markRead ack(badgeCleared)才呼叫 markMessageRead,跟桌面一樣
+   * 「等後端確認已讀才清角標」(使用者裁決)。 */
   import { onMount } from 'svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -15,7 +18,7 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, markMessageRead, messagesPageEntry } from '$lib/mobile-admin/stores';
+  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, messagesPageEntry } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MessageRow } from '$lib/mobile-admin/data';
 
@@ -27,7 +30,9 @@
   });
 
   const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
-  const openThread = (m: MessageRow) => { markMessageRead(m.id); overlay.push('messageThread', { m }); };
+  // R14(候選 F5)：不再樂觀清未讀——真正的已讀是 MessageThread.svelte 開啟對話串後
+  // 等後端 markRead ack(badgeCleared)才呼叫 markMessageRead，本頁只負責 push。
+  const openThread = (m: MessageRow) => { overlay.push('messageThread', { m }); };
 
   $: list = q ? $messages.filter((m) => (m.from + m.preview).toLowerCase().includes(q.toLowerCase())) : $messages;
 </script>

@@ -27,7 +27,6 @@ import { COACHES, type Coach } from '$lib/domain/coaches';
 import {
 	getOpsCollections,
 	getMessages,
-	markRead,
 	createMember,
 	updateMember,
 	createCourse,
@@ -204,14 +203,14 @@ export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusO
 export const messages = writable<MessageRow[]>([]);
 /** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
  *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
- *  覆寫)。Task 20：本地立即翻已讀(樂觀更新，同既有 UX)之餘，一併 best-effort 打真
- *  PATCH /conversations/{id}/read(markRead，coach/api.ts)——已讀回條屬於「最終
- *  一致即可」的次要狀態，失敗不影響本地已讀顯示，也不阻塞使用者操作，故 fire-
- *  and-forget、不 await、吞掉錯誤(id 即 getMessages() 映射出的 conversation id)。 */
+ *  覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)已搬進
+ *  $lib/coach/messages-controller 的 selectThread()，由 MessageThread.svelte 呼叫端
+ *  等 badgeCleared(該 PATCH 的 ack)為 true 才呼叫本函式——本函式因此只做「本地翻
+ *  已讀 + 宣告水合真相」兩件事，不再自帶網路呼叫(取代 Task 20 的 fire-and-forget
+ *  best-effort 版本;失敗時維持未讀，同桌面)。 */
 export function markMessageRead(id: string) {
 	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
 	messagesGate.markMutated();
-	void markRead(id).catch(() => {});
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 

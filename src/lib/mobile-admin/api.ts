@@ -43,6 +43,7 @@ import {
 	getThread,
 	sendMessage,
 	markRead,
+	createConversation,
 	createCertificate,
 	createReportCard,
 	CoachNotFoundError,
@@ -110,10 +111,7 @@ export const getReports = adminGetReports;
 // 樞紐 getMore() 一致)——行動版兩畫面皆無 PaginationBar，超過一頁如實只顯示第一頁。
 export const getVenues = adminGetVenues;
 export const getTickets = adminGetTickets;
-// createConversation(POST /conversations，撰寫新對話)刻意不重新匯出——行動版訊息
-// 中心沒有「撰寫新對話」入口(只回覆既有對話串)，重新匯出一支沒有呼叫端的函式只是
-// 假裝有接這個功能。
-export { saveSettings, getThread, sendMessage, markRead, createCertificate, createReportCard };
+export { saveSettings, getThread, sendMessage, markRead, createConversation, createCertificate, createReportCard };
 
 export interface MoreData {
 	profiles: Record<'admin' | 'coach', Profile>;
