@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import AdminTabBar from './TabBar.svelte';
@@ -16,11 +16,17 @@ afterEach(() => {
 
 describe('m-admin TabBar adapter — smoke tests', () => {
 	// R14(候選 F3)誠實開機:訊息 store 開機為 `[]` → coachMsgUnread 0 → 教練分頁沒有角標。
-	// 必須排在本檔第一支、任何 set 之前——vitest 每檔各自一份模組實例,這裡讀到的就是開機值。
-	it('開機沒有角標(role=coach,訊息 store 開機為空)', () => {
-		expect(get(coachMsgUnread)).toBe(0);
+	// 重新載入模組才照得到開機那一刻(本檔其他 it 會 set 訊息),不依賴執行順序。
+	it('開機沒有角標(role=coach,訊息 store 開機為空)', async () => {
+		vi.resetModules();
+		const fresh = await import('$lib/mobile-admin/stores');
+		const { default: FreshTabBar } = await import('./TabBar.svelte');
+		// 元件與 render 須出自同一份 svelte runtime(重置後的新模組圖),掛載也由它自己清。
+		const tl = await import('@testing-library/svelte');
+		onTestFinished(tl.cleanup);
+		expect(get(fresh.coachMsgUnread)).toBe(0);
 
-		render(AdminTabBar, { role: 'coach' });
+		tl.render(FreshTabBar, { role: 'coach' });
 
 		for (const link of screen.getAllByRole('link')) {
 			expect(link.querySelector('span[style*="border-radius:999px"]')).toBeNull();

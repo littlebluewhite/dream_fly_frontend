@@ -95,6 +95,16 @@ describe('mobile-admin +layout — 暖機清單(R14 F3)', () => {
 		expect(convGets()).toBe(1);
 	});
 
+	// 裁決:暖機看的是所在分區(currentRole),不是帳號角色——admin 帳號進教練分區一樣看得到
+	// 訊息角標,所以一樣暖。
+	it('admin 帳號進教練分區(/mobile-admin/coach)也暖訊息:GET /conversations/me 恰好一次', async () => {
+		mockUrl = new URL('http://localhost/mobile-admin/coach');
+		authStore.login('admin@test.com', 'password123');
+		render(Layout);
+		await settle();
+		expect(convGets()).toBe(1);
+	});
+
 	it('admin 角色(/mobile-admin/admin)零次', async () => {
 		authStore.login('admin@test.com', 'password123');
 		render(Layout);
