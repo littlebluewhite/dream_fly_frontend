@@ -136,12 +136,15 @@ export function createCheckoutController(deps: CheckoutControllerDeps): Checkout
 	let epoch = 0;
 
 	const form = writable<CheckoutForm>(emptyForm());
-	const machine = writable<Omit<CheckoutViewState, 'preview' | 'hasChargeable'>>({ step, paying, paid, coupon, codeErr });
-	const publish = (): void => machine.set({ step, paying, paid, coupon, codeErr });
-	const store = derived([machine, form, deps.lines, deps.points], ([$m, $form, $lines, $points]): CheckoutViewState => ({
-		...$m,
-		preview: checkoutMath($lines, $m.coupon, $points, $form.usePoints),
-		hasChargeable: $lines.length > 0
+	// 付款機四變數之外也帶 coupon/codeErr——視圖快照裡除了 form 與衍生預覽以外的全部。
+	const state = writable<Omit<CheckoutViewState, 'preview' | 'hasChargeable'>>({ step, paying, paid, coupon, codeErr });
+	const publish = (): void => state.set({ step, paying, paid, coupon, codeErr });
+	// 可計費判準單源：視圖的 hasChargeable 與 confirmPay 的第二道防線都讀它。
+	const hasChargeable = (lines: ChargeableLine[]): boolean => lines.length > 0;
+	const store = derived([state, form, deps.lines, deps.points], ([$s, $form, $lines, $points]): CheckoutViewState => ({
+		...$s,
+		preview: checkoutMath($lines, $s.coupon, $points, $form.usePoints),
+		hasChargeable: hasChargeable($lines)
 	}));
 
 	function setOpen(open: boolean): CheckoutOpenOutcome {
@@ -198,7 +201,7 @@ export function createCheckoutController(deps: CheckoutControllerDeps): Checkout
 		// 已持有/空車）：沒有可計費項目就不該送單（後端會回 400 cart is empty）——
 		// 按鈕已 disabled，這裡是第二道防線。
 		if (paying) return { kind: 'alreadyPaying' };
-		if (get(deps.lines).length === 0) return { kind: 'nothingChargeable' };
+		if (!hasChargeable(get(deps.lines))) return { kind: 'nothingChargeable' };
 		const { usePoints, paymentMethod } = get(form);
 		paying = true;
 		publish();
