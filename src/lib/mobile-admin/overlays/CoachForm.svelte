@@ -28,7 +28,7 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import type { Coach } from '$lib/domain/coaches';
-  import type { CoachFormValues } from '$lib/mobile-admin/api';
+  import type { CoachFormValues } from '$lib/admin/data';
   import { initialOf } from '$lib/api/wire';
   import { checkNewCoach, checkCoachEdit } from '$lib/admin/components/coach-save';
 

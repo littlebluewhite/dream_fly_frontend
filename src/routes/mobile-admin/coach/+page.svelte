@@ -20,7 +20,8 @@
   import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getCoachHome, coachLoadErrorCopy, GENERIC_LOAD_ERROR, type MCoachHomeData } from '$lib/mobile-admin/api';
+  import { getCoachHome, type MCoachHomeData } from '$lib/mobile-admin/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import type { IconName } from '$lib/icon-registry';
 
   let data: MCoachHomeData | null = null;

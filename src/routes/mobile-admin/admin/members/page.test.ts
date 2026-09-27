@@ -8,7 +8,7 @@ import type { MemberRow } from '$lib/mobile-admin/data';
 import { COACHES } from '$lib/domain/coaches';
 import { mapMemberAccount } from '$lib/admin/data';
 import type { ApiUserAccount } from '$lib/admin/data';
-import type { CreateMemberBody, UpdateMemberBody } from '$lib/mobile-admin/api';
+import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';

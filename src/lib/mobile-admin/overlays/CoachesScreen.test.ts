@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CoachesScreen from './CoachesScreen.svelte';
-import type { CoachFormValues } from '$lib/mobile-admin/api';
+import type { CoachFormValues } from '$lib/admin/data';
 import { overlay, coaches, toasts, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
 import type { Coach } from '$lib/domain/coaches';
 import type { ApiCoach } from '$lib/public/api';

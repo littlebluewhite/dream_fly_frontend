@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
 import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
 import { MEMBERS } from '$lib/mobile-admin/data';
-import type { CreateMemberBody } from '$lib/mobile-admin/api';
+import type { CreateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';

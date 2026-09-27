@@ -29,7 +29,8 @@
   import { overlay, role, switchRole, toasts } from '$lib/mobile-admin/stores';
   import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getCsettings, saveSettings, coachLoadErrorCopy, GENERIC_LOAD_ERROR, type CsettingsData } from '$lib/mobile-admin/api';
+  import { getSettings as getCsettings, saveSettings, type CoachSettingsData as CsettingsData } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import { authStore } from '$lib/stores/authStore';
   import type { IconName } from '$lib/icon-registry';
 

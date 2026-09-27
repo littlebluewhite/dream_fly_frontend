@@ -24,9 +24,11 @@ import type { Role } from './nav';
 // 非 test-only 消費。
 import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
 import { COACHES, type Coach } from '$lib/domain/coaches';
+import { getOpsCollections, getMessages, type OpsPages, type PageInfo } from './api';
+// R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
+// createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
+// re-export 轉手,已退役——直接向擁有者模組 $lib/admin/api 取用。
 import {
-	getOpsCollections,
-	getMessages,
 	createMember,
 	updateMember,
 	createCourse,
@@ -34,16 +36,11 @@ import {
 	createCoach,
 	updateCoach,
 	updateOrderStatus,
-	saveNewCoach,
-	saveCoachEdit,
 	type CreateMemberBody,
-	type UpdateMemberBody,
-	type CoachFormValues,
-	type SaveNewCoachOutcome,
-	type SaveCoachEditOutcome,
-	type OpsPages,
-	type PageInfo
-} from './api';
+	type UpdateMemberBody
+} from '$lib/admin/api';
+import { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
+import type { CoachFormValues } from '$lib/admin/data';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 // R13 Task 5(C4):applyStatusChange 搬到 order-status.ts,markOrderPaid 改共用
 // changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後

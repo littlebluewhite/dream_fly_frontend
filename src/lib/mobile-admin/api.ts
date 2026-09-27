@@ -5,52 +5,30 @@
  * 需要不同形狀處做薄映射（例如今日課表的 tone/label、訊息列表的 MessageRow）。
  * 凡是桌面 seam 本身仍是 mock（無後端來源）的欄位，這裡原樣沿用同一份 mock/預設值
  * ——不發明桌面沒有的假來源，也不重新實作桌面已經做過的映射邏輯。逐函式來源見
- * task-20-report.md 的盤點表。 */
+ * task-20-report.md 的盤點表。
+ *
+ * R15 Task 3b(候選 轉手退役)：本檔原本還轉出約 40 支對桌面 admin/coach seam 的零
+ * 映射 re-export（新增/編輯/報表/設定/課堂點名/我的學員/個人設定/訊息中心…），
+ * 對外只是換一個 import 路徑、沒有加任何型別事實或映射邏輯——依 ADR-0019 C4 的
+ * facade 退役判準全數刪除，生產消費端改直接 import 擁有者模組（$lib/admin/api、
+ * $lib/admin/data、$lib/admin/components/coach-save、$lib/admin/settings-form、
+ * $lib/coach/api、$lib/coach/load-error-copy、$lib/coach/data）。本檔只留真正做
+ * 「組合(平行拉取多支端點)＋薄映射」的 5 支：getMore/getCoachHome/getAdminHome/
+ * getOpsCollections/getMessages。 */
 import {
 	getVenues as adminGetVenues,
 	getTickets as adminGetTickets,
 	getCoaches as adminGetCoaches,
 	getClasses as adminGetClasses,
-	createCourse,
-	updateCourse,
-	mapCourse,
 	getMembers as adminGetMembers,
-	createMember,
-	updateMember,
-	createCoach,
-	updateCoach,
 	getOrders as adminGetOrders,
-	updateOrderStatus,
 	getReports as adminGetReports,
 	getTodaySessions as adminGetTodaySessions,
-	getRecentActivity as adminGetRecentActivity,
-	getSettings,
-	putSettings,
-	type CreateMemberBody,
-	type UpdateMemberBody,
-	type CoachWriteBody,
-	type SettingsData,
-	type SettingsWriteBody,
-	type ReportsData
+	getRecentActivity as adminGetRecentActivity
 } from '$lib/admin/api';
-import type { CoachFormValues, TodayClass } from '$lib/admin/data';
-import {
-	getDashboard as coachGetDashboard,
-	getStudents as coachGetStudents,
-	getSettings as coachGetSettings,
-	saveSettings,
-	getConversations as coachGetConversations,
-	getThread,
-	sendMessage,
-	markRead,
-	createConversation,
-	createCertificate,
-	createReportCard,
-	CoachNotFoundError,
-	type CreateCertificateBody,
-	type CreateReportCardBody
-} from '$lib/coach/api';
-import type { Coach as CoachProfile, Conversation, ThreadMsg, Student, AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
+import type { TodayClass } from '$lib/admin/data';
+import { getDashboard as coachGetDashboard, getConversations as coachGetConversations } from '$lib/coach/api';
+import type { Coach as CoachProfile, Conversation } from '$lib/coach/data';
 import { SESSION_STATUS } from '$lib/domain/sessions';
 import type { TodayStatus } from '$lib/domain/sessions';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
@@ -70,48 +48,6 @@ import {
 	type OrderRow,
 	type MessageRow
 } from './data';
-
-export { CoachNotFoundError };
-export { coachLoadErrorCopy, GENERIC_LOAD_ERROR, type LoadErrorCopy } from '$lib/coach/load-error-copy';
-// saveNewCoach/saveCoachEdit(新增/編輯教練兩階段 async 編排器，K4/C3)——mobile-admin 復用
-// 桌面 admin/coaches/+page.svelte 同一套無狀態純函式，取代原本 inline 重抄的兩步序列；R12 起
-// 由 stores.ts 的 addCoach/saveCoach 動詞包裝呼叫（見 CoachesScreen.svelte 檔頭註解）。
-export { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
-// C3(A3 並行任務跨任務凍結契約)：createSettingsForm/SettingsDraft 由並行任務建立中的
-// $lib/admin/settings-form 供給，這裡預埋 re-export——本檔自檢時此行可能報「找不到
-// 模組」，屬預期，待該模組併入後由主 agent 權威閘裁決。
-export { createSettingsForm, type SettingsDraft } from '$lib/admin/settings-form';
-export type {
-	CreateMemberBody,
-	UpdateMemberBody,
-	CreateCertificateBody,
-	CreateReportCardBody,
-	CoachWriteBody,
-	CoachFormValues,
-	SettingsData,
-	SettingsWriteBody,
-	ReportsData
-};
-export { createCourse, updateCourse, mapCourse, createMember, updateMember, createCoach, updateCoach, updateOrderStatus };
-// getSettings/putSettings(GET/PUT /settings，Task F9)——桌面與行動版系統設定畫面
-// 消費完全相同的欄位形狀(場館資訊/通知與自動化/帳號與安全)，零映射，直接重新匯出
-// 桌面 admin/api.ts 的實作(同 createCourse 等零映射寫入端點的既有慣例)。
-export { getSettings, putSettings };
-// getReports(GET /reports/admin，Task P4-F3)——mobile-admin 報表分析畫面與桌面消費
-// 完全相同的 ReportsData 形狀(revenue/kpis/各段彙總/courses/coaches)，零映射，直接
-// 重新匯出桌面 admin/api.ts 的實作(同 getSettings/putSettings 零映射既有慣例)。
-// getAdminHome() 下方已用別名 adminGetReports 內部呼叫同一支函式取兩項首頁 KPI；
-// 這裡另外以 getReports 之名重新匯出供 ReportsScreen.svelte 使用。
-export const getReports = adminGetReports;
-// getVenues/getTickets(GET /venues、GET /products，皆公開端點，C4)——場館管理
-// (VenuesScreen.svelte)/票券管理(TicketsScreen.svelte)兩個 push screen 各自非同步消費
-// 真資料的薄委派 re-export(同 getReports 零映射慣例；兩支桌面 seam 已於檔頭 import 供
-// getMore() 使用，這裡另以 getVenues/getTickets 之名重新匯出供兩個 screen 呼叫)。
-// getTickets 沿用桌面第 1 頁口徑(呼叫端不帶 page，吃後端預設 per_page=20，與「更多」
-// 樞紐 getMore() 一致)——行動版兩畫面皆無 PaginationBar，超過一頁如實只顯示第一頁。
-export const getVenues = adminGetVenues;
-export const getTickets = adminGetTickets;
-export { saveSettings, getThread, sendMessage, markRead, createConversation, createCertificate, createReportCard };
 
 export interface MoreData {
 	profiles: Record<'admin' | 'coach', Profile>;
@@ -176,43 +112,6 @@ export const getCoachHome = async (): Promise<MCoachHomeData> => {
 		pendingReplies: d.pendingReplies
 	};
 };
-
-/** 課堂點名 — 零映射 re-export(桌面 coach/api.ts 的 getAttendance/saveAttendance，
- *  Task 2：GET /sessions/today × 各場次 GET /sessions/{id}/roster、PUT
- *  /sessions/{id}/attendance)。
- *
- *  R10(雙生收斂，ADR 0014 §2)：行動頁改接 $lib/coach/attendance-controller，與桌面
- *  coach/attendance 頁共用同一套點名編排——原本這裡的 mapAttRow()/MAttendanceClass/
- *  MAttendanceData(mid 兼作 id、def→default 的行動版專屬 RosterEntry 形狀)已無存在
- *  必要，退役；FilterChips label 合成(時間+課名)搬進頁面 derived，不再由這裡的映射
- *  代勞。型別循既有 CoachProfile 慣例經本 seam 轉出，頁面只吃 `$lib/mobile-admin/api`，
- *  不越過 seam 直取 `$lib/coach/data`（見 routes/mobile-admin/coach/attendance/
- *  +page.svelte）。 */
-export { getAttendance, saveAttendance } from '$lib/coach/api';
-export type { AttRow, AttDefault, AttClassFull };
-
-export interface MStudentsData {
-	students: Student[];
-}
-/** 我的學員 — 復用桌面 coach/api.ts 的 getStudents()(Task 19：GET /coaches/me/
- *  students，只回這位教練名下的學員)，取代舊 mock 對「全體 MEMBERS 用姓名字串比對
- *  coach 欄位」的克難篩選方式。回傳型別直接是真實 Student[]（無技能評量 skill/pct
- *  多筆表——後端只有單一 skill/pct 欄位，且皆為 P2 佔位值，見 coach/data.ts 附註），
- *  故拿掉舊有的獨立 SKILLS 對照表，改用 Student 本身的欄位。 */
-export const getStudents = (): Promise<MStudentsData> => coachGetStudents();
-
-export type { CoachProfile };
-export interface CsettingsData {
-	coach: CoachProfile;
-}
-/** 個人設定 — 復用桌面 coach/api.ts 的 getSettings()(GET /users/me + GET /coaches
- *  組出真實教練檔案)，取代舊 mock 對 PROFILES.coach + COACHES.find(name==='林雅婷')
- *  的拼湊方式。真實 Coach 型別沒有 years/students/classes/awards 統計欄位(這些是
- *  舊 $lib/domain/coaches 型別的行動版專屬豐富化欄位，後端從未提供)——桌面自己的
- *  coach/settings 頁在這個位置也是「Stats — sensible values derived from data /
- *  mock」的固定假數字(授課時數/學員數/年資，見 ProfileTab 上層 +page.svelte 註解)，
- *  行動版鏡射同一份桌面固定假值，不新發明第 4 個假統計(桌面只給 3 個)。 */
-export const getCsettings = (): Promise<CsettingsData> => coachGetSettings();
 
 /** 桌面 TodayClass(見 admin/api.ts getTodaySessions()，GET /sessions/today admin
  *  分支)→ 行動版 TodayRow。coach/room 的 null→「—」代換已在桌面 mapTodaySession()
@@ -313,5 +212,3 @@ export const getMessages = async (): Promise<MessageRow[]> => {
 	const { conversations } = await coachGetConversations();
 	return conversations.map(mapConversationToRow);
 };
-
-export type { ThreadMsg };

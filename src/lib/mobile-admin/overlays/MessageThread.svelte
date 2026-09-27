@@ -23,7 +23,7 @@
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import { ErrorState, Skeleton } from '$lib/components/ui';
   import { toasts, markMessageRead } from '$lib/mobile-admin/stores';
-  import { getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/mobile-admin/api';
+  import { getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { createMessagesController } from '$lib/coach/messages-controller';
   import type { ThreadMsg } from '$lib/coach/data';
   import type { MessageRow } from '$lib/mobile-admin/data';

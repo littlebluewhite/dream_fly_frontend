@@ -24,7 +24,8 @@
   import { overlay, role, switchRole, adminUnreadCount, toasts, orders, opsHydrated, hydrateOps, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAdminHome, type MAdminHomeData, type CreateMemberBody, type UpdateMemberBody } from '$lib/mobile-admin/api';
+  import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
+  import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
 

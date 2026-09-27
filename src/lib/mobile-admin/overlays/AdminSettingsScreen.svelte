@@ -26,7 +26,8 @@
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getSettings, putSettings, createSettingsForm } from '$lib/mobile-admin/api';
+  import { getSettings, putSettings } from '$lib/admin/api';
+  import { createSettingsForm } from '$lib/admin/settings-form';
   import { apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;

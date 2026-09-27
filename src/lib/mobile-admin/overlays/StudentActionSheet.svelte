@@ -20,7 +20,7 @@
     createReportCard,
     type CreateCertificateBody,
     type CreateReportCardBody
-  } from '$lib/mobile-admin/api';
+  } from '$lib/coach/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   // 卡 3：Student 型別改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
   import type { Student } from '$lib/mobile-admin/data';

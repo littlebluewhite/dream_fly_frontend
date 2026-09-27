@@ -40,18 +40,12 @@ import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS } from './data';
 import { MESSAGES } from '$lib/testing/seed-fixtures';
 import { COACHES } from '$lib/domain/coaches';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
-import {
-	getOpsCollections,
-	getMessages,
-	updateOrderStatus,
-	createMember,
-	updateMember,
-	createCourse,
-	updateCourse,
-	createCoach,
-	updateCoach,
-	type OpsCollections
-} from './api';
+import { getOpsCollections, getMessages, type OpsCollections } from './api';
+// R15 Task 3b(候選 轉手退役)：createMember/updateMember/createCourse/updateCourse/
+// createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
+// re-export 轉手，已退役——stores.ts 改直接向擁有者模組 $lib/admin/api 取用，這裡的
+// mock 目標跟著換。
+import { updateOrderStatus, createMember, updateMember, createCourse, updateCourse, createCoach, updateCoach } from '$lib/admin/api';
 
 // Task 20：getOpsCollections()/getMessages() 現委派桌面 admin/coach seams 真呼叫
 // 後端——這裡的測試關心的是 store 自己的水合守衛/樂觀更新機制(與資料來源無關)，
@@ -71,7 +65,14 @@ vi.mock('./api', async (importOriginal) => {
 	return {
 		...actual,
 		getOpsCollections: vi.fn(async () => opsFixture()),
-		getMessages: vi.fn(async () => MESSAGES.map((m) => ({ ...m }))),
+		getMessages: vi.fn(async () => MESSAGES.map((m) => ({ ...m })))
+	};
+});
+
+vi.mock('$lib/admin/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/admin/api')>();
+	return {
+		...actual,
 		updateOrderStatus: vi.fn(),
 		createMember: vi.fn(),
 		updateMember: vi.fn(),

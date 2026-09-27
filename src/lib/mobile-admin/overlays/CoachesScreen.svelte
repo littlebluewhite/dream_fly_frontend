@@ -34,7 +34,7 @@
   import { overlay, coaches as coachesStore, toasts, opsPageEntry, addCoach, saveCoach } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/domain/coaches';
-  import type { CoachFormValues } from '$lib/mobile-admin/api';
+  import type { CoachFormValues } from '$lib/admin/data';
   import { apiErrorMessage, apiErrorText } from '$lib/api/error-text';
 
   export let onBack: () => void;

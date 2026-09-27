@@ -28,7 +28,7 @@
   import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getReports, type ReportsData } from '$lib/mobile-admin/api';
+  import { getReports, type ReportsData } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT } from '$lib/format';
   // fmtPct 跨 surface 自 admin 表面模組直取——依 ADR 0009,純函式直取不經 seam。

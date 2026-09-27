@@ -24,7 +24,7 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getStudents, type MStudentsData } from '$lib/mobile-admin/api';
+  import { getStudents, type StudentsData as MStudentsData } from '$lib/coach/api';
   // 卡 3：LEVEL_TINT/Student 改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
   import { LEVEL_TINT } from '$lib/mobile-admin/data';
   import type { Student } from '$lib/mobile-admin/data';

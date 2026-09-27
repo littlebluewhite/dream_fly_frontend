@@ -33,7 +33,9 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAttendance, saveAttendance, coachLoadErrorCopy, GENERIC_LOAD_ERROR, type AttClassFull, type AttRow, type AttDefault } from '$lib/mobile-admin/api';
+  import { getAttendance, saveAttendance } from '$lib/coach/api';
+  import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
+  import type { AttClassFull, AttRow, AttDefault } from '$lib/coach/data';
   import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { tally } from '$lib/coach/attendance-tally';
 
