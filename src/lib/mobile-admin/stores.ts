@@ -127,8 +127,8 @@ export const opsHydrated = opsGate.hydrated;
 export const hydrateOps = opsGate.hydrate;
 export const refreshOps = opsGate.refresh;
 /** 頁面進場包(R14 F1):classes/members/orders 三頁與 CoachesScreen 一律
- *  `createLoadGate({ ...opsPageEntry })`——寫入交給頁面 load-gate 的 hydrate.into,卸載後
- *  或被新一輪取代的重整不再寫共享 store。hydrateOps/refreshOps 仍留給首頁與
+ *  `createLoadGate({ ...opsPageEntry })`——寫入由閘門的資料來源依頁面 load-gate 交來的 isCurrent
+ *  把關,卸載後或被新一輪取代的重整不再寫共享 store。hydrateOps/refreshOps 仍留給首頁與
  *  refetchAfterWrite。 */
 export const opsPageEntry = opsGate.pageEntry();
 

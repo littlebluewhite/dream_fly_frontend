@@ -32,7 +32,7 @@
  * 缺陷只在四個 mark-before-await 的通知域呼叫點)。
  *
  * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
- * session 世代收進閘門——合併住 HydrationGate(hydrate 與 pageEntry().fetch 共用在飛 GET),
+ * session 世代收進閘門——合併住 HydrationGate(hydrate 與頁面 load-gate 的 load 共用在飛 GET),
  * 寫入鏈住本檔(queueWrite)。身分基準改在建構當下決定:restored 開機零觸發,建構順序契約
  * 與消費端「let 必須宣告在前」的註解一併退役。
  *
@@ -98,7 +98,7 @@ export interface SessionGateOptions<T> {
 
 /**
  * 門 (a) 對外面:HydrationGate<T>(hydrated/hydrate/refresh/markMutated/pageEntry)只多一個
- * mutate。pageEntry() 繼承自閘門(R14 F1):fetch 是**帶 epoch 核對**的 epochFetch(本工廠
+ * mutate。pageEntry() 繼承自閘門(R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠
  * 餵給水合閘門的那一支,不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })`
  * 不再有機會繞過核對。
  * mutate 吸收五份 mutator 骨架(waitlist join/cancel、leave create/cancel/bookMakeup):
@@ -118,8 +118,8 @@ export interface SessionGate<T> extends HydrationGate<T> {
 }
 
 /**
- * 建立完整 session gate。epochFetch 抽名,讓閘門的 pageEntry() 把**同一支**核對過的 fetch
- * 交給頁面的 load-gate(不是複製第二份判斷);它對 core 是 closure 前向參照,只在
+ * 建立完整 session gate。epochFetch 抽名,讓閘門的 pageEntry() 交給頁面 load-gate 的資料來源
+ * 抓的是**同一支**核對過的 fetch(不是複製第二份判斷);它對 core 是 closure 前向參照,只在
  * hydrate/refresh 時才被呼叫。建構期不觸發 onChange(身分基準見 createSessionCore),
  * 宣告順序不再是契約。
  *
@@ -135,7 +135,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate<T
 		// P1′:回應落地前核對 epoch —— 跨登出/換帳號的在飛回應整包作廢(throw 讓 gate
 		// 既不 apply 也不 commit,見 hydration-gate 檔頭「fetch rejection 原樣拋出」)。
 		// refresh 也走這條 fetch,故 gate.refresh 匯出者(leave 的 refreshLeaveRequests)
-		// 與閘門 pageEntry() 交給頁面 load-gate 的那一支,一併獲得在飛作廢語意。
+		// 與閘門 pageEntry() 交給頁面 load-gate 的資料來源,一併獲得在飛作廢語意。
 		if (epoch !== core.epoch()) throw new Error('stale session: 回應跨登出/換帳號,作廢');
 		return data;
 	};

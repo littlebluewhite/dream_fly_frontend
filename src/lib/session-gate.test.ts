@@ -604,26 +604,31 @@ describe('createSessionRefresher — 無條件重抓 + 身分感知', () => {
 
 describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的 epoch 殘窗)', () => {
 	// 殘窗原文:通知**頁**的 load-gate 直接把 raw getter 當 fetch,繞過 epoch 核對——
-	// 跨登出/換帳的在飛回應會被 load-gate 無條件套用進共享 store。pageEntry() 把
-	// 「核對過的 fetch + 閘門自己的 hydrate 選項」整包吐給頁面,頁面沒有機會拿到 raw getter。
+	// 跨登出/換帳的在飛回應會被 load-gate 無條件套用進共享 store。pageEntry() 把閘門自己的
+	// 資料來源(fetch 是核對過的 epochFetch)整包交給頁面,頁面沒有機會拿到 raw getter。
 
-	it('stale:fetch 在飛期間登出 → rejects(頁面 load-gate 據此收 error 態,不套用舊帳號資料)', async () => {
+	it('stale:頁面 load 跨 epoch → phase error,onError 收到 stale 錯誤、不套用舊帳號資料', async () => {
 		const d = createDeferred<Item[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
 		const store = writable<Item[]>([]);
 		const gate = createSessionGate<Item[]>({ fetch: () => d.promise, apply: (data) => store.set(data), reset: () => store.set([]) });
+		const onError = vi.fn();
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		const p = gate.pageEntry().fetch();
+		const page = createLoadGate({ ...gate.pageEntry(), onError });
+		const p = page.load();
 		await authStore.logout(); // 在飛期間登出 → epoch+1
 
 		d.resolve([{ id: 'a-item' }]);
-		await expect(p).rejects.toThrow('stale session: 回應跨登出/換帳號,作廢');
+		await p;
 
+		expect(get(page)).toBe('error');
+		expect(onError).toHaveBeenCalledWith(new Error('stale session: 回應跨登出/換帳號,作廢'));
 		expect(get(store)).toEqual([]); // A 的資料沒有復活
+		page.destroy();
 	});
 
-	it('retry:stale reject 後,同一支 fetch 在新 epoch 下成功(load-gate 的 refresh 回落同一支,零新程式路徑)', async () => {
+	it('retry:頁面 load 跨 epoch → phase error 之後,同一頁 refresh() 在新 epoch 下成功(同一支 epochFetch,零新程式路徑)', async () => {
 		const d = createDeferred<Item[]>();
 		let gets = 0;
 		vi.mocked(api).mockImplementation(fakeRouter({
@@ -633,21 +638,25 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 		}));
 		const store = writable<Item[]>([]);
 		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (x) => store.set(x), reset: () => store.set([]) });
-		const entry = gate.pageEntry(); // 頁面手上就這一支,retry 也是它
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		const p = entry.fetch();
+		const page = createLoadGate({ ...gate.pageEntry() }); // 頁面手上就這一包,retry 也是它
+		const p = page.load();
 		await authStore.logout();
 		d.resolve([{ id: 'stale' }]);
-		await expect(p).rejects.toThrow();
+		await p;
+		expect(get(page)).toBe('error');
 
-		await expect(entry.fetch()).resolves.toEqual([{ id: 'fresh' }]); // 新 epoch 下重試成功
+		await page.refresh(); // 新 epoch 下重試
+		expect(get(page)).toBe('ready');
+		expect(get(store)).toEqual([{ id: 'fresh' }]);
+		page.destroy();
 	});
 
-	it('session 閘門的 pageEntry().fetch 帶 epoch 核對:真 createLoadGate({ ...gate.pageEntry() }) 在飛登出 → error 態、舊帳號資料不落地', async () => {
+	it('session 閘門的進場包帶 epoch 核對:真 createLoadGate({ ...gate.pageEntry() }) 在飛登出 → error 態、舊帳號資料不落地', async () => {
 		/* R14 F1:session 閘門不再自己組 pageEntry,而是繼承 HydrationGate 的——它餵給水合閘門的
 		 * fetch 就是 epochFetch,所以繼承下來的進場包自帶 epoch 核對。本釘守住這條繼承:若 session
-		 * 閘門改餵 raw fetch,舊帳號資料會經 load-gate 的 hydrate.into 落回共享 store。 */
+		 * 閘門改餵 raw fetch,舊帳號資料會經閘門的 apply 落回共享 store。 */
 		const d = createDeferred<Item[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
 		const store = writable<Item[]>([]);
@@ -664,7 +673,7 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 		await p;
 
 		expect(phases[phases.length - 1]).toBe('error');
-		expect(get(store)).toEqual([]); // A 的資料沒有經 hydrate.into 落地
+		expect(get(store)).toEqual([]); // A 的資料沒有經 apply 落地
 		expect(get(gate.hydrated)).toBe(false);
 
 		unsub();

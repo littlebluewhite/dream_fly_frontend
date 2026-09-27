@@ -29,7 +29,7 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  C3(架構深化 R9)補完 ADR 0017 記下的 known-latent 殘窗:通知**頁**的 load-gate
  *  入口原本直接拿 api.ts 的 getNotifications 當 fetch、繞過 epoch 核對,現改吃下方
  *  notificationsPageEntry(同一顆閘門吐出的進場包)。
- *  架構深化 R10:進場包再帶 hydrate.gen(閘門的 mutationGen),通知頁 load-gate 的
+ *  架構深化 R10:通知頁 load-gate 的 refresh 族讀閘門同一本 mutation 世代帳,
  *  refresh()/silentRefresh() 因此獲得世代穩定重抓——使用者按「重新整理」的飛行窗口內
  *  點的已讀(markRead/markAllRead 的 markMutated)不再被姍姍來遲的舊快照打回未讀,舊
  *  快照丟棄後原地重抓(見 $lib/hydration-gate 的 fetchGenStable)。 */
@@ -48,7 +48,7 @@ const gate = createSessionGate<Notification[]>({
 // gate.hydrated(hydration-gate.ts 的介面明文：呼叫端可直接讀寫，非唯讀投影)。
 export const notificationsHydrated = gate.hydrated;
 export const hydrateNotifications = gate.hydrate;
-/** 通知頁的 load-gate 進場包(fetch 帶 epoch 核對 + hydrate 選項),頁面 spread 使用。 */
+/** 通知頁的 load-gate 進場包(閘門的資料來源,抓取帶 epoch 核對),頁面 spread 使用。 */
 export const notificationsPageEntry = gate.pageEntry();
 
 /** 已讀 mutation(自 routes/member/notifications/+page.svelte 搬遷，C1)——樂觀更新

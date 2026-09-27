@@ -29,8 +29,8 @@
 
   // C3:整包進場改吃 session 閘門的 pageEntry()——fetch 是帶 epoch 核對的那一支
   // (跨登出/換帳的在飛回應會 throw,由本頁 error 態接住、retry 走 gate.refresh
-  // 回落同一支),hydrate 是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
-  // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)仍全在 load-gate 內部。
+  // 回落同一支),寫入是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
+  // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)全在水合閘門內部。
   const gate = createLoadGate({ ...notificationsPageEntry });
   onMount(() => {
     gate.load();

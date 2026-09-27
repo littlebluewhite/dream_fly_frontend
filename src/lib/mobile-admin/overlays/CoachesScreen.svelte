@@ -45,7 +45,7 @@
   // 停留在 domain seed、沒有 loading 骨架、也沒有重試入口,是 ADR 0016 明文記載的
   // 風險窗。改建 createLoadGate 三態(loading/error/ready)。R14(F1)起佈線改 spread
   // ops 閘門的頁面進場包 opsPageEntry(同 routes/mobile-admin/admin/members/+page.svelte)
-  // ——hydrate.into 寫 $coachesStore,卸載後才落地的回應不寫。opsHydrated 為 true(已水合)
+  // ——閘門的 apply 寫 $coachesStore,卸載後才落地的回應不寫。opsHydrated 為 true(已水合)
   // 時 load-gate 的 guard 命中,同步 ready、不重打 getOpsCollections。ScreenHeader(含
   // 「新增教練」按鈕)留在閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
   const gate = createLoadGate({ ...opsPageEntry });

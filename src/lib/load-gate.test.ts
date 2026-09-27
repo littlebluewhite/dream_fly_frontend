@@ -5,9 +5,11 @@ import {
 	createLoadGate,
 	createPagedLoadGate,
 	type LoadPhase,
+	type LoadSource,
 	type PagedGateState,
 	type PagedResponse
 } from './load-gate';
+import { createHydrationGate } from './hydration-gate';
 import LoadGateHarness from './load-gate.harness.svelte';
 
 /** 手動控時序的 deferred promise——測 generation/destroy 競態不用 fake timers。 */
@@ -25,18 +27,6 @@ function createDeferred<T>() {
  *  保證期間的 microtask 全數收束。 */
 function settleRetry() {
 	return new Promise<void>((r) => setTimeout(r, 0));
-}
-
-/** 合成的 mutation settle 訊號源（R11 第五決策點）:未 settle 時回 promise、靜止時同步回
- *  undefined——生產上這本帳由 $lib/hydration-gate 的閘門記(markMutated(tail) 入帳、
- *  tail settle 出帳),本檔只需要訊號的形狀。 */
-function createSettleSignal() {
-	const d = createDeferred<void>();
-	let quiet = false;
-	const wait = d.promise.then(() => {
-		quiet = true;
-	});
-	return { pendingSettle: () => (quiet ? undefined : wait), settle: () => d.resolve() };
 }
 
 interface RowsPage extends PagedResponse {
@@ -250,279 +240,193 @@ describe('createLoadGate', () => {
 	});
 });
 
-/* Task T1(B0/K2-a)：hydrate 選項——把兩個通知頁手焊的「skip 讀旗標 + onData 寫旗標」
- * 4 行邏輯收進 load-gate 本身，成為型別層與 onData 互斥的獨立選項。語意仿
- * $lib/hydration-gate 的 createHydrationGate（guard 短路 + post-await re-check +
- * mutator 翻旗），差異只在 load() 的 in-flight 競態改由 flag 重查、且重查為 true 時
- * phase 仍要收斂 ready（資料已經在 store 裡，不該卡在骨架）。 */
-describe('hydrate 選項', () => {
-	it('旗標已 true → load() 短路不發 fetch、phase 收斂 ready', async () => {
-		const flag = writable(true);
-		const fetch = vi.fn(async () => ({ v: 1 }));
-		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+/* R15 Task 1(候選 F-1):頁面進場包改交「資料來源」(LoadSource)——水合協定的決策(guard
+ * 短路、mutation 勝出、翻旗、世代穩定重抓、尾流等待)全數住在水合閘門,load-gate 只管 phase、
+ * run 世代、卸載與 onError,並把棄追判準 isCurrent 交給 source。以下鎖定釘原本用合成旗標 +
+ * `hydrate` 選項寫成,改用真的 `createHydrationGate(...).pageEntry()` 後斷言不變;語意沿革見
+ * 各釘註解(T1 hydrate 選項、codex B0 r1 的重入防護(F1)/(F5)、R10 世代穩定、R11 尾流等待)。 */
+describe('source 選項（pageEntry 整合）', () => {
+	it('load 在飛 → markMutated → invalidate → 回應落地：舊快照不套用、直寫列保留', async () => {
+		/* bug #3(ADR-0024 記錄的潛伏窗口):舊 load 路徑判斷 mutation 勝出只看旗標,和解失敗
+		 * 把旗標翻回 false(invalidate)就拆掉了在飛 load 的 mutation-wins——舊快照落地、直寫列
+		 * 蒸發。load 路徑自此與 gate.hydrate 同一判準:進場捕捉世代、落地比對。 */
+		const store = writable<string[]>([]);
+		const d = createDeferred<string[]>();
+		const gate = createHydrationGate({ fetch: () => d.promise, apply: (rows) => store.set(rows) });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		await gate.load();
+		const p = page.load();
+		store.update((rows) => [...rows, 'direct']); // 在飛期間的本地直寫
+		gate.markMutated();
+		gate.invalidate(); // 和解失敗:旗標翻回 false(可重試縫)
 
-		expect(fetch).not.toHaveBeenCalled();
-		expect(into).not.toHaveBeenCalled();
-		expect(get(gate)).toBe('ready');
+		d.resolve(['stale']);
+		await p;
 
-		gate.destroy();
+		expect(get(store)).toEqual(['direct']); // 舊快照不套用,直寫列保留
+		expect(get(gate.hydrated)).toBe(false); // 不翻旗——可重試路徑保持開啟
+		expect(get(page)).toBe('ready'); // 資料已在 store,仍收斂離開骨架
+
+		page.destroy();
 	});
 
 	it('旗標 false → load() 正常序:fetch → into(d) → 翻旗 → ready', async () => {
-		const flag = writable(false);
 		const data = { v: 1 };
 		const fetch = vi.fn(async () => data);
 		const into = vi.fn((d: typeof data) => {
 			expect(d).toEqual(data);
-			expect(get(flag)).toBe(false); // into 呼叫當下旗標還沒被翻
-			expect(get(gate)).toBe('loading'); // into 呼叫當下 phase 還沒變成 ready
+			expect(get(gate.hydrated)).toBe(false); // into 呼叫當下旗標還沒被翻
+			expect(get(page)).toBe('loading'); // into 呼叫當下 phase 還沒變成 ready
 		});
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		await gate.load();
-
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(into).toHaveBeenCalledWith(data);
-		expect(get(flag)).toBe(true); // into 之後才翻旗
-		expect(get(gate)).toBe('ready'); // 翻旗之後才收斂 ready
-
-		gate.destroy();
-	});
-
-	it('refresh() 無視旗標:旗標 true 仍發 fetch 並套用 into + 翻旗(未接 hydrate.gen → plain-flag 保舊語意,單次 fetch)', async () => {
-		const flag = writable(true);
-		const data = { v: 2 };
-		const fetch = vi.fn(async () => data);
-		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
-
-		await gate.refresh();
+		await page.load();
 
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith(data);
-		expect(get(flag)).toBe(true);
-		expect(get(gate)).toBe('ready');
+		expect(get(gate.hydrated)).toBe(true); // into 之後才翻旗
+		expect(get(page)).toBe('ready'); // 翻旗之後才收斂 ready
 
-		gate.destroy();
+		page.destroy();
 	});
 
-	/* F2(codex B0 r1):上面這條測試旗標從 true 開始,砍掉 applyRefreshed 的
-	 * flag.set(true) 不會被它發現(true 砍成 true 還是 true)。這裡補從 false 出發的
-	 * 版本,把「完成後旗標為 true」這個轉移本身釘住。 */
-	it('refresh() 從旗標 false 出發:套用 into 後翻為 true(即使從未呼叫過 load())', async () => {
-		const flag = writable(false);
-		const data = { v: 3 };
-		const fetch = vi.fn(async () => data);
-		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
-
-		await gate.refresh();
-
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(into).toHaveBeenCalledWith(data);
-		expect(get(flag)).toBe(true); // false → true 的轉移才是這條測試要釘的行為
-		expect(get(gate)).toBe('ready');
-
-		gate.destroy();
-	});
-
-	it('in-flight 翻旗競態釘:load() fetch 進行中(await 期間)旗標被翻 true → resolve 後不套 into(共享 store 不被覆寫)、但 phase 收斂 ready', async () => {
-		const flag = writable(false);
+	it('in-flight mutation 勝出釘:load() fetch 進行中(await 期間)markMutated → resolve 後不套 into(共享 store 不被覆寫)、但 phase 收斂 ready', async () => {
 		const d = createDeferred<{ v: number }>();
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch: () => d.promise, hydrate: { flag, into } });
+		const gate = createHydrationGate({ fetch: () => d.promise, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		const loadPromise = gate.load();
-		expect(get(gate)).toBe('loading'); // in-flight,尚未收斂
+		const loadPromise = page.load();
+		expect(get(page)).toBe('loading'); // in-flight,尚未收斂
 
-		flag.set(true); // in-flight 期間旗標被翻 true——模擬 mutator 直接對共用 writable set(true)
+		gate.markMutated(); // in-flight 期間的本地 mutation
 		d.resolve({ v: 1 });
 		await loadPromise; // re-check 應放棄套用,promise 正常 resolve(不 reject)
 
 		expect(into).not.toHaveBeenCalled(); // mutation 勝出,不覆寫共享 store
-		expect(get(gate)).toBe('ready'); // 資料已在 store(mutation 寫的),仍要收斂離開骨架
+		expect(get(page)).toBe('ready'); // 資料已在 store(mutation 寫的),仍要收斂離開骨架
 
-		gate.destroy();
+		page.destroy();
 	});
 
-	/* F3(codex B0 r1):F1 修的是比上面「外部旗標被直接 set(true)」更深一層的競態——
-	 * into() 本身(它的 subscriber)同步重入 gate.load(),開出新一輪 generation。沒有
-	 * F1 的重查,舊一輪的 into() 之後會無條件翻旗,新一輪自己的 into() 就會被這個旗標
-	 * 擋下、真正的新資料永遠寫不進共享 store(最終停在 stale {v:1} 而非 {v:2})。 */
+	/* 重入防護(F1)(codex B0 r1 F3):into() 本身(它的 subscriber)同步重入 page.load(),開出
+	 * 新一輪 run 世代。沒有 into() 之後的 isCurrent 重查,舊一輪會無條件翻旗,新一輪自己的
+	 * 落地就會被這個旗標判成 mutation 勝出、真正的新資料永遠寫不進共享 store。 */
 	it('重入釘子:into() 的 subscriber 同步重入 load(),最終共享 store 是第二次(新 generation)的 payload、phase ready、flag true', async () => {
-		const flag = writable(false);
 		const sharedStore = writable<{ v: number } | null>(null);
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
-		const into = (data: { v: number }) => sharedStore.set(data);
-
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+		const gate = createHydrationGate({ fetch, apply: (data: { v: number }) => sharedStore.set(data) });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
 		let reentrantLoad: Promise<void> | undefined;
 		let sawWrite = false;
 		const unsub = sharedStore.subscribe((val) => {
 			// subscribe() 當下會用初值(null)立即同步觸發一次,跳過;第一次真正寫入
-			// (into({v:1}))才同步重入 gate.load(),模擬共享 store 的訂閱者收到更新後
+			// (into({v:1}))才同步重入 page.load(),模擬共享 store 的訂閱者收到更新後
 			// 自己也要重新拉一次資料。
 			if (val !== null && !sawWrite) {
 				sawWrite = true;
-				reentrantLoad = gate.load();
+				reentrantLoad = page.load();
 			}
 		});
 
-		const p1 = gate.load();
+		const p1 = page.load();
 		d1.resolve({ v: 1 });
 		await p1;
 
 		expect(fetch).toHaveBeenCalledTimes(2); // 重入已經發出第二次 fetch
-		expect(get(flag)).toBe(false); // 舊一輪的 into() 之後不得翻旗(F1)
-		expect(get(gate)).toBe('loading'); // 舊一輪不得把 phase 推成 ready(F1)
+		expect(get(gate.hydrated)).toBe(false); // 舊一輪的 into() 之後不得翻旗(F1)
+		expect(get(page)).toBe('loading'); // 舊一輪不得把 phase 推成 ready(F1)
 
 		d2.resolve({ v: 2 });
 		await reentrantLoad;
 
 		expect(get(sharedStore)).toEqual({ v: 2 }); // 是第二次(新 generation)的 payload,不是 stale {v:1}
-		expect(get(flag)).toBe(true);
-		expect(get(gate)).toBe('ready');
+		expect(get(gate.hydrated)).toBe(true);
+		expect(get(page)).toBe('ready');
 
 		unsub();
-		gate.destroy();
+		page.destroy();
 	});
 
-	/* F5(codex B0 r1 追補):applyRefreshed 有與 F1 完全同款的同步重入 gap——
-	 * refresh() 的 into(data) 觸發 subscriber 同步重入 gate.load()(此刻旗標尚未翻,
-	 * into 先於 flag.set,load 不短路、發第二次 fetch、generation++)。沒有 gen 重查,
-	 * 舊 refresh 隨後的無條件翻旗會讓新 load 的回應在 applyLoaded 的旗標重查誤判
-	 * mutation 勝出而丟棄新資料——store 停在 refresh 的舊資料。 */
+	/* 重入防護(F5)(codex B0 r1 追補):refresh 路徑有與 F1 完全同款的同步重入 gap——
+	 * refresh() 的 into(data) 觸發 subscriber 同步重入 page.load()(此刻旗標尚未翻,load 不短路、
+	 * 發第二次 fetch、run 世代++)。沒有 isCurrent 重查,舊 refresh 隨後的翻旗會讓新 load 的落地
+	 * 誤判 mutation 勝出而丟棄新資料——store 停在 refresh 的舊資料。 */
 	it('重入釘子(refresh 路徑):into() 的 subscriber 同步重入 load(),最終共享 store 是 load(新 generation)的 payload、phase ready、flag true', async () => {
-		const flag = writable(false);
 		const sharedStore = writable<{ v: number } | null>(null);
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
-		const into = (data: { v: number }) => sharedStore.set(data);
-
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+		const gate = createHydrationGate({ fetch, apply: (data: { v: number }) => sharedStore.set(data) });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
 		let reentrantLoad: Promise<void> | undefined;
 		let sawWrite = false;
 		const unsub = sharedStore.subscribe((val) => {
 			// 同上一條:略過 subscribe() 當下的初值(null)觸發;第一次真正寫入
-			// (refresh 的 into({v:1}))才同步重入 gate.load()。
+			// (refresh 的 into({v:1}))才同步重入 page.load()。
 			if (val !== null && !sawWrite) {
 				sawWrite = true;
-				reentrantLoad = gate.load();
+				reentrantLoad = page.load();
 			}
 		});
 
-		const p1 = gate.refresh(); // 與 F3 唯一的差別:第一輪從 refresh() 出發
+		const p1 = page.refresh(); // 與上一條唯一的差別:第一輪從 refresh() 出發
 		d1.resolve({ v: 1 });
 		await p1;
 
 		expect(fetch).toHaveBeenCalledTimes(2); // 重入時旗標尚未翻,load() 不短路、已發出第二次 fetch
-		expect(get(flag)).toBe(false); // 舊 refresh 一輪的 into() 之後不得翻旗(F5)
-		expect(get(gate)).toBe('loading'); // 舊一輪不得把 phase 推成 ready(F1 的 run() 重查)
+		expect(get(gate.hydrated)).toBe(false); // 舊 refresh 一輪的 into() 之後不得翻旗(F5)
+		expect(get(page)).toBe('loading'); // 舊一輪不得把 phase 推成 ready
 
 		d2.resolve({ v: 2 });
 		await reentrantLoad;
 
 		expect(get(sharedStore)).toEqual({ v: 2 }); // 是 load(新 generation)的 payload,不是 refresh 的舊 {v:1}
-		expect(get(flag)).toBe(true);
-		expect(get(gate)).toBe('ready');
+		expect(get(gate.hydrated)).toBe(true);
+		expect(get(page)).toBe('ready');
 
 		unsub();
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('失敗路徑:fetch reject → phase 進 error(與 onData 路徑相同語意),不翻旗', async () => {
-		const flag = writable(false);
 		const err = new Error('boom');
 		const fetch = vi.fn(async () => {
 			throw err;
 		});
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		await gate.load();
+		await page.load();
 
 		expect(into).not.toHaveBeenCalled();
-		expect(get(flag)).toBe(false);
-		expect(get(gate)).toBe('error');
+		expect(get(gate.hydrated)).toBe(false);
+		expect(get(page)).toBe('error');
 
-		gate.destroy();
+		page.destroy();
 	});
 
-	it('silentRefresh() 套用 + 翻旗(未接 hydrate.gen → 無世代帳可比,單次 fetch)', async () => {
-		const flag = writable(false);
-		const fetch = vi.fn().mockResolvedValueOnce({ v: 1 }).mockResolvedValueOnce({ v: 2 });
-		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
-		await gate.load();
-		expect(get(gate)).toBe('ready');
-		expect(get(flag)).toBe(true);
-
-		await gate.silentRefresh();
-
-		expect(into).toHaveBeenCalledTimes(2); // load() 一次 + silentRefresh 一次
-		expect(into).toHaveBeenLastCalledWith({ v: 2 });
-		expect(get(flag)).toBe(true);
-		expect(get(gate)).toBe('ready');
-
-		gate.destroy();
-	});
-
-	/* F2(codex B0 r1):上面這條測試執行 silentRefresh() 當下,旗標已經被前面的
-	 * load() 翻成 true 了,砍掉 applyRefreshed 的 flag.set(true) 一樣不會被發現。這裡
-	 * 讓旗標先 true、借 hydrate 自己的短路讓 load() 到 ready 但不觸發 fetch/into,再手動
-	 * 撥回 false,乾淨地釘住 silentRefresh() 自己的 false → true 轉移(T9:skip 選項退役,
-	 * 原本借 skip 短路做同一件事,現改借 hydrate 短路)。 */
-	it('silentRefresh() 從旗標 false 出發:套用 into 後翻為 true(hydrate 短路先到 ready,手動撥回旗標;未接 hydrate.gen → plain-flag 保舊語意)', async () => {
-		const flag = writable(true); // 先 true 讓 load() 走 hydrate 短路,不觸發 fetch/into
-		const data = { v: 5 };
-		const fetch = vi.fn(async () => data);
-		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into } });
-		await gate.load();
-		expect(get(gate)).toBe('ready');
-		expect(fetch).not.toHaveBeenCalled();
-		expect(into).not.toHaveBeenCalled();
-		expect(get(flag)).toBe(true); // hydrate 短路,旗標維持建構時的初值,未被動過
-
-		flag.set(false); // 手動撥回,隔離 silentRefresh() 自己的 false → true 轉移
-
-		await gate.silentRefresh();
-
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(into).toHaveBeenCalledWith(data);
-		expect(get(flag)).toBe(true); // false → true 的轉移由 silentRefresh() 自己完成
-		expect(get(gate)).toBe('ready');
-
-		gate.destroy();
-	});
-
-	/* R10（第四決策點）：hydrate 多一個可選的 `gen`（單調 mutation 世代讀取器，生產上
-	 * 由水合閘門的 pageEntry() 交出閘門的世代帳）。在場時 refresh()/silentRefresh()
-	 * 改走 $lib/hydration-gate 的 fetchGenStable：進場捕捉世代、落地比對，飛行窗口內發生的
-	 * 本地 mutation 讓那份快照作廢並原地重抓。load() 不走（hydrate 契約是丟棄了事，不補抓）。
-	 * 上面所有未帶 `gen` 的釘子即 plain-flag 消費端，語意一字不變。 */
+	/* R10(第四決策點):refresh 族的世代穩定重抓——進場捕捉 mutation 世代、落地比對,飛行窗口
+	 * 內發生的本地 mutation 讓那份快照作廢並原地重抓。load() 不走(hydrate 契約是丟棄了事)。 */
 	it('世代穩定重抓(refresh):in-flight 世代變 → 舊快照丟棄並原地重抓,phase 全程單一週期(不回 loading)', async () => {
-		const flag = writable(false);
-		let mutations = 0;
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
 		const phases: LoadPhase[] = [];
-		const unsub = gate.subscribe((p) => phases.push(p));
+		const unsub = page.subscribe((p) => phases.push(p));
 
-		const p = gate.refresh();
-		mutations += 1; // refresh 進場「之後」的本地 mutation
+		const p = page.refresh();
+		gate.markMutated(); // refresh 進場「之後」的本地 mutation
 		d1.resolve({ v: 1 });
 		await settleRetry();
 
@@ -534,16 +438,14 @@ describe('hydrate 選項', () => {
 
 		expect(into).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 2 });
-		expect(get(flag)).toBe(true);
+		expect(get(gate.hydrated)).toBe(true);
 		expect(phases).toEqual(['loading', 'ready']); // 重抓不把 phase 打回 loading（契約：單一週期）
 
 		unsub();
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('世代穩定重抓的棄追:重抓期間被新一輪 load() 取代 → 舊輪不再重抓、靜默退場,共享 store 是新一輪的 payload', async () => {
-		const flag = writable(false);
-		let mutations = 0;
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const d3 = createDeferred<{ v: number }>();
@@ -553,18 +455,21 @@ describe('hydrate 選項', () => {
 			.mockReturnValueOnce(d2.promise)
 			.mockReturnValueOnce(d3.promise);
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		const p1 = gate.refresh();
-		mutations += 1;
+		const p1 = page.refresh();
+		gate.markMutated();
+		gate.invalidate(); // 旗標翻回 false,下面的 load() 才不短路
 		d1.resolve({ v: 1 });
 		await settleRetry();
 		expect(fetch).toHaveBeenCalledTimes(2); // 舊輪的第一次重抓已出發
 
-		const p2 = gate.load(); // 新一輪取代舊輪（generation++），旗標仍 false 故不短路
+		gate.markMutated(); // 舊輪的重抓快照落地前世代又變(發生在新一輪進場之前,不影響新一輪)
+		gate.invalidate();
+		const p2 = page.load(); // 新一輪取代舊輪（run 世代++），旗標仍 false 故不短路
 		expect(fetch).toHaveBeenCalledTimes(3); // 第 3 次 = 新一輪自己的 fetch
 
-		mutations += 1; // 舊輪的重抓快照落地前世代又變
 		d2.resolve({ v: 2 });
 		await settleRetry();
 
@@ -576,28 +481,28 @@ describe('hydrate 選項', () => {
 
 		expect(into).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 3 }); // 落地的是新一輪的 payload
-		expect(get(gate)).toBe('ready');
+		expect(get(page)).toBe('ready');
 
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('世代穩定重抓(silentRefresh):世代變 → 重抓,全程 phase 不動', async () => {
-		const flag = writable(true); // 借 hydrate 短路讓 load() 到 ready 而不觸發 fetch/into
-		let mutations = 0;
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
 		const into = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations } });
-		await gate.load();
-		expect(get(gate)).toBe('ready');
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
+		gate.markMutated(); // 先翻旗,讓 load() 走 guard 短路到 ready 而不觸發 fetch/into
+		await page.load();
+		expect(get(page)).toBe('ready');
 		expect(fetch).not.toHaveBeenCalled();
 
 		const phases: LoadPhase[] = [];
-		const unsub = gate.subscribe((p) => phases.push(p));
+		const unsub = page.subscribe((p) => phases.push(p));
 
-		const p = gate.silentRefresh();
-		mutations += 1;
+		const p = page.silentRefresh();
+		gate.markMutated();
 		d1.resolve({ v: 1 });
 		await settleRetry();
 		expect(fetch).toHaveBeenCalledTimes(2);
@@ -609,67 +514,61 @@ describe('hydrate 選項', () => {
 		expect(into).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 2 });
 		expect(phases.every((x) => x === 'ready')).toBe(true); // 靜默:重抓也不動 phase
-		expect(get(gate)).toBe('ready');
+		expect(get(page)).toBe('ready');
 
-		gate.destroy();
+		page.destroy();
 	});
 
-	/* R11（第五決策點）：hydrate 再多一個可選的 `pendingSettle`（mutation 尾流的 settle
-	 * 訊號，生產上由水合閘門的 pageEntry() 交出閘門的尾流帳）。在場時
-	 * refresh()/silentRefresh() 每次出發 GET 之前先等未 settle 的樂觀 mutation 尾流
-	 * （PATCH）——關閉「GET 在 PATCH 仍在飛時出發、server 回舊真值」的 server-race 窗。
-	 * 未帶 `pendingSettle` 的釘子（含上方全部）語意一字不變。 */
+	/* R11(第五決策點):refresh 族每次出發 GET 之前先等未 settle 的樂觀 mutation 尾流
+	 * (markMutated(tail) 入帳)——關閉「GET 在 PATCH 仍在飛時出發、server 回舊真值」的
+	 * server-race 窗。 */
 	it('mutation settle(refresh):尾流未 settle → GET 不出發;settle 後才出發,phase 全程單一週期', async () => {
-		const flag = writable(false);
-		const signal = createSettleSignal();
+		const tail = createDeferred<void>();
 		const fetch = vi.fn(async () => ({ v: 1 }));
 		const into = vi.fn();
-		const gate = createLoadGate({
-			fetch,
-			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
-		});
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
+		gate.markMutated(tail.promise); // 樂觀 mutation:PATCH 尾流仍在飛
 
 		const phases: LoadPhase[] = [];
-		const unsub = gate.subscribe((p) => phases.push(p));
+		const unsub = page.subscribe((p) => phases.push(p));
 
-		const p = gate.refresh();
+		const p = page.refresh();
 		await settleRetry();
 
 		expect(fetch).not.toHaveBeenCalled(); // PATCH 尾流仍在飛,GET 不出發
 
-		signal.settle();
+		tail.resolve();
 		await p;
 
 		expect(fetch).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 1 });
-		expect(get(flag)).toBe(true);
+		expect(get(gate.hydrated)).toBe(true);
 		expect(phases).toEqual(['loading', 'ready']); // 等待不多推一次 phase（契約：單一週期）
 
 		unsub();
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('mutation settle(silentRefresh):尾流未 settle → GET 不出發;settle 後才出發,全程 phase 不動', async () => {
-		const flag = writable(true); // 借 hydrate 短路讓 load() 到 ready 而不觸發 fetch/into
-		const signal = createSettleSignal();
+		const tail = createDeferred<void>();
 		const fetch = vi.fn(async () => ({ v: 2 }));
 		const into = vi.fn();
-		const gate = createLoadGate({
-			fetch,
-			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
-		});
-		await gate.load();
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
+		gate.markMutated(tail.promise); // 翻旗(load() 走 guard 短路)+ 尾流入帳
+		await page.load();
 		expect(fetch).not.toHaveBeenCalled();
 
 		const phases: LoadPhase[] = [];
-		const unsub = gate.subscribe((p) => phases.push(p));
+		const unsub = page.subscribe((p) => phases.push(p));
 
-		const p = gate.silentRefresh();
+		const p = page.silentRefresh();
 		await settleRetry();
 
 		expect(fetch).not.toHaveBeenCalled();
 
-		signal.settle();
+		tail.resolve();
 		await p;
 		unsub();
 
@@ -677,51 +576,50 @@ describe('hydrate 選項', () => {
 		expect(into).toHaveBeenCalledWith({ v: 2 });
 		expect(phases.every((x) => x === 'ready')).toBe(true); // 靜默:等待也不動 phase
 
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('mutation settle 的棄追:等待期間被新一輪 load() 取代 → 醒來即棄追,舊輪的 GET 永不出發', async () => {
-		const flag = writable(false);
-		const signal = createSettleSignal();
+		const tail = createDeferred<void>();
 		const d = createDeferred<{ v: number }>();
 		const fetch = vi.fn(() => d.promise);
 		const into = vi.fn();
-		const gate = createLoadGate({
-			fetch,
-			hydrate: { flag, into, gen: () => 0, pendingSettle: signal.pendingSettle }
-		});
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry() });
+		gate.markMutated(tail.promise);
+		gate.invalidate(); // 旗標翻回 false,下面的 load() 才不短路;尾流帳不受影響
 
-		const p1 = gate.refresh(); // 舊輪:卡在等尾流 settle
+		const p1 = page.refresh(); // 舊輪:卡在等尾流 settle
 		await settleRetry();
 		expect(fetch).not.toHaveBeenCalled();
 
-		const p2 = gate.load(); // 新一輪取代舊輪（generation++）;load() 不套等待,直接出發
+		const p2 = page.load(); // 新一輪取代舊輪（run 世代++）;load() 不套等待,直接出發
 		expect(fetch).toHaveBeenCalledTimes(1);
 
-		signal.settle();
+		tail.resolve();
 		d.resolve({ v: 9 });
 		await Promise.all([p1, p2]);
 
 		expect(fetch).toHaveBeenCalledTimes(1); // 棄追:舊輪醒來已無意義,不補發 GET（否則會是 2）
 		expect(into).toHaveBeenCalledTimes(1);
 		expect(into).toHaveBeenCalledWith({ v: 9 }); // 落地的是新一輪的 payload
-		expect(get(gate)).toBe('ready');
+		expect(get(page)).toBe('ready');
 
-		gate.destroy();
+		page.destroy();
 	});
 
 	it('世代穩定重抓的失敗:第 N 次重抓 reject → 原樣傳給 load-gate（onError + phase=error）,不翻旗', async () => {
-		const flag = writable(false);
-		let mutations = 0;
 		const d1 = createDeferred<{ v: number }>();
 		const d2 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
 		const into = vi.fn();
 		const onError = vi.fn();
-		const gate = createLoadGate({ fetch, hydrate: { flag, into, gen: () => mutations }, onError });
+		const gate = createHydrationGate({ fetch, apply: into });
+		const page = createLoadGate({ ...gate.pageEntry(), onError });
 
-		const p = gate.refresh();
-		mutations += 1;
+		const p = page.refresh();
+		gate.markMutated();
+		gate.invalidate(); // 旗標翻回 false,「不翻旗」才釘得到
 		d1.resolve({ v: 1 });
 		await settleRetry();
 		expect(fetch).toHaveBeenCalledTimes(2);
@@ -731,11 +629,91 @@ describe('hydrate 選項', () => {
 		await p;
 
 		expect(onError).toHaveBeenCalledWith(err); // 重抓的失敗就是這一輪的失敗
-		expect(get(gate)).toBe('error');
+		expect(get(page)).toBe('error');
 		expect(into).not.toHaveBeenCalled();
-		expect(get(flag)).toBe(false);
+		expect(get(gate.hydrated)).toBe(false);
 
-		gate.destroy();
+		page.destroy();
+	});
+});
+
+/* LoadSource 契約(R15 F-1):用假 source 釘 load-gate 自己的那一半——phase、run 世代、卸載與
+ * onError 的寫入點都在 load-gate,source 只能讀 isCurrent。水合語意由上方 pageEntry 整合釘負責。 */
+describe('LoadSource 契約(假 source)', () => {
+	function fakeSource(overrides: Partial<LoadSource> = {}): LoadSource {
+		return { guarded: () => false, load: async () => {}, refresh: async () => {}, ...overrides };
+	}
+
+	it('guarded 為真 → load() 同步收斂 ready,不呼叫 source.load', async () => {
+		const load = vi.fn(async () => {});
+		const page = createLoadGate({ source: fakeSource({ guarded: () => true, load }) });
+
+		const p = page.load();
+		expect(get(page)).toBe('ready'); // 同步:尚未 await 就已 ready
+		await p;
+
+		expect(load).not.toHaveBeenCalled();
+		page.destroy();
+	});
+
+	it('isCurrent:被新一輪取代之後、destroy 之後都回 false', async () => {
+		const seen: Array<() => boolean> = [];
+		const load = vi.fn((isCurrent: () => boolean) => {
+			seen.push(isCurrent);
+			return new Promise<void>(() => {}); // 永不落地:只看棄追判準
+		});
+		const page = createLoadGate({ source: fakeSource({ load }) });
+
+		void page.load();
+		expect(seen[0]()).toBe(true);
+
+		void page.load(); // 新一輪取代舊一輪
+		expect(seen[0]()).toBe(false);
+		expect(seen[1]()).toBe(true);
+
+		page.destroy();
+		expect(seen[1]()).toBe(false);
+	});
+
+	it('source 跨多個 tick → phase 仍只有 loading→ready 一個週期', async () => {
+		const source = fakeSource({
+			load: async () => {
+				await Promise.resolve();
+				await settleRetry();
+				await settleRetry();
+			}
+		});
+		const page = createLoadGate({ source });
+		const phases: LoadPhase[] = [];
+		const unsub = page.subscribe((p) => phases.push(p));
+
+		await page.load();
+
+		expect(phases).toEqual(['loading', 'ready']);
+		unsub();
+		page.destroy();
+	});
+
+	it('silentRefresh():把 isCurrent 交給 source.refresh、吞掉錯誤、不動 phase、不呼叫 onError', async () => {
+		let handed: (() => boolean) | undefined;
+		const refresh = vi.fn(async (isCurrent: () => boolean) => {
+			handed = isCurrent;
+			throw new Error('boom');
+		});
+		const onError = vi.fn();
+		const page = createLoadGate({ source: fakeSource({ refresh }), onError });
+		await page.load();
+		const phases: LoadPhase[] = [];
+		const unsub = page.subscribe((p) => phases.push(p));
+
+		await page.silentRefresh();
+
+		expect(refresh).toHaveBeenCalledTimes(1);
+		expect(handed?.()).toBe(true); // 交出的就是這一輪的棄追判準
+		expect(phases.every((x) => x === 'ready')).toBe(true);
+		expect(onError).not.toHaveBeenCalled();
+		unsub();
+		page.destroy();
 	});
 });
 
@@ -894,16 +872,14 @@ describe('createPagedLoadGate', () => {
 	});
 });
 
-// F4(codex B0 r1):onData 與 hydrate 型別層互斥(LoadGateOptions 的 discriminated
-// union)——同時提供兩者應為編譯期錯誤,靠下面的 @ts-expect-error 釘住;svelte-check
-// 若在它「沒有錯誤可壓」時報錯,即代表這條負向測試失敗(XOR 契約鬆綁了)。這條只驗證
-// 型別、不執行(it.skip)。
-it.skip('型別:onData 與 hydrate 不得同時提供', () => {
-	const flag = writable(false);
-	// @ts-expect-error onData 與 hydrate 互斥,見 LoadGateOptions 的 discriminated union
-	createLoadGate({
-		fetch: async () => ({ v: 1 }),
-		onData: () => {},
-		hydrate: { flag, into: () => {} }
-	});
+// F4(codex B0 r1):一個 gate 只能擇一——fetch(+onData)或 source(LoadGateOptions 的
+// discriminated union)。同時提供應為編譯期錯誤,靠下面的 @ts-expect-error 釘住;svelte-check
+// 若在它「沒有錯誤可壓」時報錯,即代表這條負向測試失敗(互斥契約鬆綁了)。這條只驗證型別、
+// 不執行(it.skip)。
+it.skip('型別:fetch 與 source 不得同時提供、onData 與 source 不得同時提供', () => {
+	const source: LoadSource = { guarded: () => false, load: async () => {}, refresh: async () => {} };
+	// @ts-expect-error fetch 與 source 互斥,見 LoadGateOptions 的 discriminated union
+	createLoadGate({ fetch: async () => ({ v: 1 }), source });
+	// @ts-expect-error onData 與 source 互斥(onData 只屬於 plain 的 fetch 分支)
+	createLoadGate({ source, onData: () => {} });
 });

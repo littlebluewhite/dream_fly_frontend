@@ -4,8 +4,8 @@
    *
    * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $members store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
-   * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。寫入交給 load-gate 的
-   * hydrate.into,卸載後才落地的回應不寫共享 store。
+   * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。寫入由閘門依 load-gate
+   * 交來的 isCurrent 把關,卸載後才落地的回應不寫共享 store。
    *
    * Task 20：改讀真 GET /users 形狀(MemberRow 已瘦身，同桌面 admin/data.ts 的
    * MemberAccount)——狀態篩選由舊 3 態(在學中/出席偏低/暫停中，出席率導向)改為

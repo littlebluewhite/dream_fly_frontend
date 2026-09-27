@@ -205,23 +205,23 @@ describe('createHydrationGate', () => {
 		expect(get(gate.hydrated)).toBe(false);
 	});
 
-	it('mutation 世代(經 pageEntry().hydrate.gen 讀):唯讀單調——只有 markMutated 推進,hydrate/refresh 不動它,旗標翻回 false 也不倒退', async () => {
-		const fetch = vi.fn(async () => ({ v: 1 }));
-		const gate = createHydrationGate({ fetch, apply: () => {} });
-		const gen = gate.pageEntry().hydrate.gen;
+	it('mutation 世代只有 markMutated 推進:refresh 在飛期間另一支 hydrate/refresh 落地 → 在飛那份照常套用、不補抓', async () => {
+		/* 世代帳不再經讀取器外流(R15 F-1),改釘它的可觀察面:hydrate/refresh 若推進世代,在飛
+		 * refresh 落地時會誤判「進場之後有 mutation」而丟棄重抓(fetch 會變成 4)。旗標翻回 false
+		 * 不倒退世代,見上方「世代競態(帳本閉合輪)」釘。 */
+		const d1 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockResolvedValue({ v: 2 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
 
-		expect(gen()).toBe(0);
-		await gate.hydrate();
-		expect(gen()).toBe(0); // 水合不是 mutation
-		await gate.refresh();
-		expect(gen()).toBe(0); // 重抓也不是
+		const p = gate.refresh(); // 在飛
+		await gate.hydrate(); // 水合不是 mutation
+		await gate.refresh(); // 重抓也不是
+		d1.resolve({ v: 1 });
+		await p;
 
-		gate.markMutated();
-		expect(gen()).toBe(1);
-		gate.hydrated.set(false); // 和解失敗的可重試縫:旗標可翻回,世代只增不減
-		expect(gen()).toBe(1);
-		gate.markMutated();
-		expect(gen()).toBe(2);
+		expect(fetch).toHaveBeenCalledTimes(3); // 在飛那份世代穩定,不補抓
+		expect(apply).toHaveBeenLastCalledWith({ v: 1 });
 	});
 
 	/* R11 第五決策點——mutation settle 訊號。第四決策點(世代穩定)只比對進出場世代,對
@@ -302,30 +302,26 @@ describe('createHydrationGate', () => {
 		 * 重問 pendingSettle(),不靜止就再等。 */
 		const t1 = createDeferred<void>();
 		const t3 = createDeferred<void>();
-		const fetch = vi.fn(async () => ({ v: 1 }));
+		// 探針:比受測 refresh 早一步排隊的另一支 refresh,兩者醒來的鏈同長、探針恆早一拍——
+		// 它的 GET 出發點正落在上述窗口內,就在那一刻入帳 t3。
+		const fetch = vi.fn(async () => {
+			if (fetch.mock.calls.length === 1) gate.markMutated(t3.promise);
+			return { v: 1 };
+		});
 		const gate = createHydrationGate({ fetch, apply: () => {} });
 
 		gate.markMutated(t1.promise);
-		// 探針:比 refresh 早一步入列的同批等待者,它的 resolve 鏈因此恆比 refresh 的早一拍
-		// ——回呼執行的時點正落在上述窗口內。
-		const probe = gate.pageEntry().hydrate.pendingSettle();
-		let fetchesWhenT3Landed = -1;
-		void probe?.then(() => {
-			fetchesWhenT3Landed = fetch.mock.calls.length;
-			gate.markMutated(t3.promise);
-		});
-
+		const probe = gate.refresh();
 		const p = gate.refresh();
 		t1.resolve();
 		await settleRetry();
 
-		expect(fetchesWhenT3Landed).toBe(0); // 釘住這條真的打在窗裡(t3 早於 GET 入帳,不是事後才到)
-		expect(fetch).not.toHaveBeenCalled(); // 窗口關閉:GET 不得帶著在飛尾流出發
+		expect(fetch).toHaveBeenCalledTimes(1); // 只有探針出發(t3 就在這一發裡入帳);受測 refresh 窗口關閉,不帶著在飛尾流出發
 
 		t3.resolve();
-		await p;
+		await Promise.all([probe, p]);
 
-		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(fetch).toHaveBeenCalledTimes(3); // t3 settle 後受測 refresh 才出發(探針那份因世代變而補抓一次)
 	});
 
 	it('mutation settle:refresh 在飛期間 markMutated(尾流) → 世代作廢的補抓輪同樣等 settle 才出發', async () => {
@@ -403,23 +399,29 @@ describe('createHydrationGate', () => {
 		await p;
 	});
 
-	it('pendingSettle(經 pageEntry().hydrate.pendingSettle 讀):靜止時同步回 undefined(不得回 resolved promise——多一個 microtask 會鬆掉在飛判準),有未 settle 尾流才回 promise', async () => {
+	it('硬契約(ADR-0021):尾流帳靜止時頁面 lg.refresh() 同步呼叫 fetch(不得多一個 microtask),有未 settle 尾流才等', async () => {
 		const tail = createDeferred<void>();
-		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
-		const pendingSettle = gate.pageEntry().hydrate.pendingSettle;
+		const fetch = vi.fn(async () => ({ v: 1 }));
+		const gate = createHydrationGate({ fetch, apply: () => {} });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
-		expect(pendingSettle()).toBeUndefined(); // 開機靜止
+		void page.refresh();
+		expect(fetch).toHaveBeenCalledTimes(1); // 開機靜止:尚未 await 就已出發
 		gate.markMutated();
-		expect(pendingSettle()).toBeUndefined(); // 無尾流的 mutation 不入帳
+		void page.refresh();
+		expect(fetch).toHaveBeenCalledTimes(2); // 無尾流的 mutation 不入帳,仍同步出發
 
 		gate.markMutated(tail.promise);
-		const wait = pendingSettle();
-		expect(wait).toBeInstanceOf(Promise);
+		const p = page.refresh();
+		expect(fetch).toHaveBeenCalledTimes(2); // 尾流在飛:不出發
 
 		tail.resolve();
-		await wait;
+		await p;
+		expect(fetch).toHaveBeenCalledTimes(3);
 
-		expect(pendingSettle()).toBeUndefined(); // settle 後回歸靜止
+		void page.refresh();
+		expect(fetch).toHaveBeenCalledTimes(4); // settle 後回歸靜止,又是同步出發
+		page.destroy();
 	});
 
 	it('markMutated() 把 hydrated 翻 true;hydrated.set(false) 後可再次水合(測試重置縫)', async () => {
@@ -440,7 +442,7 @@ describe('createHydrationGate', () => {
 });
 
 describe('hydrate 合併(R14 F2)', () => {
-	/* F2:hydrate() 與 pageEntry().fetch 共用同一支在飛 GET——子頁 onMount 先於 layout,
+	/* F2:hydrate() 與頁面 load-gate 的 load 共用同一支在飛 GET——子頁 onMount 先於 layout,
 	 * 暖機與頁面載入必然同時水合,不合併就打兩次 GET。只共用 GET,沒有世代迴圈(不是 ADR-0020
 	 * 否決的形 3);refresh 族一律真抓、不併入。 */
 
@@ -460,7 +462,7 @@ describe('hydrate 合併(R14 F2)', () => {
 		expect(get(gate.hydrated)).toBe(true);
 	});
 
-	it('pageEntry().fetch(頁面 load-gate)與 hydrate()(暖機)併發 → 只 fetch 一次、apply 一次', async () => {
+	it('頁面 load-gate 的 load 與 hydrate()(暖機)併發 → 只 fetch 一次、apply 一次', async () => {
 		const d = createDeferred<{ v: number }>();
 		const fetch = vi.fn(() => d.promise);
 		const apply = vi.fn();
@@ -478,18 +480,20 @@ describe('hydrate 合併(R14 F2)', () => {
 		page.destroy();
 	});
 
-	it('refresh 族不併入在飛的 hydrate:gate.refresh() 與 pageEntry().refresh 都真抓', async () => {
+	it('refresh 族不併入在飛的 hydrate:gate.refresh() 與頁面 load-gate 的 refresh 都真抓', async () => {
 		const d = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d.promise).mockResolvedValue({ v: 2 });
 		const gate = createHydrationGate({ fetch, apply: () => {} });
+		const page = createLoadGate({ ...gate.pageEntry() });
 
 		const pHydrate = gate.hydrate(); // 在飛
 		await gate.refresh();
-		await gate.pageEntry().refresh();
+		await page.refresh();
 		expect(fetch).toHaveBeenCalledTimes(3);
 
 		d.resolve({ v: 1 });
 		await pHydrate;
+		page.destroy();
 	});
 
 	it('在飛的 hydrate reject 之後,下一次 hydrate 重新 GET(合併的 promise settle 即清掉)', async () => {
@@ -537,17 +541,31 @@ describe('invalidate()(R14 F2)', () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
-	it('不碰世代帳與尾流帳', () => {
+	it('不碰世代帳與尾流帳', async () => {
 		const tail = createDeferred<void>();
-		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: () => {} });
-		const entry = gate.pageEntry();
-		gate.markMutated(tail.promise);
-		const gen = entry.hydrate.gen();
+		const d = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d.promise).mockResolvedValue({ v: 2 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
 
+		// 世代帳:在飛 refresh 期間 invalidate → 落地世代仍穩定,照常套用、不補抓
+		const p1 = gate.refresh();
 		gate.invalidate();
+		d.resolve({ v: 1 });
+		await p1;
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
 
-		expect(entry.hydrate.gen()).toBe(gen);
-		expect(entry.hydrate.pendingSettle()).toBeInstanceOf(Promise); // 尾流仍在帳上
+		// 尾流帳:invalidate 不清帳,refresh 仍等尾流 settle 才出發
+		gate.markMutated(tail.promise);
+		gate.invalidate();
+		const p2 = gate.refresh();
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(1); // 尾流仍在帳上
+
+		tail.resolve();
+		await p2;
+		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
 	it('不碰在飛合併:同世代 invalidate 之後進場的 hydrate 仍併入在飛那支', async () => {
@@ -571,7 +589,7 @@ describe('pageEntry(plain gate)', () => {
 	/* F1(R14):頁面進場包住在 HydrationGate 本身——ops 閘門是 plain gate(不是 session 閘門),
 	 * mobile-admin 的 4 個 ops 頁原本拿 hydrate/refresh 當 load-gate 的 fetch/refresh:store 閘門
 	 * 自己 apply,load-gate 的 generation/destroyed 守衛管不到寫入。改 spread pageEntry() 之後,
-	 * 寫入交給 load-gate 的 hydrate.into,卸載與後發先至都由 load-gate 擋下。 */
+	 * load-gate 把棄追判準 isCurrent 交給閘門(R15 F-1),卸載與後發先至的回應都不寫。 */
 
 	it('refresh 在飛時 destroy() → 回應落地不寫 store、不翻旗(已卸載的頁面不寫共享 store)', async () => {
 		const d = createDeferred<{ v: number }>();
@@ -608,7 +626,7 @@ describe('pageEntry(plain gate)', () => {
 		page.destroy();
 	});
 
-	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、旗標由 load-gate 翻', async () => {
+	it('spread 整合:真 createLoadGate({ ...gate.pageEntry() }) 走一輪 loading→ready,資料落回共享 store、翻的是閘門同一顆旗標', async () => {
 		const store = writable<{ v: number } | null>(null);
 		const gate = createHydrationGate({ fetch: async () => ({ v: 1 }), apply: (d) => store.set(d) });
 
@@ -620,8 +638,8 @@ describe('pageEntry(plain gate)', () => {
 
 		expect(phases[0]).toBe('loading');
 		expect(phases[phases.length - 1]).toBe('ready');
-		expect(get(store)).toEqual({ v: 1 }); // hydrate.into 寫回的是同一顆共享 store
-		expect(get(gate.hydrated)).toBe(true); // load-gate 的 commit 翻的正是閘門同一顆旗標
+		expect(get(store)).toEqual({ v: 1 }); // 閘門的 apply 寫回的是同一顆共享 store
+		expect(get(gate.hydrated)).toBe(true); // 頁面這一輪的 commit 翻的正是閘門同一顆旗標
 
 		unsub();
 		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy

@@ -21,56 +21,30 @@
  * onData/onError。
  */
 import { onDestroy } from 'svelte';
-import { writable, type Writable } from 'svelte/store';
-import { createHydrationCore, fetchGenStable } from './hydration-gate';
+import { writable } from 'svelte/store';
 
 export type LoadPhase = 'loading' | 'error' | 'ready';
 
-interface LoadGateBaseOptions<T> {
-	/** 主要抓取函式 */
-	fetch: () => Promise<T>;
-	/** 省略時 refresh() 沿用 fetch(mobile-admin store-owned 變體會分開傳 hydrate/refresh) */
-	refresh?: () => Promise<T>;
-	/** 失敗時通知(coach 頁動態錯誤文案用) */
-	onError?: (e: unknown) => void;
+/** 資料來源(port,R15 候選 F-1):load-gate 只管 phase、run 世代、卸載與 onError;「怎麼抓、
+ *  抓回來寫不寫、何時翻旗」全歸 source。共享 store 的頁面由水合閘門的 pageEntry() 交出
+ *  (水合協定的決策點全住 $lib/hydration-gate),plain 頁面由下方 plainSource 包成同一個介面。
+ *
+ *  `isCurrent` 是 load-gate 交給 source 的棄追判準(「未卸載且仍是最新一輪 run」):source 只能
+ *  讀它,拿不到 phase 與 run 世代的寫入權。兩個條件都單向不可逆,一旦回 false 就永遠是 false。 */
+export interface LoadSource {
+	/** 已水合 → load() 同步收斂 ready、不呼叫 load。 */
+	guarded(): boolean;
+	/** 重入防護(F1):套用之後、翻旗之前重查 isCurrent;`!isCurrent()` 時不寫、不翻旗。 */
+	load(isCurrent: () => boolean): Promise<void>;
+	/** 重入防護(F5):同上;refresh 族一律真抓,無視 guarded。 */
+	refresh(isCurrent: () => boolean): Promise<void>;
 }
 
-/** hydrate 選項:把「共享 store 的水合協定」(guard 短路 + post-await re-check +
- *  mutator 翻旗)收進 load-gate 本身,取代呼叫端手焊的 skip+onData 組合。三個
- *  決策點(guarded/mutationWins/commit)委派給 $lib/hydration-gate 的
- *  createHydrationCore——協定詞彙與文件單一住所(C1);load-gate 特有的
- *  generation/destroyed 重查(F1/F5 重入語意)留在本檔,不進 core。與 onData
- *  型別層互斥,見下方 LoadGateOptions。 */
-export interface LoadGateHydrateOptions<T> {
-	/** 是否已水合的旗標;與 mutator 共用同一個 writable(mutator 直接對它
-	 *  set(true),同 hydration-gate.ts 的 markMutated() 語意)。 */
-	flag: Writable<boolean>;
-	/** 成功時套用資料,寫回共享 store。 */
-	into: (data: T) => void;
-	/** 可選:單調 mutation 世代讀取器(生產上由水合閘門的 pageEntry() 交出——世代帳由閘門
-	 *  持有、只經這支讀取器外流,見 docs/adr/0020 形 1;session 閘門的進場包繼承自同一處)。
-	 *  在場時 refresh()/silentRefresh() 改走 $lib/hydration-gate 的
-	 *  fetchGenStable——進場捕捉世代、落地比對,飛行窗口內發生的本地 mutation 讓那份快照
-	 *  作廢並原地重抓(refresh 契約:顯式新鮮度,丟棄之後必須補抓)。重抓期間 phase 不回
-	 *  loading、run-generation 也不遞增,故重入防護(F1)／(F5) 原封;被新一輪 run 取代或已
-	 *  卸載即棄追。load() 刻意不走(hydrate 契約:mutation-wins 丟棄了事,本地即真相)。
-	 *  省略時整條路徑與舊碼逐字相同——旗標自持、無世代帳的 plain-flag 消費端保舊語意。 */
-	gen?: () => number;
-	/** 可選:mutation 尾流的 settle 訊號(生產上同樣由水合閘門的 pageEntry() 交出,讀閘門
-	 *  自己的尾流帳)。在場時 refresh()/silentRefresh() 每次
-	 *  出發 fetch 之前先等未 settle 的樂觀 mutation 尾流(mark-before-await 的 PATCH)——
-	 *  關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代又已穩定」的 server-race 窗
-	 *  (ADR 0020 誠實界線,R11 閉合)。等待軸與丟棄軸正交:丟棄仍只看 gen 的進出場比對。
-	 *  與 `gen` 同進退——世代穩定重抓那條分支沒啟用(未帶 gen)時本欄不生效。load() 一樣
-	 *  刻意不走(hydrate 契約:本地即真相,丟棄了事)。省略時整條路徑與舊碼逐字相同。 */
-	pendingSettle?: () => Promise<void> | undefined;
-}
-
-/** onData 與 hydrate 型別層互斥(discriminated union + `?: never`):一個 gate 只能
- *  擇一,誤用在編譯期擋下,不做 runtime throw。 */
+/** fetch/onData 與 source 型別層互斥(discriminated union + `?: never`):一個 gate 只能擇一,
+ *  誤用在編譯期擋下,不做 runtime throw。 */
 export type LoadGateOptions<T> =
-	| (LoadGateBaseOptions<T> & { onData?: (data: T) => void; hydrate?: never })
-	| (LoadGateBaseOptions<T> & { hydrate: LoadGateHydrateOptions<T>; onData?: never });
+	| { fetch: () => Promise<T>; onData?: (d: T) => void; onError?: (e: unknown) => void; source?: never }
+	| { source: LoadSource; onError?: (e: unknown) => void; fetch?: never; onData?: never };
 
 export interface LoadGate {
 	/** Svelte store 契約;訂閱值 = LoadPhase */
@@ -93,139 +67,75 @@ function autoDestroyOnUnmount(destroy: () => void): void {
 	}
 }
 
+/** plain 頁面的資料來源:無守衛、無旗標,落地時仍是當前這一輪才交給 onData。load 與 refresh
+ *  同一支(plain 頁面沒有「guard 短路」可略過)。 */
+function plainSource<T>({ fetch, onData }: { fetch: () => Promise<T>; onData?: (d: T) => void }): LoadSource {
+	async function load(isCurrent: () => boolean): Promise<void> {
+		const data = await fetch();
+		if (!isCurrent()) return; // 過期或已卸載,忽略
+		onData?.(data);
+	}
+	return { guarded: () => false, load, refresh: load };
+}
+
 export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	let phase: LoadPhase = 'loading';
 	const { subscribe, set } = writable<LoadPhase>(phase);
 	let generation = 0;
 	let destroyed = false;
-	// 水合協定決策點(guard 短路/mutation 勝出/翻旗)——與 createHydrationGate 共用
-	// 同一顆 core(C1),機制單一來源;無 hydrate 選項時為 null,走 onData 分支。
-	const core = options.hydrate ? createHydrationCore(options.hydrate.flag) : null;
+	const source = options.source ? options.source : plainSource(options);
 
 	function setPhase(p: LoadPhase): void {
 		phase = p;
 		set(p);
 	}
 
-	/** load() 成功後套用資料:hydrate 選項下需重查旗標——in-flight 期間旗標被翻
-	 *  true(mutation 發生)代表 mutation 勝出,放棄套用、不覆寫共享 store(phase 仍
-	 *  會在 run() 收斂為 ready,資料已經在 store 裡);未帶 hydrate 時退回既有
-	 *  onData 語意。
-	 *
-	 *  F1(codex B0 r1):into() 通常寫共享 writable,其 subscriber 可能同步重入
-	 *  gate.load()(generation++、發第二次 fetch)。into() 返回後、core.commit() 之前
-	 *  重查 generation——不符(或已 destroy)代表已被重入的新一輪取代,直接 return、
-	 *  不翻旗(翻旗交給新一輪自己的 applyLoaded 呼叫);否則舊一輪的翻旗會讓新一輪的
-	 *  回應在自己的旗標重查時誤判 mutation 勝出,把真正的新資料丟棄。 */
-	function applyLoaded(data: T, gen: number): void {
-		const hydrate = options.hydrate;
-		if (!hydrate || !core) {
-			options.onData?.(data);
-			return;
-		}
-		if (core.mutationWins()) return; // mutation 勝出,不覆寫、不翻旗
-		hydrate.into(data);
-		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
-		core.commit();
-	}
-
-	/** refresh()/silentRefresh() 共用的資料套用:無條件套用,不做旗標重查(後發先至
-	 *  的競態由既有 generation 機制管)。
-	 *
-	 *  F5(codex B0 r1 追補):與 applyLoaded 對稱的同步重入防護——into() 的
-	 *  subscriber 可能同步重入 gate.load(),而此刻旗標尚未翻(into 先於 flag.set),
-	 *  load() 不短路、發第二次 fetch、generation++;舊一輪隨後的翻旗會讓新一輪的回應
-	 *  在 applyLoaded 的旗標重查誤判 mutation 勝出而丟棄新資料。into() 之後重查
-	 *  generation,不符即不翻旗(翻旗交給新一輪)。「無條件」指不做 mutation 旗標
-	 *  重查(不呼叫 core.mutationWins()),gen 檢查是重入取代的另一維度,into 照常套用。
-	 *
-	 *  指北針(R10):hydrate.gen 消費端的世代穩定在上游 run() 的 fetchGenStable 分支已經
-	 *  完成(舊快照在那裡就被丟棄並重抓),本函式維持無條件套用——這裡不重複判斷,見
-	 *  docs/adr/0020。 */
-	function applyRefreshed(data: T, gen: number): void {
-		const hydrate = options.hydrate;
-		if (!hydrate || !core) {
-			options.onData?.(data);
-			return;
-		}
-		hydrate.into(data);
-		if (destroyed || gen !== generation) return; // into() 同步重入觸發了新一輪,翻旗交給新一輪
-		core.commit();
-	}
-
-	/** refresh 族的取數:genReader 在場即世代穩定重抓(見 hydration-gate 的 fetchGenStable),
-	 *  否則裸 fetch。棄追判準 = 「已卸載 or 已被新一輪 run 取代」——兩者都單向不可逆,故
-	 *  回 undefined 時呼叫端的既有 destroyed/generation 守衛必然也會攔下,語意不重疊。
-	 *  重抓全程在同一個 run-generation 內:phase 不動、generation 不遞增;R11 起連「等
-	 *  mutation 尾流 settle」也在同一輪內,故等待期間 phase 一樣不多跳一次 loading。 */
-	async function run(
-		fetcher: () => Promise<T>,
-		apply: (data: T, gen: number) => void,
-		genReader?: () => number
-	): Promise<void> {
+	/** 開一輪 run:遞增 run 世代並捕捉,交給 source 的 isCurrent 即「未卸載且仍是這一輪」。
+	 *  phase 只在這裡寫——source 跨多少個 tick(世代穩定重抓、等尾流 settle)都活在這一個
+	 *  await 裡,phase 全程單一週期,run 世代也不因重抓遞增。 */
+	function nextRun(): () => boolean {
 		const gen = ++generation;
+		return () => !destroyed && gen === generation;
+	}
+
+	async function run(step: (isCurrent: () => boolean) => Promise<void>): Promise<void> {
+		const isCurrent = nextRun();
 		setPhase('loading');
 		try {
-			let data: T;
-			if (genReader) {
-				const stable = await fetchGenStable(fetcher, genReader, {
-					iterate: () => !destroyed && gen === generation,
-					pendingSettle: options.hydrate?.pendingSettle
-				});
-				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
-				data = stable;
-			} else {
-				data = await fetcher();
-			}
-			if (destroyed || gen !== generation) return; // 過期或已卸載,忽略
-			apply(data, gen);
-			// F1(codex B0 r1):apply()(hydrate 的 into())可能同步重入 load(),推進
-			// generation——此時 phase 收斂的主導權已經交給新一輪,舊一輪不得再推 phase。
-			if (destroyed || gen !== generation) return;
+			await step(isCurrent);
+			// 重入防護(F1):source 的寫入可能同步重入 load(),推進 run 世代——此時 phase 收斂的
+			// 主導權已經交給新一輪,舊一輪不得再推 phase。
+			if (!isCurrent()) return;
 			setPhase('ready');
 		} catch (e) {
-			if (destroyed || gen !== generation) return;
+			if (!isCurrent()) return;
 			options.onError?.(e);
 			setPhase('error');
 		}
 	}
 
 	async function load(): Promise<void> {
-		if (core?.guarded()) {
-			// 已水合 → 短路,不發 fetch(guard 短路只擋 load(),見下方 refresh())。
+		if (source.guarded()) {
+			// 已水合 → 短路,不呼叫 source.load(guard 短路只擋 load(),見下方 refresh())。
 			setPhase('ready');
 			return;
 		}
-		await run(options.fetch, applyLoaded);
+		await run((isCurrent) => source.load(isCurrent));
 	}
 
 	async function refresh(): Promise<void> {
-		// 一律真抓,無視 hydrate 旗標——guard 短路只擋 load(),retry 仍要重抓。
-		await run(options.refresh ?? options.fetch, applyRefreshed, options.hydrate?.gen);
+		// 一律真抓,無視 guarded——guard 短路只擋 load(),retry 仍要重抓。
+		await run((isCurrent) => source.refresh(isCurrent));
 	}
 
 	async function silentRefresh(): Promise<void> {
 		// 突變後靜默重同步:任何路徑都不動 phase、失敗也不呼叫 onError(同
 		// PagedLoadGate.silentRefresh()——見該函式註解的完整理由)。守衛必須在
-		// generation 遞增之前:phase 非 ready 直接 no-op。
+		// run 世代遞增之前:phase 非 ready 直接 no-op。
 		if (phase !== 'ready') return;
-		const gen = ++generation;
-		const genReader = options.hydrate?.gen; // 同 refresh():在場即世代穩定重抓
+		const isCurrent = nextRun();
 		try {
-			const fetcher = options.refresh ?? options.fetch;
-			let data: T;
-			if (genReader) {
-				const stable = await fetchGenStable(fetcher, genReader, {
-					iterate: () => !destroyed && gen === generation,
-					pendingSettle: options.hydrate?.pendingSettle
-				});
-				if (stable === undefined) return; // 棄追:必然已卸載或被新一輪取代
-				data = stable;
-			} else {
-				data = await fetcher();
-			}
-			if (destroyed || gen !== generation) return;
-			applyRefreshed(data, gen);
+			await source.refresh(isCurrent);
 		} catch {
 			/* 靜默吞掉 */
 		}

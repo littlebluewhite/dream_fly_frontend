@@ -164,33 +164,56 @@ describe('markAllRead', () => {
     expect(get(notificationsHydrated)).toBe(true);
   });
 
-  it("無未讀時零 PATCH 仍回 'ok',且零記帳——pendingSettle 同步回 undefined(不為「無事可做」讓 refresh 族多等三個 microtask)", async () => {
+  it("無未讀時零 PATCH 仍回 'ok',且零記帳——同拍的頁面 refresh 同步出發 GET(不為「無事可做」多等三個 microtask)", async () => {
     /* 空集路徑本來就無事可做:不樂觀更新、不入帳、不 allSettled。舊碼照樣入一筆空尾流,
      * 同拍呼叫的頁面 refresh 因此要等 allSettled([]) 的三個 microtask 才出發 GET —— 純粹
-     * 是時序雜訊。這裡在 await 之前同步取讀尾流帳,才照得到那筆空帳(await 之後帳已歸零)。 */
+     * 是時序雜訊。這裡在 await 之前同步呼叫頁面 refresh,才照得到那筆空帳(await 之後帳已歸零)。 */
     notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: true })));
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /notifications': () => { gets += 1; return []; }
+    }));
+    const page = createLoadGate({ ...notificationsPageEntry });
 
     const p = markAllRead();
-    expect(notificationsPageEntry.hydrate.pendingSettle?.()).toBeUndefined();
+    const refreshP = page.refresh();
+    expect(gets).toBe(1); // 零記帳:GET 尚未 await 就已出發
 
     expect(await p).toBe('ok');
-    expect(api).not.toHaveBeenCalled();
+    await refreshP;
+    expect(vi.mocked(api).mock.calls.map(([path]) => path)).toEqual(['/notifications']); // 零 PATCH
+    page.destroy();
   });
 });
 
 describe('notificationsPageEntry(C3 接線釘)', () => {
-  // 進場包本身的語意(epoch 核對 fetch、stale reject、retry、spread 進 load-gate)
-  // 由 session-gate.test.ts 的 pageEntry describe 單源覆蓋——這裡只釘「通知頁拿到的
-  // 是本模組這顆閘門」:旗標同實例(接錯閘門會讓頁面的 load-once 守衛失聯)、fetch
-  // 是可呼叫的函式。
-  it('hydrate.flag 與 notificationsHydrated 同一實例、fetch 為函式', () => {
-    expect(notificationsPageEntry.hydrate.flag).toBe(notificationsHydrated);
-    expect(typeof notificationsPageEntry.fetch).toBe('function');
+  // 進場包本身的語意(epoch 核對、stale → error、retry、spread 進 load-gate)由
+  // session-gate.test.ts 的 pageEntry describe 單源覆蓋——這裡只釘「通知頁拿到的是本模組
+  // 這顆閘門」的薄採用面:頁面 load 寫的是 notificationsHydrated 同一顆旗標(接錯閘門會讓
+  // 頁面的 load-once 守衛失聯),第二次 load 被守衛短路、不再打 GET。
+  it('頁面 load 後 notificationsHydrated 為真,第二次 load 不打 GET', async () => {
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /notifications': () => { gets += 1; return [apiNotif(false)]; }
+    }));
+    const page = createLoadGate({ ...notificationsPageEntry });
+
+    await page.load();
+    expect(get(notificationsHydrated)).toBe(true);
+    expect(gets).toBe(1);
+
+    const second = createLoadGate({ ...notificationsPageEntry });
+    await second.load();
+    expect(gets).toBe(1); // 守衛短路:同一顆旗標
+    expect(get(second)).toBe('ready');
+
+    page.destroy();
+    second.destroy();
   });
 
-  /* R10:進場包再帶 hydrate.gen（閘門的 mutationGen），頁面 load-gate 的 refresh 族
-   * 因此獲得世代穩定重抓。這裡釘的是「通知頁重新整理在飛時點已讀，已讀不回退」——
-   * 舊碼的 applyRefreshed 無條件套用，姍姍來遲的舊快照(server 端仍未讀)會把剛剛的
+  /* R10:頁面 load-gate 的 refresh 族讀閘門同一本 mutation 世代帳，因此獲得世代穩定
+   * 重抓。這裡釘的是「通知頁重新整理在飛時點已讀，已讀不回退」——
+   * 當時的舊碼無條件套用，姍姍來遲的舊快照(server 端仍未讀)會把剛剛的
    * 樂觀已讀打回未讀。 */
   it('頁面 load-gate 的 refresh 在飛期間 markRead → 已讀不回退,舊快照丟棄並原地重抓(GET×2)', async () => {
     const d = createDeferred<unknown[]>();
