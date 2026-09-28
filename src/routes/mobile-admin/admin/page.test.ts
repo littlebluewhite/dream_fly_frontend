@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
 import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
-import type { MemberRow } from '$lib/mobile-admin/data';
+import type { MemberAccount as MemberRow } from '$lib/admin/data';
 import type { CreateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';

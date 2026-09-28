@@ -17,7 +17,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
-  import type { OrderRow } from '$lib/mobile-admin/data';
+  import type { Order as OrderRow } from '$lib/admin/data';
   import { apiErrorText } from '$lib/api/error-text';
   import { orderStatusBadge } from '$lib/api/wire';
   import { orderDetailRows } from '$lib/domain/order-detail';

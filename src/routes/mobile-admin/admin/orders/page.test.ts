@@ -3,13 +3,12 @@ import { render, fireEvent } from '@testing-library/svelte';
 import OrdersPage from './+page.svelte';
 import { resetOpsForTests } from '$lib/mobile-admin/stores';
 import { fmtNT } from '$lib/format';
-import type { OrderRow } from '$lib/mobile-admin/data';
+import { MEMBER_COLORS, type Order as OrderRow } from '$lib/admin/data';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { initialOf, isoDate, orderIdentity, taxFromGross, type OrderStatus } from '$lib/api/wire';
-import { MEMBER_COLORS } from '$lib/admin/data';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections
  * (組合器，3b 留任)走真實 fetch adapter。FIXTURE_ORDERS 改為 wire 形狀，經

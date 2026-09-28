@@ -36,7 +36,8 @@ import {
 	addCoach,
 	saveCoach
 } from './stores';
-import { ADMIN_NOTIFS, type MemberRow, type ClassRow, type OrderRow } from './data';
+import { ADMIN_NOTIFS } from './data';
+import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
 import { MESSAGES, COACHES } from '$lib/testing/seed-fixtures';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import { getOpsCollections, getMessages, type OpsCollections } from './api';

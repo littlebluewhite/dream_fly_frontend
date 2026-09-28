@@ -18,9 +18,8 @@
   import { get } from 'svelte/store';
   import { coaches as coachesStore } from '$lib/mobile-admin/stores';
   import { F_LEVELS } from '$lib/mobile-admin/form-options';
-  import { CATS } from '$lib/admin/data';
+  import { CATS, type ClassRow } from '$lib/admin/data';
   import { blankClassRow, courseDraftOf, checkCourseDraft, type ValidCourse } from '$lib/admin/components/course-request';
-  import type { ClassRow } from '$lib/mobile-admin/data';
   import type { Coach } from '$lib/domain/coaches';
 
   export let onClose: () => void;

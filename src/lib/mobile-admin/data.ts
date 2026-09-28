@@ -48,8 +48,7 @@ import { STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';
 import { MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
 import { TICKET_TYPE as TICKET_TYPE_BASE } from '$lib/domain/tickets';
-import type { OrderStatus } from '$lib/api/wire';
-import { LEVEL_TONE as LEVEL_TONE_BASE, type Level } from '$lib/domain/course-level';
+import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 import type { TodayState } from '$lib/admin/data';
 
@@ -67,91 +66,11 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 	coach: { name: '林雅婷', initial: '林', role: '競技體操總教練', desc: '管理班級、學員出勤與訊息', color: '#0066CC', id: 'COACH-014' }
 };
 
-/* ---- Classes / 班級 ---- */
-// level/status 窄化為字面聯集型別（同桌面 admin/data.ts 的 ClassRow）——
-// course-request.ts 的 courseDraftOf()/blankClassRow() 要求這兩個窄型別，鬆散的
-// string 無法安全傳入。CLASSES(同步種子)已隨 R15(候選 F-3)誠實開機退役，值搬進
-// 測試專用的 $lib/testing/ops-routes fixture；本檔只留 ClassRow 形狀本體(getOpsCollections()
-// 的映射型別)。
-export interface ClassRow {
-	id: string;
-	name: string;
-	level: Level;
-	cat: string;
-	coach: string;
-	room: string;
-	day: string;
-	time: string;
-	enrolled: number;
-	cap: number;
-	age: string;
-	price: number;
-	status: '招生中' | '候補' | '額滿';
-	wait: number;
-	term: string;
-	sessions: number;
-	startDate: string;
-	checkinRate: number;
-	makeup: number;
-	/** 單堂時長（分鐘，FE#18）——同桌面 admin/data.ts ClassRow.durationMinutes，
-	 *  POST/PATCH /courses 的 duration_minutes 直接映射；新增/編輯流程皆收集
-	 *  （見 ClassForm.svelte），Task 20 起隨真接線一併加入。 */
-	durationMinutes: number;
-}
-
-/* ---- Members / 學員 ----
- * Task 20：改為 GET /users 的帳號形狀（id/name/initial/phone/joined/status/
- * points）——同桌面 admin/data.ts 的 MemberAccount。桌面 admin/members 頁自己
- * 早在 Task 16 就已改吃這個「誠實、精簡」形狀（見該檔註解：MembersTable 是
- * "honest, slimmed table — no course/campus/coach/attendance/pay/tier columns
- * (P2: no backend data source)"）；行動版學員頁 / MemberSheet / MemberForm 接
- * 真 API 時一併鏡射同一個決定——舊版 course/coach/att/parent/age/pay/remain/
- * lastSeen/recent/emName/emPhone/campus/source/birthday/tier/tierColor/
- * renewDue/lineId 這些欄位在真後端從未存在過，繼續留著只會讓假資料看起來更豐富，
- * 不會讓它變真。status 由 3 態（active/warning/paused，出席率導向）改為 GET
- * /users 的 is_active 二元旗標語意（active/inactive）。MemberAccountStatus 批次
- * 1 W2a 起改由 $lib/domain/members 轉出（見檔頭 import type），本檔不再本地宣告。
- * MEMBERS(同步種子)已隨 R15(候選 F-3)誠實開機退役，值搬進測試專用的
- * $lib/testing/ops-routes fixture；本檔只留 MemberRow 形狀本體。 */
-export interface MemberRow {
-	id: string;
-	name: string;
-	initial: string;
-	phone: string;
-	joined: string;
-	status: MemberAccountStatus;
-	points: number;
-}
-
-/* ---- Orders / 訂單 ---- */
-// OrderStatus 單源本就是 $lib/api/wire 的既有型別(鏡射 admin/data.ts 先例，同 ADR
-// 0007)，不再本地重宣告 6 態 union；C4 批3 複核零外部消費者，對外 export 退役，
-// 僅留本檔 OrderRow.status 內部使用。ORDERS(同步種子)已隨 R15(候選 F-3)誠實開機
-// 退役，值搬進測試專用的 $lib/testing/ops-routes fixture；本檔只留 OrderRow 形狀本體。
-export interface OrderRow {
-	id: string;
-	member: string;
-	initial: string;
-	color: string;
-	item: string;
-	amount: number;
-	status: OrderStatus;
-	method: string;
-	date: string;
-	invoice: string;
-	discount: string;
-	handler: string;
-	reason?: string;
-	campus: string;
-	tax: number;
-	net: number;
-	paidAt: string;
-	taxId: string;
-	// Task 20：真實後端訂單 UUID（PATCH /orders/{id}/status 要用這個，不是上面顯示用
-	// 的 `id`——後者其實是 order_number，同桌面 admin/data.ts Order.orderId 的附註）。
-	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
-	orderId: string;
-}
+// R15(候選 列型別單源)：ClassRow/MemberRow/OrderRow 三個型別本體(逐欄同桌面
+// admin/data.ts 的 ClassRow/MemberAccount/Order)已退役——單一來源改為
+// admin/data.ts，消費端改 `import type { ClassRow, MemberAccount as MemberRow,
+// Order as OrderRow } from '$lib/admin/data'`(ADR-0019 C4：alias 留在 import
+// 端，不另設 re-export)。
 
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {

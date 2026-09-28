@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import MemberForm from './MemberForm.svelte';
-import type { MemberRow } from '$lib/mobile-admin/data';
+import type { MemberAccount as MemberRow } from '$lib/admin/data';
 
 /* Task 20：學員新增/編輯改接真 POST /users、PATCH /users/{id}（契約 §3.2 兩個端點
  * 接受的欄位完全不同）——這裡驗證新增/編輯兩種模式各自呼叫 onSave(body, isNew)。

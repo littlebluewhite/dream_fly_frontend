@@ -31,8 +31,7 @@
   import { overlay, classes, coaches, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { STATUS_TONE } from '$lib/mobile-admin/data';
   import { createLoadGate } from '$lib/load-gate';
-  import type { ClassRow } from '$lib/mobile-admin/data';
-  import { CATS } from '$lib/admin/data';
+  import { CATS, type ClassRow } from '$lib/admin/data';
   import { filterClasses } from '$lib/admin/components/classes-filter';
   import type { ValidCourse } from '$lib/admin/components/course-request';
   import { apiErrorText } from '$lib/api/error-text';

@@ -14,7 +14,7 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
-  import type { MemberRow } from '$lib/mobile-admin/data';
+  import type { MemberAccount as MemberRow } from '$lib/admin/data';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;

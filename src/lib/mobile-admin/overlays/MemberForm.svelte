@@ -18,7 +18,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import type { MemberRow } from '$lib/mobile-admin/data';
+  import type { MemberAccount as MemberRow } from '$lib/admin/data';
   import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
   import { initialOf } from '$lib/api/wire';
   import { checkNewMember, checkMemberEdit } from '$lib/admin/components/member-request';

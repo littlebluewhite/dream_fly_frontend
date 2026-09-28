@@ -5,7 +5,7 @@ import OrderSheet from './OrderSheet.svelte';
 import { orders, toasts } from '$lib/mobile-admin/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { OrderRow } from '$lib/mobile-admin/data';
+import type { Order as OrderRow } from '$lib/admin/data';
 
 /* R15 Task 3a(候選 轉手退役):改 mock $lib/api/client 的 api(),讓 updateOrderStatus
  * (經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實 PATCH /orders/{id}/status

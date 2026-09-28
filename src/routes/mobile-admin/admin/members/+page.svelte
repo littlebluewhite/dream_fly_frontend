@@ -28,7 +28,7 @@
   import { overlay, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
-  import type { MemberRow } from '$lib/mobile-admin/data';
+  import type { MemberAccount as MemberRow } from '$lib/admin/data';
   import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';

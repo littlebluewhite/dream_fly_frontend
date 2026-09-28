@@ -26,7 +26,7 @@ import {
 	getTodaySessions as adminGetTodaySessions,
 	getRecentActivity as adminGetRecentActivity
 } from '$lib/admin/api';
-import type { TodayClass } from '$lib/admin/data';
+import type { TodayClass, ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
 import { getDashboard as coachGetDashboard, getConversations as coachGetConversations } from '$lib/coach/api';
 import type { Coach as CoachProfile, Conversation } from '$lib/coach/data';
 import { SESSION_STATUS } from '$lib/domain/sessions';
@@ -43,9 +43,6 @@ import {
 	PROFILES,
 	type Profile,
 	type TodayRow,
-	type ClassRow,
-	type MemberRow,
-	type OrderRow,
 	type MessageRow
 } from './data';
 

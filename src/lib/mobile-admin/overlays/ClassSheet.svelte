@@ -9,7 +9,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
-  import { STATUS_TONE, type ClassRow } from '$lib/mobile-admin/data';
+  import { STATUS_TONE } from '$lib/mobile-admin/data';
+  import type { ClassRow } from '$lib/admin/data';
   import { classFill, classDetailRows } from '$lib/domain/class-detail';
 
   export let onClose: () => void;

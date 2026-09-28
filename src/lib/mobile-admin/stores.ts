@@ -23,7 +23,8 @@ import type { Role } from './nav';
 // members/classes/orders/coaches 四個 store 誠實開機為 `[]`(見下方 EMPTY_OPS),值
 // 改由真 getOpsCollections() 水合。type Coach 仍直取 $lib/domain/coaches(型別本身
 // 留在原處，只有 COACHES 值搬到 $lib/testing/seed-fixtures 供測試用)。
-import { ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
+import { ADMIN_NOTIFS, COACH_NOTIFS, type MessageRow, type AdminNotif } from './data';
+import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow, CoachFormValues } from '$lib/admin/data';
 import type { Coach } from '$lib/domain/coaches';
 import { getOpsCollections, getMessages, type OpsCollections, type OpsPages, type PageInfo } from './api';
 // R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
@@ -41,7 +42,6 @@ import {
 	type UpdateMemberBody
 } from '$lib/admin/api';
 import { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
-import type { CoachFormValues } from '$lib/admin/data';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 // R13 Task 5(C4):applyStatusChange 搬到 order-status.ts,markOrderPaid 改共用
 // changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後
