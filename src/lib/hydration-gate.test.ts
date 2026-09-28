@@ -718,6 +718,33 @@ describe('reset()', () => {
 		expect(apply).toHaveBeenCalledWith({ v: 1 });
 	});
 
+	it('reset() 期間訂閱者同步重入 hydrate() → 發新 GET、落地會寫', async () => {
+		// bookkeeping(inflight/resetEpoch/pendingTails)必須先於 opts.reset()/翻旗——否則
+		// opts.reset() 同步觸發的重入 hydrate() 會併到重置前那支還在飛的 GET。
+		const dOld = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(dOld.promise).mockResolvedValueOnce({ v: 2 });
+		const apply = vi.fn();
+		let pReentrant: Promise<void> | undefined;
+		const gate = createHydrationGate({
+			fetch,
+			apply,
+			reset: () => {
+				pReentrant = gate.hydrate(); // 模擬訂閱者在 reset() 期間同步重入
+			}
+		});
+
+		const pOld = gate.hydrate(); // 在飛(重置前的舊 identity)
+		gate.reset();
+		await pReentrant;
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 重入沒有併入舊在飛 GET,發了一支新的
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+
+		dOld.resolve({ v: 1 });
+		await pOld;
+		expect(apply).toHaveBeenCalledTimes(1); // 重置前的舊 GET 落地仍不寫
+	});
+
 	it('hydrated 唯讀:不能從外部寫旗標', () => {
 		const gate = createHydrationGate({ fetch: async () => 1, apply: () => {} });
 		// @ts-expect-error hydrated 是 Readable,沒有 set

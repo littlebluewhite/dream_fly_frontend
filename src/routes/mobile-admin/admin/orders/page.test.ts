@@ -3,18 +3,14 @@ import { render, fireEvent } from '@testing-library/svelte';
 import OrdersPage from './+page.svelte';
 import { resetOpsForTests } from '$lib/mobile-admin/stores';
 import { fmtNT } from '$lib/format';
-import { MEMBER_COLORS, type Order as OrderRow } from '$lib/admin/data';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
-import { ntd, orderItemsSummary } from '$lib/public/adapters';
-import { initialOf, isoDate, orderIdentity, taxFromGross, type OrderStatus } from '$lib/api/wire';
+import { type OrderStatus } from '$lib/api/wire';
 
-/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections
- * (組合器，3b 留任)走真實 fetch adapter。FIXTURE_ORDERS 改為 wire 形狀，經
- * mapOrder()(鏡射 admin/api.ts 私有 mapAdminOrder()，同一組 wire 知識原子
- * ntd/orderIdentity/taxFromGross/initialOf/isoDate/orderItemsSummary/MEMBER_COLORS)
- * 映射，而非手造已映射的 OrderRow。 */
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api(),讓 getOpsCollections
+ * (組合器,3b 留任)走真實 fetch adapter,頁面讀 hydrateOps() 水合後的 $orders store,
+ * 不再手造已映射的 OrderRow fixture。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -39,40 +35,12 @@ const mkWireOrder = (over: Partial<WireOrder>): WireOrder => ({
 	items: [], ...over
 });
 
-/** 鏡射 admin/api.ts 私有 mapAdminOrder()。 */
-function mapOrder(o: WireOrder, i: number): OrderRow {
-	const amount = ntd(o.total_cents);
-	const { tax, net } = taxFromGross(amount);
-	const { display, uuid } = orderIdentity(o);
-	return {
-		id: display,
-		orderId: uuid,
-		member: o.user_name,
-		initial: initialOf(o.user_name),
-		color: MEMBER_COLORS[i % MEMBER_COLORS.length],
-		item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
-		amount,
-		status: o.status,
-		method: '線上',
-		date: isoDate(o.created_at),
-		invoice: '—',
-		discount: o.coupon_code ?? '',
-		handler: '—',
-		campus: '—',
-		tax,
-		net,
-		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
-		taxId: '—'
-	};
-}
-
 // 與 seed 相異的 fixture(訂單編號/金額皆改過),證明頁面讀 hydrateOps() 水合後
 // 的 $orders store。
 const WIRE_ORDERS: WireOrder[] = [
 	mkWireOrder({ id: 'uuid-test01', order_number: 'DF-TEST01', user_name: '測試學員甲', total_cents: 1234500, status: 'paid' }),
 	mkWireOrder({ id: 'uuid-test02', order_number: 'DF-TEST02', user_name: '測試學員乙', total_cents: 50000, status: 'pending' })
 ];
-const FIXTURE_ORDERS: OrderRow[] = WIRE_ORDERS.map(mapOrder);
 
 const opsRoutes = (wireOrders: WireOrder[], total = wireOrders.length) => ({
 	...OPS_ROUTES,

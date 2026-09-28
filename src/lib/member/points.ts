@@ -56,7 +56,7 @@ function describeLedgerReason(reason: string, delta: number): { type: LedgerType
  *  （見 points/+page.svelte），格式依賴仍在 —— 換成 ISO 會讓那段篩選永遠不
  *  match、悄悄把統計歸零。
  *  C1（架構深化 R7）抬升為 createSessionRefresher:保留「無條件重抓」語意(
- *  getAccount/getPoints 進頁 + CheckoutDialog/CartSheet 每次開啟 + placeOrder afterOrder
+ *  account 頁進頁經 warmStores 暖機 + CheckoutDialog/CartSheet 每次開啟 + placeOrder afterOrder
  *  都依賴每次真抓,不套 guard),只加 identity 清空(reset:歸 boot 態)+ 在飛換帳「靜默
  *  丟棄」(不 throw——redeemReward/placeOrder 會傳播 rejection,不得新增換帳失敗模式)。
  *  修殘影窗口(換帳後 A 的餘額殘留),呼叫端語意不變。 */

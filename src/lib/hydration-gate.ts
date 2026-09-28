@@ -144,8 +144,9 @@ export interface HydrationGate {
 	refresh(): Promise<void>;
 	/** 只把旗標翻 false(下次 hydrate 重新真抓);不碰世代帳、尾流帳、在飛合併。 */
 	invalidate(): void;
-	/** 整顆閘門還原開機態:opts.reset() → 翻旗 false → 丟在飛合併 GET → 換尾流帳本(resetEpoch)
-	 *  → 清尾流帳 → 喚醒全部等待者。重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
+	/** 整顆閘門還原開機態:丟在飛合併 GET → 換尾流帳本(resetEpoch)→ 清尾流帳 → opts.reset()
+	 *  → 翻旗 false → 喚醒全部等待者(帳本清算先於通知,重入 hydrate() 不併到重置前的舊 GET)。
+	 *  重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
 	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
 	reset(): void;
 	/** `tail` 在場＝這筆 mutation 有網路尾流（樂觀 mutation 的 PATCH）：閘門以
@@ -293,11 +294,14 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	 *  必然 settle」這個自癒前提只在同一擁有者內成立)。被喚醒的舊 refresh 見 resetEpoch 已變即
 	 *  收束,喚醒本身不搬運任何資料。 */
 	function reset(): void {
-		opts.reset?.();
-		flag.set(false);
+		// 帳本(inflight/resetEpoch/pendingTails)必須先於 opts.reset()/翻旗——這兩支才會同步
+		// 通知訂閱者,訂閱者若在通知回呼裡同步重入 hydrate(),不得併到重置前那支還在飛的 GET
+		// (終審修波:原順序 opts.reset → 翻旗 → 清帳,重入窗口還沒清帳就先開了)。
 		inflight = null; // 重置前的在飛 GET 不借給之後進場者
 		resetEpoch += 1; // 先換帳本:在飛舊尾流的出帳回呼、重置前出發的落地就此作廢
 		pendingTails = 0;
+		opts.reset?.();
+		flag.set(false);
 		const waiters = settleWaiters;
 		settleWaiters = []; // 先清空再喚醒:醒來者若重新排隊(新擁有者的尾流),排的是新一批
 		waiters.forEach((wake) => wake());

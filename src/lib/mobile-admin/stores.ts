@@ -72,8 +72,8 @@ export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 
 /** 開機值 = reset 值(R15 候選 F-3，誠實開機):四個集合皆為 `[]`,分頁 meta 全為
  *  0/0——沒水合過就不假裝有資料。結構上與 opsGate 的 reset 同源(見下方),兩者
- *  都是 applyOps(EMPTY_OPS)。 */
-export const EMPTY_OPS: OpsCollections = {
+ *  都是 applyOps(EMPTY_OPS)。本檔私有——無外部消費者,不對外匯出(ADR-0010 死值不留死出口)。 */
+const EMPTY_OPS: OpsCollections = {
 	members: [],
 	classes: [],
 	coaches: [],

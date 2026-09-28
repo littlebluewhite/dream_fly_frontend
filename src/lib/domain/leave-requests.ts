@@ -67,7 +67,7 @@ export interface LeaveRow {
 }
 
 export function leaveRow(lr: LeaveRowSource): LeaveRow {
-	const [tone, label] = STATUS_BADGE[lr.status];
+	const [tone, label] = STATUS_BADGE[lr.status] ?? ['neutral', lr.status];
 	return {
 		tone,
 		label,

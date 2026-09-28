@@ -24,14 +24,15 @@ export type Tone = [string, string];
 // 零附加型別事實的純轉手，一併退役，消費端(含 api.ts)改直取 $lib/domain/venues、
 // $lib/domain/tickets。domain/venues.ts、domain/tickets.ts 的 VENUES/TICKETS seed
 // 本身不動(admin 頁測試的 canonical fixture)。
-// Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(見
-// $lib/mobile-admin/api 的 getReports() 零映射 re-export)——domain/reports.ts 的
+// Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(復用桌面
+// `$lib/admin/api` 的 getReports(),ReportsScreen 直接 import,非經本檔或
+// mobile-admin/api 轉手)——domain/reports.ts 的
 // 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
 // 已無任何消費者，domain/reports.ts 本身隨此任務一併 `git rm`。
 // 批次 1 W2a：MemberAccountStatus 本地 union 改由 domain 轉出;C4 批3 複核零外部
 // 消費者(StatusBadgeM.svelte 改直取 $lib/domain/members),退役對外 export——
-// `export type {…} from` 不引入本地作用域,本檔 MemberRow.status 仍要用到這個
-// 型別,改由下面 base-array import 區塊的 import type 供本檔內部使用。
+// `export type {…} from` 不引入本地作用域,本檔下面的 MEMBER_ACCOUNT_STATUS(Record
+// 鍵型別)仍要用到這個型別,改由下面 base-array import 區塊的 import type 供本檔內部使用。
 // 卡 3：LEVEL_TINT 查表 + Student 型別經本 seam 轉手——單一複本留在
 // $lib/coach/data（單複本無分歧，搬 domain 只是搬家，ADR 0013 case-甲 同款否決），
 // mobile-admin 的學員頁/StudentActionSheet 一律經這裡取用，不再直取 coach surface
@@ -158,7 +159,7 @@ export const STATUS_TONE: Record<string, string> = STATUS_TONE_BASE;
 // Task P4-F3：報表分析 mock 全面退役——KPI 卡(REPORT_KPIS/Kpi)、營收趨勢
 // (REVENUE_TREND)、本月營收來源拆解(REVENUE_TOTAL/REVENUE_BREAKDOWN)原本這裡的三組
 // 常數，隨 ReportsScreen.svelte 接真 GET /reports/admin 一併移除(唯一消費者已改吃
-// getReports() payload；見 $lib/mobile-admin/api 的 getReports() 與 report-math.ts)。
+// $lib/admin/api 的 getReports() payload；見 report-math.ts)。
 
 /* ===== 場館管理 data ===== */
 // `Venue` 型別已 C4 批3 退役(消費端改直取 `$lib/domain/venues`)；`VENUES` 值早於

@@ -70,4 +70,10 @@ describe('leaveRow — 請假列 view-model 單一來源(Task 10)', () => {
 		const row = leaveRow({ ...BASE, status: 'approved', makeup_session_id: null });
 		expect(row.makeupWhen).toBeNull();
 	});
+
+	it('未知 status(契約若擴出新值)時，降級為 neutral 徽章 + 原字串，不會炸掉', () => {
+		const row = leaveRow({ ...BASE, status: 'future_status' as LeaveRowSource['status'] });
+		expect(row.tone).toBe('neutral');
+		expect(row.label).toBe('future_status');
+	});
 });
