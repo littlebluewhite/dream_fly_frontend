@@ -11,7 +11,12 @@
  * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED(R14 F3 退役)的 tone 相關欄位 member 端是嚴格
  * `Tone` 型別、mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的
  * 一側保留自己原本的 interface 宣告、只從這裡匯入值並自行斷言回自己的型別。
- * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(LEAVE_STATUS 為現存實例)。
+ * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(UPCOMING 為現存實例)。
+ *
+ * Task 10(架構深化 R15·請假列 view-model):`LEAVE_STATUS` 查表退役——它其實只服務
+ * 「我的請假」單一列的顯示,不是獨立於動作規則(`leaveAction`)之外的查表,兩者與
+ * when/makeupWhen 格式化合併單源收斂進 `domain/leave-requests.ts` 的 `leaveRow()`,
+ * member/mobile 兩側 facade 的收窄轉出一併退役。
  *
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS 五組(值+
  * interface)、以及 MY_COURSES/SCHEDULE/ORDERS 三組的值,經確認無 runtime 消費者
@@ -117,22 +122,6 @@ export interface AttRecord {
 	year: string;
 	state: 'present' | 'leave' | 'absent';
 }
-
-/* ---- 「我的請假」清單狀態 badge(Task 11;integration-contract.md §3.20 的四值
- * status)----
- * 卡 3 升遷:原本只有 member/data.ts 一份、mobile 的 MyCourseDetail 跨 surface 直取,
- * 收斂進 domain 單源後兩側 facade 各自以自身 Tone 型別對同一參照純註記收窄。未知值
- * fallback 為原字串(同 api.ts 的 ORDER_STATUS 慣例)——消費端用
- * `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值(mine/+page.svelte、
- * MyCourseDetail.svelte)。satisfies 目標明列 tone 字面聯集(R14 前 NOTIFS_SEED 首開此例:
- * 值衍生、零 import;Tone 型別本身依檔頭決策仍不進 domain),tuple 首元素才保得住
- * 字面型別,窄側 facade 得以零斷言收窄;新增列若用到新 tone,把它補進聯集即可。 */
-export const LEAVE_STATUS = {
-	pending: ['warning', '待審核'],
-	approved: ['success', '已核准'],
-	rejected: ['error', '已婉拒'],
-	cancelled: ['neutral', '已取消']
-} satisfies Record<string, ['warning' | 'success' | 'error' | 'neutral', string]>;
 
 /* ---- 每週課表 ----
  * tone 兩側型別不同:member 用 Tone union、mobile 用寬鬆 string。這裡存寬鬆版，

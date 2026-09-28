@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import ScheduleScreen from './ScheduleScreen.svelte';
 import { getSchedule } from '$lib/member/api';
-import type { Tone } from '$lib/api/wire';
+import type { ScheduleBlock } from '$lib/member/data';
 
 /* Task 19 — ScheduleScreen 改真後端(復用 getSchedule()，Task 9 週課表 seam)，
  * 取代先前直接 import 的 mock SCHEDULE 常數。Task 7(架構深化 R15·F-4)：
@@ -10,8 +10,8 @@ import type { Tone } from '$lib/api/wire';
  * 目標同步改到擁有者模組。 */
 vi.mock('$lib/member/api', () => ({ getSchedule: vi.fn() }));
 
-const FIXTURE = [
-	{ day: 1, start: '19:00', end: '20:30', name: '接縫測試專用課程', room: 'Z 教室', coach: '測試教練', color: '#0066CC', tone: 'primary' as Tone }
+const FIXTURE: ScheduleBlock[] = [
+	{ day: 1, start: '19:00', end: '20:30', name: '接縫測試專用課程', room: 'Z 教室', coach: '測試教練', color: '#0066CC', tone: 'primary' }
 ];
 
 beforeEach(() => {

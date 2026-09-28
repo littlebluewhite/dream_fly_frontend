@@ -22,9 +22,8 @@
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
-  import { ATT_STATE, LEVEL_TONE, LEAVE_STATUS } from '$lib/member/data';
-  import { formatSessionDateTime } from '$lib/domain/session-format';
-  import { leaveAction } from '$lib/domain/leave-requests';
+  import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
+  import { leaveRow } from '$lib/domain/leave-requests';
   import {
     toasts,
     waitlist,
@@ -251,8 +250,7 @@
       {:else}
         <div style="padding:2px 22px 8px">
           {#each $leaveRequests as lr, i (lr.id)}
-            {@const [tone, label] = LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]}
-            {@const action = leaveAction(lr)}
+            {@const row = leaveRow(lr)}
             <div
               style="display:flex;align-items:center;gap:12px;padding:14px 0;{i < $leaveRequests.length - 1
                 ? 'border-bottom:1px solid var(--df-border)'
@@ -261,16 +259,16 @@
               <div style="flex:1;min-width:0">
                 <div style="font-size:14px;font-weight:600;color:var(--df-text-dark)">{lr.course_name}</div>
                 <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">
-                  {formatSessionDateTime(lr.session_date, lr.start_time)}{#if lr.reason} · {lr.reason}{/if}
+                  {row.when}{#if lr.reason} · {lr.reason}{/if}
                 </div>
-                {#if action === 'makeupBooked'}
+                {#if row.makeupWhen}
                   <div style="font-size:12.5px;color:var(--df-success);margin-top:2px">
-                    已預約補課：{formatSessionDateTime(lr.makeup_session_date ?? '', lr.makeup_start_time ?? '')}
+                    已預約補課：{row.makeupWhen}
                   </div>
                 {/if}
               </div>
-              <Badge {tone} dot>{label}</Badge>
-              {#if action === 'cancel'}
+              <Badge tone={row.tone} dot>{row.label}</Badge>
+              {#if row.action === 'cancel'}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -279,7 +277,7 @@
                 >
                   取消
                 </Button>
-              {:else if action === 'bookMakeup'}
+              {:else if row.action === 'bookMakeup'}
                 <Button variant="secondary" size="sm" on:click={() => (makeupFor = lr)}>預約補課</Button>
               {/if}
             </div>

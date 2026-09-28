@@ -40,10 +40,9 @@
   } from '$lib/member/leave';
   import { createCancelLeave } from '$lib/member/cancel-leave';
   import { getEnrolmentAttendance } from '$lib/member/api';
-  import { formatSessionDateTime } from '$lib/domain/session-format';
-  import { leaveAction } from '$lib/domain/leave-requests';
+  import { leaveRow } from '$lib/domain/leave-requests';
   import { createLoadGate } from '$lib/load-gate';
-  import { ATT_STATE, LEAVE_STATUS, LEVEL_TONE } from '$lib/mobile/data';
+  import { ATT_STATE, LEVEL_TONE } from '$lib/mobile/data';
   import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
   import type { IconName } from '$lib/icon-registry';
 
@@ -212,26 +211,23 @@
           {:else}
             <div style="display:flex; flex-direction:column;">
               {#each courseLeaves as lr, i (lr.id)}
-                {@const [tone, label] = LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]}
-                {@const action = leaveAction(lr)}
+                {@const row = leaveRow(lr)}
                 <div
                   style="display:flex; align-items:center; gap:10px; padding:10px 0;
                     border-top:{i ? '1px solid var(--df-border)' : 'none'};"
                 >
                   <div style="flex:1; min-width:0;">
                     <div style="font-size:13px; color:var(--df-text-dark); font-family:var(--df-font-mono);">
-                      {formatSessionDateTime(lr.session_date, lr.start_time)}
+                      {row.when}
                     </div>
-                    {#if action === 'makeupBooked'}
+                    {#if row.makeupWhen}
                       <div style="font-size:12px; color:var(--df-success); margin-top:2px;">
-                        已預約補課：{formatSessionDateTime(lr.makeup_session_date ?? '', lr.makeup_start_time ?? '')}
+                        已預約補課：{row.makeupWhen}
                       </div>
                     {/if}
                   </div>
-                  <!-- 卡 3:LEAVE_STATUS 改經 mobile/data 收窄形(tuple Tone,首元素是鬆散
-                       string)——比照下方 ATT_STATE 的既有先例,單值 as Tone 收窄。 -->
-                  <Badge tone={tone as Tone} dot>{label}</Badge>
-                  {#if action === 'cancel'}
+                  <Badge tone={row.tone} dot>{row.label}</Badge>
+                  {#if row.action === 'cancel'}
                     <button
                       disabled={cancellingId === lr.id}
                       on:click={() => doCancelLeave(lr)}
@@ -239,7 +235,7 @@
                       style="flex:none; height:30px; padding:0 12px; border-radius:8px; border:1px solid var(--df-border);
                         background:#fff; font-size:12px; font-weight:600; color:var(--df-text-dark); cursor:pointer;"
                     >取消</button>
-                  {:else if action === 'bookMakeup'}
+                  {:else if row.action === 'bookMakeup'}
                     <button
                       on:click={() => overlay.sheet('makeup', { leaveRequest: lr })}
                       class="df-tapscale"

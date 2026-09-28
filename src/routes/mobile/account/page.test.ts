@@ -4,7 +4,7 @@ import Page from './+page.svelte';
 import { getAccount } from '$lib/member/api';
 import { hydrateProfile } from '$lib/member/profile';
 import { refreshPoints } from '$lib/member/points';
-import type { Tone } from '$lib/api/wire';
+import type { Order } from '$lib/member/data';
 
 // Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手 getAccount() 已退役，
 // 本頁直取桌面 seam，mock 目標同步改到擁有者模組。
@@ -25,8 +25,8 @@ vi.mock('$lib/member/points', async (importOriginal) => {
 // Task 1(C2 死種子退役):mobile/data.ts 的 ORDERS(值)已退役——改為檔內 inline
 // fixture;下方唯一的 it() 用自己的「相異 fixture」覆寫，這個預設值只供 beforeEach
 // 使用，內容本身不受斷言檢查。
-const ORDERS = [
-	{ id: 'DF-24061', item: '競技啦啦隊 進階班 · 2026 春季', amount: 4800, status: ['success', '已付款'] as [Tone, string], date: '2026/03/01' }
+const ORDERS: Order[] = [
+	{ id: 'DF-24061', item: '競技啦啦隊 進階班 · 2026 春季', amount: 4800, status: ['success', '已付款'], date: '2026/03/01' }
 ];
 
 beforeEach(() => {

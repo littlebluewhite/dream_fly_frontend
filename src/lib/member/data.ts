@@ -17,9 +17,12 @@ import type { Tone } from '$lib/api/wire';
 // center」段落)十一組 domain/member-app 純轉手匯出——不攜帶本檔型別事實、不做值
 // 變形——整批退役;消費端改直取 $lib/domain/member-app 同名同型符號(本批兩側符號
 // 名一致,無改名,故無 import-site alias)。LedgerType 型別本檔仍在內部使用(PT_TYPE
-// 下方),保留 import、拿掉對外轉出。UPCOMING/LEAVE_STATUS 不在此列——
-// 兩者匯入基底值後純註記收窄回本檔案自己較嚴格的型別(status/tone 欄位 member 用
+// 下方),保留 import、拿掉對外轉出。UPCOMING 不在此列——
+// 匯入基底值後純註記收窄回本檔案自己較嚴格的型別(status/tone 欄位 member 用
 // 嚴格 Tone、domain 存寬鬆 string),攜帶本檔型別事實,繼續保留。
+// LEAVE_STATUS(原同列續存的收窄 facade)於 Task 10(架構深化 R15·請假列 view-model)
+// 退役:tone/label 查表併入動作規則、when/makeupWhen 格式化,單源收斂進
+// `domain/leave-requests.ts` 的 `leaveRow()`,消費端(mine/+page.svelte)改直取。
 // NOTIFS_SEED(原同列續存的收窄 facade)於 R14 候選 F3 退役:通知 store 誠實開機為 `[]`,
 // 種子已無 production 讀者,值逐字搬進測試專用的 $lib/testing/seed-fixtures(ADR 0010)。
 // CATALOG（課程介紹目錄）不在此列——課程介紹頁現走真實 GET /courses（member/api.ts 的
@@ -35,10 +38,7 @@ import { type LedgerType } from '$lib/domain/member-app';
 // status/tone-typed rows: domain stores the loose (string) shape; import the base
 // value here and assert it back to this file's own stricter local interface
 // (declared at its original spot below) where the const is (re-)declared.
-import {
-  UPCOMING as UPCOMING_BASE,
-  LEAVE_STATUS as LEAVE_STATUS_BASE
-} from '$lib/domain/member-app';
+import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
@@ -121,14 +121,6 @@ export const ATT_STATE: Record<AttState, [Tone, string]> = {
   // 後不會再吐出 'late'。教練點名頁的 'late' 是完全獨立的本地 UI 草稿狀態（送出時
   // 併入 'present'，見 coach/api.ts saveAttendance()），與這裡的顯示對照表無關。
 };
-
-/* 「我的請假」清單狀態 badge（Task 11；integration-contract.md §3.20 的四值
- * status）。未知值 fallback 為原字串（同 api.ts 的 ORDER_STATUS 慣例）— mine/
- * +page.svelte 用 `LEAVE_STATUS[lr.status] ?? ['neutral', lr.status]` 取值。
- * 卡 3：值升遷 $lib/domain/member-app 單源（mobile 的 MyCourseDetail 原直取本檔，
- * 改經 mobile/data facade）——這裡以本檔嚴格 [Tone, string] 對同一參照純註記收窄
- * （domain 宣告處 satisfies 明列 tone 字面聯集），零斷言。 */
-export const LEAVE_STATUS: Record<string, [Tone, string]> = LEAVE_STATUS_BASE;
 
 // 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
 // 已單源收斂 5 級對照）；保留本檔既有 Record<string, Tone> 寬鍵（CourseDetailDialog.svelte
