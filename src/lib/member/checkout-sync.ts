@@ -1,38 +1,61 @@
-import { get } from 'svelte/store';
-import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
-import { chargeableLines } from './checkout';
-import { cart } from '$lib/cart';
-import { subscriptions, refreshSubscriptions } from './subscriptions';
-import { refreshPoints } from './points';
+import { derived, type Readable } from 'svelte/store';
+import { submitOrder } from '$lib/checkout-order';
+import { createCheckoutController, type CheckoutController, type CheckoutOpenOutcome } from './checkout-controller';
+import { chargeableLines, applyCouponCode } from './checkout';
+import { subscriptions } from './subscriptions';
+import { points } from './points';
+import type { CartItem } from '$lib/cart-item';
 
-/* ---- Checkout — 真訂單 API 接縫（Task 16；Task 10/C4 收斂進 `$lib/checkout-order`
- * 共用 orchestration，本檔改為委派 + re-export） ----
- * 金額/點數/報名/訂閱的商業規則一律以後端為準，前端只負責把「可計費項目」
- * （chargeableLines）同步過去、送出訂單、再把 subscriptions/points 從後端
- * hydrate 回 store——實際的同步/送單序列現在單源自 `$lib/checkout-order` 的
- * `submitOrder`，本檔只注入 member 專屬的 store 讀寫。 */
+/* ---- Checkout — 每個 surface 的結帳工廠（Task 9(R15·F-5)：取代原本焊死在本檔的
+ * member 專屬 `placeOrder`）。desktop CheckoutDialog 與 mobile/stores 各自的購物車
+ * store 不同、下單後／開啟即要暖的 store 也不同（desktop 兩者都是
+ * [refreshSubscriptions, refreshPoints]；mobile 只有 [refreshPoints]），但兩者共用
+ * 同一套「lines 衍生、送單委派 submitOrder、開啟即水合」組裝方式——組裝本身收進這裡，
+ * 呼叫端只需注入自己的 cart 與兩份 refresh 清單。 */
 
-/** 送出訂單 — 委派 `$lib/checkout-order` 的 `submitOrder`：本檔只負責注入 member
- *  專屬的 store 操作——lines 用現行購物車的可計費項目（chargeableLines）、
- *  afterOrder 對應現行的 refreshSubscriptions()/refreshPoints() promise 陣列、
- *  clearCart 對應現行的 cart.clear()。呼叫序列（sync→POST /orders→hydrate→
- *  clear）與失敗語意（任何失敗原樣拋出、不 hydrate、不清購物車）不變；
- *  idempotencyKey 未指定時交由 submitOrder 產生新 uuid。paymentMethod
- *  （Round 4 Task P4-B1）由 CheckoutDialog 的付款方式單選傳入，未帶時沿用
- *  credit_card 預設。回傳值改為 `OrderConfirmation`（計畫核可的行為變更——
- *  原本回傳 raw ApiOrder；原始物件仍可經 `.raw` 取得）。 */
-export async function placeOrder(
-  coupon: string,
-  usePoints: boolean,
-  idempotencyKey?: string,
-  paymentMethod: PaymentMethod = 'credit_card'
-): Promise<OrderConfirmation> {
-  return submitOrder(chargeableLines(get(cart), get(subscriptions)), {
-    coupon,
-    usePoints,
-    paymentMethod,
-    idempotencyKey,
-    afterOrder: () => [refreshSubscriptions(), refreshPoints()],
-    clearCart: () => cart.clear()
-  });
+export interface CheckoutSyncDeps {
+	cart: Readable<CartItem[]> & { clear(): void };
+	/** 下單成功後要跑的 best-effort 副作用（submitOrder 的 afterOrder；整體
+	 *  allSettled，逐筆失敗只 console.error，不影響已成立的訂單）。 */
+	refreshAfterOrder: ReadonlyArray<() => Promise<unknown>>;
+	/** freshCheckout（閉→開邊沿且非付款飛行中）時要跑的水合（best-effort，
+	 *  失敗沿用現值）。 */
+	refreshOnOpen: ReadonlyArray<() => Promise<unknown>>;
+}
+
+/**
+ * 組出一個 surface 專用的 CheckoutController：`lines` 衍生自注入的 cart 與 member
+ * 訂閱（chargeableLines 過濾）；`placeOrder` 委派 `submitOrder`，afterOrder/clearCart
+ * 對應注入的 refreshAfterOrder/cart.clear；`applyCouponCode`／`points` 單源自
+ * member 側模組。setOpen 額外在 freshCheckout 時觸發 refreshOnOpen（best-effort，
+ * 失敗吞掉，沿用現值——與原本兩個 surface 各自手焊的佈線同語意）。
+ */
+export function createCheckout(w: CheckoutSyncDeps): CheckoutController {
+	const lines = derived([w.cart, subscriptions], ([c, s]) => chargeableLines(c, s));
+
+	const controller = createCheckoutController({
+		placeOrder: (orderLines, order) =>
+			submitOrder(orderLines, {
+				coupon: order.coupon,
+				usePoints: order.usePoints,
+				idempotencyKey: order.idempotencyKey,
+				paymentMethod: order.paymentMethod,
+				afterOrder: () => w.refreshAfterOrder.map((fn) => fn()),
+				clearCart: () => w.cart.clear()
+			}),
+		applyCouponCode,
+		lines,
+		points
+	});
+
+	return {
+		...controller,
+		setOpen(open: boolean): CheckoutOpenOutcome {
+			const outcome = controller.setOpen(open);
+			if (outcome.kind === 'freshCheckout') {
+				for (const fn of w.refreshOnOpen) void fn().catch(() => {});
+			}
+			return outcome;
+		}
+	};
 }

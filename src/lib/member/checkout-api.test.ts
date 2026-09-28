@@ -1,11 +1,12 @@
 /* Dream Fly — member 結帳「真訂單」API 層單測（Task 16；Task 17 加了 refreshPoints
- * 的 ledger 映射與 hydrateNotifications）
+ * 的 ledger 映射與 hydrateNotifications；Task 9(架構深化 R15·F-5) 把「送單」呼叫序列
+ * 的覆蓋搬到 checkout-sync.test.ts，本檔只留 syncCartToServer 本身）
  *
  * 覆蓋 member 結帳網路層：$lib/checkout-order 的 syncCartToServer，以及 stores.ts barrel
- * 轉出的 placeOrder / refreshSubscriptions / refreshPoints / hydrateNotifications。只替換
+ * 轉出的 refreshSubscriptions / refreshPoints / hydrateNotifications。只替換
  * $lib/api/client 的 api()，ApiError
  * 用回真實類別（判斷 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→
- * POST /orders→GET×2）是這裡的核心斷言，不是只驗證最終 state。 */
+ * POST /orders→GET×2）是 checkout-sync.test.ts 的核心斷言，不是只驗證最終 state。 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
@@ -22,7 +23,6 @@ import {
   notificationsHydrated,
   waitlist,
   waitlistHydrated,
-  placeOrder,
   refreshSubscriptions,
   refreshPoints,
   hydrateNotifications,
@@ -140,195 +140,6 @@ describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
       method: 'POST',
       body: JSON.stringify({ item_type: 'product', item_id: 'pass-uuid-9', quantity: 2 })
     });
-  });
-});
-
-describe('placeOrder — 呼叫序列（sync → orders → hydrate → clear）', () => {
-  it('完整序列：DELETE /cart → POST /cart/items ×N（課程 qty 夾 1）→ POST /orders 帶 Idempotency-Key → GET subscriptions/points → 本地購物車清空', async () => {
-    cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'POST /orders': SAMPLE_ORDER,
-        'GET /subscriptions/me': [],
-        'GET /points/me': { balance: 235 }
-      }, CART_DEFAULTS)
-    );
-
-    const order = await placeOrder('DREAMFLY100', false, 'key-abc');
-
-    expect(api).toHaveBeenNthCalledWith(1, '/cart', { method: 'DELETE' });
-    expect(api).toHaveBeenNthCalledWith(2, '/cart/items', {
-      method: 'POST',
-      body: JSON.stringify({ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 })
-    });
-    expect(api).toHaveBeenNthCalledWith(3, '/cart/items', {
-      method: 'POST',
-      body: JSON.stringify({ item_type: 'product', item_id: 'pass-uuid-9', quantity: 1 })
-    });
-    expect(api).toHaveBeenNthCalledWith(4, '/orders', {
-      method: 'POST',
-      body: JSON.stringify({ coupon_code: 'DREAMFLY100', use_points: false, payment_method: 'credit_card' }),
-      headers: { 'Idempotency-Key': 'key-abc' }
-    });
-    expect(api).toHaveBeenNthCalledWith(5, '/subscriptions/me');
-    expect(api).toHaveBeenNthCalledWith(6, '/points/me');
-    expect(order.raw).toEqual(SAMPLE_ORDER);
-    expect(order.total).toBe(4700); // ntd(470000) 換算後的 NT$ 整數
-    expect(order.hasCourse).toBe(true);
-    expect(order.hasPass).toBe(false);
-    expect(order.orderNumber).toBe('DF-20260704ABCD1234');
-    expect(get(cart)).toEqual([]);
-    expect(get(points)).toBe(235);
-  });
-
-  it('已持有的 pass 不同步到 server — syncCartToServer 只送 chargeableLines（同意金額 ≡ 請款金額）', async () => {
-    subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'POST /orders': SAMPLE_ORDER,
-        'GET /subscriptions/me': [],
-        'GET /points/me': { balance: 0, ledger: [] }
-      }, CART_DEFAULTS)
-    );
-
-    await placeOrder('', false, 'key-own');
-
-    const itemPosts = vi
-      .mocked(api)
-      .mock.calls.filter(([p, i]) => p === '/cart/items' && (i as RequestInit)?.method === 'POST');
-    expect(itemPosts).toHaveLength(1); // 只有課程；已持有的 pass 被排除，預覽跳過的絕不請款
-    expect((itemPosts[0][1] as RequestInit).body).toBe(
-      JSON.stringify({ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 })
-    );
-  });
-
-  it('coupon 空字串 → coupon_code 整個欄位省略（不是送空字串）', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
-    );
-
-    await placeOrder('', true, 'key-xyz');
-
-    expect(api).toHaveBeenCalledWith('/orders', {
-      method: 'POST',
-      body: JSON.stringify({ use_points: true, payment_method: 'credit_card' }),
-      headers: { 'Idempotency-Key': 'key-xyz' }
-    });
-  });
-
-  it('payment_method 預設 credit_card——呼叫端未指定第 4 個參數時', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
-    );
-
-    await placeOrder('', false, 'key-default-pm');
-
-    const ordersCall = vi.mocked(api).mock.calls.find(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
-    expect(JSON.parse((ordersCall?.[1] as RequestInit).body as string)).toMatchObject({ payment_method: 'credit_card' });
-  });
-
-  it('選了 line_pay → payment_method 送 line_pay', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
-    );
-
-    await placeOrder('', false, 'key-line-pay', 'line_pay');
-
-    const ordersCall = vi.mocked(api).mock.calls.find(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
-    expect(JSON.parse((ordersCall?.[1] as RequestInit).body as string)).toMatchObject({ payment_method: 'line_pay' });
-  });
-
-  it('未指定 idempotencyKey → 自動產生 uuid 格式的 key', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(
-      fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
-    );
-
-    await placeOrder('', false);
-
-    const ordersCall = vi.mocked(api).mock.calls.find(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
-    const init = ordersCall?.[1] as { headers: Record<string, string> };
-    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-  });
-
-  it('失敗後同一把 key 重試 → 兩次 POST /orders 帶相同 Idempotency-Key（不因重試換新 key）', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    let attempt = 0;
-    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
-      const method = (init.method ?? 'GET').toString().toUpperCase();
-      if (path === '/orders' && method === 'POST') {
-        attempt += 1;
-        if (attempt === 1) throw new ApiError(409, 'course is full');
-        return SAMPLE_ORDER;
-      }
-      if (path === '/subscriptions/me') return [];
-      if (path === '/points/me') return { balance: 0 };
-      return undefined; // DELETE /cart、POST /cart/items
-    });
-
-    await expect(placeOrder('', false, 'retry-key-1')).rejects.toBeInstanceOf(ApiError);
-    // 失敗時本地購物車不會被清空，使用者可以直接重試、沿用同一把 key。
-    await placeOrder('', false, 'retry-key-1');
-
-    const orderCalls = vi
-      .mocked(api)
-      .mock.calls.filter(([path, init]) => path === '/orders' && (init as RequestInit)?.method === 'POST');
-    expect(orderCalls).toHaveLength(2);
-    expect((orderCalls[0][1] as { headers: Record<string, string> }).headers['Idempotency-Key']).toBe('retry-key-1');
-    expect((orderCalls[1][1] as { headers: Record<string, string> }).headers['Idempotency-Key']).toBe('retry-key-1');
-  });
-
-  it('訂單已成立後，hydrate（subscriptions/points）其中一支網路失敗仍視為成功：cart 照樣清空、order 照樣回傳', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'POST /orders': SAMPLE_ORDER,
-        'GET /subscriptions/me': new ApiError(500, 'internal error'), // hydrate 失敗
-        'GET /points/me': { balance: 235 }
-      }, CART_DEFAULTS)
-    );
-
-    const order = await placeOrder('', false); // 不 reject — 訂單本身已成功
-
-    expect(order.raw).toEqual(SAMPLE_ORDER);
-    expect(get(cart)).toEqual([]); // 本地購物車仍照樣清空
-    expect(get(points)).toBe(235); // 沒失敗的那支照樣 hydrate
-  });
-});
-
-describe('placeOrder — 失敗路徑', () => {
-  it('POST /orders 409（滿班）→ 錯誤原樣拋出；本地購物車不清空；不 hydrate subscriptions/points', async () => {
-    cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(409, 'course is full') }, CART_DEFAULTS));
-
-    let caught: unknown;
-    try {
-      await placeOrder('', false);
-    } catch (err) {
-      caught = err;
-    }
-
-    expect(caught).toBeInstanceOf(ApiError);
-    expect((caught as ApiError).status).toBe(409);
-    expect(get(cart)).toHaveLength(1); // 未清空
-    expect(api).not.toHaveBeenCalledWith('/subscriptions/me');
-    expect(api).not.toHaveBeenCalledWith('/points/me');
-  });
-
-  it('POST /orders 400（優惠碼無效）→ 錯誤原樣拋出；本地購物車不清空', async () => {
-    cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': new ApiError(400, 'invalid coupon') }, CART_DEFAULTS));
-
-    await expect(placeOrder('BADCODE', false)).rejects.toMatchObject({ status: 400 });
-    expect(get(cart)).toHaveLength(1);
   });
 });
 

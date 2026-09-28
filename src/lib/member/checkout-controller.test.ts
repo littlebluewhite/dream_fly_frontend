@@ -11,9 +11,9 @@ import {
 	createCheckoutController,
 	type AppliedCoupon,
 	type CheckoutController,
-	type PaidSummary
+	type PaidSummary,
+	type PlaceOrderInput
 } from './checkout-controller';
-import type { PaymentMethod } from '$lib/checkout-order';
 import type { ChargeableLine } from '$lib/cart-item';
 import { chargeableLines } from './checkout';
 
@@ -40,7 +40,7 @@ const COUPON: AppliedCoupon = { code: 'DREAMFLY100', off: 100 };
 
 function makeDeps() {
 	return {
-		placeOrder: vi.fn<(coupon: string, usePoints: boolean, idempotencyKey: string, paymentMethod: PaymentMethod) => Promise<PaidSummary>>(),
+		placeOrder: vi.fn<(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>>(),
 		applyCouponCode: vi.fn<(code: string) => Promise<{ coupon: AppliedCoupon | null; codeErr: string } | null>>(),
 		lines: writable<ChargeableLine[]>(LINES),
 		points: writable(0)
@@ -61,11 +61,11 @@ beforeEach(() => {
 	ctrl = createCheckoutController(deps);
 });
 
-/** 第 n 次 placeOrder 呼叫收到的 Idempotency-Key（引數第 3 位）。 */
+/** 第 n 次 placeOrder 呼叫收到的 Idempotency-Key（第 2 引數 order.idempotencyKey）。 */
 function keyOfCall(n: number): string {
 	const call = deps.placeOrder.mock.calls[n];
 	if (!call) throw new Error(`placeOrder 第 ${n} 次呼叫不存在`);
-	return call[2];
+	return call[1].idempotencyKey;
 }
 
 describe('createCheckoutController — 建構 / setOpen 邊沿', () => {
@@ -151,7 +151,12 @@ describe('confirmPay — 生命週期與守衛', () => {
 		ctrl.form.set({ code: 'dreamfly100', usePoints: true, paymentMethod: 'line_pay' });
 		await ctrl.applyCode();
 		const outcome = await ctrl.confirmPay();
-		expect(deps.placeOrder).toHaveBeenCalledWith('DREAMFLY100', true, expect.any(String), 'line_pay');
+		expect(deps.placeOrder).toHaveBeenCalledWith(LINES, {
+			coupon: 'DREAMFLY100',
+			usePoints: true,
+			idempotencyKey: expect.any(String),
+			paymentMethod: 'line_pay'
+		});
 		expect(outcome).toEqual({ kind: 'orderPlaced', paid: CONFIRMED });
 		expect(machine(ctrl)).toEqual({ step: 2, paying: false, paid: CONFIRMED });
 	});
@@ -242,7 +247,7 @@ describe('建構期即備妥可用 key（不呼叫 setOpen 的消費者）', () 
 		otherDeps.placeOrder.mockResolvedValue(CONFIRMED);
 		await ctrl.confirmPay();
 		await other.confirmPay();
-		const otherKey = otherDeps.placeOrder.mock.calls[0]?.[2];
+		const otherKey = otherDeps.placeOrder.mock.calls[0]?.[1].idempotencyKey;
 		expect(otherKey).not.toBe('');
 		expect(otherKey).not.toBe(keyOfCall(0));
 	});
@@ -318,7 +323,12 @@ describe('結算輸入與預覽', () => {
 		expect(get(ctrl).preview.total).toBe(4400);
 		d.resolve(CONFIRMED);
 		await p;
-		expect(deps.placeOrder).toHaveBeenCalledWith('DREAMFLY100', true, expect.any(String), 'line_pay');
+		expect(deps.placeOrder).toHaveBeenCalledWith(LINES, {
+			coupon: 'DREAMFLY100',
+			usePoints: true,
+			idempotencyKey: expect.any(String),
+			paymentMethod: 'line_pay'
+		});
 	});
 
 	it('付款中：confirmPay 開始後才落地的 applyCode 回應被丟棄（不落地優惠碼/預覽）', async () => {

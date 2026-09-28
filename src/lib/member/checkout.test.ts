@@ -3,8 +3,9 @@
  * orderErrorMessage（後端錯誤 → 繁中文案）。
  *
  * 舊本地結算 commitCheckout/CheckoutContext/CheckoutResult 及其測試已隨 final
- * review 移除 —— 金額/點數/報名/訂閱規則以後端為準（見 stores.ts placeOrder 與
- * checkout-api.test.ts 的呼叫序列測試），前端不再平行釘一份會漂移的數學。
+ * review 移除 —— 金額/點數/報名/訂閱規則以後端為準（見 checkout-sync.ts 的
+ * createCheckout 與 checkout-sync.test.ts 的呼叫序列測試），前端不再平行釘一份
+ * 會漂移的數學。
  *
  * cart v3：CartItem.id 是 uuid string（這裡的 id 只是字串字面量，不代表真的
  * uuid 格式）。 */

@@ -74,13 +74,20 @@ export interface CheckoutViewState {
 	hasChargeable: boolean; // lines 非空——空車/全數已持有時不可送單
 }
 
+/** confirmPay 送單時打包的送單輸入（coupon/usePoints/idempotencyKey/paymentMethod）
+ *  ——與 lines 分開傳，讓 deps.placeOrder 收到的「本次要送的行」與「怎麼送」界線
+ *  清楚（F-5：surface 端的 createCheckout 把 lines 原樣轉給 submitOrder）。 */
+export interface PlaceOrderInput {
+	coupon: string;
+	usePoints: boolean;
+	idempotencyKey: string;
+	paymentMethod: PaymentMethod;
+}
+
 export interface CheckoutControllerDeps {
-	placeOrder: (
-		coupon: string,
-		usePoints: boolean,
-		idempotencyKey: string,
-		paymentMethod: PaymentMethod
-	) => Promise<PaidSummary>;
+	/** lines 由 confirmPay 只讀一次（get(deps.lines)）、同一份既用來判斷
+	 *  hasChargeable 也往下傳——不再各自重讀一次可能已經漂移的購物車快照。 */
+	placeOrder: (lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>;
 	/** 「套用」按鈕的結果機（member/checkout 的 applyCouponCode）：空輸入回 null（不動
 	 *  狀態），否則回要寫入的 coupon 與錯誤文案。 */
 	applyCouponCode: (code: string) => Promise<{ coupon: AppliedCoupon | null; codeErr: string } | null>;
@@ -201,12 +208,13 @@ export function createCheckoutController(deps: CheckoutControllerDeps): Checkout
 		// 已持有/空車）：沒有可計費項目就不該送單（後端會回 400 cart is empty）——
 		// 按鈕已 disabled，這裡是第二道防線。
 		if (paying) return { kind: 'alreadyPaying' };
-		if (!hasChargeable(get(deps.lines))) return { kind: 'nothingChargeable' };
+		const lines = get(deps.lines); // 只讀一次：hasChargeable 判斷與往下傳給 placeOrder 同一份快照
+		if (!hasChargeable(lines)) return { kind: 'nothingChargeable' };
 		const { usePoints, paymentMethod } = get(form);
 		paying = true;
 		publish();
 		try {
-			const confirmation = await deps.placeOrder(coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod);
+			const confirmation = await deps.placeOrder(lines, { coupon: coupon?.code ?? '', usePoints, idempotencyKey, paymentMethod });
 			paid = {
 				total: confirmation.total,
 				earned: confirmation.earned,

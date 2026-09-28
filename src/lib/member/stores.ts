@@ -45,7 +45,7 @@ export type { ApiLedgerEntry, ApiPointsMe, ApiRedeemResult } from './points';
 export { subscriptions, refreshSubscriptions } from './subscriptions';
 export type { ApiSubscription } from './subscriptions';
 
-export { placeOrder } from './checkout-sync';
+export { createCheckout } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
 export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';

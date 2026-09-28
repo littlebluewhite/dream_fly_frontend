@@ -7,8 +7,9 @@
    * 的控制項（qty 鎖 1，見 stores.ts 的 cart.add()）。
    *
    * 確認付款 → 復用桌面 member 的結帳 seam 真下單（見 $lib/mobile/stores.ts 的
-   * placeOrder()：syncCartToServer + POST /orders + refreshPoints），成功/失敗
-   * 都以真實 API 回應為準——不再有本地假 checkout()、假成功 toast、假點數。 */
+   * checkout 單例：createCheckout 內部委派 submitOrder，syncCartToServer + POST
+   * /orders + refreshPoints），成功/失敗都以真實 API 回應為準——不再有本地假
+   * checkout()、假成功 toast、假點數。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
@@ -19,14 +20,15 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount, onDestroy } from 'svelte';
-  // Task 7(架構深化 R15·F-4)：points/refreshPoints/orderErrorMessage 改直取
-  // 擁有者模組（$lib/member/points、$lib/member/checkout），不再經 $lib/mobile/
-  // stores 轉手。C2(R11)/C3(R13)：checkout 仍經 mobile/stores 取用——付款狀態機
-  // 與桌面共用同一份機器，這裡拿的是 stores.ts 的模組級單例（見下方）。Task 5
-  // (R14·F4)：優惠碼套用與可計費預覽（chargeableLines + checkoutMath）也收進該
-  // 單例，本元件只讀 $checkout.preview。
+  // Task 7(架構深化 R15·F-4)：points/orderErrorMessage 改直取擁有者模組
+  // （$lib/member/points、$lib/member/checkout），不再經 $lib/mobile/stores 轉手。
+  // C2(R11)/C3(R13)：checkout 仍經 mobile/stores 取用——付款狀態機與桌面共用
+  // 同一份機器，這裡拿的是 stores.ts 的模組級單例（見下方）。Task 5(R14·F4)：
+  // 優惠碼套用與可計費預覽（chargeableLines + checkoutMath）也收進該單例，本
+  // 元件只讀 $checkout.preview；Task 9(R15·F-5)：真點數水合也收進該單例
+  // （createCheckout 的 refreshOnOpen），本元件不再自己 refreshPoints()。
   import { cart, toasts, checkout } from '$lib/mobile/stores';
-  import { points, refreshPoints } from '$lib/member/points';
+  import { points } from '$lib/member/points';
   import { orderErrorMessage } from '$lib/member/checkout';
   import { fmtNT } from '$lib/format';
   import { authStore } from '$lib/stores/authStore';
@@ -58,16 +60,11 @@
   const form = checkout.form;
 
   // 掛載 = setOpen(true)、卸載 = setOpen(false)（C3/R13：controller 是模組級單例，
-  // 靠這兩個邊沿讓機器知道「本次是哪一次結帳嘗試」）。只在 freshCheckout（無飛行中）
-  // 才水合真點數餘額——本地 mock 殘值只是 fail-safe，折抵預覽必須用真餘額；
-  // resumedInFlight（付款飛行中被外力關閉又重開）不重新水合，同桌面 CheckoutDialog
-  // 的既有慣例（見該檔 $: { checkout.setOpen(...) } 反應塊）。
-  // best-effort：失敗就沿用目前的 store 值，送單時後端仍是最終防線。
+  // 靠這兩個邊沿讓機器知道「本次是哪一次結帳嘗試」）。freshCheckout（無飛行中）時
+  // 的真點數餘額水合已收進 checkout 單例本身（Task 9(R15·F-5)：createCheckout 的
+  // refreshOnOpen，見 $lib/mobile/stores.ts），本元件不必再自己判斷 outcome。
   onMount(() => {
-    const outcome = checkout.setOpen(true);
-    if (outcome.kind === 'freshCheckout') {
-      void refreshPoints().catch(() => {});
-    }
+    checkout.setOpen(true);
   });
   onDestroy(() => {
     checkout.setOpen(false);

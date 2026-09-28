@@ -9,8 +9,9 @@ import type { Course } from '$lib/mobile/data';
 
 /* CartSheet 結帳接真（複審後）：confirmPayment 現在打真實 POST /orders（復用
  * desktop member 的 syncCartToServer + api()，見 $lib/mobile/stores.ts 的
- * placeOrder()），取代原本的本地假 checkout()。只替換 $lib/api/client 的
- * api()，ApiError 用回真實類別（orderErrorMessage 靠 instanceof 判斷）。 */
+ * checkout 單例——委派 $lib/member/checkout-sync 的 createCheckout），取代原本的
+ * 本地假 checkout()。只替換 $lib/api/client 的 api()，ApiError 用回真實類別
+ * （orderErrorMessage 靠 instanceof 判斷）。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };

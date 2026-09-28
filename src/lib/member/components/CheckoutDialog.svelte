@@ -12,11 +12,9 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import SuccessBody from './SuccessBody.svelte';
-  import { cart, points, subscriptions, checkoutOpen, toasts, placeOrder, refreshSubscriptions, refreshPoints, type PaymentMethod } from '$lib/member/stores';
-  import { derived } from 'svelte/store';
+  import { cart, points, checkoutOpen, toasts, refreshSubscriptions, refreshPoints, createCheckout, type PaymentMethod } from '$lib/member/stores';
   import { fmtNT } from '$lib/format';
-  import { chargeableLines, applyCouponCode, orderErrorMessage } from '$lib/member/checkout';
-  import { createCheckoutController } from '$lib/member/checkout-controller';
+  import { orderErrorMessage } from '$lib/member/checkout';
 
   // 付款方式(Round 4 Task P4-F4;integration-contract.md §1.8/§3.10)——單選、
   // 純資料欄位。目前仍是模擬金流,選擇不影響任何真金流 UI 或下單流程,只決定
@@ -32,13 +30,14 @@
   /* ── 付款狀態機（step/paying/paid、idempotencyKey 生命週期、閉→開邊沿偵測、
    * 防重複扣款守衛）在 checkout-controller（deps 注入，可無渲染單測）。Task 5(R14·F4)
    * 起結算輸入（優惠碼/點數折抵/付款方式）與預覽也住 controller；本元件退化為快照鏡射
-   * + 表單 bind + outcome → toast 文案的薄 adapter。lines 與請款同吃 chargeableLines
-   * （預覽 ≡ 請款，避免計算漂移）；成交金額以 API 回應（paid.*）為準，見 confirmPay。 ── */
-  const checkout = createCheckoutController({
-    placeOrder,
-    applyCouponCode,
-    lines: derived([cart, subscriptions], ([c, s]) => chargeableLines(c, s)),
-    points
+   * + 表單 bind + outcome → toast 文案的薄 adapter。Task 9(R15·F-5)：lines／
+   * placeOrder／applyCouponCode／points 的組裝收進 $lib/member/checkout-sync 的
+   * createCheckout，本元件只注入桌面自己的 cart 與「下單後」「開啟即水合」兩份
+   * refresh 清單。 ── */
+  const checkout = createCheckout({
+    cart,
+    refreshAfterOrder: [refreshSubscriptions, refreshPoints],
+    refreshOnOpen: [refreshSubscriptions, refreshPoints]
   });
   const form = checkout.form;
   let step = 0;
@@ -51,19 +50,11 @@
 
   // dialog 閉→開邊沿的重置佈線：controller 收付款生命週期與結算輸入（step 歸 0、成交
   // 快照歸零、idempotencyKey 換發、表單與優惠碼重置；付款飛行中不重置——見
-  // checkout-controller 檔頭），元件只收開啟即水合。反應塊只讀 $checkoutOpen、不讀
-  // $checkout，無自迴圈。
-  $: {
-    const outcome = checkout.setOpen($checkoutOpen);
-    if (outcome.kind === 'freshCheckout') {
-      // 開啟即水合「已持有訂閱」與「點數餘額」：chargeableLines 的持有判斷與
-      // 折抵預覽的可用點數都必須來自後端（本地 points 種子是 0 的 fail-safe，
-      // 訂閱殘值可能過期）。best-effort——失敗（未登入、離線）就沿用本地現值，
-      // 結帳送單時後端仍是最終防線（409 already enrolled／點數以實際餘額扣）。
-      void refreshSubscriptions().catch(() => {});
-      void refreshPoints().catch(() => {});
-    }
-  }
+  // checkout-controller 檔頭）。開啟即水合「已持有訂閱」與「點數餘額」已收進
+  // createCheckout 的 refreshOnOpen（best-effort，失敗沿用本地現值，結帳送單時
+  // 後端仍是最終防線），本元件不必再自己判斷 outcome。反應塊只讀 $checkoutOpen、
+  // 不讀 $checkout，無自迴圈。
+  $: checkout.setOpen($checkoutOpen);
 
   $: items = $cart;
   function close() {

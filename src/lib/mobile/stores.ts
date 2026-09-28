@@ -15,19 +15,15 @@
  * `session` gate 旗標。`cart` 改吃
  * lib-root 共用工廠 $lib/cart(C2:與 member 側同一份實作，不再是平行 store；
  * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
- * CartSheet 的結帳流程本身已改真下單，
- * `placeOrder()` 委派共用的 `submitOrder`(`$lib/checkout-order`，見下方該函式
- * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額改直讀
+ * CartSheet 的結帳流程本身已改真下單，`checkout` 單例（見下方）委派 `createCheckout`
+ * (`$lib/member/checkout-sync`，內部再委派 `submitOrder`)，不再是本地假 checkout()。
+ * 帳戶頁/點數頁/CartSheet 的即時點數餘額改直讀
  * `$lib/member/points` 的真 `points`/`pointsLedger`(Task 7 起不再經本檔轉手)。 */
 
-import { derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobilePushRegistry, MobileSheetRegistry } from './overlay-registry';
-import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
-import { points, refreshPoints } from '$lib/member/points';
-import { subscriptions } from '$lib/member/subscriptions';
-import { applyCouponCode, chargeableLines } from '$lib/member/checkout';
+import { refreshPoints } from '$lib/member/points';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
 import { type Course } from './data';
@@ -54,8 +50,10 @@ export const overlay = createOverlay<MobilePushRegistry, MobileSheetRegistry>();
 // 久），CartSheet 隨 sheet 開關呼叫 setOpen(true/false)，語意同桌面 $checkoutOpen 的
 // 閉→開偵測——sheet 若在付款飛行中被外力關閉（如導航觸發的 closeAll）又重開，走
 // resumedInFlight，同一把 key 續用、paying 繼續鎖住，不會開出第二張真訂單。詳見
-// controller 檔頭與 CartSheet 該段註解。
-import { createCheckoutController } from '$lib/member/checkout-controller';
+// controller 檔頭與 CartSheet 該段註解。Task 9(架構深化 R15·F-5)：組裝本身
+// （lines／placeOrder／applyCouponCode／points）收進 $lib/member/checkout-sync 的
+// createCheckout，這裡只注入 mobile 自己的 cart 與兩份 refresh 清單。
+import { createCheckout } from '$lib/member/checkout-sync';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** C2(架構深化 R9)：工廠本體上移為 lib-root 共用模組 $lib/cart（member 側也
@@ -75,52 +73,19 @@ export const cart = { // 介面不膨脹:只出 4 個成員
 };
 
 // C3/R13：checkout 與 cart 同生命週期（模組級單例，比 CartSheet 這顆 mount 級元件
-// 活得久）——placeOrder 即下方緊接著的 placeOrder（函式宣告已提升，這裡引用它先於
-// 其文字定義出現不影響執行期）。Task 5(R14·F4)：結算輸入與預覽也住進單例，deps 補齊
-// applyCouponCode 與兩個唯讀來源——lines 與 placeOrder 的請款同吃 chargeableLines
-// （預覽 ≡ 請款），points 是 member 側的真餘額。詳見上方段落註解與 checkout-controller
-// 檔頭。
-export const checkout = createCheckoutController({
-	placeOrder,
-	applyCouponCode,
-	lines: derived([cart, subscriptions], ([c, s]) => chargeableLines(c, s)),
-	points
+// 活得久）。Task 9(架構深化 R15·F-5)：desktop CheckoutDialog 與這裡各自組
+// createCheckout({ cart, refreshAfterOrder, refreshOnOpen })——lines／placeOrder／
+// applyCouponCode／points 的組裝單源自 $lib/member/checkout-sync，這裡只注入
+// mobile 自己的 cart，以及「下單後」「開啟即水合」兩份 refresh 清單:都只有
+// refreshPoints（mobile 購物車只產 course，恆空的 subscriptions 不必水合，見下方
+// CartSheet.svelte 的既有註解）。mobile 不做付款方式選擇 UI(Round 4 P4-F4 裁決)，
+// 呼叫端(CartSheet)一律沿用預設 credit_card——這由 checkout-controller 的表單預設
+// 值負責，本檔不必再自己焊 placeOrder adapter。
+export const checkout = createCheckout({
+	cart,
+	refreshAfterOrder: [refreshPoints],
+	refreshOnOpen: [refreshPoints]
 });
-
-/* ---------- Checkout — 真訂單 API 接縫（Task 19 收尾：CartSheet 結帳接真）----
- * C4 收斂：原本焊在這裡的「同步購物車 → POST /orders → 下單後刷新 → 清購物車」
- * orchestration 已收斂進共用的 submitOrder(見 $lib/checkout-order)，placeOrder
- * 瘦成薄 adapter，只把行動版自己的東西經參數注入(見下方兩個函式)。 */
-/** 送出訂單：委派 submitOrder(同步購物車 → POST /orders(帶呼叫端提供的
- *  Idempotency-Key) → 下單後重新水合真點數餘額 → 清空(僅)行動版本地購物車)。
- *  回傳值為 OrderConfirmation(total 已是 NT$ 整數，呼叫端見 CartSheet)。任何
- *  失敗(400 購物車為空/優惠碼無效、409 滿班/已報名/點數不足等)原樣拋出、不清
- *  空購物車——呼叫端(CartSheet)catch 後用 member/checkout 的 orderErrorMessage()
- *  轉繁中 toast，同桌面 CheckoutDialog 的既有裁決。
- *  paymentMethod(Round 4 Task P4-F4):mobile 不做付款方式選擇 UI(計畫裁決)，
- *  呼叫端一律沿用預設 credit_card。
- *  C6(反轉 K5-b):submitOrder 的 lines 收窄為 ChargeableLine[](可計費約束 brand，
- *  見 $lib/cart-item)，唯一產地是 chargeableLines()。K5-b 曾裁定 mobile「不需要
- *  過濾、直傳 get(cart)」——理由是 course-only 購物車的過濾恆 no-op;C6 反轉這個
- *  決定，改讓型別強制過濾:預覽(checkout 單例的 preview)與請款(此處 submitOrder)
- *  兩個終點同吃 chargeableLines 的輸出，「預覽合計 ≡ 實際請款」不再靠呼叫端記憶、
- *  而是編譯期保證。對今日 course-only 購物車行為零變動(空訂閱、course 恆保留)，
- *  未來若方案購買動線上架，過濾已就位、自動安全。 */
-export async function placeOrder(
-	coupon: string,
-	usePoints: boolean,
-	idempotencyKey: string = crypto.randomUUID(),
-	paymentMethod: PaymentMethod = 'credit_card'
-): Promise<OrderConfirmation> {
-	return submitOrder(chargeableLines(get(cart), get(subscriptions)), {
-		coupon,
-		usePoints,
-		paymentMethod,
-		idempotencyKey,
-		afterOrder: () => [refreshPoints()],
-		clearCart: () => cart.clear()
-	});
-}
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);
