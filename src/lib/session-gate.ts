@@ -16,20 +16,25 @@
  *
  * C3(架構深化 R9)新增 pageEntry(),關閉 ADR 0017 明載的 known-latent 殘窗(通知
  * **頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對)。門 (c)
- * `onSessionReset` 已退役(其唯一消費者曾是 mobile 專屬的通知模組;Task 5 架構深化
- * R12 起 mobile 併入 member notifications,經 $lib/mobile/stores 轉出同一顆 gate,
- * 三門收斂為兩門的結論不變)。
+ * `onSessionReset` 已退役(其唯一消費者曾是 mobile 專屬的通知模組;架構深化 R12 起
+ * mobile 併入 member notifications 這顆共用 gate;R15(候選 F-4)mobile 消費端改直接
+ * `import from '$lib/member/notifications'`,不再經 `$lib/mobile/stores` 轉出——三門
+ * 收斂為兩門的結論不變,只是 mobile 拿到這顆 gate 的路徑換了)。
  *
- * 架構深化 R10／R11 替 pageEntry() 的 hydrate 包加上 `gen`(世代穩定重抓)與
- * `pendingSettle`(mutation settle 訊號)——讓頁面 load-gate 的 refresh 族與 store 閘門讀
- * **同一本**世代帳與**同一本**尾流帳(見 $lib/hydration-gate 的 fetchGenStable)。R14(候選
- * F1)再把 pageEntry() 整個搬進 HydrationGate:本檔已把 epochFetch 當 fetch 餵給水合閘門,
- * 所以繼承下來的進場包自帶 epoch 核對,本檔不再自己組。identity onChange 呼叫本閘門的
- * `reset()`(R15 起即水合閘門自帶的 reset() 再加重置兩條鏈;閘門那支翻旗 false + 清尾流帳,
- * 後者即 R11 終審修波的跨身分清帳,理由見 createSessionGate 註解)。queueReconcile 與 mutate() 不受影響:
- * 前者的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費閉合(見該函式
- * 註解);後者是 await-then-write,天生沒有「寫回時尾流仍在飛」的窗口,不需要入帳(R11 的
- * 缺陷只在四個 mark-before-await 的通知域呼叫點)。
+ * 架構深化 R10／R11 替 pageEntry() 交出的水合協定加上世代穩定重抓與 mutation settle 訊號,
+ * 讓頁面 load-gate 的 refresh 族與 store 閘門讀**同一本**世代帳與**同一本**尾流帳(見
+ * $lib/hydration-gate 內部的 fetchGenStable)。R14(候選 F1)把 pageEntry() 整個搬進
+ * HydrationGate:本檔已把 epochFetch 當 fetch 餵給水合閘門,所以繼承下來的進場包自帶 epoch
+ * 核對,本檔不再自己組。R15(候選 F-1)再把 pageEntry() 的形狀收成 `{ source: LoadSource }`
+ * ——世代帳與尾流帳的讀取器連經 pageEntry() 交出這條路都收掉,只住 hydration-gate.ts 內部,
+ * 頁面的 load-gate 只看得到 `source.load(isCurrent)`/`source.refresh(isCurrent)` 這兩支黑箱;
+ * 本檔對此無感,`gate.pageEntry()` 原樣轉手。identity onChange 呼叫本閘門的
+ * `reset()`(R15 起即水合閘門自帶的通用 reset() 再加重置兩條鏈;取代 R14 以前專供本檔用的內部
+ * 工廠 `createOwnedHydrationGate`/`ownerChanged()`,兩者已退役——閘門的 reset() 翻旗 false +
+ * 清尾流帳,後者即 R11 終審修波的跨身分清帳,理由見 createSessionGate 註解)。queueReconcile 與
+ * mutate() 不受影響:前者的「和解快照 vs 後續 mutation」殘窗由 gate.refresh 自帶的世代比對免費
+ * 閉合(見該函式註解);後者是 await-then-write,天生沒有「寫回時尾流仍在飛」的窗口,不需要入帳
+ * (R11 的缺陷只在四個 mark-before-await 的通知域呼叫點)。
  *
  * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
  * session 世代收進閘門——合併住 HydrationGate(hydrate 與頁面 load-gate 的 load 共用在飛 GET),

@@ -415,7 +415,7 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 
 | ADR | 位置 | 舊 | 新 |
 | --- | --- | --- | --- |
-| `docs/adr/0016` C1 三決策點 | `hydration-gate.test.ts` | 讀 `gate.mutationGen()`/`gate.pendingSettle()` | 改經 `pageEntry().hydrate.gen`/`.pendingSettle` 讀,斷言不變(F-1 沿用 R14 已改寫的形狀,本輪未再變動讀取路徑) |
+| `docs/adr/0016` C1 三決策點 | `load-gate.test.ts`/`hydration-gate.test.ts` | 讀取器經 `pageEntry().hydrate.gen`/`.pendingSettle` 交出,測試直接讀這兩個欄位斷言 | 讀取器已完全退役(`pageEntry()` 只回 `{ source }`,`src/lib/hydration-gate.ts:306-308`);`load-gate.test.ts` 新增 describe「source 選項(pageEntry 整合)」與「LoadSource 契約(假 source)」,改用真 `createHydrationGate(...).pageEntry()` 或假 `LoadSource` 對 `guarded()`/`load(isCurrent)`/`refresh(isCurrent)` 的行為釘(F1/F5 重入、`isCurrent` 於被取代/卸載後回 false、`silentRefresh` 交出 `isCurrent` 且吞錯誤);`hydration-gate.test.ts` 既有的世代穩定重抓與 mutation-settle 釘全部改成呼叫 `gate.refresh()`/`page.refresh()` 之後斷言 fetch 次數與落地值,不再有任何測試直接讀 `pageEntry().hydrate.*` |
 | `docs/adr/0020`/`0021` 判準守恆釘 | `mobile-admin/stores.test.ts` | 同步 `markOrderPaid(order)` → `await refreshOps()`,`opsHydrated.set(false)` 重置 | setup 改 `resetOpsForTests()`,斷言(重抓前旗標已真、fetch 恰一次、快照照常套用)逐字不變 |
 | `docs/adr/0017` 建構順序契約 | `session-gate.test.ts` | (R14 已改為零觸發,見 `docs/adr/0017` 增補) | 本輪未再變動——`createOwnedHydrationGate`/`ownerChanged` 隨閘門自帶 `reset()` 退役,`session-gate.ts` 內部改呼叫 `gate.reset()`,零測試面變化 |
 | `docs/adr/0022`「測試收尾」儀式 | 多個 `checkout-api.test.ts`/`leave-requests-api.test.ts` 等 | `release(new Error('測試收尾'))` + 孤兒 `let release` | 改為 `new Promise(() => {})`,測試結尾不再需要手動釋放(閘門重置) |
