@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AttendancePage from './+page.svelte';
 import { toasts } from '$lib/mobile-admin/stores';
-import { api } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
@@ -148,6 +148,35 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		await fireEvent.click(getByText('儲存點名'));
 		await vi.waitFor(() => expect(get(toasts).some((t) => t.title === '儲存失敗')).toBe(true));
 		expect(getByText('儲存點名')).toBeInTheDocument(); // 未切換成「已儲存」字樣
+	});
+
+	// R15(候選 點名文案，bug #5)：標題照舊「儲存失敗」，內文依狀態碼分流(同桌面
+	// coach/attendance/+page.svelte 的 attendanceErrorMessage)。
+	it('403(非本課教練) → 儲存失敗 toast 內文顯示「沒有權限為此堂課點名。」', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': new ApiError(403, 'forbidden') }));
+		const { findByText, getByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+
+		await fireEvent.click(getByText('儲存點名'));
+		await vi.waitFor(() => expect(get(toasts).some((t) => t.title === '儲存失敗' && t.body === '沒有權限為此堂課點名。')).toBe(true));
+	});
+
+	it('404(場次不存在) → 儲存失敗 toast 內文顯示「找不到此場次，請重新整理頁面後再試。」', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': new ApiError(404, 'session not found') }));
+		const { findByText, getByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+
+		await fireEvent.click(getByText('儲存點名'));
+		await vi.waitFor(() => expect(get(toasts).some((t) => t.title === '儲存失敗' && t.body === '找不到此場次，請重新整理頁面後再試。')).toBe(true));
+	});
+
+	it('422(驗證失敗) → 儲存失敗 toast 內文顯示「點名資料有誤，本次變更未儲存，請重新整理後再試。」', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': new ApiError(422, 'invalid status') }));
+		const { findByText, getByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+
+		await fireEvent.click(getByText('儲存點名'));
+		await vi.waitFor(() => expect(get(toasts).some((t) => t.title === '儲存失敗' && t.body === '點名資料有誤，本次變更未儲存，請重新整理後再試。')).toBe(true));
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {

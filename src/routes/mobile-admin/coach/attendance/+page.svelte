@@ -17,9 +17,10 @@
    * 再編輯後遲到回應被丟棄(stale 不理會)。「切換班級」FilterChips 的 label(時間+課名)
    * 合成公式(R3 K9)已提進 $lib/coach/attendance-controller 的 sessionChipLabel 共用
    * (供桌面 dropdown 同步消歧義同名場次，ADR 0014 :224-226 銷帳)，取代原映射層算好的
-   * 字串；「儲存點名」成功/失敗 toast 文案沿用行動版既有措辭(不採桌面「已同步至雲端」/
-   * 依 status 分流錯誤文案)。「備註」改經 ctrl.applyNote 記入 controller(僅存本機、不計入
-   * 未存變更，同桌面；Sheet 內明示)。 */
+   * 字串；「儲存點名」成功 toast 文案沿用行動版既有措辭(不採桌面「已同步至雲端」)。
+   * R15(候選 點名文案，bug #5 文案對齊)：失敗 toast 標題照舊「儲存失敗」，內文改依
+   * 狀態碼分流(同桌面 attendanceErrorMessage，見下方 ATTENDANCE_ERROR_TEXT)。「備註」
+   * 改經 ctrl.applyNote 記入 controller(僅存本機、不計入未存變更，同桌面；Sheet 內明示)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -35,6 +36,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
+  import { apiErrorText } from '$lib/api/error-text';
   import type { AttClassFull, AttRow, AttDefault } from '$lib/coach/data';
   import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { tally } from '$lib/coach/attendance-tally';
@@ -117,6 +119,15 @@
     ctrl.markAllPresent();
   }
 
+  /** PUT /sessions/{id}/attendance 的錯誤分支(§3.19：404/403/422，此端點無 409)對應
+   *  繁中錯誤提示，逐字同桌面 coach/attendance/+page.svelte 的 attendanceErrorMessage；
+   *  其餘(連線問題等)給通用訊息。 */
+  const ATTENDANCE_ERROR_TEXT: Record<number, string> = {
+    403: '沒有權限為此堂課點名。',
+    404: '找不到此場次，請重新整理頁面後再試。',
+    422: '點名資料有誤，本次變更未儲存，請重新整理後再試。'
+  };
+
   async function onSave() {
     // 存檔前先快照目前班級：儲存中不可切班(見 selectClass 的 blocked 分支)，await
     // 後仍是同一班，這裡只是避免依賴這個不變量、明確表達「文案用的是送出當下的班級」。
@@ -128,7 +139,7 @@
       const label = target ? sessionChipLabel(target) : outcome.className;
       toasts.notify('success', '點名已儲存', label + ' · ' + outcome.rosterCount + ' 位學員出勤已記錄。');
     } else if (outcome.kind === 'failed') {
-      toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
+      toasts.notify('error', '儲存失敗', apiErrorText(outcome.error, ATTENDANCE_ERROR_TEXT));
     }
     // stale：儲存中又被編輯過，回應已過期被丟棄——同現行 guard，頁面不做任何事。
   }
