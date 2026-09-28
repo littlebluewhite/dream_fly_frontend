@@ -2,13 +2,15 @@
   /* 成績單與證書 push screen。account.jsx ReportScreen (208) · app.jsx (90)。
    *
    * Task 19：改真後端 —— 復用桌面 getReports()(GET /report-cards/me + GET
-   * /certificates/me + GET /reports/me，Task 13 seam，見 $lib/mobile/api.ts
-   * getReports())。真後端成績單只有 comment/rating/term_label 三個欄位，沒有
-   * mock 舊版的「評等字母(grade)/技巧熟練度百分比(skills)/學習表現雷達圖
-   * (attrs)」——這些欄位後端完全沒有對應資料，改為列表呈現每一筆成績單(同桌面
-   * /member/reports 頁的呈現方式，見該頁註解：「改為列表呈現每一筆成績單，不再
-   * 有課程 picker」)，不再假裝有這些數字。舊版「course」prop(單一課程 scope)
-   * 一併移除——真後端資料本來就沒有「只看某一門課成績單」的篩選概念。 */
+   * /certificates/me + GET /reports/me，Task 13 seam)。真後端成績單只有
+   * comment/rating/term_label 三個欄位，沒有 mock 舊版的「評等字母(grade)/
+   * 技巧熟練度百分比(skills)/學習表現雷達圖(attrs)」——這些欄位後端完全沒有
+   * 對應資料，改為列表呈現每一筆成績單(同桌面 /member/reports 頁的呈現方式，
+   * 見該頁註解：「改為列表呈現每一筆成績單，不再有課程 picker」)，不再假裝有
+   * 這些數字。舊版「course」prop(單一課程 scope)一併移除——真後端資料本來就
+   * 沒有「只看某一門課成績單」的篩選概念。Task 7(架構深化 R15·F-4)：
+   * mobile/api.ts 原本的純轉手 getReports()/ReportsData 已退役,本頁直取桌面
+   * seam。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -18,7 +20,7 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { isoDate } from '$lib/api/wire';
-  import { getReports, type ReportsData } from '$lib/mobile/api';
+  import { getReports, type ReportsData } from '$lib/member/api';
 
   export let onBack: () => void;
 

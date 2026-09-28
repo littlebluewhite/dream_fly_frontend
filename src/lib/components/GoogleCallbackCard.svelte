@@ -19,12 +19,10 @@
    * 只在 onMount 執行（client-only）：sessionStorage/authStore 呼叫在 SSR 沒有
    * 意義，也不該在伺服器端執行。
    *
-   * mobile 路由自此零 member/auth import：consumeGoogleOauthState 這裡直取
-   * $lib/member/google-oauth 的實作單源。本檔位於 src/lib/components/，在 ADR
-   * 0014 mobile 接縫掃描（只掃 src/lib/mobile、src/routes/mobile 兩目錄）範圍
-   * 之外，不必再繞 $lib/mobile/auth 接縫轉手。$lib/mobile/auth.ts 本身依 ADR
-   * 0014 枚舉保留不動——mobile 登入頁的 startGoogleLogin/isGoogleLoginEnabled
-   * 仍照舊經那裡取用，其 identity pin 測試不受影響。 */
+   * consumeGoogleOauthState 這裡直取 $lib/member/google-oauth 的實作單源。
+   * Task 7(架構深化 R15·F-4，重開 ADR-0014 §1)：mobile 側原本的純轉手 auth
+   * seam 檔已整支退役——mobile 登入頁的 startGoogleLogin/isGoogleLoginEnabled
+   * 現在也改直取 $lib/member/google-oauth，與本卡片同源，mobile 全面零轉手。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';

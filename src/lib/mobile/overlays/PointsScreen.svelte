@@ -3,10 +3,10 @@
    * 深色漸層 hero（自帶返回鍵）→ 兌換好禮 / 點數明細 切換 tab。
    *
    * Task 19：改真後端 —— 兌換品項目錄復用桌面 getPoints()(GET /rewards，Task 14
-   * rewards seam，見 $lib/mobile/api.ts getPoints());餘額/明細改讀真
-   * `$lib/member/stores` 的 points/pointsLedger(getPoints() 內部已呼叫
-   * refreshPoints() 側效水合這兩顆 store，見 member/api.ts 的既有慣例)；兌換動作
-   * 改真 `$lib/member/stores` 的 redeemReward()(POST /rewards/{id}/redeem)。
+   * rewards seam)；餘額/明細改讀真 `$lib/member/points` 的 points/pointsLedger
+   * (getPoints() 內部已呼叫 refreshPoints() 側效水合這兩顆 store，見
+   * member/api.ts 的既有慣例)；兌換動作改真 `$lib/member/points` 的
+   * redeemReward()(POST /rewards/{id}/redeem)。
    * mobile 本地(mobile/stores.ts)的 points 不再用於這個畫面 —— CartSheet 的結帳
    * 流程本身也已改真下單(復用 member 的 syncCartToServer/api()/refreshPoints)，
    * 不是本地端假 checkout()(見 mobile/stores.ts 附註)。
@@ -19,11 +19,13 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  // 卡 3：points/pointsLedger/redeemReward/redeemRewardErrorMessage 改經
-  // $lib/mobile/stores 的存量 re-export 取用（單源仍是 member 側同一顆 store）。
-  import { toasts, points, pointsLedger, redeemReward, redeemRewardErrorMessage } from '$lib/mobile/stores';
+  import { toasts } from '$lib/mobile/stores';
+  // Task 7(架構深化 R15·F-4)：points/pointsLedger/redeemReward/
+  // redeemRewardErrorMessage 改直取擁有者模組 $lib/member/points，不再經
+  // $lib/mobile/stores 轉手。
+  import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from '$lib/member/points';
   import { createLoadGate } from '$lib/load-gate';
-  import { getPoints, type PointsData, type Reward } from '$lib/mobile/api';
+  import { getPoints, type PointsData, type Reward } from '$lib/member/api';
 
   export let onBack: () => void;
 

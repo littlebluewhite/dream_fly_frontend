@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CartSheet from './CartSheet.svelte';
 import { cart, toasts, checkout } from '$lib/mobile/stores';
-import { points } from '$lib/member/stores';
+import { points } from '$lib/member/points';
 import { api, ApiError } from '$lib/api/client';
 import type { Course } from '$lib/mobile/data';
 
@@ -148,7 +148,7 @@ describe('CartSheet — 優惠碼改走真實 GET /coupons/{code}/validate', () 
   });
 });
 
-describe('CartSheet — 點數改讀真 $lib/member/stores（不是本地 mock 殘值）', () => {
+describe('CartSheet — 點數改讀真 $lib/member/points（不是本地 mock 殘值）', () => {
   it('開啟時打 GET /points/me 水合真餘額並顯示（不是行動版本地 mock 的 ME.points）', async () => {
     cart.add(COURSE);
     vi.mocked(api).mockImplementation(async (path: string) => {

@@ -1,24 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-	getHome,
-	getCourses,
-	getMine,
-	getAccount,
-	getSchedule,
-	getPoints,
-	getReports,
-	getEnrolmentAttendance,
-	submitTrialInquiry
-} from './api';
+import { getHome, getCourses, getMine, submitTrialInquiry } from './api';
 import {
 	getCourses as memberGetCourses,
 	getMine as memberGetMine,
 	getSchedule as memberGetSchedule,
-	getAccount as memberGetAccount,
-	getPoints as memberGetPoints,
-	getReports as memberGetReports,
-	getReportStats as memberGetReportStats,
-	getEnrolmentAttendance as memberGetEnrolmentAttendance
+	getReportStats as memberGetReportStats
 } from '$lib/member/api';
 import { sendContactInquiry } from '$lib/public/api';
 import { ANNOUNCE } from './data';
@@ -29,16 +15,14 @@ import { ANNOUNCE } from './data';
  * 不重新測一次桌面早就測過的 HTTP 映射邏輯。Task F8：submitTrialInquiry() 同理
  * 只 mock `$lib/public/api` 的 sendContactInquiry(已在 public/api.test.ts 端對端
  * 測過 POST /contact 映射)。R13 Task 3：偏好讀寫(原 getPreferences/savePreferences)
- * 收進會員資料 module，測試在 member/profile.test.ts。 */
+ * 收進會員資料 module，測試在 member/profile.test.ts。Task 7(架構深化 R15·F-4)：
+ * getAccount/getSchedule/getPoints/getReports/getEnrolmentAttendance 五支純轉手
+ * 已退役(mobile 消費端改直取 $lib/member/api)，本檔對應的覆蓋一併移除。 */
 vi.mock('$lib/member/api', () => ({
 	getCourses: vi.fn(),
 	getMine: vi.fn(),
 	getSchedule: vi.fn(),
-	getAccount: vi.fn(),
-	getPoints: vi.fn(),
-	getReports: vi.fn(),
-	getReportStats: vi.fn(),
-	getEnrolmentAttendance: vi.fn()
+	getReportStats: vi.fn()
 }));
 vi.mock('$lib/public/api', () => ({ sendContactInquiry: vi.fn() }));
 
@@ -59,14 +43,7 @@ beforeEach(() => {
 	vi.mocked(memberGetCourses).mockReset().mockResolvedValue({ catalog: CATALOG_FIXTURE });
 	vi.mocked(memberGetMine).mockReset().mockResolvedValue({ courses: MY_COURSES_FIXTURE });
 	vi.mocked(memberGetSchedule).mockReset().mockResolvedValue({ schedule: SCHEDULE_FIXTURE });
-	vi.mocked(memberGetAccount).mockReset().mockResolvedValue({
-		orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
-		ordersTotal: 1
-	});
-	vi.mocked(memberGetPoints).mockReset().mockResolvedValue({ rewards: [], expiring: '360 點', expiryDate: '2026/12/31' });
-	vi.mocked(memberGetReports).mockReset().mockResolvedValue({ reportCards: [], certificates: [], stats: { attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 } });
 	vi.mocked(memberGetReportStats).mockReset().mockResolvedValue({ attendedTotal: 0, attendanceRate: null, pointsBalance: 0, activeEnrolments: 0, upcomingSessions7d: 0 });
-	vi.mocked(memberGetEnrolmentAttendance).mockReset().mockResolvedValue([]);
 	vi.mocked(sendContactInquiry).mockReset().mockResolvedValue({} as never);
 });
 
@@ -127,53 +104,6 @@ describe('getMine — courses 復用桌面 getMine()，schedule 復用桌面 get
 		});
 		const d = await getMine();
 		expect(d.attendanceRate).toBeNull();
-	});
-});
-
-describe('getAccount — 復用桌面 getAccount().orders/ordersTotal', () => {
-	it('只取 orders/ordersTotal', async () => {
-		const d = await getAccount();
-		expect(d).toEqual({
-			orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
-			ordersTotal: 1
-		});
-	});
-
-	it('ordersTotal 忠實轉傳桌面回傳值，即使跟 orders.length 不同(pin：57 筆但只回 20 筆時仍回 57)', async () => {
-		vi.mocked(memberGetAccount).mockResolvedValue({
-			orders: [{ id: 'DF-1', item: '測試訂單', amount: 100, status: ['success', '已付款'], date: '2026/01/01' }],
-			ordersTotal: 57
-		});
-
-		const d = await getAccount();
-
-		expect(d.ordersTotal).toBe(57);
-	});
-});
-
-describe('getSchedule / getPoints / getReports / getEnrolmentAttendance — surface 邊界契約(純 identity 委派，零映射)', () => {
-	it('四支皆直接透傳桌面 seam 的解析結果(toBe 比 toEqual 更強：reference 相等即委派證明)', async () => {
-		const scheduleFixture = { schedule: SCHEDULE_FIXTURE };
-		vi.mocked(memberGetSchedule).mockResolvedValue(scheduleFixture);
-		expect(await getSchedule()).toBe(scheduleFixture);
-
-		const pointsFixture = { rewards: [{ id: 'r1', name: '毛巾', description: null, pointsCost: 300, stock: 5 }], expiring: '360 點', expiryDate: '2026/12/31' };
-		vi.mocked(memberGetPoints).mockResolvedValue(pointsFixture);
-		expect(await getPoints()).toBe(pointsFixture);
-
-		const reportsFixture = {
-			reportCards: [{ id: 'r1', courseName: '課程', termLabel: '2026 春季', comment: '很好', rating: 5, issuerName: '教練', createdAt: '2026-01-01' }],
-			certificates: [],
-			stats: { attendedTotal: 10, attendanceRate: 90, pointsBalance: 500, activeEnrolments: 2, upcomingSessions7d: 1 }
-		};
-		vi.mocked(memberGetReports).mockResolvedValue(reportsFixture);
-		expect(await getReports()).toBe(reportsFixture);
-
-		// 叢裡唯一帶參的委派——多驗一項參數透傳(其餘三支桌面 seam 皆為零參數)。
-		const attendanceFixture = [{ date: '06/06', year: '2026', state: 'present' as const }];
-		vi.mocked(memberGetEnrolmentAttendance).mockResolvedValue(attendanceFixture);
-		expect(await getEnrolmentAttendance('e1')).toBe(attendanceFixture);
-		expect(memberGetEnrolmentAttendance).toHaveBeenCalledWith('e1');
 	});
 });
 

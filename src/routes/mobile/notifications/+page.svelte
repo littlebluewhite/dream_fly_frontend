@@ -22,7 +22,9 @@
   import { NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/mobile/data';
   import { NOTIF_CATS } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
-  import { notifications, notificationsPageEntry, unreadCount, markRead, markAllRead } from '$lib/mobile/stores';
+  // Task 7(架構深化 R15·F-4)：通知 store/動作改直取擁有者模組
+  // $lib/member/notifications，不再經 $lib/mobile/stores 轉手。
+  import { notifications, notificationsPageEntry, unreadCount, markRead, markAllRead } from '$lib/member/notifications';
   import { toasts } from '$lib/mobile/stores';
 
   let cat = 'all';

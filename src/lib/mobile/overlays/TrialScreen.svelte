@@ -15,7 +15,8 @@
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
-  import { toasts, memberProfile } from '$lib/mobile/stores';
+  import { toasts } from '$lib/mobile/stores';
+  import { memberProfile } from '$lib/member/profile';
   import { authStore } from '$lib/stores/authStore';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';

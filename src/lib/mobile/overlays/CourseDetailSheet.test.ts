@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CourseDetailSheet from './CourseDetailSheet.svelte';
-import { cart, toasts, joinWaitlist } from '$lib/mobile/stores';
+import { cart, toasts } from '$lib/mobile/stores';
+import { joinWaitlist } from '$lib/member/waitlist';
 import { ApiError } from '$lib/api/client';
 import type { Course } from '$lib/mobile/data';
 
@@ -10,9 +11,11 @@ import type { Course } from '$lib/mobile/data';
  * (加入候補成功/失敗、加入購物車)按現碼行為釘測，mock/render 形抄同目錄
  * CartSheet.test.ts。joinWaitlist 經 vi.mock 攔截(同 TrialScreen.test.ts 攔
  * submitTrialInquiry 的手法)，候補徑不必真的打 POST /waitlist；
- * joinWaitlistErrorMessage 維持真實實作，409 專屬文案照現碼字串比對。 */
-vi.mock('$lib/mobile/stores', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile/stores')>();
+ * joinWaitlistErrorMessage 維持真實實作，409 專屬文案照現碼字串比對。Task 7
+ * (架構深化 R15·F-4)：元件改直取 $lib/member/waitlist，mock 目標同步改到
+ * 擁有者模組。 */
+vi.mock('$lib/member/waitlist', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/member/waitlist')>();
 	return { ...actual, joinWaitlist: vi.fn() };
 });
 

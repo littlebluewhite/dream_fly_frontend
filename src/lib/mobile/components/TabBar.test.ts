@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import MobileTabBar from './TabBar.svelte';
 import { TABS, mobilePath } from '$lib/mobile/nav';
-import { markAllRead, notifications, unreadCount } from '$lib/mobile/stores';
+import { markAllRead, notifications, unreadCount } from '$lib/member/notifications';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 
 vi.mock('$app/stores', () => ({
@@ -26,7 +26,7 @@ describe('mobile TabBar adapter — smoke tests', () => {
 	// 重新載入模組才照得到開機那一刻(本檔其他 it 會 set 通知),不依賴執行順序。
 	it('開機沒有角標(通知 store 開機為空)', async () => {
 		vi.resetModules();
-		const fresh = await import('$lib/mobile/stores');
+		const fresh = await import('$lib/member/notifications');
 		const { default: FreshTabBar } = await import('./TabBar.svelte');
 		// 元件與 render 須出自同一份 svelte runtime(重置後的新模組圖),掛載也由它自己清。
 		const tl = await import('@testing-library/svelte');

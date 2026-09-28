@@ -19,12 +19,15 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Stepper from '$lib/components/ui/Stepper.svelte';
   import { onMount, onDestroy } from 'svelte';
-  // 卡 3：points/refreshPoints（member/stores）與 orderErrorMessage（member/checkout）
-  // 改經 $lib/mobile/stores 的存量 re-export 取用，單源不變。
-  // C2(R11)/C3(R13)：checkout 同經 seam 取用——付款狀態機與桌面共用同一份機器，這裡
-  // 拿的是 stores.ts 的模組級單例（見下方）。Task 5(R14·F4)：優惠碼套用與可計費預覽
-  // （chargeableLines + checkoutMath）也收進該單例，本元件只讀 $checkout.preview。
-  import { cart, toasts, points, refreshPoints, orderErrorMessage, checkout } from '$lib/mobile/stores';
+  // Task 7(架構深化 R15·F-4)：points/refreshPoints/orderErrorMessage 改直取
+  // 擁有者模組（$lib/member/points、$lib/member/checkout），不再經 $lib/mobile/
+  // stores 轉手。C2(R11)/C3(R13)：checkout 仍經 mobile/stores 取用——付款狀態機
+  // 與桌面共用同一份機器，這裡拿的是 stores.ts 的模組級單例（見下方）。Task 5
+  // (R14·F4)：優惠碼套用與可計費預覽（chargeableLines + checkoutMath）也收進該
+  // 單例，本元件只讀 $checkout.preview。
+  import { cart, toasts, checkout } from '$lib/mobile/stores';
+  import { points, refreshPoints } from '$lib/member/points';
+  import { orderErrorMessage } from '$lib/member/checkout';
   import { fmtNT } from '$lib/format';
   import { authStore } from '$lib/stores/authStore';
 

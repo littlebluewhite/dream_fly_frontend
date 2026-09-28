@@ -3,9 +3,10 @@
  * The prototype (app.jsx) kept tab / stack / sheet / cart / points / notifs /
  * toasts / prefs / profile in one React component. Rendered as real routes, the
  * bottom tabs are URLs but push-screens + sheets are overlay state, and the
- * cart / toasts are shared stores that live here — prefs/profile and notifications
- * are re-exported from `$lib/member/stores` (Task 5 架構深化 R12：mobile 專屬的
- * `$lib/mobile/notifications.ts` 已併入 member 模組,理由見下方該段註解)。
+ * cart / toasts are shared stores that live here — points / notifications /
+ * prefs / profile / leave / waitlist 等關切一律屬於 member 側，本檔不再轉手
+ * (Task 7·架構深化 R15·F-4：重開 ADR-0024 F6／ADR-0014 §1——mobile production
+ * 消費端改直取 `$lib/member/<concern>`，這裡只留 mobile 真正自有的狀態)。
  * Toasts come from the canonical shared store (`createToasts` imported from
  * `$lib/stores/toasts`); no local factory is defined or exported here.
  *
@@ -16,15 +17,16 @@
  * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
  * CartSheet 的結帳流程本身已改真下單，
  * `placeOrder()` 委派共用的 `submitOrder`(`$lib/checkout-order`，見下方該函式
- * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額一律
- * 改讀 `$lib/member/stores` 的真 `points`/`pointsLedger`。 */
+ * 附註)，不再是本地假 checkout()。帳戶頁/點數頁/CartSheet 的即時點數餘額改直讀
+ * `$lib/member/points` 的真 `points`/`pointsLedger`(Task 7 起不再經本檔轉手)。 */
 
 import { derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobilePushRegistry, MobileSheetRegistry } from './overlay-registry';
 import { submitOrder, type OrderConfirmation, type PaymentMethod } from '$lib/checkout-order';
-import { points, refreshPoints, subscriptions } from '$lib/member/stores';
+import { points, refreshPoints } from '$lib/member/points';
+import { subscriptions } from '$lib/member/subscriptions';
 import { applyCouponCode, chargeableLines } from '$lib/member/checkout';
 import { createCart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
@@ -43,14 +45,6 @@ export type MobilePushId = keyof MobilePushRegistry;
 export type MobileSheetId = keyof MobileSheetRegistry;
 export const overlay = createOverlay<MobilePushRegistry, MobileSheetRegistry>();
 
-/* ---------- 請假/補課表單機（卡 2：desktop/mobile 雙生收斂的 surface seam） ---------- */
-// LeaveSheet/MakeupSheet 的表單機制（場次三態/守衛/trim）與桌面 LeaveDialog/
-// MakeupDialog 共用同一份 $lib/member/leave-form 雙工廠——mobile 元件一律經這裡
-// 取用（同 createOverlay 的 re-export 慣例）。deps（getCourseSessions/
-// createLeaveRequest/bookMakeup）卡 3 起也經下方存量 re-export 塊取用，元件不再
-// 直取 $lib/member/stores。
-export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/leave-form';
-
 /* ---------- 結帳付款狀態機（C2/R11 起、C3/R13 升級：desktop/mobile 雙生收斂的 surface
  * seam） ---------- */
 // CartSheet 的付款生命週期（step/paying/paid、idempotencyKey、防重複扣款守衛）與桌面
@@ -62,49 +56,6 @@ export { createLeaveRequestForm, createMakeupBookingForm } from '$lib/member/lea
 // resumedInFlight，同一把 key 續用、paying 繼續鎖住，不會開出第二張真訂單。詳見
 // controller 檔頭與 CartSheet 該段註解。
 import { createCheckoutController } from '$lib/member/checkout-controller';
-
-/* ---------- 取消請假（卡 6：desktop/mobile 雙生收斂的 surface seam） ---------- */
-// MyCourseDetail 的取消請假機制（busy 守衛 + outcome 攜原始錯誤）與桌面 mine 頁
-// 共用同一份 $lib/member/cancel-leave 工廠——mobile 元件一律經這裡取用（同上
-// leave-form 的 re-export 慣例）。deps（cancelLeaveRequest）卡 3 起同樣經下方
-// 存量 re-export 塊取用。
-export { createCancelLeave } from '$lib/member/cancel-leave';
-
-/* ---------- member 側 store/動作存量收編（卡 3） ---------- */
-// mobile surface 的 production 元件一律經這裡取用 member 側的共用 store 與動作，
-// 不再逐檔直取 $lib/member/*（foundation-contracts.test.ts 的 source-scan 契約
-// 釘住：$lib/mobile/{api,stores,data,auth}.ts 四個 seam 檔之外零 $lib/member
-// import）。消費者：points/refreshPoints（CartSheet、PointsScreen、account 頁）、
-// pointsLedger/redeemReward/redeemRewardErrorMessage（PointsScreen）、
-// joinWaitlist/joinWaitlistErrorMessage（CourseDetailSheet、首頁、courses 頁）、
-// leave 家族（LeaveSheet/MakeupSheet/MyCourseDetail，Task 1·架構深化 R14·F6 起
-// 三個測試改打 $lib/api/client + fakeRouter，不再 vi.mock 本檔——身分釘與白名單
-// 測試已隨之退役，單源正確性交由型別系統與 foundation-contracts 的 source-scan
-// 把關）。
-export {
-	points,
-	pointsLedger,
-	refreshPoints,
-	redeemReward,
-	redeemRewardErrorMessage,
-	joinWaitlist,
-	joinWaitlistErrorMessage,
-	leaveRequests,
-	refreshLeaveRequests,
-	createLeaveRequest,
-	cancelLeaveRequest,
-	bookMakeup,
-	leaveRequestErrorMessage,
-	getCourseSessions
-} from '$lib/member/stores';
-export type { LeaveRequest, CourseSession } from '$lib/member/stores';
-// 結帳輔助（CartSheet 的錯誤文案映射）——同上，經 seam 收編。Task 5(R14·F4) 起
-// applyCouponCode／chargeableLines／subscriptions 三個轉出隨 CartSheet 的優惠碼套用與
-// 可計費預覽收進 checkout 單例（見下方 deps）而失去唯一消費者，死出口不留（ADR 0010
-// 精神）。mobile 購物車只產 course（cart.add 只收 Course；帳戶頁 getAccount() 副作用
-// 仍可能水合 subscriptions，不可視為恆空），可計費過濾今日恆 no-op;照樣過濾是為了
-// 讓型別強制的「預覽 ≡ 請款」在 mobile 也一體成立。
-export { orderErrorMessage } from '$lib/member/checkout';
 
 /* ---------- Shopping cart (報名購物車) ---------- */
 /** C2(架構深化 R9)：工廠本體上移為 lib-root 共用模組 $lib/cart（member 側也
@@ -171,30 +122,5 @@ export async function placeOrder(
 	});
 }
 
-/* ---------- Notification centre ---------- */
-// Task 5(架構深化 R12·候選 02):mobile 專屬的 $lib/mobile/notifications.ts 已退役
-// ——伺服器本來就是同一份已讀狀態的真值,mobile 與 member 現在共用 member 側的
-// createSessionGate 通知模組(唯一通知 module)。C3(R9)當年不 re-export 是因為
-// stores ⇄ api 成環(通知段需要 ./api 的 getNotifications,./api 當年又 import 本檔的
-// PREFS_DEFAULT——該常數已於 R13 隨會員資料 module 退役);併入後源頭換成完全獨立的
-// $lib/member/stores,不再有這個環,因此改回與其他 member 側收編一致的 barrel
-// re-export 慣例。
-export {
-	notifications,
-	unreadCount,
-	notificationsHydrated,
-	notificationsPageEntry,
-	hydrateNotifications,
-	markRead,
-	markAllRead
-} from '$lib/member/stores';
-
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);
-
-/* ---------- 會員資料 + 通知偏好(帳戶 / 設定) ---------- */
-// R13 Task 3(候選 C1):本地 profile(ME mock 種子)與 prefs store 退役,連同
-// $lib/mobile/pref-sync——改經 member 側唯一的會員資料 module($lib/member/profile,
-// createSessionGate + 單一寫入鏈),桌面與 mobile 讀寫同一顆單例,換帳號即重置。
-export { memberProfile, prefs, hydrateProfile, setPref, saveProfile, profileEditError } from '$lib/member/stores';
-export type { MemberProfile, Prefs, ProfileEdit, PrefSetOutcome, ProfileSaveOutcome } from '$lib/member/stores';

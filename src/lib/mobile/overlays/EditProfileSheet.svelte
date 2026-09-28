@@ -3,8 +3,9 @@
    * 編輯姓名/生日/電話 + 通知偏好 → 一次 saveProfile(PATCH /users/me)→ toast + close。
    * 編輯的是本地副本 f / p，按儲存才送出（取消不影響）。
    *
-   * R13 Task 3(C1):改走 member 側唯一的會員資料 module($lib/member/profile,經
-   * $lib/mobile/stores 轉出;原 $lib/mobile/pref-sync 退役)。
+   * R13 Task 3(C1):改走 member 側唯一的會員資料 module($lib/member/profile;
+   * 原 $lib/mobile/pref-sync 退役)。Task 7(架構深化 R15·F-4)起直取該模組，不再
+   * 經 $lib/mobile/stores 轉手。
    *  - 開啟時先 await hydrateProfile(),落地後才用真值建立 f/p(水合前 Switch 與「儲存
    *    資料」一律 disabled——不讓使用者在那個窗口編輯,避免落地後把剛切的那一下悄悄蓋掉)。
    *  - 存檔只呼叫一次 saveProfile:module 自己比對、只送改過的欄位,沒改就不發請求;
@@ -19,15 +20,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
-  import {
-    memberProfile,
-    prefs,
-    hydrateProfile,
-    saveProfile,
-    profileEditError,
-    toasts,
-    type Prefs
-  } from '$lib/mobile/stores';
+  import { toasts } from '$lib/mobile/stores';
+  import { memberProfile, prefs, hydrateProfile, saveProfile, profileEditError, type Prefs } from '$lib/member/profile';
   import type { IconName } from '$lib/icon-registry';
   import { initialOf } from '$lib/api/wire';
 

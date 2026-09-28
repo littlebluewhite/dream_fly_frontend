@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import ReportScreen from './ReportScreen.svelte';
-import { getReports } from '$lib/mobile/api';
+import { getReports } from '$lib/member/api';
 
 /* Task 19 — ReportScreen 改真後端(復用桌面 getReports()，Task 13 seam)，取代
  * mock REPORTS/CERTS 常數與「評等字母/技巧熟練度/學習表現雷達圖」等後端沒有的
- * 欄位。改為列表呈現每一筆成績單(同桌面 /member/reports 頁)。 */
-vi.mock('$lib/mobile/api', () => ({ getReports: vi.fn() }));
+ * 欄位。改為列表呈現每一筆成績單(同桌面 /member/reports 頁)。Task 7(架構深化
+ * R15·F-4)：mobile/api.ts 原本的純轉手 getReports() 已退役，本畫面直取桌面
+ * seam，mock 目標同步改到擁有者模組。 */
+vi.mock('$lib/member/api', () => ({ getReports: vi.fn() }));
 
 const FIXTURE = {
 	reportCards: [

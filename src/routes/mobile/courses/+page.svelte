@@ -17,9 +17,10 @@
   import type { Course } from '$lib/mobile/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type MobileCoursesData } from '$lib/mobile/api';
-  // 卡 3：joinWaitlist/joinWaitlistErrorMessage 改經 $lib/mobile/stores 的存量
-  // re-export 取用（單源仍是 member 側同一組 binding）。
-  import { overlay, cart, toasts, joinWaitlist, joinWaitlistErrorMessage } from '$lib/mobile/stores';
+  // Task 7(架構深化 R15·F-4)：joinWaitlist/joinWaitlistErrorMessage 改直取
+  // 擁有者模組 $lib/member/waitlist，不再經 $lib/mobile/stores 轉手。
+  import { overlay, cart, toasts } from '$lib/mobile/stores';
+  import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/waitlist';
   import type { IconName } from '$lib/icon-registry';
 
   /* category taxonomy — home.jsx CATS (6-13). */

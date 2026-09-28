@@ -1,20 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { getPoints, type Reward } from '$lib/mobile/api';
-import { points, pointsLedger } from '$lib/member/stores';
+import { getPoints, type Reward } from '$lib/member/api';
+import { points, pointsLedger } from '$lib/member/points';
 import { toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import PointsScreen from './PointsScreen.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 /* Task 19：PointsScreen 改真後端 —— 兌換品項復用桌面 getPoints()(Task 14 rewards
- * seam)；餘額/明細/兌換動作改讀 $lib/member/stores 的真 points/pointsLedger/
+ * seam)；餘額/明細/兌換動作改讀 $lib/member/points 的真 points/pointsLedger/
  * redeemReward()。同 src/routes/member/points/page.test.ts 的慣例：只 mock
- * $lib/mobile/api 的 getPoints 與 $lib/api/client 的 api()，兌換/hydrate 邏輯本身
+ * $lib/member/api 的 getPoints 與 $lib/api/client 的 api()，兌換/hydrate 邏輯本身
  * 用真實實作端對端驗證。mobile 版沒有桌面的「確認兌換」對話框 —— 這裡改為點擊
- * 「兌換」即直接送出(mobile 既有的單點互動慣例)，故對應測試略去對話框步驟。 */
-vi.mock('$lib/mobile/api', () => ({ getPoints: vi.fn() }));
+ * 「兌換」即直接送出(mobile 既有的單點互動慣例)，故對應測試略去對話框步驟。
+ * Task 7(架構深化 R15·F-4)：元件改直取 $lib/member/api / $lib/member/points，
+ * mock 目標同步改到擁有者模組。 */
+vi.mock('$lib/member/api', () => ({ getPoints: vi.fn() }));
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -45,7 +47,7 @@ describe('PointsScreen — 三態 + 接縫 wiring', () => {
 		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
 	});
 
-	it('async 載入後顯示真實餘額($lib/member/stores 的 points，非 mobile 本地 mock)', async () => {
+	it('async 載入後顯示真實餘額($lib/member/points 的 points，非 mobile 本地 mock)', async () => {
 		vi.mocked(getPoints).mockResolvedValue(SEED);
 		points.set(2500);
 		render(PointsScreen, { props: { onBack: () => {} } });

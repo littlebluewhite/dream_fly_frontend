@@ -2,10 +2,11 @@
   /* 我的訂單 push screen。account.jsx OrdersScreen (179)。
    * ScreenHeader（自帶返回）→ 訂單清單，狀態 Badge（status[0] tone / status[1] 標籤）。
    *
-   * Task 19：改真後端 —— 復用桌面 getAccount().orders(GET /orders/me，見
-   * $lib/mobile/api.ts getAccount())，取代 mock ORDERS 常數。帳戶頁的「我的
-   * 訂單 N 筆」摘要也是同一支接縫的結果，兩處不會再各自顯示不同的訂單資料。
-   * onMount 進三態閘門(loading/error/ready)，同其餘 route 頁的既有慣例。 */
+   * Task 19：改真後端 —— 復用桌面 getAccount().orders(GET /orders/me)，取代
+   * mock ORDERS 常數。帳戶頁的「我的訂單 N 筆」摘要也是同一支接縫的結果，
+   * 兩處不會再各自顯示不同的訂單資料。onMount 進三態閘門(loading/error/ready)，
+   * 同其餘 route 頁的既有慣例。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的
+   * 純轉手 getAccount()/MobileAccountData 已退役,本頁直取桌面 seam。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -15,14 +16,14 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { fmtNT } from '$lib/format';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAccount, type MobileAccountData } from '$lib/mobile/api';
+  import { getAccount, type AccountData } from '$lib/member/api';
   import type { ComponentProps } from 'svelte';
 
   export let onBack: () => void;
 
   type BadgeTone = ComponentProps<Badge>['tone'];
 
-  let data: MobileAccountData | null = null;
+  let data: AccountData | null = null;
   const gate = createLoadGate({
     fetch: getAccount,
     onData: (d) => { data = d; }

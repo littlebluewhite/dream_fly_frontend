@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import OrdersScreen from './OrdersScreen.svelte';
-import { getAccount } from '$lib/mobile/api';
+import { getAccount } from '$lib/member/api';
+import type { Tone } from '$lib/api/wire';
 
 /* Task 19 — OrdersScreen 改真後端(自行呼叫 getAccount()，取代直接 import 的 mock
  * ORDERS 常數) —— 帳戶頁「我的訂單 N 筆」摘要與這裡現在是同一支接縫，不會再
- * 各自顯示不同的訂單資料。 */
-vi.mock('$lib/mobile/api', () => ({ getAccount: vi.fn() }));
+ * 各自顯示不同的訂單資料。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手
+ * getAccount() 已退役，本畫面直取桌面 seam，mock 目標同步改到擁有者模組。 */
+vi.mock('$lib/member/api', () => ({ getAccount: vi.fn() }));
 
-const FIXTURE = [{ id: 'DF-9001', item: '接縫測試專用訂單', amount: 1234, status: ['success', '已付款'] as [string, string], date: '2026/01/01' }];
+const FIXTURE = [{ id: 'DF-9001', item: '接縫測試專用訂單', amount: 1234, status: ['success', '已付款'] as [Tone, string], date: '2026/01/01' }];
 
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();

@@ -12,19 +12,12 @@ import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
 // 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
 // 一直以來都是對這個寬鬆版型別寫的，沿用它才不會逼既有呼叫端也跟著窄化。
-import type { EnrolledCourse as MyCourse, Order, ScheduleBlock, AttRecord } from '$lib/domain/member-app';
+import type { EnrolledCourse as MyCourse, ScheduleBlock } from '$lib/domain/member-app';
 import {
 	getCourses as memberGetCourses,
 	getMine as memberGetMine,
 	getSchedule as memberGetSchedule,
-	getAccount as memberGetAccount,
-	getPoints as memberGetPoints,
-	getReports as memberGetReports,
-	getReportStats as memberGetReportStats,
-	getEnrolmentAttendance as memberGetEnrolmentAttendance,
-	type PointsData,
-	type Reward,
-	type ReportsData
+	getReportStats as memberGetReportStats
 } from '$lib/member/api';
 import { ANNOUNCE, type Announce, type Course } from './data';
 import type { IconName } from '$lib/icon-registry';
@@ -103,59 +96,6 @@ export const getMine = async (): Promise<MineData> => {
 		attendedTotal: stats.attendedTotal
 	};
 };
-
-export interface MobileAccountData {
-	orders: Order[];
-	ordersTotal: number;
-}
-
-/** 帳戶 — 復用桌面 getAccount().orders(GET /users/me + GET /orders/me；桌面
- *  getAccount() 內部已 side-effect 呼叫 refreshPoints()/refreshSubscriptions()，
- *  讓帳戶頁的 $points 一開始就是真資料——見 member/api.ts getAccount() 註解)。
- *  個人資料不在回傳值裡——桌面 getAccount() 會順手水合會員資料 module，頁面讀
- *  $memberProfile(R13 Task 3)。這裡只取 orders/ordersTotal —— 後者
- *  是真正的訂單總數(桌面 getAccount() 打 per_page=100，orders 可能仍被截斷，
- *  ordersTotal 才不會顯示錯的筆數)。 */
-export const getAccount = async (): Promise<MobileAccountData> => {
-	const { orders, ordersTotal } = await memberGetAccount();
-	return { orders, ordersTotal };
-};
-
-export interface ScheduleData {
-	schedule: ScheduleBlock[];
-}
-
-/** 完整日程 push screen(ScheduleScreen)— 復用桌面 getSchedule()(GET
- *  /schedule/me，Task 9 週課表 seam)，零映射。 */
-export const getSchedule = (): Promise<ScheduleData> => memberGetSchedule();
-
-export type { PointsData, Reward };
-
-/** 會員點數 push screen(PointsScreen)— 復用桌面 getPoints()(GET /rewards，
- *  Task 14 rewards seam)，零映射。桌面 getPoints() 內部已呼叫 refreshPoints()
- *  整包水合 points/pointsLedger store——PointsScreen 直接讀 `$lib/member/stores`
- *  的 points/pointsLedger(不是這裡的回傳值)，兌換動作也走同一個 store 的
- *  redeemReward()(同桌面「動作留在 stores.ts、取資料留在 api.ts」的慣例)。
- *  // P2: expiring(即將到期點數)/expiryDate(到期日)後端無點數到期排程，
- *  桌面本身也是硬編這兩個字串——原樣透傳，不重新硬編一份。 */
-export const getPoints = (): Promise<PointsData> => memberGetPoints();
-
-export type { ReportsData };
-
-/** 成績單與證書 push screen(ReportScreen)— 復用桌面 getReports()(GET
- *  /report-cards/me + GET /certificates/me + GET /reports/me，Task 13 seam)，
- *  零映射。真後端成績單只有 comment/rating/term_label 三個欄位，沒有 mock 舊版
- *  的「評等字母/技巧熟練度百分比/學習表現雷達圖」——ReportScreen 已改為列表
- *  呈現每一筆成績單(同桌面 /member/reports 頁的呈現方式)，不再顯示這些後端
- *  沒有的欄位。 */
-export const getReports = (): Promise<ReportsData> => memberGetReports();
-
-/** 出席紀錄(Task F7 沿用；§3.12)— 復用桌面 getEnrolmentAttendance()(GET
- *  /enrolments/{id}/attendance)，零映射(AttRecord 形狀兩側同源)。W3 收編：
- *  原為 MyCourseDetail.svelte 直穿 member/api 的唯一 data getter，收編對齊
- *  mobile-admin 零直穿紀律，不再由呼叫端自己 import 桌面 seam。 */
-export const getEnrolmentAttendance = (id: string): Promise<AttRecord[]> =>
-	memberGetEnrolmentAttendance(id);
 
 /* ---- 試上預約(TrialScreen)送出 — Task F8：POST /contact, inquiry_type='trial' ----
  * 復用桌面 sendContactInquiry()(§3.17),不重新實作一次 HTTP。設計=洽詢特化:

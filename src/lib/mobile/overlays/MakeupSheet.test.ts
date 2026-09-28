@@ -4,18 +4,18 @@ import MakeupSheet from './MakeupSheet.svelte';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { toasts } from '$lib/mobile/stores';
-import type { LeaveRequest } from '$lib/member/stores';
+import type { LeaveRequest } from '$lib/member/leave';
 
 /* Task 19：MakeupSheet 從「MAKEUP_SLOTS 課程層級 mock + 本地 isDone 假成功」改真
  * 後端，且改吃 leaveRequest prop(不是 course)——同桌面 Task 11 的既有裁決：
  * 補課預約是針對一張已核准請假申請的動作,見 $lib/member/components/
  * MakeupDialog.svelte。之前這個元件沒有既有測試，這裡是新增覆蓋。
- * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;工廠經 $lib/mobile/
- * stores 取真實作、deps 仍 mock $lib/member/stores(佈線證明,路徑不變)。這裡
+ * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;Task 7(架構深化
+ * R15·F-4)起工廠與 deps 皆改元件直取 $lib/member/leave-form、$lib/member/leave。這裡
  * 保留元件端佈線,並釘住 mobile 版成功 toast body 字面(與桌面 MakeupDialog 分歧)。
  *
  * Task 1(架構深化 R14·F6):改走 $lib/api/client + fakeRouter(寫法照
- * member/profile.test.ts) —— 不再 mock $lib/member/stores 假成 deps，斷言改成
+ * member/profile.test.ts) —— 不 mock deps，斷言改成
  * 「打了哪個端點、帶什麼 body」。leaveRequests store 在本檔進場未水合，bookMakeup
  * 走 gate.mutate 寫回後會尾隨一次和解重抓，成功案例額外要 route
  * GET /leave-requests/me。 */

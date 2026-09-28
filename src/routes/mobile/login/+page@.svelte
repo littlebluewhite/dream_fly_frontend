@@ -20,9 +20,9 @@
   import Button from '$lib/components/ui/Button.svelte';
   import { authStore } from '$lib/stores/authStore';
   import { submitLogin } from '$lib/login-submit';
-  // 卡 3：google-oauth 效應模組改經 $lib/mobile/auth 接縫取用（實作單源仍在
-  // $lib/member/google-oauth，零複製轉手）。
-  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/mobile/auth';
+  // Task 7(架構深化 R15·F-4)：mobile 側原本的純轉手 auth seam 檔已退役——google-oauth
+  // 效應模組改直取 $lib/member/google-oauth（實作單源不變）。
+  import { isGoogleLoginEnabled, startGoogleLogin } from '$lib/member/google-oauth';
   import type { IconName } from '$lib/icon-registry';
   import '$lib/styles/mobile-frame.css';
 

@@ -5,32 +5,32 @@ import MyCourseDetail from './MyCourseDetail.svelte';
 import { overlay, toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { LeaveRequest } from '$lib/member/stores';
-import { getEnrolmentAttendance } from '$lib/mobile/api';
+import type { LeaveRequest } from '$lib/member/leave';
+import { getEnrolmentAttendance } from '$lib/member/api';
 import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
  * (真後端的補課預約是針對一張已核准請假申請的動作，見 MakeupSheet)，改為
- * 「我的請假」卡片復用 $lib/member/stores 的 leaveRequests store，範圍收斂到
+ * 「我的請假」卡片復用 $lib/member/leave 的 leaveRequests store，範圍收斂到
  * 這門課程(course_id 比對)。
  *
- * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock $lib/mobile/api
- * 的 getEnrolmentAttendance()(W3：該函式零映射委派桌面 member/api.ts 同名
- * 函式)。預設值刻意保留一筆 'leave' 紀錄(對齊已退役的
- * ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/聯絡教練兩個
- * 動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。
+ * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock 桌面
+ * member/api.ts 的 getEnrolmentAttendance()。預設值刻意保留一筆 'leave' 紀錄
+ * (對齊已退役的 ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/
+ * 聯絡教練兩個動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。
  *
  * Task 1(架構深化 R14·F6):「我的請假」改走 $lib/api/client + fakeRouter(寫法照
- * member/profile.test.ts) —— refreshLeaveRequests/cancelLeaveRequest 不再
- * vi.mock '$lib/member/stores' 假成 deps，fixture 改由 route 供給
- * (GET /leave-requests/me、DELETE /leave-requests/{id})，斷言改成「打了哪個
- * 端點、帶什麼 body」。$lib/mobile/api 的 mock(出席紀錄，非本範圍)保留。 */
+ * member/profile.test.ts) —— refreshLeaveRequests/cancelLeaveRequest 不 mock
+ * deps，fixture 改由 route 供給(GET /leave-requests/me、
+ * DELETE /leave-requests/{id})，斷言改成「打了哪個端點、帶什麼 body」。
+ * Task 7(架構深化 R15·F-4)：元件改直取 $lib/member/api 的 getEnrolmentAttendance
+ * (mobile/api.ts 原本的純轉手 wrapper 已退役)，mock 目標同步改到擁有者模組。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
-vi.mock('$lib/mobile/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
+vi.mock('$lib/member/api', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/member/api')>();
 	return { ...actual, getEnrolmentAttendance: vi.fn() };
 });
 

@@ -4,33 +4,35 @@
    * → 切換到管理後台（goto /mobile-admin）→ 登出（authStore.logout() + goto /mobile/login）。
    * Legacy Svelte（無 runes）。繁體中文文案。
    *
-   * 訂單筆數改由 getAccount()(真後端接縫,見 $lib/mobile/api.ts)非同步取得:
+   * 訂單筆數改由 getAccount()(真後端接縫,見 $lib/member/api.ts)非同步取得:
    * onMount 進三態閘門(loading/error/ready)。Task 19:登出改真 authStore.logout()
-   * (清 token,不再是示範性的 df_mobile_session)；會員點數改讀真 $lib/member/stores
+   * (清 token,不再是示範性的 df_mobile_session)；會員點數改讀真 $lib/member/points
    * 的 points(getAccount() 內部已呼叫 refreshPoints() 側效水合,見 member/api.ts
    * getAccount() 註解) — 不再是 mobile 本地、永遠停在 mock 種子值的 points store
    * (那顆本地 store 仍保留給 CartSheet 的既有假結帳流程使用,兩者現在是分開的,
    * 見 task-19-report.md 的顧慮)。hero 的名字讀 authStore(改名經 syncUser 同步)、
    * 加入年月讀會員資料 module 的 $memberProfile(getAccount() 會等它水合,R13 Task 3);
-   * 後端沒有的會員編號拿掉。 */
+   * 後端沒有的會員編號拿掉。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手
+   * getAccount()/MobileAccountData 已退役,本頁直取桌面 seam;memberProfile/points
+   * 也改直取擁有者模組,不再經 $lib/mobile/stores 轉手。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  // 卡 3：points 改經 $lib/mobile/stores 的存量 re-export 取用（單源仍是
-  // member 側同一顆 store，getAccount() 的側效水合不變）。
-  import { overlay, memberProfile, points } from '$lib/mobile/stores';
+  import { overlay } from '$lib/mobile/stores';
   import type { MobilePushId } from '$lib/mobile/stores';
+  import { memberProfile } from '$lib/member/profile';
+  import { points } from '$lib/member/points';
   import { authStore } from '$lib/stores/authStore';
   import { createLoadGate } from '$lib/load-gate';
-  import { getAccount, type MobileAccountData } from '$lib/mobile/api';
+  import { getAccount, type AccountData } from '$lib/member/api';
   import type { IconName } from '$lib/icon-registry';
 
   type Item = { id: MobilePushId; icon: IconName; label: string; sub: string; tone: string; tint: string };
 
-  let data: MobileAccountData | null = null;
+  let data: AccountData | null = null;
   const gate = createLoadGate({
     fetch: getAccount,
     onData: (d) => { data = d; }

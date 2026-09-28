@@ -3,8 +3,9 @@
    * 依星期分組固定課表。
    *
    * Task 19：改真後端 —— 復用桌面 getSchedule()(GET /schedule/me，Task 9 週課表
-   * seam，見 $lib/mobile/api.ts getSchedule())，取代 mock SCHEDULE 常數。onMount
-   * 進三態閘門(loading/error/ready)，同其餘 route 頁的既有慣例。 */
+   * seam)，取代 mock SCHEDULE 常數。onMount 進三態閘門(loading/error/ready)，
+   * 同其餘 route 頁的既有慣例。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的
+   * 純轉手 getSchedule()/ScheduleData 已退役,本頁直取桌面 seam。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -13,7 +14,7 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { WEEK } from '$lib/domain/member-app';
   import { createLoadGate } from '$lib/load-gate';
-  import { getSchedule, type ScheduleData } from '$lib/mobile/api';
+  import { getSchedule, type ScheduleData } from '$lib/member/api';
 
   export let onBack: () => void;
 

@@ -9,7 +9,8 @@
    * 交錯覆寫)，失敗改整包 resync 成伺服器真值 + 錯誤 toast(resync 也失敗才退回
    * 單鍵回滾)。
    * R13 Task 3(C1):偏好同步機與個人資料欄位改走 member 側唯一的會員資料 module
-   * ($lib/member/profile,經 $lib/mobile/stores 轉出;原 $lib/mobile/pref-sync 退役)。
+   * ($lib/member/profile;原 $lib/mobile/pref-sync 退役)。Task 7(架構深化 R15·
+   * F-4)起直取該模組，不再經 $lib/mobile/stores 轉手。
    * 個人資料列顯示後端真值;後端沒有的「會員編號」列與假的「儲存變更」按鈕拿掉
    * (偏好切換即存,個人資料在 EditProfileSheet 存)。 */
   import { onMount } from 'svelte';
@@ -20,8 +21,8 @@
   import Switch from '$lib/components/ui/Switch.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { authStore } from '$lib/stores/authStore';
-  import { overlay, prefs, memberProfile, hydrateProfile, setPref as savePref, toasts } from '$lib/mobile/stores';
-  import type { Prefs } from '$lib/mobile/stores';
+  import { overlay, toasts } from '$lib/mobile/stores';
+  import { prefs, memberProfile, hydrateProfile, setPref as savePref, type Prefs } from '$lib/member/profile';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;

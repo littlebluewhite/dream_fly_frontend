@@ -3,8 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { api } from '$lib/api/client';
-import { notifications, notificationsHydrated, hydrateNotifications } from '$lib/mobile/stores';
-import { resetNotificationsForTests } from '$lib/member/notifications';
+import { notifications, notificationsHydrated, hydrateNotifications, resetNotificationsForTests } from '$lib/member/notifications';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -16,8 +15,9 @@ import type { ApiNotification, Notification as NotifItem } from '$lib/member/dat
 import Page from './+page.svelte';
 
 // Task 5(架構深化 R12):mobile 專屬的 $lib/mobile/notifications.ts 已併入
-// member 模組(唯一通知 module),消費端改經 $lib/mobile/stores 轉出同一顆
-// createSessionGate。fetch 因此不再是 $lib/mobile/api 的 getNotifications,而是
+// member 模組(唯一通知 module)。Task 7(架構深化 R15·F-4)起消費端直取
+// $lib/member/notifications 同一顆 createSessionGate,不再經 $lib/mobile/stores
+// 轉手。fetch 因此不再是 $lib/mobile/api 的 getNotifications,而是
 // 閘門內部的 api('/notifications') + mapNotification——mock 點隨之下移到
 // $lib/api/client,以路徑分流 GET /notifications 與已讀 PATCH(同 member 側
 // routes/member/notifications/page.test.ts 的既有慣例)。

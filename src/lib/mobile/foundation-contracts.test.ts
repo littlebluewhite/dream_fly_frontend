@@ -20,7 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { walk, importSpecifiers, makeReachPredicate } from '$lib/testing/import-scan';
+import { walk } from '$lib/testing/import-scan';
 
 const ROOT = process.cwd();
 const r = (p: string) => resolve(ROOT, p);
@@ -54,43 +54,6 @@ describe('route inventory', () => {
 	it('every bottom-tab + login route file exists', () => {
 		const missing = routes.filter((p) => !existsSync(r(p)));
 		expect(missing, `missing route files: ${missing.join(', ')}`).toEqual([]);
-	});
-});
-
-describe('mobile 接縫收編不變量（卡 3：production source 零 $lib/member 直取）', () => {
-	// mobile surface 的 production source（.test.ts/.fixture.svelte 已由 surfaceFiles
-	// 的既有 walker 排除）只允許 api/stores/data/auth 四個 seam 檔 import $lib/member
-	// ——其餘元件/頁面一律經 $lib/mobile/* 接縫取用。測試檔本身不在 surfaceFiles 範圍內
-	// （已被 walker 排除），故 LeaveSheet/MakeupSheet/MyCourseDetail 等測試改走
-	// $lib/api/client + fakeRouter（Task 1·架構深化 R14·F6）後零 vi.mock
-	// '$lib/member/stores'，也與本掃描無關。掃 `from '$lib/member` 的
-	// import/export-from 子句，註解裡的路徑提及不會誤中。
-	const MOBILE_SEAM_FILES = ['src/lib/mobile/api.ts', 'src/lib/mobile/stores.ts', 'src/lib/mobile/data.ts', 'src/lib/mobile/auth.ts'].map(r);
-	const MOBILE_DIRS = ['src/lib/mobile', 'src/routes/mobile'].map((d) => r(d) + '/'); // 尾斜線：排除 mobile-admin
-	const MEMBER_DIR = r('src/lib/member');
-	const isMemberReach = makeReachPredicate('$lib/member', MEMBER_DIR);
-
-	// 分檔後煙霧 canary：三支匯入掃描器仍掛在本檔手上、仍會咬人（importSpecifiers 退化成
-	// 空集合或 reach 判定失效時本 it 先紅）——完整 39 fixture 自證已遷 $lib/testing/import-scan.test.ts。
-	it('掃描器煙霧 canary：正形命中、負形放行', () => {
-		expect(importSpecifiers("import { x } from '$lib/member/stores';").some((s) => isMemberReach(r('src/lib/mobile/x.ts'), s))).toBe(true);
-		expect(importSpecifiers("import { x } from '$lib/membership/stores';").some((s) => isMemberReach(r('src/lib/mobile/x.ts'), s))).toBe(false);
-	});
-
-	// F3 tripwire：walk() 若死亡（突變成 return []），surfaceFiles 空集合會讓下方
-	// offenders 斷言 vacuous pass——非空下限釘住「掃描真的有掃到檔案」。此釘殺
-	// `walk → []` 突變（鬆釘防機器死亡，非精確計數；現況約 89 檔）。
-	it('掃描檔案集非空釘：surface production 檔數下限', () => {
-		expect(surfaceFiles.length).toBeGreaterThan(20);
-	});
-
-	it('src/lib/mobile + src/routes/mobile 中，seam 四檔之外零 $lib/member import（含動態/side-effect/相對形）', () => {
-		const offenders = surfaceFiles
-			.filter((f) => MOBILE_DIRS.some((d) => f.startsWith(d)))
-			.filter((f) => !MOBILE_SEAM_FILES.includes(f))
-			.filter((f) => importSpecifiers(readFileSync(f, 'utf8')).some((s) => isMemberReach(f, s)))
-			.map((f) => f.replace(ROOT + '/', ''));
-		expect(offenders, `經 $lib/mobile 接縫取用，勿直取 $lib/member：${offenders.join(', ')}`).toEqual([]);
 	});
 });
 

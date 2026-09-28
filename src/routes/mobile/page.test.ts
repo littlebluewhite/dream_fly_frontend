@@ -8,9 +8,10 @@ import type { Course } from '$lib/mobile/data';
 import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 import { cart, toasts } from '$lib/mobile/stores';
 
-// Task 5(架構深化 R12):本頁的鈴鐺角標(unreadCount)改經 $lib/mobile/stores 轉出
-// member 側的通知 module(getNotifications 隨 mobile/notifications.ts 退役一併
-// 移除,不再是 $lib/mobile/api 的一員)——這裡不需要再交代它。
+// Task 5(架構深化 R12):本頁的鈴鐺角標(unreadCount)改經 member 側的通知 module
+// (getNotifications 隨 mobile/notifications.ts 退役一併移除,不再是
+// $lib/mobile/api 的一員)——這裡不需要再交代它。Task 7(架構深化 R15·F-4)起
+// 本頁直取 $lib/member/notifications,不再經 $lib/mobile/stores 轉手。
 vi.mock('$lib/mobile/api', () => ({ getHome: vi.fn() }));
 
 // Task 1(C2 死種子退役):mobile/data.ts 的 CATALOG/MY_COURSES(值)已退役——本檔案

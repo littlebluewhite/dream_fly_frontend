@@ -16,7 +16,8 @@
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import { authStore, isLoggedIn } from '$lib/stores/authStore';
-  import { overlay, toasts, hydrateNotifications } from '$lib/mobile/stores';
+  import { overlay, toasts } from '$lib/mobile/stores';
+  import { hydrateNotifications } from '$lib/member/notifications';
   import { warmStores } from '$lib/store-warm';
   import { mobileGuardTarget } from './guard';
   import TabBar from '$lib/mobile/components/TabBar.svelte';

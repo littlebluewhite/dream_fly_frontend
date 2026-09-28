@@ -6,7 +6,7 @@
    * 針對「一張已核准且尚未補課的請假申請」的動作(見 MakeupSheet.svelte)，不是
    * 課程層級可以隨時點的按鈕，鏡射桌面 mine 頁的既有決定(同一份 Task 11 註解：
    * 「課程詳情動作列不再有預約補課按鈕」)。改為新增「我的請假」卡片，列出這門
-   * 課程的請假紀錄(復用 $lib/member/stores 的 leaveRequests store)：pending 可
+   * 課程的請假紀錄(復用 $lib/member/leave 的 leaveRequests store)：pending 可
    * 取消、approved 且未補課才顯示「預約補課」進 MakeupSheet(帶 leaveRequest)。
    *
    * 舊「技巧熟練度」卡片(REPORTS[c.id]/SKILLS 逐技巧拆解百分比)已移除 —— 真
@@ -27,20 +27,19 @@
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import LoadGate from '$lib/components/ui/LoadGate.svelte';
-  // 卡 3：leave 家族 store/動作改經 $lib/mobile/stores 的存量 re-export 取用
-  // （單源仍是 member 側同一組 binding；測試 vi.mock '$lib/member/stores' 的
-  // 佈線證明不變）。
+  // Task 7(架構深化 R15·F-4)：leave 家族 store/動作與取消請假機制改直取擁有者
+  // 模組（$lib/member/leave、$lib/member/cancel-leave），不再經 $lib/mobile/
+  // stores 轉手。
+  import { overlay, toasts } from '$lib/mobile/stores';
   import {
-    overlay,
-    toasts,
-    createCancelLeave,
     leaveRequests,
     refreshLeaveRequests,
     cancelLeaveRequest,
     leaveRequestErrorMessage,
     type LeaveRequest
-  } from '$lib/mobile/stores';
-  import { getEnrolmentAttendance } from '$lib/mobile/api';
+  } from '$lib/member/leave';
+  import { createCancelLeave } from '$lib/member/cancel-leave';
+  import { getEnrolmentAttendance } from '$lib/member/api';
   import { formatSessionDateTime } from '$lib/domain/session-format';
   import { leaveAction } from '$lib/domain/leave-requests';
   import { createLoadGate } from '$lib/load-gate';
@@ -75,10 +74,9 @@
   // 填入真值，比對不到時 courseLeaves 安全落空，不拋錯)。best-effort 水合，
   // 失敗不擋課程詳情本身的顯示(同 mine 頁 load() 對候補/請假清單的處理慣例)。
   //
-  // 出席紀錄(Task F7：GET /enrolments/{id}/attendance，§3.12)—— 復用
-  // mobile/api.ts 的 getEnrolmentAttendance()(W3 收編：該函式零映射委派桌面
-  // member/api.ts 同名函式；收編前本檔案直接 import 桌面 seam，與
-  // mobile-admin 零直穿紀律相反，現已收斂對齊)。c.id 是
+  // 出席紀錄(Task F7：GET /enrolments/{id}/attendance，§3.12)—— 復用桌面
+  // member/api.ts 的 getEnrolmentAttendance()(零映射)。Task 7(架構深化 R15·
+  // F-4)：mobile/api.ts 原本的純轉手 wrapper 已退役，本檔直取桌面 seam。c.id 是
   // 這筆報名(enrolment)的 uuid(見 EnrolledCourse.id 的既有註解)。overlay push 一律
   // 帶入非 null 的 course(見 OverlayHost.svelte)，僅在有值時才載入。
   let attendance: AttRecord[] | null = null;
@@ -92,10 +90,10 @@
   });
   $: courseLeaves = c ? $leaveRequests.filter((lr) => lr.course_id === c.course_id) : [];
 
-  // 取消請假（卡 6）：busy 守衛 + outcome 機制經 $lib/mobile/stores 的 re-export
-  // 收斂進 $lib/member/cancel-leave（與桌面 mine 頁共用同一份雙生單源）；deps
-  // （cancelLeaveRequest）卡 3 起同樣經 $lib/mobile/stores 的存量 re-export 取用；
-  // toast 文案與 leaveRequestErrorMessage 映射留在元件（ADR 0011）。
+  // 取消請假（卡 6）：busy 守衛 + outcome 機制收斂進 $lib/member/cancel-leave
+  // （與桌面 mine 頁共用同一份雙生單源），deps（cancelLeaveRequest）直取
+  // $lib/member/leave；toast 文案與 leaveRequestErrorMessage 映射留在元件
+  // （ADR 0011）。
   const cancelLeave = createCancelLeave({ cancelLeaveRequest });
   $: cancellingId = $cancelLeave.cancellingLeaveId;
   async function doCancelLeave(lr: LeaveRequest) {

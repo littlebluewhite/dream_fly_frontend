@@ -6,10 +6,10 @@
    * 送出打 POST /leave-requests/{id}/makeup。舊 mock 版「MAKEUP_SLOTS 課程層級
    * 補課」入口已隨 MyCourseDetail 的動作列移除(同桌面「課程詳情動作列不再有
    * 預約補課按鈕」的既有決定，見 MyCourseDetail.svelte)。
-   * 卡 2:表單機制(三態/守衛)與桌面 MakeupDialog 共用 leave-form 雙工廠,工廠經
-   * $lib/mobile/stores 的 seam 取用;卡 3:deps(getCourseSessions/bookMakeup)與
-   * leaveRequestErrorMessage 也改經同一 seam 的存量 re-export 取用(測試仍
-   * vi.mock '$lib/member/stores',佈線證明不變)。
+   * 卡 2:表單機制(三態/守衛)與桌面 MakeupDialog 共用 leave-form 雙工廠。Task 7
+   * (架構深化 R15·F-4)：工廠與 deps(getCourseSessions/bookMakeup)、
+   * leaveRequestErrorMessage 改直取擁有者模組($lib/member/leave-form、
+   * $lib/member/leave)，不再經 $lib/mobile/stores 轉手。
    * 成功 toast body 是 mobile 自己的字面(無 course_name 前綴,與桌面分歧),留元件。 */
   import { onMount } from 'svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
@@ -18,15 +18,15 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Select from '$lib/components/ui/Select.svelte';
   import { ErrorState, Skeleton, EmptyState } from '$lib/components/ui';
+  import { toasts } from '$lib/mobile/stores';
+  import { createMakeupBookingForm } from '$lib/member/leave-form';
   import {
-    toasts,
-    createMakeupBookingForm,
     getCourseSessions,
     bookMakeup,
     leaveRequestErrorMessage,
     type CourseSession,
     type LeaveRequest
-  } from '$lib/mobile/stores';
+  } from '$lib/member/leave';
   import { sessionOptions, formatSessionDateTime } from '$lib/domain/session-format';
 
   export let onClose: () => void;

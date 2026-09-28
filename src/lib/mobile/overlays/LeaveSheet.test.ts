@@ -8,13 +8,13 @@ import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
 /* Task 19：LeaveSheet 從「COURSE_SESSIONS mock 查表 + 本地 isDone 假成功」改真
  * 後端 —— 開啟時打 GET /courses/{course_id}/sessions、送出打 POST
- * /leave-requests(復用桌面 Task 11 seam，見 $lib/member/stores.ts)。之前這個
+ * /leave-requests(復用桌面 Task 11 seam)。之前這個
  * 元件沒有既有測試(純 mock、無網路互動)，這裡是新增覆蓋，非「更新既有測試」。
- * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;工廠經 $lib/mobile/
- * stores 取真實作、deps 仍 mock $lib/member/stores(佈線證明,路徑不變)。
+ * 卡 2:表單機制的單元覆蓋在 $lib/member/leave-form.test.ts;Task 7(架構深化
+ * R15·F-4)起工廠與 deps 皆改元件直取 $lib/member/leave-form、$lib/member/leave。
  *
  * Task 1(架構深化 R14·F6):改走 $lib/api/client + fakeRouter(寫法照
- * member/profile.test.ts) —— 不再 mock $lib/member/stores 假成 deps，斷言改成
+ * member/profile.test.ts) —— 不 mock deps，斷言改成
  * 「打了哪個端點、帶什麼 body」，同 profile.test.ts 的 fetch-adapter 慣例。成功
  * 送出後 createLeaveRequest 走 gate.mutate:leaveRequests store 進場未水合
  * (wasHydrated=false)，寫回後會尾隨一次和解重抓，故成功案例額外要 route
