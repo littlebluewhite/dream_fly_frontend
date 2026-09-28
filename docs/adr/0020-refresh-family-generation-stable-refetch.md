@@ -285,3 +285,27 @@ R12 Task 3(`docs/adr/0022` §1)把 `mobile-admin/stores.ts` 的 `markOrderPaid` 
 **3. 行為變更第 3 條的 `refreshMessages()`。** 該轉出已於 R14 Task 2 退役:訊息頁改寫成
 `createLoadGate({ ...messagesPageEntry })`,重試走 load-gate 的 `refresh`,同樣經 `fetchGenStable` 讀
 閘門的世代與尾流帳。「標記已讀不閃回」照舊成立。判準句、反例與兩支守恆/競態釘逐字不變。
+
+## 增補(2026-09-28,架構深化 R15)
+
+**形 1 的讀取器不再外流**。`docs/adr/0025` F-1 把 `pageEntry()` 交出的形狀從
+`{ fetch, refresh, hydrate: { gen, pendingSettle, … } }` 換成 `{ source: LoadSource }`——
+`mutationGen` 連經 `pageEntry().hydrate.gen` 這條路都不留了,`fetchGenStable` 完全收成
+`hydration-gate.ts` 模組私有,只被同檔的 `refreshRun` 呼叫。load-gate 拿到的 `source.refresh
+(isCurrent)` 只是一支黑箱 promise,連「有沒有世代」都看不見。
+
+**為什麼這仍然不是形 3**。形 3 當年的兩點否決理由:(a) 只有經 `pageEntry()` 取得 fetch 的消費端
+受惠,結構性留洞;(b) 重抓埋進 fetch 內部後,第 1 層(load-gate 特有交織)無物可釘。R15 之後 (a)
+不再適用——`LoadGateOptions<T>` 是判別聯集(`{fetch,...}` 或 `{source,...}`,`source` 與
+`fetch` 互斥),沒有 `source` 的 plain 頁面走 `plainSource()`,不存在「繞過協定直讀旗標」的第三條
+路。(b) 依然成立且是刻意的:load-gate 仍然自己持有 phase 與 run-generation,`isCurrent()` 判準
+仍在 load-gate 裡,`source.refresh` 呼叫前後 load-gate 照樣能斷言「phase 單一週期」「棄追後不寫」
+——第 1 層要釘的觀察面(phase、卸載、被新一輪取代)沒有一項需要世代本身可見,`fetchGenStable`
+移進 hydration-gate 之後,load-gate 那一層的釘一字未改、依舊全綠,證明第 1 層的可觀察性與世代讀取
+器外不外流是兩件事。
+
+**契約 1-5 的現況**:五條逐字有效,無一撤回或改寫。契約 3(「run-generation 不因重抓遞增」)、
+契約 5(「hydrate 不套 loop」)描述的是 `hydration-gate.ts` 內部行為,與 `pageEntry()` 對外交出
+什麼形狀無關;契約 2、4 描述的是 load-gate 整合面,`source.refresh(isCurrent)` 這條新介面下
+`run()` 的單一 phase 週期、`queueReconcile` 零 diff 兩點也原樣成立(斷言路徑改經
+`gate.pageEntry().source`,判準本身未變)。詳見 `docs/adr/0025` 候選 F-1。

@@ -223,3 +223,13 @@ mobile-admin `messages` 的開機值與 reset 值都改成 `[]`,三組種子因�
 
 「已知後續」的 mobile-admin 種子只退了 `MESSAGES`。ops 四個集合與 `*_BASE` 仍是活種子,記為
 `docs/adr/0024` 的遞延。
+
+## 增補(2026-09-28,架構深化 R15)
+
+上一節記的「已知後續」關閉:mobile-admin 的 `members`/`classes`/`orders`/`coaches` 四個 ops 集合
+改走誠實開機(空陣列開機,`EMPTY_OPS`),`mobile-admin/data.ts` 的 `CLASSES`/`MEMBERS`/`ORDERS`
+builder、`domain` 的 `MemberStatus`/`MemberBase`/`MEMBERS_BASE`/`CLASSES_BASE`/`ORDERS_BASE` 隨之
+退役;`domain/shared.ts` 唯一匯出的 `CAMPUSES` 已無消費者,整檔一併刪除(`admin/data.ts` 自己的
+`ClassBase`/`OrderBase` 繼承點原地保留,不受影響)。`COACHES` 的值搬到
+`src/lib/testing/seed-fixtures.ts`,原倉的 10 個真消費者(非原估的 13,另 2 個估錯的檔案其實只是
+失效的手動 store reset,直接刪除該行 import)逐一改指向新位置。詳見 `docs/adr/0025` 候選 F-3。

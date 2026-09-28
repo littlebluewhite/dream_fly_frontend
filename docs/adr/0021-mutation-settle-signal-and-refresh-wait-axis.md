@@ -336,3 +336,13 @@ hydrate 則被 post-await 的 mutation-wins 丟棄。故第 3 層兩條釘打的
 
 **3. 名稱。** 「測試落點」末段的 `refreshNotifications` 自 R14 起更名 `hydrateNotifications`(仍是
 `gate.hydrate`),該段論證不變。
+
+## 增補(2026-09-28,架構深化 R15)
+
+`docs/adr/0025` F-1。`pendingSettle` 讀取器改為完全私有——`pageEntry()` 交出的形狀從
+`{ hydrate: { pendingSettle, … } }` 換成 `{ source }`,`pendingSettle` 連經 `pageEntry()` 交出
+這條路都收掉了,只剩 `hydration-gate.ts` 內部的 `refreshRun` 自己讀。硬契約改用貼著新介面重述:
+**靜止時(無尾流)`pageEntry().source.refresh(isCurrent)` 同步出發 `opts.fetch`**——這句話與舊的
+「`pendingSettle()` 靜止回 `undefined` 即代表沒有排隊等待的尾流」是同一個保證,只是用
+`LoadSource` 的詞彙重寫,機制本體(`pendingTails`/`resolvePending` 佇列)一字未改。詳見
+`docs/adr/0025` 候選 F-1、閘門重置。

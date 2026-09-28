@@ -30,7 +30,9 @@ notification preferences — is real on both `member` and `mobile` since Round 1
 member number, parent contact and avatar colour, were removed rather than faked — see `docs/adr/0023`.
 Since Round 14 shared stores boot honestly: the notifications and mobile-admin coach-messages stores behind
 the real badges start empty and show real counts once each surface's layout warms them, and the points
-ledger starts empty too, instead of showing seed data first — see `docs/adr/0024`.)
+ledger starts empty too, instead of showing seed data first; since Round 15 mobile-admin's operational
+collections (members/classes/orders/coaches) boot honestly the same way — see `docs/adr/0024`,
+`docs/adr/0025`.)
 Google OAuth login is wired for `member` and (since Round 4) `mobile` — `staff` and
 `mobile-admin` still have no Google option, because the backend's Google flow only ever grants the
 `member` role. See `docs/adr/0006` for the full inventory.

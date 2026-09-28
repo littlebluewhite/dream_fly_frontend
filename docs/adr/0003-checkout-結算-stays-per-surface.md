@@ -75,3 +75,15 @@ usePoints)`。這不違本 ADR:
   `derived([cart, subscriptions], … chargeableLines)`,由 `CheckoutDialog` 與 `mobile/stores.ts` 的單例
   各建一份;`points` 取 member 的點數 store。
 - 上兩節附錄的句式照舊成立:共用的是付款機與純數學,不是結算,也不是 store 實例。
+
+## 增補(2026-09-28,架構深化 R15)
+
+兩個 surface 各自手焊的 `placeOrder`(衍生 `lines` → 委派 `submitOrder` → 開啟即水合)退役,改由
+`member/checkout-sync.ts` 的 `createCheckout({ cart, refreshAfterOrder, refreshOnOpen })` 組裝——
+共用的仍是編排本身(付款機、純數學),不是結算內容:桌面與 mobile 傳進去的 `refreshAfterOrder`/
+`refreshOnOpen` 陣列不同(mobile 只暖點數,桌面暖點數與訂閱),`lines` 仍各自對自己的 `cart` 建
+`derived`。`checkout-controller.ts` 的 `deps.placeOrder` 簽章同時改為
+`(lines, order: PlaceOrderInput) => Promise<PaidSummary>`,`confirmPay` 只讀一次 `lines` 往下傳。
+順帶消掉一個重複網路呼叫:mobile 的 `CartSheet.svelte` 原本在 `freshCheckout` 之後自己再呼叫一次
+`refreshPoints()`,而 `checkout` 單例經 `createCheckout(...)` 建起後同一邊沿內部已經觸發過,故該手動
+呼叫已移除(本元件不再自己 `refreshPoints()`)。詳見 `docs/adr/0025` 候選 F-5。

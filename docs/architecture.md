@@ -27,9 +27,9 @@ everywhere regardless of surface.
 Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mobile/`, `mobile-admin/`,
 `staff/`) typically containing: `data.ts` (mock seed), `stores.ts` (Svelte stores), `nav.ts`, `format.ts`,
 `api.ts` (API seam — see below), and a `components/` (or `overlays/`) subfolder. `member/stores.ts` is the
-one exception to the single-file pattern: it's a pure barrel re-exporting 7 concern modules that live
+one exception to the single-file pattern: it's a pure barrel re-exporting 8 concern modules that live
 alongside it (`waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `checkout-sync.ts`,
-`notifications.ts`, `ui.ts`) plus a pass-through of lib-root's `cart.ts` — the cart factory moved up out
+`notifications.ts`, `ui.ts`, `profile.ts`) plus a pass-through of lib-root's `cart.ts` — the cart factory moved up out
 of the surface folder on 2026-08-03 (R9 C2, `docs/adr/0019`) and the barrel kept re-exporting it, so the
 five call sites that pull `cart` alongside other member symbols in one import clause stay untouched —
 new store/function additions go in the owning module, never in the barrel
@@ -100,11 +100,17 @@ four call sites each carried their own copy of. It maps to no backend enum and y
 isn't a seventh per-entity lookup; its one behaviour change is that `cap <= 0` now gives `pct: 0`
 instead of the `Infinity`/`NaN` the old inline `Math.round(enrolled / cap * 100)` fed straight into a
 progress bar (`docs/adr/0013`). `domain/leave-requests.ts` (2026-09-26, R12) is another entity-file
-resident of that kind. Its `leaveAction(lr)` gives the one 請假 rule: `pending` → cancel, `approved`
-without a makeup → book 補課, `approved` with one → already booked, else nothing. Until then that rule
-was hand-copied in member/mine and mobile's `MyCourseDetail`. It lives in an entity file rather than
-`member-app.ts`, whose header restricts it to constants and lookups, and mobile imports it directly as a
-pure function (`docs/adr/0022`). R13 (`docs/adr/0023`) added two more residents of that kind:
+resident of that kind. Since R15 (`docs/adr/0025`) its public surface is a single function,
+`leaveRow(source): LeaveRow` (`{ tone, label, when, makeupWhen, action }`), which absorbs both the
+display lookup (`LEAVE_STATUS`'s former tone/label pairs, now the module-private `STATUS_BADGE`) and the
+one 請假 action rule — `pending` → cancel, `approved` without a makeup → book 補課, `approved` with one →
+already booked, else nothing — behind a now-private `leaveAction(lr)`; `LEAVE_STATUS` itself is retired
+from `domain/member-app.ts`, `member/data.ts`, and `mobile/data.ts`. `makeupWhen` returns `null` (not an
+empty string) when the makeup session's date/time is missing, fixing a "(undefined)" display bug the
+old `?? ''` fallback into `formatSessionDateTime` produced. Until R12 the action rule was hand-copied in
+member/mine and mobile's `MyCourseDetail`; both call sites now destructure `leaveRow()`'s result. It
+lives in an entity file rather than `member-app.ts`, whose header restricts it to constants and lookups,
+and mobile imports it directly as a pure function (`docs/adr/0022`). R13 (`docs/adr/0023`) added two more residents of that kind:
 `domain/sessions.ts`'s `toTodaySession(s, now)` projects the wire `ApiTodaySession` (now single-sourced
 in `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the same
 `deriveSessionStatus` state — admin's `mapTodaySession` builds on it, and (since the R13 final-review
@@ -122,11 +128,14 @@ and its consumers now import the canonical source directly — import-site alias
 renamed something (`EnrolledCourse as MyCourse`, `Activity as ActivityRow`). What the four `data.ts`
 files still hold is what makes them facades in the first place: local interfaces and local mock arrays,
 the ops pair's `.map`
-builders over the `*_BASE` arrays, real mappers (`admin`'s `mapMemberAccount`), the `docs/adr/0013`
+builders over the `*_BASE` arrays (retired for mobile-admin's `classes`/`members`/`orders` since R15's
+honest boot, `docs/adr/0025` F-3 — `admin`'s own `ClassBase`/`OrderBase` builders are unaffected), real
+mappers (`admin`'s `mapMemberAccount`), the `docs/adr/0013`
 Form 2/3 narrowing re-asserts that genuinely re-assert a stricter local type over the same reference
-(`member`'s and `mobile`'s `LEAVE_STATUS`/`LEVEL_TONE`, `member`'s one `as`-assertion narrowing
+(`member`'s and `mobile`'s `LEVEL_TONE`, `member`'s one `as`-assertion narrowing
 `UPCOMING`, `mobile-admin`'s five status tables — `member`'s `NOTIFS_SEED` narrowing retired with the seed
-in R14),
+in R14; `LEAVE_STATUS`'s own narrowing retired the same way in R15, its Form 3 precedent now
+`domain/leave-requests.ts`'s private `STATUS_BADGE`),
 and one ADR-named boundary seam (`mobile-admin`'s `LEVEL_TINT`/`Student`, whose
 canonical home stays `coach/data.ts` — `docs/adr/0014`). `coach` has no persona mapping into this
 shared ops-pair/member-app seed, so it stays
@@ -275,15 +284,23 @@ inventory in `docs/adr/0006`. `mobile` and `mobile-admin` (Round 3, Task 19/20) 
 hold an `api.ts` that re-delegates to the real getters already built for their desktop counterpart
 (`mobile` → `$lib/member/api.ts`; `mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping
 only where the mobile shape diverges, with their own small residual mock spots (same ADR 0006 inventory)
-inlined the same direct way. Since 2026-07-16 `mobile`'s *remaining* direct reaches into `$lib/member`
-are consolidated too: production code imports member stores/actions/types only through
-`mobile/stores.ts`'s re-export block (plus the new `mobile/auth.ts` for the Google-OAuth effect trio),
-an invariant pinned by a source-scan contract in `mobile/foundation-contracts.test.ts` (test files are
-outside the scan). The rule governs import *direction* only: since R14 (`docs/adr/0024`) the
-same-reference identity pins in `mobile/stores.test.ts`/`mobile/auth.test.ts` and the source-path
-`ALLOWED` whitelist are retired — the last three tests that `vi.mock`ed `$lib/member/stores` by exact path
-now go through `$lib/api/client` + `fakeRouter` and assert endpoints and bodies, so no test relies on
-"the mock intercepts" as wiring proof any more. The seam's re-exports themselves stay (`docs/adr/0014`). Backend wire shapes shared across ≥2
+inlined the same direct way. Since R15 `mobile-admin/api.ts` itself is much smaller: the ~40 zero-mapping
+pass-throughs it used to carry are gone, and it keeps exactly five combinators —
+`getMore`/`getCoachHome`/`getAdminHome`/`getOpsCollections`/`getMessages` — the ones that actually fan out
+to more than one source or reshape a response; the 17 production importers that used to reach those
+pass-throughs now import the owning module (`$lib/admin/api`, `$lib/admin/data`,
+`$lib/admin/components/coach-save`, `$lib/admin/settings-form`, `$lib/coach/api`,
+`$lib/coach/load-error-copy`, `$lib/coach/data`) directly, aliasing at the import site on a name clash
+(`docs/adr/0019` C4's judgement extended from `data.ts` facades to this combinator layer, `docs/adr/0025`).
+`mobile`'s direct reaches into `$lib/member` went the other way: since R15 (F-4, `docs/adr/0025`)
+`mobile/stores.ts` itself shrank to exactly six exports — `overlay`, `MobilePushId`/`MobileSheetId`,
+`cart`, `checkout`, `toasts` — and `mobile/auth.ts` is deleted outright, so mobile production code now
+imports `$lib/member/<concern>` modules directly rather than through the barrel. The import-*direction*
+rule that used to police this (`mobile/foundation-contracts.test.ts`'s source-scan contract, plus the
+same-reference identity pins and source-path `ALLOWED` whitelist R14 had already reduced to a residual)
+is retired along with it: with nothing left routed through the barrel, there is no direction left to
+police. `docs/adr/0014` §1 records the retirement; `$lib/testing/import-scan.ts`'s scanning mechanism
+itself is unaffected and still backs the other seam contracts (`docs/adr/0025`). Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, the admin/coach
 `ApiTodaySession` (R13), display atoms like `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
 redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` takes the `OrderStatus`
@@ -305,8 +322,14 @@ keeping its own 1-4-line entity text table; the other 10 are pass-through, deleg
 wired both attendance pages in too, `docs/adr/0023`) also shared
 byte-identical *load*-error copy — the gate `onError` title/body pairs — single-sourced since 2026-07-16
 in `src/lib/coach/load-error-copy.ts` (name-based `CoachNotFoundError` discrimination, so page tests that
-stub the whole api module keep working; mobile-admin consumes it through `mobile-admin/api.ts`'s
-re-export); per-entity *action* error tables stay at call sites — `docs/adr/0014` draws that boundary.
+stub the whole api module keep working; since R15 mobile-admin's three coach pages import it directly from
+`$lib/coach/load-error-copy` instead of through `mobile-admin/api.ts`'s now-retired re-export — the
+name-based judgement itself is unchanged, only one of its two original reasons (routing through the
+`api.ts` re-export) no longer applies, `docs/adr/0014` addendum); per-entity *action* error tables stay at
+call sites — `docs/adr/0014` draws that boundary. Since R15 mobile-admin's coach attendance page joined
+that per-entity-table side: `ATTENDANCE_ERROR_TEXT` maps 403/404/422 to the same wording desktop's inline
+attendance-error table already used, so a save failure shows the specific reason instead of one generic
+message (title unchanged, `docs/adr/0011` addendum).
 Pages that used to import seed constants directly, or hand-roll their own `onMount` + local `phase`
 variable (every app surface, `mobile-admin` included), now call `gate.load()` on a
 `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts` (`docs/adr/0008`)
@@ -326,24 +349,32 @@ self-hydrate to a real three-state gate — see the hydration section below) —
 a `*Hydrated` guard (`notificationsHydrated` — shared by member and mobile since 2026-09-26 —
 `opsHydrated`, `messagesHydrated`), with
 `gate.refresh()` always re-fetching for `ErrorState`'s retry regardless of the guard — but the guard's
-mechanism and ownership differ by surface. Member/mobile notifications are page-owned: since 2026-07-13
-the page's own `createLoadGate` call carries a `hydrate: { flag, into }` option instead of hand-rolled
-`skip`+`onData` — `flag` is the `*Hydrated` writable, `into` performs the store write, and the guard
-short-circuit (`load()` only), the post-await mutation-wins re-check (also `load()`'s apply path only —
-`refresh()`/`silentRefresh()` deliberately never re-check the flag) and the flag-flip (shared by all
-three) that used to be hand-rolled at the page now
-live inside `load()`/`refresh()`/`silentRefresh()` themselves (`docs/adr/0008`; since 2026-07-20 those
-three decision points — guard short-circuit, mutation-wins re-check, flag-flip — delegate to the shared
-`HydrationCore` in `src/lib/hydration-gate.ts`, one home for the protocol's vocabulary, while the gate's
-reentry bookkeeping stays put — `docs/adr/0016`). What covers the refresh family instead is a *fourth*
-decision point added 2026-08-03 (R10 A, `docs/adr/0020`): `fetchGenStable` — capture the gate's monotonic
-mutation generation on entry, re-read it when the response lands, and if a local mutation happened inside
-that window discard the snapshot and refetch in place until it is stable. It deliberately stays outside
-`HydrationCore` (it reads the generation, never the flag) and is deliberately never applied to `load()`
-(hydrate's contract is mutation-wins-discard, with the reconcile chain owing the refetch; refresh's is
-explicit freshness, so a discard *must* be followed by one). A page opts in through the optional
-`hydrate.gen` reader, which every hydration gate's `pageEntry()` wires (only `session-gate`'s until R14
-moved `pageEntry()` onto the hydration gate itself, `docs/adr/0024`). A *fifth* decision point
+mechanism and ownership differ by surface. Since R15 (`docs/adr/0025` F-1) the wiring itself changed
+shape for every one of these: a page no longer spreads a `hydrate: { flag, into, gen, pendingSettle }`
+bag into its `createLoadGate` call. Instead `load-gate.ts` exposes a `LoadSource` port
+(`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`), `LoadGateOptions<T>` is a discriminated union of
+`{ fetch, onData?, onError? }` (plain pages) or `{ source, onError? }` (pages reading a shared store),
+and a hydration gate's `pageEntry()` returns `{ source }` instead of the old four-field pack — a page
+writes `createLoadGate({ ...gate.pageEntry() })` exactly as before, but load-gate itself now owns only
+phase, its own run-generation, unmount, and `onError`; every fetch/apply/flag decision (guard
+short-circuit, post-await mutation-wins re-check, the flag-flip, the fourth and fifth decision points
+below) moved fully inside `hydration-gate.ts`'s internal `loadRun`/`refreshRun`, reached only through the
+source's `load`/`refresh` closures. `isCurrent` is the one thing load-gate hands the source: "unmounted
+or superseded by a newer run" — the source can only read it, never touch phase or generation itself.
+`HydrationCore`, `createHydrationCore`, and the exported `FetchGenStableOptions` type are retired along
+with the old pack shape; `fetchGenStable` is a module-private function inside `hydration-gate.ts` now,
+called only by its own `refreshRun` (`docs/adr/0016`, `docs/adr/0025`). The mutation-wins re-check itself
+also closed a latent window this round: it now compares `entered !== mutationGen || get(flag)` (both the
+entry-time generation *and* the flag), rather than the flag alone, so "load in flight → `markMutated` →
+`invalidate()` → response lands" no longer applies the stale snapshot — see the "known latent" note near
+the end of the `pageEntry()` discussion below, now closed. What covers the refresh family instead is a
+*fourth* decision point added 2026-08-03 (R10 A, `docs/adr/0020`): `fetchGenStable` — capture the gate's
+monotonic mutation generation on entry, re-read it when the response lands, and if a local mutation
+happened inside that window discard the snapshot and refetch in place until it is stable. It is
+deliberately never applied to `load()`/`source.load()` (hydrate's contract is mutation-wins-discard, with
+the reconcile chain owing the refetch; refresh's is explicit freshness, so a discard *must* be followed by
+one) — this asymmetry lives entirely inside `refreshRun` now; there is no `hydrate.gen` reader left for a
+page to reach for, on purpose. A *fifth* decision point
 followed on 2026-08-10 (R11 C1, `docs/adr/0021`) — the **mutation settle signal**, an axis orthogonal
 to the generation one. Optimistic mutators are mark-before-await (write the store + `markMutated()`
 *first*, `await` the PATCH after), so "the PATCH is still in flight" is invisible to a generation
@@ -351,14 +382,16 @@ check: a GET leaving inside that window reaches the server before the write does
 back, finds the generation stable, and applies it — the exact GET/PATCH race `docs/adr/0020` had
 explicitly left out of scope. So `markMutated(tail?)` now takes the mutation's network tail and books
 it with `tail.then(done, done)` (a rejection settles too — failing that structurally rather than
-trusting call sites to `catch`), `pendingSettle()` reports whether any tail is outstanding, and
+trusting call sites to `catch`), an internal `pendingSettle()` reports whether any tail is outstanding, and
 `fetchGenStable` waits on it in a re-asking loop *before* capturing the generation and firing. **Wait
 by tails, discard by generations, never swap the two** — the honest boundaries (a hung tail makes
 refresh wait with it; a continuous mutation stream starves refresh until the user stops) are in the
 ADR. When idle, `pendingSettle()` returns `undefined` **synchronously** — a hard contract, since one
 extra microtask would push the generation capture past a caller's "refresh then synchronously
-`markMutated`" and unpick R10's in-flight pins. Pages opt in through `hydrate.pendingSettle`, wired in
-the same single line of `pageEntry()`; the enrolled call sites are `member/notifications.ts`'s
+`markMutated`" and unpick R10's in-flight pins; since R15 the contract is restated in terms of the new
+port — `source.refresh(isCurrent)` dispatches its fetch synchronously whenever there is no pending tail
+— rather than a page reaching for a `pendingSettle` reader, which no longer exists outside
+`hydration-gate.ts` (`docs/adr/0021` addendum). The enrolled call sites are `member/notifications.ts`'s
 `markRead`/`markAllRead` — two since 2026-09-26, when mobile's twin pair merged into them (four before).
 The gate's own
 `generation`/`destroyed` bookkeeping (no page-local flag needed any more) still discards a response that
@@ -369,13 +402,19 @@ the leaf module `mobile/notifications.ts`, merged into that one module; the page
 Mobile-admin's ops collections and
 messages are store-owned: the fetch/apply/guard lifecycle lives in `stores.ts`'s `opsGate`/`messagesGate`,
 because several mutators (`markOrderPaid`/`markMessageRead`) flip the guard true (a mutation *is* the
-session's source of truth) and none of them is "the page". Until R14 the pages wired the store's
-`hydrateOps`/`refreshOps` (and the messages pair) straight in as the load-gate's `fetch`/`refresh`, so the
-gate's own bookkeeping protected only the page's local phase, never the shared store. Since R14
-(`docs/adr/0024`) they spread the gate's own entry pack instead — `createLoadGate({ ...opsPageEntry })`/
-`createLoadGate({ ...messagesPageEntry })` — so the store write goes through the load-gate's `hydrate.into`
-and a response landing after unmount or after a newer run is dropped; the `*Hydrated` guard is still
-rechecked right before the write, so a mutation racing an in-flight fetch always wins. The member/course/coach writes don't go through `markMutated()` at all:
+session's source of truth) and none of them is "the page". Since R14 the pages spread the gate's own
+entry pack instead — `createLoadGate({ ...opsPageEntry })`/`createLoadGate({ ...messagesPageEntry })`
+(since R15 that pack is `{ source }`, see above) — so the store write goes through the source's `load`
+closure and a response landing after unmount or after a newer run is dropped; the `*Hydrated` guard is
+still rechecked right before the write, so a mutation racing an in-flight fetch always wins. Since R15
+(F-3, `docs/adr/0025`) the four ops collections (`members`/`classes`/`orders`/`coaches`) boot honestly
+too: an `EMPTY_OPS` constant (four empty arrays, `pages` all `{ total: 0, perPage: 0 }`) is both the
+stores' boot value and what `opsGate`'s `reset: () => applyOps(EMPTY_OPS)` restores on identity
+reset — the admin home page's pending-payment banner and `CoachesScreen`'s subtitle now read `0`/nothing
+before the gate is ready instead of the old seeded counts (mirroring `VenuesScreen`'s existing pattern);
+`mobile-admin/data.ts`'s `CLASSES`/`MEMBERS`/`ORDERS` seed builders and the domain's
+`MEMBERS_BASE`/`CLASSES_BASE`/`ORDERS_BASE`/`CAMPUSES` (the last taking the now-empty `domain/shared.ts`
+down with it) are deleted. The member/course/coach writes don't go through `markMutated()` at all:
 Task 20 and Round 4's Task F5 moved them to the real `/users`/`/courses`/`/coaches` API followed by an
 unconditional `refreshOps()` refetch, and since 2026-09-26 (R12, `docs/adr/0022`) that pairing lives
 *in the store* rather than at four call sites — per-entity, add/edit-split write verbs
@@ -397,8 +436,9 @@ publishes `opsPages` (backend `total`/`perPage` for the page-1-only members/clas
 the three pages show as header totals plus a `searchCapHint()` line once `total > perPage`. That store-owned
 guard + post-await re-check
 protocol is itself a shared factory since 2026-07-08 — `src/lib/hydration-gate.ts`'s
-`createHydrationGate` (`hydrate`/`refresh`/`markMutated`, plus `pageEntry()` and `invalidate()` since
-R14 — the mutation-generation and settle readers leave the gate only through `pageEntry().hydrate`), which
+`createHydrationGate` (public surface: `hydrated: Readable<boolean>`, `hydrate`/`refresh`/`invalidate`/
+`markMutated(tail?)`/`pageEntry()`/**`reset()`** since R15 — the mutation-generation and settle readers
+no longer leave the gate at all, not even through `pageEntry()`, see above), which
 `mobile-admin/stores.ts`'s
 `hydrateOps` builds on directly (`hydrateMessages` did too until R13 moved it onto `createSessionGate`,
 see below); since 2026-07-11 `member/notifications.ts` is the factory's
@@ -422,18 +462,26 @@ mutation-wins into refresh, which that ADR records as an explicit rejection. Sep
 surface's layout declares a **warm set** — the shared stores its shell reads before any page does — and
 calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on identity (R14, `docs/adr/0024`):
 member and mobile warm notifications (Topbar/Sidebar/TabBar badges), mobile-admin warms messages in the
-coach section only (keyed on the route section, not the account's roles). `warmStores` is the old private
+coach section only (keyed on the route section, not the account's roles). Since R15 (F-2,
+`docs/adr/0025`) individual *pages* also declare their own warm set the same way, run in `Promise.all`
+alongside their own main fetch: `member/mine` (`getMine()` + 候補 waitlist/請假), `member/account`
+(`getAccount()` + points/subscriptions), and `mobile/account` (`getAccount()` + points) each call
+`warmStores(caller, tasks)` with a caller label that also prefixes the console warm-up log
+(`'member/mine'`/`'member/account'`/`'mobile/account'`). `warmStores` is the old private
 `hydrateSessionStores` helper (2026-07-13) promoted as is — `Promise.allSettled`, best-effort (a failed
 hydrate only `console.error`s, never throws) — deliberately unlike `getPoints()`'s own fail-hard points
 refresh, which is page-critical rather than incidental. One GET per identity: the gate's guard stops
 revisits, the in-flight coalescing merges the warm call with a page's own load on the same screen, and an
 identity change resets the gate. Before R14 member's `getDashboard()` warmed points/notifications as a
-side effect of the home page's getter; it no longer does (the home page reads neither). What's left of
-that pattern (`docs/adr/0012` K7's residual) is `getAccount()` (points/subscriptions, tail-awaited after
-its main fetch) and `getMine()` (候補 waitlist + 請假 leave-requests, the third adopter, 2026-07-16, run in
-*parallel* with the main fetch via `Promise.all` to keep the mine page's pre-existing shape,
-`docs/adr/0014`) — both serve their own page's reads. Since R13
-`getAccount()` also awaits the member profile's `hydrateProfile()` in parallel with its orders fetch —
+side effect of the home page's getter; it no longer does (the home page reads neither). Since R15,
+`getMine()`/`getAccount()` no longer warm anything themselves either — they only fetch their own
+endpoint (`getMine()`: `activeEnrolments()` only, no more `GET /waitlist/me`/`GET /leave-requests/me`;
+`getAccount()`: `GET /orders/me` only, no more `GET /users/me`/`GET /points/me`/
+`GET /subscriptions/me` — `mobile/account` in particular no longer hits `GET /subscriptions/me` at all).
+What used to be a getter's hidden side effect (`docs/adr/0012` K7's residual) is now the page-level warm
+set above, dispatched in parallel with the main fetch rather than tail-awaited after it — `getPoints()`
+itself is untouched, still called directly by whichever page reads `$points`. `getAccount()` still
+awaits the member profile's `hydrateProfile()` in parallel with its orders fetch and its warm set —
 fail-hard, not in the best-effort helper, because the account page renders from `$memberProfile`. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s Topbar still imports `NOTIFS` from
@@ -471,8 +519,8 @@ than one place, independent of any single page's own load-gate?
   above; before R14 it was `getDashboard()`) — independent triggers that must agree on one guard (since
   2026-09-26 mobile's notifications page is a third, see the next bullet). The store
   therefore owns a full `createHydrationGate` instance (wrapped by `createSessionGate`, see the next
-  section), and the page's `createLoadGate({ ...notificationsPageEntry })` reads/writes that *same*
-  `gate.hydrated` writable rather than declaring its own.
+  section), and the page's `createLoadGate({ ...notificationsPageEntry })` reads that *same*
+  `gate.hydrated` (now `Readable<boolean>`, not writable outside the gate) rather than declaring its own.
 - **mobile notifications — merged into member's since 2026-09-26**: mobile used to have its own
   shape here. Until 2026-08-03 `notifsHydrated` was a plain `writable(false)` with hand-flipping
   mutators; R9 C3 (`docs/adr/0019`) rebuilt it as the leaf module `src/lib/mobile/notifications.ts` on
@@ -493,8 +541,9 @@ than one place, independent of any single page's own load-gate?
   full `createHydrationGate` factory, store-owned. The store-level `refreshOps()` gets the
   generation-stable refetch for free since R10 — the store-owned gate holds the mutation generation
   itself; "write → `markMutated` → `await refreshOps()`" stays a single fetch whose snapshot applies as
-  before (`docs/adr/0020`'s conservation pin), and the pages' retry reads the same ledger through
-  `hydrate.gen`. Neither mutator enrols a settle tail in R11's fifth decision point, and neither needs to:
+  before (`docs/adr/0020`'s conservation pin), and the pages' retry reaches the same ledger only
+  indirectly, through `source.refresh(isCurrent)` — since R15 there is no `hydrate.gen` reader left to
+  read it directly (see above). Neither mutator enrols a settle tail in R11's fifth decision point, and neither needs to:
   both call `markMutated()` only after their write has settled. `markOrderPaid` `PATCH`es first (since
   R12, see above); `markMessageRead` has, since R14, only flipped the local row and called
   `markMutated()` — mobile-admin's `MessageThread` now runs desktop's `messages-controller` and calls it
@@ -515,15 +564,19 @@ store-owned `{ fetch, refresh }` pair and retire the `hydrate` option. Rejected 
 `docs/adr/0016` addendum): with the pair, the store gate writes the shared store without knowing the page
 exists, so four protections that only the `hydrate` option gives are lost — stop re-fetching once the
 page unmounts, never write a superseded run's snapshot, and the re-entry re-checks (the load-gate's own
-"F1/F5"). R14 (`docs/adr/0024`) took the recorded direction instead: `HydrationGate` itself now hands out
-`pageEntry()` — `{ fetch, refresh, hydrate: { flag, into, gen, pendingSettle } }` — so the five callers
-that used the pair (four `hydrateOps` pages/screens and the messages page) spread it like the
-notifications pages do and have all four protections. The pack's `fetch` shares the gate's in-flight GET
-with `hydrate()` (joining only a GET that left at the current mutation generation), while `refresh` is a
-separate, uncoalesced call. The reentry bookkeeping stays in load-gate. One asymmetry is recorded as a
-known latent: load-gate's `applyLoaded` rechecks only the flag, not the mutation generation that
-`gate.hydrate()` compares, so "load in flight → `markMutated` → `invalidate()` → response lands" would
-apply the stale snapshot (unreachable today on the ops/messages gates, which never `invalidate()`).
+"F1/F5"). R14 (`docs/adr/0024`) took the recorded direction instead: `HydrationGate` itself hands out
+`pageEntry()`, so the five callers that used the pair (four `hydrateOps` pages/screens and the messages
+page) spread it like the notifications pages do and have all four protections. R14's shape was
+`{ fetch, refresh, hydrate: { flag, into, gen, pendingSettle } }`, with one recorded asymmetry: load-gate's
+apply path rechecked only the flag, not the mutation generation `gate.hydrate()` compares, so "load in
+flight → `markMutated` → `invalidate()` → response lands" would apply the stale snapshot. Since R15
+(F-1, `docs/adr/0025`) `pageEntry()` returns `{ source: LoadSource }` instead (see the top of this
+document's hydration discussion) — `source.load`'s in-flight GET is still shared with `hydrate()`,
+`source.refresh` is still a separate, uncoalesced call, and the reentry bookkeeping still stays in
+load-gate — and the recorded asymmetry is closed as part of the same change: the mutation-wins check now
+compares generation *and* flag, so that landing order no longer applies a stale snapshot (previously
+unreachable in practice, since the ops/messages gates never call `invalidate()`, but closed as a matter of
+correctness rather than left as a latent).
 
 ## Session gate: session-identity-aware resets on top of the hydration gate
 
@@ -546,7 +599,9 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
   (`docs/adr/0023`) the member profile (`member/profile.ts`, also shared by member and mobile), the coach
   identity (private to `coach/api.ts`: `{ user, coach | null }` resolved once per session, the flag
   flipped back on `CoachNotFoundError` so a retry re-resolves) and mobile-admin's messages. The coach and
-  mobile-admin ones are the first staff-side consumers — staff logins write the same `authStore`. Builds a `HydrationGate` (via the internal `createOwnedHydrationGate`, which also hands it `ownerChanged()`) plus `mutate(request, writeBack)`,
+  mobile-admin ones are the first staff-side consumers — staff logins write the same `authStore`. Builds a `HydrationGate` (`createHydrationGate({ fetch, apply, reset })`, its own `reset()` layered
+  with the reconcile/write-chain reset below — since R15 there is no separate internal
+  `createOwnedHydrationGate`/`ownerChanged()` factory any more, `docs/adr/0025`) plus `mutate(request, writeBack)`,
   which absorbs what used to be five hand-copied mutator skeletons: snapshot hydration state + epoch
   before `await`, discard an epoch-stale write-back (result still returned — the server-side effect
   already happened), re-check completeness on write-back (a prior reconcile may have flipped the flag
@@ -555,11 +610,11 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
   write whose identity changed before its turn is skipped, the task gets a `stale()` probe for its failure
   handling, and an identity change resets the chain — the member profile's `setPref`/`saveProfile` run on
   it. Its **`pageEntry()`** (R9 C3; inherited from the hydration gate since R14) is the pack a page
-  spreads into its own load-gate: `fetch`/`refresh` are the *epoch-checking* ones, `hydrate.flag`/
-  `hydrate.into` are the gate's own `hydrated` writable and `apply` function — same instances, not copies
-  — and since 2026-08-03 (R10 A) `hydrate.gen` reads the gate's own mutation generation, so the page's
-  refresh family and the store gate read **one** mutation-generation ledger rather than each keeping its
-  own. That closes the reconcile window for free: `queueReconcile` is byte-for-byte unchanged, because a
+  spreads into its own load-gate: since R15 (F-1, `docs/adr/0025`) it is `{ source: LoadSource }`, where
+  `source.load`/`source.refresh` are the *epoch-checking* fetch and refresh, and the mutation-generation
+  ledger they compare against is the gate's own — the page's refresh and the store gate read **one**
+  ledger, it just isn't exposed as a separate `hydrate.gen` reader any more (see the hydration-gate
+  discussion above). That closes the reconcile window for free: `queueReconcile` is byte-for-byte unchanged, because a
   reconcile refetch whose snapshot predates a later mutation is now discarded and refetched by
   `gate.refresh`'s own generation check instead of needing a second queued reconcile (`docs/adr/0020`).
   A failed reconcile flips the flag back through `gate.invalidate()`; `hydrate()` shares one in-flight
@@ -574,8 +629,10 @@ Both factories share one private identity core, which since R14 fixes its identi
 construction: the subscription's immediate callback only records who is logged in, so a restored (or
 guest) boot fires no reset at all — reset value equals boot value, so nothing on screen differs — and the
 old construction-order contract (plus the "declare this `let` first" comments at call sites) is gone. On a
-real identity change `createSessionGate` runs `reset()`, `ownerChanged()` (flag false, drop the in-flight
-coalesced GET, clear the settle-tail ledger) and resets its reconcile and write chains.
+real identity change `createSessionGate` calls its underlying `gate.reset()` (`opts.reset()`, flag false,
+drop the in-flight coalesced GET, bump the reset epoch, clear the settle-tail ledger and wake any
+waiters — since R15 this is the hydration gate's own general-purpose `reset()`, `docs/adr/0025`) and
+resets its reconcile and write chains.
 
 The retired third factory was `onSessionReset(reset)` — reset-only, gate ownership left with the
 caller — whose sole consumer was mobile notifs; once that store moved onto a full `createSessionGate`
@@ -599,8 +656,8 @@ called the raw API getter directly and so escaped the epoch check — **is close
 `createLoadGate({ ...notificationsPageEntry })`, mobile's reached through `mobile/stores.ts` — and can no
 longer reach a raw getter. The original judgement
 call stands unchanged: epoch knowledge still lives only in `session-gate.ts`, `load-gate.ts` still knows
-nothing about it, and the pack's only dependency on it is a type-only
-`import type { LoadGateHydrateOptions }` (in `hydration-gate.ts` since R14). There is no new code path either — a stale response makes
+nothing about it, and the pack's only dependency on it is a type-only `import type { LoadSource }` (since
+R15; `LoadGateHydrateOptions` itself is retired, `docs/adr/0025`). There is no new code path either — a stale response makes
 `epochFetch` throw, which lands in the load-gate's existing error state, and the user's retry re-enters
 the *same* `epochFetch` under the new epoch. See `docs/adr/0019` for the full walkthrough and
 `docs/adr/0017` for why the guard-short-circuit and navigate-away cases were already safe.
@@ -694,7 +751,17 @@ that `docs/adr/0011` already rejected.
   sent rather than a reset form: `checkout.form` (`code`/`usePoints`/`paymentMethod`, which the components
   `bind:` to), and the snapshot adds `coupon`/`codeErr`/`preview` (`checkoutMath(lines, coupon, points,
   usePoints)`)/`hasChargeable`. The deps grew to `{ placeOrder, applyCouponCode, lines, points }` — two
-  effects plus two read-only sources, which `docs/adr/0012` clarifies are data, not behaviour flags.
+  effects plus two read-only sources, which `docs/adr/0012` clarifies are data, not behaviour flags. Since
+  R15 (F-5, `docs/adr/0025`) `deps.placeOrder`'s signature is
+  `(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>` — `confirmPay()` reads
+  `lines` once and passes it down, rather than each surface's `placeOrder` re-deriving them — and each
+  surface no longer hand-assembles its own `placeOrder`: `member/checkout-sync.ts`'s
+  `createCheckout({ cart, refreshAfterOrder, refreshOnOpen })` builds the whole controller, deriving
+  `lines` from the given `cart` and delegating to `submitOrder`. `CheckoutDialog` and the mobile singleton
+  `checkout` each call it with their own cart and refresh lists (mobile omits `refreshSubscriptions`, its
+  cart never carries subscription lines); `setOpen`'s `freshCheckout` edge now fires `refreshOnOpen`
+  itself, so `CartSheet` no longer calls `refreshPoints()` on mount separately (its own manual call was
+  removed to stop a duplicate `GET /points/me` per sheet open).
   `confirmPay()` takes no arguments; `freshCheckout` resets form and coupon, `resumedInFlight` keeps them;
   `applyCode()` drops a response that lands after a `freshCheckout`; `removeCoupon()` backs desktop's
   「移除」 link. Toast copy and `CartSheet`'s `close()` guard stay on the components.

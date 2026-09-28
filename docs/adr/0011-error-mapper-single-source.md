@@ -118,3 +118,9 @@ orders 判 `400`、mobile-admin OrderSheet 判 `409`——同名不同狀態碼�
   OrderSheet 的 `STATUS_ERROR_TEXT` 只剩 `403` 一鍵。
 
 教訓記在這裡：看到「同名不同狀態碼」時，先查後端是不是同一條路徑，再決定是不是現況分歧。
+
+## 增補(2026-09-28,架構深化 R15)
+
+行動版點名存檔失敗新增 `ATTENDANCE_ERROR_TEXT: Record<number, string>`,依 403/404/422 分流具體
+原因,標題不變;內容與桌面 `coach/attendance/+page.svelte` 的既有分流逐字相同,仍是各自呼叫端的行內
+常數,不是新單源(決定一「文案留呼叫端」不變)。詳見 `docs/adr/0025` 候選「點名文案」。

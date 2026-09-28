@@ -383,3 +383,12 @@ coupon/codeErr 的寫入者是 `applyCode()`、`clearCodeErr()`、`removeCoupon(
 
 **4. 名冊與雙生。** 單頁 controller 名冊仍是 8 例。`messages-controller` 的呼叫端 1 → 2:mobile-admin
 `MessageThread` 經 `docs/adr/0014` §2 的雙生核可類接上,deps 與桌面逐字相同(見該篇增補)。
+
+## 增補(2026-09-28,架構深化 R15)
+
+K7 重開、只剩殘餘:`getMine()` 收斂為只回 `activeEnrolments()`,`getAccount()` 收斂為只回
+`orders`,兩者都不再順手水合共享 store。取而代之,`member/mine`、`member/account`、
+`mobile/account` 三個頁面各自在自己的 `fetch` 裡以 `warmStores(caller, tasks)` 與主 GET
+並行(`Promise.all`)出發自己要暖的清單——getter 不再有「呼叫它就會連帶水合別的 store」這層看不見的
+副作用,但暖機仍服務所在那一頁自己的讀取,不是新單源。`getPoints()` 未變動,K7 的裁決本身未撤。
+詳見 `docs/adr/0025` 候選 F-2。

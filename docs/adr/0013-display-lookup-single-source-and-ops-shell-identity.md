@@ -496,3 +496,11 @@ R8 C4 增補與 `docs/adr/0018` §4 記的承接形,R13 Task 6 改了兩處:
   對同一參照純註記收窄。`domain/member-app.ts` 檔頭的 `Tone` 條款已改寫為「`LEAVE_STATUS` 為現存實例」。
 - Form 3 的定義與「satisfies 目標必須明列 tone 字面聯集」的陷阱(`docs/adr/0014` §1)不變。
 - `member/data.ts` 的收窄 re-assert 自此只剩 `UPCOMING`(`as` 斷言)與 `LEAVE_STATUS`/`LEVEL_TONE`。
+
+## 增補(2026-09-28,架構深化 R15)
+
+`LEAVE_STATUS` 本身退役:Form 3 的前例改指 `domain/leave-requests.ts` 的私有 `STATUS_BADGE`(值
+搬過去,對外只留 `leaveRow()` 一個公開 API)。`domain/member-app.ts`/`member/data.ts`/
+`mobile/data.ts` 三處的 `LEAVE_STATUS` 值與收窄 re-assert 一併刪除;字面 grep 仍會命中若干純註解
+(說明退役緣由),這與 `NOTIFS_SEED` 等既有退役識別字的慣例一致,詳見 `docs/adr/0025` 候選「請假列
+VM」。

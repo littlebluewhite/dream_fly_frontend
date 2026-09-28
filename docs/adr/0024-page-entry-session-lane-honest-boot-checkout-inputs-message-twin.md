@@ -313,3 +313,35 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
 - **`docs/adr/0021`**:`markMessageRead` 改為送完再寫(增補)。
 - **`docs/adr/0022`**:D2 已解(增補)。
 - **`docs/adr/0023`**:兩條未來候選已關閉(增補)。
+
+## 增補(2026-09-28,架構深化 R15)
+
+`docs/adr/0025` 是本輪的接棒 ADR。以下逐項結案或重開:
+
+**結案**:
+
+- **F1 的潛伏窗(bug #3)**:「已知、刻意遞延」記的「load 在飛 → markMutated → invalidate() →
+  回應落地時套用舊快照」已修——`mutationWins` 判準改為 `entered !== mutationGen || get(flag)`,
+  與 `gate.hydrate()` 同一判準,5 個 mobile-admin 頁面連帶受益。
+- **D-F2a**:`hydrated` 型別收窄完成——公開介面型別改為 `Readable<boolean>`(非
+  `Writable<boolean>`),測試直寫旗標的 71 處(核對後實為 65+4)全數改用各模組新增的
+  `reset…ForTests()`/水合真流程,`gate.hydrated.set(true)` 只剩型別釘一處(以
+  `@ts-expect-error` 明志)。
+- **ops 誠實開機**:「明確不做」F3 記的「ops 集合不動」推翻——mobile-admin 的
+  `members`/`classes`/`orders`/`coaches` 四個集合改走誠實開機(`EMPTY_OPS`),見下方「重開」。
+- **`createOwnedHydrationGate` 的 minor 記帳**:「已知、刻意遞延」記的「只給 session-gate 用只寫在
+  註解,不是型別」——因整段函式退役而失去對象:`session-gate.ts` 改用
+  `createHydrationGate({ fetch, apply, reset })` + 通用 `gate.reset()`,`ownerChanged`/
+  `createOwnedHydrationGate` 不再存在,無需再管「只給誰用」。
+
+**重開**:
+
+- **F6「seam 的轉出本身不退役」**:結論**延續**,不是推翻——`mobile/stores.ts` 這個 seam 本身仍在,
+  `docs/adr/0014` §1 的 import 方向規則本輪才真正退役(因消費端已直取 `$lib/member/*`,規則失去
+  適用對象,見 `docs/adr/0014` 增補)。seam 檔案不刪,只是零消費者的死轉出(27 個 store 符號 + 3
+  個 checkout 符號中的相當部分)被清空,詳見 `docs/adr/0022` 增補「D2 重開一半」。
+- **F3「ops 集合不動」的裁決推翻**:當年不做的理由是「讀它們的地方都在 load-gate 骨架後面」+
+  「退役牽動約 20 個測試檔」。本輪(候選 F-3,Task 4)判斷這兩個理由不足以繼續遞延——兩處讀取點
+  (admin 首頁待付款橫幅、`CoachesScreen` 副標教練數)水合前顯示假數字本身就是使用者可見的誠實性
+  缺口,測試改動的規模本輪實際發生且已完成(19 個測試檔改走 fakeRouter,另有 10 個 `COACHES`
+  值消費者改指向 `testing/seed-fixtures.ts`)。詳見 `docs/adr/0025` 候選 F-3、轉手退役。

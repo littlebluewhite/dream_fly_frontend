@@ -437,3 +437,27 @@ R14 Task 6(候選 F5),照 R10 B 案(`718844b`)的前例。三條件逐條核對:
 
 接線差異只在 adapter:`badgeCleared` 為 true 才呼叫 `markMessageRead(m.id)`(使用者裁決:等後端確認
 已讀才清角標);`sending` 防連點與失敗 toast 留在 `MessageThread`。判準②③④照舊一條不鬆。
+
+## 增補(2026-09-28,架構深化 R15)
+
+### 1. §1:mobile import 方向規則退役
+
+`docs/adr/0025` F-4。`mobile/stores.ts` 收斂為只留 `overlay`/`MobilePushId`/`MobileSheetId`/
+`cart`/`checkout`/`toasts` 六個名字,`mobile/auth.ts` 整檔刪除,`mobile/api.ts` 的 5 支純轉手
+(`getSchedule`/`getPoints`/`getReports`/`getEnrolmentAttendance`/`getAccount`)與
+`MobileAccountData` 一併退役;mobile 消費端改直接 `import from '$lib/member/<concern>'`,不再繞經
+barrel。§1「import 方向規則」本身管的是「mobile production 只能從自家 seam 或直接從
+`$lib/member/*` 取用,不得抄近路進別的 surface」——這條規則因此**不再需要**:消費端直取
+`$lib/member/*` 已是規則允許的路徑,不是繞道。`foundation-contracts.test.ts` 管這條規則的 it、
+canary 與檔數釘一併刪除;`import-scan.ts` 與 dogfood 契約保留(掃描面不因此縮小)。
+
+### 2. §3:mobile-admin 那側的理由消失,桌面的理由仍在
+
+`docs/adr/0025` 轉手退役(Task 3b)。`mobile-admin/api.ts` 的 ~40 個純轉手退役後,
+`routes/mobile-admin/coach/+page.svelte`、`coach/attendance/+page.svelte`、
+`coach/csettings/+page.svelte` 三頁改成直接 `import { coachLoadErrorCopy, GENERIC_LOAD_ERROR }
+from '$lib/coach/load-error-copy'`,不再經 `mobile-admin/api.ts` 的活 re-export 取用——當初
+「name-based 判別」的兩個理由裡,「mobile-admin 兩頁經 `mobile-admin/api.ts` 活 re-export 取用」
+這條連帶消失(現在是直接 import,無 re-export 這一層)。桌面那側的理由(「desktop 頁面測試把
+`$lib/coach/api` 整支換假模組,`class` 在假模組裡是 `undefined`,`instanceof` 過不了」)不變,
+`coachLoadErrorCopy()` 本身仍是 name-based 判別,判準句與收斂範圍(只涵蓋載入文案)一字未改。

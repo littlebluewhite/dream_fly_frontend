@@ -367,3 +367,11 @@ R14 增補 §1「測試守衛的改寫」記的兩支行為釘(`markMutated()` �
 `hydrate.pendingSettle()` 有尾流回 promise、靜止回 `undefined`)已自 describe「pageEntry(plain gate)」
 刪除(`73f0f34`):斷言完整併入同檔 `docs/adr/0020`/`0021` 的讀取器探針(同樣經 `pageEntry().hydrate`
 讀)。spread 整合釘仍住該 describe。見 `docs/adr/0024`「ADR 點名的測試」表。
+
+## 增補(2026-09-28,架構深化 R15)
+
+C4 的判準套用到 mobile-admin:`docs/adr/0025` 轉手退役(Task 3b)。`mobile-admin/api.ts` 從約
+40 個純轉手刪到只剩 `getMore`/`getCoachHome`/`getAdminHome`/`getOpsCollections`/`getMessages`
+5 個組合器,17 個 production importer 改直接找擁有者模組,撞名時在 import 處取別名——與 C4 當年
+對 `data.ts` facade 的判準句(「零映射的純轉手退役,importer 改直取擁有者模組」)完全同一套規則,
+本輪只是把適用範圍從 `data.ts` 擴到 `api.ts` 的組合器層。

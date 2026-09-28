@@ -347,3 +347,17 @@ controller 是活得比 `CartSheet` 久的單例,輸入留在 mount 級元件,�
 
 **4. 名稱。** 決定二表格裡的 `hydrateSessionStores` 自 R14 起是 `$lib/store-warm` 的 `warmStores`
 (`docs/adr/0012` 增補)。
+
+## 增補(2026-09-28,架構深化 R15)
+
+**決定一再被取代**:`docs/adr/0025` F-1。新增 port `LoadSource`(`guarded()`/`load(isCurrent)`/
+`refresh(isCurrent)`),load-gate 收斂為只管 phase、run 世代、卸載與 `onError`,不再持有旗標與
+apply 函式;`pageEntry()` 交出 `{ source }` 而非 `{ fetch, refresh, hydrate: {...} }`。
+`HydrationCore`、`createHydrationCore`、`FetchGenStableOptions` 全數退役(`fetchGenStable` 收成
+模組私有單一簽章)。當年否決「load-gate 整體委派」的理由(F1 重入語意要求 apply 後、翻旗前重查
+generation,而 `hydrate()` 無條件翻旗)因 `isCurrent` 由呼叫方交入而不再成立。
+
+**第 1 層測試改寫**:`load-gate.test.ts` 原本針對 `hydrate` 選項的專屬 describe,改為
+「source 選項(pageEntry 整合)」,直接用真 `createHydrationGate(...).pageEntry()` 與假
+`LoadSource` 契約釘驗證,不再對著裸的 `{fetch, refresh, hydrate}` 形狀斷言。詳見 `docs/adr/0025`
+候選 F-1。

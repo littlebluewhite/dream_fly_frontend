@@ -274,3 +274,13 @@ R13 增補的另一條觀察(mobile-admin 訊息頁以 `{ fetch: hydrateMessages
 load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry })`,`refreshMessages` 退役。
 「刻意不把 session 維度深化進 `hydration-gate.ts`」的邊界原樣有效:`ownerChanged()` 是「資料擁有者換人」
 這個閘門自己的概念,誰換人、何時換人仍只有本檔知道。
+
+## 增補(2026-09-28,架構深化 R15)
+
+`ownerChanged()`/`createOwnedHydrationGate` 整段退役,由 `HydrationGate` 自帶的通用
+`reset()`(`docs/adr/0025`「閘門重置」)取代:`session-gate.ts` 改用
+`createHydrationGate({ fetch, apply, reset })`,自己的 `reset()` 變成
+`gate.reset() + reconcileChain/writeChain 重置`。「刻意不把 session 維度深化進
+`hydration-gate.ts`」的邊界依然有效——`reset()` 本身是每個水合閘門都有的通用能力(還原內容、翻旗、
+丟在飛 GET、換尾流帳、喚醒等待者),「誰換人、何時換人」這個 session 專屬的判斷仍只住
+`session-gate.ts`,只是不再需要自己重造一份「還原+翻旗+丟尾流」的樣板。

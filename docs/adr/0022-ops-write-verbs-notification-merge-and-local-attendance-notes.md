@@ -332,3 +332,24 @@ seam,seam 的可見性收益只落在 production import 面。
 
 seam 的轉出本身不退役。審查候選 07 當年要消除的「每收斂一對雙生就得 re-export + 身分釘 + 白名單三檔
 同改」,自此只剩 re-export 一檔。
+
+## 增補(2026-09-28,架構深化 R15)
+
+### D2(:184-197)重開一半:`mobile/stores.ts` 的轉出退役,seam 本身不退役
+
+`docs/adr/0025` F-4。R14 D2 裁決「本輪不改 `docs/adr/0014`」原樣有效——`mobile/stores.ts` 這個
+seam **本身**沒有退役,mobile 消費端要借 member 的 store/動作/效應仍然可以經它借。本輪動的是
+D2 記錄的另一件事:`mobile/stores.ts` 目前轉出的 27 個 `$lib/member/stores` 符號 + 3 個
+`member/checkout` 符號裡,凡是**本輪之後零消費者**的死轉出(消費端全部改直取
+`$lib/member/*`)予以刪除,連帶的 19 條(後增至 21 條,R14 增補)`toBe` 身分釘與白名單條目一併
+清空。這不是 0019 C4 判準句延伸到 store 轉手的裁決——0014 §1 vs 0019 C4「型別事實軸 vs
+效應/動作軸該由誰優先」這個具體問題本輪仍未回答,清的是「零消費者的 export」,不是「凡純轉手皆
+退役」。0014 §1 因此在此張力解決前依然有效,只是 R15 把消費端幾乎全部搬離了它。
+
+### 候選 04:`leaveAction` 改私有,由 `leaveRow()` 取代
+
+`docs/adr/0025` 候選「請假列 VM」。本篇候選 04 定的 `leaveAction(lr)` 從 `domain/leave-requests.ts`
+的公開匯出改為模組私有實作細節,呼叫端不再直接 `import { leaveAction }`。對外新增單一公開 API
+`leaveRow(source): LeaveRow`(內含 `tone`/`label`/`when`/`makeupWhen`/`action`),兩處呼叫端的
+`{@const action = leaveAction(lr)}` 改為 `{@const row = leaveRow(lr)}`。補課的開啟方式(Dialog vs
+sheet)與 toast 文案仍留呼叫端,本篇候選 04 的這句話不變。
