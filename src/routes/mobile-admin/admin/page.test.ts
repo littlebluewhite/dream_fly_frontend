@@ -3,7 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
 import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
-import { MEMBERS } from '$lib/mobile-admin/data';
+import type { MemberRow } from '$lib/mobile-admin/data';
 import type { CreateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -67,9 +67,17 @@ const homeRoutes = (sessions: ApiTodaySession[], items: typeof ACTIVITY_ITEMS) =
 	'GET /reports/admin/activity': { items }
 });
 
+/** 本頁自帶的 members fixture(R15 候選 F-3:mobile-admin/data.ts 的 MEMBERS 同步種子
+ *  已退役)——形狀是 MemberRow,只供 opsWith() 組 GET /users?page=1 wire 回應與
+ *  「快速新增學員」測試的 base 物件用，內容與桌面/domain seed 無關。 */
+const MEMBERS_FIXTURE: MemberRow[] = [
+	{ id: 'm1', name: '王小明', initial: '王', phone: '0911111111', joined: '2024/01', status: 'active', points: 1250 },
+	{ id: 'm2', name: '陳小華', initial: '陳', phone: '0922222222', joined: '2024/02', status: 'inactive', points: 0 }
+];
+
 /** getOpsCollections 回傳(新增學員走 store 的 addMember,寫入成功後會重抓 ops 集合)。
  *  只需要 GET /users?page=1 隨 memberRows 變化，其餘三路沿用 OPS_ROUTES 預設值。 */
-const opsWith = (memberRows: typeof MEMBERS) => ({
+const opsWith = (memberRows: MemberRow[]) => ({
 	...OPS_ROUTES,
 	'GET /users?page=1': { users: memberRows.map((m) => ({ id: m.id, name: m.name, phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: m.points })), total: memberRows.length, page: 1, per_page: 20 }
 });
@@ -77,9 +85,8 @@ const opsWith = (memberRows: typeof MEMBERS) => ({
 beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(
-		fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) })
+		fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) })
 	);
-	members.set(MEMBERS);
 	resetOpsForTests();
 	overlay.closeAll();
 });
@@ -110,10 +117,10 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect(txt).not.toContain('2026 年 6 月 10 日');
 	});
 
-	it('opsHydrated 未落地時，待付款橫幅不出現，即使 $orders 仍是同步 seed(有 pending 訂單)', async () => {
-		// 四路 ops 端點故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中——orders
-		// store 的同步 seed 本身就有 pending 訂單，舊碼不呼叫 hydrateOps()、直接讀
-		// $orders，會在真正水合前就顯示一個假的「N 筆訂單待付款」橫幅。
+	/* R15(候選 F-3，誠實開機):$orders 開機即為 `[]`，不再需要 $opsHydrated 守衛——
+	 * 水合前 pending 天然是 0，水合落地後才反映 fixture 裡的 pending 數。 */
+	it('水合前待付款為 0(橫幅不出現)，水合後等於 fixture 裡的 pending 數', async () => {
+		// 四路 ops 端點故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中。
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
@@ -128,7 +135,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect(queryByText('筆訂單', { exact: false })).toBeNull();
 	});
 
-	it('opsHydrated 落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
+	it('水合落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
 		const { findByText } = render(AdminHomePage);
 		await findByText('測試動態一');
 		expect(await findByText('筆訂單', { exact: false })).toBeInTheDocument(); // onMount 的 hydrateOps() 落地後才出現
@@ -151,13 +158,13 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	 * 直接驗證：橫幅只認 state(由極端 start_time/end_time 推導)，不是任何呼叫端可
 	 * 另外指定的欄位——回歸精神不變，構造方式改走 wire。 */
 	it('state 推導為 live 的課堂 → 進行中課堂橫幅出現', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 	});
 
 	it('state 推導為 wait 的課堂 → 進行中課堂橫幅不出現', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試備課班');
 		expect(queryByText('● 進行中課堂')).toBeNull();
@@ -171,14 +178,14 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 
 	it('載入失敗顯示 ErrorState', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS), 'GET /reports/admin': new Error('boom') })
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE), 'GET /reports/admin': new Error('boom') })
 		);
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('today/activity 空集合不當機,且沒有進行中課堂橫幅', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([], []), ...opsWith(MEMBERS) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([], []), ...opsWith(MEMBERS_FIXTURE) }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('營運總覽');
 		expect(queryByText('進行中課堂')).toBeNull();
@@ -187,7 +194,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	/* Task 20 — 快速操作「新增學員」改開真表單並接 createMember，不再是本地假寫入。 */
 	it('快速操作「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onSave', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS), 'POST /users': wireMember({}) })
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE), 'POST /users': wireMember({}) })
 		);
 		const { findByText } = render(AdminHomePage);
 		await findByText('新增學員');
@@ -207,13 +214,13 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	 * 使用者轉到學員管理頁看不到剛建的學員(hydrateOps 已水合則被 guard 短路)。改走
 	 * store 的 addMember() 後,寫入成功即 await refreshOps()。 */
 	it('快速新增學員後重抓 ops 集合($members 含新學員),並顯示成功 toast', async () => {
-		const created = { ...MEMBERS[0], id: 'zz-quick', name: '快速新增的學員' };
+		const created = { ...MEMBERS_FIXTURE[0], id: 'zz-quick', name: '快速新增的學員' };
 		await hydrateOps(); // 已水合(fetch 替身回舊清單):舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
 		const usersCallsBefore = callCount('GET', '/users?page=1');
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
-				...opsWith([...MEMBERS, created]),
+				...opsWith([...MEMBERS_FIXTURE, created]),
 				'POST /users': wireMember({ name: '快速新增的學員' })
 			})
 		);

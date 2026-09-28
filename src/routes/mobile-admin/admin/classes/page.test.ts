@@ -2,12 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import ClassesPage from './+page.svelte';
-import { classes, members, coaches, orders, overlay, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
-import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
+import { overlay, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import type { ValidCourse } from '$lib/admin/components/course-request';
 import { mapCourse } from '$lib/admin/api';
 import type { ApiCourse, ApiCoach } from '$lib/public/api';
-import { COACHES } from '$lib/domain/coaches';
+import { COACHES } from '$lib/testing/seed-fixtures';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
@@ -43,19 +42,11 @@ beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([WIRE_CLASS])));
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 	overlay.closeAll();
 });
 
 afterEach(() => {
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 });
 
 describe('mobile-admin/admin/classes 頁', () => {

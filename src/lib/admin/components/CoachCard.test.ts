@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CoachCard from './CoachCard.svelte';
-import { COACHES, type Coach } from '$lib/domain/coaches';
+import { COACHES } from '$lib/testing/seed-fixtures';
+import type { Coach } from '$lib/domain/coaches';
 
 /* CoachCard — the coach card from admin.jsx CoachesView. Renders name + title +
  * 專長 tags + a 公開顯示 status indicator (Task F5：取代原本的年資/學員/班級/獲獎

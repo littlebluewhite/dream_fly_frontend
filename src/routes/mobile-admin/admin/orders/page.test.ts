@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import OrdersPage from './+page.svelte';
-import { classes, members, coaches, orders, resetOpsForTests } from '$lib/mobile-admin/stores';
+import { resetOpsForTests } from '$lib/mobile-admin/stores';
 import { fmtNT } from '$lib/format';
-import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
 import type { OrderRow } from '$lib/mobile-admin/data';
-import { COACHES } from '$lib/domain/coaches';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
@@ -86,18 +84,10 @@ beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_ORDERS)));
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 });
 
 afterEach(() => {
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 });
 
 describe('mobile-admin/admin/orders 頁', () => {

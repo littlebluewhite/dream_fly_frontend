@@ -1,13 +1,17 @@
-/* 種子測試夾具（R14 候選 F3）— 誠實開機後退役的三組 store 種子，值逐字搬自原處：
+/* 種子測試夾具（R14 候選 F3、R15 候選 F-3）— 誠實開機後退役的 store 種子，值逐字搬自原處：
  *   - NOTIFS_SEED     ← $lib/domain/member-app(經 member/data.ts facade 收窄為嚴格 Tone)
  *   - POINTS_LEDGER   ← $lib/domain/member-app
  *   - MESSAGES        ← $lib/mobile-admin/data
- * production 的 notifications / pointsLedger / messages 開機值與 reset 值都是 `[]`(ADR 0010
- * 死種子退役慣例:沒有 production 讀者的值不留在 src/lib 本體)。這裡只供測試用
- * `store.set(fixture)` 灌一份「有未讀、有明細」的狀態。 */
+ *   - COACHES         ← $lib/domain/coaches(R15 候選 F-3：mobile-admin 的 coaches store
+ *                       誠實開機為 `[]`，COACHES 不再有 production 讀者)
+ * production 的 notifications / pointsLedger / messages / mobile-admin coaches 開機值與
+ * reset 值都是 `[]`(ADR 0010 死種子退役慣例:沒有 production 讀者的值不留在 src/lib 本體)。
+ * 這裡只供測試用 `store.set(fixture)` 灌一份「有未讀、有明細」的狀態，或供測試檔直接
+ * 引用當固定 fixture。 */
 import type { Notification } from '$lib/member/data';
 import type { LedgerEntry } from '$lib/domain/member-app';
 import type { MessageRow } from '$lib/mobile-admin/data';
+import type { Coach } from '$lib/domain/coaches';
 
 /* 通知:n1–n3 未讀、n4–n6 已讀。 */
 export const NOTIFS_SEED: Notification[] = [
@@ -43,4 +47,17 @@ export const MESSAGES: MessageRow[] = [
 	{ id: 'm10', from: '周曉彤 教練', initial: '周', color: '#EC4899', preview: '青少班這週需要多一位協助老師，可以幫忙安排嗎？', time: '今天 08:40', unread: false },
 	{ id: 'm11', from: '武先生（品妍家長）', initial: '武', color: '#10B981', preview: '品妍的體驗券快到期了，想直接報名律動班。', time: '昨天 17:20', unread: false },
 	{ id: 'm12', from: '系統通知', initial: '系', color: '#0F172A', preview: '06/20（六）夏季成果發表會開始售票，請協助於官網公告。', time: '2 天前', unread: false }
+];
+
+/* 教練名單，逐字搬自 $lib/domain/coaches 原 COACHES(R15 候選 F-3)。 */
+export const COACHES: Coach[] = [
+	{ id: 'c1', userId: 'u1', name: '林雅婷', initial: '林', title: '資深競技體操教練 · 國家級認證', color: '#0066CC', tags: ['競技啦啦隊', '競技體操'], isActive: true },
+	{ id: 'c2', userId: 'u2', name: '陳冠宇', initial: '陳', title: '兒童體操主教練 · 體操C級教練', color: '#0EA5E9', tags: ['兒童基礎', '幼兒體操'], isActive: true },
+	{ id: 'c3', userId: 'u3', name: '黃詩涵', initial: '黃', title: '幼兒啟蒙教練 · 幼兒體適能認證', color: '#10B981', tags: ['幼兒體操', '親子課'], isActive: true },
+	{ id: 'c4', userId: 'u4', name: '王思齊', initial: '王', title: '跑酷與成人體操教練', color: '#F59E0B', tags: ['跑酷', '成人體操'], isActive: false },
+	{ id: 'c5', userId: 'u5', name: '張育誠', initial: '張', title: '競技啦啦隊助理教練', color: '#8B5CF6', tags: ['競技啦啦隊'], isActive: false },
+	{ id: 'c6', userId: 'u6', name: '周曉彤', initial: '周', title: '競技啦啦隊編排教練 · 啦啦隊 B 級', color: '#EC4899', tags: ['競技啦啦隊'], isActive: true },
+	{ id: 'c7', userId: 'u7', name: '蘇建宏', initial: '蘇', title: '體能與跑酷專項教練 · 體適能C級', color: '#14B8A6', tags: ['跑酷', '成人體操'], isActive: true },
+	{ id: 'c8', userId: 'u8', name: '李孟潔', initial: '李', title: '幼兒啟蒙教練 · 幼兒體適能認證', color: '#0EA5E9', tags: ['幼兒體操', '親子課'], isActive: true },
+	{ id: 'c9', userId: 'u9', name: '鄭凱文', initial: '鄭', title: '成人體操與體能教練 · 重訓專項', color: '#F59E0B', tags: ['成人體操', '跑酷'], isActive: true }
 ];

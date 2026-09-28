@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import CoachEditDialog from './CoachEditDialog.svelte';
-import { COACHES, type Coach } from '$lib/domain/coaches';
+import { COACHES } from '$lib/testing/seed-fixtures';
+import type { Coach } from '$lib/domain/coaches';
 import { COACH_TITLE_ERROR, COACH_PASSWORD_ERROR } from './coach-save';
 
 /* CoachEditDialog — 編輯/新增共用一個對話框(Task F5 欄位收斂)。編輯模式收

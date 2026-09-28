@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import { render, fireEvent } from '@testing-library/svelte';
 import ClassEditDialog from './ClassEditDialog.svelte';
 import type { ClassRow } from '$lib/admin/data';
-import { COACHES } from '$lib/domain/coaches';
+import { COACHES } from '$lib/testing/seed-fixtures';
 import { toasts } from '$lib/admin/stores';
 import { COURSE_AGE_FORMAT_ERROR } from './course-request';
 

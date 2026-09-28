@@ -40,15 +40,15 @@ export type Tone = [string, string];
 // vitest/check 都護不住的死出口（codex R1）。
 export { LEVEL_TINT, type Student } from '$lib/coach/data';
 
-// Base arrays consumed by the `.map` derivations that STAY in mobile (import, not re-export).
-import { CLASSES_BASE, STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';
-import { MEMBERS_BASE, MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
-import { ORDERS_BASE } from '$lib/domain/orders';
-import { CAMPUSES } from '$lib/domain/shared';
+// R15(候選 F-3，誠實開機)：CLASSES/MEMBERS/ORDERS 三個 .map 衍生 builder 已退役——
+// members/classes/orders store 改為誠實開機(`[]`)，值改由真 GET /courses、/users、
+// /orders 水合(見 mobile-admin/stores.ts opsGate)。下方 Tone 查表(STATUS_TONE 等)
+// 與已退役的班級/學員/訂單種子陣列無關，不受影響。
+import { STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';
+import { MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
 import { TICKET_TYPE as TICKET_TYPE_BASE } from '$lib/domain/tickets';
 import type { OrderStatus } from '$lib/api/wire';
-import { taxFromGross } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE, type Level } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 import type { TodayState } from '$lib/admin/data';
@@ -68,9 +68,11 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 };
 
 /* ---- Classes / 班級 ---- */
-// level/status 窄化為 CLASSES_BASE(`$lib/domain/classes`)本身的字面聯集型別（同
-// 桌面 admin/data.ts 的 ClassRow）——course-request.ts 的 courseDraftOf()/blankClassRow()
-// 要求這兩個窄型別，鬆散的 string 無法安全傳入。
+// level/status 窄化為字面聯集型別（同桌面 admin/data.ts 的 ClassRow）——
+// course-request.ts 的 courseDraftOf()/blankClassRow() 要求這兩個窄型別，鬆散的
+// string 無法安全傳入。CLASSES(同步種子)已隨 R15(候選 F-3)誠實開機退役，值搬進
+// 測試專用的 $lib/testing/ops-routes fixture；本檔只留 ClassRow 形狀本體(getOpsCollections()
+// 的映射型別)。
 export interface ClassRow {
 	id: string;
 	name: string;
@@ -96,13 +98,6 @@ export interface ClassRow {
 	 *  （見 ClassForm.svelte），Task 20 起隨真接線一併加入。 */
 	durationMinutes: number;
 }
-export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
-	...k,
-	startDate: '2026/03/' + String((i % 27) + 1).padStart(2, '0'),
-	checkinRate: 86 + (i % 12),
-	makeup: i % 3,
-	durationMinutes: 90
-}));
 
 /* ---- Members / 學員 ----
  * Task 20：改為 GET /users 的帳號形狀（id/name/initial/phone/joined/status/
@@ -115,7 +110,9 @@ export const CLASSES: ClassRow[] = CLASSES_BASE.map((k, i) => ({
  * renewDue/lineId 這些欄位在真後端從未存在過，繼續留著只會讓假資料看起來更豐富，
  * 不會讓它變真。status 由 3 態（active/warning/paused，出席率導向）改為 GET
  * /users 的 is_active 二元旗標語意（active/inactive）。MemberAccountStatus 批次
- * 1 W2a 起改由 $lib/domain/members 轉出（見檔頭 import type），本檔不再本地宣告。 */
+ * 1 W2a 起改由 $lib/domain/members 轉出（見檔頭 import type），本檔不再本地宣告。
+ * MEMBERS(同步種子)已隨 R15(候選 F-3)誠實開機退役，值搬進測試專用的
+ * $lib/testing/ops-routes fixture；本檔只留 MemberRow 形狀本體。 */
 export interface MemberRow {
 	id: string;
 	name: string;
@@ -125,20 +122,12 @@ export interface MemberRow {
 	status: MemberAccountStatus;
 	points: number;
 }
-export const MEMBERS: MemberRow[] = MEMBERS_BASE.map((m) => ({
-	id: m.id,
-	name: m.name,
-	initial: m.initial,
-	phone: m.phone,
-	joined: m.joined,
-	status: m.status === 'paused' ? 'inactive' : 'active',
-	points: m.points
-}));
 
 /* ---- Orders / 訂單 ---- */
 // OrderStatus 單源本就是 $lib/api/wire 的既有型別(鏡射 admin/data.ts 先例，同 ADR
-// 0007)，不再本地重宣告 6 態 union；import type 見檔頭 base-array 區塊。C4 批3
-// 複核零外部消費者，對外 export 退役，僅留本檔 OrderRow.status 內部使用。
+// 0007)，不再本地重宣告 6 態 union；C4 批3 複核零外部消費者，對外 export 退役，
+// 僅留本檔 OrderRow.status 內部使用。ORDERS(同步種子)已隨 R15(候選 F-3)誠實開機
+// 退役，值搬進測試專用的 $lib/testing/ops-routes fixture；本檔只留 OrderRow 形狀本體。
 export interface OrderRow {
 	id: string;
 	member: string;
@@ -163,18 +152,6 @@ export interface OrderRow {
 	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。
 	orderId: string;
 }
-export const ORDERS: OrderRow[] = ORDERS_BASE.map((o, i) => {
-	const { tax, net } = taxFromGross(o.amount);
-	return {
-		...o,
-		campus: CAMPUSES[i % CAMPUSES.length],
-		tax,
-		net,
-		paidAt: o.status === 'paid' ? o.date : o.status === 'pending' ? '—（待付款）' : o.date,
-		taxId: i % 5 === 0 ? '539012' + String(40 + i).slice(0, 2) : '—',
-		orderId: o.id
-	};
-});
 
 /* ---- Today schedule (admin = all studio) ---- */
 export interface TodayRow {

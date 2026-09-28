@@ -36,9 +36,8 @@ import {
 	addCoach,
 	saveCoach
 } from './stores';
-import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS } from './data';
-import { MESSAGES } from '$lib/testing/seed-fixtures';
-import { COACHES } from '$lib/domain/coaches';
+import { ADMIN_NOTIFS, type MemberRow, type ClassRow, type OrderRow } from './data';
+import { MESSAGES, COACHES } from '$lib/testing/seed-fixtures';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import { getOpsCollections, getMessages, type OpsCollections } from './api';
 // R15 Task 3b(候選 轉手退役)：createMember/updateMember/createCourse/updateCourse/
@@ -82,6 +81,33 @@ vi.mock('$lib/admin/api', async (importOriginal) => {
 		updateCoach: vi.fn()
 	};
 });
+
+// R15(候選 F-3，誠實開機)：mobile-admin/data.ts 的 MEMBERS/CLASSES/ORDERS 同步種子已
+// 退役(members/classes/orders/coaches 四個 store 誠實開機為 `[]`)——本檔改自帶最小
+// fixture 當「hydrateOps() 抓回來的資料」用,內容與桌面/domain seed 無關。
+const MEMBERS: MemberRow[] = [
+	{ id: 'gm1', name: '王小明', initial: '王', phone: '0911111111', joined: '2024/01', status: 'active', points: 100 },
+	{ id: 'gm2', name: '陳小華', initial: '陳', phone: '0922222222', joined: '2024/02', status: 'inactive', points: 50 }
+];
+const CLASSES: ClassRow[] = [
+	{
+		id: 'gk1', name: '測試班級甲', level: '基礎', cat: '兒童基礎', coach: '林雅婷', room: 'A 訓練館', day: '週二',
+		time: '19:00–20:30', enrolled: 8, cap: 10, age: '7–9 歲', price: 3200, status: '招生中', wait: 0,
+		term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 90, makeup: 0, durationMinutes: 90
+	}
+];
+const ORDERS: OrderRow[] = [
+	{
+		id: 'DF-1', member: '王小明', initial: '王', color: '#0066CC', item: '測試班級甲', amount: 4800,
+		status: 'pending', method: '信用卡', date: '2026/06/08', invoice: 'INV-1', discount: '—', handler: '陳怡君',
+		campus: '美村本館', tax: 229, net: 4571, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-1'
+	},
+	{
+		id: 'DF-2', member: '陳小華', initial: '陳', color: '#EC4899', item: '測試班級甲', amount: 3200,
+		status: 'paid', method: 'LINE Pay', date: '2026/06/07', invoice: 'INV-2', discount: '—', handler: '陳怡君',
+		campus: '文心分館', tax: 152, net: 3048, paidAt: '2026/06/07', taxId: '—', orderId: 'uuid-2'
+	}
+];
 
 /** getOpsCollections 的預設回傳(含分頁 meta)。function 宣告會被 hoist,vi.mock 工廠可用。 */
 function opsFixture(over: Partial<OpsCollections> = {}): OpsCollections {
@@ -170,8 +196,11 @@ describe('markOrderPaid', () => {
 	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store,
 	// paidAt 用訂單日期(同 mapAdminOrder 讀取規則),不再是「剛剛」。
 	it('PATCH 成功 → 該筆翻為 paid、paidAt 為訂單日期,且不重抓(無 refreshOps)', async () => {
+		// 誠實開機(R15 候選 F-3):$orders 開機為 `[]`,自己灌一份含 pending 訂單的
+		// fixture 當前置狀態(不再靠同步 seed)。
+		orders.set(ORDERS);
 		const pending = get(orders).find((o) => o.status === 'pending');
-		expect(pending, 'seed should contain a pending order').toBeTruthy();
+		expect(pending, 'fixture should contain a pending order').toBeTruthy();
 		const pendingBefore = get(orders).filter((o) => o.status === 'pending').length;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending!.orderId, order_number: pending!.id, status: 'paid' });
 		vi.mocked(getOpsCollections).mockClear();
@@ -185,7 +214,6 @@ describe('markOrderPaid', () => {
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
 		expect(get(opsHydrated)).toBe(true); // opsGate.markMutated()
 		expect(getOpsCollections).not.toHaveBeenCalled();
-		orders.set(ORDERS); // restore the shared singleton for other tests
 		resetOpsForTests();
 	});
 
@@ -196,22 +224,25 @@ describe('markOrderPaid', () => {
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new ApiError(400, 'cannot transition order'));
 		resetOpsForTests();
+		orders.set(ORDERS);
 
 		const outcome = await markOrderPaid(pending);
 
 		expect(outcome).toEqual({ kind: 'illegalTransition' });
 		expect(get(orders)).toEqual(ORDERS);
 		expect(get(opsHydrated)).toBe(false);
+		resetOpsForTests();
 	});
 
 	it('store 以 server 回的 status 為準(不硬寫 paid)', async () => {
+		resetOpsForTests();
+		orders.set(ORDERS);
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'processing' });
 
 		await markOrderPaid(pending);
 
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('processing');
-		orders.set(ORDERS);
 		resetOpsForTests();
 	});
 });
@@ -242,45 +273,67 @@ describe('markMessageRead + coachMsgUnread', () => {
 });
 
 describe('hydrateOps / refreshOps / opsHydrated', () => {
-	it('members/classes/coaches/orders keep the synchronous seed at module load (no empty-array flash)', () => {
-		// 對齊 mobile notifs 前例:空起始會造成跨頁讀值的行為回歸,集合 store 一律
-		// 同步 seed,水合只是之後再覆寫一次(clone)。
-		expect(get(members)).toEqual(MEMBERS);
-		expect(get(classes)).toEqual(CLASSES);
-		expect(get(coaches)).toEqual(COACHES);
-		expect(get(orders)).toEqual(ORDERS);
-		expect(get(opsHydrated)).toBe(false);
+	// R15(候選 F-3，誠實開機)：取代原「fresh import 後 members/classes/coaches/orders keep
+	// the synchronous seed at module load」釘——四個集合開機值改為 `[]`,opsPages 全為
+	// 0/0,不再有「同步 seed、水合只是覆寫一次」的假資料。fresh import(同 hydrateMessages
+	// 區塊既有寫法)避開本檔其他 it 已對共享 singleton 動過手腳的殘留狀態。
+	it('fresh import 後 members/classes/coaches/orders 皆為 []、opsPages 全為 0、旗標為 false(誠實開機)', async () => {
+		vi.resetModules();
+		const fresh = await import('./stores');
+		expect(get(fresh.members)).toEqual([]);
+		expect(get(fresh.classes)).toEqual([]);
+		expect(get(fresh.coaches)).toEqual([]);
+		expect(get(fresh.orders)).toEqual([]);
+		expect(get(fresh.opsPages)).toEqual({
+			members: { total: 0, perPage: 0 },
+			classes: { total: 0, perPage: 0 },
+			orders: { total: 0, perPage: 0 }
+		});
+		expect(get(fresh.opsHydrated)).toBe(false);
+	});
+
+	it('resetOpsForTests() 之後四個 store 回到 [](內容 = reset 值 = 開機值)', async () => {
+		resetOpsForTests();
+		await hydrateOps(); // 先真的水合過,確認不是「巧合仍是空陣列」
+		expect(get(members).length).toBeGreaterThan(0);
+		expect(get(classes).length).toBeGreaterThan(0);
+		expect(get(coaches).length).toBeGreaterThan(0);
+		expect(get(orders).length).toBeGreaterThan(0);
+
+		resetOpsForTests();
+
+		expect(get(members)).toEqual([]);
+		expect(get(classes)).toEqual([]);
+		expect(get(coaches)).toEqual([]);
+		expect(get(orders)).toEqual([]);
 	});
 
 	it('hydrateOps() 在 guard 為 false 時實際觸發水合(覆寫先前的假資料)', async () => {
+		resetOpsForTests();
 		members.set([{ ...MEMBERS[0], name: '水合前的假資料' }]);
 		await hydrateOps();
 		expect(get(members)).toEqual(MEMBERS);
 		expect(get(opsHydrated)).toBe(true);
-		// restore for other tests
-		members.set(MEMBERS);
 		resetOpsForTests();
 	});
 
 	it('hydrateOps() 在 guard 為 true 時短路,不會再次覆寫(保護 overlay mutation)', async () => {
+		resetOpsForTests();
 		await hydrateOps();
 		expect(get(opsHydrated)).toBe(true);
 		classes.set([{ ...CLASSES[0], name: '使用者剛新增的班級' }]);
 		await hydrateOps();
 		expect(get(classes)).toEqual([{ ...CLASSES[0], name: '使用者剛新增的班級' }]);
-		// restore for other tests
-		classes.set(CLASSES);
 		resetOpsForTests();
 	});
 
 	it('refreshOps() 一律重新 fetch,不受 guard 短路(供重試使用)', async () => {
+		resetOpsForTests();
 		await hydrateOps();
 		expect(get(opsHydrated)).toBe(true);
 		orders.set([{ ...ORDERS[0], member: '水合前的假資料' }]);
 		await refreshOps();
 		expect(get(orders)).toEqual(ORDERS);
-		// restore for other tests
-		orders.set(ORDERS);
 		resetOpsForTests();
 	});
 
@@ -292,6 +345,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 	 * 所以 refresh 也不會因尾流帳而等待。 */
 	it('判準守恆:await markOrderPaid(order) → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
 		resetOpsForTests();
+		orders.set(ORDERS);
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
 		await markOrderPaid(pending); // refresh 進場「之前」的 mutation
@@ -305,8 +359,6 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 		expect(get(orders)).toEqual(ORDERS); // 顯式新鮮度:server 快照照常套用(該筆回到 pending)
 		expect(get(opsHydrated)).toBe(true);
 
-		// restore for other tests
-		orders.set(ORDERS);
 		resetOpsForTests();
 	});
 
@@ -326,15 +378,6 @@ describe('searchCapHint(僅抓第 1 頁時的搜尋範圍提示)', () => {
 	it('total <= perPage → 無提示', () => {
 		expect(searchCapHint({ total: 20, perPage: 20 })).toBeNull();
 		expect(searchCapHint({ total: 3, perPage: 20 })).toBeNull();
-	});
-});
-
-describe('ORDERS builder — 5% 內含稅顯示反推（taxFromGross 站點級 pin）', () => {
-	it('ORDERS[0]（amount 4800）→ tax 229 / net 4571', () => {
-		expect(ORDERS[0].amount).toBe(4800);
-		expect(ORDERS[0].tax).toBe(229);
-		expect(ORDERS[0].net).toBe(4571);
-		expect(ORDERS[0].net + ORDERS[0].tax).toBe(ORDERS[0].amount);
 	});
 });
 
@@ -423,6 +466,7 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 	// 真寫入成功後改呼叫 refreshOps() 整包重抓,不再是 markMutated 站點。)
 	it('markOrderPaid() 在 hydrateOps() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後不覆寫剛標記的付款狀態,opsHydrated 為 true', async () => {
 		resetOpsForTests();
+		orders.set(ORDERS); // 誠實開機(R15 候選 F-3):開機為 `[]`,先灌一份含 pending 訂單的 fixture 當前置狀態
 		const d = createDeferred<OpsCollections>();
 		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise);
 
@@ -440,8 +484,6 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid'); // mutation 保留,沒被水合覆寫
 		expect(get(opsHydrated)).toBe(true);
 
-		// restore for other tests
-		orders.set(ORDERS);
 		resetOpsForTests();
 	});
 
@@ -480,11 +522,9 @@ describe('ops 寫入動詞', () => {
 	const refreshedOps = () =>
 		opsFixture({ members: [REFRESHED_MEMBER], classes: [REFRESHED_CLASS], coaches: [REFRESHED_COACH] });
 
+	// R15(候選 F-3，誠實開機):resetOpsForTests() 現在會把內容還原成開機值(`[]`),
+	// 不必再靠這裡手動 .set() 四個集合(見 hydration-gate.ts opts.reset)。
 	function reset() {
-		members.set(MEMBERS);
-		classes.set(CLASSES);
-		coaches.set(COACHES);
-		orders.set(ORDERS);
 		resetOpsForTests();
 		vi.mocked(getOpsCollections).mockClear();
 	}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import ClassForm from './ClassForm.svelte';
-import { COACHES } from '$lib/domain/coaches';
+import { COACHES } from '$lib/testing/seed-fixtures';
 
 /* R13 Task 4(C2)：ClassForm 與桌面 ClassEditDialog 共用 course-request.ts 的
  * draft/check。驗證規則的逐欄測試住 course-request.test.ts，這裡只驗接線：

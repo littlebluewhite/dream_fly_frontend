@@ -377,4 +377,21 @@ describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 ge
 		expect(call).toBe(2);
 		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(SEED_COACHES.length);
 	});
+
+	/* R15(候選 F-3，誠實開機):header 副標以前直讀 $coachesStore.length,水合前會先
+	 * 閃出種子資料的假人數(見「全輪可見的行為變更」項 7);改判 $gate === 'ready' 才顯示
+	 * 人數,loading 時只顯示「專任教練」四字。 */
+	it('header 副標:loading 時只顯示「專任教練」;ready 後顯示「N 位專任教練」', async () => {
+		resetOpsForTests();
+		const d = createDeferred<ApiCoach[]>();
+		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_COACHES_BASE), 'GET /coaches': () => d.promise }));
+
+		const { findByText, getByText, queryByText } = render(CoachesScreen, { props: { onBack: () => {} } });
+
+		expect(getByText('專任教練')).toBeTruthy();
+		expect(queryByText(SEED_COACHES.length + ' 位專任教練')).toBeNull();
+
+		d.resolve(WIRE_COACHES_BASE);
+		await findByText(SEED_COACHES.length + ' 位專任教練');
+	});
 });

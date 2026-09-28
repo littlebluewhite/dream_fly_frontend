@@ -15,8 +15,17 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
+/* R15(候選 F-3，誠實開機):$orders 開機為 `[]`——本檔各 it 原本直讀 $orders 的同步
+ * seed 取一筆 pending 訂單，改為自帶 fixture、beforeEach 灌進 store。 */
+const PENDING_ORDER_FIXTURE: OrderRow = {
+	id: 'DF-TEST', member: '測試學員', initial: '測', color: '#0066CC', item: '測試班級', amount: 3200,
+	status: 'pending', method: '信用卡', date: '2026/06/08', invoice: 'INV-TEST', discount: '—', handler: '陳怡君',
+	campus: '美村本館', tax: 152, net: 3048, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-test'
+};
+
 beforeEach(() => {
 	vi.mocked(api).mockReset();
+	orders.set([PENDING_ORDER_FIXTURE]);
 });
 
 describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, admin/api.ts)', () => {

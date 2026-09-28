@@ -19,12 +19,13 @@ import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
 import type { Role } from './nav';
-// C4 批3(facade 純轉手退役):COACHES/type Coach 改直取 $lib/domain/coaches(原經
-// ./data 純轉手,零附加型別事實)——這裡是 coaches store 的同步種子值(見下方),
-// 非 test-only 消費。
-import { MEMBERS, CLASSES, ORDERS, ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
-import { COACHES, type Coach } from '$lib/domain/coaches';
-import { getOpsCollections, getMessages, type OpsPages, type PageInfo } from './api';
+// R15(候選 F-3，誠實開機)：MEMBERS/CLASSES/ORDERS/COACHES 同步種子已退役——
+// members/classes/orders/coaches 四個 store 誠實開機為 `[]`(見下方 EMPTY_OPS),值
+// 改由真 getOpsCollections() 水合。type Coach 仍直取 $lib/domain/coaches(型別本身
+// 留在原處，只有 COACHES 值搬到 $lib/testing/seed-fixtures 供測試用)。
+import { ADMIN_NOTIFS, COACH_NOTIFS, type MemberRow, type ClassRow, type OrderRow, type MessageRow, type AdminNotif } from './data';
+import type { Coach } from '$lib/domain/coaches';
+import { getOpsCollections, getMessages, type OpsCollections, type OpsPages, type PageInfo } from './api';
 // R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
 // createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
 // re-export 轉手,已退役——直接向擁有者模組 $lib/admin/api 取用。
@@ -69,34 +70,56 @@ export const adminUnread = unreadCount;
 export const adminNotifs = createReadState<AdminNotif>(ADMIN_NOTIFS);
 export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 
+/** 開機值 = reset 值(R15 候選 F-3，誠實開機):四個集合皆為 `[]`,分頁 meta 全為
+ *  0/0——沒水合過就不假裝有資料。結構上與 opsGate 的 reset 同源(見下方),兩者
+ *  都是 applyOps(EMPTY_OPS)。 */
+export const EMPTY_OPS: OpsCollections = {
+	members: [],
+	classes: [],
+	coaches: [],
+	orders: [],
+	pages: {
+		members: { total: 0, perPage: 0 },
+		classes: { total: 0, perPage: 0 },
+		orders: { total: 0, perPage: 0 }
+	}
+};
+
 /* ---------- Live collections (新增 / 編輯 表單寫回) ---------- */
-export const members = writable<MemberRow[]>(MEMBERS);
-export const classes = writable<ClassRow[]>(CLASSES);
+export const members = writable<MemberRow[]>(EMPTY_OPS.members);
+export const classes = writable<ClassRow[]>(EMPTY_OPS.classes);
 // 寫入不局部樂觀更新這些 store:寫入成功後一律 refreshOps() 整包重抓(見下方寫入動詞)。
-export const coaches = writable<Coach[]>(COACHES);
+export const coaches = writable<Coach[]>(EMPTY_OPS.coaches);
 
 /** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本頁已收
  *  revenue, 待付款 count) and the admin home 待付款 banner all derive from this
  *  store — keep it the single source of truth for order status. */
-export const orders = writable<OrderRow[]>(ORDERS);
+export const orders = writable<OrderRow[]>(EMPTY_OPS.orders);
 
 /** members/classes/orders 的分頁 meta(只抓第 1 頁,見 api.ts getOpsCollections)。頁面
- *  header 顯示 total,total > perPage 時搜尋區顯示 searchCapHint()。同步 seed 取 seed 陣列
- *  長度(perPage 同值 → 不出提示),水合後由 opsGate.apply 覆寫。 */
-const _opsPages = writable<OpsPages>({
-	members: { total: MEMBERS.length, perPage: MEMBERS.length },
-	classes: { total: CLASSES.length, perPage: CLASSES.length },
-	orders: { total: ORDERS.length, perPage: ORDERS.length }
-});
+ *  header 顯示 total,total > perPage 時搜尋區顯示 searchCapHint()。誠實開機(R15 候選
+ *  F-3):開機值全為 0/0(不出提示),水合後由 opsGate.apply 覆寫。 */
+const _opsPages = writable<OpsPages>(EMPTY_OPS.pages);
 export const opsPages = { subscribe: _opsPages.subscribe };
+
+/** apply/reset 共用的套用函式(R15 候選 F-3):把 OpsCollections 整包寫回四個 store +
+ *  分頁 meta,結構上保證開機值與 reset 值同源(皆呼叫 applyOps(EMPTY_OPS))。 */
+function applyOps(d: OpsCollections): void {
+	members.set(d.members);
+	classes.set(d.classes);
+	coaches.set(d.coaches);
+	orders.set(d.orders);
+	_opsPages.set(d.pages);
+}
 
 /** 行動版不能換頁,搜尋只涵蓋已抓回的第 1 頁——超過一頁時誠實提示(不照抄桌面「切換頁面」文案)。 */
 export function searchCapHint(p: PageInfo): string | null {
 	return p.total > p.perPage ? `僅搜尋前 ${p.perPage} 筆，完整清單請至桌面後台` : null;
 }
 
-/** 集合水合守衛(members/classes/coaches/orders 一次到位)。四個 store 都保留同步
- *  seed(對齊 mobile notifs 前例;空起始會造成跨頁讀值的行為回歸)。hydrateOps()
+/** 集合水合守衛(members/classes/coaches/orders 一次到位)。誠實開機(R15 候選
+ *  F-3):開機值 = reset 值 = EMPTY_OPS(四個 store 皆為 `[]`,分頁 meta 全為 0/0)——
+ *  沒水合過就不假裝有資料,不再走「同步 seed、水合只是覆寫一次」的舊慣例。hydrateOps()
  *  由 classes/members/orders 任一消費頁在 onMount 觸發;markOrderPaid 呼叫
  *  opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的本地寫入」被首次
  *  水合的 seed clone 無聲清除(C1 regression)。refreshOps() 保持一律真抓,供「重新
@@ -112,16 +135,11 @@ export function searchCapHint(p: PageInfo): string | null {
  *  提供 getOpsCollections。 */
 const opsGate = createHydrationGate({
 	fetch: () => getOpsCollections(),
-	apply: (d) => {
-		members.set(d.members);
-		classes.set(d.classes);
-		coaches.set(d.coaches);
-		orders.set(d.orders);
-		_opsPages.set(d.pages);
-	}
+	apply: applyOps,
+	reset: () => applyOps(EMPTY_OPS)
 });
 export const opsHydrated = opsGate.hydrated;
-/** 測試出口:閘門還原開機態(旗標 + 在飛 GET + 尾流帳;ops 未給 opts.reset,集合內容不動)。production 不得引用。 */
+/** 測試出口:閘門還原開機態(內容回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
 export const resetOpsForTests = opsGate.reset;
 export const hydrateOps = opsGate.hydrate;
 export const refreshOps = opsGate.refresh;

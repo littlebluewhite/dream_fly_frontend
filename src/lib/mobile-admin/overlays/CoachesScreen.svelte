@@ -116,7 +116,7 @@
 </script>
 
 <PushScreen>
-  <ScreenHeader {onBack} title="教練管理" sub={$coachesStore.length + ' 位專任教練'}>
+  <ScreenHeader {onBack} title="教練管理" sub={($gate === 'ready' ? $coachesStore.length + ' 位' : '') + '專任教練'}>
     <HeaderIcon slot="right" icon="user-plus" label="新增教練" onClick={newCoach} />
   </ScreenHeader>
   <LoadGate {gate}>

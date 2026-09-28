@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
-import { classes, members, coaches, orders, overlay, opsHydrated, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
-import { CLASSES, MEMBERS, ORDERS } from '$lib/mobile-admin/data';
+import { members, overlay, opsHydrated, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import type { MemberRow } from '$lib/mobile-admin/data';
-import { COACHES } from '$lib/domain/coaches';
 import { mapMemberAccount } from '$lib/admin/data';
 import type { ApiUserAccount } from '$lib/admin/data';
 import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
@@ -43,19 +41,11 @@ beforeEach(() => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_MEMBERS)));
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 	overlay.closeAll();
 });
 
 afterEach(() => {
 	resetOpsForTests();
-	members.set(MEMBERS);
-	classes.set(CLASSES);
-	coaches.set(COACHES);
-	orders.set(ORDERS);
 });
 
 describe('mobile-admin/admin/members 頁', () => {
@@ -124,7 +114,7 @@ describe('mobile-admin/admin/members 頁', () => {
 		resolveRetry({ users: WIRE_MEMBERS, total: WIRE_MEMBERS.length, page: 1, per_page: 20 });
 		await new Promise<void>((r) => setTimeout(r, 0));
 
-		expect(get(members)).toEqual(MEMBERS); // 已卸載頁面的重試回應不寫共享 store
+		expect(get(members)).toEqual([]); // 已卸載頁面的重試回應不寫共享 store(誠實開機:未曾成功水合過就仍是 `[]`)
 		expect(get(opsHydrated)).toBe(false);
 	});
 
