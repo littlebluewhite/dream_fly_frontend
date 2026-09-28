@@ -91,12 +91,17 @@ mutation 勝出、失敗、世代與尾流七支)全部改用真 `createHydratio
 - `HydrationGateOptions` 加 `reset?: () => void`(還原內容為開機值);`HydrationGate` 去泛型,公開面
   收斂為 `hydrated: Readable<boolean>`、`hydrate()`、`refresh()`、`invalidate()`、
   `markMutated(tail?)`、`pageEntry()`,以及新增的 **`reset()`**。`reset()` 依序:
-  1. `opts.reset?.()`
-  2. 旗標翻回 false
-  3. 丟掉在飛合併 GET(`inflight = null`)
-  4. 換尾流帳本(`resetEpoch += 1`,原 `tailEpoch`)
-  5. `pendingTails = 0`
+  1. 丟掉在飛合併 GET(`inflight = null`)
+  2. 換尾流帳本(`resetEpoch += 1`,原 `tailEpoch`)
+  3. `pendingTails = 0`
+  4. `opts.reset?.()`
+  5. 旗標翻回 false
   6. 喚醒全部尾流等待者
+
+  (終審修波補釘:帳本清算三步——`inflight`/`resetEpoch`/`pendingTails`——移到
+  `opts.reset?.()`/翻旗**之前**。後兩者才會同步通知訂閱者;訂閱者若在通知回呼裡同步重入
+  `hydrate()`,清帳若還沒做完就先開了這個窗口,重入會併到重置前那支還在飛的 GET。控制器裁決
+  改順序,行為契約不變——帳本清算原本就先於「喚醒等待者」,只是提早到 `opts.reset?.()`/翻旗之前。)
 - `loadRun`/`refreshRun` 進場記下 `resetEpoch`,落地比對;不符即不寫——重置之前出發的
   hydrate/refresh 落地一律不寫。`refreshRun` 把同一比對併進 `fetchGenStable` 的 `iterate`
   (`live = isCurrent() && epoch === resetEpoch`),被喚醒的舊 refresh 因此直接收束、不再多發一支
@@ -316,12 +321,13 @@ fetch 並行啟動」)與 `getAccount` 主測試裡的 `memberProfile`/`subscrip
   `checkout` 建 `createCheckout({ cart, refreshAfterOrder: [refreshPoints],
   refreshOnOpen: [refreshPoints] })`(mobile 購物車只產課程,恆空的 subscriptions 不必水合)。
   兩個原本各自手焊的 `placeOrder` 刪除。
-- **偏離(順帶消除的重複網路呼叫)**:`mobile/overlays/CartSheet.svelte` 原本在 `onMount` 呼叫
-  `checkout.setOpen(true)` 後,若結果是 `freshCheckout` 還會**另外**呼叫一次 `refreshPoints()`。
-  `checkout` 單例經 `createCheckout({ refreshOnOpen: [refreshPoints], … })` 建起後,同一個
-  `freshCheckout` 邊沿內部已經觸發 `refreshPoints()`——留著 `CartSheet` 的手動呼叫會讓每次開啟
-  sheet 都多打一次 `GET /points/me`,是真實(雖然安靜)的行為變化,故一併移除,網路呼叫數維持
-  Task 9 之前的原樣。
+- **偏離**:`mobile/overlays/CartSheet.svelte` 原本在 `onMount` 呼叫 `checkout.setOpen(true)` 後,
+  若結果是 `freshCheckout` 還會自己呼叫一次 `refreshPoints()`——這是 `checkout` 單例(mobile
+  `stores.ts` 的模組級物件)當時沒有 `refreshOnOpen` 才需要的手焊。改用
+  `createCheckout({ refreshOnOpen: [refreshPoints], … })` 組裝後,同一個 `freshCheckout` 邊沿
+  已由 factory 內部觸發 `refreshPoints()`,`refresh` 的位置從 `CartSheet` 的 `onMount` 搬進了
+  factory 的 `refreshOnOpen`——開啟一次 sheet 前後仍是一支 `GET /points/me`,行為未變,故移除
+  `CartSheet` 那份已重複的手動呼叫。
 
 **測試**:新增 `checkout-sync.test.ts`;刪除 `stores.test.ts` 的 `placeOrder — 委派
 submitOrder(mobile adapter,C4 首套單測)` describe(:87-181,逐字符合 brief 範圍)與
@@ -343,6 +349,8 @@ brief 的 :143-330),兩者的內容(:144、:305 對應段落)搬進新檔並改�
 (不是空字串),呼叫端據此判斷是否渲染該行,而非渲染出 `(undefined)`。刪除 `LEAVE_STATUS`:
 `domain/member-app.ts`、`member/data.ts`、`mobile/data.ts` 三處都刪(值/facade 一併退役,常數計數
 9→8)。補課開啟方式(Dialog vs sheet)與 toast 文案仍留呼叫端(`docs/adr/0011`/`0012`)。
+`STATUS_BADGE[lr.status]` 補回兩個舊呼叫端原有的 `?? ['neutral', lr.status]` 後援,未知 status
+一律降級為 neutral 徽章 + 原字串,不炸掉(終審修波補釘)。
 
 **紅釘**:`it.each` 列出各狀態的 tone/label/when 表;「已補課但補課日期缺漏時不渲染 undefined」。
 `OrdersScreen.test.ts`、`routes/mobile/account/page.test.ts`、`ScheduleScreen.test.ts` 三個
@@ -386,13 +394,10 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 4. **桌面帳戶頁的暖機(點數、訂閱)改為與主 GET 並行**,不再是主 GET 落地後才尾端暖機(F-2)。
 5. **console 的暖機 log 前綴** 變成 `member/mine`、`member/account`、`mobile/account`(warmStores
    的 `caller` 參數,F-2)。
-6. **一個之前存在的重複網路呼叫消失**:mobile 開啟購物車 sheet 時只打一次
-   `GET /points/me`(以前 `CartSheet` 的手動呼叫與 `checkout` 單例的 `refreshOnOpen` 各打一次,
-   F-5)。
-7. **補課日期缺漏時不再顯示「(undefined)」**(請假列 VM)。
-8. **一個之前存在的隱性 bug 消失**:`load-gate.ts` 的 `load()` 路徑「load 在飛 → markMutated →
+6. **補課日期缺漏時不再顯示「(undefined)」**(請假列 VM)。
+7. **一個之前存在的隱性 bug 消失**:`load-gate.ts` 的 `load()` 路徑「load 在飛 → markMutated →
    invalidate() → 回應落地」不再套用舊快照(F-1,`docs/adr/0024` 記的 bug #3)。
-9. **被喚醒的舊 refresh 不再重抓並套用前一身分的資料**:reset() 之後,舊尾流之後才 settle 的
+8. **被喚醒的舊 refresh 不再重抓並套用前一身分的資料**:reset() 之後,舊尾流之後才 settle 的
    refresh 直接收束、不再多發一支 GET(閘門重置)。
 
 其餘改動 wire 等價。

@@ -84,6 +84,7 @@ usePoints)`。這不違本 ADR:
 `refreshOnOpen` 陣列不同(mobile 只暖點數,桌面暖點數與訂閱),`lines` 仍各自對自己的 `cart` 建
 `derived`。`checkout-controller.ts` 的 `deps.placeOrder` 簽章同時改為
 `(lines, order: PlaceOrderInput) => Promise<PaidSummary>`,`confirmPay` 只讀一次 `lines` 往下傳。
-順帶消掉一個重複網路呼叫:mobile 的 `CartSheet.svelte` 原本在 `freshCheckout` 之後自己再呼叫一次
-`refreshPoints()`,而 `checkout` 單例經 `createCheckout(...)` 建起後同一邊沿內部已經觸發過,故該手動
-呼叫已移除(本元件不再自己 `refreshPoints()`)。詳見 `docs/adr/0025` 候選 F-5。
+refresh 的位置跟著搬:mobile 的 `CartSheet.svelte` 原本在 `freshCheckout` 之後自己呼叫一次
+`refreshPoints()`,改用 `createCheckout({ refreshOnOpen: [refreshPoints], … })` 組裝後,同一邊沿
+已由 factory 的 `refreshOnOpen` 觸發,`CartSheet` 那份手動呼叫已移除——一開一次 sheet 前後仍是一支
+`GET /points/me`,行為未變。詳見 `docs/adr/0025` 候選 F-5。
