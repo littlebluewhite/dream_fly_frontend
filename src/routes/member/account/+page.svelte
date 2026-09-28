@@ -6,7 +6,19 @@
   import { onMount } from 'svelte';
   import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { fmtNT } from '$lib/format';
-  import { points, subscriptions, toasts, memberProfile, prefs, saveProfile, type ProfileEdit } from '$lib/member/stores';
+  import {
+    points,
+    subscriptions,
+    toasts,
+    memberProfile,
+    prefs,
+    saveProfile,
+    hydrateProfile,
+    refreshPoints,
+    refreshSubscriptions,
+    type ProfileEdit
+  } from '$lib/member/stores';
+  import { warmStores } from '$lib/store-warm';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAccount, type AccountData } from '$lib/member/api';
@@ -16,9 +28,18 @@
   let editing = false;
   let saving = false;
 
-  // 個人資料讀 $memberProfile(會員資料 module;getAccount 會等它水合完成)。
+  // R15(候選 F2)：getAccount() 只回訂單資料，個人資料水合(hydrateProfile，失敗照拋——
+  // $memberProfile 是本頁主資料之一)與點數/訂閱暖機由本頁自己宣告，與主 GET 同一個
+  // Promise.all 並行發出(暖機是 best-effort，見 $lib/store-warm 的 warmStores 檔頭)。
   const gate = createLoadGate({
-    fetch: getAccount,
+    fetch: async () => {
+      const [account] = await Promise.all([
+        getAccount(),
+        hydrateProfile(),
+        warmStores('member/account', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]])
+      ]);
+      return account;
+    },
     onData: (d) => { data = d; }
   });
   onMount(() => {

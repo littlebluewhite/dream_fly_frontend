@@ -79,7 +79,8 @@
   // 使用者看得到自己加了什麼，只是合計不把已持有的 pass 重複計費。
   // 刻意不在 onMount 加 refreshSubscriptions():mobile 購物車只產 course
   // （cart.add 只收 Course），過濾恆 no-op 的保證來自這裡——並非 subscriptions 恆空
-  // （帳戶頁 getAccount() 副作用可水合它）;未來方案動線上架時，在上方 onMount 補一次 refreshSubscriptions() 水合
+  // （R15 候選 F2 起行動版帳戶頁不再暖這支，desktop 帳戶頁的暖機才可能水合它）;
+  // 未來方案動線上架時，在上方 onMount 補一次 refreshSubscriptions() 水合
   // 即可（座標留此，desktop CheckoutDialog 開啟即水合訂閱是既有先例）。
 
   /* 確認付款 → 真下單（placeOrder：同步購物車 → POST /orders → 水合真點數 →

@@ -3,21 +3,27 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { getMine, getEnrolmentAttendance } from '$lib/member/api';
 import type { AttRecord, EnrolledCourse } from '$lib/domain/member-app';
 import { get } from 'svelte/store';
-import { waitlist, leaveRequests, toasts, type LeaveRequest } from '$lib/member/stores';
+import { waitlist, leaveRequests, toasts, hydrateWaitlist, hydrateLeaveRequests, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/member/api', () => ({ getMine: vi.fn(), getEnrolmentAttendance: vi.fn() }));
-// 只替換 api()，ApiError 用回真實類別。卡 6 後頁面只剩單一 getMine() 接縫——
-// 候補/請假的 best-effort 水合收進 getMine() 本身，而 getMine 在此整支 mock 掉
-// （waiting 過濾、hydrate 失敗不擋主資料等水合語意由 member/api.test.ts 把關），
-// 候補/請假清單的 GET 水合 fixture 一律改 store 直接 seed。這個 api() mock 縮小
-// 到剩動作端點：取消的 DELETE（/waitlist/{id}、/leave-requests/{id}）與 dialog
-// 的場次查詢（GET /courses/{id}/sessions）。
+// 只替換 api()，ApiError 用回真實類別。頁面只剩單一 getMine() 接縫——候補/請假清單
+// 的映射與 hydrate 失敗不擋主資料等水合語意由 member/api.test.ts、$lib/store-warm.test.ts
+// 把關，這個 api() mock 縮小到剩動作端點：取消的 DELETE（/waitlist/{id}、
+// /leave-requests/{id}）與 dialog 的場次查詢（GET /courses/{id}/sessions）。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
+});
+
+// R15(候選 F2)：候補/請假的暖機搬到本頁的 gate.fetch 自己宣告(與 getMine() 並行)——
+// hydrateWaitlist/hydrateLeaveRequests 在此整支 mock 掉，候補/請假清單一律改 store
+// 直接 seed，這個檔案只驗頁面渲染與取消動作佈線，不重複測 hydrate 本身的語意。
+vi.mock('$lib/member/stores', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/member/stores')>();
+  return { ...actual, hydrateWaitlist: vi.fn(), hydrateLeaveRequests: vi.fn() };
 });
 
 // Task 1(C2 死種子退役):member/data.ts 的 MY_COURSES(值)已退役——改為檔內 inline
@@ -34,6 +40,8 @@ beforeEach(() => {
   // 預設空出勤明細——不關心出席明細內容的既有測試(候補/請假相關)不用逐一配置。
   vi.mocked(getEnrolmentAttendance).mockReset().mockResolvedValue([]);
   vi.mocked(api).mockReset();
+  vi.mocked(hydrateWaitlist).mockReset().mockResolvedValue(undefined);
+  vi.mocked(hydrateLeaveRequests).mockReset().mockResolvedValue(undefined);
   waitlist.set([]);
   leaveRequests.set([]);
 });
@@ -81,6 +89,24 @@ describe('member/mine 頁', () => {
     expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
     // 不得顯示錯誤狀態
     expect(screen.queryByText('載入失敗')).toBeNull();
+  });
+
+  // R15(候選 F2)：候補清單/我的請假的暖機收進本頁的 gate.fetch，與主 getMine() 同一個
+  // Promise.all 並行發出——退化成「等 getMine 完成才暖機」的尾端序列會紅(主 fetch
+  // 未 resolve 前，暖機已經先發出)。
+  it('候補清單/我的請假暖機與主 getMine() 並行發出，不是等主 fetch 完成才暖機', async () => {
+    let resolveMine!: (v: { courses: never[] }) => void;
+    vi.mocked(getMine).mockReturnValue(new Promise((res) => { resolveMine = res; }));
+
+    render(Page);
+
+    await vi.waitFor(() => {
+      expect(hydrateWaitlist).toHaveBeenCalled();
+      expect(hydrateLeaveRequests).toHaveBeenCalled();
+    });
+
+    resolveMine({ courses: [] });
+    expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
   });
 });
 

@@ -131,6 +131,38 @@ describe('帳戶 — 三態', () => {
 	});
 });
 
+describe('帳戶 — 暖機(R15 候選 F2：getAccount() 只回訂單資料，暖機與個人資料水合改由本頁宣告)', () => {
+	// 退化成「等 getAccount 完成才暖機」的尾端序列會紅——主 fetch 未 resolve 前，
+	// 個人資料水合與點數/訂閱暖機已經先發出。
+	it('個人資料水合(GET /users/me)與點數/訂閱暖機(GET /points/me、GET /subscriptions/me)與主 GET /orders/me 並行發出', async () => {
+		let resolveOrders!: (v: typeof ORDERS_RES) => void;
+		route({ 'GET /orders/me?per_page=100': () => new Promise((res) => { resolveOrders = res; }) });
+
+		render(Page);
+
+		await vi.waitFor(() => {
+			const paths = vi.mocked(api).mock.calls.map(([p]) => p);
+			expect(paths).toContain('/users/me');
+			expect(paths).toContain('/points/me');
+			expect(paths).toContain('/subscriptions/me');
+		});
+
+		resolveOrders(ORDERS_RES);
+		await screen.findByText('王承恩');
+	});
+
+	// 搬自 member/api.test.ts 舊 getAccount 單元測試(側效 hydrate 失敗仍成功回傳
+	// orders)——暖機移到頁面層後，這個等價保證改在頁面層驗證。
+	it('點數/訂閱暖機失敗時仍成功顯示帳戶頁(主資料 fail-hard、暖機 best-effort)', async () => {
+		route({ 'GET /points/me': new Error('network down'), 'GET /subscriptions/me': new Error('network down') });
+
+		render(Page);
+
+		await screen.findByText('王承恩');
+		expect(screen.queryByText('載入失敗')).toBeNull();
+	});
+});
+
 describe('帳戶 — 編輯個人資料(R13 Task 3:經 saveProfile 寫回 PATCH /users/me)', () => {
 	async function openEditDialog() {
 		render(Page);

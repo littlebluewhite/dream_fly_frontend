@@ -32,9 +32,12 @@
     leaveRequests,
     cancelLeaveRequest,
     leaveRequestErrorMessage,
+    hydrateWaitlist,
+    hydrateLeaveRequests,
     type WaitlistEntry,
     type LeaveRequest
   } from '$lib/member/stores';
+  import { warmStores } from '$lib/store-warm';
   import { createLoadGate } from '$lib/load-gate';
   import { createCancelLeave } from '$lib/member/cancel-leave';
   import { createMineController } from '$lib/member/mine-controller';
@@ -51,11 +54,17 @@
   const ctrl = createMineController({ getEnrolmentAttendance, cancelWaitlist });
   $: ({ active, attState, attendance, cancellingId } = $ctrl);
 
-  // 候補清單/我的請假的 best-effort 旁路 hydrate 已收進 getMine() 接縫本身
-  // （卡 6，見 member/api.ts 的 getMine 註解與 $lib/store-warm 的 warmStores 檔頭）——
-  // 失敗只記錄、不擋主要的「我的課程」資料流程，頁面只剩單一 fetch 接縫。
+  // R15(候選 F2)：getMine() 只回主資料，候補清單/我的請假的 best-effort 暖機由本頁
+  // 自己宣告，與主 GET 同一個 Promise.all 並行發出（見 $lib/store-warm 的 warmStores
+  // 檔頭——失敗只記錄、不擋主要的「我的課程」資料流程）。
   const gate = createLoadGate({
-    fetch: getMine,
+    fetch: async () => {
+      const [mine] = await Promise.all([
+        getMine(),
+        warmStores('member/mine', [['候補清單', hydrateWaitlist], ['我的請假', hydrateLeaveRequests]])
+      ]);
+      return mine;
+    },
     onData: (d) => {
       data = d;
       ctrl.init(d.courses[0]?.id ?? null);

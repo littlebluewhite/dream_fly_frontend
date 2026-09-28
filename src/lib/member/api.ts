@@ -10,8 +10,7 @@ import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$li
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import { refreshPoints, refreshSubscriptions, hydrateWaitlist, hydrateLeaveRequests, hydrateProfile } from './stores';
-import { warmStores } from '$lib/store-warm';
+import { refreshPoints } from './stores';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
@@ -230,16 +229,12 @@ export interface MineData {
  *  空字串預設，暫不推導。
  *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。
  *
- *  卡 6：順手 hydrate waitlist/leaveRequests store(best-effort 語意，見
- *  $lib/store-warm 的 warmStores() 檔頭)——原本焊在 mine 頁 gate 的旁路 Promise.all 收進
- *  接縫。與 getAccount 的尾端序列 await 刻意不同：mine 現況本就是
- *  主 fetch 與旁路水合「並行」，等價優先，故這裡與主 fetch 同一個 Promise.all
- *  (warmStores 內建 allSettled，不會讓 Promise.all reject)。 */
+ *  R15(候選 F2)：只打自己的路徑(GET /enrolments/me)，不再順手 hydrate waitlist/
+ *  leaveRequests store——那是呼叫端(member/mine、mobile mine)自己讀的 store,暖不
+ *  暖、暖哪些是頁面自己的決定,不該焊在這支 getter 裡(見 member/mine/+page.svelte 的
+ *  gate.fetch，暖機與這裡的主 GET 並行同時出發)。 */
 export const getMine = async (): Promise<MineData> => {
-  const [active] = await Promise.all([
-    activeEnrolments(),
-    warmStores('getMine', [['候補清單', hydrateWaitlist], ['我的請假', hydrateLeaveRequests]])
-  ]);
+  const active = await activeEnrolments();
   const courses: EnrolledCourse[] = active.map((e) => ({
     id: e.id,
     course_id: e.course_id, // Task 11：請假入口需要課程 id 呼叫 GET /courses/{id}/sessions
@@ -317,20 +312,17 @@ function mapOrder(o: ApiOrderSummary): Order {
   };
 }
 
-/** GET /orders/me?per_page=100 + 會員資料水合(hydrateProfile，GET /users/me，每個
- *  identity 只抓一次)；兩者 fail-hard(Promise.all)——帳戶頁讀 $memberProfile，不讀
- *  這裡的回傳值(R13 Task 3：個人資料的讀寫收進 $lib/member/profile)。per_page=100 顯式帶滿單頁上限(同 coach/api.ts getPendingLeaveRequests
- *  的既有慣例)——後端預設 per_page=20 會把訂單較多的會員截斷成只看到最近 20 筆；
- *  ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/OrdersScreen)顯示的
- *  「N 筆報名紀錄」不會被這個截斷誤導成 20。
- *  順手 hydrate points/subscriptions store(best-effort 語意，見 $lib/store-warm 的 warmStores()
- *  檔頭)——帳戶頁直接讀 $points / $subscriptions store(不是這裡的回傳值)。 */
+/** GET /orders/me?per_page=100。per_page=100 顯式帶滿單頁上限(同 coach/api.ts
+ *  getPendingLeaveRequests 的既有慣例)——後端預設 per_page=20 會把訂單較多的會員
+ *  截斷成只看到最近 20 筆；ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/
+ *  OrdersScreen)顯示的「N 筆報名紀錄」不會被這個截斷誤導成 20。
+ *
+ *  R15(候選 F2)：只打自己的路徑，不再等會員資料水合(hydrateProfile)、也不再順手
+ *  hydrate points/subscriptions store——那些是帳戶頁自己讀的 store/資料，暖不暖、
+ *  暖哪些是頁面自己的決定(見 member/account/+page.svelte、mobile/account/
+ *  +page.svelte 的 gate.fetch，兩處清單不同：桌面暖點數＋訂閱，行動版只暖點數)。 */
 export const getAccount = async (): Promise<AccountData> => {
-  const [orderList] = await Promise.all([
-    api<ApiOrderListResponse>('/orders/me?per_page=100'),
-    hydrateProfile()
-  ]);
-  await warmStores('getAccount', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]]);
+  const orderList = await api<ApiOrderListResponse>('/orders/me?per_page=100');
   return {
     orders: orderList.orders.map(mapOrder),
     ordersTotal: orderList.total

@@ -7,8 +7,10 @@ import { SUBS_SEED, type Subscription } from './data';
 
 /* ---- Subscriptions / entitlements ----
  * Task 17: localStorage persistence removed — truth is the server now
- * (GET /subscriptions/me via refreshSubscriptions, called from getAccount()
- * and after placeOrder()). A client-cached snapshot could out-live the real
+ * (GET /subscriptions/me via refreshSubscriptions, called from the 桌面帳戶頁
+ * gate.fetch（R15 候選 F2 起——見 member/account/+page.svelte;mobile 帳戶頁不暖
+ * 這支，見 mobile/account/+page.svelte）and after placeOrder()). A client-cached
+ * snapshot could out-live the real
  * entitlement (e.g. an admin-side change) with no event to invalidate it, so
  * the store simply starts empty/seeded and is hydrated on demand instead. */
 export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ...s })));
@@ -37,7 +39,7 @@ export interface ApiSubscription {
  *  一樣能正常顯示。（points 頁的 pointsLedger 則是反過來選 YYYY/MM/DD——因為那裡
  *  有一段既有邏輯依賴這個格式，見 refreshPoints 的註解(points.ts)。） */
 /** C1（架構深化 R7）抬升為 createSessionRefresher:同 refreshPoints——保留「無條件重抓」
- *  語意(getAccount 進頁 + placeOrder afterOrder 依賴,不套 guard),只加 identity 清空
+ *  語意(桌面帳戶頁進頁暖機 + placeOrder afterOrder 依賴,不套 guard),只加 identity 清空
  *  (reset 歸 boot 態空)+ 在飛換帳靜默丟棄(不 throw)。 */
 export const refreshSubscriptions = createSessionRefresher<ApiSubscription[]>({
   fetch: () => api<ApiSubscription[]>('/subscriptions/me'),
