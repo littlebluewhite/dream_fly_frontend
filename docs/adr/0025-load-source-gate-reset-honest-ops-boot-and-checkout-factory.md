@@ -371,9 +371,10 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
   本輪未重開。
 - **F-2**:`getPoints()` 不動——它服務的是所在那一頁自己的讀取,`docs/adr/0012` K7 記的殘餘縮小
   但未清零。
-- **F-4**:**seam 的轉出本身不退役**(`docs/adr/0024` F6 的結論原樣有效)。`mobile/stores.ts` 仍
-  轉出 `$lib/member/notifications`/`points`/`waitlist`/… 等模組的符號給消費端使用,只是消費端本身
-  改直取——這句話管的是「production import 面」,不是「seam 檔存不存在」。
+- **F-4**:`mobile/stores.ts` 的會員轉出**已退役**(重開 `docs/adr/0024` F6,見第 7 節),檔案只剩
+  mobile 自有的 6 個名字(`overlay`/`MobilePushId`/`MobileSheetId`/`cart`/`checkout`/`toasts`)。
+  本輪不做的是:不把 mobile 自有的 overlay/cart/checkout/toasts 也搬進會員模組——那些是 mobile
+  surface 自己擁有的東西,不是轉手。
 - **F-5**:不合併兩個 surface 的結算(`docs/adr/0003` 的載重理由不變,見該篇增補)。`applyCouponCode`
   仍是 member 模組的匯出,不隨 controller 收編。
 - **請假列 VM**:`leaveAction` 私有化後,補課開啟方式(Dialog vs sheet)刻意不統一——兩 surface
@@ -411,8 +412,9 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
   補上顯式的哨兵判斷(同 `docs/adr/0020`「兩筆殘餘」第 1 點的既有記帳方式)。
 - **F-4 的既有殘留**(繼承自 `docs/adr/0024`,未擴大也未縮小):`ClassForm.svelte` 的
   `$coachesStore` 後援仍在(見上「明確不做」)。
-- **F-2 K7 殘餘**:`getMine`(候補清單+我的請假,並行形)與 `getAccount`(點數+訂閱)仍以
-  `warmStores` 順手水合,服務所在那一頁自己的讀取,`docs/adr/0012` K7 的裁決原樣未變。
+- **F-2 K7 殘餘**:`getMine`/`getAccount` 已不再順手水合(第 8 節),暖機改由頁面在 load-gate 的
+  `fetch` 裡用 `warmStores` 宣告。剩下的只有 `getPoints()`——它的順手水合服務所在那一頁自己讀的
+  `$points`,照留(見上「明確不做」),`docs/adr/0012` K7 的裁決本身未撤。
 - **mobile-admin header total 與「全部」chip 計數不一致**(`docs/adr/0022` 記錄的既有已知項,
   本輪未觸及)。
 
