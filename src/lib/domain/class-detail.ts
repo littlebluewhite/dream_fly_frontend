@@ -1,6 +1,6 @@
 /* Dream Fly — 課程詳情顯示查表（純函式，Task 11 R11 卡 3）。
  *
- * admin 桌面 ClassDialog 與 mobile-admin ClassSheet 的課程詳情 12 列 rows 原是各自
+ * admin 桌面 ClassDialog 與 mobile-admin ClassSheet 的課程詳情 rows(R16 Task 2b 起 6 列) 原是各自
  * inline 一份、byte-identical 雙生（零測）；ClassDialog/ClassSheet/ClassCard/
  * mobile-admin classes 頁另有四處各自重複 enrolled>=cap 滿班判定與
  * Math.round(enrolled/cap*100) 百分比。本檔收斂為單一 domain 顯示查表，依
@@ -28,33 +28,22 @@ export interface ClassDetailSource {
   day: string;
   time: string;
   coach: string;
-  room: string;
   age: string;
   cat: string;
-  term: string;
-  startDate: string;
-  sessions: number;
-  checkinRate: number;
   wait: number;
-  makeup: number;
   price: number;
 }
 
-/** [icon, label, value] 詳情欄位列——逐字搬 ClassDialog.svelte 原 rows（含
- *  「N 堂」「N%」fmtNT 格式化），供 ClassDialog/ClassSheet 共用。 */
+/** [icon, label, value] 詳情欄位列——搬自 ClassDialog.svelte 原 rows（fmtNT 格式化），
+ *  供 ClassDialog/ClassSheet 共用。R16 Task 2b：教室/期別/開課日期/堂數/到課率/補課
+ *  名額後端沒有，12 列 → 6 列。 */
 export function classDetailRows(k: ClassDetailSource): [IconName, string, string][] {
   return [
     ['clock', '上課時段', k.day + ' · ' + k.time],
     ['user-round', '授課教練', k.coach + ' 教練'],
-    ['map-pin', '教室 / 場地', k.room],
     ['cake', '適合年齡', k.age],
     ['layers', '課程類別', k.cat],
-    ['calendar-range', '本期期別', k.term],
-    ['calendar-plus', '開課日期', k.startDate],
-    ['repeat-2', '本期堂數', k.sessions + ' 堂'],
-    ['percent', '平均到課率', k.checkinRate + '%'],
     ['user-plus', '候補人數', k.wait + ' 人'],
-    ['history', '補課名額', k.makeup + ' 位'],
     ['circle-dollar-sign', '季費', fmtNT(k.price)]
   ];
 }

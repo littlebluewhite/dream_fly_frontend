@@ -21,37 +21,25 @@ describe('classFill', () => {
 });
 
 describe('classDetailRows', () => {
-  // 刻意讓每個欄位值互不相同（不沿用 seed k1 的 wait/makeup 皆為 0），避免欄位
+  // 刻意讓每個欄位值互不相同（不沿用 seed k1 的 wait 為 0），避免欄位
   // 錯位/互換的 bug 被巧合的重複值蓋過去。
   const fixture: ClassDetailSource = {
     day: '週二 / 週四',
     time: '19:00–20:30',
     coach: '林雅婷',
-    room: 'A 訓練館',
     age: '10–16 歲',
     cat: '競技啦啦隊',
-    term: '2026 春季',
-    startDate: '2026/03/01',
-    sessions: 16,
-    checkinRate: 85,
     wait: 3,
-    makeup: 2,
     price: 4800
   };
 
-  it('12 列逐鍵像素保真（含「N 堂」「N%」與 fmtNT 價格格式，逐字比對 ClassDialog 原 rows）', () => {
+  it('6 列逐鍵像素保真（fmtNT 價格格式；R16 Task 2b 拿掉後端沒有的教室/期別/開課日期/堂數/到課率/補課名額）', () => {
     expect(classDetailRows(fixture)).toEqual([
       ['clock', '上課時段', '週二 / 週四 · 19:00–20:30'],
       ['user-round', '授課教練', '林雅婷 教練'],
-      ['map-pin', '教室 / 場地', 'A 訓練館'],
       ['cake', '適合年齡', '10–16 歲'],
       ['layers', '課程類別', '競技啦啦隊'],
-      ['calendar-range', '本期期別', '2026 春季'],
-      ['calendar-plus', '開課日期', '2026/03/01'],
-      ['repeat-2', '本期堂數', '16 堂'],
-      ['percent', '平均到課率', '85%'],
       ['user-plus', '候補人數', '3 人'],
-      ['history', '補課名額', '2 位'],
       ['circle-dollar-sign', '季費', fmtNT(4800)]
     ]);
   });

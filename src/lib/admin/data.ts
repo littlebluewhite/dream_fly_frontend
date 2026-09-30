@@ -70,9 +70,6 @@ import { initialOf, isoDate } from '$lib/api/wire';
 
 /* ───────────────────────── classes ───────────────────────── */
 export interface ClassRow extends ClassBase {
-	startDate: string;
-	checkinRate: number;
-	makeup: number;
 	/** 單堂時長（分鐘，FE#18）——後端 duration_minutes 的直接映射；新增流程必填，
 	 *  編輯流程也可調整（見 ClassEditDialog）。 */
 	durationMinutes: number;
@@ -126,11 +123,9 @@ export function mapMemberAccount(u: ApiUserAccount): MemberAccount {
 
 /* ───────────────────────── orders ───────────────────────── */
 export interface Order extends OrderBase {
-	campus: string;
 	tax: number;
 	net: number;
 	paidAt: string;
-	taxId: string;
 	// Task 8 piece 2: 真實後端訂單 UUID（PATCH /orders/{id}/status 要用這個，不是
 	// 上面顯示用的 `id`——後者其實是 order_number，見 admin/api.ts 的 mapAdminOrder）。
 	// mock 資料沒有真實後端 id 可用，自referential 帶入即可（型別完整性用途）。

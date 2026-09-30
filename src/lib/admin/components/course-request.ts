@@ -206,7 +206,6 @@ export function blankClassRow(coaches: Coach[]): ClassRow {
 		level: '基礎',
 		cat: CATS[0],
 		coach: coaches[0]?.name ?? '',
-		room: '',
 		day: '',
 		time: '',
 		enrolled: 0,
@@ -215,11 +214,6 @@ export function blankClassRow(coaches: Coach[]): ClassRow {
 		price: 3200,
 		status: '招生中',
 		wait: 0,
-		term: '2026 春季',
-		sessions: 16,
-		startDate: '',
-		checkinRate: 0,
-		makeup: 0,
 		durationMinutes: 90
 	};
 }

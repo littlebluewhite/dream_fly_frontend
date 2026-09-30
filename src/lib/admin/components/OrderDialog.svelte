@@ -1,8 +1,8 @@
 <script lang="ts">
   /* 訂單明細 — order detail modal. Faithful port of admin.jsx OrderDialog: a
    * centered 訂單金額 (large) + status badge, then a 2-col field grid covering
-   * 訂單編號/學員/項目/所屬分校/優惠/付款方式/收款時間/未稅金額/營業稅 5%/發票號碼/統一編號/
-   * 經手人/建立時間, plus 退款原因 when the order is refunded. Built on the shared
+   * 訂單編號/學員/項目/優惠/付款方式/收款時間/未稅金額/營業稅 5%/建立時間, plus 退款原因
+   * when the order is refunded (R16 Task 2b：所屬分校/發票號碼/統一編號/經手人後端沒有，拿掉). Built on the shared
    * Dialog (matches the source's ADialog). Footer is always 關閉 + (pending-only)
    * 發送催繳 — 發送催繳 stays a page-level toast only (no backend endpoint, out of
    * this task's scope).

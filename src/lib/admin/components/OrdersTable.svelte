@@ -2,7 +2,7 @@
   /* 訂單與金流 — the orders table (admin.jsx OrdersView body). Status filter tabs
    * (全部 + 待付款/已付款/處理中/已完成/已取消/已退款 — 中文標籤沿用 $lib/api/wire 的
    * ORDER_STATUS 查表，不另建第二份對照) over a table: 訂單編號 / 學員 (avatar+name) /
-   * 項目 / 優惠 / 金額 (right, mono) / 付款方式 / 經手人 / 狀態 (order StatusBadge) / 時間.
+   * 項目 / 優惠 / 金額 (right, mono) / 付款方式 / 狀態 (order StatusBadge) / 時間.
    * Filtering lives in the pure filterOrders() (orders-filter.ts); the topbar
    * `search` store feeds the query. A row click opens the OrderDialog; 變更狀態
    * (Task 8 piece 2: legalNextStatuses-driven, real PATCH /orders/{id}/status via
@@ -72,7 +72,6 @@
         <th class="th">優惠</th>
         <th class="th th-right">金額</th>
         <th class="th">付款方式</th>
-        <th class="th">經手人</th>
         <th class="th">狀態</th>
         <th class="th">時間</th>
       </tr>
@@ -95,14 +94,13 @@
           >
           <td class="td td-amount">{fmtNT(o.amount)}</td>
           <td class="td td-muted">{o.method}</td>
-          <td class="td td-muted">{o.handler}</td>
           <td class="td"><StatusBadge kind="order" value={o.status} /></td>
           <td class="td td-time">{o.date}</td>
         </tr>
       {/each}
       {#if visible.length === 0}
         <tr>
-          <td colspan="9" class="empty">找不到符合的訂單</td>
+          <td colspan="8" class="empty">找不到符合的訂單</td>
         </tr>
       {/if}
     </tbody>

@@ -14,7 +14,6 @@ export interface ClassBase {
 	level: Level;
 	cat: string;
 	coach: string;
-	room: string;
 	day: string;
 	time: string;
 	enrolled: number;
@@ -23,8 +22,6 @@ export interface ClassBase {
 	price: number;
 	status: '招生中' | '候補' | '額滿';
 	wait: number;
-	term: string;
-	sessions: number;
 }
 
 /** 課程招生狀態 union（admin/mobile-admin 共用查表鍵）。 */

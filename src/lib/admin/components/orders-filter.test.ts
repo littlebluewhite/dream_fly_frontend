@@ -8,10 +8,10 @@ import { filterOrders, countByStatus } from './orders-filter';
  * FE#9 的既有前提)，維持「paid+pending+refunded 三態切片加總 = 全集」這條測試
  * 前提成立。 */
 const ORDERS: Order[] = [
-	{ id: 'DF-24061', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', invoice: 'QX-48120391', discount: '—', handler: '陳怡君', campus: '美村本館', tax: 229, net: 4571, paidAt: '06/08 14:22', taxId: '53901240', orderId: 'uuid-DF-24061' },
-	{ id: 'DF-24059', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', invoice: 'QX-48120377', discount: '—', handler: '系統自動', campus: '文心分館', tax: 152, net: 3048, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-DF-24059' },
-	{ id: 'DF-24057', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', invoice: 'QX-48120344', discount: '體驗折抵', handler: '王思齊', campus: '北屯分館', tax: 29, net: 571, paidAt: '06/06 10:12', taxId: '—', orderId: 'uuid-DF-24057', reason: '家長申請改期，全額退款' },
-	{ id: 'DF-24058', member: '吳冠霖', initial: '吳', color: '#0066CC', item: '競技體操 選手班 · 春季', amount: 6200, status: 'paid', method: '信用卡', date: '06/07 16:30', invoice: 'QX-48120362', discount: '續報 -300', handler: '林雅婷', campus: '美村本館', tax: 295, net: 5905, paidAt: '06/07 16:30', taxId: '—', orderId: 'uuid-DF-24058' }
+	{ id: 'DF-24061', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', discount: '—', tax: 229, net: 4571, paidAt: '06/08 14:22', orderId: 'uuid-DF-24061' },
+	{ id: 'DF-24059', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', discount: '—', tax: 152, net: 3048, paidAt: '—（待付款）', orderId: 'uuid-DF-24059' },
+	{ id: 'DF-24057', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', discount: '體驗折抵', tax: 29, net: 571, paidAt: '06/06 10:12', orderId: 'uuid-DF-24057', reason: '家長申請改期，全額退款' },
+	{ id: 'DF-24058', member: '吳冠霖', initial: '吳', color: '#0066CC', item: '競技體操 選手班 · 春季', amount: 6200, status: 'paid', method: '信用卡', date: '06/07 16:30', discount: '續報 -300', tax: 295, net: 5905, paidAt: '06/07 16:30', orderId: 'uuid-DF-24058' }
 ];
 
 /* Task 6 (FE#9): the ORDERS fixture above only carries paid/pending/refunded
@@ -29,14 +29,10 @@ function makeOrder(status: OrderStatus, id: string): Order {
 		status,
 		method: '信用卡',
 		date: '06/01 00:00',
-		invoice: 'QX-TEST',
 		discount: '—',
-		handler: '測試',
-		campus: '測試館',
 		tax: 48,
 		net: 952,
 		paidAt: status === 'pending' ? '—（待付款）' : '06/01 00:00',
-		taxId: '—',
 		orderId: 'uuid-' + id
 	};
 }

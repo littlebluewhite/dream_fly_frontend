@@ -14,7 +14,7 @@ import { COURSE_AGE_FORMAT_ERROR } from './course-request';
  *
  * Task 1(C2 死種子退役):admin/data.ts 的 CLASSES(值)已退役——改為檔內 inline
  * ClassRow fixture(沿用真實種子 k1 的欄位值)。 */
-const base: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: 'A 訓練館', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 86, makeup: 0, durationMinutes: 90 };
+const base: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', day: '週二 / 週四', time: '19:00–20:30', enrolled: 11, cap: 12, age: '10–16 歲', price: 4800, status: '招生中', wait: 0, durationMinutes: 90 };
 
 describe('ClassEditDialog', () => {
 	it('renders open with the class name field and the 儲存課程 primary', () => {
@@ -152,7 +152,7 @@ describe('ClassEditDialog', () => {
 	 * ②關閉重開丟棄髒草稿——兼作「初始 working copy 改 clone」修正的回歸釘：初次掛載後的
 	 * bind:value 編輯絕不可寫回呼叫端傳入的原實體（別名形會讓取消不救、列表資料已髒）。 */
 	it('resets fields when the klass prop changes to a different class (no stale data)', async () => {
-		const other: ClassRow = { ...base, id: 'k2', name: '兒童基礎 B 班', cap: 20, price: 5200, sessions: 12, durationMinutes: 60 };
+		const other: ClassRow = { ...base, id: 'k2', name: '兒童基礎 B 班', cap: 20, price: 5200, durationMinutes: 60 };
 		const { getByLabelText, rerender } = render(ClassEditDialog, { open: true, klass: { ...base }, coaches: COACHES });
 
 		await fireEvent.input(getByLabelText('班級名稱'), { target: { value: '髒草稿' } });

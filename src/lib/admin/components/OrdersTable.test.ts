@@ -6,7 +6,7 @@ import { search } from '$lib/admin/stores';
 import type { Order } from '$lib/admin/data';
 
 /* OrdersTable — the 訂單與金流 table (admin.jsx OrdersView body). Renders status
- * tabs over rows of 訂單編號/學員/項目/優惠/金額/付款方式/經手人/狀態/時間. We render with
+ * tabs over rows of 訂單編號/學員/項目/優惠/金額/付款方式/狀態/時間. We render with
  * two hand-built rows so assertions are deterministic and reset the search
  * store between tests (it is a cross-route singleton). */
 const paid: Order = {
@@ -19,14 +19,10 @@ const paid: Order = {
 	status: 'paid',
 	method: '信用卡',
 	date: '06/08 14:22',
-	invoice: 'QX-90000001',
 	discount: '—',
-	handler: '陳怡君',
-	campus: '美村本館',
 	tax: 229,
 	net: 4571,
 	paidAt: '06/08 14:22',
-	taxId: '53901240',
 	orderId: 'uuid-DF-90001'
 };
 const pending: Order = {
@@ -39,14 +35,10 @@ const pending: Order = {
 	status: 'pending',
 	method: 'ATM 轉帳',
 	date: '06/07 19:45',
-	invoice: 'QX-90000002',
 	discount: '早鳥 9 折',
-	handler: '系統自動',
-	campus: '東興分館',
 	tax: 152,
 	net: 3048,
 	paidAt: '—（待付款）',
-	taxId: '—',
 	orderId: 'uuid-DF-90002'
 };
 // Task 6 (FE#9): fixtures for the 3 statuses the tab set didn't cover before
@@ -62,14 +54,10 @@ const processing: Order = {
 	status: 'processing',
 	method: '信用卡',
 	date: '06/09 09:00',
-	invoice: 'QX-90000003',
 	discount: '—',
-	handler: '林雅婷',
-	campus: '美村本館',
 	tax: 171,
 	net: 3429,
 	paidAt: '06/09 09:00',
-	taxId: '—',
 	orderId: 'uuid-DF-90003'
 };
 const completed: Order = {
@@ -82,14 +70,10 @@ const completed: Order = {
 	status: 'completed',
 	method: '信用卡',
 	date: '06/10 10:00',
-	invoice: 'QX-90000004',
 	discount: '—',
-	handler: '林雅婷',
-	campus: '美村本館',
 	tax: 295,
 	net: 5905,
 	paidAt: '06/10 10:00',
-	taxId: '—',
 	orderId: 'uuid-DF-90004'
 };
 const cancelled: Order = {
@@ -102,14 +86,10 @@ const cancelled: Order = {
 	status: 'cancelled',
 	method: 'ATM 轉帳',
 	date: '06/11 11:00',
-	invoice: 'QX-90000005',
 	discount: '—',
-	handler: '系統自動',
-	campus: '東興分館',
 	tax: 152,
 	net: 3048,
 	paidAt: '06/11 11:00',
-	taxId: '—',
 	orderId: 'uuid-DF-90005'
 };
 const refunded: Order = {
@@ -122,14 +102,10 @@ const refunded: Order = {
 	status: 'refunded',
 	method: '信用卡',
 	date: '06/12 12:00',
-	invoice: 'QX-90000006',
 	discount: '體驗折抵',
-	handler: '王思齊',
-	campus: '東興分館',
 	tax: 29,
 	net: 571,
 	paidAt: '06/12 12:00',
-	taxId: '—',
 	orderId: 'uuid-DF-90006'
 };
 
@@ -156,10 +132,10 @@ describe('OrdersTable', () => {
 		expect(badges).toContain('待付款');
 	});
 
-	it('renders the method and handler columns', () => {
+	it('renders the method column; 經手人 column is gone (R16 Task 2b：後端沒有經手人欄位)', () => {
 		const { container } = render(OrdersTable, { rows: [paid] });
 		expect(container.textContent).toContain('信用卡'); // method
-		expect(container.textContent).toContain('陳怡君'); // handler
+		expect(container.textContent).not.toContain('經手人');
 	});
 
 	it('shows the status filter tabs', () => {

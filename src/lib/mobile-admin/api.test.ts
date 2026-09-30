@@ -89,14 +89,10 @@ function expectedOrder(o: (typeof ORDERS_FIXTURE)[number], i: number) {
 		status: o.status,
 		method: '線上',
 		date: isoDate(o.created_at),
-		invoice: '—',
 		discount: o.coupon_code ?? '',
-		handler: '—',
-		campus: '—',
 		tax,
 		net,
-		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
-		taxId: '—'
+		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at)
 	};
 }
 

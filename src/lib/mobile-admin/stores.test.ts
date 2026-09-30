@@ -92,21 +92,19 @@ const MEMBERS: MemberRow[] = [
 ];
 const CLASSES: ClassRow[] = [
 	{
-		id: 'gk1', name: '測試班級甲', level: '基礎', cat: '兒童基礎', coach: '林雅婷', room: 'A 訓練館', day: '週二',
+		id: 'gk1', name: '測試班級甲', level: '基礎', cat: '兒童基礎', coach: '林雅婷', day: '週二',
 		time: '19:00–20:30', enrolled: 8, cap: 10, age: '7–9 歲', price: 3200, status: '招生中', wait: 0,
-		term: '2026 春季', sessions: 16, startDate: '2026/03/01', checkinRate: 90, makeup: 0, durationMinutes: 90
+		durationMinutes: 90
 	}
 ];
 const ORDERS: OrderRow[] = [
 	{
 		id: 'DF-1', member: '王小明', initial: '王', color: '#0066CC', item: '測試班級甲', amount: 4800,
-		status: 'pending', method: '信用卡', date: '2026/06/08', invoice: 'INV-1', discount: '—', handler: '陳怡君',
-		campus: '美村本館', tax: 229, net: 4571, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-1'
+		status: 'pending', method: '信用卡', date: '2026/06/08', discount: '—', tax: 229, net: 4571, paidAt: '—（待付款）', orderId: 'uuid-1'
 	},
 	{
 		id: 'DF-2', member: '陳小華', initial: '陳', color: '#EC4899', item: '測試班級甲', amount: 3200,
-		status: 'paid', method: 'LINE Pay', date: '2026/06/07', invoice: 'INV-2', discount: '—', handler: '陳怡君',
-		campus: '文心分館', tax: 152, net: 3048, paidAt: '2026/06/07', taxId: '—', orderId: 'uuid-2'
+		status: 'paid', method: 'LINE Pay', date: '2026/06/07', discount: '—', tax: 152, net: 3048, paidAt: '2026/06/07', orderId: 'uuid-2'
 	}
 ];
 

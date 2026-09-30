@@ -26,7 +26,7 @@ const COACHES: Coach[] = [
 	{ id: 'co1', userId: 'u1', name: '林雅婷', initial: '林', title: '教練', color: '#000', tags: [], isActive: true },
 	{ id: 'co2', userId: 'u2', name: '陳冠宇', initial: '陳', title: '教練', color: '#000', tags: [], isActive: true }
 ];
-const BASE_CLASS: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', room: '', day: '週二', time: '19:00–20:30', enrolled: 11, cap: 12, age: '8–14 歲', price: 4800, status: '招生中', wait: 0, term: '', sessions: 0, startDate: '', checkinRate: 0, makeup: 0, durationMinutes: 90 };
+const BASE_CLASS: ClassRow = { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', coach: '林雅婷', day: '週二', time: '19:00–20:30', enrolled: 11, cap: 12, age: '8–14 歲', price: 4800, status: '招生中', wait: 0, durationMinutes: 90 };
 
 function validOf(d: CourseDraft): ValidCourse {
 	const r = checkCourseDraft(d, COACHES);
@@ -181,7 +181,6 @@ describe('blankClassRow — 新增課程 flow 的空白 ClassRow（桌面 blankC
 			level: '基礎',
 			cat: CATS[0],
 			coach: '林雅婷',
-			room: '',
 			day: '',
 			time: '',
 			enrolled: 0,
@@ -190,11 +189,6 @@ describe('blankClassRow — 新增課程 flow 的空白 ClassRow（桌面 blankC
 			price: 3200,
 			status: '招生中',
 			wait: 0,
-			term: '2026 春季',
-			sessions: 16,
-			startDate: '',
-			checkinRate: 0,
-			makeup: 0,
 			durationMinutes: 90
 		});
 	});

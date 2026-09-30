@@ -167,8 +167,8 @@ interface ApiAdminOrder {
 type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
 
 /** `AdminOrderSummary` → 既有 Order 形狀，讓 OrdersTable/OrderDialog 樣板不用改。
- *  AdminOrderSummary 沒有發票/經手人/分校欄位 —— 誠實給預設值(P2，各欄位見
- *  行內註解)；item 現由 items 摘要組成(orderItemsSummary，與 member/api.ts
+ *  AdminOrderSummary 沒有發票/經手人/分校/統編欄位 —— R16 Task 2b 起從 Order
+ *  形狀拿掉(不再給「—」佔位)；item 現由 items 摘要組成(orderItemsSummary，與 member/api.ts
  *  mapOrder 共用同一份措辭)；tax/net 由 amount 反推 5% 內含稅(wire.ts 的
  *  taxFromGross，非後端資料)；status 直接沿用後端 6 態原值(pending/paid/
  *  processing/completed/cancelled/refunded)，中文標籤由 ORDER_STATUS 查表
@@ -190,14 +190,10 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		status: o.status,
 		method: '線上', // 後端目前僅有模擬付款，沒有真實付款方式欄位
 		date: isoDate(o.created_at),
-		invoice: '—', // P2: 後端無發票號碼欄位
 		discount: o.coupon_code ?? '',
-		handler: '—', // P2: 後端無經手人／客服歸屬欄位
-		campus: '—', // P2: 訂單無分校欄位(courses/venues 目前也無分校維度)
 		tax,
 		net,
-		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at),
-		taxId: '—' // P2: 後端無統一編號欄位
+		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at)
 	};
 }
 
@@ -360,8 +356,8 @@ function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus
  *  (CourseResponse 本身沒有教練姓名欄位，需靠 getClasses() 內的 coachNameById 對照
  *  ——該表現在存的是 mapCoach() 輸出的真實 name)；level 經 $lib/domain/course-level
  *  的共用 5 級對照常數轉繁中(FE#17：後端 course_level 現為 5 值，這裡不再是舊
- *  3→5 折疊)；duration_minutes 直接映射為 durationMinutes(FE#18)；room/term/
- *  sessions/startDate/checkinRate/makeup 後端無對應欄位，誠實給預設值(P2)。 */
+ *  3→5 折疊)；duration_minutes 直接映射為 durationMinutes(FE#18)。教室/期別/堂數/
+ *  開課日/到課率/補課名額後端無對應欄位，R16 Task 2b 起從 ClassRow 拿掉。 */
 export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
 	const { day, time } = splitSchedule(c.schedule_text);
 	return {
@@ -370,7 +366,6 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 		level: COURSE_LEVEL_LABEL[c.level] ?? '基礎',
 		cat: c.category ?? '',
 		coach: c.coach_id ? (coachNameById.get(c.coach_id) ?? '') : '',
-		room: '', // P2: 課程無場地欄位(無 course↔venue 關聯)
 		day,
 		time,
 		enrolled: c.enrolled_count,
@@ -379,11 +374,6 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 		price: ntd(c.price_cents),
 		status: classStatusOf(c.enrolled_count, c.max_students, c.waitlist_count),
 		wait: c.waitlist_count,
-		term: '', // P2: 課程無期別欄位
-		sessions: 0, // P2: 課程無本期堂數欄位(duration_minutes 是單堂時長，語意不同)
-		startDate: '', // P2: 課程無開課日期欄位
-		checkinRate: 0, // P2: 課程無到課率彙總欄位
-		makeup: 0, // P2: 課程無補課名額欄位
 		durationMinutes: c.duration_minutes
 	};
 }

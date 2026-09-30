@@ -5,8 +5,8 @@ import type { Order } from '$lib/admin/data';
 import { fmtNT } from '$lib/format';
 
 /* OrderDialog — order detail modal (admin.jsx OrderDialog). A centered amount +
- * status badge over a 2-col field grid (id/member/item/campus/discount/method/
- * paidAt/net/tax/invoice/taxId/handler/date), plus 退款原因 when refunded. Footer
+ * status badge over a 2-col field grid (id/member/item/discount/method/
+ * paidAt/net/tax/date), plus 退款原因 when refunded. Footer
  * is always 關閉 + (pending-only) 發送催繳.
  *
  * Task 8 piece 2: the old hardcoded pending→標記已付款 primary is replaced with a
@@ -16,9 +16,9 @@ import { fmtNT } from '$lib/format';
  * Task 1(C2 死種子退役):admin/data.ts 的 ORDERS(值)已退役——paid/pending/refunded
  * 改為檔內 inline fixture，欄位值互不相同以證明每個欄位確實各自渲染(不是巧合對到
  * 同一個字串)。 */
-const paid: Order = { id: 'DF-9001', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', invoice: 'QX-90010001', discount: '—', handler: '陳怡君', campus: '美村本館', tax: 229, net: 4571, paidAt: '06/08 14:22', taxId: '53901240', orderId: 'uuid-9001' };
-const pending: Order = { id: 'DF-9002', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', invoice: 'QX-90010002', discount: '—', handler: '系統自動', campus: '文心分館', tax: 152, net: 3048, paidAt: '—（待付款）', taxId: '—', orderId: 'uuid-9002' };
-const refunded: Order = { id: 'DF-9003', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', invoice: 'QX-90010003', discount: '體驗折抵', handler: '王思齊', campus: '北屯分館', tax: 29, net: 571, paidAt: '06/06 10:12', taxId: '—', orderId: 'uuid-9003', reason: '家長申請改期，全額退款' };
+const paid: Order = { id: 'DF-9001', member: '王承恩', initial: '王', color: '#0066CC', item: '競技啦啦隊 進階班 · 春季', amount: 4800, status: 'paid', method: '信用卡', date: '06/08 14:22', discount: '—', tax: 229, net: 4571, paidAt: '06/08 14:22', orderId: 'uuid-9001' };
+const pending: Order = { id: 'DF-9002', member: '李宥蓁', initial: '李', color: '#0EA5E9', item: '兒童基礎 B 班 · 春季', amount: 3200, status: 'pending', method: 'ATM 轉帳', date: '06/07 19:45', discount: '—', tax: 152, net: 3048, paidAt: '—（待付款）', orderId: 'uuid-9002' };
+const refunded: Order = { id: 'DF-9003', member: '周哲瑋', initial: '周', color: '#10B981', item: '跑酷入門班 · 體驗', amount: 600, status: 'refunded', method: '信用卡', date: '06/06 10:12', discount: '體驗折抵', tax: 29, net: 571, paidAt: '06/06 10:12', orderId: 'uuid-9003', reason: '家長申請改期，全額退款' };
 const cancelled: Order = { ...paid, status: 'cancelled' };
 
 describe('OrderDialog', () => {
@@ -44,14 +44,17 @@ describe('OrderDialog', () => {
 		expect(container.textContent).toContain(fmtNT(paid.net)); // 未稅金額
 	});
 
-	it('renders the paidAt, taxId, invoice, method and campus fields', () => {
+	it('renders the paidAt and method fields', () => {
 		const { container } = render(OrderDialog, { order: paid });
 		expect(container.textContent).toContain(paid.paidAt);
-		expect(container.textContent).toContain(paid.taxId);
-		expect(container.textContent).toContain(paid.invoice);
 		expect(container.textContent).toContain(paid.method);
-		expect(container.textContent).toContain(paid.campus);
-		expect(container.textContent).toContain(paid.handler);
+	});
+
+	it('不再顯示後端沒有的所屬分校/發票號碼/統一編號/經手人(R16 Task 2b)', () => {
+		const { container } = render(OrderDialog, { order: paid });
+		for (const label of ['所屬分校', '發票號碼', '統一編號', '經手人']) {
+			expect(container.textContent).not.toContain(label);
+		}
 	});
 
 	it('shows the 退款原因 reason for a refunded order', () => {

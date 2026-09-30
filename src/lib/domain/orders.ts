@@ -17,9 +17,7 @@ export interface OrderBase {
 	status: OrderStatus;
 	method: string;
 	date: string;
-	invoice: string;
 	discount: string;
-	handler: string;
 	reason?: string;
 }
 

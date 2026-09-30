@@ -2,8 +2,8 @@
   /* 課程資料 — read-only class detail modal. Faithful port of admin.jsx
    * ClassDialog: 分級 + 招生狀態 badges (via StatusBadge) + the mono班級 id, the
    * class name, an 報名人數 progress bar, then a 2-col icon field grid covering
-   * 上課時段 / 授課教練 / 教室 / 適合年齡 / 課程類別 / 本期期別 / 開課日期 / 本期堂數 /
-   * 平均到課率 / 候補人數 / 補課名額 / 季費. Built on the shared Dialog (matches the
+   * 上課時段 / 授課教練 / 適合年齡 / 課程類別 / 候補人數 / 季費 (R16 Task 2b：教室/期別/
+   * 開課日期/堂數/到課率/補課名額後端沒有，拿掉). Built on the shared Dialog (matches the
    * source's ADialog, width 480) with a 編輯課程 primary that calls onEdit and a
    * 關閉 secondary that calls onClose. */
   import { Dialog, Icon, ProgressBar } from '$lib/components/ui';

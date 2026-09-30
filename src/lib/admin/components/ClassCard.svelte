@@ -22,11 +22,12 @@
   $: full = fill.full;
   $: pct = fill.pct;
 
-  // 教練 / 上課日·時段 / 教室·年齡 — mirrors the source's three icon rows.
+  // 教練 / 上課日·時段 / 年齡 — 原稿第三列是「教室·年齡」，R16 Task 2b 起課程沒有的
+  // 教室欄位拿掉，只留年齡。
   $: rows = [
     ['user', k.coach + ' 教練'],
     ['calendar-days', k.day + ' · ' + k.time],
-    ['map-pin', k.room + ' · ' + k.age]
+    ['cake', k.age]
   ] satisfies [IconName, string][];
 
   function roster() {

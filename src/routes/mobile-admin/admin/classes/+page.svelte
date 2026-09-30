@@ -91,13 +91,12 @@
   $: list = filterClasses($classes, { cat, query: q });
   $: capHint = searchCapHint($opsPages.classes);
 
-  // 班級卡片的三顆 icon meta rows(教練/日期時段/教室)——原模板內聯 each 陣列
+  // 班級卡片的 icon meta rows(教練/日期時段；R16 Task 2b 起課程沒有的教室列拿掉)——原模板內聯 each 陣列
   // hoist 為純函式並標型別(依 k 逐卡片而異，不是單一靜態陣列)。
   function classMetaRows(k: ClassRow): [IconName, string][] {
     return [
       ['user', k.coach + ' 教練'],
-      ['calendar-days', k.day + ' · ' + k.time],
-      ['map-pin', k.room]
+      ['calendar-days', k.day + ' · ' + k.time]
     ];
   }
 </script>

@@ -250,6 +250,8 @@ describe('getOrders — GET /orders（admin）', () => {
 		expect(first.date).toBe('2026-06-08');
 		expect(first.discount).toBe(''); // coupon_code ?? ''
 		expect(first.paidAt).toBe('—（待付款）'); // pending → placeholder
+		// R16 Task 2b:後端沒有的發票/經手人/分校/統編不再給「—」佔位
+		for (const k of ['invoice', 'handler', 'campus', 'taxId']) expect(first).not.toHaveProperty(k);
 
 		expect(d.orders[1].paidAt).toBe('2026-06-08'); // paid → real date
 		expect(d.orders[5].discount).toBe('SPRING10');
@@ -440,6 +442,8 @@ describe('getClasses — GET /courses（admin 自帶分頁抓取，不假道 pub
 		expect(c1.level).toBe('進階'); // advanced → 進階
 		expect(c1.age).toBe('8–14 歲');
 		expect(c1.durationMinutes).toBe(90);
+		// R16 Task 2b:課程沒有的教室/期別/堂數/開課日/到課率/補課名額不再捏造
+		for (const k of ['room', 'term', 'sessions', 'startDate', 'checkinRate', 'makeup']) expect(c1).not.toHaveProperty(k);
 
 		const c2 = d.classes.find((c) => c.id === 'c2')!;
 		expect(c2.day).toBe(''); // schedule_text: null 的 fallback

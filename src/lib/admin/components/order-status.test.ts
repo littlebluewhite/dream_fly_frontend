@@ -24,14 +24,10 @@ function makeOrder(status: OrderStatus, id: string): Order {
 		status,
 		method: '信用卡',
 		date: '06/01 00:00',
-		invoice: 'QX-TEST',
 		discount: '—',
-		handler: '測試',
-		campus: '測試館',
 		tax: 48,
 		net: 952,
 		paidAt: status === 'pending' ? '—（待付款）' : '06/01 00:00',
-		taxId: '—',
 		orderId: 'uuid-' + id
 	};
 }
