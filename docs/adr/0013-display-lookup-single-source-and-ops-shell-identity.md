@@ -504,3 +504,20 @@ R8 C4 增補與 `docs/adr/0018` §4 記的承接形,R13 Task 6 改了兩處:
 `mobile/data.ts` 三處的 `LEAVE_STATUS` 值與收窄 re-assert 一併刪除;字面 grep 仍會命中若干純註解
 (說明退役緣由),這與 `NOTIFS_SEED` 等既有退役識別字的慣例一致,詳見 `docs/adr/0025` 候選「請假列
 VM」。
+
+## 增補(2026-09-30,架構深化 R16):`course-category.ts` 入列;明細列數變更;色差紀錄複核
+
+完整背景見 `docs/adr/0026` §3、§7、§8。本篇原文不改寫,以下各點以本節為準。
+
+- **`src/lib/domain/course-category.ts`**(Task 6):`COURSE_CATEGORIES`(6 筆,`key`/`chip`/
+  `trialLabel`/`icon`/`age`)與 `courseCategoryIcon(cat)`(未知類別回 `graduation-cap`),是 mobile
+  首頁、課程頁、`TrialScreen`、`mobile/api.ts` 的單一來源。它不產出 `Tone`、不對應後端 enum(後端
+  `category` 是自由文字),不算第七個顯示查表。`admin/data.ts` 的 `CATS` 不動(`docs/adr/0022`)。
+- **明細列數**(Task 2b):R11 增補的 `classDetailRows` 12 列改為 6 列(上課時段、授課教練、適合年齡、
+  課程類別、候補人數、季費);R13 增補的 `orderDetailRows` 13 列(有退款原因時 14 列)改為 9 列(10 列),
+  拿掉的是後端沒有的欄位。
+- **Form 3 前例的型別來源**:`domain/leave-requests.ts` 私有 `STATUS_BADGE` 的鍵型別 `LeaveStatus`
+  改從 `$lib/api/wire` import(Task 7),值與收窄方式不變。
+- **色差紀錄複核,無需更正**:`NOTIF_TONE_BG.accent` 與 `ANNOUNCE` 第 3 則的 `bg` 仍是 member
+  `var(--df-accent-bg)`、mobile `#FFF8DB`;`domain/member-app.ts` 檔頭與本篇「`ANNOUNCE` 刻意發散」
+  的描述仍與程式一致。

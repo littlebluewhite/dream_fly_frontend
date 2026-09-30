@@ -402,3 +402,37 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
 - **「結帳跨登入在飛窗口」擴大**:R14 Task 5(候選 F4)起結算輸入住 `checkout` 單例,付款中重開保留
   優惠碼、點數折抵與預覽。A 付款在飛時 B 打開購物車,帶過去的除了付款狀態,還有這三樣。仍記為遞延
   (`docs/adr/0024`)。
+
+## 增補(2026-09-30,架構深化 R16):兩條遞延項關閉;會員資料 module 改名搬家;教練閘門只快取教練檔案
+
+完整背景見 `docs/adr/0026` §2、§3。本篇原文不改寫,以下各點以本節為準。
+
+### 1. 「已知、刻意遞延」兩條已關閉
+
+- **「身兼會員的教練,改名後 `$memberProfile` 顯示舊名」**(兩個 module 的快取各自為政):R16 Task 1b
+  起教練端不再自己快取 `/users/me`。教練閘門的 fetch 是 `Promise.all([hydrateSelfAccount(),
+  listCoaches()])`,`saveSettings` 改經 `saveSelfAccount` 寫入,教練頁與會員 app 讀的是同一份
+  `$selfAccount`,改名後兩邊同時更新。
+- **「場地/期別/堂數的顯示清理」**:R16 Task 2b 把 `ClassBase.room/term/sessions` 從型別拿掉,
+  `classDetailRows` 12 → 6 列,`ClassCard` 第三列只顯示年齡,mobile-admin 班級卡的空白教室列拿掉。
+  列表卡與明細不再顯示空值。
+
+### 2. §2 會員資料 module:改名搬家為本人帳號資料
+
+`src/lib/member/profile.ts` 搬到 `src/lib/self-account.ts`(R16 Task 1a,不留舊名 alias):
+`memberProfile`→`selfAccount`、`MemberProfile`→`SelfAccount`、`hydrateProfile`→`hydrateSelfAccount`、
+`saveProfile`→`saveSelfAccount`、`ProfileEdit`→`SelfAccountEdit`、`ProfileSaveOutcome`→
+`SelfAccountSaveOutcome`、`profileEditError`→`selfAccountEditError`;偏好相關的名字不變。
+`member/stores.ts` 的轉出刪除。`SelfAccount` 另加 `id` 與 `lastLogin`。本篇與 R14 增補提到的舊名,
+自此都讀作新名。
+
+### 3. §7 教練身分:閘門只快取 `ApiCoach | null`
+
+- 私有 `createSessionGate<CoachIdentity>` 改成 `createSessionGate<ApiCoach | null>`;`CoachIdentity`、
+  `fetchMe`、`identity` 刪除。`requireCoach()` 回 `{ account, coach }`,`account` 讀自 `$selfAccount`。
+- `saveSettings` 不再走 `gate.mutate(PATCH /users/me, writeBack)`:`requireCoach()`(在 PATCH 之前
+  解析教練檔案的保證不變)→ `saveSelfAccount(edit)` → `failed` 時丟出。只送改過的欄位,所以電話為
+  `null` 的教練只改姓名時不再送 `phone: ''` 撞 422。
+- §6 寫的「coach 兩支 mapper 的目標形狀另帶 `level`/`cat`」不再成立:`TodayClass.level/cat` 隨 R16
+  Task 2a 拿掉(後端沒有這兩個欄位)。
+- 「教練身分快取到登出為止」仍然成立(閘門仍快取 `ApiCoach` 到換帳號為止)。

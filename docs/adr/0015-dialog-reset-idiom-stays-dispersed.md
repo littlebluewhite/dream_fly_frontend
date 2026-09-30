@@ -55,3 +55,14 @@ clone 進本地 `f`,並重建各自的派生 string buffer)與 **derive 族**一
   `本期堂數` 那一行斷言(輸入已不存在,斷言沒有對象);其餘斷言逐字不變。第二支(關閉重開丟棄髒草稿、
   原實體不污染)完全不變。
 - 決定一(reset 慣用式維持分散、不建統一 helper)不受影響。
+
+## 增補(2026-09-30,架構深化 R16):學員表單機的重置時機留在元件
+
+完整背景見 `docs/adr/0026` §3、§4。
+
+- R16 Task 3 把教練的證書/成績單表單收成 `coach/student-forms.ts` 雙工廠。工廠提供 `reset()`
+  (成績單為 `reset(student)`),但**何時**重置仍由元件決定:`CertificateDialog`/`ReportCardDialog`
+  沿用 `lastOpen` 守衛,在開啟邊沿呼叫 `form.reset()`;`StudentActionSheet` 在建構時呼叫。決定一
+  (reset 慣用式維持分散、不建統一 helper)不受影響。
+- R16 Task 2b 從 `ClassRow` 拿掉 `room`/`term`/`sessions`/`startDate`/`checkinRate`/`makeup`。
+  `ClassEditDialog.test.ts` 兩支 reset 釘只改 fixture(拿掉這些欄位),斷言逐字不變。

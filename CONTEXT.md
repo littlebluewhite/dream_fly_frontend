@@ -14,11 +14,20 @@ _Avoid_: 使用者(指訪客時), 家長
 尚未登入的瀏覽者;可瀏覽、可加入購物車,但**結帳前必須先登入成為會員**(auth-at-checkout)。
 _Avoid_: 使用者
 
+**本人帳號資料 (Self Account)**:
+任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
+上次登入時間——連同本人的通知偏好。真值在後端 `/users/me`,讀寫單一來源是 `src/lib/self-account.ts`
+(`selfAccount`/`hydrateSelfAccount`/`saveSelfAccount`/`selfAccountEditError`,建在 session 閘門上,
+換帳號即重置)。member、mobile 與教練端(`coach/api.ts` 的教練閘門與 `saveSettings`)共用同一顆,
+所以同一位登入者在同一個頁面 session 裡從任何一端改名,各端讀到的都是新名字。存檔只送與目前值
+不同的欄位,全部相同就不發請求(見 `docs/adr/0023`、`docs/adr/0026`)。教練檔案(`GET /coaches`)是另一份資料,不屬於本人帳號資料。
+_Avoid_: 個人檔案(與教練檔案混淆), 教練檔案(那是 `/coaches` 的那一列), 對 staff 說「會員資料」
+
 **會員資料 (Member Profile)**:
-會員本人可檢視、可自行修改的個人資料——姓名、電話、生日(email 只讀、加入年月由後端推導)——以及
-本人的通知偏好(課前提醒、教練訊息、活動與優惠、深色模式)。真值在後端 `/users/me`,讀寫單一來源是
-`src/lib/member/profile.ts`(member 與 mobile 共用同一顆,換帳號即重置;見 `docs/adr/0023`)。只收後端
-真的有欄位的資料:會員編號、家長聯絡人、頭像顏色這類後端沒有的欄位不算會員資料,也不提供輸入。
+本人帳號資料在會員端的視角:會員在 member 帳戶頁與 mobile 設定頁可檢視、可自行修改的姓名、電話、
+生日,以及通知偏好(課前提醒、教練訊息、活動與優惠、深色模式)。沒有自己的 module,讀寫都經
+`src/lib/self-account.ts`。只收後端真的有欄位的資料:會員編號、家長聯絡人、頭像顏色這類後端沒有的欄位
+不算會員資料,也不提供輸入(見 `docs/adr/0023`)。
 _Avoid_: 帳號設定(那是含登出、密碼等的整個畫面), 個人檔案(與教練檔案混淆), 系統設定(那是 admin 的全域組態)
 
 ### 報名、訂閱與結帳 (Enrolment, Subscription & Checkout)
@@ -162,11 +171,15 @@ _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)�
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(水合閘門 + identity 重置 + epoch 核對 fetch
-+ `mutate()` + 寫入鏈 `queueWrite()`,頁面進場包繼承自水合閘門;供 waitlist/請假/通知/會員資料/教練
-身分/mobile-admin 訊息——通知自 2026-09-26 起是 member 與 mobile 共用的同一顆閘門,mobile 經自家
-`mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;會員資料同樣兩端共用一顆,教練身分住 `coach/api.ts`
-內部、每個 session 只解析一次,mobile-admin 訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
-`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。身分基準在建構當下決定:
++ `mutate()` + 寫入鏈 `queueWrite()`,頁面進場包繼承自水合閘門;供 waitlist/請假/通知/本人帳號資料/
+教練身分/mobile-admin 訊息——通知自 2026-09-26 起是 member 與 mobile 共用的同一顆閘門,mobile 經自家
+`mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
+身分住 `coach/api.ts` 內部、每個 session 只解析一次(自 `docs/adr/0026` 起只快取教練檔案),mobile-admin
+訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
+`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由同檔匯出的
+純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
+閘門內部與 member/mobile/mobile-admin layout 的暖機 key、mobile-admin `MessageThread` 都呼叫它,
+不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序
 不是契約。`queueWrite` 排進同一條寫入鏈:輪到時身分已換就跳過,換帳號即重置這條鏈(見
 `docs/adr/0024`)。`reset()` 本身自 `docs/adr/0025`「閘門重置」起改呼叫水合閘門通用的
@@ -174,7 +187,7 @@ restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(re
 兩者已退役),再疊上 `reconcileChain`/`writeChain` 的重置——「誰換人、何時換人」這個 session 專屬
 判斷仍只住本檔。原第三門 `onSessionReset`(僅重置、閘門所有權留呼叫端)已於 2026-08-03 隨其唯一
 消費者(行動版通知)改建完整閘門而退役(見 `docs/adr/0017` 增補與 `docs/adr/0019`)。
-_Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活、
+_Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活、
 開機時為了「對齊開機值」而觸發 reset
 
 **暖機清單 (Warm Set)**:

@@ -392,3 +392,17 @@ K7 重開、只剩殘餘:`getMine()` 收斂為只回 `activeEnrolments()`,`getAc
 並行(`Promise.all`)出發自己要暖的清單——getter 不再有「呼叫它就會連帶水合別的 store」這層看不見的
 副作用,但暖機仍服務所在那一頁自己的讀取,不是新單源。`getPoints()` 未變動,K7 的裁決本身未撤。
 詳見 `docs/adr/0025` 候選 F-2。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026` §2、§4。本篇原文不改寫,以下各點以本節為準。
+
+- **R13 增補第 1 點的住所改名**:pref-sync 語意所在的 `src/lib/member/profile.ts` 搬到
+  `src/lib/self-account.ts`,`saveProfile` 改名 `saveSelfAccount`;兩個「移植自 pref-sync.test.ts」
+  describe 隨檔搬到 `self-account.test.ts`,名稱與斷言不變。`setPref` 與 `prefs` 名字不變。它仍是
+  store 層 module,不在名冊內。
+- **`coach/student-forms.ts` 不入名冊**:`createCertificateForm`/`createReportCardForm` 的呼叫端是
+  桌面 `CertificateDialog`/`ReportCardDialog` 與 mobile-admin `StudentActionSheet`,走
+  `docs/adr/0014` §2 雙生核可類(同 `member/leave-form.ts`)。形狀照 K1:單檔雙工廠、不用 mode 旗標;
+  判準②③④照舊——deps 只有 I/O、outcome 用領域 kind(`certificateIssued`/`reportCardCreated`/
+  `failed`)、toast 文案留元件。名冊仍是 8 例。

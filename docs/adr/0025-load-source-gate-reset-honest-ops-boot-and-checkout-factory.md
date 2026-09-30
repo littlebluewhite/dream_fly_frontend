@@ -472,3 +472,10 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 - **`docs/adr/0024`**:結案:F1 潛伏窗(bug #3)、D-F2a、ops 誠實開機、`createOwnedHydrationGate`
   的 minor 記帳。重開:F6「轉出不退役」的結論延續、「不做 F3」的裁決本輪推翻(F-3 已擴及 mobile-admin
   的四個 ops 集合,增補)。
+
+## 增補(2026-09-30,架構深化 R16)
+
+第 10 節寫 `domain/leave-requests.ts` 新增 `LeaveStatus`;R16 Task 7 起 `LeaveStatus` 與
+`ApiLeaveRequest` 住 `src/lib/api/wire.ts`(member 與 coach 共用的 wire 形狀,`docs/adr/0007` 增補),
+`domain/leave-requests.ts` 改從 wire import、不再匯出。`STATUS_BADGE`/`leaveRow()` 的行為不變。
+詳見 `docs/adr/0026` §8。

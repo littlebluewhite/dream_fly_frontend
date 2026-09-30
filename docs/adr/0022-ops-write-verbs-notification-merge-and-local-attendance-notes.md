@@ -353,3 +353,18 @@ D2 記錄的另一件事:`mobile/stores.ts` 目前轉出的 27 個 `$lib/member/
 `leaveRow(source): LeaveRow`(內含 `tone`/`label`/`when`/`makeupWhen`/`action`),兩處呼叫端的
 `{@const action = leaveAction(lr)}` 改為 `{@const row = leaveRow(lr)}`。補課的開啟方式(Dialog vs
 sheet)與 toast 文案仍留呼叫端,本篇候選 04 的這句話不變。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026` §3、§5、§7。本篇原文不改寫,以下各點以本節為準。
+
+- **§6 `blankClassRow`**:R16 Task 2b 從 `ClassRow` 拿掉後端沒有的 `startDate`/`checkinRate`(連同
+  `room`/`term`/`sessions`/`makeup`),`blankClassRow(coaches)` 的桌面預設因此只剩 `cat: CATS[0]` 等
+  真欄位。分類清單仍以 `admin/data.ts` 的 `CATS` 為單一來源;R16 Task 6 新增的
+  `domain/course-category.ts` 是 mobile 會員端的類別表(chip/試上標籤/icon/年齡),不取代也不合併
+  `CATS`。
+- **§4 overlay 型別斷言**:R16 Task 4 拿掉 `RoleSheet` 的 `setRole` prop(角色只從 URL 推導,選了就
+  `goto(roleHome(id))`)。`overlay.test.ts` 原本的「缺必填 setRole」改寫為「多傳 setRole 被拒」,
+  「role sheet 的 role 必填,不可省略 props」保留;`@ts-expect-error` 行數不變,四種錯誤類別照舊涵蓋。
+- **R13 增補「§7 的 `prefSync` 單例」**:偏好寫入所在的 `$lib/member/profile` 搬到
+  `$lib/self-account`,`saveProfile` 改名 `saveSelfAccount`;`setPref` 名字與「共用一條寫入鏈」不變。

@@ -375,3 +375,10 @@ C4 的判準套用到 mobile-admin:`docs/adr/0025` 轉手退役(Task 3b)。`mobi
 5 個組合器,17 個 production importer 改直接找擁有者模組,撞名時在 import 處取別名——與 C4 當年
 對 `data.ts` facade 的判準句(「零映射的純轉手退役,importer 改直取擁有者模組」)完全同一套規則,
 本輪只是把適用範圍從 `data.ts` 擴到 `api.ts` 的組合器層。
+
+## 增補(2026-09-30,架構深化 R16)
+
+C4 批3 保留的記名邊界 seam 由 `LEVEL_TINT`/`Student` 縮成只剩 `type Student`:R16 Task 2a 拿掉後端
+沒有的 `Student.level`,`LEVEL_TINT` 失去對象而退役(`docs/adr/0014` R16 增補、`docs/adr/0026` §3)。
+判準句的保留側第三款(ADR 記名的邊界 seam)與鑑別法都不變,本篇提到 `LEVEL_TINT`/`Student` 之處自此
+只讀作 `Student`。

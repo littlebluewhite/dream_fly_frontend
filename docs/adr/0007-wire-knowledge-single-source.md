@@ -149,3 +149,26 @@ UI 目標型別 `TodaySession` 與投影 `toTodaySession(s, now)` **不進** `wi
 倉內只剩 authStore 一個宣告處。本節的理由沒有被推翻:收斂不是為了防漂移,而是兩個消費端開始把
 `/users/me` 的回應餵回 `authStore.syncUser`,型別必須是 authStore 自己的那一份。它仍不進 `wire.ts`,
 因為宣告處只有一個,也只有 authStore 定義它的語意。
+
+## 增補(2026-09-30,架構深化 R16):`LeaveStatus`/`ApiLeaveRequest` 收進 wire;`ApiUser` 現況
+
+完整背景見 `docs/adr/0026` §2、§8。
+
+### 1. 請假 wire 形狀符合收錄判準,已收進 `wire.ts`
+
+`LeaveRequestResponse`(§3.20)是 member(`POST`/`GET /leave-requests/me`、補課)與 coach(待審清單,
+另加 `user_id`/`user_name`)共用的後端形狀,原本 `member/leave.ts` 自己宣告一份、coach 另宣告一份。
+R16 Task 7 收成 `wire.ts` 的 `LeaveStatus` 與 `ApiLeaveRequest`:
+
+- `member/leave.ts` 的 `LeaveRequest = Omit<ApiLeaveRequest, 'decided_at'>`,本地宣告刪除。
+- `coach/api.ts` 的 `ApiCoachLeaveRequest = ApiLeaveRequest & { user_id, user_name }`。
+- `domain/leave-requests.ts` 改從 wire import `LeaveStatus`,不再自己匯出。
+
+UI 目標型別(`LeaveRow` 等)照本篇判準不進 `wire.ts`。
+
+### 2. `ApiUser` 的現況
+
+R13 增補寫的「`coach/api.ts` 的窄化版改 import `stores/authStore.ts` 匯出的 `ApiUser`」不再成立:
+R16 Task 1b 起 `coach/api.ts` 不讀 `/users/me`,也不 import `ApiUser`,本人資料一律讀
+`$selfAccount`。「`member/profile.ts` 以 `ApiUser & { preferences, birth_date }` 延伸同一份」改讀作
+`src/lib/self-account.ts` 的私有 `ApiMe`。倉內仍只有 authStore 一個宣告處。

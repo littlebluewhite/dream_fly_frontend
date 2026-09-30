@@ -93,8 +93,9 @@ hand-copied today's-session-status tables (`coach`'s `CLASS_STATUS` label, `admi
 `mobile-admin`'s own today-status label tables) — the canonical `live` label is `coach`'s and
 `mobile-admin`'s pre-existing `上課中`, so `admin`'s former `進行中` is the one that changed
 (`docs/adr/0018`). `domain/class-detail.ts` (2026-08-10, R11 C5) is a different kind of resident, closer
-to `session-format.ts` than to those six: `classDetailRows` — the 12-row `[icon, label, value]` course
-detail list behind `admin`'s `ClassDialog` and `mobile-admin`'s `ClassSheet`, until then two
+to `session-format.ts` than to those six: `classDetailRows` — the `[icon, label, value]` course
+detail list (12 rows until R16 dropped the backend-less room/term/sessions/start-date/check-in/makeup rows,
+6 now) behind `admin`'s `ClassDialog` and `mobile-admin`'s `ClassSheet`, until then two
 byte-identical untested inline copies — plus `classFill(enrolled, cap)`, the full/percentage derivation
 four call sites each carried their own copy of. It maps to no backend enum and yields no `Tone`, so it
 isn't a seventh per-entity lookup; its one behaviour change is that `cap <= 0` now gives `pct: 0`
@@ -114,11 +115,15 @@ and mobile imports it directly as a pure function (`docs/adr/0022`). R13 (`docs/
 `domain/sessions.ts`'s `toTodaySession(s, now)` projects the wire `ApiTodaySession` (now single-sourced
 in `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the same
 `deriveSessionStatus` state — admin's `mapTodaySession` builds on it, and (since the R13 final-review
-fix wave) so do coach's `mapTodayClass`/`mapAttendanceClass`, which layer their own richer `level`/`cat`
-fields on top instead of re-deriving `hhmm`/venue defaults/status themselves; and
-`domain/order-detail.ts`'s `orderDetailRows(o)` is `class-detail.ts`'s sibling for orders — the 13-row
-(14 with a refund reason) detail list `admin`'s `OrderDialog` and `mobile-admin`'s `OrderSheet` used to
+fix wave) so do coach's `mapTodayClass`/`mapAttendanceClass`, which build on it instead of re-deriving
+`hhmm`/venue defaults/status themselves (the `level`/`cat` fields they used to layer on top had no backend
+source and were dropped in R16); and
+`domain/order-detail.ts`'s `orderDetailRows(o)` is `class-detail.ts`'s sibling for orders — the 9-row
+(10 with a refund reason; 13/14 until R16 dropped the backend-less campus/invoice/tax-id/handler rows) detail list `admin`'s `OrderDialog` and `mobile-admin`'s `OrderSheet` used to
 inline separately, typed structurally so it takes both `Order` and `OrderRow`.
+R16 (`docs/adr/0026`) added `domain/course-category.ts` — `COURSE_CATEGORIES` (key/chip/trial label/icon/age)
+plus `courseCategoryIcon(cat)` (unknown → `graduation-cap`), the single source for `mobile`'s home, courses
+page, `TrialScreen` and `mobile/api.ts`; it yields no `Tone` and leaves `admin/data.ts`'s `CATS` alone.
 Four facades consume it — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s `data.ts` —
 but since 2026-08-03 (R9 C4, `docs/adr/0019`) **none of them re-exports a pass-through any more**: every
 export line that carried no local type fact (no narrowing annotation, no `as` assertion, no local
@@ -136,7 +141,8 @@ Form 2/3 narrowing re-asserts that genuinely re-assert a stricter local type ove
 `UPCOMING`, `mobile-admin`'s five status tables — `member`'s `NOTIFS_SEED` narrowing retired with the seed
 in R14; `LEAVE_STATUS`'s own narrowing retired the same way in R15, its Form 3 precedent now
 `domain/leave-requests.ts`'s private `STATUS_BADGE`),
-and one ADR-named boundary seam (`mobile-admin`'s `LEVEL_TINT`/`Student`, whose
+and one ADR-named boundary seam (`mobile-admin`'s `Student` type — `LEVEL_TINT` retired alongside it in R16
+with the backend-less `Student.level`, `docs/adr/0026` — whose
 canonical home stays `coach/data.ts` — `docs/adr/0014`). `coach` has no persona mapping into this
 shared ops-pair/member-app seed, so it stays
 outside the four-facade group above — though since 2026-07-23 (R8 C4) it's no longer true that `coach`
@@ -217,12 +223,16 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   Since R13, `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the
   logged-in user push the fresh name into `member` (and so into that cache) without a re-login; it's a
   no-op for any other user id and leaves the identity key alone, so no session gate resets.
-- **Member profile** (會員資料): the member's own name/phone/birthday and four notification preferences
-  live in one module, `src/lib/member/profile.ts` (R13, `docs/adr/0023`), shared by `member` and — via
-  `mobile/stores.ts` — `mobile`. It sits on a `createSessionGate` (one `GET /users/me` per identity,
-  reset on account switch) and serializes every `PATCH /users/me` through one write chain that hydrates
-  first; `setPref` is optimistic with a resync/rollback ladder, `saveProfile` sends only changed fields.
-  Fields the backend has no column for (member number, parent contact, avatar colour) have no input.
+- **Self account** (本人帳號資料; 會員資料 is its member-side view): the logged-in user's own
+  name/phone/birthday (plus read-only email, join month and last login) and four notification preferences
+  live in one module, `src/lib/self-account.ts` (R13 as `member/profile.ts`, `docs/adr/0023`; moved and
+  renamed in R16, `docs/adr/0026`), imported directly by `member`, `mobile` and — since R16 — `coach`,
+  whose private coach gate now caches only the `ApiCoach` row and reads the person from `$selfAccount`, so
+  a rename shows up on every surface at once. It sits on a `createSessionGate` (one `GET /users/me` per
+  identity, reset on account switch) and serializes every `PATCH /users/me` through one write chain that
+  hydrates first; `setPref` is optimistic with a resync/rollback ladder, `saveSelfAccount` sends only
+  changed fields (no request at all when nothing changed). Fields the backend has no column for (member
+  number, parent contact, avatar colour) have no input.
 - **One persistent cart** spanning guest → login → checkout: since 2026-08-03 (R9 C2, `docs/adr/0019`)
   the factory and the singleton both live at lib-root in `src/lib/cart.ts` — the single app-wide
   `cart = createCart(true)` (persisted to `dreamfly_cart_v3` — string uuid item ids deduped by
@@ -302,13 +312,13 @@ is retired along with it: with nothing left routed through the barrel, there is 
 police. `docs/adr/0014` §1 records the retirement; `$lib/testing/import-scan.ts`'s scanning mechanism
 itself is unaffected and still backs the other seam contracts (`docs/adr/0025`). Backend wire shapes shared across ≥2
 surfaces — order-status badges, list-page envelopes, member/coach paired DTOs, the admin/coach
-`ApiTodaySession` (R13), display atoms like `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
+`ApiTodaySession` (R13), the member/coach `ApiLeaveRequest`/`LeaveStatus` (R16), display atoms like `ageRange`/`initialOf` — live in the single source `src/lib/api/wire.ts` rather than each `api.ts`
 redeclaring its own copy (`docs/adr/0007`; since 2026-07-11 `mobile-admin/data.ts` takes the `OrderStatus`
 type from wire instead of holding a verbatim copy, and its two dynamic badge lookups use wire's
 `orderStatusBadge` fallback — which left a re-exported `ORDER_STATUS` table consumer-less, so it
 was dropped, and R9 C4 dropped the outward `OrderStatus` re-export too, keeping only the file-local
-`import type` its own `OrderRow.status` needs; since 2026-07-16 it also re-exports `LEVEL_TINT` and the
-`Student` type from
+`import type` its own `OrderRow.status` needs; since 2026-07-16 it also re-exports the
+`Student` type (and, until R16 retired it, `LEVEL_TINT`) from
 `$lib/coach/data` — coach stays the single source — for mobile-admin's two coach-side consumers, a
 boundary seam R9 C4 re-checked and kept byte-for-byte (`docs/adr/0014`, `docs/adr/0019`); since 2026-07-20 — R5 C7 — wire also owns two pieces of order knowledge as zero-import
 pure helpers: `orderIdentity`, the dual-identity protocol picking the display `order_number` vs the real
@@ -321,11 +331,13 @@ keeping its own 1-4-line entity text table; the other 10 are pass-through, deleg
 (`docs/adr/0011`). Coach's six pages (four desktop + mobile-admin's two coach pages; eight since R13
 wired both attendance pages in too, `docs/adr/0023`) also shared
 byte-identical *load*-error copy — the gate `onError` title/body pairs — single-sourced since 2026-07-16
-in `src/lib/coach/load-error-copy.ts` (name-based `CoachNotFoundError` discrimination, so page tests that
-stub the whole api module keep working; since R15 mobile-admin's three coach pages import it directly from
-`$lib/coach/load-error-copy` instead of through `mobile-admin/api.ts`'s now-retired re-export — the
-name-based judgement itself is unchanged, only one of its two original reasons (routing through the
-`api.ts` re-export) no longer applies, `docs/adr/0014` addendum); per-entity *action* error tables stay at
+in `src/lib/coach/load-error-copy.ts` (since R16 an `instanceof CoachNotFoundError` check; it was name-based
+while desktop page tests stubbed the whole `$lib/coach/api` module, but R16 moved all eight
+`routes/coach/*/page.test.ts` onto the HTTP seam — `vi.mock('$lib/api/client')` + `fakeRouter` with
+`src/lib/testing/coach-routes.ts`'s `COACH_ROUTES` — and an `import-scan.test.ts` contract pins zero
+whole-module `vi.mock('$lib/coach/api')`; since R15 mobile-admin's three coach pages import it directly from
+`$lib/coach/load-error-copy` instead of through `mobile-admin/api.ts`'s now-retired re-export,
+`docs/adr/0014` addenda, `docs/adr/0026`); per-entity *action* error tables stay at
 call sites — `docs/adr/0014` draws that boundary. Since R15 mobile-admin's coach attendance page joined
 that per-entity-table side: `ATTENDANCE_ERROR_TEXT` maps 403/404/422 to the same wording desktop's inline
 attendance-error table already used, so a save failure shows the specific reason instead of one generic
@@ -480,9 +492,9 @@ endpoint (`getMine()`: `activeEnrolments()` only, no more `GET /waitlist/me`/`GE
 `GET /subscriptions/me` — `mobile/account` in particular no longer hits `GET /subscriptions/me` at all).
 What used to be a getter's hidden side effect (`docs/adr/0012` K7's residual) is now the page-level warm
 set above, dispatched in parallel with the main fetch rather than tail-awaited after it — `getPoints()`
-itself is untouched, still called directly by whichever page reads `$points`. `getAccount()` still
-awaits the member profile's `hydrateProfile()` in parallel with its orders fetch and its warm set —
-fail-hard, not in the best-effort helper, because the account page renders from `$memberProfile`. Layout shells stay outside the seam
+itself is untouched, still called directly by whichever page reads `$points`. The account page's own
+fetch awaits the self account's `hydrateSelfAccount()` in parallel with `getAccount()` and its warm set —
+fail-hard, not in the best-effort helper, because the page renders from `$selfAccount`. Layout shells stay outside the seam
 — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte` / `Topbar.svelte` have no `data.ts`
 or `api.ts` import at all (hardcoded nav config), while `coach`'s Topbar still imports `NOTIFS` from
 `data.ts` for its unread-bell dropdown — synchronously, never through `api.ts` or the load gate (coach's
@@ -596,9 +608,9 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
 
 - **`createSessionGate<T>({ fetch, apply, reset })`** — waitlist / leave / notifications (one gate
   shared by member and mobile since 2026-09-26; mobile had its own until then), and since R13
-  (`docs/adr/0023`) the member profile (`member/profile.ts`, also shared by member and mobile), the coach
-  identity (private to `coach/api.ts`: `{ user, coach | null }` resolved once per session, the flag
-  flipped back on `CoachNotFoundError` so a retry re-resolves) and mobile-admin's messages. The coach and
+  (`docs/adr/0023`) the self account (`self-account.ts` since R16, shared by member, mobile and coach), the coach
+  identity (private to `coach/api.ts`: since R16 just `ApiCoach | null`, resolved once per session from
+  `hydrateSelfAccount()` + `GET /coaches`, the flag flipped back on `CoachNotFoundError` so a retry re-resolves) and mobile-admin's messages. The coach and
   mobile-admin ones are the first staff-side consumers — staff logins write the same `authStore`. Builds a `HydrationGate` (`createHydrationGate({ fetch, apply, reset })`, its own `reset()` layered
   with the reconcile/write-chain reset below — since R15 there is no separate internal
   `createOwnedHydrationGate`/`ownerChanged()` factory any more, `docs/adr/0025`) plus `mutate(request, writeBack)`,
@@ -608,7 +620,7 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
   back to `false`), `markMutated()`, then conditionally queue a serialized, retryable reconciliation
   refetch, and (since R14) `queueWrite(task, skipped)`, one serialized write chain per gate: a queued
   write whose identity changed before its turn is skipped, the task gets a `stale()` probe for its failure
-  handling, and an identity change resets the chain — the member profile's `setPref`/`saveProfile` run on
+  handling, and an identity change resets the chain — the self account's `setPref`/`saveSelfAccount` run on
   it. Its **`pageEntry()`** (R9 C3; inherited from the hydration gate since R14) is the pack a page
   spreads into its own load-gate: since R15 (F-1, `docs/adr/0025`) it is `{ source: LoadSource }`, where
   `source.load`/`source.refresh` are the *epoch-checking* fetch and refresh, and the mutation-generation
@@ -625,7 +637,10 @@ three factories; since 2026-08-03 (R9 C3, `docs/adr/0019`) it has **two**, both 
   in-flight cross-login discard (`return`, not `throw` — throwing would inject a new "switched
   accounts" failure mode into `redeemReward`'s and `placeOrder`'s existing rejection chains).
 
-Both factories share one private identity core, which since R14 fixes its identity *baseline* at
+Both factories share one private identity core, keyed by `sessionIdentity(auth)` — since R16 an exported
+pure function (`null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
+mobile-admin layouts' warm keys and mobile-admin's `MessageThread` call too instead of hand-copying the
+formula (`docs/adr/0026`). Since R14 it fixes its identity *baseline* at
 construction: the subscription's immediate callback only records who is logged in, so a restored (or
 guest) boot fires no reset at all — reset value equals boot value, so nothing on screen differs — and the
 old construction-order contract (plus the "declare this `let` first" comments at call sites) is gone. On a
@@ -806,9 +821,9 @@ that `docs/adr/0011` already rejected.
   reclassified it as a mobile-shared module (roster back to eight), and R13 retired it outright
   (`docs/adr/0023`, `docs/adr/0012` R13 addendum). Its preference-sync semantics — optimistic per-key
   writes, one serialized chain, a whole-object resync when a save fails and a single-key rollback when
-  the resync fails too (`saved`/`resynced`/`rolledBack`) — now live in `src/lib/member/profile.ts`'s
-  `setPref`, which owns the `prefs` store itself, sits on a `createSessionGate`, and shares one write
-  chain with `saveProfile`. That module is store-level, not a single-page controller.
+  the resync fails too (`saved`/`resynced`/`rolledBack`) — now live in `src/lib/self-account.ts`'s
+  `setPref` (R13's `member/profile.ts`, moved in R16), which owns the `prefs` store itself, sits on a
+  `createSessionGate`, and shares one write chain with `saveSelfAccount`. That module is store-level, not a single-page controller.
 
 The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant since 2026-07-16 —
 modules whose callers are desktop↔mobile twins with byte-identical orchestration rather than a single
@@ -842,6 +857,11 @@ Since R14 (F5, `docs/adr/0024`) `coach/messages-controller.ts` is in the class a
 `createConversation`, making the deps byte-identical to desktop's. The one wiring difference is the
 badge: `MessageThread` calls the store's `markMessageRead(id)` only when `badgeCleared` resolves true,
 so the unread badge clears after the backend acknowledged the read, as on desktop.
+Since R16 (`docs/adr/0026`) `coach/student-forms.ts` joins the class: `createCertificateForm`/
+`createReportCardForm` (one file, two factories, no mode flag) hold the required-field guard, double-submit
+guard, trimming, optional-field omission and local-date default that desktop's `CertificateDialog`/
+`ReportCardDialog` and mobile-admin's `StudentActionSheet` used to copy verbatim; toast copy and the
+`lastOpen` reset timing stay in the components.
 Since 2026-07-22 (R7 C8) `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)`
 pushes the pattern further still — an IO-callback orchestrator, not a deps-injected snapshot store,
 shared by *four* surfaces' login pages (`member`/`mobile`/`mobile-admin`/`staff`) rather than a

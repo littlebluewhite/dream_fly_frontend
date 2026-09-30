@@ -233,3 +233,21 @@ builder、`domain` 的 `MemberStatus`/`MemberBase`/`MEMBERS_BASE`/`CLASSES_BASE`
 `ClassBase`/`OrderBase` 繼承點原地保留,不受影響)。`COACHES` 的值搬到
 `src/lib/testing/seed-fixtures.ts`,原倉的 10 個真消費者(非原估的 13,另 2 個估錯的檔案其實只是
 失效的手動 store reset,直接刪除該行 import)逐一改指向新位置。詳見 `docs/adr/0025` 候選 F-3。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026` §3。本篇原文不改寫,以下各點以本節為準。
+
+- **§3 的 `LEVEL_TINT` 例子失去對象**:R16 Task 2a 拿掉後端沒有的 `Student.level`,`StudentLevel`
+  與 `LEVEL_TINT` 一併退役,`coach/data.test.ts`「every StudentLevel value resolves in LEVEL_TINT」
+  隨之刪除(同批刪除的還有 `CAT_COLOR` 涵蓋率測試)。§3 的論點(測試自帶 inline fixture,不借用
+  production 種子)不受影響,同檔剩下的 `CLASS_STATUS` 涵蓋率測試仍是它的實例。
+- **本輪退役清單**(型別欄位與只為它們存在的值,沿本篇「重新 grep 全部消費者、值/型別分家」的方法):
+  - coach:`StudentLevel`、`LEVEL_TINT`、`SchedCat`、`SchedVenue`、`CAT_COLOR`,以及設定頁寫死的
+    `STATS`;`Student.level/skill/pct/att`、`TodayClass.level/cat`、`Conversation.kind`、
+    `Coach.en/gender/emergency` 等欄位。
+  - admin:`ClassBase.room/term/sessions`、`ClassRow.startDate/checkinRate/makeup`、
+    `OrderBase.invoice/handler`、`Order.campus/taxId`。
+  - member/mobile:`EnrolledCourse.cat/coach/room/next/term/remain`、`DashboardData.track`、
+    `MobileHomeData.myCourses`。
+  - mobile-admin:`role` store 與 `switchRole`(Task 4,角色改由 URL 推導)。

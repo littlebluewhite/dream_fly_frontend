@@ -461,3 +461,32 @@ from '$lib/coach/load-error-copy'`,不再經 `mobile-admin/api.ts` 的活 re-exp
 這條連帶消失(現在是直接 import,無 re-export 這一層)。桌面那側的理由(「desktop 頁面測試把
 `$lib/coach/api` 整支換假模組,`class` 在假模組裡是 `undefined`,`instanceof` 過不了」)不變,
 `coachLoadErrorCopy()` 本身仍是 name-based 判別,判準句與收斂範圍(只涵蓋載入文案)一字未改。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026` §3、§4、§9。本篇原文不改寫,以下各點以本節為準。
+
+### 1. §1:mobile-admin 的邊界 seam 只剩 `Student`
+
+R16 Task 2a 拿掉後端沒有的 `Student.level`,`LEVEL_TINT` 與 `StudentLevel` 一併退役。
+`mobile-admin/data.ts` 的轉手由 `export { LEVEL_TINT, type Student } from '$lib/coach/data'` 縮成
+`export type { Student } from '$lib/coach/data'`。§1 與 R9 增補的理由(單複本無分歧、canonical 出處
+留在 `coach/data.ts`)照舊適用於剩下的 `Student`;本篇與 R9 增補提到 `LEVEL_TINT` 之處,自此只讀作
+`Student`。
+
+### 2. §2 雙生核可類新例:`coach/student-forms.ts`
+
+R16 Task 3。桌面 `CertificateDialog`/`ReportCardDialog` 與 mobile-admin `StudentActionSheet` 原本逐字
+複製同一套表單編排(必填檢核、防雙送、trim、空選填欄省略、submitting 生命週期、本地日期預設)。
+三條件逐條成立:deps 相同(`createCertificate`/`createReportCard`)、零行為旗標(單檔雙工廠
+`createCertificateForm`/`createReportCardForm`,不用 mode 旗標)、編排逐字重複。toast 文案
+(`apiErrorMessage` 映射)與重置時機(`lastOpen` 守衛,`docs/adr/0015`)留元件,判準④照舊。
+
+### 3. §3:桌面那側的理由也消失,判別改回 `instanceof`
+
+R16 Task 8 把 8 個 `routes/coach/*/page.test.ts` 改成 `vi.mock('$lib/api/client')` + `fakeRouter(…,
+COACH_ROUTES)`(`src/lib/testing/coach-routes.ts`),全倉不再有測試整支 mock `$lib/coach/api`——R15
+增補記的「桌面那側的理由」就此消失。`coachLoadErrorCopy()` 改為 `e instanceof CoachNotFoundError`
+(import 自 `./api`,不成環)。`load-error-copy.test.ts` 的「name-only 假物會命中」改寫成「不命中,
+回 `GENERIC_LOAD_ERROR`」(案例數不變)。`import-scan.test.ts` 加上可執行契約「測試 seam 契約:零
+vi.mock 整支 $lib/coach/api」防回退。§3 的劃界本身(單源只涵蓋載入文案、動作錯誤表留呼叫端)不變。

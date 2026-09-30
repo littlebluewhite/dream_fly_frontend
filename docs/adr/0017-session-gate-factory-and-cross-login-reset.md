@@ -284,3 +284,18 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
 `hydration-gate.ts`」的邊界依然有效——`reset()` 本身是每個水合閘門都有的通用能力(還原內容、翻旗、
 丟在飛 GET、換尾流帳、喚醒等待者),「誰換人、何時換人」這個 session 專屬的判斷仍只住
 `session-gate.ts`,只是不再需要自己重造一份「還原+翻旗+丟尾流」的樣板。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026` §2、§6。本篇原文不改寫,以下各點以本節為準。
+
+- **身分 key 收成 `sessionIdentity()`**:R13 增補寫的 identity key(`member.id`)精確公式是
+  `loggedIn ? (member?.id ?? '') : null`。這條公式原本在 `createSessionCore`、mobile-admin
+  `MessageThread`、member/mobile/mobile-admin 三個 layout 的暖機 key 各抄一份;R16 Task 5 起由
+  `session-gate.ts` 匯出的純函式 `sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>)` 單一
+  持有,六處都改呼叫它。刻意不做 derived store:它會讓閘門的重置時機晚一拍。「誰換人、何時換人」
+  仍只住本檔,本篇的零觸發開機與 `reset()` 語意不變。
+- **消費者名稱更新**:R13 增補的「會員資料(`src/lib/member/profile.ts`)」搬到
+  `src/lib/self-account.ts`(本人帳號資料);「教練身分」閘門的型別由 `{ user, coach | null }` 改成
+  `ApiCoach | null`,本人資料改讀 `$selfAccount`。`createSessionGate` 消費者仍是六個,
+  `authStore` 訂閱仍是八個。

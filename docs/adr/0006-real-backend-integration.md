@@ -248,3 +248,17 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
 - 若之後要為 `dreamfly_cart_v2`/`dreamfly_subscriptions` 做瀏覽器端清除（非搬移，只是清掉不用的舊
   key），可以在使用者下次寫入 `dreamfly_cart_v3`/登入成功時順手 `localStorage.removeItem()`；目前
   評估價值低（省下的 storage 微不足道），故未列入本次範圍。
+
+## 增補(2026-09-30,架構深化 R16)
+
+完整背景見 `docs/adr/0026`。第 5 節殘餘表不增不減;以下是同一條「誠實缺口」原則在本輪的延伸。
+
+- **後端沒有的列欄位拿掉,不再以 `''`/`0` 假裝**:coach、admin、member/mobile 三邊列型別裡後端從未
+  提供的欄位(學員程度/技能/出席率、課程教室/期別/堂數、訂單發票/經手人/分校/統編、我的課程的教練/
+  教室/下一堂等)連同只靠它們運作的篩選、KPI、圖例與提示一起拿掉。教練學員頁因此不再把每位學員標成
+  出席率偏低。
+- **教練生日接真值**:`Coach.birth` 讀 `GET /users/me` 的 `birth_date`,設定頁唯讀顯示;設定頁寫死
+  的統計(312 hr/36 人/6 年)拿掉。
+- **R13 增補寫的會員資料 module 搬家**:`src/lib/member/profile.ts` 改為 `src/lib/self-account.ts`
+  (本人帳號資料),教練的 `saveSettings` 也經它寫 `PATCH /users/me`,不再自己呼叫 `syncUser`。
+- **桌面 admin/coach 的「登出」真的呼叫 `authStore.logout()`**(先前只跳 toast,session 不變)。
