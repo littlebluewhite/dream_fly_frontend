@@ -21,14 +21,6 @@ const STUDENT: Student = {
   courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }]
 };
 
-/** 同元件的 today()：本地日期，非 toISOString()(避免 UTC 位移，見元件註解)。 */
-function localToday(): string {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
 const CREATED = {
   id: 'ct1', course_id: null, course_name: null, title: '結業證書',
   level: null, issued_on: '', note: null, created_at: '2026-07-06T00:00:00Z'
@@ -58,77 +50,9 @@ describe('CertificateDialog — 開啟狀態與欄位', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('核發日期預設為今天', () => {
-    render(CertificateDialog, { open: true, student: STUDENT });
-    const today = localToday();
-    expect((screen.getByLabelText('核發日期', { exact: false }) as HTMLInputElement).value).toBe(today);
-  });
-});
-
-describe('CertificateDialog — 必填檢核（證書名稱）', () => {
-  const submitButton = () => screen.getByText('發放證書').closest('button') as HTMLButtonElement;
-
-  it('證書名稱未填前送出鈕停用；填妥後啟用', async () => {
-    render(CertificateDialog, { open: true, student: STUDENT });
-    expect(submitButton()).toBeDisabled();
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '結業證書' } });
-    expect(submitButton()).not.toBeDisabled();
-  });
-
-  it('證書名稱只有空白字元時仍停用（trim 後為空）', async () => {
-    render(CertificateDialog, { open: true, student: STUDENT });
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '   ' } });
-    expect(submitButton()).toBeDisabled();
-  });
 });
 
 describe('CertificateDialog — 送出（POST /certificates）', () => {
-  it('送出 { user_id, title, issued_on }，level/note 留白時省略欄位', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': CREATED }));
-    const onClose = vi.fn();
-    render(CertificateDialog, { open: true, student: STUDENT, onClose });
-
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '結業證書' } });
-    await fireEvent.click(screen.getByText('發放證書'));
-
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
-    const today = localToday();
-    expect(api).toHaveBeenCalledWith('/certificates', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: 'su01', title: '結業證書', issued_on: today })
-    });
-  });
-
-  it('level/note 有填寫時一併帶入 body', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': CREATED }));
-    render(CertificateDialog, { open: true, student: STUDENT });
-
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '結業證書' } });
-    await fireEvent.input(screen.getByLabelText('等級（選填）'), { target: { value: '結業' } });
-    await fireEvent.input(screen.getByLabelText('備註（選填）'), { target: { value: '表現優異' } });
-    await fireEvent.click(screen.getByText('發放證書'));
-
-    const today = localToday();
-    await vi.waitFor(() => {
-      expect(api).toHaveBeenCalledWith('/certificates', {
-        method: 'POST',
-        body: JSON.stringify({ user_id: 'su01', title: '結業證書', issued_on: today, level: '結業', note: '表現優異' })
-      });
-    });
-  });
-
-  it('證書名稱前後留白會 trim 再送出', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': CREATED }));
-    render(CertificateDialog, { open: true, student: STUDENT });
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '  結業證書  ' } });
-    await fireEvent.click(screen.getByText('發放證書'));
-
-    await vi.waitFor(() => {
-      const body = JSON.parse(vi.mocked(api).mock.calls[0][1]?.body as string);
-      expect(body.title).toBe('結業證書');
-    });
-  });
-
   it('成功時顯示成功 toast 並呼叫 onClose', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': CREATED }));
     const notifySpy = vi.spyOn(toasts, 'notify');
@@ -159,19 +83,6 @@ describe('CertificateDialog — 送出（POST /certificates）', () => {
     expect(onClose).not.toHaveBeenCalled();
     // 表單仍在，可重試
     expect(screen.getByText('發放證書')).toBeInTheDocument();
-  });
-
-  it('422（輸入資料不符規則）→ 顯示對應繁中錯誤 toast', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /certificates': new ApiError(422, '輸入資料不符規則') }));
-    const notifySpy = vi.spyOn(toasts, 'notify');
-    render(CertificateDialog, { open: true, student: STUDENT });
-
-    await fireEvent.input(screen.getByLabelText('證書名稱', { exact: false }), { target: { value: '結業證書' } });
-    await fireEvent.click(screen.getByText('發放證書'));
-
-    await vi.waitFor(() => {
-      expect(notifySpy).toHaveBeenCalledWith('error', '發放失敗', '輸入資料不符規則');
-    });
   });
 
   it('非 ApiError 的失敗（例如網路錯誤）→ 顯示通用錯誤訊息', async () => {

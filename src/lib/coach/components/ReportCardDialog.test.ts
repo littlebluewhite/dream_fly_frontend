@@ -79,69 +79,7 @@ describe('ReportCardDialog — 開啟狀態與欄位', () => {
   });
 });
 
-describe('ReportCardDialog — 必填檢核（期別/評語/課程）', () => {
-  it('期別與評語未填前送出鈕停用；填妥後啟用', async () => {
-    render(ReportCardDialog, { open: true, student: ONE_COURSE });
-    expect(submitButton()).toBeDisabled();
-    await fillRequired();
-    expect(submitButton()).not.toBeDisabled();
-  });
-
-  it('多堂課學員未選課程時即使期別/評語已填仍停用；選課程後啟用', async () => {
-    render(ReportCardDialog, { open: true, student: TWO_COURSES });
-    await fillRequired();
-    expect(submitButton()).toBeDisabled();
-    await fireEvent.change(screen.getByLabelText('課程', { exact: false }), { target: { value: 'en-b' } });
-    expect(submitButton()).not.toBeDisabled();
-  });
-});
-
 describe('ReportCardDialog — 送出（POST /report-cards）', () => {
-  it('單堂課自動帶入 enrolment_id；送出 { enrolment_id, term_label, comment }（trim；不評分時省略 rating）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': CREATED }));
-    const onClose = vi.fn();
-    render(ReportCardDialog, { open: true, student: ONE_COURSE, onClose });
-
-    await fillRequired('  2026 夏季  ', '  進步很多  ');
-    await fireEvent.click(screen.getByText('建立成績單'));
-
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(api).toHaveBeenCalledWith('/report-cards', {
-      method: 'POST',
-      body: JSON.stringify({ enrolment_id: 'en-su01', term_label: '2026 夏季', comment: '進步很多' })
-    });
-  });
-
-  it('選了評分時 body 帶 rating（number）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': { ...CREATED, rating: 4 } }));
-    render(ReportCardDialog, { open: true, student: ONE_COURSE });
-
-    await fillRequired();
-    await fireEvent.change(screen.getByLabelText('評分（選填）'), { target: { value: '4' } });
-    await fireEvent.click(screen.getByText('建立成績單'));
-
-    await vi.waitFor(() => {
-      expect(api).toHaveBeenCalledWith('/report-cards', {
-        method: 'POST',
-        body: JSON.stringify({ enrolment_id: 'en-su01', term_label: '2026 夏季', comment: '進步很多', rating: 4 })
-      });
-    });
-  });
-
-  it('多堂課選定課程後送出該課的 enrolment_id', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': CREATED }));
-    render(ReportCardDialog, { open: true, student: TWO_COURSES });
-
-    await fireEvent.change(screen.getByLabelText('課程', { exact: false }), { target: { value: 'en-b' } });
-    await fillRequired();
-    await fireEvent.click(screen.getByText('建立成績單'));
-
-    await vi.waitFor(() => {
-      const body = JSON.parse(vi.mocked(api).mock.calls[0][1]?.body as string);
-      expect(body.enrolment_id).toBe('en-b');
-    });
-  });
-
   it('成功時顯示成功 toast 並呼叫 onClose', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': CREATED }));
     const notifySpy = vi.spyOn(toasts, 'notify');
@@ -185,19 +123,6 @@ describe('ReportCardDialog — 送出（POST /report-cards）', () => {
 
     await vi.waitFor(() => {
       expect(notifySpy).toHaveBeenCalledWith('error', '成績單建立失敗', '非本課教練');
-    });
-  });
-
-  it('422（rating/term_label 驗證）→ 直通繁中錯誤 toast', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /report-cards': new ApiError(422, '輸入資料不符規則') }));
-    const notifySpy = vi.spyOn(toasts, 'notify');
-    render(ReportCardDialog, { open: true, student: ONE_COURSE });
-
-    await fillRequired();
-    await fireEvent.click(screen.getByText('建立成績單'));
-
-    await vi.waitFor(() => {
-      expect(notifySpy).toHaveBeenCalledWith('error', '成績單建立失敗', '輸入資料不符規則');
     });
   });
 

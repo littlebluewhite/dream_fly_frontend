@@ -14,7 +14,8 @@
    * 先例，理由見 CertificateDialog 同位置註解）。 */
   import { Input, Textarea, Select } from '$lib/components/ui';
   import Dialog from '$lib/components/ui/Dialog.svelte';
-  import { createReportCard, type CreateReportCardBody } from '$lib/coach/api';
+  import { createReportCard } from '$lib/coach/api';
+  import { createReportCardForm, RATING_OPTIONS } from '$lib/coach/student-forms';
   import { toasts } from '$lib/coach/stores';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { Student } from '$lib/coach/data';
@@ -23,56 +24,27 @@
   export let student: Student | null = null;
   export let onClose: () => void = () => {};
 
-  let enrolmentId = '';
-  let termLabel = '';
-  let comment = '';
-  let rating = ''; // '' = 不評分；'1'–'5'
-  let submitting = false;
-
-  const RATING_OPTIONS = [
-    { value: '', label: '不評分' },
-    { value: '1', label: '1 星' },
-    { value: '2', label: '2 星' },
-    { value: '3', label: '3 星' },
-    { value: '4', label: '4 星' },
-    { value: '5', label: '5 星' }
-  ];
+  const form = createReportCardForm({ createReportCard });
+  const { enrolmentId, termLabel, comment, rating } = form;
 
   let lastOpen = false;
   $: {
-    if (open && !lastOpen && student) {
-      // 單堂課直接帶入該 enrolment；多堂課留空待教練選擇。
-      enrolmentId = student.courses.length === 1 ? student.courses[0].enrolment_id : '';
-      termLabel = '';
-      comment = '';
-      rating = '';
-      submitting = false;
-    }
+    if (open && !lastOpen && student) form.reset(student);
     lastOpen = open;
   }
 
-  $: valid = !!enrolmentId && termLabel.trim() !== '' && comment.trim() !== '';
-
   async function submit() {
-    if (!student || !valid || submitting) return;
-    submitting = true;
-    const body: CreateReportCardBody = {
-      enrolment_id: enrolmentId,
-      term_label: termLabel.trim(),
-      comment: comment.trim()
-    };
-    if (rating) body.rating = Number(rating);
-    try {
-      await createReportCard(body);
-      toasts.notify('success', '已建立成績單', `${student.name} · ${termLabel.trim()}`);
+    if (!student) return;
+    const outcome = await form.submit();
+    if (!outcome) return;
+    if (outcome.kind === 'reportCardCreated') {
+      toasts.notify('success', '已建立成績單', `${student.name} · ${$termLabel.trim()}`);
       onClose();
-    } catch (e) {
+    } else {
       // 後端(leave/certificates/report-cards 模組)錯誤字串本身即繁中(409「此期別已
       // 建立過成績單」、403「非本課教練」、422 欄位驗證)，直接透傳(apiErrorMessage)，
       // 同 CertificateDialog 慣例。
-      toasts.notify('error', '成績單建立失敗', apiErrorMessage(e));
-    } finally {
-      submitting = false;
+      toasts.notify('error', '成績單建立失敗', apiErrorMessage(outcome.error));
     }
   }
 </script>
@@ -82,10 +54,10 @@
   title="寫評語"
   onClose={onClose}
   primaryAction={{
-    label: submitting ? '送出中…' : '建立成績單',
+    label: $form.submitting ? '送出中…' : '建立成績單',
     onClick: submit,
     variant: 'primary',
-    disabled: !valid || submitting
+    disabled: !$form.valid || $form.submitting
   }}
   secondaryAction={{ label: '取消', onClick: onClose, variant: 'secondary' }}
 >
@@ -97,15 +69,15 @@
           label="課程"
           required
           placeholder="選擇課程"
-          bind:value={enrolmentId}
+          bind:value={$enrolmentId}
           options={student.courses.map((c) => ({ value: c.enrolment_id, label: c.course_name }))}
         />
       {:else if student.courses.length === 1}
         <p style="margin:0;font-size:13.5px;color:var(--df-text-light)">課程：{student.courses[0].course_name}</p>
       {/if}
-      <Input label="期別" required bind:value={termLabel} placeholder="例如 2026 夏季" />
-      <Textarea label="評語" required bind:value={comment} rows={4} placeholder="學員本期的學習表現與建議…" />
-      <Select label="評分（選填）" bind:value={rating} options={RATING_OPTIONS} />
+      <Input label="期別" required bind:value={$termLabel} placeholder="例如 2026 夏季" />
+      <Textarea label="評語" required bind:value={$comment} rows={4} placeholder="學員本期的學習表現與建議…" />
+      <Select label="評分（選填）" bind:value={$rating} options={RATING_OPTIONS} />
     </div>
   {/if}
 </Dialog>

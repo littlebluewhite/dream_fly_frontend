@@ -15,12 +15,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
-  import {
-    createCertificate,
-    createReportCard,
-    type CreateCertificateBody,
-    type CreateReportCardBody
-  } from '$lib/coach/api';
+  import { createCertificate, createReportCard } from '$lib/coach/api';
+  import { createCertificateForm, createReportCardForm, RATING_OPTIONS } from '$lib/coach/student-forms';
   import { apiErrorMessage } from '$lib/api/error-text';
   // 卡 3：Student 型別改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
   import type { Student } from '$lib/mobile-admin/data';
@@ -29,65 +25,33 @@
   export let student: Student | null = null;
   export let mode: 'reportCard' | 'certificate' = 'reportCard';
 
-  /** 本地日期(YYYY-MM-DD)，非 toISOString()——後者取 UTC 日期，在 Asia/Taipei
-   *  (UTC+8)的凌晨會早報一天(同 CertificateDialog.svelte 的 today() 慣例)。 */
-  function today(): string {
-    const d = new Date();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${mm}-${dd}`;
-  }
+  // 發證書欄位；寫評語欄位——單堂課直接帶入該 enrolment、多堂課留空待教練選擇(同桌面
+  // ReportCardDialog 慣例)。sheet 每次 overlay.sheet() 重掛，故建構時重置一次即可。
+  const certForm = createCertificateForm({ createCertificate });
+  const { title: certTitle, level: certLevel, issuedOn, note: certNote } = certForm;
+  certForm.reset();
+  const reportCardForm = createReportCardForm({ createReportCard });
+  const { enrolmentId, termLabel, comment, rating } = reportCardForm;
+  if (student) reportCardForm.reset(student);
 
-  // 發證書欄位
-  let certTitle = '';
-  let certLevel = '';
-  let issuedOn = today();
-  let certNote = '';
-
-  // 寫評語欄位——單堂課直接帶入該 enrolment；多堂課留空待教練選擇(同桌面
-  // ReportCardDialog 慣例)。
-  let enrolmentId = student && student.courses.length === 1 ? student.courses[0].enrolment_id : '';
-  let termLabel = '';
-  let comment = '';
-  let rating = '';
-  const RATING_OPTIONS = [
-    { value: '', label: '不評分' },
-    { value: '1', label: '1 星' },
-    { value: '2', label: '2 星' },
-    { value: '3', label: '3 星' },
-    { value: '4', label: '4 星' },
-    { value: '5', label: '5 星' }
-  ];
-
-  let submitting = false;
-
-  $: validCert = certTitle.trim() !== '';
-  $: validReportCard = !!enrolmentId && termLabel.trim() !== '' && comment.trim() !== '';
-  $: valid = mode === 'certificate' ? validCert : validReportCard;
+  $: active = mode === 'certificate' ? certForm : reportCardForm;
+  $: valid = $active.valid;
+  $: submitting = $active.submitting;
 
   // 後端(certificates/report-cards 模組)的錯誤字串本身就是繁中 → apiErrorMessage
   // 直接透傳，同桌面 CertificateDialog/ReportCardDialog 慣例。
   async function submit() {
-    if (!student || !valid || submitting) return;
-    submitting = true;
-    try {
-      if (mode === 'certificate') {
-        const body: CreateCertificateBody = { user_id: student.user_id, title: certTitle.trim(), issued_on: issuedOn };
-        if (certLevel.trim()) body.level = certLevel.trim();
-        if (certNote.trim()) body.note = certNote.trim();
-        await createCertificate(body);
-        toasts.notify('success', '已發放證書', `${student.name} · ${certTitle.trim()}`);
-      } else {
-        const body: CreateReportCardBody = { enrolment_id: enrolmentId, term_label: termLabel.trim(), comment: comment.trim() };
-        if (rating) body.rating = Number(rating);
-        await createReportCard(body);
-        toasts.notify('success', '已建立成績單', `${student.name} · ${termLabel.trim()}`);
-      }
+    if (!student) return;
+    const outcome = mode === 'certificate' ? await certForm.submit(student) : await reportCardForm.submit();
+    if (!outcome) return;
+    if (outcome.kind === 'certificateIssued') {
+      toasts.notify('success', '已發放證書', `${student.name} · ${$certTitle.trim()}`);
       onClose();
-    } catch (e) {
-      toasts.notify('error', mode === 'certificate' ? '發放失敗' : '成績單建立失敗', apiErrorMessage(e));
-    } finally {
-      submitting = false;
+    } else if (outcome.kind === 'reportCardCreated') {
+      toasts.notify('success', '已建立成績單', `${student.name} · ${$termLabel.trim()}`);
+      onClose();
+    } else {
+      toasts.notify('error', mode === 'certificate' ? '發放失敗' : '成績單建立失敗', apiErrorMessage(outcome.error));
     }
   }
 </script>
@@ -109,10 +73,10 @@
 
     {#if mode === 'certificate'}
       <div style="display:flex; flex-direction:column; gap:14px;">
-        <Input label="證書名稱" bind:value={certTitle} placeholder="例如 競技啦啦隊 進階班 結業證書" />
-        <Input label="等級（選填）" bind:value={certLevel} placeholder="例如 結業、優等" />
-        <Input label="核發日期" type="date" bind:value={issuedOn} />
-        <Input label="備註（選填）" bind:value={certNote} />
+        <Input label="證書名稱" bind:value={$certTitle} placeholder="例如 競技啦啦隊 進階班 結業證書" />
+        <Input label="等級（選填）" bind:value={$certLevel} placeholder="例如 結業、優等" />
+        <Input label="核發日期" type="date" bind:value={$issuedOn} />
+        <Input label="備註（選填）" bind:value={$certNote} />
       </div>
     {:else}
       <div style="display:flex; flex-direction:column; gap:14px;">
@@ -120,15 +84,15 @@
           <Select
             label="課程"
             placeholder="選擇課程"
-            bind:value={enrolmentId}
+            bind:value={$enrolmentId}
             options={student.courses.map((c) => ({ value: c.enrolment_id, label: c.course_name }))}
           />
         {:else if student.courses.length === 1}
           <p style="margin:0; font-size:13.5px; color:var(--df-text-light);">課程：{student.courses[0].course_name}</p>
         {/if}
-        <Input label="期別" bind:value={termLabel} placeholder="例如 2026 夏季" />
-        <Input label="評語" bind:value={comment} placeholder="學員本期的學習表現與建議…" />
-        <Select label="評分（選填）" bind:value={rating} options={RATING_OPTIONS} />
+        <Input label="期別" bind:value={$termLabel} placeholder="例如 2026 夏季" />
+        <Input label="評語" bind:value={$comment} placeholder="學員本期的學習表現與建議…" />
+        <Select label="評分（選填）" bind:value={$rating} options={RATING_OPTIONS} />
       </div>
     {/if}
   {/if}
