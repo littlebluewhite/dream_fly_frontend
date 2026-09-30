@@ -1,31 +1,46 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import StudentsPage from './+page.svelte';
-import type { Student } from '$lib/coach/data';
-import { getStudents } from '$lib/coach/api';
 import { search } from '$lib/coach/stores';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginAs } from '$lib/testing/coach-session';
+import { COACH_ROUTES, COACH_USER } from '$lib/testing/coach-routes';
+import { authStore } from '$lib/stores/authStore';
 
-// createCertificate/createReportCard 也在此一併 mock（不執行真呼叫）——
-// CertificateDialog/ReportCardDialog（Task 13）從同一個模組 import，若省略會在
-// dialog 元件初始化時解析成 undefined 的具名匯出;本檔案只驗證「發證書」「寫評語」
-// 開啟 dialog 的接線，送出/錯誤分支見各 dialog 自己的測試檔。
-vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn(), createReportCard: vi.fn() }));
+/* R16 Task 8(候選 10):改 mock $lib/api/client 的 api()，getStudents() 走真實 fetch
+ * adapter(GET /coaches/me/students)。CertificateDialog/ReportCardDialog 的
+ * createCertificate/createReportCard 也是真實函式——本檔案只驗證「發證書」「寫評語」
+ * 開啟 dialog 的接線、不送出，fakeRouter 沒交代 POST 端點，誤送會直接讓測試失敗；
+ * 送出/錯誤分支見各 dialog 自己的測試檔。getStudents 不經教練身分閘門，仍照慣例
+ * loginAs()(同 mobile-admin/coach/page.test.ts)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-// Task 1(C2 死種子退役):coach/data.ts 的 STUDENTS(值)已退役——改為檔內 inline
-// fixture(2 筆,沿用真實種子 su01/su04 的欄位值)。
-const STUDENTS: Student[] = [
-	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }] },
-	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }] }
+// Task 1(C2 死種子退役):inline fixture(2 筆,沿用真實種子 su01/su04 的欄位值)。
+// R16 Task 8:改為 GET /coaches/me/students 的 wire 形狀(MyStudentResponse)。
+const STUDENTS = [
+	{ user_id: 'su01', name: '王宥蓁', phone: null, courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }] },
+	{ user_id: 'su04', name: '張家豪', phone: null, courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }] }
 ];
 
-beforeEach(() => {
+const STUDENTS_PATH = 'GET /coaches/me/students';
+const route = (overrides: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(fakeRouter({ [STUDENTS_PATH]: STUDENTS, ...overrides }, COACH_ROUTES));
+
+beforeEach(async () => {
 	search.set('');
-	vi.mocked(getStudents).mockReset();
-	vi.mocked(getStudents).mockResolvedValue({ students: STUDENTS });
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));
+	await authStore.logout();
+	await loginAs(COACH_USER);
+	route();
 });
 
 /* 我的學員 — KpiCard(學員總數)+ 篩選(班級)+ 學員卡片格。資料改由 getStudents()
- * 接縫載入,三態閘門(loading/error/ready)。 */
+ * 接縫載入(真 fetch adapter),三態閘門(loading/error/ready)。 */
 describe('/coach/students (+page)', () => {
 	it('renders the heading count and every student name from STUDENTS', async () => {
 		const { container, findByText } = render(StudentsPage);
@@ -54,8 +69,8 @@ describe('/coach/students (+page)', () => {
 	});
 
 	it('同名學員各自渲染一張卡(列表 key 是 user_id,不是姓名)', async () => {
-		const twin: Student = { ...STUDENTS[0], user_id: 'su99' };
-		vi.mocked(getStudents).mockResolvedValue({ students: [STUDENTS[0], twin] });
+		const twin = { ...STUDENTS[0], user_id: 'su99' };
+		route({ [STUDENTS_PATH]: [STUDENTS[0], twin] });
 		const { findAllByText } = render(StudentsPage);
 		expect(await findAllByText(STUDENTS[0].name)).toHaveLength(2);
 	});
@@ -70,15 +85,13 @@ describe('/coach/students (+page)', () => {
 
 describe('/coach/students — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
-		vi.mocked(getStudents).mockReset();
-		vi.mocked(getStudents).mockRejectedValue(new Error('network'));
+		route({ [STUDENTS_PATH]: new Error('network') });
 		const { findByText } = render(StudentsPage);
 		await findByText('載入失敗');
 	});
 
 	it('loading:顯示骨架', () => {
-		vi.mocked(getStudents).mockReset();
-		vi.mocked(getStudents).mockReturnValue(new Promise(() => {}));
+		route({ [STUDENTS_PATH]: () => new Promise(() => {}) });
 		const { getByTestId } = render(StudentsPage);
 		expect(getByTestId('students-skeleton')).toBeTruthy();
 	});

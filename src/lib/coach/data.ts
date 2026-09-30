@@ -139,7 +139,8 @@ export interface Notif {
 /* ──────────────── the coach (李志偉 教練) ──────────────── */
 // Task W4(coach/admin 桌面 shell 身分接 authStore):Topbar/Sidebar 已改讀
 // $authStore.member 衍生身分槽位,COACH 值不再是這兩個元件的消費者——僅剩
-// CoachAvatar 的預設 initial 與 routes/coach/page.test.ts 的 fixture 兩處消費者;
+// CoachAvatar 的預設 initial 一處消費者(routes/coach/page.test.ts 的 fixture 用途
+// R16 Task 8 改走 HTTP seam 後退役);
 // Coach 型別仍是 coach/api.ts mapCoach() 的回傳形狀,不退役。
 export const COACH: Coach = {
 	name: '李志偉',

@@ -134,4 +134,15 @@ describe('匯入掃描器（Import Scan）', () => {
 		);
 		expect(offenders, `production 不得引用 *ForTests：${offenders.join(', ')}`).toEqual([]);
 	});
+
+	it('測試 seam 契約：零 vi.mock 整支 $lib/coach/api(R16 Task 8)', () => {
+		// 教練頁測試走 HTTP seam(mock $lib/api/client + loginAs + fakeRouter(…, COACH_ROUTES))。
+		// 整支換掉 coach/api 會讓 CoachNotFoundError 變 undefined、逼 production 退回 name 比對。
+		const testFiles = walk(r('src')).filter((f) => f.endsWith('.test.ts'));
+		expect(testFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
+		const offenders = testFiles
+			.filter((f) => /vi\.mock\(\s*['"`]\$lib\/coach\/api['"`]/.test(readFileSync(f, 'utf8')))
+			.map((f) => f.replace(ROOT + '/', ''));
+		expect(offenders, `改走 HTTP seam，不要 mock $lib/coach/api：${offenders.join(', ')}`).toEqual([]);
+	});
 });

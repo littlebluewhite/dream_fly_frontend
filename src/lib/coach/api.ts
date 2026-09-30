@@ -8,10 +8,8 @@
  * users.name 來，見 integration-contract.md §3.4 附註）。R13 Task 7(C6)起由私有 session
  * 閘門快取：每個登入身分只解析一次，換帳號/登出即重置。R16 Task 1b 起這顆閘門只快取
  * ApiCoach | null，本人資料一律讀 $selfAccount(與會員端同一份快取)。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
- * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面 catch 用 e.name 判斷
- * （不是 instanceof —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，
- * import 進來的 class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號
- * 未綁定教練檔案」。 */
+ * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面經 coachLoadErrorCopy
+ * (instanceof 判別，R16 Task 8)改顯示「此帳號未綁定教練檔案」。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';

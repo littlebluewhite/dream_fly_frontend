@@ -1,28 +1,45 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import SchedulePage from './+page.svelte';
-import type { SchedCourse } from '$lib/coach/data';
-import { getSchedule } from '$lib/coach/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginAs } from '$lib/testing/coach-session';
+import { COACH_ROUTES, COACH_USER } from '$lib/testing/coach-routes';
+import { authStore } from '$lib/stores/authStore';
 
-vi.mock('$lib/coach/api', () => ({ getSchedule: vi.fn() }));
+/* R16 Task 8(候選 10):改 mock $lib/api/client 的 api()，getSchedule() 走真實 fetch
+ * adapter；教練身分(requireCoach)經 loginAs() 驅動，每個測試先登出再登入避免 session
+ * 閘門快取跨測試殘留(同 mobile-admin/coach/page.test.ts 慣例)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 // Task 1(C2 死種子退役):coach/data.ts 的 SCHED_COURSES(值)已退役——改為檔內
-// inline fixture。R16 Task 2a:可授課時段只有 day/start/end。
-const SCHED_COURSES: SchedCourse[] = [
-	{ day: 'Tue', start: '10:00', end: '11:00' },
-	{ day: 'Wed', start: '16:00', end: '17:00' }
+// inline fixture。R16 Task 2a:可授課時段只有 day/start/end。R16 Task 8:改為
+// GET /coaches/{id}/schedule 的 wire 形狀(day_of_week 2=Tue、3=Wed)。
+const SCHEDULE_PATH = 'GET /coaches/co1/schedule';
+const SLOTS = [
+	{ id: 'sl1', day_of_week: 2, start_time: '10:00:00', end_time: '11:00:00', is_available: true },
+	{ id: 'sl2', day_of_week: 3, start_time: '16:00:00', end_time: '17:00:00', is_available: true }
 ];
 
-beforeEach(() => {
-	vi.mocked(getSchedule).mockReset();
-	vi.mocked(getSchedule).mockResolvedValue({ courses: SCHED_COURSES });
+const route = (overrides: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(fakeRouter({ [SCHEDULE_PATH]: SLOTS, ...overrides }, COACH_ROUTES));
+
+beforeEach(async () => {
+	vi.mocked(api).mockReset();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/logout': undefined }));
+	await authStore.logout();
+	await loginAs(COACH_USER);
+	route();
 });
 
 /* 排課管理 page — now interactive: 日/週/月 toggle, prev/next/今日.
  * Anchor defaults to the real current date (Task 1: 1.2); assertions below
  * match courses by weekday key, not by an exact date, so they stay
  * deterministic regardless of which real week the test runs in.
- * Data now arrives through the getSchedule() seam (async), so every assertion
+ * Data now arrives through the getSchedule() seam (async, real fetch adapter), so every assertion
  * first awaits the ready phase. */
 describe('/coach/schedule (+page) — interactive', () => {
 	it('defaults to the 週 view (time grid present) showing all courses', async () => {
@@ -60,25 +77,21 @@ describe('/coach/schedule (+page) — interactive', () => {
 
 describe('/coach/schedule — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
-		vi.mocked(getSchedule).mockReset();
-		vi.mocked(getSchedule).mockRejectedValue(new Error('network'));
+		route({ [SCHEDULE_PATH]: new Error('network') });
 		const { findByText } = render(SchedulePage);
 		await findByText('載入失敗');
 	});
 
 	it('CoachNotFoundError（查無教練檔案）時，顯示「此帳號未綁定教練檔案」而非泛用載入失敗', async () => {
-		vi.mocked(getSchedule).mockReset();
-		const notFound = new Error('此帳號未綁定教練檔案');
-		notFound.name = 'CoachNotFoundError';
-		vi.mocked(getSchedule).mockRejectedValue(notFound);
+		route({ 'GET /coaches': [] }); // 查無本人教練檔案 → 真 CoachNotFoundError
 		const { findByText, queryByText } = render(SchedulePage);
 		await findByText('此帳號未綁定教練檔案');
 		expect(queryByText('載入失敗')).toBeNull();
 	});
 
 	it('loading:顯示骨架', () => {
-		vi.mocked(getSchedule).mockReset();
-		vi.mocked(getSchedule).mockReturnValue(new Promise(() => {}));
+		// 只讓排課端點卡住(身分照常回應，理由見 mobile-admin/coach/page.test.ts loading 註解)。
+		route({ [SCHEDULE_PATH]: () => new Promise(() => {}) });
 		const { getByTestId } = render(SchedulePage);
 		expect(getByTestId('schedule-skeleton')).toBeTruthy();
 	});
