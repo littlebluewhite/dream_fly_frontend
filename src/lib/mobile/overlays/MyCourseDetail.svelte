@@ -61,10 +61,7 @@
 
   $: metaRows = c
     ? ([
-        ['calendar-days', c.schedule],
-        ['map-pin', c.room],
-        ['user-round', c.coach + ' 教練'],
-        ['ticket', '本季尚餘 ' + c.remain + ' 堂']
+        ['calendar-days', c.schedule]
       ] satisfies [IconName, string][])
     : [];
 
@@ -135,7 +132,6 @@
               >{c.name}</h2>
               <div style="display:flex; align-items:center; gap:6px; margin-top:5px;">
                 <Badge tone={levelTone}>{c.level}</Badge>
-                <span style="font-size:12.5px; color:var(--df-text-light);">{c.term}</span>
               </div>
             </div>
           </div>

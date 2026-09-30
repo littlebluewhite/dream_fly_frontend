@@ -36,7 +36,7 @@
 </script>
 
 {#if course}
-  <Sheet open {onClose} maxHeight="90%" height="90%" pad={0} title={course.coach + ' 教練'} sub={'線上 · ' + course.name}>
+  <Sheet open {onClose} maxHeight="90%" height="90%" pad={0} title="聯絡教練" sub={'線上 · ' + course.name}>
     <div bind:this={bodyEl} class="df-scroll" style="height:100%; padding:16px; display:flex; flex-direction:column; gap:11px; background:var(--df-bg-light);">
       {#each thread as m, i (i)}
         {@const mine = m.from === 'me'}

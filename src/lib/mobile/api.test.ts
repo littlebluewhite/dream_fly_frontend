@@ -32,7 +32,7 @@ const CATALOG_FIXTURE = [
 ];
 
 const MY_COURSES_FIXTURE = [
-	{ id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '', icon: 'sparkles' as const, color: '#0066CC', schedule: '週二 19:00', room: '', att: 96, attended: 24, total: 25, next: '', term: '', remain: 0 }
+	{ id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles' as const, color: '#0066CC', schedule: '週二 19:00', att: 96, attended: 24, total: 25 }
 ];
 
 const SCHEDULE_FIXTURE = [
@@ -47,7 +47,7 @@ beforeEach(() => {
 	vi.mocked(sendContactInquiry).mockReset().mockResolvedValue({} as never);
 });
 
-describe('getHome — 復用桌面 getCourses()/getMine()，薄映射 icon', () => {
+describe('getHome — 復用桌面 getCourses()，薄映射 icon', () => {
 	it('catalog 依分類對照表補上 icon;未知分類落回預設 icon', async () => {
 		const d = await getHome();
 		expect(d.catalog).toEqual([
@@ -55,9 +55,10 @@ describe('getHome — 復用桌面 getCourses()/getMine()，薄映射 icon', () 
 			{ ...CATALOG_FIXTURE[1], icon: 'graduation-cap' }
 		]);
 	});
-	it('myCourses 直接透傳桌面 getMine().courses(EnrolledCourse 形狀同源，零映射)', async () => {
+	it('不再拉 getMine()(R16 Task 2c：首頁的「下一堂課」卡已拿掉，沒有讀報名課程的地方)', async () => {
 		const d = await getHome();
-		expect(d.myCourses).toBe(MY_COURSES_FIXTURE);
+		expect(memberGetMine).not.toHaveBeenCalled();
+		expect(d).not.toHaveProperty('myCourses');
 	});
 	it('announce 後端無來源，沿用 mock(鏡射桌面 getDashboard() 的決定)', async () => {
 		const d = await getHome();

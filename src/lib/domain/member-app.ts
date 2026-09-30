@@ -91,19 +91,13 @@ export const UPCOMING: UpcomingClass[] = [
 export interface EnrolledCourse {
 	id: string;
 	name: string;
-	cat: string;
 	level: string;
-	coach: string;
 	icon: IconName;
 	color: string;
 	schedule: string;
-	room: string;
 	att: number;
 	attended: number;
 	total: number;
-	next: string;
-	term: string;
-	remain: number;
 	/** 課程 uuid（區別於 `id`——member/api.ts 的 getMine() 把 `id` 設為「報名」uuid，
 	 *  非課程 uuid）。Task 11（請假/補課 UI）新增：請假入口需要課程 id 才能呼叫
 	 *  GET /courses/{id}/sessions。選填——mock 資料（MY_COURSES，member/mobile 共用）

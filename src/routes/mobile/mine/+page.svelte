@@ -6,9 +6,9 @@
    * (loading/error/ready)。摘要統計三卡改接真後端(GET /reports/me,§3.24):
    * 出席率為 null(無出勤資料,裁決 3)時顯示「—」,不是 0%——由本頁(顯示層)判斷,
    * api.ts 只原樣透傳 attendanceRate。原「連續到課」/「已掌握技巧」兩卡後端無
-   * 對應概念,換成後端真有的「7 日內場次」/「累計出席」。「本季報名 N 門 · 季別」
-   * 的季別原重複硬編 '2026 春季',改由 courses[0].term 衍生(與課程卡本身同一
-   * 欄位同源,不留雙來源)。報名課程為空陣列時走 MEmpty,不留白。 */
+   * 對應概念,換成後端真有的「7 日內場次」/「累計出席」。標題「本季報名 N 門」不再
+   * 接「 · 季別」,課程卡也拿掉下一堂 chip(R16 Task 2c:後端沒有季別/下一堂)。報名
+   * 課程為空陣列時走 MEmpty,不留白。 */
   import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
@@ -67,7 +67,7 @@
 
   {#if data}
   <div class="df-scroll df-view">
-    <ScreenHeader title="我的課程" sub={`本季報名 ${courses.length} 門${courses[0] ? ' · ' + courses[0].term : ''}`} />
+    <ScreenHeader title="我的課程" sub={`本季報名 ${courses.length} 門`} />
 
     <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
       <!-- summary -->
@@ -150,10 +150,6 @@
                       <div style="width:{c.att}%; height:100%; background:{c.color}; border-radius:999px;"></div>
                     </div>
                   </div>
-                  <div
-                    style="flex:none; display:flex; align-items:center; gap:5px; font-size:12px; color:var(--df-text-light);
-                      background:var(--df-bg-light); border-radius:999px; padding:5px 11px;"
-                  ><Icon name="calendar-clock" size={13} color="var(--df-primary)" />{c.next}</div>
                 </div>
               </button>
             {/each}

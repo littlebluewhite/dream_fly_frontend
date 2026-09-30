@@ -44,17 +44,16 @@ function toMobileCourse(c: CatalogCourse): Course {
 export interface MobileHomeData {
 	catalog: Course[];
 	announce: Announce[];
-	myCourses: MyCourse[];
 }
 
 /** 首頁 — catalog 復用桌面 getCourses()(GET /courses + GET /coaches join，只加
- *  icon 薄映射)；myCourses 復用桌面 getMine().courses(EnrolledCourse 形狀兩側
- *  同源，零映射)。兩者互不相依，平行拉取。
+ *  icon 薄映射)。R16 Task 2c：首頁唯一讀報名課程的「下一堂課」卡已拿掉，不再順手
+ *  拉 getMine()。
  *  // P2: announce(最新公告)後端無對應資料源，沿用 mock —— 同桌面 getDashboard()
  *  對 announce 的決定(桌面也是原樣顯示 mock、不隱藏)，此處鏡射該決定。 */
 export const getHome = async (): Promise<MobileHomeData> => {
-	const [{ catalog }, { courses }] = await Promise.all([memberGetCourses(), memberGetMine()]);
-	return { catalog: catalog.map(toMobileCourse), announce: ANNOUNCE, myCourses: courses };
+	const { catalog } = await memberGetCourses();
+	return { catalog: catalog.map(toMobileCourse), announce: ANNOUNCE };
 };
 
 export interface MobileCoursesData {

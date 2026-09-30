@@ -72,7 +72,7 @@
       </svelte:fragment>
     </Sheet>
   {:else}
-    <Sheet open {onClose} title="請假申請" sub={course.name + ' · ' + course.coach + ' 教練'} maxHeight="90%">
+    <Sheet open {onClose} title="請假申請" sub={course.name} maxHeight="90%">
       {#if sessionsPhase === 'loading'}
         <Skeleton w="100%" h={44} r={8} />
       {:else if sessionsPhase === 'error'}

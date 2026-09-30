@@ -30,8 +30,8 @@ vi.mock('$lib/member/stores', async (importOriginal) => {
 // fixture(2 筆,沿用真實種子 k1/k6 的欄位值;下方多處斷言依賴 index 0/1 各自的
 // id/name 相異)。
 const MY_COURSES: EnrolledCourse[] = [
-  { id: 'k1', name: '競技啦啦隊 進階班', cat: '競技啦啦隊', level: '進階', coach: '林雅婷', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: 'A 訓練館', att: 98, attended: 23, total: 24, next: '明日 19:00', term: '2026 春季', remain: 14 },
-  { id: 'k6', name: '競技體操 選手班', cat: '競技體操', level: '選手', coach: '林雅婷', icon: 'medal', color: '#F59E0B', schedule: '週四 17:00–19:00', room: 'A 訓練館', att: 88, attended: 21, total: 24, next: '週四 17:00', term: '2026 春季', remain: 10 }
+  { id: 'k1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', att: 98, attended: 23, total: 24 },
+  { id: 'k6', name: '競技體操 選手班', level: '選手', icon: 'medal', color: '#F59E0B', schedule: '週四 17:00–19:00', att: 88, attended: 21, total: 24 }
 ];
 const SEED = { courses: MY_COURSES };
 
@@ -60,6 +60,17 @@ describe('member/mine 頁', () => {
     vi.mocked(getMine).mockRejectedValue(new Error('boom'));
     render(Page);
     expect(await screen.findByText('載入失敗')).toBeInTheDocument();
+  });
+
+  it('KPI 只留出席率;課程卡/詳情不再顯示後端沒有的教練、季別、教室、下一堂、剩餘堂數(R16 Task 2c)', async () => {
+    vi.mocked(getMine).mockResolvedValue(SEED);
+    const { container } = render(Page);
+    await screen.findByText('出席紀錄');
+    const txt = container.textContent ?? '';
+    expect(txt).toContain('98%');
+    for (const gone of ['下一堂', '剩餘堂數', ' 教練 · ', ' · undefined']) expect(txt).not.toContain(gone);
+    // 詳情標題下只顯示時段，不接落單的「 · 」
+    expect(screen.getByText('週二 / 週四 19:00–20:30')).toBeInTheDocument();
   });
 
   // 迴歸:出席紀錄若以顯示文字/日期為 key,同日同狀態時 Svelte 擲 each_key_duplicate。

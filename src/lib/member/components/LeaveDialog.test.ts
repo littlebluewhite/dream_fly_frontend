@@ -24,19 +24,13 @@ const COURSE: EnrolledCourse = {
   id: 'enrol-1',
   course_id: 'course-1',
   name: '競技啦啦隊 進階班',
-  cat: '',
   level: '進階',
-  coach: '林雅婷',
   icon: 'sparkles',
   color: '#0066CC',
   schedule: '',
-  room: '',
   att: 0,
   attended: 0,
-  total: 0,
-  next: '',
-  term: '',
-  remain: 0
+  total: 0
 };
 
 const SESSIONS = [

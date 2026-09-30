@@ -25,9 +25,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 const COURSE: MyCourse = {
-	id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '林雅婷',
-	icon: 'sparkles', color: '#0066CC', schedule: '', room: '', att: 90, attended: 9, total: 10,
-	next: '', term: '', remain: 0
+	id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles', color: '#0066CC', schedule: '', att: 90, attended: 9, total: 10
 };
 
 const SESSIONS = [{ id: 's1', session_date: '2026-07-10', start_time: '19:00:00', end_time: '20:30:00' }];

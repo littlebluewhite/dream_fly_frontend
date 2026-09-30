@@ -87,7 +87,7 @@
       icon="calendar-off"
       color="var(--df-warning)"
       title="請假申請"
-      subtitle={course.name + ' · ' + course.coach + ' 教練'}
+      subtitle={course.name}
     >
       {#if sessionsPhase === 'loading'}
         <Skeleton w="100%" h={44} r={8} />

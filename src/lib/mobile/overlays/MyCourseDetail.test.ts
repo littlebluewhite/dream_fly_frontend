@@ -35,9 +35,7 @@ vi.mock('$lib/member/api', async (importOriginal) => {
 });
 
 const COURSE: MyCourse = {
-	id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '林雅婷',
-	icon: 'sparkles', color: '#0066CC', schedule: '', room: '', att: 90, attended: 9, total: 10,
-	next: '', term: '', remain: 0
+	id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles', color: '#0066CC', schedule: '', att: 90, attended: 9, total: 10
 };
 
 const DEFAULT_ATTENDANCE: AttRecord[] = [
@@ -80,6 +78,16 @@ describe('MyCourseDetail — 動作列不再有課程層級「預約補課」按
 		expect(await screen.findByRole('button', { name: '請假' })).toBeInTheDocument();
 		expect(screen.getAllByRole('button', { name: '聯絡教練' })).toHaveLength(2);
 		expect(screen.queryByText('預約補課')).toBeNull();
+	});
+});
+
+describe('MyCourseDetail — 只顯示後端有的課程資料(R16 Task 2c)', () => {
+	it('不再顯示教室/教練/本季尚餘堂數/季別', async () => {
+		const { container } = render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+		await screen.findByRole('button', { name: '請假' });
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain('本季尚餘');
+		expect(txt).not.toContain(' 教練');
 	});
 });
 

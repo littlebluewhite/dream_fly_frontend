@@ -100,10 +100,9 @@
 
   $: cur = data && active != null ? (data.courses.find((c) => c.id === active) ?? data.courses[0]) : null;
 
+  // R16 Task 2c：下一堂/剩餘堂數後端沒有，KPI 只留出席率。
   $: stats = cur ? ([
-    { icon: 'calendar-check', value: cur.att + '%', label: '出席率' },
-    { icon: 'calendar-clock', value: cur.next, label: '下一堂' },
-    { icon: 'hourglass', value: cur.remain + ' 堂', label: '剩餘堂數' }
+    { icon: 'calendar-check', value: cur.att + '%', label: '出席率' }
   ] satisfies { icon: IconName; value: string; label: string }[]) : [];
 </script>
 
@@ -142,7 +141,6 @@
               </div>
               <div style="flex:1;min-width:0">
                 <div style="font-size:15.5px;font-weight:700;color:var(--df-ink)">{c.name}</div>
-                <div style="font-size:12.5px;color:var(--df-text-light);margin-top:2px">{c.coach} 教練 · {c.term}</div>
               </div>
               <Icon name="chevron-right" size={18} color={on ? 'var(--df-primary)' : 'var(--df-border-strong)'} />
             </div>
@@ -174,7 +172,7 @@
               <h3 style="margin:0;font-size:19px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading)">{cur.name}</h3>
               <Badge tone={LEVEL_TONE[cur.level]}>{cur.level}</Badge>
             </div>
-            <div style="font-size:13px;color:var(--df-text-light);margin-top:4px">{cur.schedule} · {cur.room}</div>
+            <div style="font-size:13px;color:var(--df-text-light);margin-top:4px">{cur.schedule}</div>
           </div>
         </div>
         <div style="padding:24px;display:flex;flex-direction:column;gap:20px">

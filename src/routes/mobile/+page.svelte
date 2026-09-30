@@ -1,15 +1,14 @@
 <script lang="ts">
   /* 首頁 tab。home.jsx HomeScreen (51-156)。
-   * 漸層 hero（問候 + 通知鈴 + 購物車）、下一堂課、免費試上 banner、課程分類、最新公告、熱門課程。
+   * 漸層 hero（問候 + 通知鈴 + 購物車）、免費試上 banner、課程分類、最新公告、熱門課程。
    * setTab(...) → goto 對應路由；nav.sheet('cart') → overlay.sheet；nav.push('trial') → overlay.push；
    * 課程卡 onOpen → overlay.sheet('course',{course})；onAdd → cart.add + toast。
    * 原型 <StatusBar light/> 改為 hero 內 .m-top-inset spacer（比照 HeroHeader 慣例）。
    * Legacy Svelte（無 runes）、繁體中文文案、mock-only。
    *
    * 資料改由 getHome()(mock-API 接縫)非同步取得:onMount 進三態閘門
-   * (loading/error/ready);cart/overlay/unread 等既有 store 互動不動。下一堂課
-   * 卡的「明日」/「19:00」原是頁面硬編字面,與 myCourses[0].next 描述同一件事
-   * 卻各自寫一次,改為拆解 next.next 衍生,不留雙來源。 */
+   * (loading/error/ready);cart/overlay/unread 等既有 store 互動不動。R16 Task 2c:
+   * 原「下一堂課」卡靠後端沒有的 EnrolledCourse.next,真資料下永遠隱藏,整卡拿掉。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -55,17 +54,7 @@
   $: member = $authStore.member;
   $: catalog = data?.catalog ?? [];
   $: announce = data?.announce ?? [];
-  $: myCourses = data?.myCourses ?? [];
   $: hot = catalog.filter((c) => c.hot).concat(catalog.filter((c) => !c.hot)).slice(0, 4);
-  // 下一堂課卡的日期/時間:與 mine 頁課程卡同一欄位(next.next,如「明日 19:00」)
-  // 同源拆解,不再各自硬編一次。載入完成前 myCourses 仍是 [],用可選鏈防呆。
-  // Task 19:真後端的 EnrolledCourse.next 目前一律是空字串(member/api.ts 的
-  // getMine() P2——後端無法誠實推導「下一堂」相對時間,見該檔案註解),空字串
-  // split(' ') 只會產生 1 個元素、第二個變數解構成 undefined——這裡多一層「有
-  // 值才顯示」的空集合守衛,同整張卡「零報名時不顯示」的既有慣例,避免顯示一個
-  // 內容殘缺的日期卡。
-  $: next = myCourses[0]?.next ? myCourses[0] : undefined;
-  $: [nextDay, nextTime] = next ? next.next.split(' ') : ['', ''];
 
   async function addToCart(c: Course) {
     const r = cart.add(c);
@@ -142,36 +131,6 @@
 
   <div class="df-scroll df-view">
     <div style="padding:18px; display:flex; flex-direction:column; gap:22px;">
-      <!-- next class hero — 空集合守衛:零報名會員(myCourses 空)時 next 為
-        undefined,整卡不渲染(mine 頁已有「尚未報名任何課程」MEmpty,首頁不重複)。 -->
-      {#if next}
-        <button
-          on:click={() => goto('/mobile/mine')}
-          class="df-tapscale"
-          style="text-align:left; border:none; cursor:pointer; border-radius:16px; padding:0; background:transparent; margin-top:-52px;"
-        >
-          <div style="background:#fff; border-radius:16px; padding:16px; box-shadow:var(--df-shadow-card); border:1px solid var(--df-border);">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-              <span style="font-size:12px; font-weight:700; letter-spacing:1px; color:var(--df-primary);">下一堂課</span>
-              <Badge tone="success" dot>可報到</Badge>
-            </div>
-            <div style="display:flex; align-items:center; gap:13px;">
-              <div style="text-align:center; flex:none; background:var(--df-primary-bg); border-radius:12px; padding:9px 13px;">
-                <div style="font-size:11px; color:var(--df-primary); font-weight:600;">{nextDay}</div>
-                <div style="font-size:19px; font-weight:800; color:var(--df-primary); font-family:var(--df-font-heading);">{nextTime}</div>
-              </div>
-              <div style="flex:1; min-width:0;">
-                <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{next.name}</div>
-                <div style="font-size:12.5px; color:var(--df-text-light); margin-top:3px; display:flex; align-items:center; gap:5px;">
-                  <Icon name="map-pin" size={13} color="var(--df-text-muted)" />{next.room} · {next.coach} 教練
-                </div>
-              </div>
-              <Icon name="chevron-right" size={20} color="var(--df-text-muted)" />
-            </div>
-          </div>
-        </button>
-      {/if}
-
       <!-- free trial banner -->
       <button
         on:click={() => overlay.push('trial')}

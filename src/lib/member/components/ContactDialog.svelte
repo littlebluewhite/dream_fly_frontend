@@ -65,9 +65,9 @@
   <div class="overlay" on:click={onClose}>
     <div class="panel" role="dialog" aria-modal="true" tabindex="-1" on:click|stopPropagation>
       <div class="head">
-        <Avatar name={course.coach} size="md" color={course.color} status="online" />
+        <Avatar name={course.name} size="md" color={course.color} status="online" />
         <div class="head-meta">
-          <div class="coach-name">{course.coach} 教練</div>
+          <div class="coach-name">聯絡教練</div>
           <div class="online"><span class="dot"></span>線上 · {course.name}</div>
         </div>
         <IconButton aria-label="關閉" variant="ghost" on:click={onClose}>

@@ -14,7 +14,7 @@ vi.mock('$lib/stores/authStore', async () => (await import('$lib/testing/auth-mo
 
 const SEED = {
   stats: STATS, skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
-  nextClass: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館', track: '競技啦啦隊'
+  nextClass: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館'
 };
 beforeEach(() => {
   vi.mocked(getDashboard).mockReset();

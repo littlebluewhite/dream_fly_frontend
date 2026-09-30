@@ -58,7 +58,7 @@ describe('getDashboard', () => {
     upcoming_sessions_7d: 0
   };
 
-  it('nextClass 來自最新一筆有效報名的 schedule_text；track 空字串；skills/upcoming/announce 仍是 mock；stats 三卡改接 GET /reports/me(只換 value,icon/tint/color/label 沿用 STATS 版型)', async () => {
+  it('nextClass 來自最新一筆有效報名的 schedule_text；不再帶 track(R16 Task 2c)；skills/upcoming/announce 仍是 mock；stats 三卡改接 GET /reports/me(只換 value,icon/tint/color/label 沿用 STATS 版型)', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
@@ -78,8 +78,7 @@ describe('getDashboard', () => {
         { ...STATS[2], value: '1,250' }
       ],
       skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
-      nextClass: '週二 / 週四 19:00–20:30',
-      track: ''
+      nextClass: '週二 / 週四 19:00–20:30'
     });
   });
 
@@ -278,7 +277,7 @@ describe('getSchedule — GET /schedule/me 週模式映射（§3.18）', () => {
 });
 
 describe('getMine', () => {
-  it('GET /enrolments/me → EnrolledCourse[]；只留 active；level 轉繁中；cat/coach/room 缺省空字串；attended/total 為真值、att 為兩者比率', async () => {
+  it('GET /enrolments/me → EnrolledCourse[]；只留 active；level 轉繁中；不再捏造 cat/coach/room/next/term/remain；attended/total 為真值、att 為兩者比率', async () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /enrolments/me': [
@@ -294,9 +293,7 @@ describe('getMine', () => {
       courses: [
         {
           // FE#17：level 走共用 5 級對照(advanced → 進階)，不再是舊的三態 初/中/高級。
-          id: 'enrol-1', course_id: 'course-1', name: '競技啦啦隊 進階班', cat: '', level: '進階', coach: '',
-          icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', room: '',
-          att: 75, attended: 18, total: 24, next: '', term: '', remain: 0
+          id: 'enrol-1', course_id: 'course-1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles', color: '#0066CC', schedule: '週二 / 週四 19:00–20:30', att: 75, attended: 18, total: 24
         }
       ]
     });

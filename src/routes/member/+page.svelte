@@ -96,7 +96,6 @@
         <Card padding={22}>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
             <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--df-ink)">技巧熟練度</h3>
-            <Badge tone="primary">{data.track}</Badge>
           </div>
           <div style="display:flex;flex-direction:column;gap:14px">
             {#each data.skills as [n, v], i (i)}

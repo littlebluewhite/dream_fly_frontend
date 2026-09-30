@@ -22,7 +22,6 @@ export interface DashboardData {
   upcoming: UpcomingClass[];
   announce: Announcement[];
   nextClass: string; // banner「下一堂課」— 進接縫(原為 markup 硬編)
-  track: string;     // 技巧卡 track badge — 進接縫(原為 markup 硬編)
 }
 
 interface ApiEnrolment {
@@ -45,7 +44,7 @@ async function activeEnrolments(): Promise<ApiEnrolment[]> {
 }
 
 /** 儀表板 — nextClass 來自最新一筆有效報名的 schedule_text（沒有報名則空字串）；
- *  track 後端無對應資料，一律空字串。stats 三卡(報名課程數/本月出席率/會員點數)
+ *  技巧卡 track badge 後端無對應資料，R16 Task 2c 起拿掉。stats 三卡(報名課程數/本月出席率/會員點數)
  *  改接 GET /reports/me(經 getReportStats() 映射,§3.24)——只換 value,icon/tint/
  *  color/label 沿用既有 STATS 版型；attendanceRate 為 null(無點名資料,裁決 3)
  *  顯示「—」,不是 0%(0% 會誤導成「有資料、出席率為零」)。skills/upcoming/announce
@@ -61,8 +60,7 @@ export const getDashboard = async (): Promise<DashboardData> => {
       { ...STATS[2], value: stats.pointsBalance.toLocaleString('en-US') }
     ],
     skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
-    nextClass: active[0]?.schedule_text ?? '',
-    track: ''
+    nextClass: active[0]?.schedule_text ?? ''
   };
 };
 
@@ -214,20 +212,16 @@ export interface MineData {
   courses: EnrolledCourse[];
 }
 
-/** GET /enrolments/me → EnrolledCourse。cat/coach/room 後端沒有對應欄位(enrolment
- *  不含課程分類/教練/教室)，icon/color 也沒有，一律給合理預設值(icon 沿用 Task 14
+/** GET /enrolments/me → EnrolledCourse。enrolment 不含課程分類/教練/教室，R16 Task 2c
+ *  起這三欄從 EnrolledCourse 拿掉；icon/color 也沒有，給裝飾用預設值(icon 沿用 Task 14
  *  adapter 對「無 icon 欄位」的處理慣例：'sparkles')。
  *
  *  Task 10：attended/total 為真值(§3.19 即時計算——attended 為標記 present 的筆數、
  *  total 為已點名的場次數，尚未點名的場次不計入；無點名紀錄時兩者皆為 0)；att(出席率
  *  百分比)由兩者相除而來，total 為 0 時併為 0 避免除以零，也維持與 attended/total 的
  *  數字一致(不會出現「0% 但 23/24 堂」這種自相矛盾的顯示)。
- *  // P2: next(下一堂)——GET /courses/{id}/sessions 可依「依 session_date, start_time
- *  排序」的第一筆推導最近未來場次，但需要每堂已報名課程各呼叫一次、且要另外處理
- *  「明日/週X」相對日期格式化與 studio_timezone 牆鐘語意(§3.18 裁決 2)；盤點 UI 用途
- *  後(僅 member/mine/+page.svelte 一個「下一堂」KPI 小卡使用，非核心流程)，維持誠實
- *  空字串預設，暫不推導。
- *  // P2: term/remain(學期/剩餘堂數)——後端無對應欄位，一律沿用預設值。
+ *  下一堂/學期/剩餘堂數後端無對應欄位(下一堂需逐課 GET /courses/{id}/sessions 推導，
+ *  未做)，R16 Task 2c 起從 EnrolledCourse 拿掉，不再給空字串/0 佔位。
  *
  *  R15(候選 F2)：只打自己的路徑(GET /enrolments/me)，不再順手 hydrate waitlist/
  *  leaveRequests store——那是呼叫端(member/mine、mobile mine)自己讀的 store,暖不
@@ -239,19 +233,13 @@ export const getMine = async (): Promise<MineData> => {
     id: e.id,
     course_id: e.course_id, // Task 11：請假入口需要課程 id 呼叫 GET /courses/{id}/sessions
     name: e.course_name,
-    cat: '',
     level: COURSE_LEVEL_LABEL[e.course_level] ?? e.course_level,
-    coach: '',
     icon: 'sparkles',
     color: BRAND_PRIMARY_HEX,
     schedule: e.schedule_text ?? '',
-    room: '',
     att: e.total > 0 ? Math.round((e.attended / e.total) * 100) : 0,
     attended: e.attended,
-    total: e.total,
-    next: '', // P2: 見上方註解
-    term: '',
-    remain: 0
+    total: e.total
   }));
   return { courses };
 };
