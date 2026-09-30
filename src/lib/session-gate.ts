@@ -55,7 +55,7 @@
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { get } from 'svelte/store';
-import { authStore } from '$lib/stores/authStore';
+import { authStore, type AuthState } from '$lib/stores/authStore';
 import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
 
 /**
@@ -70,12 +70,17 @@ import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
  * 回傳 epoch():單調遞增的 session 世代,身分每變一次 +1;fetch/mutate 出發時捕捉、
  * 落地前比對——跨登出/換帳號的在飛回應即以此作廢。
  */
+/** session 身分 key 的單一來源:未登入 null;登入但無 member.id 退化為空字串。 */
+export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): string | null {
+	return a.loggedIn ? (a.member?.id ?? '') : null;
+}
+
 function createSessionCore(onChange: () => void): { epoch: () => number } {
 	let sessionEpoch = 0;
 	let lastIdentity: string | null = null;
 	let baselined = false;
-	authStore.subscribe(({ loggedIn, member }) => {
-		const identity = loggedIn ? (member?.id ?? '') : null;
+	authStore.subscribe((a) => {
+		const identity = sessionIdentity(a);
 		if (!baselined) {
 			baselined = true; // 立即回呼:只記身分基準
 			lastIdentity = identity;

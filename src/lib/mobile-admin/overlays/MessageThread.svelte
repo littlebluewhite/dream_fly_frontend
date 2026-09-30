@@ -16,6 +16,7 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { authStore } from '$lib/stores/authStore';
+  import { sessionIdentity } from '$lib/session-gate';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -41,11 +42,9 @@
   let reply = '';
   let sending = false;
 
-  /** 與 session-gate.ts / messagesGate 的 identity 源逐字相同：loggedIn ? (member?.id
-   *  ?? '') : null（未登入為 null，登入但無 member.id 退化為空字串）。 */
+  /** 與 session-gate 同源(sessionIdentity)。 */
   function identity(): string | null {
-    const { loggedIn, member } = get(authStore);
-    return loggedIn ? (member?.id ?? '') : null;
+    return sessionIdentity(get(authStore));
   }
 
   function load() {
