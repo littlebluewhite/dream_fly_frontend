@@ -31,6 +31,7 @@ import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { authStore } from '$lib/stores/authStore';
 import { loginAs, asLoginUser, authRoutes } from '$lib/testing/coach-session';
+import { selfAccount, hydrateSelfAccount } from '$lib/self-account';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -126,6 +127,19 @@ describe('教練身分:每個 session 只解析一次(C6)', () => {
 
 		expect(d.coach).toEqual(MAPPED_COACH);
 		expect(callCount('/coaches')).toBe(2);
+	});
+});
+
+describe('教練身分經本人帳號資料解析(R16 Task 1b)', () => {
+	it('本人帳號資料已水合時,教練 gate 不重打 GET /users/me(只補 GET /coaches)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await hydrateSelfAccount();
+
+		const d = await getSettings();
+
+		expect(d.coach).toEqual(MAPPED_COACH);
+		expect(callCount('/users/me')).toBe(1);
+		expect(callCount('/coaches')).toBe(1);
 	});
 });
 
@@ -381,19 +395,51 @@ describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀',
 describe('saveSettings — PATCH /users/me,以回應直接更新教練身分快取(不再重抓)', () => {
 	const updated = { ...ME, name: '林雅婷改', phone: '0900-000-000' };
 
-	it('送出 { name, phone };回傳以 PATCH 回應映射的 Coach,並同步 authStore 的 member', async () => {
+	it('只送改過的欄位(電話沒改就不送);回傳以 PATCH 回應映射的 Coach,並同步 authStore 的 member', async () => {
+		const renamed = { ...ME, name: '林雅婷改' };
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await getSettings();
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /users/me': asLoginUser(renamed) }));
+
+		const d = await saveSettings({ name: '林雅婷改', phone: ME.phone });
+
+		expect(api).toHaveBeenCalledWith('/users/me', {
+			method: 'PATCH',
+			body: JSON.stringify({ name: '林雅婷改' })
+		});
+		expect(d.coach).toEqual({ ...MAPPED_COACH, name: '林雅婷改', full: '林雅婷改 教練' });
+		expect(get(authStore).member?.name).toBe('林雅婷改');
+	});
+
+	it('電話是 null 的教練只改姓名 → PATCH body 只有 { name }(不再送 phone: \'\' 撞後端 422)', async () => {
+		const NO_PHONE = { ...ME, phone: null };
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': NO_PHONE, 'GET /coaches': [MY_COACH] }));
+		const { coach } = await getSettings();
+		expect(coach.phone).toBe('');
+		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /users/me': asLoginUser({ ...NO_PHONE, name: '林雅婷改' }) }));
+
+		await saveSettings({ name: '林雅婷改', phone: coach.phone });
+
+		expect(api).toHaveBeenCalledWith('/users/me', { method: 'PATCH', body: JSON.stringify({ name: '林雅婷改' }) });
+	});
+
+	it('存檔後 $selfAccount 是新名字(教練與本人帳號資料同一份快取)', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
 		await getSettings();
 		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /users/me': asLoginUser(updated) }));
 
-		const d = await saveSettings({ name: '林雅婷改', phone: '0900-000-000' });
+		await saveSettings({ name: '林雅婷改', phone: '0900-000-000' });
 
-		expect(api).toHaveBeenCalledWith('/users/me', {
-			method: 'PATCH',
-			body: JSON.stringify({ name: '林雅婷改', phone: '0900-000-000' })
-		});
-		expect(d.coach).toEqual({ ...MAPPED_COACH, name: '林雅婷改', full: '林雅婷改 教練', phone: '0900-000-000' });
-		expect(get(authStore).member?.name).toBe('林雅婷改');
+		expect(get(selfAccount)?.name).toBe('林雅婷改');
+		expect(get(selfAccount)?.phone).toBe('0900-000-000');
+	});
+
+	it('姓名不合法 → 拋出驗證錯誤,不送 PATCH', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await getSettings();
+
+		await expect(saveSettings({ name: '林', phone: ME.phone })).rejects.toThrow('姓名需為 2–100 個字');
+		expect(callCount('/users/me', 'PATCH')).toBe(0);
 	});
 
 	it('PATCH 成功而 GET /coaches 會失敗時仍回成功(修掉「已存卻顯示儲存失敗」);之後的 getter 讀到新姓名、不重抓', async () => {

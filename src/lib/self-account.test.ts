@@ -118,13 +118,21 @@ describe('水合:每個 identity 只 GET 一次', () => {
 });
 
 describe('mapping', () => {
-	it('birth 為 null → 空字串;phone 為 null → 空字串;since 是 YYYY/MM', async () => {
-		route({ 'GET /users/me': me({ phone: null }) });
+	it('birth 為 null → 空字串;phone 為 null → 空字串;since 是 YYYY/MM;lastLogin 是 YYYY-MM-DD HH:MM', async () => {
+		route({ 'GET /users/me': me({ phone: null, last_login: '2026-07-04T08:42:00Z' }) });
 		await hydrateSelfAccount();
 
 		expect(get(selfAccount)).toEqual({
-			name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '', birth: '', since: '2024/03'
+			id: 'u-a', name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '', birth: '', since: '2024/03',
+			lastLogin: '2026-07-04 08:42'
 		});
+	});
+
+	it('last_login 缺或為 null → lastLogin 空字串', async () => {
+		route({ 'GET /users/me': me() });
+		await hydrateSelfAccount();
+
+		expect(get(selfAccount)?.lastLogin).toBe('');
 	});
 
 	it('birth_date 原樣沿用 YYYY-MM-DD;preferences 缺鍵走預設', async () => {

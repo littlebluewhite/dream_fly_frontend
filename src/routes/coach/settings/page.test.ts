@@ -98,6 +98,32 @@ describe('/coach/settings — 儲存個人資料(C6)', () => {
 	});
 });
 
+describe('/coach/settings — 個人資料 inline 驗證(R16 Task 1b)', () => {
+	it('姓名只輸入 1 個字 → 顯示驗證錯誤、儲存鈕停用、不呼叫 saveSettings', async () => {
+		vi.mocked(saveSettings).mockReset();
+		const { findByText, getByDisplayValue, getByText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+
+		await fireEvent.input(getByDisplayValue(FIXTURE_COACH.name), { target: { value: '改' } });
+
+		expect(await findByText('姓名需為 2–100 個字')).toBeInTheDocument();
+		const btn = getByText('儲存變更').closest('button')!;
+		expect(btn).toBeDisabled();
+		await fireEvent.click(btn);
+		expect(saveSettings).not.toHaveBeenCalled();
+	});
+
+	it('原本有電話的教練清空電話 → 顯示「聯絡電話無法清空」、儲存鈕停用', async () => {
+		const { findByText, getByDisplayValue, getByText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+
+		await fireEvent.input(getByDisplayValue(FIXTURE_COACH.phone), { target: { value: '' } });
+
+		expect(await findByText('聯絡電話無法清空')).toBeInTheDocument();
+		expect(getByText('儲存變更').closest('button')!).toBeDisabled();
+	});
+});
+
 describe('/coach/settings — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
 		vi.mocked(getSettings).mockReset();

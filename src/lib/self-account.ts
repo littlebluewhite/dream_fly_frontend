@@ -4,7 +4,9 @@
  * 會員本人的「個人資料 + 通知偏好」唯一住處:GET/PATCH /users/me 的讀寫、欄位映射、
  * 表單規則、寫入序列化都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)與 mobile
  * (SettingsScreen / EditProfileSheet / 首頁·帳戶 hero / TrialScreen / CartSheet)直接
- * import $lib/self-account 取同一顆單例。取代了三份各自為政的來源:
+ * import $lib/self-account 取同一顆單例。R16 Task 1b 起教練端(coach/api.ts 的教練 gate 與
+ * saveSettings)也經這裡讀寫本人資料,教練 gate 只另快取 ApiCoach——改名後 $selfAccount 與
+ * 教練頁同一份快取(關掉 ADR-0023 記的「快取各自為政」)。取代了三份各自為政的來源:
  * member/api.ts 的 mapProfile/saveBirthDate、mobile/stores.ts 的本地 profile/prefs
  * store,以及 mobile/pref-sync.ts 的偏好同步機(其 outcome 與序列鏈語意原樣移入)。
  *
@@ -20,7 +22,7 @@
  * 誠實界線:後端沒有會員編號、家長聯絡人、頭像顏色——這些輸入一律拿掉(D2)。 */
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
-import { initialOf } from '$lib/api/wire';
+import { initialOf, isoDateTime } from '$lib/api/wire';
 import { createSessionGate } from '$lib/session-gate';
 import { authStore, type ApiUser } from '$lib/stores/authStore';
 
@@ -39,6 +41,8 @@ export interface Prefs {
 }
 
 export interface SelfAccount {
+	/** users.id(教練端用它對 GET /coaches 的 user_id)。 */
+	id: string;
 	name: string;
 	initial: string;
 	email: string;
@@ -48,6 +52,8 @@ export interface SelfAccount {
 	birth: string;
 	/** 加入年月 YYYY/MM。 */
 	since: string;
+	/** 上次登入 YYYY-MM-DD HH:MM;未知為 ''。 */
+	lastLogin: string;
 }
 
 /** 只放「想改的」欄位;與目前值相同的欄位會被略過,全部相同就不發請求。 */
@@ -87,14 +93,16 @@ function prefsToWire(raw: ApiMe['preferences'], p: Prefs): Record<string, unknow
 	return out;
 }
 
-function toProfile(u: ApiMe): SelfAccount {
+function toSelfAccount(u: ApiMe): SelfAccount {
 	return {
+		id: u.id,
 		name: u.name,
 		initial: initialOf(u.name),
 		email: u.email,
 		phone: u.phone ?? '',
 		birth: u.birth_date ?? '',
-		since: u.created_at.slice(0, 7).replace('-', '/')
+		since: u.created_at.slice(0, 7).replace('-', '/'),
+		lastLogin: u.last_login ? isoDateTime(u.last_login) : ''
 	};
 }
 
@@ -103,8 +111,12 @@ function toProfile(u: ApiMe): SelfAccount {
  *  dialog 的 Draft 一律帶入目前值(即使使用者沒有動那個欄位),未改動的欄位不該擋住其他
  *  欄位的存檔(F3:Google 註冊建立的姓名可能落在 2–100 之外,見 backend auth/service.rs,
  *  這類使用者原本連生日/偏好都存不了)。回傳繁中錯誤文案,合法回 null。兩個編輯 dialog
+ *  與教練端兩個設定頁(ProfileTab / mobile-admin csettings,current 傳 Coach 的 name/phone)
  *  用它即時提示,saveSelfAccount 也再擋一次。 */
-export function selfAccountEditError(edit: SelfAccountEdit, current: SelfAccount | null): string | null {
+export function selfAccountEditError(
+	edit: Pick<SelfAccountEdit, 'name' | 'phone'>,
+	current: Pick<SelfAccount, 'name' | 'phone'> | null
+): string | null {
 	if (edit.name !== undefined) {
 		const name = edit.name.trim();
 		if (name !== current?.name) {
@@ -125,7 +137,7 @@ export function selfAccountEditError(edit: SelfAccountEdit, current: SelfAccount
 const me = writable<ApiMe | null>(null);
 const prefsStore = writable<Prefs>({ ...PREFS_DEFAULT });
 
-export const selfAccount: Readable<SelfAccount | null> = derived(me, ($me) => ($me ? toProfile($me) : null));
+export const selfAccount: Readable<SelfAccount | null> = derived(me, ($me) => ($me ? toSelfAccount($me) : null));
 export const prefs: Readable<Prefs> = { subscribe: prefsStore.subscribe };
 
 function applyMe(u: ApiMe): void {
@@ -192,7 +204,7 @@ export function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveO
 		try {
 			await hydrateSelfAccount();
 			const cur = get(me)!; // 水合成功且同一 session(queueWrite 已核對)→ 必有值
-			const invalid = selfAccountEditError(edit, toProfile(cur));
+			const invalid = selfAccountEditError(edit, toSelfAccount(cur));
 			if (invalid) return { kind: 'failed', error: new Error(invalid) };
 
 			const body: Record<string, unknown> = {};

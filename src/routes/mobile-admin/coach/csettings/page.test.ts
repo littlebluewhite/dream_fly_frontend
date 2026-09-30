@@ -60,7 +60,7 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		expect(screen.getByDisplayValue('test.coach@dreamfly.tw')).toBeDisabled();
 	});
 
-	it('儲存變更真打 PATCH /users/me(saveSettings)，只送 name/phone', async () => {
+	it('儲存變更真打 PATCH /users/me(saveSettings)，只送改過的欄位', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ ...settingsRoutes(), 'PATCH /users/me': { ...ME, name: '改名教練' } })
 		);
@@ -71,8 +71,21 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		await fireEvent.input(nameInput, { target: { value: '改名教練' } });
 		await fireEvent.click(getByText('儲存變更'));
 
-		expect(api).toHaveBeenCalledWith('/users/me', { method: 'PATCH', body: JSON.stringify({ name: '改名教練', phone: '0900-000-000' }) });
+		expect(api).toHaveBeenCalledWith('/users/me', { method: 'PATCH', body: JSON.stringify({ name: '改名教練' }) });
 		expect(await findByText('改名教練 教練')).toBeInTheDocument();
+	});
+
+	it('姓名只輸入 1 個字 → 顯示驗證錯誤、儲存鈕停用、不送出', async () => {
+		render(CsettingsPage);
+		await screen.findByDisplayValue('測試教練');
+
+		await fireEvent.input(screen.getByDisplayValue('測試教練'), { target: { value: '改' } });
+
+		expect(await screen.findByText('姓名需為 2–100 個字')).toBeInTheDocument();
+		const btn = screen.getByText('儲存變更').closest('button')!;
+		expect(btn).toBeDisabled();
+		await fireEvent.click(btn);
+		expect(vi.mocked(api).mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
 	});
 
 	it('登出真呼叫 authStore.logout()（不再是 localStorage 旗標清除）', async () => {

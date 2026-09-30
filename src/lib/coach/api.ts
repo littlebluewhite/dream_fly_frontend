@@ -3,10 +3,11 @@
  * Task 12：getConversations/getThread/sendMessage/markRead 換真後端資料（訊息中心，
  * §3.21）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。
  *
- * 教練身分：GET /users/me + GET /coaches → find(user_id === me.id) 是本檔案的核心
- * （登入的使用者本人就是教練，教練姓名只能從 users.name 來，見 integration-contract.md
- * §3.4 附註）。R13 Task 7(C6)起由私有 session 閘門快取：每個登入身分只解析一次，
- * 換帳號/登出即重置。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
+ * 教練身分：本人帳號資料($lib/self-account，GET /users/me) + GET /coaches →
+ * find(user_id === account.id) 是本檔案的核心（登入的使用者本人就是教練，教練姓名只能從
+ * users.name 來，見 integration-contract.md §3.4 附註）。R13 Task 7(C6)起由私有 session
+ * 閘門快取：每個登入身分只解析一次，換帳號/登出即重置。R16 Task 1b 起這顆閘門只快取
+ * ApiCoach | null，本人資料一律讀 $selfAccount(與會員端同一份快取)。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
  * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面 catch 用 e.name 判斷
  * （不是 instanceof —— 頁面測試把 $lib/coach/api 整支模組換成只有單一 getter 的假模組，
  * import 進來的 class 會是 undefined，instanceof undefined 會炸掉），改顯示「此帳號
@@ -14,7 +15,8 @@
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
-import { authStore, type ApiUser } from '$lib/stores/authStore';
+import { authStore } from '$lib/stores/authStore';
+import { selfAccount, hydrateSelfAccount, saveSelfAccount, type SelfAccount } from '$lib/self-account';
 import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
@@ -42,76 +44,71 @@ export class CoachNotFoundError extends Error {
 	}
 }
 
-/* ═════════════════════════ 教練本人（GET /users/me + GET /coaches） ═════════════════════════ */
+/* ═════════════════════════ 教練本人（本人帳號資料 + GET /coaches） ═════════════════════════ */
 
-/** 教練身分:登入者本人(GET /users/me)+ 對應的教練檔案(GET /coaches 只回 active 教練;
- *  找不到為 null)。 */
-interface CoachIdentity {
-	user: ApiUser;
-	coach: ApiCoach | null;
-}
-
-async function fetchMe(): Promise<CoachIdentity> {
-	const [user, coaches] = await Promise.all([api<ApiUser>('/users/me'), listCoaches()]);
-	return { user, coach: coaches.find((c) => c.user_id === user.id) ?? null };
-}
-
-let identity: CoachIdentity | null = null;
+/** 登入者本人對應的教練檔案(GET /coaches 只回 active 教練;找不到為 null)。本人資料
+ *  由 $lib/self-account 持有(已水合就不重打 GET /users/me)。 */
+let myCoach: ApiCoach | null = null;
 
 /** 每個登入身分只解析一次;換帳號/登出(authStore identity 變更)即清空,在飛的舊回應由
- *  閘門的 epoch 核對作廢。 */
-const gate = createSessionGate<CoachIdentity>({
-	fetch: fetchMe,
-	apply: (d) => {
-		identity = d;
+ *  閘門的 epoch 核對作廢(本人帳號資料的閘門同一時刻各自重置)。 */
+const gate = createSessionGate<ApiCoach | null>({
+	fetch: async () => {
+		const [, coaches] = await Promise.all([hydrateSelfAccount(), listCoaches()]);
+		const id = get(selfAccount)?.id;
+		return coaches.find((c) => c.user_id === id) ?? null;
+	},
+	apply: (c) => {
+		myCoach = c;
 	},
 	reset: () => {
-		identity = null;
+		myCoach = null;
 	}
 });
 
 /** 教練身分(快取命中不打 API;併發呼叫共用同一支在飛解析——閘門的 hydrate 合併)。沒有
  *  教練檔案時 invalidate 再拋 CoachNotFoundError——管理員綁定教練檔案後,使用者按重試就會
  *  重新解析。 */
-async function requireCoach(): Promise<{ user: ApiUser; coach: ApiCoach }> {
+async function requireCoach(): Promise<{ account: SelfAccount; coach: ApiCoach }> {
 	await gate.hydrate();
-	const me = identity;
-	if (!me?.coach) {
+	const coach = myCoach;
+	if (!coach) {
 		gate.invalidate();
 		throw new CoachNotFoundError();
 	}
-	return { user: me.user, coach: me.coach };
+	// 閘門的 fetch 已等本人帳號資料水合,兩顆閘門同一 identity 變更時一起重置 → 必有值
+	return { account: get(selfAccount)!, coach };
 }
 
-/** 教練身分(user + coach)組合成既有 Coach 形狀，getDashboard/getSettings 共用。
- *  name/display/full/initial 由 user.name 推導（東亞姓名慣例：首字視為姓氏，同 mock 原始
+/** 教練身分(本人帳號資料 + coach)組合成既有 Coach 形狀，getDashboard/getSettings 共用。
+ *  name/display/full/initial 由 account.name 推導（東亞姓名慣例：首字視為姓氏，同 mock 原始
  *  資料「李志偉」→「李教練」/「李志偉 教練」的推導方式一致）；role/bio/chips 來自
  *  ApiCoach 的 title/bio/certifications；id 改用教練真實 uuid（舊「DF-C2019-007」員編
  *  格式後端無對應欄位，P2）；en/gender/birth/emergency 後端無對應欄位，誠實給空字串
- *  （P2）；registered 用 coach.created_at；lastLogin 用 user.last_login。 */
-function mapCoach(user: ApiUser, coach: ApiCoach): Coach {
-	const surname = initialOf(user.name);
+ *  （P2）；registered 用 coach.created_at；lastLogin 用 account.lastLogin。 */
+function mapCoach(account: SelfAccount, coach: ApiCoach): Coach {
+	const surname = account.initial;
 	return {
-		name: user.name,
+		name: account.name,
 		display: `${surname}教練`,
-		full: `${user.name} 教練`,
+		full: `${account.name} 教練`,
 		en: '', // P2: 後端無英文姓名欄位
 		initial: surname,
 		// Task 4 判斷：CoachResponse 新增的 name 欄位在此不適用 —— name/display/full/
-		// initial 已經正確取自 user.name(教練本人的真實姓名，見上方函式註解)；role 這裡
+		// initial 已經正確取自 account.name(教練本人的真實姓名，見上方函式註解)；role 這裡
 		// 語意上是「職稱」(routes/coach/settings 渲染成「{role} · {id}」的職銜列)，不是
 		// 姓名欄位，繼續用 coach.title 才是對的欄位，不需要也不應該改成 coach.name。
 		role: coach.title,
 		id: coach.id, // P2: 舊員編格式(DF-C2019-007)無對應欄位，改用教練 uuid
-		email: user.email,
-		phone: user.phone ?? '',
+		email: account.email,
+		phone: account.phone,
 		gender: '', // P2: 後端無性別欄位
 		birth: '', // P2: 後端無生日欄位
 		emergency: '', // P2: 後端無緊急聯絡人欄位
 		bio: coach.bio ?? '',
 		chips: coach.certifications,
 		registered: isoDate(coach.created_at),
-		lastLogin: user.last_login ? isoDateTime(user.last_login) : ''
+		lastLogin: account.lastLogin
 	};
 }
 
@@ -176,7 +173,7 @@ export interface CoachDashboardData {
  *  不強塞新卡片。conversations 由 getConversations() best-effort 併入(降級語意見
  *  下方行內註解)。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
-	const { user, coach } = await requireCoach();
+	const { account, coach } = await requireCoach();
 	const [todayClasses, reports, conversations] = await Promise.all([
 		myTodayClasses(),
 		api<ApiCoachReports>('/reports/coach'),
@@ -191,7 +188,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 			})
 	]);
 	return {
-		coach: mapCoach(user, coach),
+		coach: mapCoach(account, coach),
 		todayLabel: todayLabel(),
 		todayClasses,
 		conversations,
@@ -275,7 +272,7 @@ export interface AttendanceData {
  *  getToday()(即使本函式主要需要的是 user.name 顯示用，不是 coach.id)——教練檔案
  *  不存在時兩者一致丟 CoachNotFoundError。 */
 export const getAttendance = async (): Promise<AttendanceData> => {
-	const { user } = await requireCoach();
+	const { account } = await requireCoach();
 	const sessions = await api<ApiTodaySession[]>('/sessions/today');
 	const now = new Date();
 	const results = await Promise.allSettled(
@@ -286,7 +283,7 @@ export const getAttendance = async (): Promise<AttendanceData> => {
 	sessions.forEach((s, i) => {
 		const r = results[i];
 		if (r.status === 'fulfilled') {
-			classes.push(mapAttendanceClass(s, r.value, user.name, now));
+			classes.push(mapAttendanceClass(s, r.value, account.name, now));
 		} else {
 			failedClasses.push(s.course_name);
 			console.error(`getAttendance: ${s.course_name} 名冊載入失敗`, r.reason);
@@ -601,29 +598,26 @@ export const decideLeaveRequest = (id: string, status: 'approved' | 'rejected'):
 		mapCoachLeaveRequest
 	);
 
-/* ═════════════════════════ 個人設定（GET /users/me；儲存 → PATCH /users/me） ═════════════════════════ */
+/* ═════════════════════════ 個人設定（本人帳號資料；儲存 → saveSelfAccount → PATCH /users/me） ═════════════════════════ */
 
 export interface CoachSettingsData { coach: Coach }
 export const getSettings = async (): Promise<CoachSettingsData> => {
-	const { user, coach } = await requireCoach();
-	return { coach: mapCoach(user, coach) };
+	const { account, coach } = await requireCoach();
+	return { coach: mapCoach(account, coach) };
 };
 
 /** ProfileTab 可編輯的欄位裡，只有 name/phone 有對應的後端 PATCH 欄位（avatar_url 目前
  *  沒有 UI 入口，未使用）；email/gender/birth/emergency/bio 後端不支援寫入，維持頁面
- *  本地編輯、不送出(同既有行為)。PATCH 回應就是完整的 UserResponse：直接更新教練身分
- *  快取並 authStore.syncUser(Topbar 等處的姓名跟著變)，不再重抓——重抓失敗曾讓「已存」
- *  顯示成「儲存失敗」。教練檔案取自快取(設定頁已載入，命中不打 API)。 */
-export const saveSettings = async (fields: { name?: string; phone?: string }): Promise<CoachSettingsData> => {
+ *  本地編輯、不送出(同既有行為)。R16 Task 1b:先解析教練(快取命中不打 API),再交給
+ *  saveSelfAccount——它與目前值比對、只送改過的欄位(電話 null 的教練只改姓名時不再送
+ *  phone: '' 撞後端 8–20 碼驗證的 422),表單規則不合法就不發請求;PATCH 回應寫回
+ *  $selfAccount 並 authStore.syncUser(Topbar 等處的姓名跟著變),不重抓。簽章不變:失敗
+ *  (含驗證錯誤、換帳號後被跳過)照樣 throw。 */
+export const saveSettings = async (edit: { name?: string; phone?: string }): Promise<CoachSettingsData> => {
 	const { coach } = await requireCoach();
-	const user = await gate.mutate(
-		() => api<ApiUser>('/users/me', { method: 'PATCH', body: JSON.stringify(fields) }),
-		(u) => {
-			identity = { user: u, coach };
-			authStore.syncUser(u);
-		}
-	);
-	return { coach: mapCoach(user, coach) };
+	const outcome = await saveSelfAccount(edit);
+	if (outcome.kind === 'failed') throw outcome.error;
+	return { coach: mapCoach(get(selfAccount)!, coach) };
 };
 
 /* ═════════════════════════ 發證書（POST /certificates，見 integration-contract.md §3.22） ═════════════════════════ */

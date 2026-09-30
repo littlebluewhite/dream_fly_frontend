@@ -14,7 +14,9 @@
    * 的決定)。通知偏好/帳號安全(密碼/2FA/登入裝置)桌面自己在這兩個位置也是全部
    * mock(NotifTab/SecurityTab 皆無對應後端)，鏡射同一決定原樣保留。
    * cInfo 找不到本人資料(coach 為 null，通常是 CoachNotFoundError)時顯示
-   * EmptyState，不當機。 */
+   * EmptyState，不當機。R16 Task 1b：姓名/聯絡電話即時用本人帳號資料的
+   * selfAccountEditError 檢查，不合法時顯示原因並停用「儲存變更」；saveSettings 只送
+   * 改過的欄位。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -31,6 +33,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings as getCsettings, saveSettings, type CoachSettingsData as CsettingsData } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
+  import { selfAccountEditError } from '$lib/self-account';
   import { authStore } from '$lib/stores/authStore';
   import type { IconName } from '$lib/icon-registry';
 
@@ -62,6 +65,7 @@
     phone = cInfo.phone;
     bio = cInfo.bio;
   }
+  $: error = cInfo ? selfAccountEditError({ name, phone }, cInfo) : null;
 
   const STATS: [string, string][] = [
     ['312 hr', '授課時數'],
@@ -91,6 +95,7 @@
   const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
 
   async function save() {
+    if (error) return;
     saving = true;
     try {
       const saved = await saveSettings({ name, phone });
@@ -243,7 +248,8 @@
           {/each}
         </Panel>
 
-        <Button variant="primary" fullWidth disabled={saving} on:click={save}>
+        {#if error}<div role="alert" style="font-size:12.5px; color:var(--df-error);">{error}</div>{/if}
+        <Button variant="primary" fullWidth disabled={saving || !!error} on:click={save}>
           <span style="display:inline-flex; align-items:center; gap:6px; justify-content:center;"><Icon name="check" size={16} color="#fff" />{saving ? '儲存中…' : '儲存變更'}</span>
         </Button>
         <button

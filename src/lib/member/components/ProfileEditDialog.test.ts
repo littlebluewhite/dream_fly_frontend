@@ -8,12 +8,14 @@ import type { SelfAccount, Prefs } from '$lib/self-account';
  * two-statement `wasOpen` bug as PasswordDialog). */
 
 const PROFILE: SelfAccount = {
+	id: 'u-1',
 	name: '陳小美',
 	initial: '陳',
 	email: 'mama@example.com',
 	phone: '0912345678',
 	birth: '2015-06-12',
-	since: '2024/01'
+	since: '2024/01',
+	lastLogin: ''
 };
 const PREFS: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
 

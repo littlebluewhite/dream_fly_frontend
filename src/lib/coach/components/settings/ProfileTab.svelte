@@ -2,9 +2,12 @@
   /* 個人資料 tab — edit form + live preview card + danger zone
    * coach 改為 required prop(元件樹檢查,Task 4):不再自行 import COACH,由
    * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。
-   * onSaved(C6):儲存成功後把後端回應映射的 Coach 交回頁面,頁首姓名跟著更新。 */
+   * onSaved(C6):儲存成功後把後端回應映射的 Coach 交回頁面,頁首姓名跟著更新。
+   * R16 Task 1b:姓名/電話即時用本人帳號資料的 selfAccountEditError 檢查(與會員端同一份
+   * 規則),不合法時顯示原因並停用「儲存變更」。 */
   import type { Coach } from '$lib/coach/data';
   import { saveSettings } from '$lib/coach/api';
+  import { selfAccountEditError } from '$lib/self-account';
   import { toasts } from '$lib/coach/stores';
   import Card from '$lib/components/ui/Card.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -27,9 +30,12 @@
 
   let saving = false;
 
+  $: error = selfAccountEditError({ name, phone }, coach);
+
   // name/phone 有對應的後端 PATCH /users/me 欄位，實際送出並儲存；email/gender/
   // birth/emergency/bio 後端不支援寫入，維持本地編輯、不送出(P2，同 api.ts 註解)。
   async function save() {
+    if (error) return;
     saving = true;
     try {
       const saved = await saveSettings({ name, phone });
@@ -83,8 +89,9 @@
         <Input label="緊急聯絡人" bind:value={emergency} placeholder="姓名 (關係) / 電話" />
         <Textarea label="個人簡介" bind:value={bio} rows={4} maxLength={200} />
 
+        {#if error}<div role="alert" style="font-size:var(--df-text-sm);color:var(--df-error)">{error}</div>{/if}
         <div style="display:flex;justify-content:flex-end;padding-top:4px">
-          <Button variant="primary" size="md" disabled={saving} on:click={save}>
+          <Button variant="primary" size="md" disabled={saving || !!error} on:click={save}>
             <span style="display:inline-flex;align-items:center;gap:8px">
               <Icon name="save" size={16} color="#fff" />
               {saving ? '儲存中…' : '儲存變更'}
