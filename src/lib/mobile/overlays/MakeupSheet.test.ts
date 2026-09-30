@@ -15,7 +15,7 @@ import type { LeaveRequest } from '$lib/member/leave';
  * 保留元件端佈線,並釘住 mobile 版成功 toast body 字面(與桌面 MakeupDialog 分歧)。
  *
  * Task 1(架構深化 R14·F6):改走 $lib/api/client + fakeRouter(寫法照
- * member/profile.test.ts) —— 不 mock deps，斷言改成
+ * self-account.test.ts) —— 不 mock deps，斷言改成
  * 「打了哪個端點、帶什麼 body」。leaveRequests store 在本檔進場未水合，bookMakeup
  * 走 gate.mutate 寫回後會尾隨一次和解重抓，成功案例額外要 route
  * GET /leave-requests/me。 */

@@ -16,7 +16,7 @@
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import SuccessBody from '$lib/components/mobile/SuccessBody.svelte';
   import { toasts } from '$lib/mobile/stores';
-  import { memberProfile } from '$lib/member/profile';
+  import { selfAccount } from '$lib/self-account';
   import { authStore } from '$lib/stores/authStore';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
@@ -56,7 +56,7 @@
   // 預填真值(R13 Task 3):名字取 authStore,電話取會員資料 module(已水合才有值;
   // 本畫面不為了預填多打一支 GET)。
   let parent = $authStore.member?.name ?? '';
-  let phone = $memberProfile?.phone ?? '';
+  let phone = $selfAccount?.phone ?? '';
   let student = '';
   let note = '';
   let submitting = false;

@@ -7,7 +7,7 @@
  * API (hydrated via each module's refresh* functions); only the cart itself stays
  * a local store, synced to the server at checkout time (placeOrder).
  *
- * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 8 個
+ * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 7 個
  * 關切模組的 public exports（型別一律用 `export type`）。新增 store／函式請寫進
  * 歸屬模組，不要寫進這裡：
  *  - $lib/cart          購物車 store + 持久化（lib-root 共用模組，本 barrel 只轉手）
@@ -17,7 +17,6 @@
  *  - subscriptions.ts   訂閱 / entitlement
  *  - checkout-sync.ts   購物車同步 + 送出訂單
  *  - notifications.ts   通知中心
- *  - profile.ts         會員資料(個人資料 + 通知偏好,GET/PATCH /users/me)
  *  - ui.ts              跨路由 UI 狀態（checkoutOpen/search/toasts） */
 
 export { createCart, cart, cartCount } from '$lib/cart';
@@ -49,8 +48,5 @@ export { createCheckout } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
 export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';
-
-export { memberProfile, prefs, hydrateProfile, setPref, saveProfile, profileEditError } from './profile';
-export type { MemberProfile, Prefs, ProfileEdit, PrefSetOutcome, ProfileSaveOutcome } from './profile';
 
 export { checkoutOpen, search, toasts } from './ui';

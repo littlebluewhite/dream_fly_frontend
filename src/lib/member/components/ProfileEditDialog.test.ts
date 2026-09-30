@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import ProfileEditDialog from './ProfileEditDialog.svelte';
-import type { MemberProfile, Prefs } from '$lib/member/stores';
+import type { SelfAccount, Prefs } from '$lib/self-account';
 
 /* 編輯個人資料 — local editable copy `f` of the `profile` prop, reset each time
  * the dialog transitions to open (FE#19 scan target: found with the same
  * two-statement `wasOpen` bug as PasswordDialog). */
 
-const PROFILE: MemberProfile = {
+const PROFILE: SelfAccount = {
 	name: '陳小美',
 	initial: '陳',
 	email: 'mama@example.com',
@@ -62,7 +62,7 @@ describe('ProfileEditDialog', () => {
 	});
 
 	// 生日（Round 4 Task P4-F4）——date input，顯示既有值；清空後 onSave 收到的
-	// edit 帶空字串（會員資料 module 的 saveProfile 負責轉成顯式 null 清除）。
+	// edit 帶空字串（會員資料 module 的 saveSelfAccount 負責轉成顯式 null 清除）。
 	it('生日欄位是 <input type="date">，顯示既有值', () => {
 		const { getByLabelText } = render(ProfileEditDialog, { open: true, profile: PROFILE, prefs: PREFS });
 		const birthInput = getByLabelText('生日') as HTMLInputElement;

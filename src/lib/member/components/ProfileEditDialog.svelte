@@ -4,20 +4,20 @@
    * preferences section. Ported from the prototype's ProfileEditDialog
    * (client/views.jsx).
    * R13 Task 3(C1):姓名/電話/生日/課前提醒/活動與優惠全部真的寫回後端(PATCH
-   * /users/me,經會員資料 module 的 saveProfile,由帳戶頁呼叫)。後端沒有的欄位
+   * /users/me,經會員資料 module 的 saveSelfAccount,由帳戶頁呼叫)。後端沒有的欄位
    * (會員編號、家長聯絡人、頭像顏色)拿掉;email 只讀(後端不收)。表單規則同後端
-   * (profileEditError),不合法時「儲存資料」停用並顯示原因。 */
+   * (selfAccountEditError),不合法時「儲存資料」停用並顯示原因。 */
   import { Avatar, Button, IconButton, Input, Switch, Icon } from '$lib/components/ui';
   import { initialOf } from '$lib/api/wire';
-  import { profileEditError, type MemberProfile, type Prefs, type ProfileEdit } from '$lib/member/stores';
+  import { selfAccountEditError, type SelfAccount, type Prefs, type SelfAccountEdit } from '$lib/self-account';
 
   export let open = false;
-  export let profile: MemberProfile;
+  export let profile: SelfAccount;
   export let prefs: Prefs;
   /** 儲存中:停用「儲存資料」(防連點)。 */
   export let saving = false;
   export let onClose: () => void = () => {};
-  export let onSave: (edit: ProfileEdit) => void = () => {};
+  export let onSave: (edit: SelfAccountEdit) => void = () => {};
 
   type Draft = { name: string; phone: string; birth: string; classReminder: boolean; promo: boolean };
   function draftOf(): Draft {
@@ -39,7 +39,7 @@
     lastOpen = open;
   }
 
-  $: error = profileEditError({ name: f.name, phone: f.phone }, profile);
+  $: error = selfAccountEditError({ name: f.name, phone: f.phone }, profile);
 
   function save() {
     onSave({ name: f.name, phone: f.phone, birth: f.birth, prefs: { classReminder: f.classReminder, promo: f.promo } });

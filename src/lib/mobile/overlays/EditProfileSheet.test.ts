@@ -7,7 +7,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { toasts } from '$lib/mobile/stores';
 import EditProfileSheet from './EditProfileSheet.svelte';
 
-/* EditProfileSheet(R13 Task 3·C1):存檔一次 saveProfile(PATCH /users/me),只送改過的
+/* EditProfileSheet(R13 Task 3·C1):存檔一次 saveSelfAccount(PATCH /users/me),只送改過的
  * 欄位;偏好送整包(後端原始物件 + 4 鍵)。改走 $lib/api/client + fakeRouter(ADR-0022
  * 通知合一的前例)、真 authStore 登入、真會員資料 module。從帳號頁情境開啟(Settings
  * 未掛載),水合只靠本 sheet 自己觸發。 */
@@ -58,7 +58,7 @@ async function openHydrated(onClose = vi.fn()) {
 	return onClose;
 }
 
-describe('EditProfileSheet — 一次 saveProfile', () => {
+describe('EditProfileSheet — 一次 saveSelfAccount', () => {
 	it('水合後顯示真值;只切一個偏好 → PATCH 只帶 preferences 整包(伺服器值 + 那一個改動,未知鍵保住)', async () => {
 		const onClose = await openHydrated();
 

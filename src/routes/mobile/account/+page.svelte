@@ -11,9 +11,9 @@
    * mobile 本地、永遠停在 mock 種子值的 points store
    * (那顆本地 store 仍保留給 CartSheet 的既有假結帳流程使用,兩者現在是分開的,
    * 見 task-19-report.md 的顧慮)。hero 的名字讀 authStore(改名經 syncUser 同步)、
-   * 加入年月讀會員資料 module 的 $memberProfile(本頁自己等它水合,R13 Task 3);
+   * 加入年月讀會員資料 module 的 $selfAccount(本頁自己等它水合,R13 Task 3);
    * 後端沒有的會員編號拿掉。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手
-   * getAccount()/MobileAccountData 已退役,本頁直取桌面 seam;memberProfile/points
+   * getAccount()/MobileAccountData 已退役,本頁直取桌面 seam;selfAccount/points
    * 也改直取擁有者模組,不再經 $lib/mobile/stores 轉手。Task 8(架構深化 R15·F-2)：
    * getAccount() 只回訂單資料——個人資料水合與點數暖機改由本頁自己宣告，與主 GET
    * 並行發出；行動版帳戶頁只暖點數，不暖訂閱(不打 GET /subscriptions/me，本頁不
@@ -26,7 +26,7 @@
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay } from '$lib/mobile/stores';
   import type { MobilePushId } from '$lib/mobile/stores';
-  import { memberProfile, hydrateProfile } from '$lib/member/profile';
+  import { selfAccount, hydrateSelfAccount } from '$lib/self-account';
   import { points, refreshPoints } from '$lib/member/points';
   import { warmStores } from '$lib/store-warm';
   import { authStore } from '$lib/stores/authStore';
@@ -41,7 +41,7 @@
     fetch: async () => {
       const [account] = await Promise.all([
         getAccount(),
-        hydrateProfile(),
+        hydrateSelfAccount(),
         warmStores('mobile/account', [['點數', refreshPoints]])
       ]);
       return account;
@@ -97,7 +97,7 @@
       <Avatar name={$authStore.member?.initial ?? ''} size="lg" color="rgba(255,255,255,0.22)" />
       <div style="flex:1; min-width:0;">
         <div style="font-size:21px; font-weight:800; font-family:var(--df-font-heading);">{$authStore.member?.name ?? ''}</div>
-        {#if $memberProfile}<div style="font-size:12.5px; opacity:0.85; margin-top:2px;">{$memberProfile.since} 加入</div>{/if}
+        {#if $selfAccount}<div style="font-size:12.5px; opacity:0.85; margin-top:2px;">{$selfAccount.since} 加入</div>{/if}
       </div>
       <button
         on:click={() => overlay.sheet('editProfile')}

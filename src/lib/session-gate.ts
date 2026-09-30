@@ -9,7 +9,7 @@
  *   - createSessionGate     完整 session gate(gate + 身分重置 + 序列化可重試和解鏈
  *                           + epoch 核對 fetch;頁面進場包 pageEntry() 繼承自閘門)——
  *                           waitlist / leave / notifications;R13(docs/adr/0023)
- *                           再加會員資料(member/profile)、教練身分(coach/api 私有)
+ *                           再加本人帳號資料(self-account)、教練身分(coach/api 私有)
  *                           與 mobile-admin 訊息(messagesGate),共六個
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
  *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions

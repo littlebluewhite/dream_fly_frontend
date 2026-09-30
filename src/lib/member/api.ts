@@ -317,7 +317,7 @@ function mapOrder(o: ApiOrderSummary): Order {
  *  截斷成只看到最近 20 筆；ordersTotal 另外回傳真正的總筆數，讓呼叫端(mobile 帳戶頁/
  *  OrdersScreen)顯示的「N 筆報名紀錄」不會被這個截斷誤導成 20。
  *
- *  R15(候選 F2)：只打自己的路徑，不再等會員資料水合(hydrateProfile)、也不再順手
+ *  R15(候選 F2)：只打自己的路徑，不再等會員資料水合(hydrateSelfAccount)、也不再順手
  *  hydrate points/subscriptions store——那些是帳戶頁自己讀的 store/資料，暖不暖、
  *  暖哪些是頁面自己的決定(見 member/account/+page.svelte、mobile/account/
  *  +page.svelte 的 gate.fetch，兩處清單不同：桌面暖點數＋訂閱，行動版只暖點數)。 */

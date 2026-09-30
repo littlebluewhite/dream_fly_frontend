@@ -20,7 +20,7 @@ import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-a
  * 聯絡教練兩個動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。
  *
  * Task 1(架構深化 R14·F6):「我的請假」改走 $lib/api/client + fakeRouter(寫法照
- * member/profile.test.ts) —— refreshLeaveRequests/cancelLeaveRequest 不 mock
+ * self-account.test.ts) —— refreshLeaveRequests/cancelLeaveRequest 不 mock
  * deps，fixture 改由 route 供給(GET /leave-requests/me、
  * DELETE /leave-requests/{id})，斷言改成「打了哪個端點、帶什麼 body」。
  * Task 7(架構深化 R15·F-4)：元件改直取 $lib/member/api 的 getEnrolmentAttendance

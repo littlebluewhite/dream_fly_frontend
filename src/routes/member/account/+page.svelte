@@ -10,14 +10,10 @@
     points,
     subscriptions,
     toasts,
-    memberProfile,
-    prefs,
-    saveProfile,
-    hydrateProfile,
     refreshPoints,
-    refreshSubscriptions,
-    type ProfileEdit
+    refreshSubscriptions
   } from '$lib/member/stores';
+  import { selfAccount, prefs, saveSelfAccount, hydrateSelfAccount, type SelfAccountEdit } from '$lib/self-account';
   import { warmStores } from '$lib/store-warm';
   import ProfileEditDialog from '$lib/member/components/ProfileEditDialog.svelte';
   import { createLoadGate } from '$lib/load-gate';
@@ -28,14 +24,14 @@
   let editing = false;
   let saving = false;
 
-  // R15(候選 F2)：getAccount() 只回訂單資料，個人資料水合(hydrateProfile，失敗照拋——
-  // $memberProfile 是本頁主資料之一)與點數/訂閱暖機由本頁自己宣告，與主 GET 同一個
+  // R15(候選 F2)：getAccount() 只回訂單資料，個人資料水合(hydrateSelfAccount，失敗照拋——
+  // $selfAccount 是本頁主資料之一)與點數/訂閱暖機由本頁自己宣告，與主 GET 同一個
   // Promise.all 並行發出(暖機是 best-effort，見 $lib/store-warm 的 warmStores 檔頭)。
   const gate = createLoadGate({
     fetch: async () => {
       const [account] = await Promise.all([
         getAccount(),
-        hydrateProfile(),
+        hydrateSelfAccount(),
         warmStores('member/account', [['點數', refreshPoints], ['訂閱', refreshSubscriptions]])
       ]);
       return account;
@@ -46,7 +42,7 @@
     gate.load();
   });
 
-  $: profile = $memberProfile;
+  $: profile = $selfAccount;
   $: contacts = profile
     ? ([['phone', profile.phone], ['mail', profile.email]] satisfies [IconName, string][]).filter(([, v]) => v)
     : [];
@@ -54,10 +50,10 @@
   // 儲存個人資料(R13 Task 3)——姓名/電話/生日/通知偏好經會員資料 module 一次寫回
   // PATCH /users/me(只送改過的欄位,不做樂觀更新)。saving 鎖防連點;失敗時 dialog
   // 不關、可重試。
-  async function save(edit: ProfileEdit) {
+  async function save(edit: SelfAccountEdit) {
     if (saving) return;
     saving = true;
-    const outcome = await saveProfile(edit);
+    const outcome = await saveSelfAccount(edit);
     saving = false;
     if (outcome.kind === 'failed') {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');

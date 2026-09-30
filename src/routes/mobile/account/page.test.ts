@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getAccount } from '$lib/member/api';
-import { hydrateProfile } from '$lib/member/profile';
+import { hydrateSelfAccount } from '$lib/self-account';
 import { refreshPoints } from '$lib/member/points';
 import type { Order } from '$lib/member/data';
 
@@ -13,9 +13,9 @@ vi.mock('$lib/member/api', () => ({ getAccount: vi.fn() }));
 // Task 8(架構深化 R15·F-2)：getAccount() 只回訂單資料，個人資料水合/點數暖機改由
 // 本頁自己宣告；這裡整支 mock 掉，只驗頁面的訂單渲染與三態，不重複測水合/暖機本身
 // 的語意（見 member/account/page.test.ts 的暖機描述、$lib/store-warm.test.ts）。
-vi.mock('$lib/member/profile', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/profile')>();
-	return { ...actual, hydrateProfile: vi.fn() };
+vi.mock('$lib/self-account', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/self-account')>();
+	return { ...actual, hydrateSelfAccount: vi.fn() };
 });
 vi.mock('$lib/member/points', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/member/points')>();
@@ -32,7 +32,7 @@ const ORDERS: Order[] = [
 beforeEach(() => {
 	vi.mocked(getAccount).mockReset();
 	vi.mocked(getAccount).mockResolvedValue({ orders: ORDERS, ordersTotal: ORDERS.length });
-	vi.mocked(hydrateProfile).mockReset().mockResolvedValue(undefined);
+	vi.mocked(hydrateSelfAccount).mockReset().mockResolvedValue(undefined);
 	vi.mocked(refreshPoints).mockReset().mockResolvedValue(undefined);
 });
 
@@ -74,7 +74,7 @@ describe('帳戶頁 — 暖機(R15 候選 F2：只暖點數，不暖訂閱)', ()
 		render(Page);
 
 		await vi.waitFor(() => {
-			expect(hydrateProfile).toHaveBeenCalled();
+			expect(hydrateSelfAccount).toHaveBeenCalled();
 			expect(refreshPoints).toHaveBeenCalled();
 		});
 
@@ -91,8 +91,8 @@ describe('帳戶頁 — 暖機(R15 候選 F2：只暖點數，不暖訂閱)', ()
 		expect(screen.queryByText('載入失敗')).toBeNull();
 	});
 
-	it('個人資料水合失敗 → 整頁錯誤態(hydrateProfile 是主資料之一,fail-hard)', async () => {
-		vi.mocked(hydrateProfile).mockRejectedValue(new Error('network down'));
+	it('個人資料水合失敗 → 整頁錯誤態(hydrateSelfAccount 是主資料之一,fail-hard)', async () => {
+		vi.mocked(hydrateSelfAccount).mockRejectedValue(new Error('network down'));
 
 		render(Page);
 

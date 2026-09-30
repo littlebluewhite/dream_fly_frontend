@@ -1,4 +1,4 @@
-/* Dream Fly — member/profile.ts 單測(R13 Task 3·候選 C1:會員資料 module)。
+/* Dream Fly — self-account.ts 單測(R13 Task 3·候選 C1:會員資料 module)。
  *
  * 只替換 $lib/api/client 的 api()(fakeRouter 依 "METHOD path" 回應);authStore 用真的
  * ——identity 由真 login/logout 驅動,syncUser 也是真的(ADR-0022 通知合一的前例)。
@@ -9,7 +9,7 @@ import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { authStore } from '$lib/stores/authStore';
-import { memberProfile, prefs, hydrateProfile, setPref, saveProfile, type Prefs } from './profile';
+import { selfAccount, prefs, hydrateSelfAccount, setPref, saveSelfAccount, type Prefs } from './self-account';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -69,69 +69,69 @@ beforeEach(async () => {
 });
 
 describe('水合:每個 identity 只 GET 一次', () => {
-	it('同一 identity 重複 / 併發呼叫 hydrateProfile() 只 GET 一次', async () => {
+	it('同一 identity 重複 / 併發呼叫 hydrateSelfAccount() 只 GET 一次', async () => {
 		route({ 'GET /users/me': me() });
 
-		await Promise.all([hydrateProfile(), hydrateProfile()]);
-		await hydrateProfile();
+		await Promise.all([hydrateSelfAccount(), hydrateSelfAccount()]);
+		await hydrateSelfAccount();
 
 		expect(getCount()).toBe(1);
 	});
 
 	it('A → B 直接換帳號:立即清空、B 重新 GET', async () => {
 		route({ 'GET /users/me': me({ preferences: { promo: true } }) });
-		await hydrateProfile();
-		expect(get(memberProfile)?.name).toBe('王小明');
+		await hydrateSelfAccount();
+		expect(get(selfAccount)?.name).toBe('王小明');
 
 		await loginAs(USER_B);
-		expect(get(memberProfile)).toBeNull();
+		expect(get(selfAccount)).toBeNull();
 		expect(get(prefs)).toEqual(DEFAULT_PREFS);
 
 		route({ 'GET /users/me': me({}, USER_B) });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		expect(getCount()).toBe(2);
-		expect(get(memberProfile)?.name).toBe('李大華');
+		expect(get(selfAccount)?.name).toBe('李大華');
 	});
 
 	it('登出即重置;再登入重新 GET', async () => {
 		route({ 'GET /users/me': me({ preferences: { dark: true } }) });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		expect(get(prefs).dark).toBe(true);
 
 		await authStore.logout();
-		expect(get(memberProfile)).toBeNull();
+		expect(get(selfAccount)).toBeNull();
 		expect(get(prefs)).toEqual(DEFAULT_PREFS);
 
 		await loginAs(USER_A);
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		expect(getCount()).toBe(2);
 	});
 
-	it('GET 失敗:hydrateProfile 拋出,下次可重試', async () => {
+	it('GET 失敗:hydrateSelfAccount 拋出,下次可重試', async () => {
 		route({ 'GET /users/me': new Error('offline') });
-		await expect(hydrateProfile()).rejects.toThrow('offline');
+		await expect(hydrateSelfAccount()).rejects.toThrow('offline');
 
 		route({ 'GET /users/me': me() });
-		await hydrateProfile();
-		expect(get(memberProfile)?.name).toBe('王小明');
+		await hydrateSelfAccount();
+		expect(get(selfAccount)?.name).toBe('王小明');
 	});
 });
 
 describe('mapping', () => {
 	it('birth 為 null → 空字串;phone 為 null → 空字串;since 是 YYYY/MM', async () => {
 		route({ 'GET /users/me': me({ phone: null }) });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 
-		expect(get(memberProfile)).toEqual({
+		expect(get(selfAccount)).toEqual({
 			name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '', birth: '', since: '2024/03'
 		});
 	});
 
 	it('birth_date 原樣沿用 YYYY-MM-DD;preferences 缺鍵走預設', async () => {
 		route({ 'GET /users/me': me({ birth_date: '2013-05-18', preferences: { promo: true } }) });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 
-		expect(get(memberProfile)?.birth).toBe('2013-05-18');
+		expect(get(selfAccount)?.birth).toBe('2013-05-18');
 		expect(get(prefs)).toEqual({ ...DEFAULT_PREFS, promo: true });
 	});
 });
@@ -144,7 +144,7 @@ describe('回歸:GET 還沒落地就 setPref', () => {
 			'PATCH /users/me': (init: RequestInit) => me({ preferences: JSON.parse(String(init.body)).preferences })
 		});
 
-		const hydrating = hydrateProfile(); // 例如帳戶頁進場
+		const hydrating = hydrateSelfAccount(); // 例如帳戶頁進場
 		const outcome = setPref('promo', true); // 使用者手快,GET 還在飛
 		expect(get(prefs).promo).toBe(true); // 樂觀更新
 
@@ -157,7 +157,7 @@ describe('回歸:GET 還沒落地就 setPref', () => {
 		]);
 		expect(get(prefs)).toEqual({ classReminder: false, coachMsg: true, promo: true, dark: false });
 
-		await hydrateProfile(); // 已水合:不再 GET,不會蓋回
+		await hydrateSelfAccount(); // 已水合:不再 GET,不會蓋回
 		expect(getCount()).toBe(1);
 		expect(get(prefs).promo).toBe(true);
 	});
@@ -180,7 +180,7 @@ describe('回歸:GET 還沒落地就 setPref', () => {
 describe('setPref 三種 outcome(移植自 pref-sync.test.ts)', () => {
 	beforeEach(async () => {
 		route({ 'GET /users/me': me() });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 	});
 
@@ -226,7 +226,7 @@ describe('交錯競態(移植自 pref-sync.test.ts)', () => {
 	it('切 A 在飛又切 B → 序列化:call2 在 call1 的失敗處理(含 resync)完成後才送出,且 body 是「輪到時」的最新整包', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		route({ 'GET /users/me': me() });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 
 		const call1Save = deferred<unknown>();
@@ -259,38 +259,38 @@ describe('交錯競態(移植自 pref-sync.test.ts)', () => {
 	});
 });
 
-describe('saveProfile', () => {
+describe('saveSelfAccount', () => {
 	beforeEach(async () => {
 		route({ 'GET /users/me': me({ birth_date: '2013-05-18', preferences: { legacy_key: 'x' } }) });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 	});
 
-	it('只送改過的欄位;成功後 memberProfile 與 Topbar 讀的 authStore 名字同步更新', async () => {
+	it('只送改過的欄位;成功後 selfAccount 與 Topbar 讀的 authStore 名字同步更新', async () => {
 		route({ 'PATCH /users/me': me({ name: '王大明', birth_date: '2013-05-18', preferences: { legacy_key: 'x' } }) });
 
-		const outcome = await saveProfile({ name: ' 王大明 ', phone: '0912345678', birth: '2013-05-18' });
+		const outcome = await saveSelfAccount({ name: ' 王大明 ', phone: '0912345678', birth: '2013-05-18' });
 
 		expect(outcome).toEqual({ kind: 'saved' });
 		expect(patchBodies()).toEqual([{ name: '王大明' }]);
-		expect(get(memberProfile)?.name).toBe('王大明');
+		expect(get(selfAccount)?.name).toBe('王大明');
 		expect(get(authStore).member?.name).toBe('王大明');
 	});
 
 	it('沒有改動就不發請求', async () => {
-		expect(await saveProfile({ name: '王小明', phone: '0912345678', birth: '2013-05-18', prefs: { promo: false } })).toEqual({ kind: 'saved' });
+		expect(await saveSelfAccount({ name: '王小明', phone: '0912345678', birth: '2013-05-18', prefs: { promo: false } })).toEqual({ kind: 'saved' });
 		expect(patchBodies()).toEqual([]);
 	});
 
 	it('birth 清空 → 送 null;prefs 有改 → 送整包(保住未知鍵)並寫回 prefs', async () => {
 		route({ 'PATCH /users/me': (init: RequestInit) => me({ ...JSON.parse(String(init.body)) }) });
 
-		await saveProfile({ birth: '', prefs: { classReminder: false, promo: true } });
+		await saveSelfAccount({ birth: '', prefs: { classReminder: false, promo: true } });
 
 		expect(patchBodies()).toEqual([
 			{ birth_date: null, preferences: { legacy_key: 'x', class_reminder: false, coach_msg: true, promo: true, dark: false } }
 		]);
-		expect(get(memberProfile)?.birth).toBe('');
+		expect(get(selfAccount)?.birth).toBe('');
 		expect(get(prefs)).toEqual({ classReminder: false, coachMsg: true, promo: true, dark: false });
 	});
 
@@ -298,17 +298,17 @@ describe('saveProfile', () => {
 		const err = new Error('422');
 		route({ 'PATCH /users/me': err });
 
-		const outcome = await saveProfile({ name: '王大明', prefs: { promo: true } });
+		const outcome = await saveSelfAccount({ name: '王大明', prefs: { promo: true } });
 
 		expect(outcome).toEqual({ kind: 'failed', error: err });
-		expect(get(memberProfile)?.name).toBe('王小明');
+		expect(get(selfAccount)?.name).toBe('王小明');
 		expect(get(prefs).promo).toBe(false);
 		expect(get(authStore).member?.name).toBe('王小明');
 	});
 
 	it('表單規則照後端:姓名 2–100、電話 8–20、原本有電話不能清空 → failed 且不發請求', async () => {
 		for (const edit of [{ name: '王' }, { name: 'x'.repeat(101) }, { phone: '1234567' }, { phone: '1'.repeat(21) }, { phone: '' }]) {
-			const outcome = await saveProfile(edit);
+			const outcome = await saveSelfAccount(edit);
 			expect(outcome.kind).toBe('failed');
 		}
 		expect(patchBodies()).toEqual([]);
@@ -324,7 +324,7 @@ describe('saveProfile', () => {
 			'PATCH /users/me': me({ birth_date: '2013-05-18' }, { ...USER_A, name: 'J' })
 		});
 
-		const outcome = await saveProfile({ name: 'J', phone: USER_A.phone, birth: '2013-05-18' });
+		const outcome = await saveSelfAccount({ name: 'J', phone: USER_A.phone, birth: '2013-05-18' });
 
 		expect(outcome).toEqual({ kind: 'saved' });
 		expect(patchBodies()).toEqual([{ birth_date: '2013-05-18' }]);
@@ -334,13 +334,13 @@ describe('saveProfile', () => {
 describe('換帳號:A 排隊的寫入跳過', () => {
 	it('A 的寫入在飛時排進的第二筆,換成 B 之後輪到時直接跳過,不送出', async () => {
 		route({ 'GET /users/me': me() });
-		await hydrateProfile();
+		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 
 		const first = deferred<unknown>();
 		route({ 'PATCH /users/me': () => first.promise });
 		const a1 = setPref('dark', true);
-		const a2 = saveProfile({ name: '王大明' });
+		const a2 = saveSelfAccount({ name: '王大明' });
 		await new Promise((r) => setTimeout(r, 0));
 		expect(patchBodies()).toHaveLength(1);
 
@@ -350,7 +350,7 @@ describe('換帳號:A 排隊的寫入跳過', () => {
 
 		expect((await a2).kind).toBe('failed');
 		expect(patchBodies()).toHaveLength(1); // 第二筆沒送
-		expect(get(memberProfile)).toBeNull(); // A 的回應也沒寫進 B
+		expect(get(selfAccount)).toBeNull(); // A 的回應也沒寫進 B
 		expect(get(authStore).member?.name).toBe('李大華');
 	});
 });

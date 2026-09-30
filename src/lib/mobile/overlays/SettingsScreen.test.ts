@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { toasts } from '$lib/mobile/stores';
-import { prefs } from '$lib/member/profile';
+import { prefs } from '$lib/self-account';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -10,9 +10,9 @@ import SettingsScreen from './SettingsScreen.svelte';
 
 /* SettingsScreen 偏好持久化(users.preferences，PATCH /users/me 整包覆寫)。
  *
- * R13 Task 3(C1):偏好同步機改由會員資料 module($lib/member/profile)持有,原
+ * R13 Task 3(C1):偏好同步機改由會員資料 module($lib/self-account)持有,原
  * $lib/mobile/pref-sync 退役;機制本身(三種 outcome、交錯競態、水合前切換)的單元測試
- * 在 member/profile.test.ts。本檔改走 $lib/api/client + fakeRouter(ADR-0022 通知合一的
+ * 在 self-account.test.ts。本檔改走 $lib/api/client + fakeRouter(ADR-0022 通知合一的
  * 前例)、真 authStore 登入,只留 markup 綁定、PATCH body 與 outcome→toast 佈線。
  * 4 個 Switch 依 DOM 順序索引:0=課程提醒 1=教練訊息 2=活動公告 3=深色模式。 */
 vi.mock('$lib/api/client', async (importOriginal) => {

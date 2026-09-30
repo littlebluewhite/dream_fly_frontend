@@ -7,8 +7,8 @@ import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 
-// R13 Task 3(C1):個人資料改由會員資料 module($lib/member/profile)持有,頁面讀
-// $memberProfile、存檔走 saveProfile。測試改走 $lib/api/client + fakeRouter(ADR-0022
+// R13 Task 3(C1):個人資料改由會員資料 module($lib/self-account)持有,頁面讀
+// $selfAccount、存檔走 saveSelfAccount。測試改走 $lib/api/client + fakeRouter(ADR-0022
 // 通知合一的前例)——真 getAccount、真 profile module、真 authStore,斷言 PATCH body。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -163,7 +163,7 @@ describe('帳戶 — 暖機(R15 候選 F2：getAccount() 只回訂單資料，�
 	});
 });
 
-describe('帳戶 — 編輯個人資料(R13 Task 3:經 saveProfile 寫回 PATCH /users/me)', () => {
+describe('帳戶 — 編輯個人資料(R13 Task 3:經 saveSelfAccount 寫回 PATCH /users/me)', () => {
 	async function openEditDialog() {
 		render(Page);
 		await screen.findByText('王承恩');
@@ -197,7 +197,7 @@ describe('帳戶 — 編輯個人資料(R13 Task 3:經 saveProfile 寫回 PATCH 
 		);
 		await vi.waitFor(() => expect(screen.queryByText('儲存資料')).toBeNull()); // 對話框已關閉
 		expect(get(toasts).some((t) => t.tone === 'success' && t.body.includes('個人資料已更新'))).toBe(true);
-		expect(screen.getByText('王大明')).toBeInTheDocument(); // 卡片讀 $memberProfile,已更新
+		expect(screen.getByText('王大明')).toBeInTheDocument(); // 卡片讀 $selfAccount,已更新
 		expect(get(authStore).member?.name).toBe('王大明'); // Topbar 讀的 authStore 也同步
 	});
 

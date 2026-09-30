@@ -15,7 +15,7 @@ import { ANNOUNCE } from './data';
  * 不重新測一次桌面早就測過的 HTTP 映射邏輯。Task F8：submitTrialInquiry() 同理
  * 只 mock `$lib/public/api` 的 sendContactInquiry(已在 public/api.test.ts 端對端
  * 測過 POST /contact 映射)。R13 Task 3：偏好讀寫(原 getPreferences/savePreferences)
- * 收進會員資料 module，測試在 member/profile.test.ts。Task 7(架構深化 R15·F-4)：
+ * 收進會員資料 module，測試在 self-account.test.ts。Task 7(架構深化 R15·F-4)：
  * getAccount/getSchedule/getPoints/getReports/getEnrolmentAttendance 五支純轉手
  * 已退役(mobile 消費端改直取 $lib/member/api)，本檔對應的覆蓋一併移除。 */
 vi.mock('$lib/member/api', () => ({

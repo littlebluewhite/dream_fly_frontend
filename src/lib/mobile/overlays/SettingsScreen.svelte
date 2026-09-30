@@ -9,7 +9,7 @@
    * 交錯覆寫)，失敗改整包 resync 成伺服器真值 + 錯誤 toast(resync 也失敗才退回
    * 單鍵回滾)。
    * R13 Task 3(C1):偏好同步機與個人資料欄位改走 member 側唯一的會員資料 module
-   * ($lib/member/profile;原 $lib/mobile/pref-sync 退役)。Task 7(架構深化 R15·
+   * ($lib/self-account;原 $lib/mobile/pref-sync 退役)。Task 7(架構深化 R15·
    * F-4)起直取該模組，不再經 $lib/mobile/stores 轉手。
    * 個人資料列顯示後端真值;後端沒有的「會員編號」列與假的「儲存變更」按鈕拿掉
    * (偏好切換即存,個人資料在 EditProfileSheet 存)。 */
@@ -22,7 +22,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { authStore } from '$lib/stores/authStore';
   import { overlay, toasts } from '$lib/mobile/stores';
-  import { prefs, memberProfile, hydrateProfile, setPref as savePref, type Prefs } from '$lib/member/profile';
+  import { prefs, selfAccount, hydrateSelfAccount, setPref as savePref, type Prefs } from '$lib/self-account';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
@@ -31,9 +31,9 @@
   type ToggleRow = { icon: IconName; label: string; sub?: string; k: keyof Prefs; last?: boolean };
 
   $: personal = [
-    { icon: 'user-round', label: '姓名', value: $memberProfile?.name ?? $authStore.member?.name ?? '' },
-    { icon: 'cake', label: '生日', value: $memberProfile?.birth ?? '' },
-    { icon: 'phone', label: '聯絡電話', value: $memberProfile?.phone ?? '', last: true }
+    { icon: 'user-round', label: '姓名', value: $selfAccount?.name ?? $authStore.member?.name ?? '' },
+    { icon: 'cake', label: '生日', value: $selfAccount?.birth ?? '' },
+    { icon: 'phone', label: '聯絡電話', value: $selfAccount?.phone ?? '', last: true }
   ] satisfies FieldRow[];
 
   const notifyRows: ToggleRow[] = [
@@ -46,7 +46,7 @@
   // toast 依 outcome 映射於此(ADR 0011 呼叫端映射慣例)。背景水合失敗只記錄、沿用
   // 目前顯示(同原 pref-sync 語意)。
   onMount(() => {
-    hydrateProfile().catch((err) => console.error('SettingsScreen: 會員資料載入失敗', err));
+    hydrateSelfAccount().catch((err) => console.error('SettingsScreen: 會員資料載入失敗', err));
   });
 
   function setPref(k: keyof Prefs, v: boolean) {
@@ -66,7 +66,7 @@
   <div class="df-scroll">
     <div style="padding:16px; display:flex; flex-direction:column; gap:18px;">
       <div style="display:flex; flex-direction:column; align-items:center; gap:10px; padding:6px 0 2px;">
-        <Avatar name={$memberProfile?.initial ?? $authStore.member?.initial ?? ''} size="xl" />
+        <Avatar name={$selfAccount?.initial ?? $authStore.member?.initial ?? ''} size="xl" />
         <button
           on:click={() => overlay.sheet('editProfile')}
           class="df-tapscale"

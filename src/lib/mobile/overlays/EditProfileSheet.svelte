@@ -1,15 +1,15 @@
 <script lang="ts">
   /* 編輯個人資料 sheet。mobile/profile.jsx EditProfileSheet (20-70)。
-   * 編輯姓名/生日/電話 + 通知偏好 → 一次 saveProfile(PATCH /users/me)→ toast + close。
+   * 編輯姓名/生日/電話 + 通知偏好 → 一次 saveSelfAccount(PATCH /users/me)→ toast + close。
    * 編輯的是本地副本 f / p，按儲存才送出（取消不影響）。
    *
-   * R13 Task 3(C1):改走 member 側唯一的會員資料 module($lib/member/profile;
+   * R13 Task 3(C1):改走 member 側唯一的會員資料 module($lib/self-account;
    * 原 $lib/mobile/pref-sync 退役)。Task 7(架構深化 R15·F-4)起直取該模組，不再
    * 經 $lib/mobile/stores 轉手。
-   *  - 開啟時先 await hydrateProfile(),落地後才用真值建立 f/p(水合前 Switch 與「儲存
+   *  - 開啟時先 await hydrateSelfAccount(),落地後才用真值建立 f/p(水合前 Switch 與「儲存
    *    資料」一律 disabled——不讓使用者在那個窗口編輯,避免落地後把剛切的那一下悄悄蓋掉)。
-   *  - 存檔只呼叫一次 saveProfile:module 自己比對、只送改過的欄位,沒改就不發請求;
-   *    表單規則(姓名 2–100、電話 8–20、原本有電話不能清空)用同一份 profileEditError。
+   *  - 存檔只呼叫一次 saveSelfAccount:module 自己比對、只送改過的欄位,沒改就不發請求;
+   *    表單規則(姓名 2–100、電話 8–20、原本有電話不能清空)用同一份 selfAccountEditError。
    *  - busy 鎖:儲存飛行中「儲存資料」停用、save() 再擋一次(合成 click 不受 disabled 限制)
    *    ——關掉 ADR-0022 遞延的防連點項。失敗時 sheet 不關、可重試。
    *  - 後端沒有的會員編號、家長聯絡人、大頭照底色拿掉(D2);email 只讀。 */
@@ -21,13 +21,13 @@
   import Input from '$lib/components/ui/Input.svelte';
   import Switch from '$lib/components/ui/Switch.svelte';
   import { toasts } from '$lib/mobile/stores';
-  import { memberProfile, prefs, hydrateProfile, saveProfile, profileEditError, type Prefs } from '$lib/member/profile';
+  import { selfAccount, prefs, hydrateSelfAccount, saveSelfAccount, selfAccountEditError, type Prefs } from '$lib/self-account';
   import type { IconName } from '$lib/icon-registry';
   import { initialOf } from '$lib/api/wire';
 
   export let onClose: () => void;
 
-  // local editable copies — (re)built from the module once hydrateProfile() resolves.
+  // local editable copies — (re)built from the module once hydrateSelfAccount() resolves.
   let f = { name: '', phone: '', birth: '', email: '' };
   let p: Prefs = { ...get(prefs) };
   let hydrating = true;
@@ -35,26 +35,26 @@
 
   onMount(async () => {
     try {
-      await hydrateProfile();
+      await hydrateSelfAccount();
     } catch (err) {
       console.error('EditProfileSheet: 會員資料載入失敗', err);
       toasts.notify('error', '載入失敗', '連線發生問題，請稍後再試。');
       onClose();
       return;
     }
-    const cur = get(memberProfile);
+    const cur = get(selfAccount);
     if (cur) f = { name: cur.name, phone: cur.phone, birth: cur.birth, email: cur.email };
     p = { ...get(prefs) };
     hydrating = false;
   });
 
-  $: error = hydrating ? null : profileEditError({ name: f.name, phone: f.phone }, $memberProfile);
+  $: error = hydrating ? null : selfAccountEditError({ name: f.name, phone: f.phone }, $selfAccount);
 
   async function save() {
     // 雙重保險：Button 的 disabled 擋不掉合成 click，這裡再擋一次。
     if (hydrating || busy || error) return;
     busy = true;
-    const outcome = await saveProfile({ name: f.name, phone: f.phone, birth: f.birth, prefs: p });
+    const outcome = await saveSelfAccount({ name: f.name, phone: f.phone, birth: f.birth, prefs: p });
     busy = false;
     if (outcome.kind === 'failed') {
       toasts.notify('error', '儲存失敗', '連線發生問題，請稍後再試。');
@@ -75,7 +75,7 @@
   <div style="display:flex; flex-direction:column; gap:20px;">
     <!-- avatar -->
     <div style="display:flex; flex-direction:column; align-items:center;">
-      <span style="width:80px; height:80px; border-radius:50%; background:var(--df-primary); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:34px; font-weight:800; font-family:var(--df-font-body); line-height:1; user-select:none;">{initialOf(f.name, $memberProfile?.initial ?? '')}</span>
+      <span style="width:80px; height:80px; border-radius:50%; background:var(--df-primary); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:34px; font-weight:800; font-family:var(--df-font-body); line-height:1; user-select:none;">{initialOf(f.name, $selfAccount?.initial ?? '')}</span>
     </div>
     <!-- editable fields -->
     <div style="display:flex; flex-direction:column; gap:13px;">

@@ -1,15 +1,16 @@
-/* Dream Fly — 會員資料 module(R13 Task 3·候選 C1)。
+/* Dream Fly — 本人帳號資料 module(R13 Task 3·候選 C1 起為會員資料 module;R16 Task 1a 改名搬到
+ * lib 根目錄 $lib/self-account)。
  *
  * 會員本人的「個人資料 + 通知偏好」唯一住處:GET/PATCH /users/me 的讀寫、欄位映射、
  * 表單規則、寫入序列化都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)與 mobile
- * (SettingsScreen / EditProfileSheet / 首頁·帳戶 hero / TrialScreen / CartSheet)經
- * $lib/member/stores → $lib/mobile/stores 取同一顆單例。取代了三份各自為政的來源:
+ * (SettingsScreen / EditProfileSheet / 首頁·帳戶 hero / TrialScreen / CartSheet)直接
+ * import $lib/self-account 取同一顆單例。取代了三份各自為政的來源:
  * member/api.ts 的 mapProfile/saveBirthDate、mobile/stores.ts 的本地 profile/prefs
  * store,以及 mobile/pref-sync.ts 的偏好同步機(其 outcome 與序列鏈語意原樣移入)。
  *
  * 結構保證:
  *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(修掉 prefs 與
- *    profile 跨登入殘留)。併發的 hydrateProfile() 共用同一支在飛 GET(閘門的 hydrate 合併)。
+ *    profile 跨登入殘留)。併發的 hydrateSelfAccount() 共用同一支在飛 GET(閘門的 hydrate 合併)。
  *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite;每一筆輪到時:session 變了就跳過 →
  *    await 水合(「寫前先水合」不再是呼叫端的義務)→ gate.mutate(PATCH, ...)。
  *  - 後端對 preferences 是整包覆寫,送出時 = 後端原始物件 + 本地 4 鍵,前端不認識的
@@ -37,7 +38,7 @@ export interface Prefs {
 	dark: boolean;
 }
 
-export interface MemberProfile {
+export interface SelfAccount {
 	name: string;
 	initial: string;
 	email: string;
@@ -50,7 +51,7 @@ export interface MemberProfile {
 }
 
 /** 只放「想改的」欄位;與目前值相同的欄位會被略過,全部相同就不發請求。 */
-export interface ProfileEdit {
+export interface SelfAccountEdit {
 	name?: string;
 	phone?: string;
 	/** '' = 清空(送 null)。 */
@@ -59,7 +60,7 @@ export interface ProfileEdit {
 }
 
 export type PrefSetOutcome = { kind: 'saved' } | { kind: 'resynced' } | { kind: 'rolledBack' };
-export type ProfileSaveOutcome = { kind: 'saved' } | { kind: 'failed'; error: unknown };
+export type SelfAccountSaveOutcome = { kind: 'saved' } | { kind: 'failed'; error: unknown };
 
 const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
 const PREF_WIRE: Record<keyof Prefs, string> = {
@@ -86,7 +87,7 @@ function prefsToWire(raw: ApiMe['preferences'], p: Prefs): Record<string, unknow
 	return out;
 }
 
-function toProfile(u: ApiMe): MemberProfile {
+function toProfile(u: ApiMe): SelfAccount {
 	return {
 		name: u.name,
 		initial: initialOf(u.name),
@@ -102,8 +103,8 @@ function toProfile(u: ApiMe): MemberProfile {
  *  dialog 的 Draft 一律帶入目前值(即使使用者沒有動那個欄位),未改動的欄位不該擋住其他
  *  欄位的存檔(F3:Google 註冊建立的姓名可能落在 2–100 之外,見 backend auth/service.rs,
  *  這類使用者原本連生日/偏好都存不了)。回傳繁中錯誤文案,合法回 null。兩個編輯 dialog
- *  用它即時提示,saveProfile 也再擋一次。 */
-export function profileEditError(edit: ProfileEdit, current: MemberProfile | null): string | null {
+ *  用它即時提示,saveSelfAccount 也再擋一次。 */
+export function selfAccountEditError(edit: SelfAccountEdit, current: SelfAccount | null): string | null {
 	if (edit.name !== undefined) {
 		const name = edit.name.trim();
 		if (name !== current?.name) {
@@ -124,7 +125,7 @@ export function profileEditError(edit: ProfileEdit, current: MemberProfile | nul
 const me = writable<ApiMe | null>(null);
 const prefsStore = writable<Prefs>({ ...PREFS_DEFAULT });
 
-export const memberProfile: Readable<MemberProfile | null> = derived(me, ($me) => ($me ? toProfile($me) : null));
+export const selfAccount: Readable<SelfAccount | null> = derived(me, ($me) => ($me ? toProfile($me) : null));
 export const prefs: Readable<Prefs> = { subscribe: prefsStore.subscribe };
 
 function applyMe(u: ApiMe): void {
@@ -147,7 +148,7 @@ const gate = createSessionGate<ApiMe>({
 /** 觸發水合(每個 identity 只 GET 一次;併發呼叫共用同一支在飛 GET)。失敗原樣拋出,
  *  下次呼叫會重試——要 fail-hard 的呼叫端(帳戶頁 getAccount)直接 await,背景水合的
  *  呼叫端自行 catch。 */
-export const hydrateProfile = gate.hydrate;
+export const hydrateSelfAccount = gate.hydrate;
 
 function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {
 	return gate.mutate(() => api<ApiMe>('/users/me', { method: 'PATCH', body: JSON.stringify(body) }), writeBack);
@@ -163,7 +164,7 @@ export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 	prefsStore.update((p) => ({ ...p, [k]: v }));
 	return gate.queueWrite<PrefSetOutcome>(async (stale) => {
 		try {
-			await hydrateProfile();
+			await hydrateSelfAccount();
 			// 切換發生在水合落地之前:水合的 apply 已用後端值蓋掉這次樂觀切換,補回。
 			if (!wasHydrated) prefsStore.update((p) => ({ ...p, [k]: v }));
 			// 寫回只同步 me/名字、不動 prefsStore:本筆飛行期間使用者可能又切了別的鍵。
@@ -186,12 +187,12 @@ export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 
 /** 存個人資料(姓名/電話/生日/偏好)。不做樂觀更新;只送與目前值不同的欄位,全部相同
  *  就不發請求;birth 為 '' 送 null(後端 double-option:顯式清空)。偏好有改時送整包。 */
-export function saveProfile(edit: ProfileEdit): Promise<ProfileSaveOutcome> {
-	return gate.queueWrite<ProfileSaveOutcome>(async () => {
+export function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveOutcome> {
+	return gate.queueWrite<SelfAccountSaveOutcome>(async () => {
 		try {
-			await hydrateProfile();
+			await hydrateSelfAccount();
 			const cur = get(me)!; // 水合成功且同一 session(queueWrite 已核對)→ 必有值
-			const invalid = profileEditError(edit, toProfile(cur));
+			const invalid = selfAccountEditError(edit, toProfile(cur));
 			if (invalid) return { kind: 'failed', error: new Error(invalid) };
 
 			const body: Record<string, unknown> = {};

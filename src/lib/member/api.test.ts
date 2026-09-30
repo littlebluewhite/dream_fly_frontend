@@ -510,7 +510,7 @@ describe('getAccount', () => {
     ]);
   });
 
-  // R15(候選 F2)：會員資料水合(hydrateProfile)與點數/訂閱暖機已搬出 getAccount()，
+  // R15(候選 F2)：會員資料水合(hydrateSelfAccount)與點數/訂閱暖機已搬出 getAccount()，
   // 改由呼叫端(member/account、mobile/account 頁面)自己宣告——getAccount 現在只打
   // 自己的路徑，不再等/碰這三支端點(側效失敗仍成功回傳 orders 的等價保證見
   // member/account/page.test.ts；暖機的通用 best-effort 行為見 $lib/store-warm.test.ts)。
