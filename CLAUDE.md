@@ -2,10 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`) — consult
-> it before writing, changing, or reviewing code. It carries the general principles (Think Before Coding,
-> Simplicity First, Surgical Changes, Goal-Driven) plus this repo's frontend conventions and a review
-> checklist. This file is **orientation** (what the project is, how to run it); the **rules** for how to
+> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`, local
+> and git-ignored) — consult it before writing, changing, or reviewing code. It carries this repo's
+> frontend conventions and a review checklist, layered on the general principles (Think Before Coding,
+> Simplicity First, Surgical Changes, Goal-Driven). This file is **orientation** (what the project is, how to run it); the **rules** for how to
 > write code here are in the skill.
 
 ## What this is
@@ -13,39 +13,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Dream Fly (夢飛) — the frontend for a **gymnastics & competitive-cheer academy** (體操與競技啦啦學苑).
 SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. The backend is
 the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
-`/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, and (since Round 3)
-both `mobile` and `mobile-admin` — call it for real now. Round 4 wired most of what was still mock:
-dashboard stats, per-course attendance history, trial-booking, mobile preference persistence, the admin
-dashboard's today/activity panels, admin coach/venue/ticket/coupon/system-settings writes, the admin
-reports page (13 restored panels + the always-live revenue trend; see `docs/adr/0009`), and Google OAuth
-on `mobile`. Mock data remains only in a
+`/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, `mobile`, and
+`mobile-admin` — call it for real, including dashboard stats, per-course attendance history, trial-booking,
+mobile preference persistence, the admin dashboard's today/activity panels, admin
+coach/venue/ticket/coupon/system-settings writes, and the admin reports page (13 panels + the always-live
+revenue trend; see `docs/adr/0009`). Mock data remains only in a
 handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
 of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
 read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
 admin settings page's local-only login-device list, and the shell badges that have no backend feed
 (coach Topbar's `NOTIFS` bell, the hardcoded `badge: 3` on coach's 訊息中心 nav item, admin Topbar's
-「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`). (The self account (本人帳號資料) — the logged-in user's own name/phone/birthday
-and notification preferences — is real on both `member` and `mobile` since Round 13: one module,
-`src/lib/self-account.ts` (moved from `src/lib/member/profile.ts` in Round 16), writes it via
-`PATCH /users/me`, and since Round 16 `coach`'s settings pages read and save the coach's own name/phone
-through it too, so every surface shares one cache; fields the backend has no column for, such as
-member number, parent contact and avatar colour, were removed rather than faked — and Round 16 dropped the
-remaining backend-less row fields on coach/admin/member the same way — see `docs/adr/0023`, `docs/adr/0026`.
-Since Round 14 shared stores boot honestly: the notifications and mobile-admin coach-messages stores behind
-the real badges start empty and show real counts once each surface's layout warms them, and the points
-ledger starts empty too, instead of showing seed data first; since Round 15 mobile-admin's operational
-collections (members/classes/orders/coaches) boot honestly the same way — see `docs/adr/0024`,
-`docs/adr/0025`.)
-Google OAuth login is wired for `member` and (since Round 4) `mobile` — `staff` and
-`mobile-admin` still have no Google option, because the backend's Google flow only ever grants the
-`member` role. See `docs/adr/0006` for the full inventory.
+「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`).
+The self account (本人帳號資料) — the logged-in user's own name/phone/birthday and notification
+preferences — is written by one module, `src/lib/self-account.ts`, via `PATCH /users/me`; `member` and
+`mobile` use it, and `coach`'s settings pages read and save the coach's name/phone through it, so every
+surface shares one cache. Fields the backend has no column for (member number, parent contact, avatar
+colour, and other backend-less row fields on coach/admin/member) are left out rather than faked — see
+`docs/adr/0023`, `docs/adr/0026`.
+Shared stores boot honestly: the notifications and mobile-admin coach-messages stores behind the real
+badges, the points ledger, and mobile-admin's operational collections (members/classes/orders/coaches)
+start empty and show real data once each surface's layout warms them — see `docs/adr/0024`, `docs/adr/0025`.
+Google OAuth login is wired for `member` and `mobile`; `staff` and `mobile-admin` have no Google option,
+because the backend's Google flow only grants the `member` role. See `docs/adr/0006` for the full inventory.
 
 > `README.md` is a quick-start summary; `CONTEXT.md`, `docs/adr/`, and `docs/architecture.md` remain the
 > authoritative deep references.
 
 ## Running the full stack
 
-The frontend has no standalone mock mode anymore — start `dream_fly_backend` first:
+The frontend has no mock mode — start `dream_fly_backend` first:
 
 ```bash
 # in the sibling dream_fly_backend/ checkout
