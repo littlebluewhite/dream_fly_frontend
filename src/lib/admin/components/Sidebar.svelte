@@ -24,10 +24,11 @@
   $: profileInitial = member?.initial ?? '?';
 
   let menuOpen = false;
-  function logout() {
+  async function logout() {
     menuOpen = false;
     toasts.notify('success', '已登出', '結束目前工作階段。');
-    goto('/admin');
+    await authStore.logout();
+    goto('/staff/login');
   }
   function profileAction(label: string) {
     menuOpen = false;

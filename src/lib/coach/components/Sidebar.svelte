@@ -2,7 +2,7 @@
   /* 教練端 sidebar (shell.jsx:42-127): 240px navy rail — brand + gold 教練端 pill,
    * 7 flat nav items (active = primary bg + white), and an interactive gold
    * profile card that toggles a ProfileMenu popover (3 navigating rows + a
-   * toast-only logout). Active state via nav.ts isActive() so 儀表板 isn't stuck
+   * logout). Active state via nav.ts isActive() so 儀表板 isn't stuck
    * active on deeper routes. */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
@@ -32,9 +32,11 @@
     menu = false;
     goto(coachPath(to));
   }
-  function logout() {
+  async function logout() {
     menu = false;
-    toasts.notify('info', '登出', '您已安全登出（示範）。');
+    toasts.notify('success', '已登出', '結束目前工作階段。');
+    await authStore.logout();
+    goto('/staff/login');
   }
 
   function switchRole() {

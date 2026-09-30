@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import { readable } from 'svelte/store';
+import { readable, get } from 'svelte/store';
+import { goto } from '$app/navigation';
 import Sidebar from './Sidebar.svelte';
 import { authStore } from '$lib/stores/authStore';
 import { FIXTURE_MEMBER, type TestAuthStore } from '$lib/testing/auth-mock';
@@ -52,5 +53,17 @@ describe('coach Sidebar — 身分槽位改讀 authStore', () => {
 
     expect(screen.getAllByText('教練')).toHaveLength(2); // profile card 顯示名 + 角色字面
     expect(screen.getByText('?')).toBeInTheDocument();
+  });
+
+  it('登出:結束 auth 工作階段並導向 /staff/login', async () => {
+    (authStore as TestAuthStore).__set({ loggedIn: true, member: FIXTURE_MEMBER, roles: ['coach'] });
+    render(Sidebar);
+
+    await fireEvent.click(screen.getByText('王教練').closest('button')!);
+    await fireEvent.click(screen.getByText('登出目前工作階段').closest('button')!);
+
+    expect(authStore.logout).toHaveBeenCalled();
+    expect(get(authStore).loggedIn).toBe(false);
+    expect(goto).toHaveBeenCalledWith('/staff/login');
   });
 });

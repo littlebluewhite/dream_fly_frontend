@@ -65,7 +65,12 @@ export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[] }) 
  *  isLoggedIn 具名 export 的偏差檔(mobile-admin/page)。 */
 export function makeAuthMockB(opts?: { withIsLoggedIn?: boolean }) {
 	const state = writable<MockAuthState>({ loggedIn: false, member: null, roles: [] });
-	const authStore = { subscribe: state.subscribe, __set: state.set, syncUser: vi.fn() };
+	const authStore = {
+		subscribe: state.subscribe,
+		__set: state.set,
+		logout: vi.fn(async () => state.set({ loggedIn: false, member: null, roles: [] })),
+		syncUser: vi.fn()
+	};
 	return opts?.withIsLoggedIn
 		? { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn) }
 		: { authStore };
