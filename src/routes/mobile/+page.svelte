@@ -29,17 +29,7 @@
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/waitlist';
   import { authStore } from '$lib/stores/authStore';
   import { unreadCount } from '$lib/member/notifications';
-  import type { IconName } from '$lib/icon-registry';
-
-  /* category taxonomy — home.jsx CATS (6-13). */
-  const CATS: { key: string; label: string; icon: IconName }[] = [
-    { key: '幼兒體操', label: '幼兒', icon: 'baby' },
-    { key: '兒童基礎', label: '兒童', icon: 'rotate-cw' },
-    { key: '競技啦啦隊', label: '啦啦隊', icon: 'sparkles' },
-    { key: '競技體操', label: '競技', icon: 'medal' },
-    { key: '成人體操', label: '成人', icon: 'dumbbell' },
-    { key: '跑酷', label: '跑酷', icon: 'flame' }
-  ];
+  import { COURSE_CATEGORIES } from '$lib/domain/course-category';
 
   let data: MobileHomeData | null = null;
   const gate = createLoadGate({
@@ -163,7 +153,7 @@
       <div>
         <SectionTitle action="課程介紹" onAction={() => goto('/mobile/courses')}>課程分類</SectionTitle>
         <div style="display:grid; grid-template-columns:repeat(6, 1fr); gap:6px;">
-          {#each CATS as cat (cat.key)}
+          {#each COURSE_CATEGORIES as cat (cat.key)}
             <button
               on:click={() => goto('/mobile/courses')}
               class="df-tapscale"
@@ -172,7 +162,7 @@
               <div style="width:50px; height:50px; border-radius:15px; background:var(--df-primary-bg); display:flex; align-items:center; justify-content:center;">
                 <Icon name={cat.icon} size={23} color="var(--df-primary)" />
               </div>
-              <span style="font-size:11px; color:var(--df-text-dark); font-weight:500;">{cat.label}</span>
+              <span style="font-size:11px; color:var(--df-text-dark); font-weight:500;">{cat.chip}</span>
             </button>
           {/each}
         </div>

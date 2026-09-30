@@ -20,21 +20,13 @@
   import { authStore } from '$lib/stores/authStore';
   import { submitTrialInquiry } from '$lib/mobile/api';
   import { ApiError } from '$lib/api/client';
+  import { COURSE_CATEGORIES, courseCategoryIcon } from '$lib/domain/course-category';
   import { buildTrialDays, type TrialDay } from './trial-dates';
   import { stepValid, buildTrialInquiry } from './trialValidation';
   import type { IconName } from '$lib/icon-registry';
 
   export let onBack: () => void;
 
-  type Cat = { key: string; label: string; icon: IconName; age: string };
-  const TRIAL_CATS: Cat[] = [
-    { key: '幼兒體操', label: '幼兒體操', icon: 'baby', age: '3–5 歲' },
-    { key: '兒童基礎', label: '兒童基礎', icon: 'rotate-cw', age: '6–9 歲' },
-    { key: '競技啦啦隊', label: '競技啦啦隊', icon: 'sparkles', age: '10–16 歲' },
-    { key: '競技體操', label: '競技體操', icon: 'medal', age: '8 歲以上' },
-    { key: '成人體操', label: '成人體操', icon: 'dumbbell', age: '16 歲以上' },
-    { key: '跑酷', label: '跑酷 Parkour', icon: 'flame', age: '12 歲以上' }
-  ];
   const TRIAL_AGES = ['3–5 歲', '6–9 歲', '10–12 歲', '13–16 歲', '16 歲以上'];
   // TRIAL_DAYS 動態產生政策(pad2/addDays/toTrialDay/buildTrialDays)抽至同層
   // trial-dates.ts(零 svelte 依賴純函式，2026-07-22 架構深化 R7)；TRIAL_SLOTS
@@ -69,7 +61,7 @@
 
   $: chosenSlot = TRIAL_SLOTS.find((s) => s.id === slot);
   $: chosenDay = TRIAL_DAYS.find((d) => d.monthDay === day);
-  $: catIcon = TRIAL_CATS.find((c) => c.key === cat)?.icon ?? 'graduation-cap';
+  $: catIcon = courseCategoryIcon(cat);
   $: state = { cat, age, day, slot, parent, phone, student };
   // step 3 預約單的五列 icon meta rows——原模板內聯 each 陣列 hoist 至此並標型別。
   $: ticketRows = [
@@ -141,7 +133,7 @@
             <h3 style="margin:0; font-size:15.5px; font-weight:700; color:var(--df-ink);">想先體驗哪一類課程？</h3>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            {#each TRIAL_CATS as c (c.key)}
+            {#each COURSE_CATEGORIES as c (c.key)}
               {@const on = cat === c.key}
               <button
                 on:click={() => (cat = c.key)}
@@ -152,7 +144,7 @@
                 <div style="width:40px; height:40px; border-radius:11px; background:{on ? 'var(--df-primary)' : 'var(--df-primary-bg)'}; display:flex; align-items:center; justify-content:center; flex:none;">
                   <Icon name={c.icon} size={21} color={on ? '#fff' : 'var(--df-primary)'} />
                 </div>
-                <div style="min-width:0;"><div style="font-size:13.5px; font-weight:700; color:var(--df-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{c.label}</div><div style="font-size:11.5px; color:var(--df-text-light);">{c.age}</div></div>
+                <div style="min-width:0;"><div style="font-size:13.5px; font-weight:700; color:var(--df-ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{c.trialLabel}</div><div style="font-size:11.5px; color:var(--df-text-light);">{c.age}</div></div>
               </button>
             {/each}
           </div>

@@ -20,25 +20,11 @@ import {
 	getReportStats as memberGetReportStats
 } from '$lib/member/api';
 import { ANNOUNCE, type Announce, type Course } from './data';
-import type { IconName } from '$lib/icon-registry';
-
-/** 課程分類 → icon。真後端 CatalogCourse(`$lib/public/adapters`)沒有 icon 欄位
- *  (courses 表本身不存這個欄位)——對照首頁/課程介紹頁既有 CATS 分類清單的圖示
- *  選擇(6 個分類皆已在別處驗證過是有效註冊的 icon 名稱)。未知分類(admin 可自
- *  由輸入 category 文字)一律給預設值，同 TrialScreen catIcon 的 fallback 慣例。 */
-const CATEGORY_ICON: Record<string, IconName> = {
-	幼兒體操: 'baby',
-	兒童基礎: 'rotate-cw',
-	競技啦啦隊: 'sparkles',
-	競技體操: 'medal',
-	成人體操: 'dumbbell',
-	跑酷: 'flame'
-};
-const DEFAULT_COURSE_ICON = 'graduation-cap';
+import { courseCategoryIcon } from '$lib/domain/course-category';
 
 /** CatalogCourse → mobile Course：欄位逐一相同，只加 icon 薄映射。 */
 function toMobileCourse(c: CatalogCourse): Course {
-	return { ...c, icon: CATEGORY_ICON[c.cat] ?? DEFAULT_COURSE_ICON };
+	return { ...c, icon: courseCategoryIcon(c.cat) };
 }
 
 export interface MobileHomeData {

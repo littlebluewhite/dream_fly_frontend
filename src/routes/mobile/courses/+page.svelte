@@ -21,18 +21,9 @@
   // 擁有者模組 $lib/member/waitlist，不再經 $lib/mobile/stores 轉手。
   import { overlay, cart, toasts } from '$lib/mobile/stores';
   import { joinWaitlist, joinWaitlistErrorMessage } from '$lib/member/waitlist';
-  import type { IconName } from '$lib/icon-registry';
+  import { COURSE_CATEGORIES } from '$lib/domain/course-category';
 
-  /* category taxonomy — home.jsx CATS (6-13). */
-  const CATS: { key: string; label: string; icon: IconName }[] = [
-    { key: '幼兒體操', label: '幼兒', icon: 'baby' },
-    { key: '兒童基礎', label: '兒童', icon: 'rotate-cw' },
-    { key: '競技啦啦隊', label: '啦啦隊', icon: 'sparkles' },
-    { key: '競技體操', label: '競技', icon: 'medal' },
-    { key: '成人體操', label: '成人', icon: 'dumbbell' },
-    { key: '跑酷', label: '跑酷', icon: 'flame' }
-  ];
-  const CHIPS = [{ key: 'all', label: '全部' }, ...CATS];
+  const CHIPS = [{ key: 'all', chip: '全部' }, ...COURSE_CATEGORIES];
 
   let data: MobileCoursesData | null = null;
   const gate = createLoadGate({
@@ -129,7 +120,7 @@
             background:{cat === cc.key ? 'var(--df-primary)' : '#fff'};
             color:{cat === cc.key ? '#fff' : 'var(--df-text-dark)'}; font-size:13px;
             font-weight:{cat === cc.key ? 700 : 500}; cursor:pointer; white-space:nowrap;"
-        >{cc.label}</button>
+        >{cc.chip}</button>
       {/each}
     </div>
   </div>
