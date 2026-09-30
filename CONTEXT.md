@@ -7,7 +7,7 @@
 ### 身分 (Identity)
 
 **會員 (Member)**:
-已登入的單一帳號;是報名、點數、訂閱 / 使用權的歸屬對象。目前帳號即學員本人,不分家長 / 學員。
+已登入的單一帳號;是報名、點數、訂閱 / 使用權的歸屬對象。帳號即學員本人,不分家長 / 學員。
 _Avoid_: 使用者(指訪客時), 家長
 
 **訪客 (Guest)**:
@@ -53,7 +53,7 @@ _Avoid_: 會員卡(指實體卡時例外)
 _Avoid_: basket, 待結帳清單
 
 **結帳 (Checkout)**:
-將購物車內項目完成的步驟 —— 課程產生「報名」、方案產生「訂閱 / 使用權」;套用點數 / 優惠碼並確認。目前為**模擬,不接真實金流**。
+將購物車內項目完成的步驟 —— 課程產生「報名」、方案產生「訂閱 / 使用權」;套用點數 / 優惠碼並確認。付款為**模擬,不接真實金流**。
 _Avoid_: 付款, 購買
 
 **結算 (Settlement)**:
@@ -114,15 +114,14 @@ _Avoid_: 統計(過於籠統)
 
 **載入閘門 (Load Gate)**:
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
-`createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。收窄為只管 phase、run 世代、卸載與
+`createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。只管 phase、run 世代、卸載與
 `onError`;`LoadGateOptions<T>` 是判別聯集——plain 頁面給 `{ fetch, onData?, onError? }`,接共享
 store 的頁面給 `{ source: LoadSource, onError? }`(`source` 與 `fetch` 互斥)。`LoadSource` 是水合
 閘門交出的 port(`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`),`isCurrent` 是 load-gate 給
 source 的棄追判準(未卸載且仍是最新一輪 run);guard 短路、post-await 重查「mutation 勝出」、mutator
 翻旗一次到位這些決策全歸 source 那一側(水合閘門)做,load-gate 只負責呼叫並尊重 `isCurrent()`。接共享
 store 的頁面一律寫 `createLoadGate({ ...gate.pageEntry() })`。重入防護(F1)/(F5)留在本閘門,經
-`isCurrent` 交給 source 尊重,不下沉給水合閘門(見 `docs/adr/0016` 決定一;`docs/adr/0025` F-1 取代
-舊有的「委派不成立」結論)。
+`isCurrent` 交給 source 尊重,不下沉給水合閘門(見 `docs/adr/0016` 決定一、`docs/adr/0025` F-1)。
 _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合、消費端直讀共享 store 的旗標當 `fetch`/`refresh`
 (寫共享 store 的變成 store 閘門,卸載棄追與後發優先都護不到)
 
@@ -130,7 +129,7 @@ _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合、消費端直讀
 共享 store 的水合協定(guard 短路、post-await 重查「mutation 勝出」、mutator 翻旗);單一來源
 `src/lib/hydration-gate.ts` 的 `createHydrationGate`。公開面是
 `hydrated: Readable<boolean>`/`hydrate()`/`refresh()`/`invalidate()`/`markMutated(tail?)`/
-`pageEntry()`/**`reset()`**。`hydrated` 已收窄為唯讀,production 翻旗只能經 `invalidate()`(翻
+`pageEntry()`/**`reset()`**。`hydrated` 唯讀,production 翻旗只能經 `invalidate()`(翻
 false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-F2a、`docs/adr/0025`「閘門
 重置」)。`pageEntry()` 交出 `{ source: LoadSource }` 給 load-gate,`hydrate()` 與 `source.load`
 共用同一支在飛 GET(只併入同世代出發的那支,settle 即清);refresh 族(`refresh()`/`source.refresh`)
@@ -140,9 +139,8 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 `pendingSettle` 內部讀取,同為 refresh 族專用):樂觀 mutation 是「先寫 store 再 await PATCH」,尾流
 在飛這件事對世代軸不可見——GET 搶跑會拿到 server 舊真值而世代此刻已穩定。故 refresh 族每次出發前先等
 未 settle 的尾流全數落地(reject 也算 settle),靜止時同步出發、零額外成本(見 `docs/adr/0021`)。
-**等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點都已完全
-內縮進 `hydration-gate.ts` 內部——連經 `pageEntry()` 交出的讀取器都收掉,load-gate 與消費端只看得到
-黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序還原內容、旗標翻 false、
+**等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點只住
+`hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序還原內容、旗標翻 false、
 丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數、喚醒全部尾流等待者;重置前出發的
 load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。各模組匯出 `reset…ForTests = gate.reset`
 供測試清理,production 不得 import(`import-scan.test.ts` 契約守)。
@@ -155,26 +153,26 @@ await refresh」序列會因此無窮重抓);把等待判準接上世代(同一�
 水合閘門交給頁面載入閘門的進場物——`gate.pageEntry()` 回傳 `{ source: LoadSource }`,頁面寫
 `createLoadGate({ ...gate.pageEntry() })` 即可(見 `docs/adr/0025` F-1)。plain 閘門(如
 mobile-admin 的 `opsGate`)與 session 閘門都交出同一形(住 `HydrationGate`)。`source.guarded()`
-對應舊有的 guard 短路,`source.load(isCurrent)`/`source.refresh(isCurrent)` 內部各自委派
+是 guard 短路,`source.load(isCurrent)`/`source.refresh(isCurrent)` 內部各自委派
 `loadRun`/`refreshRun`——`load` 與閘門的 `hydrate()` 共用在飛 GET,`refresh` 是不合併的另一支;
 session 閘門餵進來的是 epoch 核對過的 fetch,所以兩支都自帶核對,頁面結構上拿不到 raw getter。
 `isCurrent` 由 load-gate 交給 source,是「未卸載且仍是最新一輪 run」的棄追判準——source 只能讀它,
-拿不到 phase 或世代的寫入權。世代帳與尾流帳的讀取器不再經頁面進場包外流(連 `pageEntry()` 這條路都
-收掉),只住 `hydration-gate.ts` 內部,`refreshRun` 自己讀(見 `docs/adr/0020`、`docs/adr/0021`)。
+拿不到 phase 或世代的寫入權。世代帳與尾流帳的讀取器只住
+`hydration-gate.ts` 內部,`refreshRun` 自己讀(見 `docs/adr/0020`、`docs/adr/0021`)。
 寫共享 store 的仍是頁面的載入閘門,所以卸載之後或被新一輪取代的回應不會寫進 store。跨登出/換帳的在飛
 回應會讓 fetch 拋出,落進 load-gate 既有的 error 態,使用者重試時回落同一支核對過的 fetch(零新程式
 路徑;見 `docs/adr/0019`)。閘門 `reset()` 之後,重置前出發的 load/refresh 落地一律不寫(見上方
 「水合閘門」詞條)。
 _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)直入 load-gate;頁面直接讀閘門的
-世代/尾流帳(這兩本帳現在連經進場包都拿不到,只住閘門內部)
+世代/尾流帳
 
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(水合閘門 + identity 重置 + epoch 核對 fetch
 + `mutate()` + 寫入鏈 `queueWrite()`,頁面進場包繼承自水合閘門;供 waitlist/請假/通知/本人帳號資料/
-教練身分/mobile-admin 訊息——通知自 2026-09-26 起是 member 與 mobile 共用的同一顆閘門,mobile 經自家
+教練身分/mobile-admin 訊息——通知是 member 與 mobile 共用的同一顆閘門,mobile 經自家
 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
-身分住 `coach/api.ts` 內部、每個 session 只解析一次(自 `docs/adr/0026` 起只快取教練檔案),mobile-admin
+身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),mobile-admin
 訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
 `createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由同檔匯出的
 純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
@@ -182,11 +180,9 @@ domain store 對「會員身分變更」(登入/登出、或不經整頁重載�
 不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序
 不是契約。`queueWrite` 排進同一條寫入鏈:輪到時身分已換就跳過,換帳號即重置這條鏈(見
-`docs/adr/0024`)。`reset()` 本身自 `docs/adr/0025`「閘門重置」起改呼叫水合閘門通用的
-`gate.reset()`(取代原本專供 session 閘門用的內部工廠 `createOwnedHydrationGate`/`ownerChanged()`,
-兩者已退役),再疊上 `reconcileChain`/`writeChain` 的重置——「誰換人、何時換人」這個 session 專屬
-判斷仍只住本檔。原第三門 `onSessionReset`(僅重置、閘門所有權留呼叫端)已於 2026-08-03 隨其唯一
-消費者(行動版通知)改建完整閘門而退役(見 `docs/adr/0017` 增補與 `docs/adr/0019`)。
+`docs/adr/0024`)。`reset()` 呼叫水合閘門通用的
+`gate.reset()`,再疊上 `reconcileChain`/`writeChain` 的重置(見 `docs/adr/0025`「閘門重置」);
+「誰換人、何時換人」這個 session 專屬判斷只住本檔。
 _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活、
 開機時為了「對齊開機值」而觸發 reset
 
@@ -196,8 +192,8 @@ _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一�
 一個 surface 的外殼(Topbar/Sidebar/TabBar)由該 surface 的 `+layout.svelte` 宣告(member/mobile 暖
 通知,mobile-admin 只在教練分區暖訊息);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
 用 `Promise.all` 並行出發——`member/mine`(候補清單、我的請假)、`member/account`(點數、訂閱)、
-`mobile/account`(點數)三頁自 `docs/adr/0025` F-2 起這麼做,取代原本 `getMine`/`getAccount` 順手
-水合的隱性副作用(見 `docs/adr/0012` K7)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
+`mobile/account`(點數)三頁這麼做(見 `docs/adr/0025` F-2、
+`docs/adr/0012` K7)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
 載入的重複、換身分時閘門自己重置。暖機前 store 是誠實的開機值(空清單,角標不顯示),不是種子(見
 `docs/adr/0024`)。
 _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看不出這一層);seed teaser(開機先顯示
@@ -209,20 +205,19 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 `member-app.ts`(member/mobile 雙生的查表與成對常數)。取用形只有兩種:facade 若**真的**攜帶本檔
 型別事實(以自身較嚴格或不同形狀的 `Tone` 對同一參照純註記收窄,零 `as` 斷言),消費端經該 facade
 取用——mobile-admin/member/mobile 屬此;facade 若只是同源且結構恆等的轉手(admin 這類 `Tone` 與 wire
-相容、無可收窄者;facade 端改過名的 alias 亦同),該層已於 2026-08-03 全數退役,消費端改**直取**
+相容、無可收窄者;facade 端改過名的 alias 亦同)不設這一層,消費端**直取**
 `$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
 零型別事實的純轉手 re-export(假接縫——只換來一批逐符號同一性守護測試)。mobile 的 store/動作轉手不在此列:
-`mobile/stores.ts` 的 seam 管 import 方向,照留;它的逐符號身分釘已於 R14 退役(見 `docs/adr/0024`)
+`mobile/stores.ts` 的 seam 管 import 方向,照留(見 `docs/adr/0024`)
 
 **匯入掃描器 (Import Scan)**:
 原始碼層 import 掃描的 test-support 模組;單一來源 `$lib/testing/import-scan.ts`(`walk`/
-`importSpecifiers`/`makeReachPredicate` 三支,字串/註解/模板感知、六輪 codex 硬化),供接縫契約
-測試掃 production 檔。`docs/adr/0014` §1 的 mobile import 方向規則本身已退役(見該篇增補),但掃描器
-機制保留、繼續供其他契約使用,例如 `docs/adr/0025`「閘門重置」新增的契約——production 原始碼零引用
-各模組的 `*ForTests` 重置匯出。
+`importSpecifiers`/`makeReachPredicate` 三支,字串/註解/模板感知),供接縫契約
+測試掃 production 檔,例如 production 原始碼零引用各模組的 `*ForTests` 重置匯出
+(見 `docs/adr/0025`「閘門重置」)。
 _Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib/testing`(dogfood 契約會紅)
 
 **可計費行 (ChargeableLine)**:

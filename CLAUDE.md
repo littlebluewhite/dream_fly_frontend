@@ -3,41 +3,27 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`, local
-> and git-ignored) — consult it before writing, changing, or reviewing code. It carries this repo's
-> frontend conventions and a review checklist, layered on the general principles (Think Before Coding,
-> Simplicity First, Surgical Changes, Goal-Driven). This file is **orientation** (what the project is, how to run it); the **rules** for how to
-> write code here are in the skill.
+> and git-ignored) — read it before writing, changing, or reviewing code. This file is **orientation**
+> (what the project is, how to run it); the skill holds the **rules**.
 
 ## What this is
 
 Dream Fly (夢飛) — the frontend for a **gymnastics & competitive-cheer academy** (體操與競技啦啦學苑).
 SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing Library. The backend is
 the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
-`/api/v1`. Auth, cart, checkout, and every app surface's seam — admin, coach, member, `mobile`, and
-`mobile-admin` — call it for real, including dashboard stats, per-course attendance history, trial-booking,
-mobile preference persistence, the admin dashboard's today/activity panels, admin
-coach/venue/ticket/coupon/system-settings writes, and the admin reports page (13 panels + the always-live
-revenue trend; see `docs/adr/0009`). Mock data remains only in a
-handful of explicitly **P2-commented** spots where no backend endpoint exists, session management is out
-of scope, or the gap is purely cosmetic: the mobile-admin identity chip, its page-1-only list fetches, its
-read-only venue screen and demo ticket-edit toast (the admin desktop equivalents are wired), the
-admin settings page's local-only login-device list, and the shell badges that have no backend feed
-(coach Topbar's `NOTIFS` bell, the hardcoded `badge: 3` on coach's 訊息中心 nav item, admin Topbar's
-「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`).
-The self account (本人帳號資料) — the logged-in user's own name/phone/birthday and notification
-preferences — is written by one module, `src/lib/self-account.ts`, via `PATCH /users/me`; `member` and
-`mobile` use it, and `coach`'s settings pages read and save the coach's name/phone through it, so every
-surface shares one cache. Fields the backend has no column for (member number, parent contact, avatar
-colour, and other backend-less row fields on coach/admin/member) are left out rather than faked — see
-`docs/adr/0023`, `docs/adr/0026`.
-Shared stores boot honestly: the notifications and mobile-admin coach-messages stores behind the real
-badges, the points ledger, and mobile-admin's operational collections (members/classes/orders/coaches)
-start empty and show real data once each surface's layout warms them — see `docs/adr/0024`, `docs/adr/0025`.
-Google OAuth login is wired for `member` and `mobile`; `staff` and `mobile-admin` have no Google option,
-because the backend's Google flow only grants the `member` role. See `docs/adr/0006` for the full inventory.
+`/api/v1`. Every surface calls it for real.
 
-> `README.md` is a quick-start summary; `CONTEXT.md`, `docs/adr/`, and `docs/architecture.md` remain the
-> authoritative deep references.
+Mock data lives only in a handful of **P2-commented** spots where no backend endpoint exists, session
+management is out of scope, or the gap is purely cosmetic — treat them as known gaps, not bugs: the
+mobile-admin identity chip, its page-1-only list fetches, its read-only venue screen and demo ticket-edit
+toast (the admin desktop equivalents are wired), the admin settings page's local-only login-device list,
+and the shell badges that have no backend feed (coach Topbar's `NOTIFS` bell, the hardcoded `badge: 3` on
+coach's 訊息中心 nav item, admin Topbar's 「目前有 3 則新通知」 toast, mobile-admin's
+`ADMIN_NOTIFS`/`COACH_NOTIFS`). Fields the backend has no column for are left out, never faked
+(`docs/adr/0023`, `docs/adr/0026`); `docs/adr/0006` holds the full inventory.
+
+Google OAuth login exists for `member` and `mobile` only: the backend's Google flow grants just the
+`member` role, so `staff` and `mobile-admin` have no Google option.
 
 ## Running the full stack
 
@@ -58,35 +44,32 @@ npm run dev                # http://localhost:5173
 
 ## Commands
 
-- `npm install` — **required on every fresh checkout/worktree**: `package-lock.json` is gitignored, so a
-  clone has no deps until installed. (A missing `@lucide/svelte` at build time almost always means this
-  step was skipped — a merge/branch carries no dependency fix.)
-- `npm run dev` — Vite dev server at http://localhost:5173
-- `npm run build` / `npm run preview` — production build / preview
-- `npm run check` — `svelte-kit sync && svelte-check`. This is the type-check gate; **there is no ESLint
-  or Prettier** in this repo, so `check` is the closest thing to a linter.
-- `npm run test` — `vitest run` (jsdom env, setup in `src/vitest-setup.ts`). `npm run test:watch` to watch.
-- Run one test file: `npx vitest run src/lib/checkout-gate.test.ts`
-- Run tests by name: `npx vitest run -t "blocks open redirect"`
+Scripts are in `package.json`. What it doesn't tell you:
 
-**Verification gate** for any change: `npm run check && npm run test`; add `npm run build` for anything
-that touches routing or SSR.
+- `npm install` is **required on every fresh checkout/worktree**: `package-lock.json` is gitignored, so a
+  clone has no deps until installed. A missing `@lucide/svelte` at build time means this step was skipped.
+- `npm run check` (svelte-check) is the only lint: the repo has no ESLint or Prettier, so match the
+  surrounding style by hand.
+- Vitest runs in jsdom with setup in `src/vitest-setup.ts`.
+
+**Verification gate** for any change: `npm run check && npm run test`, plus `npm run build` for anything
+that touches routing or SSR. A change is done when the gate is green.
 
 ## Architecture
 
 Mapped in **`docs/architecture.md`** — read it before touching routing, layouts, surfaces, `src/lib`
 stores, or the cart/checkout/auth flow. In one breath: seven UI **surfaces** split at the root layout
 (public/marketing vs six app surfaces), `src/lib` organised per surface, and an auth/cart/checkout core
-backed by the real `dream_fly_backend` API (Bearer tokens + a thin `localStorage` cache) where 報名
-(course enrolment) and 訂閱 (pass subscription) are independent (ADR 0001).
+backed by `dream_fly_backend` (Bearer tokens + a thin `localStorage` cache) where 報名 (course enrolment)
+and 訂閱 (pass subscription) are independent (ADR 0001).
 
 ## Domain docs (read before working in an area)
 
-- **`CONTEXT.md`** — the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, etc.). Use these
-  exact terms in code, tests, and issue titles; don't drift to synonyms the glossary lists under *Avoid*.
+- **`CONTEXT.md`** — the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
+  frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Use these exact terms in code,
+  tests, and issue titles; each entry's *Avoid* line marks the wrong synonyms.
 - **`docs/adr/`** — architecture decisions. Read any ADR that touches your area; if your change
-  contradicts one, surface it explicitly rather than silently overriding.
-- **`docs/architecture.md`** — how the frontend is wired (surfaces, `src/lib` layout, auth/cart/checkout).
+  contradicts one, surface the conflict explicitly.
 - **`docs/design/`** — the original JSX design prototypes (reference only; not shipped code).
 - **`docs/agents/`** — `issue-tracker.md` (issues/PRDs are GitHub issues via the `gh` CLI),
-  `triage-labels.md` (five canonical triage labels), `domain.md` (how to consume the domain docs above).
+  `triage-labels.md` (triage label names), `domain.md` (how skills consume the domain docs).
