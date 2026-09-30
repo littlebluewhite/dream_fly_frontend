@@ -12,7 +12,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
- * createCourse/updateCourse(經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實
+ * createCourse/updateCourse(stores.ts 直取 $lib/admin/api)走真實
  * fetch adapter。FIXTURE_CLASS 改為 wire 形狀(ApiCourse)，經真實 mapCourse() 映射，
  * 而非手造已映射的 ClassRow——term/sessions/startDate/checkinRate/makeup 五個 P2
  * 欄位由 mapCourse() 一律給預設值('',0,'',0,0)，不再手填假數字(本頁清單也不顯示

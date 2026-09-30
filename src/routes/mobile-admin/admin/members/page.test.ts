@@ -10,7 +10,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
- * createMember/updateMember(經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實
+ * createMember/updateMember(stores.ts 直取 $lib/admin/api)走真實
  * fetch adapter。FIXTURE_MEMBERS 改為 wire 形狀(ApiUserAccount)，經真實
  * mapMemberAccount() 映射，而非手造已映射的 MemberRow。 */
 vi.mock('$lib/api/client', async (importOriginal) => {

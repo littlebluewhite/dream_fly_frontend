@@ -19,14 +19,13 @@ export type Tone = [string, string];
 // 是來源為 coach surface 的邊界 seam(Student,見卡 3 段落與 ADR 0014 §1)。
 // C4 批3(facade 純轉手退役):COACHES(值，test-only 消費 + stores.ts/stores.test.ts
 // 內部種子值)/type Coach 退役——消費端改直取 $lib/domain/coaches。VENUES/TICKETS
-// 值早於本批已退役(見 api.ts getVenues/getTickets 薄委派 re-export；唯一消費者
-// VenuesScreen/TicketsScreen 改吃 payload)；本批複核 Venue/Ticket 型別轉出本身也是
+// 值早於本批已退役(唯一消費者 VenuesScreen/TicketsScreen 改吃
+// $lib/admin/api getVenues/getTickets 的 payload)；本批複核 Venue/Ticket 型別轉出本身也是
 // 零附加型別事實的純轉手，一併退役，消費端(含 api.ts)改直取 $lib/domain/venues、
 // $lib/domain/tickets。domain/venues.ts、domain/tickets.ts 的 VENUES/TICKETS seed
 // 本身不動(admin 頁測試的 canonical fixture)。
 // Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(復用桌面
-// `$lib/admin/api` 的 getReports(),ReportsScreen 直接 import,非經本檔或
-// mobile-admin/api 轉手)——domain/reports.ts 的
+// `$lib/admin/api` 的 getReports(),ReportsScreen 直接 import,非經本檔)——domain/reports.ts 的
 // 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
 // 已無任何消費者，domain/reports.ts 本身隨此任務一併 `git rm`。
 // 批次 1 W2a：MemberAccountStatus 本地 union 改由 domain 轉出;C4 批3 複核零外部
@@ -98,7 +97,7 @@ export interface TodayRow {
 // R10(雙生收斂，ADR 0014 §2)：Attendance roster 種子 RosterEntry(型別)/ROSTER(值)
 // 已退役——課堂點名頁(routes/mobile-admin/coach/attendance)改接
 // $lib/coach/attendance-controller，與桌面 coach/attendance 頁共用同一套點名編排，
-// 名冊改直吃桌面 AttRow 形狀(mid/def，經 $lib/mobile-admin/api 零映射轉出)，不再需要
+// 名冊改直吃桌面 AttRow 形狀(mid/def，由 $lib/coach/data 直取)，不再需要
 // 這層行動版專屬(mid 兼作 id、def→default)的轉譯。零 production 消費者已實證
 // （page.test.ts 改用自帶 inline fixture），同本檔既有死種子退役慣例(ADR 0010)。
 

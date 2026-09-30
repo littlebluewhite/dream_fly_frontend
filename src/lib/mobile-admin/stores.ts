@@ -7,8 +7,8 @@
  * exported for isolated test instances; the app uses the singletons.
  *
  * Task 20：members/classes/coaches/orders/messages 現由 $lib/mobile-admin/api
- * 的 getOpsCollections()/getMessages() 供給真資料(該檔再往下委派桌面 admin/coach
- * seams)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
+ * 的 getOpsCollections()/getMessages() 供給真資料(該檔組合桌面 admin/coach
+ * seams 並做薄映射)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
  * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
 
 import { writable, derived, get } from 'svelte/store';

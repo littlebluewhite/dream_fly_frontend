@@ -46,8 +46,8 @@ describe('mobile seam 收窄接線(C2：factory 上移 $lib/cart 後，mobile ca
 	});
 
 	// K5-a 前例延續：courseToCartItem 對 CatalogCourse 消費端給的是硬編預設 icon
-	// ('sparkles')，add() 必須用課程自帶的 icon（來自 api.ts 的 CATEGORY_ICON 薄
-	// 映射，如「競技體操」→'medal'）覆寫掉它，購物車行才不會全部顯示同一個 icon。
+	// ('sparkles')，add() 必須用課程自帶的 icon（來自 domain/course-category.ts 的
+	// courseCategoryIcon，如「競技體操」→'medal'）覆寫掉它，購物車行才不會全部顯示同一個 icon。
 	// fixture 刻意選 'medal'（≠ courseToCartItem 的預設 'sparkles'），避免巧合撞
 	// 值造成假陽性。
 	it('add() 保留課程自帶 icon，不被 courseToCartItem 的預設 icon(sparkles)蓋掉——icon 覆寫語意釘', () => {

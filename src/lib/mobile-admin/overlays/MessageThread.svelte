@@ -4,8 +4,8 @@
    * R14(候選 F5，ADR-0014 §2)：改接桌面同一套 $lib/coach/messages-controller(仿 R10 B
    * 案 attendance-controller 前例,commit 718844b)——取代本檔原本自管的
    * getThread/sendMessage 本地狀態機。deps(getThread/sendMessage/markRead/
-   * getStudents/createConversation)已與桌面逐字相同(mobile-admin/api.ts 現亦轉出
-   * createConversation),controller 不必為行動版加行為旗標。
+   * getStudents/createConversation)已與桌面逐字相同(皆直取 $lib/coach/api,
+   * 含 createConversation),controller 不必為行動版加行為旗標。
    *
    * 已讀角標改成「等後端 markRead ack 才清」(使用者裁決 F5,跟桌面一樣)：onMount 呼叫
    * ctrl.selectThread(m.id)取回 threadReady/badgeCleared 兩條互不等待的 promise——

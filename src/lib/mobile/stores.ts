@@ -61,8 +61,8 @@ import { createCheckout } from '$lib/member/checkout-sync';
  *  （twin）退役。factory 不在此收窄：mobile 只是拿一個無 persist 的實例（=
  *  現行為，不寫 localStorage），介面收斂為 subscribe/add/remove/clear 四個
  *  成員，不膨脹。add() 仍是薄 adapter——把 mobile 的 Course 轉成 factory 認得
- *  的 CartItemInput（經 courseToCartItem），並保留課程自帶 icon（來自 api.ts
- *  的 CATEGORY_ICON 薄映射）覆寫掉 courseToCartItem 對公開課程消費端給的硬編
+ *  的 CartItemInput（經 courseToCartItem），並保留課程自帶 icon（來自 domain/course-category.ts
+ *  的 courseCategoryIcon）覆寫掉 courseToCartItem 對公開課程消費端給的硬編
  *  預設('sparkles')——這段覆寫邏輯 factory 不擁有，留在這層做。 */
 const cartBase = createCart(); // 無 persist(= mobile 現行為)
 export const cart = { // 介面不膨脹:只出 4 個成員

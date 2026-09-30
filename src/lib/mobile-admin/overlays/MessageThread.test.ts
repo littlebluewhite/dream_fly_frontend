@@ -21,8 +21,8 @@ import type { MessageRow } from '$lib/mobile-admin/data';
  * loggedIn/member.id)。用真 authStore.login 驅動 identity(同 session-gate.test.ts
  * 慣用式)，只替換 $lib/api/client 的 api()。
  *
- * R15 Task 3a(候選 轉手退役)：getThread/sendMessage/markRead(經 $lib/mobile-admin/api
- * 轉手 coach/api.ts 實作)改走真實呼叫，同其餘 fakeRouter 化的測試檔慣例。 */
+ * R15 Task 3a(候選 轉手退役)：getThread/sendMessage/markRead(畫面直取
+ * $lib/coach/api)改走真實呼叫，同其餘 fakeRouter 化的測試檔慣例。 */
 
 vi.mock('$lib/mobile-admin/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile-admin/stores')>();

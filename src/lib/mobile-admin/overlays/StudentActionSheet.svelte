@@ -4,7 +4,7 @@
    * 無多技能評量表可編輯，Task 20 起改為桌面 StudentCard 真正提供的兩個動作：
    * 寫評語(POST /report-cards)、發證書(POST /certificates)，integration-
    * contract.md §3.22，Task 13）。mode prop 決定顯示哪一種表單，皆透過
-   * $lib/mobile-admin/api 呼叫真後端；成功關閉 sheet，失敗顯示錯誤 toast 且不
+   * $lib/coach/api 呼叫真後端；成功關閉 sheet，失敗顯示錯誤 toast 且不
    * 關閉(同桌面 CertificateDialog/ReportCardDialog 慣例)。
    * onClose 由 OverlayHost 帶入；student/mode 由 overlay.sheet('studentAction',
    * {student, mode}) 帶入。 */

@@ -7,8 +7,8 @@ import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach } from '$lib/public/api';
 
-/* R15 Task 3a(候選 轉手退役)：getCsettings/saveSettings/CoachNotFoundError 在
- * mobile-admin/api.ts 是零映射 re-export，改 mock $lib/api/client 的 api()，走真實
+/* R15 Task 3a(候選 轉手退役)：getCsettings/saveSettings/CoachNotFoundError 原經
+ * mobile-admin/api.ts 零映射 re-export，已退役，改 mock $lib/api/client 的 api()，走真實
  * fetch adapter；教練身分真經 loginAs() 驅動(同 coach/page.test.ts 慣例)。改用真
  * authStore(不再 module mock 它)——本頁的「登出」本就是要驗證真 authStore.logout()
  * 有被呼叫，mock 掉它反而測不到接線本身。 */

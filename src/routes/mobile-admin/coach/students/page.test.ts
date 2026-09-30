@@ -8,8 +8,8 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
 
-/* R15 Task 3a(候選 轉手退役)：getStudents() 在 mobile-admin/api.ts 是零映射
- * re-export(桌面 coach/api.ts 的 GET /coaches/me/students)，改 mock $lib/api/client
+/* R15 Task 3a(候選 轉手退役)：getStudents() 原經 mobile-admin/api.ts 零映射
+ * re-export，已退役，畫面直取 $lib/coach/api(GET /coaches/me/students)，改 mock $lib/api/client
  * 的 api()，走真實 fetch adapter。不需要 loginAs()——getStudents() 無 requireCoach()
  * 閘門(呼叫者查無教練資料時後端本身回空陣列，見 coach/api.ts 附註)。
  *

@@ -32,8 +32,8 @@ import { initialOf } from '$lib/api/wire';
  * 把 opsHydrated 設回 false 才 render，驗證 guard 開啟時 onMount 真的會呼叫。
  *
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓
- * createMember/createCoach/updateMember/updateCoach/getOpsCollections(經
- * $lib/mobile-admin/api 轉手 admin/api.ts 實作)一路走真實 fetch adapter。
+ * createMember/createCoach/updateMember/updateCoach/getOpsCollections(stores.ts
+ * 直取 $lib/admin/api)一路走真實 fetch adapter。
  * 教練清單的「預期輸出」改用 expectedFromWire()鏡射 admin/api.ts 私有 mapCoach()
  * 的 color/initial 推導(色票依陣列位置 i%MEMBER_COLORS.length 決定，不能沿用
  * $lib/domain/coaches 的 COACHES 手寫色票——那組色票不是逐位置生成，第 8/9 筆

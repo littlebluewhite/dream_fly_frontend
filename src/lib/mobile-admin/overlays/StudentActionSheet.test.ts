@@ -10,7 +10,7 @@ import type { Student } from '$lib/coach/data';
  * 提供的兩個動作：寫評語(POST /report-cards)、發證書(POST /certificates)。
  *
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 createCertificate/
- * createReportCard(經 $lib/mobile-admin/api 轉手 coach/api.ts 實作)走真實呼叫，同
+ * createReportCard(畫面直取 $lib/coach/api)走真實呼叫，同
  * CertificateDialog.test.ts/ReportCardDialog.test.ts 慣例。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();

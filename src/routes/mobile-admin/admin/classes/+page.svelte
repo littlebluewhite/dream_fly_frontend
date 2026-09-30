@@ -9,7 +9,7 @@
    * 機制擋下,不再需要頁面自帶的 alive 旗標。
    *
    * Task 20：新增/編輯改接真 POST /courses、PATCH /courses/{id}（復用桌面
-   * createCourse/updateCourse/mapCourse，經 $lib/mobile-admin/api 薄層）；openEdit
+   * createCourse/updateCourse/mapCourse，由 stores.ts 的 addCourse/saveCourse 直取 $lib/admin/api）；openEdit
    * 統一收斂「班級卡編輯鈕」與「班級詳情 sheet 的編輯鈕」兩個入口，兩者都需要真正
    * 呼叫後端，不能其中一條路徑漏接。R12 起寫入經 store 的 addCourse/saveCourse
    * 動詞(寫入成功後 await refreshOps() 整包重抓)，toast 在動詞 resolve 後才出現。

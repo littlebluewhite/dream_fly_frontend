@@ -10,7 +10,7 @@
    * R10(雙生收斂，ADR 0014 §2)：改接桌面 coach/attendance 頁同一套
    * $lib/coach/attendance-controller，取代原本內聯自管的點名狀態——mobile-admin/api.ts
    * 的 mapAttRow/MAttendanceClass/MAttendanceData 映射層已退役(getAttendance/
-   * saveAttendance 改零映射 re-export)，本頁退化為薄 adapter：解構 controller 單一
+   * saveAttendance 改由本頁直取 $lib/coach/api)，本頁退化為薄 adapter：解構 controller 單一
    * 快照 store、切班/點名/全部標記出席/備註/儲存全轉呼 controller 方法；tally 改直取
    * $lib/coach/attendance-tally(最後一處點名邏輯雙生收斂)。白拿桌面既有行為，含原
    * 行動版沒有的：切班保留未存草稿(byClass 暫存)、儲存中切班被擋(info toast)、儲存中

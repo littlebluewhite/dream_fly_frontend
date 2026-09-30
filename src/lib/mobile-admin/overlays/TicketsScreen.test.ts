@@ -7,7 +7,7 @@ import type { ApiProduct } from '$lib/public/api';
 import { fmtNT } from '$lib/format';
 
 /* 票券管理 push screen — C4：接真 GET /products(復用桌面 admin/api.ts 的 getTickets()，
- * 見 $lib/mobile-admin/api 薄委派 re-export)。fixture 刻意異於 domain/tickets.ts seed，
+ * 畫面直接 import $lib/admin/api)。fixture 刻意異於 domain/tickets.ts seed，
  * 證明畫面讀 getTickets() payload 而非殘留的 TICKETS import；hero 總額精確驗算(倣桌面
  * routes/admin/tickets/page.test.ts)；quota null → 「不限」；id 是 UUID 形、不出現於版面。
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，走真實 getTickets()

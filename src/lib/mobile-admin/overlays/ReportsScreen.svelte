@@ -4,8 +4,8 @@
    * 收入來源、教練表現、場館使用時數、出席率分布、新生 vs 回訪、年齡層、
    * 付款方式占比 conic 圓餅、試上洽詢轉換、星期別出席負載、會員分級）。
    *
-   * Task P4-F3：接真 GET /reports/admin(復用桌面 admin/api.ts 的 getReports()，見
-   * $lib/mobile-admin/api 零映射 re-export，與桌面 admin/reports/+page.svelte
+   * Task P4-F3：接真 GET /reports/admin(復用桌面 admin/api.ts 的 getReports()，畫面
+   * 直接 import $lib/admin/api，與桌面 admin/reports/+page.svelte
    * (P4-F2)消費同一份 ReportsData)。三態載入用 createLoadGate(同 AdminSettingsScreen.
    * svelte 既有慣例)。分校 Panel 依裁決移除(單一場館，campusRevenue 無資料源)；
    * 「本月營收來源拆解」拿掉舊 mock 的假下鑽按鈕(r.drill 為示範用死連結，真資料無

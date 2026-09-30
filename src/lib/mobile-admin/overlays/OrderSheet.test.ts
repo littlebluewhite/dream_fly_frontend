@@ -8,7 +8,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import type { Order as OrderRow } from '$lib/admin/data';
 
 /* R15 Task 3a(候選 轉手退役):改 mock $lib/api/client 的 api(),讓 updateOrderStatus
- * (經 $lib/mobile-admin/api 轉手 admin/api.ts 實作)走真實 PATCH /orders/{id}/status
+ * (OrderSheet 經 stores.ts 直取 $lib/admin/api)走真實 PATCH /orders/{id}/status
  * 呼叫,同 CertificateDialog.test.ts 慣例。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();

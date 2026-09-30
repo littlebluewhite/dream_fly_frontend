@@ -3,8 +3,8 @@
    * 場館資訊輸入 + 通知/自動化開關 + 帳號與安全列 + 儲存變更。
    *
    * Task F9：GET/PUT /settings 接真(integration-contract.md §3.25)——復用桌面
-   * admin/api.ts 的 getSettings/putSettings(見 $lib/mobile-admin/api 零映射
-   * re-export，兩個 surface 消費完全相同的欄位形狀)。載入採 createLoadGate 三態
+   * admin/api.ts 的 getSettings/putSettings(畫面直接 import $lib/admin/api，
+   * 兩個 surface 消費完全相同的欄位形狀)。載入採 createLoadGate 三態
    * (同 coach/settings/+page.svelte 慣例——本畫面是單筆表單、只有這一個畫面消費，
    * 不需要 $lib/mobile-admin/stores.ts 那套給 members/classes/coaches/orders 用的
    * 跨畫面集合水合機制)。單一「儲存變更」全量送出三組 key，理由同桌面版
@@ -12,8 +12,7 @@
    * 範圍——桌面版才有這個區塊，行動版原本就沒有，維持現狀。
    *
    * 卡 C2：草稿狀態機（10 欄 + saving 旗標 + save() 的 SettingsWriteBody 組裝）
-   * 收斂進 $lib/admin/settings-form 的 createSettingsForm，經 $lib/mobile-admin/api
-   * 零映射 re-export 取用（與桌面 +page.svelte 共用同一份機制，0014 §2 雙生核可
+   * 收斂進 $lib/admin/settings-form 的 createSettingsForm，直接 import 取用（與桌面 +page.svelte 共用同一份機制，0014 §2 雙生核可
    * 類）；403 文案（SETTINGS_ERROR_TEXT）/成功 toast/gate.silentRefresh() 仍逐字
    * 留在本檔。 */
   import { onMount } from 'svelte';

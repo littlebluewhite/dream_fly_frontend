@@ -10,8 +10,8 @@ import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach } from '$lib/public/api';
 import type { ApiTodaySession } from '$lib/api/wire';
 
-/* R15 Task 3a(候選 轉手退役)：getAttendance/saveAttendance 在 mobile-admin/api.ts 是零映射
- * re-export(桌面 coach/api.ts 的實作)，改 mock $lib/api/client 的 api()，讓它們走真實
+/* R15 Task 3a(候選 轉手退役)：getAttendance/saveAttendance 原經 mobile-admin/api.ts 零映射
+ * re-export，已退役，本頁直取 $lib/coach/api 實作，改 mock $lib/api/client 的 api()，讓它們走真實
  * fetch adapter；教練身分(requireCoach)真經 loginAs() 驅動，每個測試先登出再登入避免
  * session 閘門快取跨測試殘留(同 coach/page.test.ts 慣例)。 */
 vi.mock('$lib/api/client', async (importOriginal) => {

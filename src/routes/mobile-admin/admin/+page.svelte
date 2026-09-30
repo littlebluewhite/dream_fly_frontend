@@ -40,7 +40,7 @@
   onMount(() => {
     gate.load();
     // best-effort：待付款橫幅只是提示,失敗就先不顯示,不擋首頁其餘內容(同
-    // member/courses 的候補水合慣例)。真正擋橫幅假出現的是下面 $opsHydrated 守衛。
+    // member/courses 的候補水合慣例)。橫幅不會假出現,靠的是 $orders 開機即為 `[]`(見檔頭註解)。
     void hydrateOps().catch(() => {});
   });
 

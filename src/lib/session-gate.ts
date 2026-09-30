@@ -58,23 +58,23 @@ import { get } from 'svelte/store';
 import { authStore, type AuthState } from '$lib/stores/authStore';
 import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
 
+/** session 身分 key 的單一來源:未登入 null;登入但無 member.id 退化為空字串。 */
+export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): string | null {
+	return a.loggedIn ? (a.member?.id ?? '') : null;
+}
+
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
  * 這唯一決策收成一處。
  *
  * 身分基準在建構當下決定(R14 F2):subscribe 的立即回呼只記 lastIdentity、不觸發
  * onChange——restored 與訪客開機一律零觸發(ADR-0017 的「reset 值 = 開機值」保證畫面無差別),
- * 故建構期間不會呼叫任何 reset,呼叫端的 let 宣告在哪都不炸。identity key = loggedIn ? (member?.id ?? '') : null
- * (現行慣例逐字:未登入為 null,登入但無 member.id 退化為空字串)。
+ * 故建構期間不會呼叫任何 reset,呼叫端的 let 宣告在哪都不炸。identity key 見 sessionIdentity()
+ * (未登入為 null,登入但無 member.id 退化為空字串)。
  *
  * 回傳 epoch():單調遞增的 session 世代,身分每變一次 +1;fetch/mutate 出發時捕捉、
  * 落地前比對——跨登出/換帳號的在飛回應即以此作廢。
  */
-/** session 身分 key 的單一來源:未登入 null;登入但無 member.id 退化為空字串。 */
-export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): string | null {
-	return a.loggedIn ? (a.member?.id ?? '') : null;
-}
-
 function createSessionCore(onChange: () => void): { epoch: () => number } {
 	let sessionEpoch = 0;
 	let lastIdentity: string | null = null;

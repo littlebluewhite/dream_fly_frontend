@@ -5,8 +5,8 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import type { ApiVenue } from '$lib/public/api';
 
-/* 場館管理 push screen — C4：接真 GET /venues(復用桌面 admin/api.ts 的 getVenues()，見
- * $lib/mobile-admin/api 薄委派 re-export)。fixture 刻意異於 domain/venues.ts seed(場地
+/* 場館管理 push screen — C4：接真 GET /venues(復用桌面 admin/api.ts 的 getVenues()，畫面
+ * 直接 import $lib/admin/api)。fixture 刻意異於 domain/venues.ts seed(場地
  * 名/型態/器材皆改過)，證明畫面讀 getVenues() payload 而非殘留的 VENUES import；id 是
  * UUID 形、方塊改顯示 slug——斷言 UUID 不出現於版面、slug 出現(鏡射桌面 F4 裁決)。
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，走真實 getVenues()

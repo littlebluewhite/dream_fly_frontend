@@ -5,7 +5,7 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 /* 報表分析 push screen — Task P4-F3：接真 GET /reports/admin(復用桌面 admin/api.ts，
- * 見 $lib/mobile-admin/api 零映射 re-export)。刻意用與 KpiCard 顯示格式吻合、可精確
+ * 畫面直接 import $lib/admin/api)。刻意用與 KpiCard 顯示格式吻合、可精確
  * 驗算的 fixture 數字(同桌面 admin/reports/page.test.ts 的驗算慣例)，證明畫面讀的是
  * getReports() payload 並用 report-math/format 正確換算，而非殘留的舊 mock 常數。
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，fixture 改為 GET
