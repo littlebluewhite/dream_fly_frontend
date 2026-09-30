@@ -223,7 +223,7 @@
           <span
             style="font-size:22px;font-weight:800;color:#fff;font-family:var(--df-font-mono);line-height:1.1"
           >{nextClass.start}</span>
-          <span style="font-size:11px;color:rgba(255,255,255,0.8);margin-top:2px">{nextClass.level}</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.8);margin-top:2px;font-family:var(--df-font-mono)">{nextClass.end}</span>
         </div>
 
         <!-- Class info + pre-check tiles -->

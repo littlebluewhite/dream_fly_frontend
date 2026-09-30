@@ -35,9 +35,6 @@
       <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--df-text-light)">
         <Icon name="users" size={12} color="var(--df-text-light)" />{c.count} 位
       </span>
-      <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--df-text-light)">
-        <Icon name="signal" size={12} color="var(--df-text-light)" />{c.level}
-      </span>
     </div>
   </div>
 

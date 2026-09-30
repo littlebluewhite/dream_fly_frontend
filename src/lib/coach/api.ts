@@ -84,27 +84,25 @@ async function requireCoach(): Promise<{ account: SelfAccount; coach: ApiCoach }
  *  name/display/full/initial 由 account.name 推導（東亞姓名慣例：首字視為姓氏，同 mock 原始
  *  資料「李志偉」→「李教練」/「李志偉 教練」的推導方式一致）；role/bio/chips 來自
  *  ApiCoach 的 title/bio/certifications；id 改用教練真實 uuid（舊「DF-C2019-007」員編
- *  格式後端無對應欄位，P2）；en/gender/birth/emergency 後端無對應欄位，誠實給空字串
- *  （P2）；registered 用 coach.created_at；lastLogin 用 account.lastLogin。 */
+ *  格式後端無對應欄位，P2）；birth 讀 account.birth(GET /users/me 的真實生日)；英文姓名/
+ *  性別/緊急聯絡人後端無對應欄位，R16 Task 2a 起從 Coach 形狀拿掉(不再誠實給空字串)；
+ *  registered 用 coach.created_at；lastLogin 用 account.lastLogin。 */
 function mapCoach(account: SelfAccount, coach: ApiCoach): Coach {
 	const surname = account.initial;
 	return {
 		name: account.name,
 		display: `${surname}教練`,
 		full: `${account.name} 教練`,
-		en: '', // P2: 後端無英文姓名欄位
 		initial: surname,
 		// Task 4 判斷：CoachResponse 新增的 name 欄位在此不適用 —— name/display/full/
 		// initial 已經正確取自 account.name(教練本人的真實姓名，見上方函式註解)；role 這裡
-		// 語意上是「職稱」(routes/coach/settings 渲染成「{role} · {id}」的職銜列)，不是
+		// 語意上是「職稱」(routes/coach/settings 渲染成「{role}」的職銜列)，不是
 		// 姓名欄位，繼續用 coach.title 才是對的欄位，不需要也不應該改成 coach.name。
 		role: coach.title,
 		id: coach.id, // P2: 舊員編格式(DF-C2019-007)無對應欄位，改用教練 uuid
 		email: account.email,
 		phone: account.phone,
-		gender: '', // P2: 後端無性別欄位
-		birth: '', // P2: 後端無生日欄位
-		emergency: '', // P2: 後端無緊急聯絡人欄位
+		birth: account.birth,
 		bio: coach.bio ?? '',
 		chips: coach.certifications,
 		registered: isoDate(coach.created_at),
@@ -119,9 +117,8 @@ function mapCoach(account: SelfAccount, coach: ApiCoach): Coach {
  *  並依 start_time 排序——前端不再需要自行過濾/排序。 */
 
 /** TodaySessionResponse → 既有 TodayClass 形狀，經 domain/sessions 的 toTodaySession 投影
- *  （C5：admin/coach/mobile-admin 共用同一支純函式，coach 只在其上疊自己的 level/cat 欄位，
- *  不再自行重算 hhmm/venue 預設值/狀態，見 docs/adr/0023）。level/cat 無對應欄位，一律誠實
- *  給預設值(P2)。 */
+ *  （C5：admin/coach/mobile-admin 共用同一支純函式，不再自行重算 hhmm/venue 預設值/狀態，
+ *  見 docs/adr/0023）。課程等級/分類無對應欄位，R16 Task 2a 起從 TodayClass 拿掉。 */
 function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 	const t = toTodaySession(s, now);
 	return {
@@ -131,8 +128,6 @@ function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 		name: t.name,
 		room: t.room,
 		count: t.count,
-		level: '基礎', // P2: TodaySessionResponse 無課程等級欄位
-		cat: '體操', // P2: TodaySessionResponse 無課程分類欄位
 		status: t.state
 	};
 }
@@ -330,9 +325,10 @@ const DOW_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 export interface CoachScheduleData { courses: SchedCourse[] }
 
-/** CoachScheduleResponse 是教練「可授課時段」，不是特定課程場次 —— 沒有 name/count/
- *  cat/venue 欄位，一律誠實給預設值(P2，各自附註)；day/start/end 是真實映射（day_of_week
- *  → Mon..Sun key，HH:MM:SS 裁切為 HH:MM 供既有 UI 顯示）；只保留 is_available 的時段
+/** CoachScheduleResponse 是教練「可授課時段」，不是特定課程場次 —— 沒有課名/人數/
+ *  分類/場館欄位，R16 Task 2a 起 SchedCourse 只留 day/start/end 真實映射（day_of_week
+ *  → Mon..Sun key，HH:MM:SS 裁切為 HH:MM 供既有 UI 顯示），「可授課時段」標籤是元件
+ *  裡的字面值；只保留 is_available 的時段
  *  （未開放的時段不是真的可授課，不該顯示成一個假課程區塊）。 */
 export const getSchedule = async (): Promise<CoachScheduleData> => {
 	const { coach } = await requireCoach();
@@ -343,11 +339,7 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 			.map((s) => ({
 				day: DOW_TO_KEY[s.day_of_week],
 				start: hhmm(s.start_time),
-				end: hhmm(s.end_time),
-				name: '可授課時段', // P2: availability 端點無課程名稱欄位(非特定課程場次)
-				count: 0, // P2: 同上，無學員人數欄位
-				cat: '體操', // P2: 同上，無課程類別欄位
-				venue: '主場館' // P2: 同上，無場館欄位
+				end: hhmm(s.end_time)
 			}))
 	};
 };
@@ -378,7 +370,7 @@ const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
 /** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
  *  member（§3.21 角色規則），且 CONTEXT.md 明定「會員」帳號即學員本人、不分家長/學員
- *  （Avoid: 家長），故 kind 一律誠實給 '會員'；color 無代表色欄位，同其餘 mapXxx 慣例
+ *  （Avoid: 家長），故不帶對話種類欄位(R16 Task 2a 起拿掉 kind)；color 無代表色欄位，同其餘 mapXxx 慣例
  *  固定預設值(P2)。time 由 last_message_at 轉換
  *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有
  *  「撰寫新對話」的建立文案 '尚無訊息'；badge 直接用 unread_count(brief 明定)。清單
@@ -389,7 +381,6 @@ function mapConversation(r: ApiConversationSummary): Conversation {
 		name: r.peer_name,
 		initial: initialOf(r.peer_name),
 		color: BRAND_PRIMARY_HEX, // P2: 後端無代表色欄位
-		kind: '會員', // P2: 無家長/學員/群組之分，見上方函式註解
 		time: r.last_message_at ? toDisplayTime(r.last_message_at) : '',
 		badge: r.unread_count,
 		preview: r.last_message_body ?? '尚無訊息'
@@ -494,10 +485,9 @@ interface ApiMyStudent {
  *  結構化穿透(寫評語 dialog 需要 enrolment_id，多堂課時供教練選擇，Task 13)；cls 由
  *  courses(該學員在這位教練名下的所有課程)以「、」串接組成——忠實反映可能不只一堂
  *  課，而非只取第一堂丟掉其餘資訊；initial 由姓名首字推導(同 mapProfile 慣例)；
- *  color 無代表色欄位,固定預設值(P2，同 mapScheduleEntry 慣例)。level/skill/pct/att
- *  無對應欄位(此端點不含技能評量/出勤統計——§3.19 的 attended/total 是 member 視角
- *  的單一課程統計，見 GET /enrolments/me，非教練視角的單一學員數字)，一律誠實給
- *  預設值(P2，各自附註)。 */
+ *  color 無代表色欄位,固定預設值(P2)。程度/技能評量/出勤率無對應欄位(此端點不含
+ *  技能評量/出勤統計——§3.19 的 attended/total 是 member 視角的單一課程統計，見
+ *  GET /enrolments/me，非教練視角的單一學員數字)，R16 Task 2a 起從 Student 拿掉。 */
 function mapStudent(s: ApiMyStudent): Student {
 	return {
 		user_id: s.user_id,
@@ -505,11 +495,7 @@ function mapStudent(s: ApiMyStudent): Student {
 		initial: initialOf(s.name),
 		color: BRAND_PRIMARY_HEX, // P2: 後端無代表色欄位
 		cls: s.courses.map((c) => c.course_name).join('、'),
-		courses: s.courses,
-		level: '初階', // P2: MyStudentResponse 無學員程度欄位
-		skill: '', // P2: 無技能評量欄位
-		pct: 0, // P2: 無技能評量百分比欄位
-		att: 0 // P2: 無出勤率統計欄位
+		courses: s.courses
 	};
 }
 
@@ -607,8 +593,8 @@ export const getSettings = async (): Promise<CoachSettingsData> => {
 };
 
 /** ProfileTab 可編輯的欄位裡，只有 name/phone 有對應的後端 PATCH 欄位（avatar_url 目前
- *  沒有 UI 入口，未使用）；email/gender/birth/emergency/bio 後端不支援寫入，維持頁面
- *  本地編輯、不送出(同既有行為)。R16 Task 1b:先解析教練(快取命中不打 API),再交給
+ *  沒有 UI 入口，未使用）；email/birth/bio 後端不支援經此寫入，頁面唯讀顯示或不提供
+ *  輸入(R16 Task 2a)。R16 Task 1b:先解析教練(快取命中不打 API),再交給
  *  saveSelfAccount——它與目前值比對、只送改過的欄位(電話 null 的教練只改姓名時不再送
  *  phone: '' 撞後端 8–20 碼驗證的 422),表單規則不合法就不發請求;PATCH 回應寫回
  *  $selfAccount 並 authStore.syncUser(Topbar 等處的姓名跟著變),不重抓。簽章不變:失敗

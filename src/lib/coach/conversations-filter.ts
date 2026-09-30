@@ -31,7 +31,6 @@ export function filterConversations(convos: Conversation[], opts: ConversationsF
 
 	return convos.filter((c) => {
 		if (tab === '未讀' && !c.badge) return false;
-		if (tab === '家長' && c.kind !== '家長') return false;
 		if (q && !(c.name + c.preview).toLowerCase().includes(q)) return false;
 		return true;
 	});

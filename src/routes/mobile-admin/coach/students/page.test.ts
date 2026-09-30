@@ -13,11 +13,9 @@ import { initialOf, BRAND_PRIMARY_HEX } from '$lib/api/wire';
  * 的 api()，走真實 fetch adapter。不需要 loginAs()——getStudents() 無 requireCoach()
  * 閘門(呼叫者查無教練資料時後端本身回空陣列，見 coach/api.ts 附註)。
  *
- * Deviation：真 mapStudent()(coach/api.ts 私有)裡 level/skill/pct/att 四欄皆是 P2
- * 佔位值('初階'/''/0/0)——MyStudentResponse 本就無技能評量/出勤統計欄位，不是「真
- * 後端唯一欄位」（舊測試註解的前提已不成立）。原測試斷言 fixture 自訂的 92%/測試動作
- * 已無法經 wire 構造，改斷言「熟練度數字固定是 P2 佔位值 0%，不是隨 fixture 個人化的
- * 假數字」，回歸精神不變：接線讀 payload、不是頁面自己編。 */
+ * R16 Task 2a：MyStudentResponse 無程度/技能評量/出勤統計欄位，Student 已拿掉
+ * level/skill/pct/att，頁面不再顯示程度 chip、熟練度條與出席率(原本一律是 P2 佔位
+ * 值)。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -34,11 +32,7 @@ function mapStudent(s: WireStudent): Student {
 		initial: initialOf(s.name),
 		color: BRAND_PRIMARY_HEX,
 		cls: s.courses.map((c) => c.course_name).join('、'),
-		courses: s.courses,
-		level: '初階',
-		skill: '',
-		pct: 0,
-		att: 0
+		courses: s.courses
 	};
 }
 
@@ -72,12 +66,13 @@ describe('mobile-admin/coach/students 頁', () => {
 		expect(await findByText('2 位學員')).toBeInTheDocument();
 	});
 
-	it('技能熟練度為 P2 佔位值(MyStudentResponse 無對應欄位，getStudents() 一律給空字串/0，不假造個人化數字)', async () => {
-		const { findAllByText } = render(StudentsPage);
-		await findAllByText('熟練度');
-		// '0%' 同時出現在熟練度與(若頁面另有顯示)其他 P2 佔位百分比欄位，故只驗證
-		// 至少每位學員的熟練度都落地成 0%，不鎖死總命中數。
-		expect((await findAllByText('0%')).length).toBeGreaterThanOrEqual(FIXTURE_STUDENTS.length);
+	it('不顯示後端沒有的程度/熟練度/出席率(R16 Task 2a)', async () => {
+		const { findByText, container } = render(StudentsPage);
+		await findByText('測試學員甲');
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain('熟練度');
+		expect(txt).not.toContain('出席率');
+		expect(txt).not.toContain('%');
 	});
 
 	it('搜尋篩選仍正常運作', async () => {

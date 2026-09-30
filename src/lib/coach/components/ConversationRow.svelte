@@ -28,7 +28,6 @@
   <div style="flex:1;min-width:0">
     <div style="display:flex;align-items:center;gap:6px">
       <span style="font-size:13.5px;font-weight:700;color:var(--df-text-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">{c.name}</span>
-      <span style="font-size:10px;font-weight:600;color:var(--df-text-muted);background:var(--df-bg-light);border-radius:4px;padding:1px 6px;flex:none">{c.kind}</span>
       <span style="font-size:11px;color:var(--df-text-muted);flex:none">{c.time}</span>
     </div>
     <div style="font-size:12.5px;color:var(--df-text-light);margin-top:4px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{c.preview}</div>

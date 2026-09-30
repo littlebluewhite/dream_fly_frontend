@@ -7,10 +7,10 @@ import { getSchedule } from '$lib/coach/api';
 vi.mock('$lib/coach/api', () => ({ getSchedule: vi.fn() }));
 
 // Task 1(C2 死種子退役):coach/data.ts 的 SCHED_COURSES(值)已退役——改為檔內
-// inline fixture(2 筆,沿用真實種子的啦啦隊/跑酷兩筆,供下方分類篩選測試)。
+// inline fixture。R16 Task 2a:可授課時段只有 day/start/end。
 const SCHED_COURSES: SchedCourse[] = [
-	{ day: 'Tue', start: '10:00', end: '11:00', name: '啦啦隊基礎', count: 10, cat: '啦啦隊', venue: '主場館' },
-	{ day: 'Wed', start: '16:00', end: '17:00', name: '跑酷入門', count: 8, cat: '跑酷', venue: '副館' }
+	{ day: 'Tue', start: '10:00', end: '11:00' },
+	{ day: 'Wed', start: '16:00', end: '17:00' }
 ];
 
 beforeEach(() => {
@@ -18,8 +18,7 @@ beforeEach(() => {
 	vi.mocked(getSchedule).mockResolvedValue({ courses: SCHED_COURSES });
 });
 
-/* 排課管理 page — now interactive: 日/週/月 toggle, prev/next/今日, and two
- * CoachDropdown filters (category + venue) that narrow the rendered courses.
+/* 排課管理 page — now interactive: 日/週/月 toggle, prev/next/今日.
  * Anchor defaults to the real current date (Task 1: 1.2); assertions below
  * match courses by weekday key, not by an exact date, so they stay
  * deterministic regardless of which real week the test runs in.
@@ -32,9 +31,9 @@ describe('/coach/schedule (+page) — interactive', () => {
 		const txt = container.textContent ?? '';
 		// week grid renders SCHED_HOURS time labels; month view does not.
 		expect(txt).toContain('08:00');
-		// a Tue 啦啦隊 course and a Wed 跑酷 course are both visible unfiltered.
-		expect(getByText('啦啦隊基礎')).toBeInTheDocument();
-		expect(getByText('跑酷入門')).toBeInTheDocument();
+		// the Tue and Wed availability slots are both visible.
+		expect(getByText('10:00-11:00')).toBeInTheDocument();
+		expect(getByText('16:00-17:00')).toBeInTheDocument();
 	});
 
 	it('switching to 月 swaps to the month view (time grid gone)', async () => {
@@ -48,19 +47,14 @@ describe('/coach/schedule (+page) — interactive', () => {
 		expect(getByText('一')).toBeInTheDocument();
 	});
 
-	it('a category filter narrows the rendered courses', async () => {
-		const { getByText, queryByText, getAllByText, findByText } = render(SchedulePage);
+	it('分類/場館篩選、分類圖例與「點擊空白時段可新增課程」提示已拿掉(R16 Task 2a)', async () => {
+		const { container, findByText } = render(SchedulePage);
 		await findByText('08:00');
-		// open the category CoachDropdown (current value label) and pick 跑酷.
-		await fireEvent.click(getByText('全部課程類型'));
-		// "跑酷" appears both as a dropdown option (a <button>) and a legend chip
-		// (a <span>) — click the option button, not the legend.
-		const parkour = getAllByText('跑酷').find((el) => el.closest('button'));
-		expect(parkour).toBeTruthy();
-		await fireEvent.click(parkour!);
-		// 跑酷 course stays, 啦啦隊 course is filtered out.
-		expect(getByText('跑酷入門')).toBeInTheDocument();
-		expect(queryByText('啦啦隊基礎')).toBeNull();
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain('全部課程類型');
+		expect(txt).not.toContain('所有場館');
+		expect(txt).not.toContain('課程類別');
+		expect(txt).not.toContain('點擊空白時段');
 	});
 });
 

@@ -18,8 +18,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 const ONE_COURSE: Student = {
   user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC',
   cls: '兒童體操初階 B 班',
-  courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }],
-  level: '初階', skill: '前滾翻', pct: 80, att: 98
+  courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }]
 };
 
 /** 多堂課學員——需先選課程（即選 enrolment）。 */
@@ -29,8 +28,7 @@ const TWO_COURSES: Student = {
   courses: [
     { course_id: 'c-mid-a', course_name: '兒童體操中階 A 班', enrolment_id: 'en-a' },
     { course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-b' }
-  ],
-  level: '中階', skill: '後空翻', pct: 72, att: 95
+  ]
 };
 
 const CREATED = {

@@ -6,12 +6,10 @@
    * Task 20：改讀真 getCsettings()(coach/api.ts getSettings()，GET /users/me +
    * GET /coaches)，取代舊 mock 對 PROFILES.coach + COACHES.find(name==='林雅婷')
    * 的拼湊方式——真實 Coach 型別(coach/data.ts)沒有 years/students/classes/awards
-   * 統計欄位(舊 $lib/domain/coaches 型別才有，行動版專屬豐富化、後端從未提供)，
-   * 改用桌面 coach/settings 頁自己在這個位置的固定假統計(授課時數/學員數/年資，
-   * 3 格，同該頁「Stats — sensible values derived from data / mock」的決定，不
-   * 新發明第 4 格)。姓名/聯絡電話改真送 PATCH /users/me(saveSettings)；職稱/
-   * Email/簡介維持頁面本地編輯、不送出(契約不支援寫入這些欄位，同桌面 ProfileTab
-   * 的決定)。通知偏好/帳號安全(密碼/2FA/登入裝置)桌面自己在這兩個位置也是全部
+   * 統計欄位(舊 $lib/domain/coaches 型別才有，行動版專屬豐富化、後端從未提供)；
+   * R16 Task 2a 起連同桌面一起拿掉寫死的假統計格(授課時數/學員數/年資)。姓名/聯絡
+   * 電話改真送 PATCH /users/me(saveSettings)；職稱/Email/簡介唯讀顯示(契約不支援
+   * 經此寫入這些欄位，同桌面 ProfileTab 的決定)。通知偏好/帳號安全(密碼/2FA/登入裝置)桌面自己在這兩個位置也是全部
    * mock(NotifTab/SecurityTab 皆無對應後端)，鏡射同一決定原樣保留。
    * cInfo 找不到本人資料(coach 為 null，通常是 CoachNotFoundError)時顯示
    * EmptyState，不當機。R16 Task 1b：姓名/聯絡電話即時用本人帳號資料的
@@ -53,25 +51,17 @@
 
   $: cInfo = data?.coach;
 
-  // 編輯欄位：姓名/電話有真實後端 PATCH /users/me 欄位；職稱/Email/簡介後端不支援
-  // 寫入，維持本地編輯、不送出(同桌面 ProfileTab 的決定)——但每次 cInfo 變動(載入
-  // 完成)都要重新帶入真值，不能只在宣告時取一次快照。
+  // 編輯欄位：姓名/電話有真實後端 PATCH /users/me 欄位；職稱/Email/簡介唯讀(同桌面
+  // ProfileTab 的決定)——但每次 cInfo 變動(載入完成)都要重新帶入真值，不能只在宣告時
+  // 取一次快照。
   let name = '';
   let phone = '';
-  let bio = '';
   let saving = false;
   $: if (cInfo) {
     name = cInfo.name;
     phone = cInfo.phone;
-    bio = cInfo.bio;
   }
   $: error = cInfo ? selfAccountEditError({ name, phone }, cInfo) : null;
-
-  const STATS: [string, string][] = [
-    ['312 hr', '授課時數'],
-    ['36 人', '學員數'],
-    ['6 年', '年資']
-  ];
 
   let notif = { parentMsg: true, classRemind: true, attUndone: true, lowAtt: true, weekly: false, sms: false };
   let twoFA = true;
@@ -84,7 +74,7 @@
   ];
   // alarm-clock → clock（registry 未含 alarm-clock）
   const notifRows: [keyof typeof notif, IconName, string, string][] = [
-    ['parentMsg', 'message-circle', '家長訊息通知', '有家長傳送新訊息時即時通知'],
+    ['parentMsg', 'message-circle', '學員訊息通知', '有學員傳送新訊息時即時通知'],
     ['classRemind', 'clock', '課前提醒', '上課前 30 分鐘提醒準備與點名'],
     ['attUndone', 'calendar-check', '點名未完成提醒', '課後尚未點名於 30 分鐘後提醒'],
     ['lowAtt', 'user-x', '學員出席偏低警示', '我的學員出席率低於 75% 通知'],
@@ -147,14 +137,6 @@
               style="width:40px; height:40px; border-radius:11px; border:1.5px solid var(--df-border); background:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;"
             ><Icon name="camera" size={18} color="var(--df-text-light)" /></button>
           </div>
-          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:15px; border-top:1px solid var(--df-border); padding-top:14px;">
-            {#each STATS as [v, l] (l)}
-              <div style="text-align:center;">
-                <div style="font-size:16.5px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">{v}</div>
-                <div style="font-size:11px; color:var(--df-text-light); margin-top:1px;">{l}</div>
-              </div>
-            {/each}
-          </div>
         </div>
 
         <!-- contact info -->
@@ -178,7 +160,7 @@
             </div>
             <div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:5px;">教練簡介</div>
-              <textarea bind:value={bio} rows={3} style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border-strong); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-dark); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6;"></textarea>
+              <textarea value={cInfo.bio} rows={3} disabled style="width:100%; padding:11px 13px; border:1.5px solid var(--df-border); border-radius:9px; font-size:14px; font-family:var(--df-font-body); color:var(--df-text-light); outline:none; resize:vertical; box-sizing:border-box; line-height:1.6; background:var(--df-bg-light);"></textarea>
             </div>
             <div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-bottom:7px;">專長領域</div>

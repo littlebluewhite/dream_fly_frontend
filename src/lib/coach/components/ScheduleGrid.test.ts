@@ -17,8 +17,8 @@ const DAYS_WEEK: SchedDay[] = [
 const ONE_DAY: SchedDay[] = [{ key: 'Sat', zh: '六', date: '5/30', today: true }];
 
 const COURSES: SchedCourse[] = [
-	{ day: 'Sat', start: '09:00', end: '10:00', name: '週末親子班', count: 12, cat: '體操', venue: '主場館' },
-	{ day: 'Mon', start: '09:00', end: '10:00', name: '幼兒體操初階', count: 8, cat: '體操', venue: '主場館' }
+	{ day: 'Sat', start: '09:00', end: '10:00' },
+	{ day: 'Mon', start: '14:00', end: '15:00' }
 ];
 
 describe('ScheduleGrid (prop-driven)', () => {
@@ -32,14 +32,18 @@ describe('ScheduleGrid (prop-driven)', () => {
 
 	it('day-view passes a single day → renders only that day and its courses', () => {
 		const { getByText, queryByText } = render(ScheduleGrid, { days: ONE_DAY, courses: COURSES });
-		// Sat course shows; Mon course is filtered out because Mon isn't in `days`.
-		expect(getByText('週末親子班')).toBeInTheDocument();
-		expect(queryByText('幼兒體操初階')).toBeNull();
+		// Sat slot shows; Mon slot is filtered out because Mon isn't in `days`.
+		expect(getByText('09:00-10:00')).toBeInTheDocument();
+		expect(queryByText('14:00-15:00')).toBeNull();
 	});
 
 	it('respects the courses prop — an empty courses array renders no course blocks', () => {
 		const { queryByText } = render(ScheduleGrid, { days: DAYS_WEEK, courses: [] });
-		expect(queryByText('週末親子班')).toBeNull();
-		expect(queryByText('幼兒體操初階')).toBeNull();
+		expect(queryByText('可授課時段')).toBeNull();
+	});
+
+	it('區塊標籤是字面值「可授課時段」(R16 Task 2a：SchedCourse 只有 day/start/end)', () => {
+		const { getAllByText } = render(ScheduleGrid, { days: DAYS_WEEK, courses: COURSES });
+		expect(getAllByText('可授課時段')).toHaveLength(2);
 	});
 });

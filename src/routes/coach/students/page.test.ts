@@ -3,6 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import StudentsPage from './+page.svelte';
 import type { Student } from '$lib/coach/data';
 import { getStudents } from '$lib/coach/api';
+import { search } from '$lib/coach/stores';
 
 // createCertificate/createReportCard 也在此一併 mock（不執行真呼叫）——
 // CertificateDialog/ReportCardDialog（Task 13）從同一個模組 import，若省略會在
@@ -11,20 +12,19 @@ import { getStudents } from '$lib/coach/api';
 vi.mock('$lib/coach/api', () => ({ getStudents: vi.fn(), createCertificate: vi.fn(), createReportCard: vi.fn() }));
 
 // Task 1(C2 死種子退役):coach/data.ts 的 STUDENTS(值)已退役——改為檔內 inline
-// fixture(2 筆,沿用真實種子 su01(初階)/su04(選手)的欄位值——下方「程度篩選」
-// 測試需要一個非啟蒙 level 被篩掉、一個被篩中,且「啟蒙」篩選需為空集合,同既有
-// 測試前提:真實種子從未出現 level:'啟蒙' 的學員)。
+// fixture(2 筆,沿用真實種子 su01/su04 的欄位值)。
 const STUDENTS: Student[] = [
-	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }], level: '初階', skill: '前滾翻', pct: 80, att: 98 },
-	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }], level: '選手', skill: '空中轉體', pct: 88, att: 99 }
+	{ user_id: 'su01', name: '王宥蓁', initial: '王', color: '#0066CC', cls: '兒童體操初階 B 班', courses: [{ course_id: 'c-jr-b', course_name: '兒童體操初階 B 班', enrolment_id: 'en-su01' }] },
+	{ user_id: 'su04', name: '張家豪', initial: '張', color: '#8B5CF6', cls: '競技選手培訓班', courses: [{ course_id: 'c-elite', course_name: '競技選手培訓班', enrolment_id: 'en-su04' }] }
 ];
 
 beforeEach(() => {
+	search.set('');
 	vi.mocked(getStudents).mockReset();
 	vi.mocked(getStudents).mockResolvedValue({ students: STUDENTS });
 });
 
-/* 我的學員 — KpiCard 3 欄 + 篩選(班級/程度)+ 學員卡片格。資料改由 getStudents()
+/* 我的學員 — KpiCard(學員總數)+ 篩選(班級)+ 學員卡片格。資料改由 getStudents()
  * 接縫載入,三態閘門(loading/error/ready)。 */
 describe('/coach/students (+page)', () => {
 	it('renders the heading count and every student name from STUDENTS', async () => {
@@ -35,35 +35,36 @@ describe('/coach/students (+page)', () => {
 		for (const s of STUDENTS) expect(txt).toContain(s.name);
 	});
 
-	it('renders the average attendance KPI', async () => {
+	it('只留學員總數 KPI:不再有平均出席率/待加強(原本每位學員都被算成出席率低於 75%)', async () => {
 		const { container, findByText } = render(StudentsPage);
 		await findByText(STUDENTS[0].name);
-		const avg = Math.round(STUDENTS.reduce((sum, s) => sum + s.att, 0) / STUDENTS.length);
 		const txt = container.textContent ?? '';
-		expect(txt).toContain(`${avg}%`);
+		expect(txt).toContain('學員總數');
+		expect(txt).not.toContain('平均出席率');
+		expect(txt).not.toContain('待加強');
+		expect(txt).not.toContain('出席率低於 75%');
 	});
 
-	it('a level filter narrows the rendered students', async () => {
-		const { getByText, queryByText, getAllByText, findByText } = render(StudentsPage);
+	it('學員卡不顯示後端沒有的程度/技能評量/出席率,也沒有「查看詳情」示範入口', async () => {
+		const { container, findByText, queryByText } = render(StudentsPage);
 		await findByText(STUDENTS[0].name);
-		// open the 程度 CoachDropdown (defaults to 全部程度) and pick 選手.
-		await fireEvent.click(getByText('全部程度'));
-		const athlete = getAllByText('選手').find((el) => el.closest('button'));
-		expect(athlete).toBeTruthy();
-		await fireEvent.click(athlete!);
-		// 張家豪 is 選手 level; 王宥蓁 is 初階 — filtered out.
-		expect(getByText('張家豪')).toBeInTheDocument();
-		expect(queryByText('王宥蓁')).toBeNull();
+		expect(queryByText('查看詳情')).toBeNull();
+		expect(queryByText('全部程度')).toBeNull();
+		expect(container.textContent ?? '').not.toContain('%');
 	});
 
-	it('shows the existing empty state when a filter matches zero students', async () => {
-		// 啟蒙 is a valid level option but no seed student currently holds it.
-		const { getByText, getAllByText, findByText } = render(StudentsPage);
+	it('同名學員各自渲染一張卡(列表 key 是 user_id,不是姓名)', async () => {
+		const twin: Student = { ...STUDENTS[0], user_id: 'su99' };
+		vi.mocked(getStudents).mockResolvedValue({ students: [STUDENTS[0], twin] });
+		const { findAllByText } = render(StudentsPage);
+		expect(await findAllByText(STUDENTS[0].name)).toHaveLength(2);
+	});
+
+	it('shows the existing empty state when the search matches zero students', async () => {
+		const { getByText, findByText } = render(StudentsPage);
 		await findByText(STUDENTS[0].name);
-		await fireEvent.click(getByText('全部程度'));
-		const beginner = getAllByText('啟蒙').find((el) => el.closest('button'));
-		await fireEvent.click(beginner!);
-		expect(getByText('找不到符合的學員')).toBeInTheDocument();
+		search.set('___no-such-student___');
+		expect(await findByText('找不到符合的學員')).toBeInTheDocument();
 	});
 });
 

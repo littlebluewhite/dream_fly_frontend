@@ -60,6 +60,17 @@ describe('mobile-admin/coach/csettings 頁', () => {
 		expect(screen.getByDisplayValue('test.coach@dreamfly.tw')).toBeDisabled();
 	});
 
+	it('簡介唯讀顯示;寫死的授課時數/學員數/年資統計拿掉;通知文案改「學員訊息通知」(R16 Task 2a)', async () => {
+		const { container } = render(CsettingsPage);
+		await screen.findByDisplayValue('測試教練');
+		expect(screen.getByDisplayValue('測試簡介')).toBeDisabled();
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain('312 hr');
+		expect(txt).not.toContain('授課時數');
+		expect(txt).not.toContain('家長訊息通知');
+		expect(txt).toContain('學員訊息通知');
+	});
+
 	it('儲存變更真打 PATCH /users/me(saveSettings)，只送改過的欄位', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ ...settingsRoutes(), 'PATCH /users/me': { ...ME, name: '改名教練' } })

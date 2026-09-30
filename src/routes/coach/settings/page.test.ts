@@ -16,15 +16,12 @@ const FIXTURE_COACH: Coach = {
 	name: '測試教練',
 	display: '測試教練',
 	full: '測試教練 教練',
-	en: 'Test Coach',
 	initial: '測',
 	role: '測試職稱',
 	id: 'DF-TEST-000',
 	email: 'test.coach@example.com',
 	phone: '0900-000-000',
-	gender: '不透露',
 	birth: '2000-01-01',
-	emergency: '測試聯絡人 / 0900-000-001',
 	bio: '測試用個人簡介文字。',
 	chips: ['測試標籤一', '測試標籤二'],
 	registered: '2020-01-01',
@@ -43,8 +40,17 @@ describe('/coach/settings (+page)', () => {
 		const txt = container.textContent ?? '';
 		expect(txt).toContain(FIXTURE_COACH.full);
 		expect(txt).toContain(FIXTURE_COACH.role);
-		expect(txt).toContain(FIXTURE_COACH.id);
 		expect(txt).toContain(FIXTURE_COACH.chips[0]);
+	});
+
+	it('頁首職銜列只顯示 role(不再接「 · 教練 uuid」);寫死的授課時數/學員數/年資統計拿掉(R16 Task 2a)', async () => {
+		const { container, findByText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+		const txt = container.textContent ?? '';
+		expect(txt).not.toContain(FIXTURE_COACH.id);
+		expect(txt).not.toContain('312 hr');
+		expect(txt).not.toContain('授課時數');
+		expect(txt).not.toContain('年資');
 	});
 
 	it('passes coach through to ProfileTab (預覽卡顯示 fixture 的 email/簡介)', async () => {
@@ -53,6 +59,17 @@ describe('/coach/settings (+page)', () => {
 		const txt = container.textContent ?? '';
 		expect(txt).toContain(FIXTURE_COACH.email);
 		expect(txt).toContain(FIXTURE_COACH.bio);
+	});
+
+	it('ProfileTab:email/生日唯讀(生日讀 payload 的真值),性別/緊急聯絡人/簡介輸入框拿掉(R16 Task 2a)', async () => {
+		const { findByText, getByDisplayValue, queryByLabelText } = render(SettingsPage);
+		await findByText(FIXTURE_COACH.full);
+		expect(getByDisplayValue(FIXTURE_COACH.email)).toBeDisabled();
+		expect(getByDisplayValue(FIXTURE_COACH.birth)).toBeDisabled();
+		expect(getByDisplayValue(FIXTURE_COACH.name)).not.toBeDisabled();
+		expect(queryByLabelText('性別')).toBeNull();
+		expect(queryByLabelText('緊急聯絡人')).toBeNull();
+		expect(queryByLabelText('個人簡介')).toBeNull();
 	});
 
 	it('CoachAvatar 顯示 payload 的 initial,而非退回 seed 預設值(審查回修)', async () => {

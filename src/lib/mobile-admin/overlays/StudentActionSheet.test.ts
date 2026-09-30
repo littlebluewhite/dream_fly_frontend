@@ -27,11 +27,7 @@ const STUDENT_ONE_COURSE: Student = {
 	initial: '王',
 	color: '#000',
 	cls: '兒童體操初階 B 班',
-	courses: [{ course_id: 'c1', course_name: '兒童體操初階 B 班', enrolment_id: 'en-1' }],
-	level: '初階',
-	skill: '前滾翻',
-	pct: 80,
-	att: 90
+	courses: [{ course_id: 'c1', course_name: '兒童體操初階 B 班', enrolment_id: 'en-1' }]
 };
 
 describe('StudentActionSheet — 發證書 (POST /certificates)', () => {

@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 教練端 dashboard class row (views_dashboard.jsx:120-138). ACTION-FREE: blue
-   * time block (start + level) + name + room/count meta + status badge; the
+   * time block (start + end；R16 Task 2a 起課程等級欄位拿掉) + name + room/count meta + status badge; the
    * whole row is clickable via the optional `onClick` (dashboard → /coach/today).
    * The today view uses a SEPARATE TodayClassCard with action buttons — do not
    * confuse the two. */
@@ -25,7 +25,7 @@
     style="background:var(--df-primary);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;align-items:center;flex:none"
   >
     <span style="font-size:16px;font-weight:800;color:#fff;font-family:var(--df-font-mono)">{c.start}</span>
-    <span style="font-size:11px;color:rgba(255,255,255,0.8)">{c.level}</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.8);font-family:var(--df-font-mono)">{c.end}</span>
   </div>
   <div style="flex:1;min-width:0">
     <div style="font-size:15px;font-weight:600;color:var(--df-text-dark)">{c.name}</div>

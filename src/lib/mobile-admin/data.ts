@@ -16,7 +16,7 @@ export type Tone = [string, string];
  * is unchanged. */
 
 // 對 `$lib/domain` 的純轉手 re-export 已全數退役(C4 批3);本節其下唯一還在轉手的
-// 是來源為 coach surface 的邊界 seam(LEVEL_TINT/Student,見卡 3 段落與 ADR 0014 §1)。
+// 是來源為 coach surface 的邊界 seam(Student,見卡 3 段落與 ADR 0014 §1)。
 // C4 批3(facade 純轉手退役):COACHES(值，test-only 消費 + stores.ts/stores.test.ts
 // 內部種子值)/type Coach 退役——消費端改直取 $lib/domain/coaches。VENUES/TICKETS
 // 值早於本批已退役(見 api.ts getVenues/getTickets 薄委派 re-export；唯一消費者
@@ -33,13 +33,12 @@ export type Tone = [string, string];
 // 消費者(StatusBadgeM.svelte 改直取 $lib/domain/members),退役對外 export——
 // `export type {…} from` 不引入本地作用域,本檔下面的 MEMBER_ACCOUNT_STATUS(Record
 // 鍵型別)仍要用到這個型別,改由下面 base-array import 區塊的 import type 供本檔內部使用。
-// 卡 3：LEVEL_TINT 查表 + Student 型別經本 seam 轉手——單一複本留在
+// 卡 3：Student 型別經本 seam 轉手(R16 Task 2a:LEVEL_TINT 查表隨後端沒有的
+// Student.level 退役，不再轉手)——單一複本留在
 // $lib/coach/data（單複本無分歧，搬 domain 只是搬家，ADR 0013 case-甲 同款否決），
 // mobile-admin 的學員頁/StudentActionSheet 一律經這裡取用，不再直取 coach surface
-// （api.ts 是 seam 本體，其對 coach/data 的型別 import 不在此列）。StudentLevel
-// 無 mobile-admin 消費者，不轉出——型別 re-export 轉譯期擦除，零消費者的轉出是
-// vitest/check 都護不住的死出口（codex R1）。
-export { LEVEL_TINT, type Student } from '$lib/coach/data';
+// （api.ts 是 seam 本體，其對 coach/data 的型別 import 不在此列）。
+export type { Student } from '$lib/coach/data';
 
 // R15(候選 F-3，誠實開機)：CLASSES/MEMBERS/ORDERS 三個 .map 衍生 builder 已退役——
 // members/classes/orders store 改為誠實開機(`[]`)，值改由真 GET /courses、/users、

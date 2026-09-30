@@ -107,7 +107,6 @@
   const tabs = [
     { k: '全部', label: '全部' },
     { k: '未讀', label: '未讀' },
-    { k: '家長', label: '家長' },
   ];
 
   // thread header 三顆動作 icon——原模板內聯 each 陣列 hoist 至此並標型別。
@@ -197,7 +196,7 @@
         <!-- faux search field (static) -->
         <div style="display:flex;align-items:center;gap:8px;background:var(--df-bg-light);border:1px solid var(--df-border);border-radius:8px;padding:0 12px;height:36px">
           <Icon name="search" size={15} color="var(--df-text-muted)" />
-          <span style="font-size:12.5px;color:var(--df-text-muted)">搜尋家長或學員</span>
+          <span style="font-size:12.5px;color:var(--df-text-muted)">搜尋學員</span>
         </div>
         <!-- filter tabs -->
         <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
@@ -233,7 +232,6 @@
         <span style="width:40px;height:40px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:15.5px;font-weight:700;color:var(--df-ink)">{cur.name}</div>
-          <div style="font-size:12.5px;color:var(--df-text-light)">{cur.kind}</div>
         </div>
         {#each threadActionIcons as ic}
           <button
@@ -274,7 +272,6 @@
           <span style="width:38px;height:38px;border-radius:50%;background:{cur.color};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex:none">{cur.initial}</span>
           <div>
             <div style="font-size:14px;font-weight:700;color:var(--df-text-dark)">{cur.name}</div>
-            <div style="font-size:12px;color:var(--df-text-light)">{cur.kind}</div>
           </div>
         </div>
       </InfoSection>

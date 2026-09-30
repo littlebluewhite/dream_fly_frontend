@@ -3,10 +3,11 @@
    * Faithful port of docs/design/coach/views_students.jsx L156-196, now
    * prop-driven: `days` drives the columns (1 for 日 view, 7 for 週), `courses`
    * is the live filtered list. `hours` defaults to SCHED_HOURS so the page need
-   * not pass it. */
-  import { SCHED_HOURS, CAT_COLOR } from '$lib/coach/data';
+   * not pass it.
+   * R16 Task 2a：courses 是教練「可授課時段」(只有 day/start/end)，區塊標籤是字面值、
+   * 單一品牌色；課名/人數/分類色與點擊 toast 隨假欄位拿掉。 */
+  import { SCHED_HOURS } from '$lib/coach/data';
   import type { SchedDay, SchedCourse } from '$lib/coach/data';
-  import { toasts } from '$lib/coach/stores';
   import { toY, dur, ROW_H } from '$lib/coach/schedule-grid';
 
   export let days: SchedDay[];
@@ -71,20 +72,14 @@
       {/each}
 
       {#each dayCourses as c, i (i)}
-        {@const col = CAT_COLOR[c.cat]}
-        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <div
-          on:click={() => toasts.notify('info', c.name, c.start + '–' + c.end + ' · ' + c.count + ' 位學員')}
-          style="position:absolute;top:{toY(c.start) + 2}px;left:4px;right:4px;height:{dur(c.start, c.end) - 4}px;background:{col.bg};border-left:3px solid {col.bar};border-radius:7px;padding:6px 8px;cursor:pointer;overflow:hidden"
+          style="position:absolute;top:{toY(c.start) + 2}px;left:4px;right:4px;height:{dur(c.start, c.end) - 4}px;background:var(--df-primary-bg);border-left:3px solid var(--df-primary);border-radius:7px;padding:6px 8px;overflow:hidden"
         >
-          <div style="font-size:12px;font-weight:700;color:{col.fg};line-height:1.25">{c.name}</div>
+          <div style="font-size:12px;font-weight:700;color:var(--df-primary-dark);line-height:1.25">可授課時段</div>
           <div
-            style="font-size:10.5px;color:{col.fg};opacity:0.85;margin-top:2px;font-family:var(--df-font-mono)"
+            style="font-size:10.5px;color:var(--df-primary-dark);opacity:0.85;margin-top:2px;font-family:var(--df-font-mono)"
           >
             {c.start}-{c.end}
-          </div>
-          <div style="font-size:10.5px;color:{col.fg};opacity:0.85;margin-top:1px">
-            {c.count} 位學員
           </div>
         </div>
       {/each}

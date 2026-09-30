@@ -18,13 +18,11 @@ import type { ThreadData, StudentsData } from './api';
 
 const STUDENT_1: Student = {
 	user_id: 'su1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班',
-	courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }],
-	level: '初階', skill: '', pct: 0, att: 0
+	courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }]
 };
 const STUDENT_2: Student = {
 	user_id: 'su2', name: '林小美', initial: '林', color: '#0066CC', cls: '幼兒體操啟蒙班',
-	courses: [{ course_id: 'c2', course_name: '幼兒體操啟蒙班', enrolment_id: 'en2' }],
-	level: '啟蒙', skill: '', pct: 0, att: 0
+	courses: [{ course_id: 'c2', course_name: '幼兒體操啟蒙班', enrolment_id: 'en2' }]
 };
 
 const THREAD_C1: ThreadMsg[] = [
@@ -34,7 +32,7 @@ const THREAD_C1: ThreadMsg[] = [
 const THREAD_C2: ThreadMsg[] = [{ who: 'them', text: '謝謝老師', time: '2026-07-04 10:00' }];
 
 const NEW_CONVO: Conversation = {
-	id: 'c9', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+	id: 'c9', name: '王小明', initial: '王', color: '#0066CC',
 	time: '', badge: 0, preview: '尚無訊息'
 };
 

@@ -12,7 +12,9 @@
    *     前者純本地假調整、後者無資料可用 — 一併移除，換成桌面 StudentCard 真正
    *     提供的兩個動作：寫評語(POST /report-cards)、發證書(POST /certificates)
    *     （Task 13，integration-contract.md §3.22）。原本的 StudentSkillsSheet 改名
-   *     為 StudentActionSheet，改渲染這兩個真表單。 */
+   *     為 StudentActionSheet，改渲染這兩個真表單。
+   *  3. R16 Task 2a：程度 chip、熟練度 MiniBar 與出席率隨後端沒有的 level/skill/pct/att
+   *     欄位一起拿掉；搜尋只比對姓名與班級。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -20,13 +22,11 @@
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
-  import MiniBar from '$lib/mobile-admin/components/MiniBar.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getStudents, type StudentsData as MStudentsData } from '$lib/coach/api';
-  // 卡 3：LEVEL_TINT/Student 改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
-  import { LEVEL_TINT } from '$lib/mobile-admin/data';
+  // 卡 3：Student 改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
   import type { Student } from '$lib/mobile-admin/data';
 
   let students: Student[] = [];
@@ -45,7 +45,7 @@
   const openCertificate = (student: Student) => overlay.sheet('studentAction', { student, mode: 'certificate' });
 
   $: list = q
-    ? students.filter((m) => (m.name + m.cls + m.skill).toLowerCase().includes(q.toLowerCase()))
+    ? students.filter((m) => (m.name + m.cls).toLowerCase().includes(q.toLowerCase()))
     : students;
 </script>
 
@@ -70,7 +70,6 @@
         <MEmpty icon="search-x" title="找不到符合的學員" />
       {:else}
         {#each list as m (m.user_id)}
-          {@const tint = LEVEL_TINT[m.level]}
           <div style="background:#fff; border:1px solid var(--df-border); border-radius:16px; box-shadow:var(--df-shadow-card); padding:16px;">
             <div style="display:flex; align-items:center; gap:12px; margin-bottom:13px;">
               <Avatar name={m.initial} size="md" color={m.color} />
@@ -78,15 +77,6 @@
                 <div style="font-size:15.5px; font-weight:700; color:var(--df-ink);">{m.name}</div>
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px;">{m.cls}</div>
               </div>
-              <span style="background:{tint.bg}; color:{tint.fg}; font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px; flex:none;">{m.level}</span>
-            </div>
-            <div style="margin-bottom:13px;">
-              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px;"><span style="color:var(--df-text-light);">{m.skill}熟練度</span><span style="font-weight:700; color:var(--df-text-dark);">{m.pct}%</span></div>
-              <MiniBar value={m.pct} tone={m.pct >= 85 ? 'success' : 'primary'} height={6} />
-            </div>
-            <div style="display:flex; align-items:center; gap:7px; margin-bottom:13px; font-size:12px; color:var(--df-text-light);">
-              <Icon name="calendar-check" size={14} color={m.att < 75 ? 'var(--df-error)' : 'var(--df-success)'} />
-              出席率 <span style="font-weight:700; color:{m.att < 75 ? 'var(--df-error)' : 'var(--df-text-dark)'};">{m.att}%</span>
             </div>
             <div style="display:flex; gap:8px;">
               <button

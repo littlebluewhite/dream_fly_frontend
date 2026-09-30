@@ -5,9 +5,10 @@
    *
    * Data arrives async via getStudents()(真實 API 接縫，Task 10：GET /coaches/me/
    * students): onMount loads the roster into a three-state gate (loading/error/
-   * ready); `students` is the local working copy the filters read from. */
+   * ready); `students` is the local working copy the filters read from.
+   * R16 Task 2a：程度篩選、平均出席率/待加強 KPI 隨後端沒有的 level/skill/att 欄位
+   * 拿掉(待加強原本把每位學員都算成出席率 0%)；列表 key 改用 user_id(同名學員不撞)。 */
   import { onMount } from 'svelte';
-  import { LEVEL_TINT } from '$lib/coach/data';
   import type { Student } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getStudents } from '$lib/coach/api';
@@ -55,26 +56,17 @@
 
   /* ---- filter state ---- */
   let cls = '全部班級';
-  let lvl = '全部程度';
 
   /* ---- dropdown options ---- */
   $: distinctCls = ['全部班級', ...Array.from(new Set(students.map((s) => s.cls)))];
-  const lvlOptions = ['全部程度', '啟蒙', '初階', '中階', '選手'];
 
   /* ---- filtered list ---- */
   $: filtered = students.filter((s) => {
     if (cls !== '全部班級' && s.cls !== cls) return false;
-    if (lvl !== '全部程度' && s.level !== lvl) return false;
     const q = $search.trim().toLowerCase();
-    if (q && !s.name.toLowerCase().includes(q) && !s.skill.toLowerCase().includes(q)) return false;
+    if (q && !s.name.toLowerCase().includes(q)) return false;
     return true;
   });
-
-  /* ---- KPI values ---- */
-  $: avgAtt = students.length
-    ? Math.round(students.reduce((sum, s) => sum + s.att, 0) / students.length)
-    : 0;
-  $: lowAttCount = students.filter((s) => s.att < 75).length;
 </script>
 
 <LoadGate {gate}>
@@ -82,12 +74,9 @@
     <div><Skeleton w={140} h={26} r={6} /></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <Skeleton w={160} h={38} r={8} />
-      <Skeleton w={160} h={38} r={8} />
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
-      {#each [0, 1, 2] as i (i)}
-        <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
-      {/each}
+      <SkelCard><Skeleton w="100%" h={80} r={10} /></SkelCard>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
       {#each [0, 1, 2] as i (i)}
@@ -113,32 +102,17 @@
       options={distinctCls.map((s) => ({ key: s, label: s }))}
       onChange={(v) => (cls = v)}
     />
-    <CoachDropdown
-      icon="target"
-      value={lvl}
-      options={lvlOptions.map((s) => ({ key: s, label: s }))}
-      onChange={(v) => (lvl = v)}
-    />
   </div>
 
-  <!-- 3. KPI grid (3 columns) -->
+  <!-- 3. KPI grid -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
     <KpiCard label="學員總數" value={students.length} icon="users" iconColor="var(--df-primary)" />
-    <KpiCard label="平均出席率" value="{avgAtt}%" icon="calendar-check" iconColor="var(--df-success)" />
-    <KpiCard
-      label="待加強"
-      value={lowAttCount}
-      icon="triangle-alert"
-      iconColor="var(--df-error)"
-      sub={lowAttCount > 0 ? '出席率低於 75%' : '無需關注'}
-      subTone={lowAttCount > 0 ? 'var(--df-error)' : 'var(--df-success)'}
-    />
   </div>
 
   <!-- 4. Student card grid -->
   {#if filtered.length > 0}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-      {#each filtered as s (s.name)}
+      {#each filtered as s (s.user_id)}
         <StudentCard {s} onReportCard={openReportCard} onCertificate={openCertificate} />
       {/each}
     </div>

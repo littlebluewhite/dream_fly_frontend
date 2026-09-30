@@ -4,25 +4,19 @@ import { filterConversations, pickSelection, applyCreatedConversation } from './
 
 /* Pure filter/selection derivation for coach/messages（ported from +page.svelte's
  * reactive chain, §see conversations-filter.ts header）. Exercised against a small
- * hand-built fixture set covering the tab/badge/kind boundaries the source
+ * hand-built fixture set covering the tab/badge boundaries the source
  * predicates branch on. */
 const BASE: Conversation[] = [
-	{ id: 'c1', name: '王媽媽', initial: '王', color: '#0066CC', kind: '家長', time: '09:42', badge: 2, preview: '小明明天可以調課嗎' },
-	{ id: 'c2', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '家長', time: '昨天', badge: 0, preview: '謝謝老師這學期的指導' },
-	{ id: 'c3', name: '林同學', initial: '林', color: '#10B981', kind: '學員', time: '08:55', preview: '教練我這週想請假' },
-	{ id: 'c4', name: '競技選手班 群組', initial: '群', color: '#8B5CF6', kind: '群組', time: '09:20', badge: 5, preview: '場地確定了嗎' }
+	{ id: 'c1', name: '王媽媽', initial: '王', color: '#0066CC', time: '09:42', badge: 2, preview: '小明明天可以調課嗎' },
+	{ id: 'c2', name: '陳爸爸', initial: '陳', color: '#EC4899', time: '昨天', badge: 0, preview: '謝謝老師這學期的指導' },
+	{ id: 'c3', name: '林同學', initial: '林', color: '#10B981', time: '08:55', preview: '教練我這週想請假' },
+	{ id: 'c4', name: '競技選手班 群組', initial: '群', color: '#8B5CF6', time: '09:20', badge: 5, preview: '場地確定了嗎' }
 ];
 
 describe('filterConversations — tab', () => {
 	it("tab='全部'（或省略）不依 tab 排除，回傳全數", () => {
 		expect(filterConversations(BASE, { tab: '全部' })).toHaveLength(BASE.length);
 		expect(filterConversations(BASE)).toHaveLength(BASE.length);
-	});
-
-	it("tab='家長' 只留 kind==='家長'", () => {
-		const out = filterConversations(BASE, { tab: '家長' });
-		expect(out.map((c) => c.id)).toEqual(['c1', 'c2']);
-		expect(out.every((c) => c.kind === '家長')).toBe(true);
 	});
 });
 
@@ -66,7 +60,7 @@ describe('filterConversations — 搜尋（trim + lowercase 正規化收進模�
 	it('name+preview 跨界串接釘：query 恰好橫跨兩欄邊界仍會命中（現頁 `c.name + c.preview` 無分隔符直接串接的現行語意，逐字保留，非本次修正範圍）', () => {
 		// name 尾字 + preview 首字拼出 query，但個別欄位皆不含 query。
 		const boundary: Conversation = {
-			id: 'b1', name: '陳', initial: '陳', color: '#000', kind: '學員', time: '',
+			id: 'b1', name: '陳', initial: '陳', color: '#000', time: '',
 			preview: '好，收到'
 		};
 		expect(boundary.name.toLowerCase().includes('陳好')).toBe(false);
@@ -97,7 +91,7 @@ describe('pickSelection', () => {
 
 describe('applyCreatedConversation', () => {
 	const NEW: Conversation = {
-		id: 'c9', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+		id: 'c9', name: '王小明', initial: '王', color: '#0066CC',
 		time: '', badge: 0, preview: '尚無訊息'
 	};
 

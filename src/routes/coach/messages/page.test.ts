@@ -37,11 +37,11 @@ vi.mock('$lib/coach/api', () => ({
 
 const CONVOS = [
 	{
-		id: 'c1', name: '王媽媽', initial: '王', color: '#0066CC', kind: '會員',
+		id: 'c1', name: '王媽媽', initial: '王', color: '#0066CC',
 		time: '09:42', badge: 2, preview: '老師您好，小明明天的課可以調整時間嗎？'
 	},
 	{
-		id: 'c2', name: '陳爸爸', initial: '陳', color: '#EC4899', kind: '會員',
+		id: 'c2', name: '陳爸爸', initial: '陳', color: '#EC4899',
 		time: '昨天', badge: 3, preview: '謝謝老師這學期的細心指導！'
 	}
 ];
@@ -54,13 +54,13 @@ const THREAD_C1 = [
 /* 撰寫新對話 picker 名冊(getStudents)——陳爸爸 對應既有對話 c2 的 peer，供 get-or-create
  * 合併情境使用。 */
 const MY_STUDENTS = [
-	{ user_id: 'su1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }], level: '初階' as const, skill: '', pct: 0, att: 0 },
-	{ user_id: 'su2', name: '林小美', initial: '林', color: '#0066CC', cls: '幼兒體操啟蒙班', courses: [{ course_id: 'c2', course_name: '幼兒體操啟蒙班', enrolment_id: 'en2' }], level: '初階' as const, skill: '', pct: 0, att: 0 },
-	{ user_id: 'su3', name: '陳爸爸', initial: '陳', color: '#0066CC', cls: '成人體適能班', courses: [{ course_id: 'c3', course_name: '成人體適能班', enrolment_id: 'en3' }], level: '初階' as const, skill: '', pct: 0, att: 0 }
+	{ user_id: 'su1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班', courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }] },
+	{ user_id: 'su2', name: '林小美', initial: '林', color: '#0066CC', cls: '幼兒體操啟蒙班', courses: [{ course_id: 'c2', course_name: '幼兒體操啟蒙班', enrolment_id: 'en2' }] },
+	{ user_id: 'su3', name: '陳爸爸', initial: '陳', color: '#0066CC', cls: '成人體適能班', courses: [{ course_id: 'c3', course_name: '成人體適能班', enrolment_id: 'en3' }] }
 ];
 
 const NEW_CONVO = {
-	id: 'c9', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+	id: 'c9', name: '王小明', initial: '王', color: '#0066CC',
 	time: '', badge: 0, preview: '尚無訊息'
 };
 
@@ -230,6 +230,17 @@ describe('/coach/messages — SLA 死概念移除（R11 R1：真資料下 urgent
 	});
 });
 
+describe('/coach/messages — 對話種類假欄位移除（R16 Task 2a：會員即學員本人，不分家長）', () => {
+	it('不再渲染「家長」分頁與對話種類標籤；搜尋提示改為「搜尋學員」', async () => {
+		const { findByText, queryByText, container } = render(MessagesPage);
+		await findByText('陳爸爸');
+		expect(queryByText('家長')).not.toBeInTheDocument();
+		expect(queryByText('會員')).not.toBeInTheDocument();
+		expect(queryByText('搜尋學員')).toBeInTheDocument();
+		expect(container.textContent ?? '').not.toContain('搜尋家長');
+	});
+});
+
 describe('/coach/messages (+page) — 撰寫新對話（getStudents 名冊 + POST /conversations）', () => {
 	it('撰寫 opens a dialog listing 我的學員（getStudents 名冊，取代虛構 MSG_DIRECTORY）', async () => {
 		const { findByText, getByText, findByLabelText } = render(MessagesPage);
@@ -259,7 +270,7 @@ describe('/coach/messages (+page) — 撰寫新對話（getStudents 名冊 + POS
 
 	it('get-or-create 回傳既有對話 id → 選中既有列，不重複插入', async () => {
 		vi.mocked(createConversation).mockResolvedValue({
-			id: 'c2', name: '陳爸爸', initial: '陳', color: '#0066CC', kind: '會員',
+			id: 'c2', name: '陳爸爸', initial: '陳', color: '#0066CC',
 			time: '昨天', badge: 0, preview: '尚無訊息'
 		});
 		const { findByText, getByText, getAllByText, findByLabelText } = render(MessagesPage);

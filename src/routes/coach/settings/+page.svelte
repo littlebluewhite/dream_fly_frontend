@@ -43,13 +43,6 @@
   onMount(() => {
     gate.load();
   });
-
-  // Stats — sensible values derived from data / mock
-  const STATS = [
-    { label: '授課時數', value: '312 hr' },
-    { label: '學員數',   value: '36 人' },
-    { label: '年資',     value: '6 年' }
-  ];
 </script>
 
 <LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
@@ -74,29 +67,13 @@
           {data.coach.full}
         </div>
         <div style="font-size:var(--df-text-base);color:var(--df-text-light);margin-top:4px">
-          {data.coach.role} · {data.coach.id}
+          {data.coach.role}
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
           {#each data.coach.chips as chip}
             <CoachTag tone="accent">{chip}</CoachTag>
           {/each}
         </div>
-      </div>
-
-      <!-- Stats row -->
-      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
-        {#each STATS as stat}
-          <div style="text-align:center;min-width:64px">
-            <div
-              style="font-size:22px;font-weight:800;color:var(--df-primary);font-family:var(--df-font-body);letter-spacing:-0.5px"
-            >
-              {stat.value}
-            </div>
-            <div style="font-size:12px;color:var(--df-text-light);margin-top:2px">
-              {stat.label}
-            </div>
-          </div>
-        {/each}
       </div>
     </div>
   </Card>

@@ -43,6 +43,7 @@ const ME = {
 	email: 'lin@dreamfly.com.tw',
 	name: '林雅婷',
 	phone: '0912-000-111',
+	birth_date: '1990-05-01',
 	last_login: '2026-07-04T08:42:00Z',
 	created_at: '2019-08-15T00:00:00Z'
 };
@@ -55,9 +56,9 @@ const MY_COACH = {
 const OTHER_COACH = { ...MY_COACH, id: 'co2', user_id: 'u2', title: '跑酷教練' };
 
 const MAPPED_COACH = {
-	name: '林雅婷', display: '林教練', full: '林雅婷 教練', en: '', initial: '林',
+	name: '林雅婷', display: '林教練', full: '林雅婷 教練', initial: '林',
 	role: '資深體操教練', id: 'co1', email: 'lin@dreamfly.com.tw', phone: '0912-000-111',
-	gender: '', birth: '', emergency: '', bio: '專注幼兒體操教學。',
+	birth: '1990-05-01', bio: '專注幼兒體操教學。',
 	chips: ['國家級教練證'], registered: '2019-08-15', lastLogin: '2026-07-04 08:42'
 };
 
@@ -157,7 +158,7 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 		attendance_rate_30d: 0.8
 	};
 
-	it('coach 由教練身分(GET /users/me + GET /coaches)對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room 用 venue(null → 「—」)，level/cat 無對應欄位一律預設值(P2)；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
+	it('coach 由教練身分(GET /users/me + GET /coaches)對映；todayClasses 直接映射 GET /sessions/today(不再前端過濾)；room 用 venue(null → 「—」)，不再捏造課程等級/分類；status 依目前時間推導；待點名/出席率/待回覆改讀 GET /reports/coach(§3.24)；conversations 併入真 getConversations()(mapConversation 映射)', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date(2026, 6, 4, 9, 30, 0)); // 09:30 落在 s1 場次(09:00–10:00)中
 		try {
@@ -176,14 +177,14 @@ describe('getDashboard — GET /sessions/today（§3.18；後端已只回自己�
 			const d = await getDashboard();
 
 			expect(d.todayClasses).toEqual([
-				{ id: 's1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: 'C 軟墊區', count: 9, level: '基礎', cat: '體操', status: 'live' },
-				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '—', count: 8, level: '基礎', cat: '體操', status: 'wait' }
+				{ id: 's1', start: '09:00', end: '10:00', name: '兒童體操初級班', room: 'C 軟墊區', count: 9, status: 'live' },
+				{ id: 's2', start: '10:30', end: '11:30', name: '青少年體操中級班', room: '—', count: 8, status: 'wait' }
 			]);
 			expect(d.coach).toEqual(MAPPED_COACH);
 			expect(d.todayLabel).toBe(todayLabel(new Date(2026, 6, 4, 9, 30, 0)));
 			// conversations 由 getDashboard() 併入真 getConversations() —— mapConversation 映射結果。
 			expect(d.conversations).toEqual([
-				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員', time: '2026-07-05 09:42', badge: 2, preview: '老師您好' }
+				{ id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', time: '2026-07-05 09:42', badge: 2, preview: '老師您好' }
 			]);
 			expect(d.pendingClasses).toBe('1 班');
 			expect(d.attendanceRate).toBe('80%');
@@ -357,12 +358,11 @@ describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 		const sat = d.courses.find((c) => c.day === 'Sat')!;
 		expect(sat.start).toBe('14:00');
 		expect(sat.end).toBe('15:30');
-		// 無對應欄位的一律誠實預設值(P2)
-		for (const c of d.courses) {
-			expect(c.count).toBe(0);
-			expect(c.cat).toBe('體操');
-			expect(c.venue).toBe('主場館');
-		}
+		// R16 Task 2a:可授課時段只映射 day/start/end,不再捏造課名/人數/分類/場館
+		expect(d.courses).toEqual([
+			{ day: 'Sun', start: '09:00', end: '10:00' },
+			{ day: 'Sat', start: '14:00', end: '15:30' }
+		]);
 	});
 
 	it('找不到教練檔案時拋出 CoachNotFoundError', async () => {
@@ -374,7 +374,7 @@ describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 });
 
 describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀', () => {
-	it('name/display/full/initial 由 user.name 推導；role/bio/chips 來自 ApiCoach；id 改用教練 uuid；gender/birth/emergency 無對應欄位(P2)', async () => {
+	it('name/display/full/initial 由 user.name 推導；role/bio/chips 來自 ApiCoach；id 改用教練 uuid；birth 讀本人帳號資料的真實生日(GET /users/me birth_date)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] })
 		);
@@ -589,14 +589,14 @@ describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
 
 /* Task 12：訊息中心（GET /conversations/me + GET .../messages + POST .../messages +
  * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——CONTEXT.md 明定
- * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故 kind 一律映射'會員'。 */
+ * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故不帶對話種類欄位(R16 Task 2a)。 */
 const ME2 = {
 	id: 'u9', email: 'chen@dreamfly.com.tw', name: '陳雅婷',
 	phone: null, last_login: null, created_at: '2020-01-01T00:00:00Z'
 };
 
 describe('getConversations — GET /conversations/me（§3.21，純陣列不分頁）', () => {
-	it('映射 peer_name/last_message_body/last_message_at/unread_count；kind 一律"會員"；保留伺服器排序', async () => {
+	it('映射 peer_name/last_message_body/last_message_at/unread_count；不帶 kind；保留伺服器排序', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /conversations/me': [
@@ -610,11 +610,11 @@ describe('getConversations — GET /conversations/me（§3.21，純陣列不分�
 
 		expect(d.conversations).toEqual([
 			{
-				id: 'c1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+				id: 'c1', name: '王小明', initial: '王', color: '#0066CC',
 				time: '2026-07-05 09:42', badge: 2, preview: '老師您好'
 			},
 			{
-				id: 'c2', name: '陳小華', initial: '陳', color: '#0066CC', kind: '會員',
+				id: 'c2', name: '陳小華', initial: '陳', color: '#0066CC',
 				time: '', badge: 0, preview: '尚無訊息'
 			}
 		]);
@@ -761,7 +761,7 @@ describe('createConversation — POST /conversations（§3.21，get-or-create）
 			body: JSON.stringify({ user_id: 'u9' })
 		});
 		expect(convo).toEqual({
-			id: 'cv1', name: '王小明', initial: '王', color: '#0066CC', kind: '會員',
+			id: 'cv1', name: '王小明', initial: '王', color: '#0066CC',
 			time: '', badge: 0, preview: '尚無訊息'
 		});
 	});
@@ -796,7 +796,7 @@ describe('createConversation — POST /conversations（§3.21，get-or-create）
 });
 
 describe('getStudents — GET /coaches/me/students（§3.19）', () => {
-	it('映射為 Student[]；user_id 穿透(訊息中心撰寫新對話 POST /conversations 需要)；courses 結構化穿透(含 enrolment_id，寫評語 POST /report-cards 需要)；cls 由 courses 陣列以「、」串接；level/skill/pct/att 皆為誠實預設值(P2)', async () => {
+	it('映射為 Student[]；user_id 穿透(訊息中心撰寫新對話 POST /conversations 需要)；courses 結構化穿透(含 enrolment_id，寫評語 POST /report-cards 需要)；cls 由 courses 陣列以「、」串接；不再捏造程度/技能評量/出席率', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /coaches/me/students': [
@@ -814,16 +814,14 @@ describe('getStudents — GET /coaches/me/students（§3.19）', () => {
 		expect(d.students).toEqual([
 			{
 				user_id: 'u1', name: '王小明', initial: '王', color: '#0066CC', cls: '兒童體操初階班',
-				courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }],
-				level: '初階', skill: '', pct: 0, att: 0
+				courses: [{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en1' }]
 			},
 			{
 				user_id: 'u2', name: '陳小華', initial: '陳', color: '#0066CC', cls: '兒童體操初階班、競技選手班',
 				courses: [
 					{ course_id: 'c1', course_name: '兒童體操初階班', enrolment_id: 'en2' },
 					{ course_id: 'c2', course_name: '競技選手班', enrolment_id: 'en3' }
-				],
-				level: '初階', skill: '', pct: 0, att: 0
+				]
 			}
 		]);
 	});

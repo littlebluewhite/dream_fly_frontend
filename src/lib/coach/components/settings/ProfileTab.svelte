@@ -4,14 +4,15 @@
    * settings/+page.svelte 於 getSettings() ready 後下傳,換後端只動頁面一層。
    * onSaved(C6):儲存成功後把後端回應映射的 Coach 交回頁面,頁首姓名跟著更新。
    * R16 Task 1b:姓名/電話即時用本人帳號資料的 selfAccountEditError 檢查(與會員端同一份
-   * 規則),不合法時顯示原因並停用「儲存變更」。 */
+   * 規則),不合法時顯示原因並停用「儲存變更」。
+   * R16 Task 2a:只留後端有的欄位——email/生日/簡介是真值但這裡不寫入,改唯讀顯示
+   * (email、生日 disabled;簡介只在預覽卡顯示);性別/緊急聯絡人後端沒有,拿掉。 */
   import type { Coach } from '$lib/coach/data';
   import { saveSettings } from '$lib/coach/api';
   import { selfAccountEditError } from '$lib/self-account';
   import { toasts } from '$lib/coach/stores';
   import Card from '$lib/components/ui/Card.svelte';
   import Input from '$lib/components/ui/Input.svelte';
-  import Textarea from '$lib/components/ui/Textarea.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import CoachAvatar from '$lib/coach/components/CoachAvatar.svelte';
@@ -21,19 +22,13 @@
 
   // Local copies of editable fields
   let name = coach.name;
-  let email = coach.email;
   let phone = coach.phone;
-  let gender = coach.gender;
-  let birth = coach.birth;
-  let emergency = coach.emergency;
-  let bio = coach.bio;
 
   let saving = false;
 
   $: error = selfAccountEditError({ name, phone }, coach);
 
-  // name/phone 有對應的後端 PATCH /users/me 欄位，實際送出並儲存；email/gender/
-  // birth/emergency/bio 後端不支援寫入，維持本地編輯、不送出(P2，同 api.ts 註解)。
+  // name/phone 有對應的後端 PATCH /users/me 欄位，實際送出並儲存；email/birth/bio 唯讀。
   async function save() {
     if (error) return;
     saving = true;
@@ -69,25 +64,16 @@
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
+        <Input label="姓名" bind:value={name} required />
         <div style="display:flex;gap:16px;flex-wrap:wrap">
           <div style="flex:1;min-width:140px">
-            <Input label="姓名" bind:value={name} required />
-          </div>
-          <div style="flex:1;min-width:140px">
-            <Input label="性別" bind:value={gender} />
-          </div>
-        </div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <div style="flex:1;min-width:140px">
-            <Input label="電子郵件" bind:value={email} type="email" required />
+            <Input label="電子郵件" value={coach.email} type="email" disabled />
           </div>
           <div style="flex:1;min-width:140px">
             <Input label="手機號碼" bind:value={phone} type="tel" />
           </div>
         </div>
-        <Input label="出生年月日" bind:value={birth} type="date" />
-        <Input label="緊急聯絡人" bind:value={emergency} placeholder="姓名 (關係) / 電話" />
-        <Textarea label="個人簡介" bind:value={bio} rows={4} maxLength={200} />
+        <Input label="出生年月日" value={coach.birth} type="date" disabled />
 
         {#if error}<div role="alert" style="font-size:var(--df-text-sm);color:var(--df-error)">{error}</div>{/if}
         <div style="display:flex;justify-content:flex-end;padding-top:4px">
@@ -123,11 +109,11 @@
         <div
           style="font-size:var(--df-text-xs);color:var(--df-text-light);line-height:1.6;padding:0 8px"
         >
-          {bio || '尚無簡介'}
+          {coach.bio || '尚無簡介'}
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;padding-top:8px;border-top:1px solid var(--df-border)">
           <div style="display:flex;align-items:center;gap:8px;font-size:var(--df-text-xs);color:var(--df-text-light)">
-            <Icon name="mail" size={13} color="var(--df-text-light)" />{email || coach.email}
+            <Icon name="mail" size={13} color="var(--df-text-light)" />{coach.email}
           </div>
           <div style="display:flex;align-items:center;gap:8px;font-size:var(--df-text-xs);color:var(--df-text-light)">
             <Icon name="phone" size={13} color="var(--df-text-light)" />{phone || coach.phone}
