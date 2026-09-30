@@ -26,8 +26,7 @@
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import { LoadGate, EmptyState, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, role, switchRole, toasts } from '$lib/mobile-admin/stores';
-  import { adminPath, type Role } from '$lib/mobile-admin/nav';
+  import { overlay, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings as getCsettings, saveSettings, type CoachSettingsData as CsettingsData } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
@@ -82,7 +81,7 @@
     ['sms', 'smartphone', '簡訊提醒', '重要館務異動同步以簡訊通知']
   ];
 
-  const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
+  const onRole = () => overlay.sheet('role', { role: 'coach' });
 
   async function save() {
     if (error) return;

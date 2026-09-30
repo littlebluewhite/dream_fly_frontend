@@ -4,12 +4,12 @@
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import NoteBox from '$lib/components/mobile/NoteBox.svelte';
   import { PROFILES } from '$lib/mobile-admin/data';
-  import type { Role } from '$lib/mobile-admin/nav';
+  import { goto } from '$app/navigation';
+  import { roleHome, type Role } from '$lib/mobile-admin/nav';
   import type { IconName } from '$lib/icon-registry';
 
   export let onClose: () => void;
   export let role: Role;
-  export let setRole: (r: Role) => void;
 
   const opts: { id: Role; icon: IconName; label: string; desc: string; tone: string }[] = [
     { id: 'admin' as Role, icon: 'shield-check', label: '管理後台', desc: PROFILES.admin.name + ' · ' + PROFILES.admin.role, tone: 'var(--df-primary)' },
@@ -17,7 +17,7 @@
   ];
 
   function pick(id: Role, on: boolean) {
-    if (!on) setRole(id);
+    if (!on) goto(roleHome(id));
     onClose();
   }
 </script>

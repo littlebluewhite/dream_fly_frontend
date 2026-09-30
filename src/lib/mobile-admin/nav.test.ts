@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADMIN_TABS, COACH_TABS, tabsFor, adminPath, isActive, roleFromPath, activeTab } from './nav';
+import { ADMIN_TABS, COACH_TABS, tabsFor, adminPath, roleHome, isActive, roleFromPath, activeTab } from './nav';
 
 describe('tabsFor', () => {
 	it('returns the admin tab set (總覽/學員/課程/訂單/更多)', () => {
@@ -51,5 +51,12 @@ describe('activeTab', () => {
 		expect(activeTab('admin', '/mobile-admin/admin/orders')).toBe('orders');
 		expect(activeTab('coach', '/mobile-admin/coach')).toBe('today');
 		expect(activeTab('coach', '/mobile-admin/coach/messages')).toBe('messages');
+	});
+});
+
+describe('roleHome', () => {
+	it('每個身分的首頁:admin → /mobile-admin/admin、coach → /mobile-admin/coach', () => {
+		expect(roleHome('admin')).toBe('/mobile-admin/admin');
+		expect(roleHome('coach')).toBe('/mobile-admin/coach');
 	});
 });

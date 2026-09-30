@@ -6,11 +6,12 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { createReadState } from '$lib/stores/read-state';
 import {
 	adminUnread,
-	role,
 	overlay,
-	switchRole,
 	closeNotifAfterReadAll,
 	openAdminNotif,
+	openCoachNotif,
+	coachNotifs,
+	coachUnreadCount,
 	adminNotifs,
 	orders,
 	markOrderPaid,
@@ -147,15 +148,6 @@ describe('createReadState (adminNotifs/coachNotifs 的底層 factory)', () => {
 	});
 });
 
-describe('switchRole', () => {
-	it('updates the role store (Task 20: no longer persists df_madmin_role — that demo flag is gone)', () => {
-		switchRole('coach');
-		expect(get(role)).toBe('coach');
-		expect(localStorage.getItem('df_madmin_role')).toBeNull();
-		switchRole('admin'); // restore the shared singleton for other tests
-	});
-});
-
 describe('closeNotifAfterReadAll', () => {
 	it('marks all read then closes the open bell sheet (snapshot would otherwise stay stale)', () => {
 		overlay.sheet('notif', {});
@@ -186,6 +178,25 @@ describe('openAdminNotif (mobile-admin 四頁 dashboard/orders/classes/members �
 		expect(adminUnread(get(adminNotifs))).toBe(0);
 		expect(get(overlay).sheet).toBe(null);
 		adminNotifs.set(ADMIN_NOTIFS); // restore the shared singleton for other tests
+	});
+});
+
+describe('openCoachNotif (教練四頁的 bell icon 共用)', () => {
+	it("開出 'notif' sheet,props.notifs 帶入 coachNotifs 現值", () => {
+		openCoachNotif();
+		expect(get(overlay).sheet?.id).toBe('notif');
+		expect((get(overlay).sheet?.props as { notifs: unknown }).notifs).toEqual(get(coachNotifs));
+		overlay.closeAll();
+	});
+
+	it('props.onReadAll → coachNotifs 全部標為已讀且 sheet 關閉', () => {
+		const before = get(coachNotifs);
+		expect(get(coachUnreadCount), 'seed 應含未讀').toBeGreaterThan(0);
+		openCoachNotif();
+		(get(overlay).sheet?.props as { onReadAll: () => void }).onReadAll();
+		expect(get(coachUnreadCount)).toBe(0);
+		expect(get(overlay).sheet).toBe(null);
+		coachNotifs.set(before); // restore the shared singleton for other tests
 	});
 });
 

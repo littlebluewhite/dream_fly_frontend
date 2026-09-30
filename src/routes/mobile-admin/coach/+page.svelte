@@ -17,8 +17,8 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
-  import { overlay, role, switchRole, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
-  import { adminPath, type Role } from '$lib/mobile-admin/nav';
+  import { overlay, openCoachNotif, coachUnreadCount } from '$lib/mobile-admin/stores';
+  import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getCoachHome, type MCoachHomeData } from '$lib/mobile-admin/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
@@ -53,8 +53,7 @@
     : [];
 
   const setTab = (id: string) => goto(adminPath('coach', id));
-  const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
-  const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
+  const onRole = () => overlay.sheet('role', { role: 'coach' });
 </script>
 
 <LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
@@ -74,7 +73,7 @@
       role="coach"
       {p}
       unread={$coachUnreadCount}
-      {onBell}
+      onBell={openCoachNotif}
       {onRole}
       greeting={data.coach.display + '，午安 👋'}
       sub={'今天有 ' + classCount + ' 堂課、' + studentCount + ' 位學員，記得課後完成點名。'}

@@ -18,7 +18,6 @@ import { createSessionGate } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
-import type { Role } from './nav';
 // R15(候選 F-3，誠實開機)：MEMBERS/CLASSES/ORDERS/COACHES 同步種子已退役——
 // members/classes/orders/coaches 四個 store 誠實開機為 `[]`(見下方 EMPTY_OPS),值
 // 改由真 getOpsCollections() 水合。type Coach 仍直取 $lib/domain/coaches(型別本身
@@ -259,32 +258,12 @@ export const hydrateMessages = messagesGate.hydrate;
 /** 訊息頁的進場包(R14 F1);fetch 是帶 epoch 核對的那一支(session 閘門繼承自水合閘門)。 */
 export const messagesPageEntry = messagesGate.pageEntry();
 
-/* ---------- Role (current section, synced from the URL by +layout.svelte) ----------
- * Task 20: the demo `session` writable is gone (real login state lives in
- * authStore; nothing ever read `$session` reactively — it was write-only, so
- * removing it is a straight orphan cleanup, not a behaviour change). `role` is
- * no longer the security-relevant bit either (the layout guard checks the
- * real authStore roles against the URL's role segment) — it survives purely
- * as the "which section am I looking at" display value the 更多/設定頁 profile
- * chip and RoleSheet read. */
-export const role = writable<Role>('admin');
-
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);
 
 /* ---------- Convenience derived counts ---------- */
 export const adminUnreadCount = derived(adminNotifs, ($n) => adminUnread($n));
 export const coachUnreadCount = derived(coachNotifs, ($n) => adminUnread($n));
-
-/** Switch the displayed role. Task 20: no longer persists to localStorage
- *  (`df_madmin_role` was one of the two demo flags removed with real auth) —
- *  the caller always follows this with `goto(adminPath(r, …))`, and the real
- *  destination on a fresh visit to the bare `/mobile-admin` root is decided by
- *  `mobileAdminRootTarget()` from the account's actual staff roles, not a
- *  remembered preference. */
-export function switchRole(r: Role) {
-	role.set(r);
-}
 
 /** Mark every bell notification read, toast, then close the sheet. The open
  *  NotifSheet renders a snapshot of the notifs array captured when it opened, so
@@ -295,9 +274,18 @@ export function closeNotifAfterReadAll(markAllRead: () => void) {
 	overlay.closeSheet();
 }
 
+/** 開通知 sheet 的共用實作:onReadAll 恰等於 closeNotifAfterReadAll(store.markAllRead)。 */
+function openNotifSheet(store: typeof adminNotifs): void {
+	overlay.sheet('notif', { notifs: get(store), onReadAll: () => closeNotifAfterReadAll(store.markAllRead) });
+}
+
 /** 開通知 sheet(mobile-admin dashboard/orders/classes/members 四頁的 bell icon 共用
- *  同一顆函式——四頁原本各自維護一份 byte-identical 的本地 openNotif,onReadAll 恰等於
- *  closeNotifAfterReadAll(adminNotifs.markAllRead),收斂進此處單一具名函式)。 */
+ *  同一顆函式——四頁原本各自維護一份 byte-identical 的本地 openNotif,收斂進此處單一具名函式)。 */
 export function openAdminNotif(): void {
-	overlay.sheet('notif', { notifs: get(adminNotifs), onReadAll: () => closeNotifAfterReadAll(adminNotifs.markAllRead) });
+	openNotifSheet(adminNotifs);
+}
+
+/** 教練四頁(today/attendance/students/messages)的 bell icon 共用。 */
+export function openCoachNotif(): void {
+	openNotifSheet(coachNotifs);
 }

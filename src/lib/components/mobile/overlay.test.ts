@@ -75,11 +75,11 @@ describe('createOverlay — typed registries (compile-time)', () => {
 
 	it('mobile-admin: required props must be passed', () => {
 		const o = createOverlay<MobileAdminPushRegistry, MobileAdminSheetRegistry>();
-		o.sheet('role', { role: 'admin', setRole: () => {} });
-		// @ts-expect-error role sheet 的 role / setRole 必填,不可省略 props
-		o.sheet('role');
-		// @ts-expect-error 缺必填 setRole
 		o.sheet('role', { role: 'admin' });
+		// @ts-expect-error role sheet 的 role 必填,不可省略 props
+		o.sheet('role');
+		// @ts-expect-error setRole 已移除(RoleSheet 改以 URL 導覽)
+		o.sheet('role', { role: 'admin', setRole: () => {} });
 		// @ts-expect-error member sheet 的 onEdit 必填(無 fallback)
 		o.sheet('member', { m: null });
 		// @ts-expect-error onBack 由 host 注入,呼叫端不可傳

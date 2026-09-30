@@ -32,7 +32,7 @@
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, toasts } from '$lib/mobile-admin/stores';
+  import { overlay, openCoachNotif, coachUnreadCount, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
@@ -88,7 +88,6 @@
     gate.load();
   });
 
-  const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
 
   $: current = classesToday.find((c) => c.id === curClassId) ?? null;
   $: roster = current?.roster ?? [];
@@ -166,7 +165,7 @@
   </div>
 
   <ScreenHeader title="課堂點名" sub={todayLabel() + ' · 逐一標記出勤'}>
-    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
+    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={openCoachNotif} />
   </ScreenHeader>
 
   {#if classesToday.length === 0}

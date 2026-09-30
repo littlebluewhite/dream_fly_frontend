@@ -13,15 +13,12 @@
    * 導去 /mobile-admin/login（不是桌面的 /staff/login，那會跳出手機框架外）。
    * Reactive（非 onMount 一次性），session 過期或角色改變時也能被抓到。
    *
-   * role store 現只做「目前所在分區」的展示用途（RoleSheet 目前選取樣式等）—— 真正
-   * 的存取判斷完全交給下面的 guard；currentRole（從路徑推導）才是安全判斷的唯一
-   * 依據，這裡把它同步進 role store 只是讓既有讀 $role 的畫面（更多／設定頁的身分
-   * 卡）跟著路徑走，不會停在舊角色。 */
+   * 角色只從路徑推導（roleFromPath）；不再有 role store。 */
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import { authStore } from '$lib/stores/authStore';
-  import { overlay, role, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
+  import { overlay, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
   import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';
   import { mobileAdminGuardTarget } from './guard';
@@ -31,7 +28,6 @@
   import '$lib/styles/mobile-frame.css';
 
   $: currentRole = roleFromPath($page.url.pathname);
-  $: if (currentRole) role.set(currentRole);
 
   $: if (browser) {
     const target = mobileAdminGuardTarget($page.url.pathname, $authStore.loggedIn, $authStore.roles);

@@ -22,7 +22,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, role, switchRole, adminUnreadCount, toasts, orders, hydrateOps, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, orders, hydrateOps, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
@@ -55,7 +55,7 @@
   $: liveNow = today.find((t) => t.state === 'live');
 
   const go = (id: string) => goto(adminPath('admin', id));
-  const openRole = () => overlay.sheet('role', { role: $role, setRole: (r: typeof $role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
+  const openRole = () => overlay.sheet('role', { role: 'admin' });
 
   // POST /users 的錯誤訊息已是後端給的繁中使用者可讀文字 → apiErrorMessage 直接透傳，
   // 同 members 頁慣例。參數對齊 MemberForm 的 onSave(body, isNew)聯集;m: null 的表單只會送

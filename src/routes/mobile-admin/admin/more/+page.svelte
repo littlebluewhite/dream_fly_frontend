@@ -13,9 +13,8 @@
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
-  import { overlay, role, switchRole } from '$lib/mobile-admin/stores';
+  import { overlay } from '$lib/mobile-admin/stores';
   import type { MobileAdminPushId } from '$lib/mobile-admin/stores';
-  import { adminPath, type Role } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getMore, type MoreData } from '$lib/mobile-admin/api';
   import { authStore } from '$lib/stores/authStore';
@@ -44,7 +43,7 @@
       ] satisfies [string, [string, IconName, string, MobileAdminPushId][]][])
     : [];
 
-  const onRole = () => overlay.sheet('role', { role: $role, setRole: (r: Role) => { switchRole(r); goto(adminPath(r, r === 'admin' ? 'home' : 'today')); } });
+  const onRole = () => overlay.sheet('role', { role: 'admin' });
   // Task 20：真登出（POST /auth/logout best-effort revoke + 清 token），取代示範性的
   // localStorage 旗標清除。
   async function logout() {

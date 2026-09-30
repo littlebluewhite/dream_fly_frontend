@@ -11,7 +11,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { authStore } from '$lib/stores/authStore';
   import { staffPortals, wantsBlockedNotice } from '$lib/staff/roles';
-  import { adminPath } from '$lib/mobile-admin/nav';
+  import { roleHome } from '$lib/mobile-admin/nav';
   import { submitLogin } from '$lib/login-submit';
   import '$lib/styles/mobile-frame.css';
 
@@ -37,7 +37,7 @@
       login: () => authStore.login(account, pw),
       resolveTarget: () => {
         const target = staffPortals($authStore.roles)[0];
-        return target ? adminPath(target, target === 'admin' ? 'home' : 'today') : null;
+        return target ? roleHome(target) : null;
       },
       onNoAccess: () => authStore.logout(),
       navigate: goto

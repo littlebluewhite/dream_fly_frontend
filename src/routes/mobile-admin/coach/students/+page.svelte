@@ -23,7 +23,7 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll } from '$lib/mobile-admin/stores';
+  import { overlay, openCoachNotif, coachUnreadCount } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getStudents, type StudentsData as MStudentsData } from '$lib/coach/api';
   // 卡 3：Student 改經 $lib/mobile-admin/data 接縫取用（單源仍在 coach/data）。
@@ -40,7 +40,6 @@
     gate.load();
   });
 
-  const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
   const openReportCard = (student: Student) => overlay.sheet('studentAction', { student, mode: 'reportCard' });
   const openCertificate = (student: Student) => overlay.sheet('studentAction', { student, mode: 'certificate' });
 
@@ -57,7 +56,7 @@
   </div>
 
   <ScreenHeader title="我的學員" sub={students.length + ' 位學員'}>
-    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
+    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={openCoachNotif} />
   </ScreenHeader>
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border);">

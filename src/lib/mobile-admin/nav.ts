@@ -50,6 +50,11 @@ export function adminPath(role: Role, id: string): string {
 	return id === ROOT_TAB[role] ? base : `${base}/${id}`;
 }
 
+/** A role's landing page (the role root). */
+export function roleHome(role: Role): string {
+	return adminPath(role, ROOT_TAB[role]);
+}
+
 /** TabBar active-state rule: a role root is active only on an exact match;
  *  deeper tabs match by prefix. */
 export function isActive(href: string, path: string): boolean {

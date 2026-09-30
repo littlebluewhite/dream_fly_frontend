@@ -18,7 +18,7 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coachNotifs, coachUnreadCount, closeNotifAfterReadAll, messages, messagesPageEntry } from '$lib/mobile-admin/stores';
+  import { overlay, openCoachNotif, coachUnreadCount, messages, messagesPageEntry } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MessageRow } from '$lib/mobile-admin/data';
 
@@ -29,7 +29,6 @@
     gate.load();
   });
 
-  const onBell = () => overlay.sheet('notif', { notifs: $coachNotifs, onReadAll: () => closeNotifAfterReadAll(coachNotifs.markAllRead) });
   // R14(候選 F5)：不再樂觀清未讀——真正的已讀是 MessageThread.svelte 開啟對話串後
   // 等後端 markRead ack(badgeCleared)才呼叫 markMessageRead，本頁只負責 push。
   const openThread = (m: MessageRow) => { overlay.push('messageThread', { m }); };
@@ -54,7 +53,7 @@
   </div>
 
   <ScreenHeader title="訊息" sub="家長與館務溝通">
-    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={onBell} />
+    <HeaderIcon slot="right" icon="bell" badge={$coachUnreadCount} label="通知" onClick={openCoachNotif} />
   </ScreenHeader>
 
   <div style="flex:none; background:#fff; padding:0 14px 12px; border-bottom:1px solid var(--df-border);">

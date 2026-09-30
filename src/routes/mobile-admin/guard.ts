@@ -9,7 +9,7 @@
  * never to desktop's `/staff/login` (that would break out of the phone-frame
  * surface entirely). */
 import { staffPortals } from '$lib/staff/roles';
-import { roleFromPath, adminPath } from '$lib/mobile-admin/nav';
+import { roleFromPath, roleHome } from '$lib/mobile-admin/nav';
 
 export const MOBILE_ADMIN_LOGIN_PATH = '/mobile-admin/login';
 
@@ -38,5 +38,5 @@ export function mobileAdminRootTarget(loggedIn: boolean, roles: string[]): strin
 	if (!loggedIn) return MOBILE_ADMIN_LOGIN_PATH;
 	const target = staffPortals(roles)[0];
 	if (!target) return `${MOBILE_ADMIN_LOGIN_PATH}?blocked=1`;
-	return adminPath(target, target === 'admin' ? 'home' : 'today');
+	return roleHome(target);
 }
