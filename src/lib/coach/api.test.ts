@@ -392,7 +392,7 @@ describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀',
 	});
 });
 
-describe('saveSettings — PATCH /users/me,以回應直接更新教練身分快取(不再重抓)', () => {
+describe('saveSettings — PATCH /users/me,以回應直接寫回 $selfAccount(不再重抓)', () => {
 	const updated = { ...ME, name: '林雅婷改', phone: '0900-000-000' };
 
 	it('只送改過的欄位(電話沒改就不送);回傳以 PATCH 回應映射的 Coach,並同步 authStore 的 member', async () => {

@@ -293,7 +293,7 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
   `loggedIn ? (member?.id ?? '') : null`。這條公式原本在 `createSessionCore`、mobile-admin
   `MessageThread`、member/mobile/mobile-admin 三個 layout 的暖機 key 各抄一份;R16 Task 5 起由
   `session-gate.ts` 匯出的純函式 `sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>)` 單一
-  持有,六處都改呼叫它。刻意不做 derived store:它會讓閘門的重置時機晚一拍。「誰換人、何時換人」
+  持有,五處都改呼叫它。刻意不做 derived store:它會讓閘門的重置時機晚一拍。「誰換人、何時換人」
   仍只住本檔,本篇的零觸發開機與 `reset()` 語意不變。
 - **消費者名稱更新**:R13 增補的「會員資料(`src/lib/member/profile.ts`)」搬到
   `src/lib/self-account.ts`(本人帳號資料);「教練身分」閘門的型別由 `{ user, coach | null }` 改成

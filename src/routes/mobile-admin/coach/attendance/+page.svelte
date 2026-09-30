@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 教練 · 課堂點名。port coach.jsx AttendanceScreen (63-162) + Segmented (70-79)。
-   * onBell → overlay.sheet('notif')；notify → toasts.notify。備註用 kit Sheet（本地狀態）。
+   * onBell → openCoachNotif()；notify → toasts.notify。備註用 kit Sheet（本地狀態）。
    *
    * Task 20：改讀真 getAttendance()(coach/api.ts，Task 2：GET /sessions/today ×
    * 各場次 GET /sessions/{id}/roster)，取代舊 mock 只有單一硬編班級(k1)的限制——
@@ -32,7 +32,7 @@
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, openCoachNotif, coachUnreadCount, toasts } from '$lib/mobile-admin/stores';
+  import { openCoachNotif, coachUnreadCount, toasts } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';

@@ -21,7 +21,7 @@ describe('ClassForm', () => {
 	});
 
 	it('驗證不過(名稱空白 / 人數 0)時主按鈕 disabled', async () => {
-		const k = { id: 'k1', name: '既有班', level: '基礎' as const, cat: '兒童基礎', coach: COACHES[0].name, room: '', day: '', time: '', enrolled: 0, cap: 10, age: '', price: 3200, status: '招生中' as const, wait: 0, term: '', sessions: 0, startDate: '', checkinRate: 0, makeup: 0, durationMinutes: 60 };
+		const k = { id: 'k1', name: '既有班', level: '基礎' as const, cat: '兒童基礎', coach: COACHES[0].name, day: '', time: '', enrolled: 0, cap: 10, age: '', price: 3200, status: '招生中' as const, wait: 0, durationMinutes: 60 };
 		render(ClassForm, { props: { onClose: () => {}, onSave: vi.fn(), coaches: COACHES, k } });
 		const btn = () => screen.getByText(/儲存課程/).closest('button')!;
 

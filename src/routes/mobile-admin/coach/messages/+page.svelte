@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 教練 · 訊息。port coach.jsx CoachMessagesScreen (213-242)。
-   * 點訊息 → overlay.push('messageThread',{m})；onBell → overlay.sheet('notif')。
+   * 點訊息 → overlay.push('messageThread',{m})；onBell → openCoachNotif()。
    *
    * 資料經 messagesPageEntry(訊息閘門的頁面進場包,R14 F1)非同步水合共享 messages store,三態
    * 閘門(loading/error/ready);messagesHydrated 守衛防止第二次進頁的 fetch 覆寫

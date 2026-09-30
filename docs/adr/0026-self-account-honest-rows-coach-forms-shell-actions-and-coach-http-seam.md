@@ -124,7 +124,7 @@ ADR 點名它們),保留開啟、toast、403/409/網路錯誤、取消、開啟�
 `MessageThread` 與 member/mobile/mobile-admin 三個 layout 的暖機 key 各抄一份。
 
 **決定**:`session-gate.ts` 匯出純函式 `sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>):
-string | null`,`createSessionCore` 與上述五處改呼叫它。**不做 derived store**:它會讓所有 session
+string | null`,`createSessionCore` 與上述四處改呼叫它。**不做 derived store**:它會讓所有 session
 閘門的重置時機往後延一拍,而且 15 個 mock authStore 的測試檔都得跟著改。
 
 ### 7. Task 6 — mobile 課程類別表 `domain/course-category.ts`
@@ -196,7 +196,7 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
 8. **排課頁沒有分類/場館篩選與圖例;訊息中心沒有「家長」分頁**(Task 2a)。
 9. **admin 課程明細 12 → 6 列、訂單明細 13 → 9 列,訂單表沒有「經手人」欄**(Task 2b)。
 10. **mobile 首頁的「下一堂課」卡拿掉,首頁少打一次 `getMine()`(`GET /enrolments/me`)**(Task 2c)。
-11. **mobile-admin 切換角色直接導向該角色首頁**;選目前角色等於原地導覽(Task 4)。
+11. **mobile-admin 切換角色直接導向該角色首頁**;選目前角色只關閉 sheet、不導覽(Task 4)。
 12. **教練請假頁的時段顯示星期**,例如 `2026-07-10 (五) 19:00`(Task 7)。
 
 其餘改動 wire 等價。

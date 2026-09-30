@@ -198,8 +198,7 @@ export const getOpsCollections = async (): Promise<OpsCollections> => {
 };
 
 /** Conversation(教練/admin 對話摘要)→ 既有 MessageRow 形狀。unread 由 badge(未讀則數)
- *  是否 >0 推導；kind(會員/家長/群組)這類桌面訊息中心專屬欄位行動版列表本就不
- *  顯示，不映射。 */
+ *  是否 >0 推導。 */
 function mapConversationToRow(c: Conversation): MessageRow {
 	return { id: c.id, from: c.name, initial: c.initial, color: c.color, preview: c.preview, time: c.time, unread: (c.badge ?? 0) > 0 };
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
   /* 教練 · 我的學員。port coach.jsx CoachStudentsScreen (165-210)。
-   * onBell → overlay.sheet('notif')。
+   * onBell → openCoachNotif()。
    *
    * Task 20：改讀真 getStudents()(coach/api.ts，Task 19：GET /coaches/me/students，
    * 只回這位教練名下的學員)，取代舊 mock 對「全體 MEMBERS 用姓名字串比對 coach
