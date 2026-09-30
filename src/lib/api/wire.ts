@@ -78,6 +78,27 @@ export type ApiPage<K extends string, T> = { [P in K]: T[] } & { total: number; 
 export const pageMeta = (r: { total: number; page: number; per_page: number }) =>
   ({ total: r.total, page: r.page, perPage: r.per_page });
 
+/** 請假申請狀態（integration-contract.md §3.20 四態）。 */
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+/** LeaveRequestResponse wire 形狀（§3.20）——member 的 POST/GET me/makeup 與教練清單
+ *  （另加 user_id/user_name，見 coach/api.ts）共用的單一來源。 */
+export interface ApiLeaveRequest {
+  id: string;
+  course_id: string;
+  course_name: string;
+  session_id: string;
+  session_date: string; // "YYYY-MM-DD"
+  start_time: string; // "HH:MM:SS"
+  reason: string | null;
+  status: LeaveStatus;
+  makeup_session_id: string | null;
+  makeup_session_date: string | null;
+  makeup_start_time: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
 /** GET /report-cards/me（member）與 POST /report-cards（coach）共用的成績單 wire
  *  形狀（integration-contract.md §3.22）。自現行 member/api.ts 與 coach/api.ts
  *  逐字複製——兩處欄位完全相同。 */

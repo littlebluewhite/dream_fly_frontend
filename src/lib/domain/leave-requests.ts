@@ -13,11 +13,8 @@
  * formatSessionDateTime 產生的「已預約補課： (undefined)」）——呼叫端據此判斷是否
  * 渲染這一行。 */
 
-import type { Tone } from '$lib/api/wire';
+import type { Tone, LeaveStatus } from '$lib/api/wire';
 import { formatSessionDateTime } from './session-format';
-
-/** 請假申請狀態（integration-contract.md §3.20 四態）。 */
-export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 /** 一筆請假紀錄可觸發的動作：'cancel'（可取消，pending）、'bookMakeup'（可預約補課，
  *  approved 且未補課）、'makeupBooked'（已補課，僅顯示不可操作）、null（rejected /

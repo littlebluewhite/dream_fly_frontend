@@ -31,7 +31,7 @@ describe('/coach/leave-requests (+page) — 渲染', () => {
 		const txt = container.textContent ?? '';
 		expect(txt).toContain('共 2 筆待審核');
 		expect(txt).toContain('陳小華 · 競技選手班');
-		expect(txt).toContain('2026-07-10 19:00');
+		expect(txt).toContain('2026-07-10 (五) 19:00');
 		expect(txt).toContain('生病');
 	});
 
@@ -66,7 +66,7 @@ describe('/coach/leave-requests — 分頁截斷（total 穿透，防計數/空�
 	it('審核成功後計數以 total 遞減（非以截斷後陣列長度重算）', async () => {
 		vi.mocked(getPendingLeaveRequests).mockReset();
 		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: REQUESTS, total: 150 });
-		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[0] });
+		vi.mocked(decideLeaveRequest).mockResolvedValue();
 		const { findByText, getAllByText, container } = render(LeaveRequestsPage);
 		await findByText('王小明 · 兒童體操初階班');
 
@@ -78,7 +78,7 @@ describe('/coach/leave-requests — 分頁截斷（total 穿透，防計數/空�
 	it('本頁全部審完但 total 仍有剩：不顯示「目前沒有待審核」空狀態，改示未載入提示', async () => {
 		vi.mocked(getPendingLeaveRequests).mockReset();
 		vi.mocked(getPendingLeaveRequests).mockResolvedValue({ requests: [REQUESTS[0]], total: 21 });
-		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[0] });
+		vi.mocked(decideLeaveRequest).mockResolvedValue();
 		const { findByText, getAllByText, queryByText, container } = render(LeaveRequestsPage);
 		await findByText('王小明 · 兒童體操初階班');
 
@@ -109,7 +109,7 @@ describe('/coach/leave-requests — 三態', () => {
 describe('/coach/leave-requests — 核准/婉拒（PATCH /leave-requests/{id}）', () => {
 	it('點擊「核准」→ decideLeaveRequest(id, "approved")，成功後從清單移除並顯示成功 toast', async () => {
 		const notifySpy = vi.spyOn(toasts, 'notify');
-		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[0], reason: '生病' });
+		vi.mocked(decideLeaveRequest).mockResolvedValue();
 		const { findByText, getAllByText, queryByText } = render(LeaveRequestsPage);
 		await findByText('王小明 · 兒童體操初階班');
 
@@ -121,7 +121,7 @@ describe('/coach/leave-requests — 核准/婉拒（PATCH /leave-requests/{id}�
 	});
 
 	it('點擊「婉拒」→ decideLeaveRequest(id, "rejected")，成功後從清單移除', async () => {
-		vi.mocked(decideLeaveRequest).mockResolvedValue({ ...REQUESTS[1], reason: null });
+		vi.mocked(decideLeaveRequest).mockResolvedValue();
 		const { findByText, getAllByText, queryByText } = render(LeaveRequestsPage);
 		await findByText('陳小華 · 競技選手班');
 

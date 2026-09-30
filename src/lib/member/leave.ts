@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
+import type { ApiLeaveRequest } from '$lib/api/wire';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
  * 全新 UI 流（repo 原無請假 UI，比照 Round 1 打卡 UI 先例：新寫網路層，不是替換
@@ -10,36 +11,8 @@ import { createSessionGate } from '$lib/session-gate';
  * 同課程未來場次補課（POST .../makeup），與請假申請本身是兩個分開的動作——
  * 舊 mock 版 LeaveDialog 的「同時保留補課額度」開關已不適用,一併移除。 */
 
-export interface LeaveRequest {
-  id: string;
-  course_id: string;
-  course_name: string;
-  session_id: string;
-  session_date: string; // "YYYY-MM-DD"
-  start_time: string; // "HH:MM:SS"
-  reason: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  makeup_session_id: string | null;
-  makeup_session_date: string | null;
-  makeup_start_time: string | null;
-  created_at: string;
-}
-
-interface ApiLeaveRequest {
-  id: string;
-  course_id: string;
-  course_name: string;
-  session_id: string;
-  session_date: string;
-  start_time: string;
-  reason: string | null;
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
-  makeup_session_id: string | null;
-  makeup_session_date: string | null;
-  makeup_start_time: string | null;
-  decided_at: string | null;
-  created_at: string;
-}
+/** UI 形狀 = wire 形狀去掉 decided_at（目前沒有畫面需要顯示決定時間）。 */
+export type LeaveRequest = Omit<ApiLeaveRequest, 'decided_at'>;
 
 /** LeaveRequestResponse → LeaveRequest。decided_at 未進 UI 形狀——目前沒有畫面
  *  需要顯示決定時間，維持誠實窄化(同 api.ts 窄化 local interface 的慣例)。 */

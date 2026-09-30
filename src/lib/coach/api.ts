@@ -21,7 +21,7 @@ import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiCertificate, ApiReportCard, ApiTodaySession } from '$lib/api/wire';
+import type { ApiPage, ApiLeaveRequest, ApiCertificate, ApiReportCard, ApiTodaySession } from '$lib/api/wire';
 import { toTodaySession } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import type {
@@ -521,23 +521,8 @@ export interface CoachLeaveRequest {
 	created_at: string;
 }
 
-interface ApiCoachLeaveRequest {
-	id: string;
-	course_id: string;
-	course_name: string;
-	user_id: string;
-	user_name: string;
-	session_id: string;
-	session_date: string;
-	start_time: string;
-	reason: string | null;
-	status: string;
-	makeup_session_id: string | null;
-	makeup_session_date: string | null;
-	makeup_start_time: string | null;
-	decided_at: string | null;
-	created_at: string;
-}
+/** 教練/admin 清單版 LeaveRequestResponse = 會員形狀另加申請人。 */
+type ApiCoachLeaveRequest = ApiLeaveRequest & { user_id: string; user_name: string };
 
 type ApiLeaveRequestListResponse = ApiPage<'leave_requests', ApiCoachLeaveRequest>;
 
@@ -579,10 +564,9 @@ export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsDat
  *  前端來說是同一個動作,差別只在送出的 status 值。404/403/409/422 原樣拋出，呼叫端
  *  (leave-requests/+page.svelte)依 ApiError 顯示對應繁中錯誤(這個模組後端本身就已
  *  回繁中訊息，同 member/stores.ts 的 leaveRequestErrorMessage 慣例)。 */
-export const decideLeaveRequest = (id: string, status: 'approved' | 'rejected'): Promise<CoachLeaveRequest> =>
-	api<ApiCoachLeaveRequest>(`/leave-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) }).then(
-		mapCoachLeaveRequest
-	);
+export const decideLeaveRequest = async (id: string, status: 'approved' | 'rejected'): Promise<void> => {
+	await api<ApiLeaveRequest>(`/leave-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+};
 
 /* ═════════════════════════ 個人設定（本人帳號資料；儲存 → saveSelfAccount → PATCH /users/me） ═════════════════════════ */
 

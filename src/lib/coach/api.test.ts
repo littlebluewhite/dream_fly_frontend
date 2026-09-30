@@ -920,14 +920,13 @@ describe('getPendingLeaveRequests — GET /leave-requests?status=pending&per_pag
 describe('decideLeaveRequest — PATCH /leave-requests/{id}（§3.20）', () => {
 	const API_RESPONSE = {
 		id: 'lr-1', course_id: 'c1', course_name: '兒童體操初階班',
-		user_id: 'u9', user_name: '王小明',
 		session_id: 's1', session_date: '2026-07-10', start_time: '19:00:00',
 		reason: '生病', status: 'approved',
 		makeup_session_id: null, makeup_session_date: null, makeup_start_time: null,
 		decided_at: '2026-07-02T00:00:00Z', created_at: '2026-07-01T00:00:00Z'
 	};
 
-	it('核准：送出 { status: "approved" }，回傳映射後的 CoachLeaveRequest', async () => {
+	it('核准：送出 { status: "approved" }，不回傳資料（後端回的是會員形狀 LeaveRequestResponse，無 user_name）', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /leave-requests/lr-1': API_RESPONSE }));
 
 		const d = await decideLeaveRequest('lr-1', 'approved');
@@ -936,11 +935,7 @@ describe('decideLeaveRequest — PATCH /leave-requests/{id}（§3.20）', () => 
 			method: 'PATCH',
 			body: JSON.stringify({ status: 'approved' })
 		});
-		expect(d).toEqual({
-			id: 'lr-1', course_name: '兒童體操初階班', user_name: '王小明',
-			session_date: '2026-07-10', start_time: '19:00:00',
-			reason: '生病', created_at: '2026-07-01T00:00:00Z'
-		});
+		expect(d).toBeUndefined();
 	});
 
 	it('婉拒：送出 { status: "rejected" }', async () => {
