@@ -41,8 +41,7 @@ import type { ChargeableLine } from '$lib/cart-item';
 import { checkoutMath } from '$lib/checkout-math';
 
 /** 成交快照 = placeOrder 確認物件的六欄投影（金額/點數以 API 回應為準，非本地試算）。
- *  deps 回傳型別也用這個窄形：真 placeOrder（Promise<OrderConfirmation>，多 raw 欄）
- *  協變可直接指派，單元 mock 則不必湊 raw 的 wire 物件。 */
+ *  deps 回傳型別也用這個窄形：真 placeOrder 與單元 mock 都直接回這個窄形，不必湊 wire 物件。 */
 export interface PaidSummary {
 	total: number; // NT$ 整數
 	earned: number; // 回饋點數
@@ -76,7 +75,7 @@ export interface CheckoutViewState {
 
 /** confirmPay 送單時打包的送單輸入（coupon/usePoints/idempotencyKey/paymentMethod）
  *  ——與 lines 分開傳，讓 deps.placeOrder 收到的「本次要送的行」與「怎麼送」界線
- *  清楚（F-5：surface 端的 createCheckout 把 lines 原樣轉給 submitOrder）。 */
+ *  清楚（F-5：surface 端的 createCheckout 的私有 placeOrder 把 lines 原樣同步到 server 購物車）。 */
 export interface PlaceOrderInput {
 	coupon: string;
 	usePoints: boolean;

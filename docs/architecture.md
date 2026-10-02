@@ -204,12 +204,12 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   own `addItem` input rather than as a factory option: **a shared factory is not a shared store instance**.
 - **Routing contract is single-sourced** in `lib/checkout-gate.ts`: `checkoutTarget()`, `wantsCheckout()`,
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
-- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it through the shared wire orchestration
-  `src/lib/checkout-order.ts`'s `submitOrder()` (see `docs/adr/0003`'s appendix), reached via the checkout
-  controller that `member/checkout-sync.ts`'s `createCheckout` builds for each surface (see the
+- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it through the checkout
+  controller that `member/checkout-sync.ts`'s `createCheckout` builds for each surface (its private `placeOrder`
+  calls `checkout-order.ts`'s `syncCartToServer` then `POST /orders`; see `docs/adr/0003`'s FE-5 addendum; see also the
   controller section below). The lines it submits are `chargeableLines(cart, subscriptions)`
   (`member/checkout.ts`) — the branded `ChargeableLine[]` filter that skips passes the member already
-  holds, a no-op for mobile's course-only carts; mobile's cart is typed as the shared `CartItem`
+  holds (the `/cart` page and `CartDropdown` total through the same filter and mark held lines 「已持有，不計費」), a no-op for mobile's course-only carts; mobile's cart is typed as the shared `CartItem`
   (`$lib/cart-item`). The backend creates both artifacts atomically in one transaction. A
   `type: 'course'` line becomes a real 報名 (enrolment row); the member's weekly schedule is real too,
   hydrated from `GET /schedule/me` (`member/api.ts`'s `getSchedule()`, derived from the member's active
@@ -607,7 +607,7 @@ rejected.
   response that lands after a `freshCheckout`; `removeCoupon()` backs desktop's 「移除」 link. Surfaces
   don't assemble the controller themselves: `member/checkout-sync.ts`'s
   `createCheckout({ cart, refreshAfterOrder, refreshOnOpen })` builds it, deriving `lines` from the given
-  `cart` and delegating to `submitOrder`, and its `setOpen` fires `refreshOnOpen` on the `freshCheckout`
+  `cart` and running its private `placeOrder`, and its `setOpen` fires `refreshOnOpen` on the `freshCheckout`
   edge. Its two consumers, with no branch inside the machine, are member's `CheckoutDialog`
   (`[refreshSubscriptions, refreshPoints]` for both lists) and mobile's module-level singleton `checkout`
   in `mobile/stores.ts`, beside `cart` and with the same lifetime (`[refreshPoints]` only — its cart never

@@ -34,7 +34,7 @@ export type CartItemInput = Omit<CartItem, 'qty'>;
 /* ---- ChargeableLine — 可計費約束（branded type，C6）----
  * 「預覽合計 ≡ 實際請款」這條不變量原本只靠呼叫端記憶維護（desktop 記得先過濾
  * 已持有的 pass、mobile 曾直傳整車）。C6 把它收進型別:checkoutMath（預覽）與
- * submitOrder（請款）兩個終點都只收 ChargeableLine[]，而 ChargeableLine 的唯一
+ * createCheckout 的 placeOrder（請款）兩個終點都只收 ChargeableLine[]，而 ChargeableLine 的唯一
  * 產地是 chargeableLines()（member/checkout）——過濾清單與請款清單從建構上同源，
  * 呼叫端繞不過去。
  *

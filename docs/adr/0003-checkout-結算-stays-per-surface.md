@@ -88,3 +88,16 @@ refresh 的位置跟著搬:mobile 的 `CartSheet.svelte` 原本在 `freshCheckou
 `refreshPoints()`,改用 `createCheckout({ refreshOnOpen: [refreshPoints], … })` 組裝後,同一邊沿
 已由 factory 的 `refreshOnOpen` 觸發,`CartSheet` 那份手動呼叫已移除——一開一次 sheet 前後仍是一支
 `GET /points/me`,行為未變。詳見 `docs/adr/0025` 候選 F-5。
+
+## 增補(2026-10-03,FE-5):relay 收合進 `createCheckout`
+
+`checkout-order.ts` 的 `submitOrder`(sync → POST /orders → allSettled afterOrder → clearCart → 適配
+`OrderConfirmation`)已刪——它是只剩一個呼叫端的 relay,連同 `OrderConfirmation` 與兩個死預設值
+(`paymentMethod ?? 'credit_card'`、`idempotencyKey ?? crypto.randomUUID()`;controller 永遠明確傳入)一併退役。
+同一段序列現在是 `member/checkout-sync.ts` 的 `createCheckout` 的**私有** `placeOrder`,直接回
+`PaidSummary`;`checkout-order.ts` 只留 wire 型別(`ApiOrder`/`ApiOrderItem`/`PaymentMethod`)與
+`syncCartToServer`。序列的覆蓋改走 `confirmPay`(`checkout-sync.test.ts`)。本 ADR 前述附錄的結論不變:
+共用的是 wire 編排,不是結算,兩 surface 仍各自注入 store。
+
+`member/checkout.ts` 的 `validateCoupon` 併入 `applyCouponCode`(它是唯一呼叫端;404 → 同一句
+「優惠碼無效或已過期」的分類契約改由 `applyCouponCode` 的案例釘住)。

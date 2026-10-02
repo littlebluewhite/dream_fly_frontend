@@ -16,7 +16,7 @@
  * lib-root 共用工廠 $lib/cart(C2:與 member 側同一份實作，不再是平行 store；
  * 介面收斂為 subscribe/add/remove/clear 四個成員，詳見下方 Shopping cart 段落)；
  * CartSheet 的結帳流程本身已改真下單，`checkout` 單例（見下方）委派 `createCheckout`
- * (`$lib/member/checkout-sync`，內部再委派 `submitOrder`)，不再是本地假 checkout()。
+ * (`$lib/member/checkout-sync`，送單序列住其私有 placeOrder)，不再是本地假 checkout()。
  * 帳戶頁/點數頁/CartSheet 的即時點數餘額改直讀
  * `$lib/member/points` 的真 `points`/`pointsLedger`(Task 7 起不再經本檔轉手)。 */
 

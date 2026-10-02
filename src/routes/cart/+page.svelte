@@ -1,14 +1,24 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { cart } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
   import { subtotalOf } from '$lib/checkout-math';
+  import { chargeableLines } from '$lib/member/checkout';
+  import { subscriptions, refreshSubscriptions } from '$lib/member/stores';
   import { toasts } from '$lib/stores/marketingToasts';
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  $: total = subtotalOf($cart);
+  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；登入時 best-effort 暖訂閱。
+  $: chargeable = chargeableLines($cart, $subscriptions);
+  $: billable = new Set<CartItem>(chargeable);
+  $: total = subtotalOf(chargeable);
+
+  onMount(() => {
+    if ($isLoggedIn) void refreshSubscriptions().catch(() => {});
+  });
 
   function removeItem(item: CartItem) {
     cart.remove(item.id);
@@ -86,10 +96,14 @@
 
                     <div class="item-actions">
                       <div class="item-price-section">
-                        <p class="unit-price">單價：NT$ {item.price.toLocaleString()}</p>
-                        <p class="subtotal">
-                          小計：NT$ {(item.price * item.qty).toLocaleString()}
-                        </p>
+                        {#if billable.has(item)}
+                          <p class="unit-price">單價：NT$ {item.price.toLocaleString()}</p>
+                          <p class="subtotal">
+                            小計：NT$ {(item.price * item.qty).toLocaleString()}
+                          </p>
+                        {:else}
+                          <p class="subtotal">已持有，不計費</p>
+                        {/if}
                       </div>
 
                       <button class="remove-btn" on:click={() => removeItem(item)}>

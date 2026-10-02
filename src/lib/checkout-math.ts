@@ -27,7 +27,7 @@ export function subtotalOf(items: CartMathLine[]): number {
  *  items 收窄為 `ChargeableLine[]`（見 $lib/cart-item）:「預覽金額只能算在可計費
  *  項目上」這條契約由輸入型別直接強制，不再是散文約定——`ChargeableLine` 的唯一
  *  產地是 chargeableLines()（member/checkout），呼叫端無從把未過濾的整車直接餵進
- *  來，預覽因此與請款（submitOrder）恆同源。內部小計仍走 subtotalOf（收較寬的
+ *  來，預覽因此與請款（createCheckout 的 placeOrder）恆同源。內部小計仍走 subtotalOf（收較寬的
  *  CartMathLine[]，ChargeableLine 結構相容），計算本身只讀 price/qty、不變。 */
 export function checkoutMath(
   items: ChargeableLine[],

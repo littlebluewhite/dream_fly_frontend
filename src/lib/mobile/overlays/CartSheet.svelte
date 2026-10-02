@@ -7,7 +7,7 @@
    * 的控制項（qty 鎖 1，見 stores.ts 的 cart.add()）。
    *
    * 確認付款 → 復用桌面 member 的結帳 seam 真下單（見 $lib/mobile/stores.ts 的
-   * checkout 單例：createCheckout 內部委派 submitOrder，syncCartToServer + POST
+   * checkout 單例：createCheckout 的私有 placeOrder，syncCartToServer + POST
    * /orders + refreshPoints），成功/失敗都以真實 API 回應為準——不再有本地假
    * checkout()、假成功 toast、假點數。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
@@ -71,7 +71,7 @@
   });
 
   // C6：預覽金額只算「可計費項目」——checkout 單例的 lines（stores.ts）是 chargeableLines
-  // 的輸出，與請款（placeOrder → submitOrder）同一產地，型別強制「預覽合計 ≡ 實際請款」。
+  // 的輸出，與請款（createCheckout 的 placeOrder）同一產地，型別強制「預覽合計 ≡ 實際請款」。
   // 下方明細列表（{#each $cart}）仍照舊渲染整車，對照 desktop CheckoutDialog 同款:
   // 使用者看得到自己加了什麼，只是合計不把已持有的 pass 重複計費。
   // 刻意不在 onMount 加 refreshSubscriptions():mobile 購物車只產 course

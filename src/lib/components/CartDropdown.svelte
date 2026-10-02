@@ -3,12 +3,20 @@
   import { cart } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
+  import { subtotalOf } from '$lib/checkout-math';
+  import { chargeableLines } from '$lib/member/checkout';
+  import { subscriptions, refreshSubscriptions } from '$lib/member/stores';
+  import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
 
-  $: total = $cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；開啟且登入時 best-effort 暖訂閱。
+  $: if (isOpen && $isLoggedIn) void refreshSubscriptions().catch(() => {});
+  $: chargeable = chargeableLines($cart, $subscriptions);
+  $: billable = new Set<CartItem>(chargeable);
+  $: total = subtotalOf(chargeable);
 
   function removeItem(itemId: string) {
     cart.remove(itemId);
@@ -56,7 +64,11 @@
                     <span class="level-tag">{item.level}</span>
                   {/if}
                 </p>
-                <p class="item-price">NT$ {item.price.toLocaleString()}</p>
+                {#if billable.has(item)}
+                  <p class="item-price">NT$ {item.price.toLocaleString()}</p>
+                {:else}
+                  <p class="item-price">已持有，不計費</p>
+                {/if}
               </div>
 
               <div class="item-controls">

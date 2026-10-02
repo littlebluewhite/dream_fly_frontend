@@ -6,7 +6,7 @@
  * 訂閱（chargeableLines 過濾已持有的 pass）、setOpen 在 freshCheckout 時觸發注入的
  * refreshOnOpen（best-effort，失敗吞掉）。*/
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createCart } from '$lib/cart';
@@ -126,6 +126,104 @@ describe('createCheckout — 失敗路徑', () => {
 		expect(get(cart)).toHaveLength(1); // 未清空
 		expect(api).not.toHaveBeenCalledWith('/subscriptions/me');
 		expect(api).not.toHaveBeenCalledWith('/points/me');
+	});
+});
+
+describe('createCheckout — 送單內容（confirmPay 經 placeOrder）', () => {
+	const courseCart = () => {
+		const cart = createCart();
+		cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
+		return cart;
+	};
+
+	it('未套優惠碼 → coupon_code 整個欄位省略；未指定付款方式預設 credit_card；Idempotency-Key 為 uuid', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
+
+		const checkout = createCheckout({ cart: courseCart(), refreshAfterOrder: [], refreshOnOpen: [] });
+		checkout.form.update((f) => ({ ...f, usePoints: true }));
+		await checkout.confirmPay();
+
+		const call = vi.mocked(api).mock.calls.find(([p, i]) => p === '/orders' && (i as RequestInit)?.method === 'POST');
+		const init = call?.[1] as { body: string; headers: Record<string, string> };
+		expect(init.body).toBe(JSON.stringify({ use_points: true, payment_method: 'credit_card' }));
+		expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+	});
+
+	it('套用優惠碼＋指定 line_pay → POST /orders body 帶 coupon_code 與 payment_method: line_pay', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter(
+				{ 'POST /orders': SAMPLE_ORDER, 'GET /coupons/DREAMFLY100/validate': { code: 'DREAMFLY100', discount_cents: 10000 } },
+				CART_DEFAULTS
+			)
+		);
+
+		const checkout = createCheckout({ cart: courseCart(), refreshAfterOrder: [], refreshOnOpen: [] });
+		checkout.form.update((f) => ({ ...f, code: 'DREAMFLY100', paymentMethod: 'line_pay' }));
+		await checkout.applyCode();
+		await checkout.confirmPay();
+
+		expect(api).toHaveBeenCalledWith('/orders', {
+			method: 'POST',
+			body: JSON.stringify({ coupon_code: 'DREAMFLY100', use_points: false, payment_method: 'line_pay' }),
+			headers: { 'Idempotency-Key': expect.any(String) }
+		});
+	});
+
+	it('成交快照各欄位取自後端回應（hasCourse/hasPass 由 items 推得）', async () => {
+		const order: ApiOrder = {
+			...SAMPLE_ORDER,
+			points_used: 100,
+			items: [
+				...SAMPLE_ORDER.items,
+				{ id: 'oi-2', item_type: 'product', product_id: 'pass-uuid-9', course_id: null, quantity: 1, unit_price_cents: 300000 }
+			]
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': order }, CART_DEFAULTS));
+
+		const checkout = createCheckout({ cart: courseCart(), refreshAfterOrder: [], refreshOnOpen: [] });
+		const outcome = await checkout.confirmPay();
+
+		expect(outcome).toEqual({
+			kind: 'orderPlaced',
+			paid: { total: 4700, earned: 235, ptRedeem: 100, hasCourse: true, hasPass: true, orderNumber: 'DF-20260704ABCD1234' }
+		});
+	});
+
+	it('同步購物車失敗（DELETE /cart 出錯）→ orderFailed、不打 POST /orders、不清購物車', async () => {
+		const cart = courseCart();
+		vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /cart': new ApiError(500, 'internal error') }, CART_DEFAULTS));
+
+		const checkout = createCheckout({ cart, refreshAfterOrder: [], refreshOnOpen: [] });
+		const outcome = await checkout.confirmPay();
+
+		expect(outcome.kind).toBe('orderFailed');
+		expect(api).toHaveBeenCalledTimes(1); // 只有 DELETE /cart
+		expect(get(cart)).toHaveLength(1);
+	});
+});
+
+describe('createCheckout — refreshAfterOrder 部分失敗', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('其中一支 reject：訂單仍視為成功、購物車仍清空、console.error 記一筆', async () => {
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
+		const cart = createCart();
+		cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
+
+		const checkout = createCheckout({
+			cart,
+			refreshAfterOrder: [() => Promise.resolve(), () => Promise.reject(new Error('refresh failed'))],
+			refreshOnOpen: []
+		});
+		const outcome = await checkout.confirmPay();
+
+		expect(outcome.kind).toBe('orderPlaced');
+		expect(get(cart)).toEqual([]);
+		expect(errSpy).toHaveBeenCalledTimes(1);
+		expect(errSpy).toHaveBeenCalledWith('Failed to refresh after checkout:', expect.any(Error));
 	});
 });
 

@@ -40,3 +40,12 @@ relabel 以最小代價達成誠實標示，符合「簡單優先、手術式修
 （訪客可加購、跨登入保留，見 `docs/adr/0001`），而非 member surface 的私有狀態——符號住在 lib-root
 之後，公開層的取用路徑才與它真正的歸屬一致。`lib/public/` 正規化的暫緩裁決不受影響（`lib/public/`
 底下今日仍只有 `adapters.ts`／`api.ts`／`calendar-grid.ts`／`calendar-selection.ts` 四個非元件模組）。
+
+## 增補(2026-10-03,FE-5):購物車總額改走 `chargeableLines`
+
+`/cart` 頁與 `lib/components/CartDropdown.svelte` 原本以 `subtotalOf($cart)`(或手寫 reduce)加總整車,
+把會員已持有的方案也算進總計,與結帳對話框不一致。兩處改為
+`subtotalOf(chargeableLines($cart, $subscriptions))`,已持有行標「已持有,不計費」;會員登入時 best-effort
+呼叫 `refreshSubscriptions()` 暖訂閱(失敗沿用現值)。這是第二處公開層借用 member 域符號
+(`$lib/member/checkout`、`$lib/member/stores`),判準同 `tickets` 頁:取用的是 member 域規則的唯一產地,
+不另寫第二份「已持有方案」判斷。訪客(訂閱恆空)行為不變。

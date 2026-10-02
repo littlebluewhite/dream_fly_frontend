@@ -1,5 +1,5 @@
-/* Dream Fly — member 結帳前端邏輯單測：chargeableLines（純過濾）、validateCoupon
- * （真 API 優惠碼驗證）、applyCouponCode（「套用」按鈕的共用結果機）、
+/* Dream Fly — member 結帳前端邏輯單測：chargeableLines（純過濾）、
+ * applyCouponCode（「套用」按鈕的共用結果機，含真 API 優惠碼驗證的 404／錯誤分類）、
  * orderErrorMessage（後端錯誤 → 繁中文案）。
  *
  * 舊本地結算 commitCheckout/CheckoutContext/CheckoutResult 及其測試已隨 final
@@ -11,11 +11,11 @@
  * uuid 格式）。 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chargeableLines, validateCoupon, applyCouponCode, orderErrorMessage } from './checkout';
+import { chargeableLines, applyCouponCode, orderErrorMessage } from './checkout';
 import type { CartItem } from '$lib/cart-item';
 import { api, ApiError } from '$lib/api/client';
 
-// 只替換 api()，ApiError 用回真實類別（validateCoupon 靠 instanceof 判斷 404）。
+// 只替換 api()，ApiError 用回真實類別（applyCouponCode 內層靠 instanceof 判斷 404）。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
@@ -45,36 +45,6 @@ describe('chargeableLines', () => {
   });
 });
 
-/* ─── validateCoupon（真實 API 版，取代 checkout-math 的 lookupCoupon 查表）─── */
-describe('validateCoupon', () => {
-  beforeEach(() => {
-    vi.mocked(api).mockReset();
-  });
-
-  it('有效碼 → 呼叫 GET /coupons/{code}/validate（trim 過），discount_cents 換算 NT$', async () => {
-    vi.mocked(api).mockResolvedValue({ code: 'DREAMFLY100', discount_cents: 10000 });
-
-    const result = await validateCoupon('  dreamfly100  ');
-
-    expect(api).toHaveBeenCalledWith('/coupons/dreamfly100/validate');
-    expect(result).toEqual({ code: 'DREAMFLY100', off: 100 });
-  });
-
-  it('404（不存在／未啟用／已過期）→ null', async () => {
-    vi.mocked(api).mockRejectedValue(new ApiError(404, 'coupon not found'));
-
-    const result = await validateCoupon('NOPE');
-
-    expect(result).toBeNull();
-  });
-
-  it('非 404 錯誤（如網路失敗、5xx）原樣拋出，不吞成 null', async () => {
-    vi.mocked(api).mockRejectedValue(new ApiError(500, 'internal error'));
-
-    await expect(validateCoupon('X')).rejects.toBeInstanceOf(ApiError);
-  });
-});
-
 /* ─── applyCouponCode（「套用」按鈕的共用結果機：桌面 CheckoutDialog ↔ 行動版
  * CartSheet 雙生收斂，C2/R11）──────────────────────────────────── */
 describe('applyCouponCode', () => {
@@ -92,6 +62,15 @@ describe('applyCouponCode', () => {
     vi.mocked(api).mockResolvedValue({ code: 'DREAMFLY100', discount_cents: 10000 });
 
     expect(await applyCouponCode('DREAMFLY100')).toEqual({ coupon: { code: 'DREAMFLY100', off: 100 }, codeErr: '' });
+  });
+
+  it('呼叫 GET /coupons/{code}/validate（trim 過、不轉大寫），discount_cents 換算 NT$', async () => {
+    vi.mocked(api).mockResolvedValue({ code: 'DREAMFLY100', discount_cents: 10000 });
+
+    const result = await applyCouponCode('  dreamfly100  ');
+
+    expect(api).toHaveBeenCalledWith('/coupons/dreamfly100/validate');
+    expect(result).toEqual({ coupon: { code: 'DREAMFLY100', off: 100 }, codeErr: '' });
   });
 
   it('404（查無）與網路/未預期錯誤一視同仁 → 同一句「優惠碼無效或已過期」，不另開技術性文案', async () => {

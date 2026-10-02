@@ -1,10 +1,9 @@
 /* Dream Fly — member 結帳「真訂單」API 層單測（Task 16；Task 17 加了 refreshPoints
  * 的 ledger 映射與 hydrateNotifications；Task 9(架構深化 R15·F-5) 把「送單」呼叫序列
- * 的覆蓋搬到 checkout-sync.test.ts，本檔只留 syncCartToServer 本身）
+ * 的覆蓋搬到 checkout-sync.test.ts；FE-5 起 syncCartToServer 的單測住 checkout-order.test.ts）
  *
- * 覆蓋 member 結帳網路層：$lib/checkout-order 的 syncCartToServer，以及 stores.ts barrel
- * 轉出的 refreshSubscriptions / refreshPoints / hydrateNotifications。只替換
- * $lib/api/client 的 api()，ApiError
+ * 覆蓋 stores.ts barrel 轉出的 refreshSubscriptions / refreshPoints / hydrateNotifications
+ * 與候補。只替換 $lib/api/client 的 api()，ApiError
  * 用回真實類別（判斷 409/404 狀態碼要用 instanceof）。呼叫序列（DELETE→POST×N→
  * POST /orders→GET×2）是 checkout-sync.test.ts 的核心斷言，不是只驗證最終 state。 */
 
@@ -12,8 +11,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
-import { syncCartToServer } from '$lib/checkout-order';
-import type { ApiOrder } from '$lib/checkout-order';
 import {
   cart,
   subscriptions,
@@ -34,30 +31,12 @@ import {
 } from './stores';
 import { resetWaitlistForTests } from './waitlist';
 import { resetNotificationsForTests } from './notifications';
-import type { CartItem } from '$lib/cart-item';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
-
-const COURSE_ITEM: CartItem = { id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, qty: 1, icon: 'sparkles' };
-const PASS_ITEM: CartItem = { id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, qty: 1, icon: 'ticket' };
-
-const SAMPLE_ORDER: ApiOrder = {
-  id: 'order-1',
-  order_number: 'DF-20260704ABCD1234',
-  status: 'paid',
-  total_cents: 470000,
-  discount_cents: 10000,
-  coupon_code: 'DREAMFLY100',
-  points_used: 0,
-  points_earned: 235,
-  paid_at: '2026-06-22T00:00:00Z',
-  created_at: '2026-06-22T00:00:00Z',
-  items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: 'course-uuid-9', quantity: 1, unit_price_cents: 480000 }]
-};
 
 /** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined（204/成功
  *  upsert）——沿用原本 fakeRouter 內建的 cart fallback，經由 defaults 表傳入共用
@@ -102,45 +81,6 @@ beforeEach(() => {
   notifications.set([]);
   resetNotificationsForTests();
   vi.mocked(api).mockReset();
-});
-
-describe('syncCartToServer — 呼叫序列與 quantity 規則', () => {
-  it('DELETE /cart 後逐項 POST /cart/items；課程一律夾 quantity=1，方案照本地 qty', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
-
-    await syncCartToServer([{ ...COURSE_ITEM, qty: 3 }, PASS_ITEM]);
-
-    expect(api).toHaveBeenNthCalledWith(1, '/cart', { method: 'DELETE' });
-    expect(api).toHaveBeenNthCalledWith(2, '/cart/items', {
-      method: 'POST',
-      body: JSON.stringify({ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 })
-    });
-    expect(api).toHaveBeenNthCalledWith(3, '/cart/items', {
-      method: 'POST',
-      body: JSON.stringify({ item_type: 'product', item_id: 'pass-uuid-9', quantity: 1 })
-    });
-    expect(api).toHaveBeenCalledTimes(3);
-  });
-
-  it('空購物車 → 只呼叫 DELETE /cart，沒有任何 POST', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
-
-    await syncCartToServer([]);
-
-    expect(api).toHaveBeenCalledTimes(1);
-    expect(api).toHaveBeenCalledWith('/cart', { method: 'DELETE' });
-  });
-
-  it('方案 qty > 1 時照實際 qty 送出（夾 1 只套用在課程）', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({}, CART_DEFAULTS));
-
-    await syncCartToServer([{ ...PASS_ITEM, qty: 2 }]);
-
-    expect(api).toHaveBeenNthCalledWith(2, '/cart/items', {
-      method: 'POST',
-      body: JSON.stringify({ item_type: 'product', item_id: 'pass-uuid-9', quantity: 2 })
-    });
-  });
 });
 
 describe('refreshSubscriptions', () => {

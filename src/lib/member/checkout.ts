@@ -1,10 +1,9 @@
 /* Dream Fly — member 結帳前端邏輯（真 API 時代）。
  *
- * 四個成員：
- *  - chargeableLines（純）：預覽與 placeOrder 購物車同步共用的「跳過已持有 pass」過濾。
- *  - validateCoupon（API）：GET /coupons/{code}/validate，404 → null。
+ * 三個成員：
+ *  - chargeableLines（純）：預覽、送單、購物車總額共用的「跳過已持有 pass」過濾。
  *  - applyCouponCode（API）：「套用」按鈕的結果機（空輸入 → null／命中／無效同文案），
- *    包住 validateCoupon 的分類；兩個 surface 的 applyCode 共用它。
+ *    內含 GET /coupons/{code}/validate 的 404 分類；兩個 surface 的 applyCode 共用它。
  *  - orderErrorMessage（純）：後端結帳錯誤字串 → 繁中 toast 文案。
  *
  * Task 16 前的本地結算 commitCheckout / CheckoutContext / CheckoutResult 已移除
@@ -20,8 +19,8 @@ import { ntd } from '$lib/public/adapters';
 /**
  * 過濾出「可計費項目」：已持有的 pass 是 no-op，不計費、不贈點。回傳 branded 的
  * `ChargeableLine[]`（見 $lib/cart-item）——本函式是全站唯一的 brand 產地。預覽
- * （checkoutMath）與請款（submitOrder，經 syncCartToServer 推上 server 購物車）
- * 兩個終點都只收 `ChargeableLine[]`，「預覽合計 ≡ 實際請款」不再靠呼叫端記憶、
+ * （checkoutMath）與請款（createCheckout 的 placeOrder，經 syncCartToServer 推上 server
+ * 購物車）兩個終點都只收 `ChargeableLine[]`，「預覽合計 ≡ 實際請款」不再靠呼叫端記憶、
  * 改由型別強制:預覽跳過的項目不可能繞過本產地被送進 server 購物車。
  */
 export function chargeableLines(cart: CartItem[], subs: { id: string }[]): ChargeableLine[] {
@@ -35,34 +34,13 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): Charg
   return cart.filter((c) => !(c.type === 'pass' && subscribedIds.has(c.id))) as ChargeableLine[];
 }
 
-/* ─── validateCoupon — 真實 API 驗證（本地查表版 lookupCoupon 已退役，查表不再保留）。
- * C2(R11) 起兩個 surface 的「套用」按鈕都改叫下方的 applyCouponCode，本函式是它的內層
- * ——保留獨立出口與單測，釘住「404 → null／其餘原樣拋出」這條 applyCouponCode 吞掉之後
- * 就再也驗不到的分類契約。 ── */
+/* ─── applyCouponCode — 「套用優惠碼」按鈕的結果機（C2/R11：桌面 CheckoutDialog 與
+ * 行動版 CartSheet 原本各手焊一份 byte-identical 的 applyCode，收斂到這裡）── */
 
-export interface CouponValidateResponse {
+interface CouponValidateResponse {
   code: string;
   discount_cents: number;
 }
-
-/**
- * 呼叫 GET /coupons/{code}/validate（需登入）。後端本身就會 trim + 轉大寫比對
- * （見 coupons::repository::normalize_code），這裡只 trim，不用再自己轉大寫。
- * 404（不存在／未啟用／已過期，後端三者不區分）→ null；其餘錯誤（網路、5xx 等）原樣拋出，
- * 交由呼叫端決定怎麼呈現。discount_cents → NT$ 一律經 ntd()（全前端唯一轉換點）。
- */
-export async function validateCoupon(code: string): Promise<{ code: string; off: number } | null> {
-  try {
-    const res = await api<CouponValidateResponse>(`/coupons/${encodeURIComponent(code.trim())}/validate`);
-    return { code: res.code, off: ntd(res.discount_cents) };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return null;
-    throw err;
-  }
-}
-
-/* ─── applyCouponCode — 「套用優惠碼」按鈕的結果機（C2/R11：桌面 CheckoutDialog 與
- * 行動版 CartSheet 原本各手焊一份 byte-identical 的 applyCode，收斂到這裡）── */
 
 /** 套用結果：`coupon` 是命中的優惠碼（未命中為 null），`codeErr` 是要顯示的錯誤文案
  *  （命中為空字串）——呼叫端把兩欄直接寫回自己的表單狀態，不必再自己分類。 */
@@ -73,19 +51,20 @@ export interface ApplyCouponResult {
 
 /**
  * 空輸入（或只有空白）回 null——呼叫端據此不動任何狀態：空輸入按「套用」不顯示錯誤
- * （兩個 surface 遷入前的既有決策）。命中回 `{ coupon, codeErr: '' }`；查無（404 →
- * validateCoupon 回 null）與網路/未預期錯誤（validateCoupon 原樣拋出）一視同仁，
- * 一律回 `{ coupon: null, codeErr: '優惠碼無效或已過期' }`——不另開技術性錯誤文案。
+ * （兩個 surface 遷入前的既有決策）。其餘呼叫 GET /coupons/{code}/validate（需登入；
+ * 後端自己 trim + 轉大寫比對，這裡只 trim）：命中回 `{ coupon, codeErr: '' }`
+ * （discount_cents → NT$ 經 ntd()，全前端唯一轉換點）；查無（404：不存在／未啟用／已過期，
+ * 後端三者不區分）與網路/未預期錯誤一視同仁，一律回
+ * `{ coupon: null, codeErr: '優惠碼無效或已過期' }`——不另開技術性錯誤文案。
  */
 export async function applyCouponCode(code: string): Promise<ApplyCouponResult | null> {
   if (!code.trim()) return null;
-  let hit: { code: string; off: number } | null;
   try {
-    hit = await validateCoupon(code);
+    const res = await api<CouponValidateResponse>(`/coupons/${encodeURIComponent(code.trim())}/validate`);
+    return { coupon: { code: res.code, off: ntd(res.discount_cents) }, codeErr: '' };
   } catch {
-    hit = null;
+    return { coupon: null, codeErr: '優惠碼無效或已過期' };
   }
-  return hit ? { coupon: hit, codeErr: '' } : { coupon: null, codeErr: '優惠碼無效或已過期' };
 }
 
 /* ─── orderErrorMessage — 結帳錯誤 → 繁中 toast 文案 ─────────────── */

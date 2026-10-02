@@ -1,13 +1,22 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { cart } from '$lib/cart';
 import { courseToCartItem, passToCartItem } from '$lib/cart-item';
 import { authStore } from '$lib/stores/authStore';
+import { api } from '$lib/api/client';
+import { subscriptions } from '$lib/member/subscriptions';
+import { fakeRouter } from '$lib/testing/fake-router';
 import { checkoutTarget } from '$lib/checkout-gate';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
+// 登入時開啟會 best-effort 暖 GET /subscriptions/me；只替換 api()。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 import { goto } from '$app/navigation';
 
 // authStore is API-backed (real network calls); this file only cares about
@@ -40,6 +49,8 @@ const PASS: Ticket = {
 };
 
 beforeEach(() => {
+	vi.mocked(api).mockReset();
+	subscriptions.set([]);
 	localStorage.clear();
 	cart.clear();
 	authStore.logout();
@@ -96,5 +107,42 @@ describe('購物車頁 — 結帳 gate', () => {
 		cart.addItem(courseToCartItem(COURSE));
 		const { queryByText } = render(Page);
 		expect(queryByText('結帳後將由專人與您聯繫確認')).toBeNull();
+	});
+});
+
+describe('購物車頁 — 已持有方案不計入總額', () => {
+	it('登入後暖到已持有的方案 → 該行標「已持有，不計費」、總計只算可計費行', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /subscriptions/me': [
+					{
+						id: 'sub-1',
+						product_id: PASS.id,
+						product_name: PASS.name,
+						status: 'active',
+						started_at: '2026-06-01T00:00:00Z',
+						expires_at: null,
+						total_sessions: null,
+						remaining_sessions: null,
+						price_cents: 180000
+					}
+				]
+			})
+		);
+		await authStore.login('member@test.com', 'password123');
+		cart.addItem(courseToCartItem(COURSE));
+		cart.addItem(passToCartItem(PASS));
+		const { getByText, container } = render(Page);
+
+		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
+		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
+	});
+
+	it('未持有時總計照舊算全部（無「已持有」標記）', () => {
+		cart.addItem(courseToCartItem(COURSE));
+		cart.addItem(passToCartItem(PASS));
+		const { queryByText, container } = render(Page);
+		expect(queryByText('已持有，不計費')).toBeNull();
+		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 5,000');
 	});
 });

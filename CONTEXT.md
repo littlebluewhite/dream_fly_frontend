@@ -235,10 +235,12 @@ _Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib
 
 **可計費行 (ChargeableLine)**:
 可進「結帳」金額計算與請款的購物車項目;唯一產地 `member/checkout.ts` 的 `chargeableLines()`
-(濾除已訂閱方案後打上 brand),`checkoutMath` 與 `submitOrder` 兩終點只收此型別。兩個 surface 的
-`placeOrder` 委派自 `member/checkout-sync.ts` 的 `createCheckout(w)` 工廠組裝而成,對
+(濾除已訂閱方案後打上 brand),`checkoutMath` 與 `createCheckout` 的私有 `placeOrder` 兩終點只收此型別。
+購物車總額(`/cart` 頁、`CartDropdown`)也是 `subtotalOf(chargeableLines(cart, subscriptions))`,已持有
+的方案行標「已持有,不計費」且不計入總計。兩個 surface 的
+`placeOrder` 住在 `member/checkout-sync.ts` 的 `createCheckout(w)` 工廠內,對
 `w.cart` 建 `derived` 算出 lines 之後往下傳一次;`checkout-controller.ts` 的 `deps.placeOrder`
 簽章因此是 `(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>`,呼叫端不
 各自重讀第二份(見 `docs/adr/0003`、`docs/adr/0025` F-5)。
-_Avoid_: 未過濾清單直餵 checkoutMath/submitOrder(編譯期擋);production 檔於唯一產地之外自行
+_Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車總額直接加總整車(會把已持有方案算進去);production 檔於唯一產地之外自行
 `as` 斷言打 brand(測試 fixture 的檔內 helper cast 屬受核可例外,見 `checkout-math.test.ts` 檔頭)
