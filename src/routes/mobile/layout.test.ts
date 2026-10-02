@@ -27,14 +27,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { resetNotificationsForTests } from '$lib/member/notifications';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import Layout from './+layout.svelte';
 
-beforeEach(() => {
+beforeEach(async () => {
   mockUrl = new URL('http://localhost/mobile');
   authStore.logout();
-  resetNotificationsForTests();
+  await resetSessionStores();
   vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
 });
 afterEach(() => vi.clearAllMocks());

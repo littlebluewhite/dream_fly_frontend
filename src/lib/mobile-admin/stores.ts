@@ -138,7 +138,6 @@ const opsGate = createHydrationGate({
 	apply: applyOps,
 	reset: () => applyOps(EMPTY_OPS)
 });
-export const opsHydrated = opsGate.hydrated;
 /** 測試出口:閘門還原開機態(內容回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
 export const resetOpsForTests = opsGate.reset;
 export const hydrateOps = opsGate.hydrate;
@@ -221,7 +220,7 @@ export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusO
  *  the original unread count for the whole session. 誠實開機(R14 候選 F3):開機值 =
  *  reset 值 = `[]`,教練分區的 layout 暖機後才顯示真數(不再顯示種子的假 3 則)。 */
 export const messages = writable<MessageRow[]>([]);
-/** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
+/** Mark a thread read (the coach opened it). Also declares hydration truth on the messages gate
  *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
  *  覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)住在
  *  $lib/coach/messages-controller 的 selectThread()，MessageThread.svelte 把它的 ack
@@ -259,9 +258,6 @@ const messagesGate = createSessionGate({
 		messages.set([]);
 	}
 });
-export const messagesHydrated = messagesGate.hydrated;
-/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
-export const resetMessagesForTests = messagesGate.reset;
 export const hydrateMessages = messagesGate.hydrate;
 /** 訊息頁的進場包(R14 F1);fetch 是帶 epoch 核對的那一支(session 閘門繼承自水合閘門)。 */
 export const messagesPageEntry = messagesGate.pageEntry();

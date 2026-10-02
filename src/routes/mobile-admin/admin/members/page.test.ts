@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MembersPage from './+page.svelte';
-import { members, overlay, opsHydrated, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
+import { members, overlay, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import { mapMemberAccount, type MemberAccount as MemberRow, type ApiUserAccount } from '$lib/admin/data';
 import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
@@ -113,7 +113,6 @@ describe('mobile-admin/admin/members 頁', () => {
 		await new Promise<void>((r) => setTimeout(r, 0));
 
 		expect(get(members)).toEqual([]); // 已卸載頁面的重試回應不寫共享 store(誠實開機:未曾成功水合過就仍是 `[]`)
-		expect(get(opsHydrated)).toBe(false);
 	});
 
 	it('members 空集合不當機,顯示找不到符合的學員', async () => {

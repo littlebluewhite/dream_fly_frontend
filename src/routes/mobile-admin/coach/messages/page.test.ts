@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MessagesPage from './+page.svelte';
-import { messages, hydrateMessages, resetMessagesForTests, coachMsgUnread, markMessageRead } from '$lib/mobile-admin/stores';
+import { messages, hydrateMessages, coachMsgUnread, markMessageRead } from '$lib/mobile-admin/stores';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { MESSAGES } from '$lib/testing/seed-fixtures';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -26,15 +27,15 @@ const WIRE_MESSAGES: WireConversation[] = [
 	{ id: 'zz2', peer_id: 'p2', peer_name: '測試家長乙', last_message_body: '測試預覽乙', last_message_at: '2026-01-01T00:00:00Z', unread_count: 0 }
 ];
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': WIRE_MESSAGES }));
-	resetMessagesForTests();
+	await resetSessionStores();
 	messages.set(MESSAGES.map((m) => ({ ...m })));
 });
 
-afterEach(() => {
-	resetMessagesForTests();
+afterEach(async () => {
+	await resetSessionStores();
 	messages.set(MESSAGES.map((m) => ({ ...m })));
 });
 

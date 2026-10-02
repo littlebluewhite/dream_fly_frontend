@@ -50,9 +50,6 @@ const gate = createSessionGate<LeaveRequest[]>({
   apply: (list) => leaveRequests.set(list),
   reset: () => leaveRequests.set([]) // boot 態 = 空
 });
-export const leaveRequestsHydrated = gate.hydrated;
-/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
-export const resetLeaveRequestsForTests = gate.reset;
 export const hydrateLeaveRequests = gate.hydrate;
 /** 保名 = gate.refresh：無視守衛、一律真抓——MyCourseDetail 開課程詳情要「刷新
  *  最新請假狀態」的既有語意（mobile stores 的 re-export 與 identity pin 均繫於

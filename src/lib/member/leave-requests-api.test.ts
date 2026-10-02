@@ -4,17 +4,14 @@
  * 覆蓋 stores.ts 新增的請假網路層：getCourseSessions / hydrateLeaveRequests /
  * refreshLeaveRequests / createLeaveRequest / cancelLeaveRequest / bookMakeup /
  * leaveRequestErrorMessage。
- * 只替換 $lib/api/client 的 api()，ApiError 用回真實類別（同 checkout-api.test.ts
- * 慣例）。呼叫序列（path/method/body）是核心斷言,不是只驗證最終 store 狀態。 */
+ * 只替換 $lib/api/client 的 api()，ApiError 用回真實類別。呼叫序列（path/method/body）是核心斷言,不是只驗證最終 store 狀態。 */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
-import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import {
   leaveRequests,
-  leaveRequestsHydrated,
   getCourseSessions,
   hydrateLeaveRequests,
   refreshLeaveRequests,
@@ -23,39 +20,12 @@ import {
   bookMakeup,
   leaveRequestErrorMessage
 } from './stores';
-import { resetLeaveRequestsForTests } from './leave';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
-
-/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers
- *  （手法同 checkout-api.test.ts / load-gate.test.ts 的 createDeferred）。 */
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
-/** F2 和解重抓（mutator 尾隨的 void gate.refresh()）是 fire-and-forget——
- *  macrotask 跳一拍，讓其 fetch → apply 鏈完整收束後再斷言。 */
-function settleReconcile() {
-  return new Promise<void>((r) => setTimeout(r, 0));
-}
-
-/** F1 用最小 AuthResponse——authStore.login() 走真實 applySession
- *  （setTokens + 登入態），登出邊沿才有得測。 */
-const AUTH_RES = {
-  access_token: 'at-f1',
-  refresh_token: 'rt-f1',
-  user: {
-    id: 'u-f1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false,
-    avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member']
-  }
-};
 
 const API_LR_PENDING = {
   id: 'lr-1', course_id: 'course-1', course_name: '競技啦啦隊 進階班',
@@ -73,60 +43,24 @@ const API_LR_APPROVED = {
   decided_at: '2026-07-02T00:00:00Z', created_at: '2026-06-28T00:00:00Z'
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
   leaveRequests.set([]);
-  resetLeaveRequestsForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓 hydrateLeaveRequests 短路
+  await resetSessionStores(); // 模組單例閘門:登入→登出走一圈,不重置會跨 it 洩漏
 });
 
-/* C1：水合改走 createHydrationGate（guard 短路 + post-await re-check + mutator
- * 翻旗，同 checkout-api.test.ts 的 hydrateNotifications/hydrateWaitlist 協定）。 */
-describe('hydrateLeaveRequests — GET /leave-requests/me（guard 短路 + mutation 勝出）', () => {
-  it('hydrates the store from the API response，並把 leaveRequestsHydrated 翻 true', async () => {
+/* 閘門協定(guard 短路、在飛作廢、和解重抓、換身分重置)的釘子住 hydration-gate.test.ts /
+ * session-gate.test.ts;本檔只留接線:HTTP 路徑與 body、成功後 store 內容、錯誤文案。 */
+describe('hydrateLeaveRequests — GET /leave-requests/me', () => {
+  it('hydrates the store from the API response', async () => {
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING, API_LR_APPROVED] }));
 
     await hydrateLeaveRequests();
 
+    expect(api).toHaveBeenCalledWith('/leave-requests/me');
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-1', 'lr-2']);
-    expect(get(leaveRequestsHydrated)).toBe(true);
   });
 
-  it('guard 短路:已經 hydrate 過就不重覆抓 —— 避免蓋掉本地 create/cancel 直寫的狀態', async () => {
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_APPROVED] }));
-    await hydrateLeaveRequests(); // 哨兵經真水合落地(旗標唯讀)
-    vi.mocked(api).mockClear();
-    vi.mocked(api).mockImplementation(fakeRouter({})); // 任何呼叫都會丟錯
-
-    await hydrateLeaveRequests();
-
-    expect(api).not.toHaveBeenCalled();
-    expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']); // 未被覆寫
-  });
-
-  it('F1 跨登入洩漏釘:hydrate 完成後 authStore 登出 → 旗標翻 false + store 清空,下一個帳號 hydrate 重新真抓', async () => {
-    /* SPA 登出（authStore.logout() + goto）沒有整頁重載,模組單例的 gate 旗標若不
-     * 重置,B 帳號登入後 hydrateLeaveRequests() 被 guarded() 短路——直接看到 A 的假單。 */
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': AUTH_RES,
-      'POST /auth/logout': undefined,
-      'GET /leave-requests/me': [API_LR_PENDING]
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw'); // 帳號 A 登入
-    await hydrateLeaveRequests();
-    expect(get(leaveRequests)).toHaveLength(1);
-    expect(get(leaveRequestsHydrated)).toBe(true);
-
-    await authStore.logout(); // 「登入 → 登出」邊沿
-
-    expect(get(leaveRequestsHydrated)).toBe(false); // 旗標重置,guarded() 不再短路
-    expect(get(leaveRequests)).toEqual([]); // A 的假單不留給 B
-
-    const gets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/leave-requests/me').length;
-    const before = gets();
-    await hydrateLeaveRequests(); // 帳號 B 再水合 → 真的重新 fetch
-    expect(gets()).toBe(before + 1);
-  });
 });
 
 describe('refreshLeaveRequests — GET /leave-requests/me', () => {
@@ -159,54 +93,6 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     expect(get(leaveRequests).map((r) => r.id)).toEqual(['lr-2']);
   });
 
-  it('P1′ 在飛作廢釘:refresh in-flight 期間登出 → 姍姍來遲的回應整包作廢(不套用、不 commit)', async () => {
-    /* refreshLeaveRequests 無視 guard 且無條件套用——登出重置後若讓在飛回應落地,
-     * A 的假單會復活並 commit true,B 帳號的 hydrate 被 guarded() 短路(F1 的邊沿
-     * 重置只清「已落地」的狀態,關不住在飛窗口)。 */
-    const deferred = createDeferred<unknown[]>();
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': AUTH_RES,
-      'POST /auth/logout': undefined,
-      'GET /leave-requests/me': () => deferred.promise
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw');
-    const p = refreshLeaveRequests(); // A 的 GET 掛起中
-    await authStore.logout(); // 在飛期間登出
-
-    deferred.resolve([API_LR_PENDING]);
-    await expect(p).rejects.toThrow(); // 過期 fetch 作廢
-
-    expect(get(leaveRequests)).toEqual([]); // A 的假單沒有復活
-    expect(get(leaveRequestsHydrated)).toBe(false); // B 的 hydrate 不會被短路
-  });
-
-  it('R10 世代穩定重抓(MyCourseDetail 場景):refresh 在飛期間取消假單 → 已取消不復活,舊快照丟棄並原地重抓(GET×2)', async () => {
-    /* MyCourseDetail 開詳情時呼叫 refreshLeaveRequests()「刷新最新請假狀態」;使用者在
-     * 這個飛行窗口內按下取消,舊碼會讓姍姍來遲的舊快照(server 端仍 pending)無條件落地,
-     * 剛取消的假單復活成 pending。判準是「refresh 進場之後才發生的 mutation」,cancel 的
-     * 寫入正落在窗口內 → 舊快照丟棄、原地重抓 server 已更新的版本。 */
-    const deferred = createDeferred<unknown[]>();
-    let gets = 0;
-    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING] }));
-    await hydrateLeaveRequests(); // 清單頁已載入過,詳情頁只是要「最新」
-    vi.mocked(api).mockClear();
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /leave-requests/me': () => (++gets === 1 ? deferred.promise : [{ ...API_LR_PENDING, status: 'cancelled' }]),
-      'DELETE /leave-requests/lr-1': undefined
-    }));
-
-    const p = refreshLeaveRequests(); // 開詳情的刷新在飛
-    await cancelLeaveRequest('lr-1'); // 飛行窗口內取消 → 本地 cancelled + 推世代
-    expect(get(leaveRequests)[0].status).toBe('cancelled');
-
-    deferred.resolve([API_LR_PENDING]); // 舊快照:server 端當時仍是 pending
-    await p;
-
-    expect(gets).toBe(2); // 舊快照丟棄後補抓(refresh 契約:丟棄不能了事)
-    expect(get(leaveRequests)[0].status).toBe('cancelled'); // 已取消不復活
-  });
-
 });
 
 describe('createLeaveRequest — POST /leave-requests', () => {
@@ -221,33 +107,6 @@ describe('createLeaveRequest — POST /leave-requests', () => {
     });
     expect(result.id).toBe('lr-1');
     expect(get(leaveRequests)).toEqual([result]);
-  });
-
-  it('P1′(mutator):create 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
-    /* 薄 happy-path 釘只證明「create 成功時 prepend」，證明不了 createLeaveRequest 仍
-     * 委派 gate.write——若被誤改成「直接 await api + store 直寫」，這條釘與
-     * session-gate.test 的泛型 mutate 釘會兩邊皆綠，但跨帳號資料仍會落地。 */
-    const deferred = createDeferred<unknown>();
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': AUTH_RES,
-      'POST /auth/logout': undefined,
-      'GET /leave-requests/me': [API_LR_APPROVED],
-      'POST /leave-requests': () => deferred.promise
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw');
-    await hydrateLeaveRequests(); // A 已水合,store 非空
-    expect(get(leaveRequests)).toHaveLength(1);
-
-    const p = createLeaveRequest('sess-1', '生病'); // A 的 POST 掛起中
-    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
-
-    deferred.resolve(API_LR_PENDING);
-    const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
-
-    expect(result.id).toBe('lr-1');
-    expect(get(leaveRequests)).toEqual([]); // 棄寫:新單不落地,舊單也沒有復活——維持 reset 後狀態
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('omits reason from the body when not provided (contract: reason? 選填)', async () => {
@@ -292,40 +151,6 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     expect(list.find((r) => r.id === 'lr-2')?.status).toBe('approved'); // untouched
   });
 
-  it('P1′(mutator):cancel 在飛登出 → 棄寫不落地,同 id canary 原封不動(mutator 回傳值本為 void,只斷言不寫回)', async () => {
-    /* 薄 happy-path 釘只證明「cancel 成功時原地標記 cancelled」，證明不了
-     * cancelLeaveRequest 仍委派 gate.write——理由同 createLeaveRequest 上方的
-     * P1′(mutator)釘。不可證偽補強(帳本閉合輪 R3):登出後 store 已被 reset 清空,
-     * 若直接斷言 toEqual([]),繞過 gate.write、直接 await api 後 map 空陣列的壞
-     * 實作一樣得 []——斷言恆真、抓不到退化。改在登出後、resolve 前植入一筆「B
-     * session 的 canary」,id 與在飛 cancel 的目標同(lr-1,模擬 B 剛好也載入了同
-     * id 資料);正確實作核對 epoch 後棄寫、canary 原封不動,壞實作的 map 會把它的
-     * status 改成 cancelled。 */
-    const deferred = createDeferred<undefined>();
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': AUTH_RES,
-      'POST /auth/logout': undefined,
-      'GET /leave-requests/me': [API_LR_PENDING],
-      'DELETE /leave-requests/lr-1': () => deferred.promise
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw');
-    await hydrateLeaveRequests(); // A 已水合,store 含 lr-1(pending)
-    expect(get(leaveRequests)).toHaveLength(1);
-
-    const p = cancelLeaveRequest('lr-1'); // A 的 DELETE 掛起中
-    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
-
-    const canary = { ...API_LR_APPROVED, id: 'lr-1' }; // B session 的資料(同 id)——正確實作應保它不動
-    leaveRequests.set([canary as never]);
-
-    deferred.resolve(undefined);
-    await p;
-
-    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.write 直寫會被 map 改掉 status → 紅
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
-  });
-
   it('leaves the store untouched when the DELETE call fails', async () => {
     leaveRequests.set([API_LR_PENDING as never]);
     vi.mocked(api).mockImplementation(
@@ -336,29 +161,6 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     expect(get(leaveRequests)[0].status).toBe('pending');
   });
 
-  it('F2 完整性釘:未 hydrate 直接 cancelLeaveRequest → 和解重抓收斂為完整 server 清單(含本地沒有的既有列),旗標 true,之後 hydrate 被 guarded() 短路', async () => {
-    /* 寫入當下旗標 false（從未 hydrate）→ 本地只有直寫的 lr-1,server 上的 lr-2
-     * 缺席;而寫入的翻旗會讓 guarded() 從此短路——沒有和解重抓,
-     * 既有列永不補回。 */
-    leaveRequests.set([API_LR_PENDING as never]); // 本地僅 lr-1（例如上個畫面直寫）
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'DELETE /leave-requests/lr-1': undefined,
-      'GET /leave-requests/me': [{ ...API_LR_PENDING, status: 'cancelled' }, API_LR_APPROVED]
-    }));
-
-    await cancelLeaveRequest('lr-1');
-    await settleReconcile();
-
-    expect(get(leaveRequests).map((r) => [r.id, r.status])).toEqual([
-      ['lr-1', 'cancelled'],
-      ['lr-2', 'approved']
-    ]);
-    expect(get(leaveRequestsHydrated)).toBe(true);
-
-    const calls = vi.mocked(api).mock.calls.length;
-    await hydrateLeaveRequests(); // 和解重抓後水合真相已成立——guarded() 短路,不再重覆真抓
-    expect(vi.mocked(api).mock.calls.length).toBe(calls);
-  });
 });
 
 describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
@@ -375,41 +177,6 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     });
     expect(result.makeup_session_id).toBe('sess-9');
     expect(get(leaveRequests)[0].makeup_session_date).toBe('2026-07-20');
-  });
-
-  it('P1′(mutator):makeup 在飛登出 → 棄寫不落地,同 id canary 原封不動,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
-    /* 薄 happy-path 釘只證明「makeup 成功時原地取代」，證明不了 bookMakeup 仍委派
-     * gate.write——理由同 createLeaveRequest 上方的 P1′(mutator)釘。不可證偽補強
-     * (帳本閉合輪 R3):登出後 store 已被 reset 清空,若直接斷言 toEqual([]),繞過
-     * gate.write、直接 await api 後 map 空陣列的壞實作一樣得 []——斷言恆真、抓不
-     * 到退化。改在登出後、resolve 前植入一筆「B session 的 canary」,id 與在飛
-     * makeup 的目標同(lr-2,模擬 B 剛好也載入了同 id 資料);正確實作核對 epoch 後
-     * 棄寫、canary 原封不動,壞實作的 map 會把它整筆取代成 server 回應。 */
-    const updated = { ...API_LR_APPROVED, makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00' };
-    const deferred = createDeferred<unknown>();
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': AUTH_RES,
-      'POST /auth/logout': undefined,
-      'GET /leave-requests/me': [API_LR_APPROVED],
-      'POST /leave-requests/lr-2/makeup': () => deferred.promise
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw');
-    await hydrateLeaveRequests(); // A 已水合,store 含 lr-2(approved)
-    expect(get(leaveRequests)).toHaveLength(1);
-
-    const p = bookMakeup('lr-2', 'sess-9'); // A 的 POST 掛起中
-    await authStore.logout(); // 在飛期間登出 → epoch 變更,reset 已清空 store
-
-    const canary = { ...API_LR_PENDING, id: 'lr-2' }; // B session 的資料(同 id)——正確實作應保它不動
-    leaveRequests.set([canary as never]);
-
-    deferred.resolve(updated);
-    const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
-
-    expect(result.makeup_session_id).toBe('sess-9');
-    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.write 直寫會被 map 整筆取代 → 紅
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('propagates 409 (該場次名額已滿) unhandled', async () => {

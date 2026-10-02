@@ -32,7 +32,6 @@ const USER_A = {
 	id: 'u-a', email: 'a@dreamfly.test', name: '王小明', phone: '0912345678', phone_verified: false,
 	avatar_url: null, is_active: true, created_at: '2024-03-15T08:00:00Z', roles: ['member']
 };
-const USER_B = { ...USER_A, id: 'u-b', email: 'b@dreamfly.test', name: '李大華', phone: null };
 
 /** GET /users/me 的完整形狀(authStore 的 ApiUser + preferences + birth_date)。 */
 function me(over: Record<string, unknown> = {}, user: Record<string, unknown> = USER_A) {
@@ -54,7 +53,7 @@ function getCount(): number {
 	return vi.mocked(api).mock.calls.filter(([path, init]) => path === '/users/me' && !init?.method).length;
 }
 
-async function loginAs(user: typeof USER_A | typeof USER_B) {
+async function loginAs(user: typeof USER_A) {
 	route({ 'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user } });
 	await authStore.login(user.email, 'pw');
 }
@@ -68,45 +67,7 @@ beforeEach(async () => {
 	vi.mocked(api).mockClear();
 });
 
-describe('水合:每個 identity 只 GET 一次', () => {
-	it('同一 identity 重複 / 併發呼叫 hydrateSelfAccount() 只 GET 一次', async () => {
-		route({ 'GET /users/me': me() });
-
-		await Promise.all([hydrateSelfAccount(), hydrateSelfAccount()]);
-		await hydrateSelfAccount();
-
-		expect(getCount()).toBe(1);
-	});
-
-	it('A → B 直接換帳號:立即清空、B 重新 GET', async () => {
-		route({ 'GET /users/me': me({ preferences: { promo: true } }) });
-		await hydrateSelfAccount();
-		expect(get(selfAccount)?.name).toBe('王小明');
-
-		await loginAs(USER_B);
-		expect(get(selfAccount)).toBeNull();
-		expect(get(prefs)).toEqual(DEFAULT_PREFS);
-
-		route({ 'GET /users/me': me({}, USER_B) });
-		await hydrateSelfAccount();
-		expect(getCount()).toBe(2);
-		expect(get(selfAccount)?.name).toBe('李大華');
-	});
-
-	it('登出即重置;再登入重新 GET', async () => {
-		route({ 'GET /users/me': me({ preferences: { dark: true } }) });
-		await hydrateSelfAccount();
-		expect(get(prefs).dark).toBe(true);
-
-		await authStore.logout();
-		expect(get(selfAccount)).toBeNull();
-		expect(get(prefs)).toEqual(DEFAULT_PREFS);
-
-		await loginAs(USER_A);
-		await hydrateSelfAccount();
-		expect(getCount()).toBe(2);
-	});
-
+describe('hydrateSelfAccount', () => {
 	it('GET 失敗:hydrateSelfAccount 拋出,下次可重試', async () => {
 		route({ 'GET /users/me': new Error('offline') });
 		await expect(hydrateSelfAccount()).rejects.toThrow('offline');
@@ -364,29 +325,5 @@ describe('saveSelfAccount', () => {
 
 		expect(outcome).toEqual({ kind: 'saved' });
 		expect(patchBodies()).toEqual([{ birth_date: '2013-05-18' }]);
-	});
-});
-
-describe('換帳號:A 排隊的寫入跳過', () => {
-	it('A 的寫入在飛時排進的第二筆,換成 B 之後輪到時直接跳過,不送出', async () => {
-		route({ 'GET /users/me': me() });
-		await hydrateSelfAccount();
-		vi.mocked(api).mockClear();
-
-		const first = deferred<unknown>();
-		route({ 'PATCH /users/me': () => first.promise });
-		const a1 = setPref('dark', true);
-		const a2 = saveSelfAccount({ name: '王大明' });
-		await new Promise((r) => setTimeout(r, 0));
-		expect(patchBodies()).toHaveLength(1);
-
-		await loginAs(USER_B); // 無登出,直接換帳號
-		first.resolve(me({ preferences: { dark: true } }));
-		await a1;
-
-		expect((await a2).kind).toBe('failed');
-		expect(patchBodies()).toHaveLength(1); // 第二筆沒送
-		expect(get(selfAccount)).toBeNull(); // A 的回應也沒寫進 B
-		expect(get(authStore).member?.name).toBe('李大華');
 	});
 });

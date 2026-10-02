@@ -22,12 +22,11 @@
 export { createCart, cart, cartCount } from '$lib/cart';
 export type { AddResult } from '$lib/cart';
 
-export { waitlist, waitlistHydrated, hydrateWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './waitlist';
+export { waitlist, hydrateWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './waitlist';
 export type { WaitlistEntry } from './waitlist';
 
 export {
   leaveRequests,
-  leaveRequestsHydrated,
   hydrateLeaveRequests,
   refreshLeaveRequests,
   createLeaveRequest,
@@ -47,6 +46,6 @@ export type { ApiSubscription } from './subscriptions';
 export { createCheckout } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
-export { notifications, unreadCount, notificationsHydrated, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';
+export { notifications, unreadCount, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';
 
 export { checkoutOpen, search, toasts } from './ui';

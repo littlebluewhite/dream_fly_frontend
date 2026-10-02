@@ -5,8 +5,8 @@ import { tick } from 'svelte';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { notifications, notificationsHydrated, hydrateNotifications, toasts } from '$lib/member/stores';
-import { resetNotificationsForTests } from '$lib/member/notifications';
+import { notifications, hydrateNotifications, toasts } from '$lib/member/stores';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 import type { ApiNotification, Notification } from '$lib/member/data';
 import Page from './+page.svelte';
@@ -44,7 +44,7 @@ async function hydrateWithSeed() {
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
   feed = FEED_UNSET;
   vi.mocked(api).mockImplementation(async (path: string) => (path === '/notifications' ? feed() : undefined));
@@ -53,14 +53,14 @@ beforeEach(() => {
   get(toasts).forEach((t) => toasts.dismiss(t.id));
   // Reset the load-once guard so each test starts un-hydrated. A store (not a
   // module boolean) so test order can't leak a prior successful hydrate.
-  resetNotificationsForTests();
+  await resetSessionStores();
   // Re-seed the feed so a prior test's set() doesn't bleed through.
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
-afterEach(() => {
+afterEach(async () => {
   // Ensure shared store is always restored to seed after each test.
-  resetNotificationsForTests();
+  await resetSessionStores();
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
@@ -160,12 +160,6 @@ describe('member/notifications 頁', () => {
     expect(feedCalls()).toBe(0);
   });
 
-  it('首次成功載入會把守衛設為 true', async () => {
-    feed = async () => WIRE.map((n) => ({ ...n }));
-    render(Page);
-    await screen.findByText('明日課程提醒');
-    expect(get(notificationsHydrated)).toBe(true);
-  });
 
   it('refresh 失敗後重試必須真正重新 fetch 而非被 hydration 守衛短路', async () => {
     // Step 1: 初次載入成功 → hydration 守衛設為 true

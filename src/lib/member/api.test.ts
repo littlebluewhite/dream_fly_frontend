@@ -10,9 +10,7 @@ import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance,
 import { api } from '$lib/api/client';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, waitlist, leaveRequests } from './stores';
-import { resetNotificationsForTests } from './notifications';
-import { resetWaitlistForTests } from './waitlist';
-import { resetLeaveRequestsForTests } from './leave';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -27,7 +25,7 @@ vi.mock('$lib/public/api', () => ({
   listCoaches: vi.fn()
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
   vi.mocked(listCourses).mockReset();
   vi.mocked(listCoaches).mockReset();
@@ -35,11 +33,9 @@ beforeEach(() => {
   pointsLedger.set([]);
   subscriptions.set([]);
   notifications.set([]);
-  resetNotificationsForTests();
   waitlist.set([]);
-  resetWaitlistForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓 getMine 的旁路 hydrate 短路
   leaveRequests.set([]);
-  resetLeaveRequestsForTests();
+  await resetSessionStores(); // 模組單例閘門:登入→登出走一圈,不重置會跨 it 洩漏、讓旁路 hydrate 短路
 });
 
 describe('getDashboard', () => {

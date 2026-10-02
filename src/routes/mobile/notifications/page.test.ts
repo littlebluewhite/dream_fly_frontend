@@ -3,7 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { api } from '$lib/api/client';
-import { notifications, notificationsHydrated, hydrateNotifications, resetNotificationsForTests } from '$lib/member/notifications';
+import { notifications, hydrateNotifications } from '$lib/member/notifications';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -47,7 +48,7 @@ const FEED_UNSET = () => Promise.reject(new Error('測試未指定 GET /notifica
 /** 本頁只有兩種 api 呼叫:GET /notifications(路徑相等)與 /notifications/{id}/read。 */
 const feedCalls = () => vi.mocked(api).mock.calls.filter(([path]) => path === '/notifications').length;
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.mocked(api).mockReset();
 	feed = FEED_UNSET;
 	vi.mocked(api).mockImplementation(async (path: string) => (path === '/notifications' ? feed() : undefined));
@@ -55,15 +56,15 @@ beforeEach(() => {
 	// 清掉才能對「某 toast 不得出現」做可靠斷言(同 member 前例)。
 	get(toasts).forEach((t) => toasts.dismiss(t.id));
 	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
-	resetNotificationsForTests();
+	await resetSessionStores();
 	// 重新灌夾具(store 開機為 `[]`,本檔測試需要有未讀的 feed,比照 member 前例),避免前一
 	// 測試的 set()/markAllRead 滲漏到下一個測試。
 	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
-afterEach(() => {
+afterEach(async () => {
 	// 確保共享 store 在每個測試後都還原為 seed。
-	resetNotificationsForTests();
+	await resetSessionStores();
 	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
@@ -96,13 +97,6 @@ describe('mobile/notifications 頁', () => {
 		// 直接 ready(store 已有資料),且未再呼叫接縫 → 不覆寫已讀狀態。
 		expect(await screen.findByText('明日課程提醒')).toBeInTheDocument();
 		expect(feedCalls()).toBe(0);
-	});
-
-	it('首次成功載入會把守衛設為 true', async () => {
-		feed = async () => NOTIFS_SEED.map(seedToWire);
-		render(Page);
-		await screen.findByText('明日課程提醒');
-		expect(get(notificationsHydrated)).toBe(true);
 	});
 
 	it('refresh 失敗後重試必須真正重新 fetch 而非被 hydration 守衛短路', async () => {

@@ -17,12 +17,12 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  (以身分為 key,見 $lib/store-warm)——原本掛在 api.ts 的 getDashboard(),只有先進首頁
  *  角標才是真資料;現在任何頁面進場都暖,Topbar/Sidebar/TabBar 的未讀角標不用等使用者先逛過
  *  首頁或通知頁。
- *  守衛跟 notifications 頁的 load() 用同一顆 notificationsHydrated flag——已經 hydrate
+ *  守衛跟 notifications 頁的 load() 用同一顆閘門的水合旗標——已經 hydrate
  *  過就不重覆抓，避免蓋掉使用者在通知頁的本地已讀狀態（不論是哪一邊先觸發都一樣：先到者
  *  hydrate、後到者直接讀已經在 store 裡的資料）。type→cat/icon/tone 對照表住 data.ts 的
  *  mapNotification(api.ts 原本的 getNotifications() 已於 R12 退役，本閘門是唯一消費者)。gate.refresh
  *  不匯出——通知域目前沒有「無視守衛強制重抓」的消費者(YAGNI)。
- *  C1 抬升(修跨登入洩漏):原本 notificationsHydrated 旗標跨帳號存活是真缺陷——SPA 登出
+ *  C1 抬升(修跨登入洩漏):原本水合旗標跨帳號存活是真缺陷——SPA 登出
  *  無整頁重載,B 帳號的 getDashboard 觸發的 refreshNotifications(今 hydrateNotifications)
  *  被 guarded() 短路,直接讀到 A 的通知。改走 createSessionGate 後,identity 變更即 reset
  *  (旗標翻 false + 通知重置為 boot 態)、換帳後重抓真資料。R14:boot 態 = `[]`(F3 誠實開機);
@@ -42,13 +42,6 @@ const gate = createSessionGate<Notification[]>({
   apply: (list) => notifications.set(list),
   reset: () => notifications.set([]) // boot 態(開機值 = reset 值 = [])
 });
-// True once the notifications feed has been hydrated via GET /notifications on
-// the first client mount; lets re-visits skip re-seeding so read-state (and the
-// unread badge) survive navigation. Independent of `notifications`/`unreadCount`
-// so it never affects the badge. 唯讀投影(R15 閘門重置);測試以 resetNotificationsForTests 重置。
-export const notificationsHydrated = gate.hydrated;
-/** 測試出口:整顆閘門還原開機態(內容 + 旗標 + 在飛 GET + 尾流帳 + 兩條鏈)。production 不得引用。 */
-export const resetNotificationsForTests = gate.reset;
 export const hydrateNotifications = gate.hydrate;
 /** 通知頁的 load-gate 進場包(閘門的資料來源,抓取帶 epoch 核對),頁面 spread 使用。 */
 export const notificationsPageEntry = gate.pageEntry();

@@ -33,14 +33,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { resetMessagesForTests } from '$lib/mobile-admin/stores';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import Layout from './+layout.svelte';
 
-beforeEach(() => {
+beforeEach(async () => {
 	mockUrl = new URL('http://localhost/mobile-admin/admin');
 	authStore.logout();
-	resetMessagesForTests();
+	await resetSessionStores();
 	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
 });
 afterEach(() => vi.clearAllMocks());

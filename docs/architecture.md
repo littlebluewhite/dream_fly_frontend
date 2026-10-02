@@ -292,8 +292,8 @@ a `Card`). The member 我的課程 page's in-card attendance-history load is not
 outside the wrapper.
 
 Data that already lives in a store (member/mobile's notification centre; mobile-admin's ops collections
-and messages) hydrates once behind a `*Hydrated` guard (`notificationsHydrated` — shared by member and
-mobile — `opsHydrated`, `messagesHydrated`), with `gate.refresh()` always re-fetching for `ErrorState`'s
+and messages) hydrates once behind the gate's hydrated guard (`notifications` — shared by member and
+mobile — the ops collections, `messages`; stores no longer export `*Hydrated`), with `gate.refresh()` always re-fetching for `ErrorState`'s
 retry regardless of the guard — but the guard's mechanism and ownership differ by surface. The wiring is
 the same for all of them (`docs/adr/0025` F-1): `load-gate.ts` exposes a `LoadSource` port
 (`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`), `LoadGateOptions<T>` is a discriminated union of
@@ -340,7 +340,7 @@ Mobile-admin's ops collections and messages are store-owned: the fetch/apply/gua
 the guard true (a mutation *is* the session's source of truth) and none of them is "the page". The pages
 spread the gate's own entry pack — `createLoadGate({ ...opsPageEntry })`/
 `createLoadGate({ ...messagesPageEntry })` — so the store write goes through the source's `load` closure
-and a response landing after unmount or after a newer run is dropped; the `*Hydrated` guard is rechecked
+and a response landing after unmount or after a newer run is dropped; the hydrated guard is rechecked
 right before the write, so a mutation racing an in-flight fetch always wins. The four ops collections
 (`members`/`classes`/`orders`/`coaches`) boot honestly (`docs/adr/0025` F-3): a private `EMPTY_OPS`
 constant (four empty arrays, `pages` all `{ total: 0, perPage: 0 }`) is both the stores' boot value and
@@ -370,8 +370,8 @@ the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s ops gate b
 every identity-scoped store builds on it through `src/lib/session-gate.ts` (`docs/adr/0017`, see the
 dedicated section below) — member's waitlist, leave-requests and notifications, mobile-admin's messages,
 the self account and coach identity. `hydrateWaitlist`/`hydrateLeaveRequests`/`hydrateNotifications`
-*are* `gate.hydrate` behind `waitlistHydrated`/`leaveRequestsHydrated`/`notificationsHydrated`, and their
-mutators run through one `gate.mutate()`. There is no `refreshWaitlist` (YAGNI); `refreshLeaveRequests`
+*are* `gate.hydrate`, and their
+mutators run through one `gate.write()`. There is no `refreshWaitlist` (YAGNI); `refreshLeaveRequests`
 is `gate.refresh`, used by `MyCourseDetail`'s open-refresh — accepting once-per-session freshness, with
 in-flight cross-login responses discarded and the explicit-refresh window closed by the
 generation-stable refetch loop, so a cancel landing inside that window discards the stale snapshot and

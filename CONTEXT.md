@@ -155,8 +155,9 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 **等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點只住
 `hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序還原內容、旗標翻 false、
 丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數、喚醒全部尾流等待者;重置前出發的
-load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。各模組匯出 `reset…ForTests = gate.reset`
-供測試清理,production 不得 import(`import-scan.test.ts` 契約守)。
+load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/messages)不再匯出測試專用的重置,測試用真的登入 → 登出
+(`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests = opsGate.reset`,
+production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯出 `*Hydrated`(`hydrated` 只留在閘門介面當唯讀探針)。
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
 自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「寫入 → markMutated →
 await refresh」序列會因此無窮重抓);把等待判準接上世代(同一條正常序列會永久掛住)或把丟棄判準接上
@@ -229,7 +230,7 @@ _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不
 **匯入掃描器 (Import Scan)**:
 原始碼層 import 掃描的 test-support 模組;單一來源 `$lib/testing/import-scan.ts`(`walk`/
 `importSpecifiers`/`makeReachPredicate` 三支,字串/註解/模板感知),供接縫契約
-測試掃 production 檔,例如 production 原始碼零引用各模組的 `*ForTests` 重置匯出
+測試掃 production 檔,例如 production 原始碼零引用 `resetOpsForTests` 這類 `*ForTests` 重置匯出
 (見 `docs/adr/0025`「閘門重置」)。
 _Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib/testing`(dogfood 契約會紅)
 

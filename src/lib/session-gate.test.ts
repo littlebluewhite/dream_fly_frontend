@@ -225,7 +225,8 @@ describe('createSessionGate — session 家族', () => {
 			'GET /list': () => { gets += 1; return [{ id: 'b' }]; }
 		}));
 		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
+		const apply = vi.fn((d: Item[]) => store.set(d));
+		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply, reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
 		void gate.write({ optimistic: () => {}, send: () => new Promise(() => {}) }); // A 的樂觀寫入:PATCH 掛死,永不 settle
@@ -258,6 +259,9 @@ describe('createSessionGate — session 家族', () => {
 
 		// 尾流 settle 後才出發:refresh 一發 + B 的寫入進場時未水合、落地後排的和解一發。
 		expect(gets).toBe(2);
+		// 兩發 GET 都落地(apply 兩次)= 「refresh 一次 + 一次和解」;若是 refresh 因世代不穩而
+		// 自己重抓兩次,舊快照會被丟棄、apply 只會跑一次——GET 次數相同,只有 apply 次數分得出來。
+		expect(apply).toHaveBeenCalledTimes(2);
 		expect(get(store)).toEqual([{ id: 'b' }]);
 	});
 

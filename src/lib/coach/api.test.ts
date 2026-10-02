@@ -30,7 +30,7 @@ import { api } from '$lib/api/client';
 import { todayLabel } from './schedule-dates';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { authStore } from '$lib/stores/authStore';
-import { loginAs, asLoginUser, authRoutes } from '$lib/testing/coach-session';
+import { loginAs, asLoginUser } from '$lib/testing/coach-session';
 import { selfAccount, hydrateSelfAccount } from '$lib/self-account';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -76,48 +76,7 @@ beforeEach(async () => {
 const callCount = (path: string, method = 'GET') =>
 	vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
 
-describe('教練身分:每個 session 只解析一次(C6)', () => {
-	it('連續兩個 getter 只打一次 GET /users/me + GET /coaches', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH], 'GET /sessions/today': [] })
-		);
-
-		await getSettings();
-		await getToday();
-
-		expect(callCount('/users/me')).toBe(1);
-		expect(callCount('/coaches')).toBe(1);
-	});
-
-	it('併發的 getter 共用同一支在飛解析', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH], 'GET /sessions/today': [] })
-		);
-
-		await Promise.all([getSettings(), getToday()]);
-
-		expect(callCount('/users/me')).toBe(1);
-		expect(callCount('/coaches')).toBe(1);
-	});
-
-	it('A → B 換帳號:B 重新解析,不沿用 A 的教練身分', async () => {
-		const USER_B = { ...ME, id: 'u2', email: 'b@dreamfly.com.tw', name: '陳建宏' };
-		let me: typeof ME = ME;
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ ...authRoutes(USER_B), 'GET /users/me': () => me, 'GET /coaches': [MY_COACH, OTHER_COACH] })
-		);
-		expect((await getSettings()).coach.role).toBe('資深體操教練');
-
-		me = USER_B;
-		await authStore.login(USER_B.email, 'pw');
-		const d = await getSettings();
-
-		expect(d.coach.name).toBe('陳建宏');
-		expect(d.coach.role).toBe('跑酷教練');
-		expect(callCount('/users/me')).toBe(2);
-		expect(callCount('/coaches')).toBe(2);
-	});
-
+describe('教練身分解析(C6;快取/換身分協定的釘子住 session-gate.test.ts)', () => {
 	it('CoachNotFoundError 之後重試會重新解析(管理員綁定教練檔案後重試即成功)', async () => {
 		let coaches = [OTHER_COACH];
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': () => coaches }));

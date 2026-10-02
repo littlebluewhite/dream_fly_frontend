@@ -1,12 +1,6 @@
-/* Dream Fly — member/notifications.ts 單測（C1：markRead/markAllRead 從
- * routes/member/notifications/+page.svelte 搬遷進模組後的單元測試）。
- *
- * hydrateNotifications/notificationsHydrated 的 gate 語意（guard 短路、post-await
- * re-check、翻旗）已由 checkout-api.test.ts 的「hydrateNotifications(Task 17)」
- * 三個 it 與 hydration-gate.test.ts 的 createHydrationGate 單測覆蓋——本檔案只補
- * markRead/markAllRead 這兩個新 export 的模組層測試，與 routes/member/notifications/
- * page.test.ts 既有的頁面測試並存、是模組層的第二層覆蓋（樂觀更新、PATCH 佈線、
- * 失敗不回滾、allSettled 部分失敗回 'partial'）。
+/* Dream Fly — member/notifications.ts 接線單測:GET /notifications 映射、markRead/markAllRead
+ * 的 PATCH 佈線與樂觀更新、頁面進場包的接線。閘門協定(guard 短路、在飛作廢、mutation 勝出、
+ * 和解重抓、換身分重置)的釘子住 hydration-gate.test.ts / session-gate.test.ts,本檔不重釘。
  *
  * 只替換 $lib/api/client 的 api()。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,25 +8,10 @@ import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { createLoadGate } from '$lib/load-gate';
-import { notifications, notificationsHydrated, notificationsPageEntry, markRead, markAllRead, hydrateNotifications, resetNotificationsForTests } from './notifications';
+import { notifications, notificationsPageEntry, markRead, markAllRead, hydrateNotifications } from './notifications';
 import { mapNotification } from './data';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
-// Task 5(架構深化 R12):跨帳號 session 重置的「無登出直接換帳號」釘,自
-// mobile/notifications.test.ts 移植(mobile module 併入本檔前的獨有覆蓋,見
-// task-5-report.md)。用真 authStore.login 驅動 identity。
-import { authStore } from '$lib/stores/authStore';
-
-/** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers（同
- *  leave-requests-api.test.ts / load-gate.test.ts 的慣用式）。 */
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 /** GET /notifications 的後端形狀（ApiNotification），只填 mapNotification 會讀到的欄位。
  *  id 預設 'n1'(既有呼叫端沿用);settle 測試(移植自 mobile)需要區分多筆,顯式傳入。 */
@@ -48,11 +27,11 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   return { ...actual, api: vi.fn() };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
   vi.mocked(api).mockResolvedValue(undefined);
   // 夾具: n1–n3 未讀、n4–n6 已讀（見 $lib/testing/seed-fixtures 的 NOTIFS_SEED）。
-  resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
+  await resetSessionStores(); // 登入→登出走一圈讓閘門回開機態(內容還原 []),再鋪夾具
   notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
@@ -103,6 +82,21 @@ describe('mapNotification(自 member/api.test.ts 移入,原 getNotifications() �
   });
 });
 
+describe('hydrateNotifications — GET /notifications', () => {
+  it('把 GET /notifications 映射後寫入 notifications store', async () => {
+    vi.mocked(api).mockResolvedValue([
+      { id: 'n1', type: 'order_placed', title: '付款成功', message: '訂單已完成付款', is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' }
+    ]);
+
+    await hydrateNotifications();
+
+    expect(api).toHaveBeenCalledWith('/notifications');
+    expect(get(notifications)).toEqual([
+      { id: 'n1', cat: 'order', icon: 'credit-card', tone: 'success', title: '付款成功', body: '訂單已完成付款', time: '2026-07-04 06:30', read: false }
+    ]);
+  });
+});
+
 describe('markRead', () => {
   it('樂觀更新 store 後送 PATCH /notifications/{id}/read', async () => {
     await markRead('n1');
@@ -118,14 +112,6 @@ describe('markRead', () => {
     await markRead('n1');
 
     expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
-  });
-
-  it('經 gate.write() 宣告水合真相——把 notificationsHydrated 設為 true', async () => {
-    expect(get(notificationsHydrated)).toBe(false);
-
-    await markRead('n1');
-
-    expect(get(notificationsHydrated)).toBe(true);
   });
 });
 
@@ -155,43 +141,14 @@ describe('markAllRead', () => {
     expect(result).toBe('partial');
     expect(get(notifications).every((n) => n.read)).toBe(true);
   });
-
-  it('經 gate.write() 宣告水合真相——把 notificationsHydrated 設為 true', async () => {
-    expect(get(notificationsHydrated)).toBe(false);
-
-    await markAllRead();
-
-    expect(get(notificationsHydrated)).toBe(true);
-  });
-
-  it("無未讀時零 PATCH 仍回 'ok',且零記帳——同拍的頁面 refresh 同步出發 GET(不為「無事可做」多等三個 microtask)", async () => {
-    /* 空集路徑本來就無事可做:不樂觀更新、不入帳、不 allSettled。舊碼照樣入一筆空尾流,
-     * 同拍呼叫的頁面 refresh 因此要等 allSettled([]) 的三個 microtask 才出發 GET —— 純粹
-     * 是時序雜訊。這裡在 await 之前同步呼叫頁面 refresh,才照得到那筆空帳(await 之後帳已歸零)。 */
-    notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: true })));
-    let gets = 0;
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /notifications': () => { gets += 1; return []; }
-    }));
-    const page = createLoadGate({ ...notificationsPageEntry });
-
-    const p = markAllRead();
-    const refreshP = page.refresh();
-    expect(gets).toBe(1); // 零記帳:GET 尚未 await 就已出發
-
-    expect(await p).toBe('ok');
-    await refreshP;
-    expect(vi.mocked(api).mock.calls.map(([path]) => path)).toEqual(['/notifications']); // 零 PATCH
-    page.destroy();
-  });
 });
 
 describe('notificationsPageEntry(C3 接線釘)', () => {
   // 進場包本身的語意(epoch 核對、stale → error、retry、spread 進 load-gate)由
   // session-gate.test.ts 的 pageEntry describe 單源覆蓋——這裡只釘「通知頁拿到的是本模組
-  // 這顆閘門」的薄採用面:頁面 load 寫的是 notificationsHydrated 同一顆旗標(接錯閘門會讓
-  // 頁面的 load-once 守衛失聯),第二次 load 被守衛短路、不再打 GET。
-  it('頁面 load 後 notificationsHydrated 為真,第二次 load 不打 GET', async () => {
+  // 這顆閘門」的薄採用面:頁面 load 與 hydrateNotifications 共用同一顆閘門(接錯閘門會讓
+  // 頁面的 load-once 守衛失聯),水合過後再進頁不再打 GET。
+  it('頁面 load 後第二次 load 不打 GET(與 hydrateNotifications 同一顆閘門)', async () => {
     let gets = 0;
     vi.mocked(api).mockImplementation(fakeRouter({
       'GET /notifications': () => { gets += 1; return [apiNotif(false)]; }
@@ -199,8 +156,9 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
     const page = createLoadGate({ ...notificationsPageEntry });
 
     await page.load();
-    expect(get(notificationsHydrated)).toBe(true);
     expect(gets).toBe(1);
+    await hydrateNotifications();
+    expect(gets).toBe(1); // hydrateNotifications 與頁面 load 共用同一顆旗標
 
     const second = createLoadGate({ ...notificationsPageEntry });
     await second.load();
@@ -209,161 +167,5 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
 
     page.destroy();
     second.destroy();
-  });
-
-  /* R10:頁面 load-gate 的 refresh 族讀閘門同一本 mutation 世代帳，因此獲得世代穩定
-   * 重抓。這裡釘的是「通知頁重新整理在飛時點已讀，已讀不回退」——
-   * 當時的舊碼無條件套用，姍姍來遲的舊快照(server 端仍未讀)會把剛剛的
-   * 樂觀已讀打回未讀。 */
-  it('頁面 load-gate 的 refresh 在飛期間 markRead → 已讀不回退,舊快照丟棄並原地重抓(GET×2)', async () => {
-    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
-    vi.mocked(api).mockResolvedValueOnce([apiNotif(false)]);
-    await hydrateNotifications();
-    const d = createDeferred<unknown[]>();
-    let gets = 0;
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /notifications': () => (++gets === 1 ? d.promise : [apiNotif(true)]),
-      'PATCH /notifications/n1/read': undefined
-    }));
-
-    const page = createLoadGate({ ...notificationsPageEntry });
-    const p = page.refresh(); // 使用者按「重新整理」/retry — 顯式新鮮度
-    await markRead('n1'); // 飛行窗口內點已讀 → 樂觀更新 + 推世代
-    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
-
-    d.resolve([apiNotif(false)]); // 舊快照:server 端當時仍未讀
-    await p;
-
-    expect(gets).toBe(2); // 舊快照丟棄後補抓
-    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true); // 已讀不回退
-
-    page.destroy();
-  });
-
-  /* R11(第五決策點:mutation settle 訊號)。上一條釘的是「GET 已落地、之後才寫入」
-   * 的世代軸;這一條釘的是 ADR 0020 誠實界線記載的另一半——markRead 是 mark-before-await
-   * (先寫 store、宣告 mutation,才 await PATCH)。舊碼的 refresh 只看世代穩定,對「PATCH 還在
-   * 飛」是盲的:GET 在 PATCH 落庫前出發 → server 回未讀、而世代此刻已穩定 → 舊快照照套,
-   * 已讀被打回未讀。現在 refresh 族先等尾流 settle 才出發。 */
-  it('mutation settle:markRead 的 PATCH 未 settle → 頁面 refresh 的 GET 不出發;PATCH settle 後才出發,已讀不回退', async () => {
-    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
-    vi.mocked(api).mockResolvedValueOnce([apiNotif(false)]);
-    await hydrateNotifications();
-    const patch = createDeferred<unknown>();
-    let gets = 0;
-    let serverRead = false; // 後端真相:PATCH 落庫後才翻已讀
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /notifications': () => { gets += 1; return [apiNotif(serverRead)]; },
-      'PATCH /notifications/n1/read': () => patch.promise
-    }));
-
-    const page = createLoadGate({ ...notificationsPageEntry });
-    const readP = markRead('n1'); // 樂觀已讀 + 尾流入帳
-    const refreshP = page.refresh(); // 使用者同時按「重新整理」
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(gets).toBe(0); // PATCH 仍在飛 → GET 一律不出發(server-race 窗關閉)
-
-    serverRead = true;
-    patch.resolve(undefined);
-    await Promise.all([readP, refreshP]);
-
-    expect(gets).toBe(1); // 尾流 settle 才出發,而且只出發一次(世代已穩定,無補抓)
-    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true); // 已讀不回退
-
-    page.destroy();
-  });
-});
-
-// Task 5(架構深化 R12·候選 02)：以下兩個 describe 移植自
-// mobile/notifications.test.ts(併入前的獨有覆蓋)——member 側原本沒有「無登出
-// 直接換帳號」與「markAllRead 的 allSettled 尾流」這兩條釘。搬遷後 mobile 模組
-// 退役，消費端改經 $lib/mobile/stores 轉出同一顆閘門/store(見 task-5-report.md)。
-describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () => {
-  const AUTH_RES = {
-    access_token: 'at-m', refresh_token: 'rt-m',
-    user: { id: 'u-m1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false, avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member'] }
-  };
-  const AUTH_RES_B = { ...AUTH_RES, access_token: 'at-mb', refresh_token: 'rt-mb', user: { ...AUTH_RES.user, id: 'u-m2', email: 'b@dreamfly.test', name: '乙' } };
-
-  beforeEach(async () => {
-    vi.mocked(api).mockReset();
-    vi.mocked(api).mockResolvedValue(undefined); // logout best-effort revoke .catch 安全
-    await authStore.logout(); // 每個 it 從登出態起跑:立即回呼身分 null == baseline,不誤觸
-    resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
-    notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
-  });
-
-  // P1″ 換帳號釘(移植自 mobile/notifications.test.ts:186)：A hydrate 後 B 直接
-  // 登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知。登出重置本身已由
-  // checkout-api.test.ts 的「hydrateNotifications(Task 17)」F1 系列覆蓋,這裡補
-  // 的是「無登出邊沿」這條 member 側原本沒釘到的路徑。
-  it('A hydrate 後 B 直接登入(無登出)→ identity 變更即 reset,B 不繼承 A 的通知', async () => {
-    let logins = 0;
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
-      'GET /notifications': [apiNotif(true, 'a1')]
-    }));
-
-    await authStore.login('a@dreamfly.test', 'pw');
-    await hydrateNotifications(); // A 的通知經真水合落地、旗標 true
-    vi.mocked(api).mockClear();
-
-    await authStore.login('b@dreamfly.test', 'pw'); // B 直接登入,無登出邊沿
-
-    expect(get(notificationsHydrated)).toBe(false);
-    expect(get(notifications)).toEqual([]); // A 的通知即刻清空為 boot 態 `[]`
-  });
-});
-
-describe('markAllRead 的 allSettled 尾流(移植自 mobile/notifications.test.ts:218-248)', () => {
-  /* markAllRead 是 mark-before-await(先寫 store、宣告 mutation,才 await 那批 PATCH)。
-   * 舊碼的 refresh 只看世代穩定,對「PATCH 群還在飛」是盲的:GET 在落庫前出發 → server
-   * 回未讀、而世代此刻已穩定 → 舊快照照套,已讀被打回未讀(ADR 0020 誠實界線記載的
-   * GET/PATCH server-race)。allSettled 的尾流「含失敗也 settle」,不得因為某一筆 PATCH
-   * 失敗就永久卡住 refresh。 */
-  beforeEach(() => {
-    vi.mocked(api).mockReset();
-    resetNotificationsForTests(); // 先重置(內容還原 [])再鋪夾具
-    notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: false })).slice(0, 2));
-  });
-
-  it('markAllRead 的 PATCH 群未 settle → 頁面 refresh 的 GET 不出發;含失敗的 allSettled settle 後照出發', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const okPatch = createDeferred<unknown>();
-    const badPatch = createDeferred<unknown>();
-    const [id1, id2] = NOTIFS_SEED.slice(0, 2).map((n) => n.id);
-    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
-    vi.mocked(api).mockResolvedValueOnce([apiNotif(false, id1), apiNotif(false, id2)]);
-    await hydrateNotifications();
-    let gets = 0;
-    let serverRead1 = false; // 後端真相:n1 落庫後才翻已讀;n2 的 PATCH 失敗,始終未讀
-    vi.mocked(api).mockImplementation(fakeRouter({
-      'GET /notifications': () => { gets += 1; return [apiNotif(serverRead1, id1), apiNotif(false, id2)]; },
-      [`PATCH /notifications/${id1}/read`]: () => okPatch.promise,
-      [`PATCH /notifications/${id2}/read`]: () => badPatch.promise
-    }));
-
-    const page = createLoadGate({ ...notificationsPageEntry });
-    const allP = markAllRead(); // 樂觀全已讀 + allSettled 尾流入帳
-    const refreshP = page.refresh(); // 使用者同時按「重新整理」
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(gets).toBe(0); // PATCH 群仍在飛 → GET 一律不出發
-
-    serverRead1 = true;
-    okPatch.resolve(undefined);
-    badPatch.reject(new Error('network error'));
-    const result = await allP;
-    await refreshP;
-
-    expect(result).toBe('partial');
-    expect(gets).toBe(1); // 尾流(含失敗那筆)settle 後才出發,且只一次
-    expect(get(notifications).find((n) => n.id === id1)?.read).toBe(true); // 落庫成功的已讀不回退
-    // 已知殘餘(誠實界線):id2 的 PATCH 失敗,重新整理顯示 server 真相(未讀)——這是顯式
-    // 新鮮度契約,不是回歸(見 markAllRead 的「失敗不還原」不閃爍原則)。
-    expect(get(notifications).find((n) => n.id === id2)?.read).toBe(false);
-
-    page.destroy();
   });
 });

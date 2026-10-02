@@ -318,6 +318,8 @@ describe('source 選項（pageEntry 整合）', () => {
 
 		expect(into).not.toHaveBeenCalledWith({ v: 1 }); // mutation 勝出,舊快照不覆寫共享 store
 		expect(get(page)).toBe('ready'); // 資料已在 store(mutation 寫的),仍要收斂離開骨架
+		await new Promise<void>((r) => setTimeout(r, 0)); // 和解重抓收束
+		expect(into).toHaveBeenCalledWith({ v: 2 }); // 落地的是和解重抓那份
 
 		page.destroy();
 	});

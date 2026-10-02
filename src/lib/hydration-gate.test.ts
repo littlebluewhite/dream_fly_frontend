@@ -968,7 +968,7 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 
 	it('記帳順序:樂觀寫入翻旗的同步通知裡重入 refresh() → GET 不得出發(尾流先入帳,才推世代/翻旗)', async () => {
 		const fetch = vi.fn(async () => ['server']);
-		const { gate } = makeGate(fetch);
+		const { gate, apply } = makeGate(fetch);
 		const patch = createDeferred<void>();
 		let reentrant: Promise<void> | undefined;
 		const unsub = gate.hydrated.subscribe((h) => {
@@ -983,8 +983,10 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 		patch.resolve();
 		await writing;
 		await reentrant;
+		await settleRetry();
 		unsub();
-		expect(fetch).toHaveBeenCalled();
+		expect(fetch).toHaveBeenCalledTimes(2); // 重入的 refresh + 未水合寫入排的和解重抓
+		expect(apply).toHaveBeenCalledWith(['server']);
 	});
 
 	it('ADR-0020 反例(非樂觀):await write() → await refresh() 恰一次 GET,快照照常套用', async () => {
@@ -1045,6 +1047,25 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 		expect(fetch).toHaveBeenCalledTimes(2); // PATCH 失敗 → resync 的 GET 已出發
 		gate.reset();
 		resyncGet.resolve(['old-owner']);
+
+		expect(await p).toEqual({ kind: 'stale', settled: { status: 'rejected', reason: err } });
+		expect(undo).not.toHaveBeenCalled();
+		expect(get(store)).toEqual([]); // 新擁有者的開機值
+	});
+
+	it('resync 在飛期間 reset、重抓之後才 reject → 同樣 stale(不回報 rolledBack、不 undo)', async () => {
+		const resyncGet = createDeferred<string[]>();
+		const fetch = vi.fn().mockResolvedValueOnce(['server']).mockReturnValueOnce(resyncGet.promise);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+		const undo = vi.fn();
+		const err = new Error('network');
+
+		const p = gate.write({ optimistic: () => undo, send: () => Promise.reject(err), onFailure: 'resync' });
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(2); // PATCH 失敗 → resync 的 GET 已出發
+		gate.reset();
+		resyncGet.reject(new Error('resync boom'));
 
 		expect(await p).toEqual({ kind: 'stale', settled: { status: 'rejected', reason: err } });
 		expect(undo).not.toHaveBeenCalled();

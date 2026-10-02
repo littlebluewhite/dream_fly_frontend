@@ -3,7 +3,7 @@ import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/s
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, toasts, waitlist } from '$lib/member/stores';
-import { resetWaitlistForTests } from '$lib/member/waitlist';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { getCourses } from '$lib/member/api';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -50,16 +50,16 @@ const WAITLIST_DEFAULTS: Record<string, unknown> = {
 	}
 };
 
-beforeEach(() => {
+beforeEach(async () => {
 	vi.mocked(getCourses).mockReset();
 	vi.mocked(getCourses).mockResolvedValue({ catalog: CATALOG });
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter({}, WAITLIST_DEFAULTS));
 	waitlist.set([]);
-	resetWaitlistForTests(); // 模組單例閘門,不重置會跨 it 洩漏、讓進頁的 hydrateWaitlist 短路
+	await resetSessionStores();
 });
 
-afterEach(() => {
+afterEach(async () => {
 	cart.clear();
 	waitlist.set([]); // singleton waitlist isn't cleared by cart.clear(); reset it so entries don't leak across tests
 });
