@@ -124,27 +124,35 @@ export function onSessionExpired(fn: () => void): void {
   sessionExpiredListeners.add(fn);
 }
 
-/** On failure, compare-and-clear: tokens are cleared only if the stored refresh
- *  token is still the one this call sent, or storage is already empty (another
- *  tab logged out while the request was in flight). If another tab or a fresh
- *  login replaced it, that newer session stands. This is the single place
- *  tokens are cleared on a failed refresh, and the single place
+/** Tokens are cleared only when the session is really over: the backend
+ *  explicitly rejected the refresh token (4xx), or there was none to send. A
+ *  network error or 5xx leaves everything in place — a blip must not log out
+ *  every tab. Even on a rejection, compare-and-clear: clear only if the stored
+ *  refresh token is still the one this call sent, or storage is already empty
+ *  (another tab logged out while the request was in flight). If another tab or
+ *  a fresh login replaced it, that newer session stands. This is the single
+ *  place tokens are cleared on a failed refresh, and the single place
  *  onSessionExpired fires. */
 async function performRefresh(): Promise<boolean> {
   const sent = getRefresh();
-  if (sent && (await exchangeRefreshToken(sent))) {
+  const outcome: RefreshOutcome = sent ? await exchangeRefreshToken(sent) : 'rejected';
+  if (outcome === 'ok') {
     return true;
   }
   const now = getRefresh();
-  if (now === sent || now === null) {
+  if (outcome === 'rejected' && (now === sent || now === null)) {
     clearTokens();
     sessionExpiredListeners.forEach((fn) => fn());
   }
   return false;
 }
 
-/** POST /auth/refresh; stores the rotated pair and returns true on success. */
-async function exchangeRefreshToken(refresh: string): Promise<boolean> {
+/** `rejected`: the backend answered 4xx (token invalid/revoked/expired).
+ *  `unavailable`: network error, 5xx, or an unreadable success body. */
+type RefreshOutcome = 'ok' | 'rejected' | 'unavailable';
+
+/** POST /auth/refresh; stores the rotated pair on success. Transport only — never clears. */
+async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
   try {
     const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
       method: 'POST',
@@ -152,12 +160,12 @@ async function exchangeRefreshToken(refresh: string): Promise<boolean> {
       body: JSON.stringify({ refresh_token: refresh })
     });
     if (!response.ok) {
-      return false;
+      return response.status >= 400 && response.status < 500 ? 'rejected' : 'unavailable';
     }
     const data = (await response.json()) as { access_token: string; refresh_token: string };
     setTokens(data.access_token, data.refresh_token);
-    return true;
+    return 'ok';
   } catch {
-    return false;
+    return 'unavailable';
   }
 }

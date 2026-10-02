@@ -272,6 +272,11 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
   清 token。別的分頁或新的登入在 POST 進行中換上了新 token,那個新 session 保留不動。`performRefresh()`
   是 refresh 失敗時唯一清 token 的地方;`exchangeRefreshToken()` 只負責傳輸,從不清。「storage 已空」
   那一半是 R17 加的:別的分頁在我們的 POST 進行中登出,本分頁記憶體裡的 access token 也一起丟掉。
+- **只有後端明確拒絕才清 token**(R17):`exchangeRefreshToken()` 回報三種結果——成功、拒絕
+  (`/auth/refresh` 回 4xx)、不可用(網路錯誤、5xx)。只有「拒絕」(或根本沒有 refresh token 可送)才走上面的
+  compare-and-clear;「不可用」回 false,不清 token、不發訊號、不改登入狀態。`hydrate()` 的 `/users/me`
+  失敗同理:真的 401 已經走 `api()` → refresh 那條路,其他失敗不碰 token。refresh token 是各分頁共用的,
+  一次暫時性故障若清掉它,所有分頁會同時登出。
 - **§1「並導回登入頁」成真**(FE-3):以前 refresh 失敗只清 token,畫面仍顯示登入,要等下一次整頁重載
   才發現。現在 `client.ts` 在上述唯一的清除點呼叫 `onSessionExpired` 訊號,`authStore` 收到就設成
   登出。各 surface 的 layout 守門本來就跟著 `$authStore` 反應,所以導回登入頁、session 閘門重置、

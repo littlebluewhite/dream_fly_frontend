@@ -265,7 +265,7 @@ describe('refreshTokens()', () => {
     expect(getAccess()).toBeNull();
   });
 
-  it('returns false and clears tokens on a network error', async () => {
+  it('network error: returns false but keeps the tokens and does not signal expiry (refresh unavailable, not rejected)', async () => {
     setTokens('access', 'refresh');
     const fetchMock = vi.fn().mockRejectedValue(new Error('network down'));
     vi.stubGlobal('fetch', fetchMock);
@@ -273,8 +273,33 @@ describe('refreshTokens()', () => {
     const ok = await refreshTokens();
 
     expect(ok).toBe(false);
+    expect(getAccess()).toBe('access');
+    expect(getRefresh()).toBe('refresh');
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it('5xx: returns false but keeps the tokens and does not signal expiry', async () => {
+    setTokens('access', 'refresh');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable')));
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
+    expect(getAccess()).toBe('access');
+    expect(getRefresh()).toBe('refresh');
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it('4xx (backend rejected the token): clears the tokens and signals expiry once', async () => {
+    setTokens('access', 'refresh');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'invalid refresh token' }, 401, 'Unauthorized')));
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
     expect(getAccess()).toBeNull();
     expect(getRefresh()).toBeNull();
+    expect(expired).toHaveBeenCalledTimes(1);
   });
 
   it('resolves false (never rejects) when the refresh-token storage read throws', async () => {

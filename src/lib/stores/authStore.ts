@@ -163,15 +163,15 @@ function createAuthStore() {
       return;
     }
     const refreshed = await refreshTokens();
-    // 失敗時若 token 真的被清掉,onSessionExpired 已設 LOGGED_OUT;沒清掉代表別的分頁換上了
-    // 新 session,交給下方的 storage listener。
+    // 失敗時若 token 真的被清掉(後端明確拒絕),onSessionExpired 已設 LOGGED_OUT;沒清掉代表
+    // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給下方的 storage listener)。
     if (!refreshed) return;
     try {
       const user = await api<ApiUser>('/users/me');
       applyUser(user);
     } catch {
-      clearTokens();
-      set(LOGGED_OUT);
+      // 真的 401 已由 api() → refreshTokens() 處理;其他失敗(5xx/網路)不是 session 過期,
+      // 不碰 token、不改登入狀態——清共用 refresh token 會讓所有分頁一起登出。
     }
   }
 

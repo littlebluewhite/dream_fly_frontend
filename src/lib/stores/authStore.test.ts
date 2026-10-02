@@ -301,6 +301,32 @@ describe('authStore.hydrate', () => {
   });
 });
 
+// FE-3 修波:/users/me 非 401 的失敗(5xx/網路)不是 session 過期——不碰 token、不改登入狀態。
+describe('authStore.hydrate — /users/me unavailable', () => {
+  it('/users/me 503: keeps tokens and state; no auth-cache write, no token removal', async () => {
+    setTokens('stale-access', 'valid-refresh');
+    const cached = JSON.stringify({ loggedIn: true, member: toMember(SAMPLE_USER), roles: ['member'] });
+    localStorage.setItem('dreamfly_auth', cached);
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh' })); // /auth/refresh
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable')); // /users/me
+    vi.stubGlobal('fetch', fetchMock);
+    const before = get(authStore);
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem');
+
+    await authStore.hydrate();
+
+    expect(getAccess()).toBe('new-access');
+    expect(getRefresh()).toBe('new-refresh');
+    expect(get(authStore)).toBe(before);
+    // Only the successful refresh's rotation writes; the failed /users/me writes nothing.
+    expect(setItem.mock.calls).toEqual([['dreamfly_refresh', 'new-refresh']]);
+    expect(removeItem).not.toHaveBeenCalled();
+    expect(localStorage.getItem('dreamfly_auth')).toBe(cached);
+  });
+});
+
 // R13 Task 3(T0):會員資料 module 的 PATCH /users/me 成功後,用回應同步 Topbar 等讀
 // authStore 的名字——identity key(loggedIn + member.id)不變,不得觸發任何 session gate 重置。
 describe('authStore.syncUser', () => {
