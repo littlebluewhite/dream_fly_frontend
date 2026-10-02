@@ -299,3 +299,15 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
   `src/lib/self-account.ts`(本人帳號資料);「教練身分」閘門的型別由 `{ user, coach | null }` 改成
   `ApiCoach | null`,本人資料改讀 `$selfAccount`。`createSessionGate` 消費者仍是六個,
   `authStore` 訂閱仍是八個。
+
+## 增補(2026-10-03,架構深化 R17)
+
+- **`sessionIdentity()` 搬到 `authStore.ts`**:身分的 owner 是 `authStore`,身分 key 公式跟著住在那裡。
+  `session-gate.ts`、`MessageThread` 與 member/mobile/mobile-admin 三個 layout 都改從
+  `$lib/stores/authStore` import;測試替身 `$lib/testing/auth-mock` 兩個家族轉手真實作。公式與
+  「刻意不做 derived store」都不變。
+- **session 過期與跨分頁變化也走同一條身分邊**:refresh 失敗真的清掉 token 時(`client.ts`
+  `onSessionExpired`),以及別的分頁登出或換帳號時(`authStore` 的 `storage` listener),`authStore`
+  只是 `set(LOGGED_OUT)` 或重新 `hydrate()`。本檔的 `createSessionCore` 看到身分改變,照原樣重置閘門、
+  遞增 epoch,沒有新路徑;本檔只改了 `sessionIdentity` 的 import 來源。refresh token 只是被別的分頁輪替時身分不變,閘門不動。
+  消費者計數不變(六個 `createSessionGate` + 兩個 `createSessionRefresher`)。

@@ -17,8 +17,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { authStore } from '$lib/stores/authStore';
-  import { sessionIdentity } from '$lib/session-gate';
+  import { authStore, sessionIdentity } from '$lib/stores/authStore';
   import { overlay, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
   import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';

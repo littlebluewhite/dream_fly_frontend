@@ -6,9 +6,9 @@
  * CACHE for first paint only — it lets a reload show the last-known session
  * instantly instead of flashing "logged out" while hydrate() confirms it. */
 
-import { writable, derived } from 'svelte/store';
-import { api, refreshTokens } from '$lib/api/client';
-import { getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
+import { writable, derived, get } from 'svelte/store';
+import { api, refreshTokens, onSessionExpired } from '$lib/api/client';
+import { getRefresh, setTokens, clearTokens, forgetAccess, REFRESH_KEY } from '$lib/api/tokens';
 import { isoDate, initialOf } from '$lib/api/wire';
 import type { Member } from '$lib/domain/member-app';
 
@@ -24,6 +24,11 @@ export interface AuthState {
 }
 
 const LOGGED_OUT: AuthState = { loggedIn: false, member: null, roles: [] };
+
+/** session 身分 key 的單一來源:未登入 null;登入但無 member.id 退化為空字串。 */
+export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): string | null {
+  return a.loggedIn ? (a.member?.id ?? '') : null;
+}
 
 /** User shape returned by POST /auth/{register,login,refresh} (nested under
  *  `user`) and GET /users/me (flat). `last_login` only appears on the latter,
@@ -158,10 +163,9 @@ function createAuthStore() {
       return;
     }
     const refreshed = await refreshTokens();
-    if (!refreshed) {
-      set(LOGGED_OUT);
-      return;
-    }
+    // 失敗時若 token 真的被清掉,onSessionExpired 已設 LOGGED_OUT;沒清掉代表別的分頁換上了
+    // 新 session,交給下方的 storage listener。
+    if (!refreshed) return;
     try {
       const user = await api<ApiUser>('/users/me');
       applyUser(user);
@@ -177,6 +181,28 @@ function createAuthStore() {
    *  roles 不動(角色變更不是這條路徑的事)。dreamfly_auth 快取經上方 subscribe 自動跟上。 */
   function syncUser(user: ApiUser): void {
     update((s) => (s.loggedIn && s.member?.id === user.id ? { ...s, member: toMember(user) } : s));
+  }
+
+  // refresh 失敗、client 真的清掉 token 的那一刻(唯一來源見 client.ts performRefresh)。
+  onSessionExpired(() => set(LOGGED_OUT));
+
+  // 跨分頁同步:別的分頁改了登入狀態(storage 事件只送到其他分頁)。只看「目前 storage」決定,
+  // 不看事件帶的新舊值——refresh key 只是被別的分頁輪替時不得重新水合,否則分頁互相觸發 refresh
+  // 永不停。listener 永不寫共用的 refresh key。
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', (event) => {
+      if (event.key !== null && event.key !== AUTH_STORAGE_KEY && event.key !== REFRESH_KEY) return;
+      if (!getRefresh()) {
+        forgetAccess();
+        set(LOGGED_OUT);
+        return;
+      }
+      const cached = loadCache();
+      if (cached.loggedIn && sessionIdentity(cached) !== sessionIdentity(get({ subscribe }))) {
+        forgetAccess();
+        void hydrate();
+      }
+    });
   }
 
   return { subscribe, login, register, loginWithGoogle, logout, hydrate, syncUser };

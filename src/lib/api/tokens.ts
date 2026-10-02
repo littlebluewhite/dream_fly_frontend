@@ -6,7 +6,7 @@
  * page reload doesn't force a re-login; it rotates on every successful
  * refresh (see client.ts). */
 
-const REFRESH_KEY = 'dreamfly_refresh';
+export const REFRESH_KEY = 'dreamfly_refresh';
 
 let accessToken: string | null = null;
 
@@ -24,6 +24,11 @@ export function setTokens(access: string, refresh: string): void {
     // Quota exceeded / storage blocked — memory state above still holds.
     console.error('Failed to persist refresh token to storage:', error);
   }
+}
+
+/** Drop only this tab's in-memory access token; the shared refresh token stays. */
+export function forgetAccess(): void {
+  accessToken = null;
 }
 
 export function getRefresh(): string | null {

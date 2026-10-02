@@ -16,7 +16,7 @@ import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { createLoadGate, type LoadPhase } from './load-gate';
-import { createSessionGate, createSessionRefresher, sessionIdentity } from './session-gate';
+import { createSessionGate, createSessionRefresher } from './session-gate';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -678,20 +678,5 @@ describe('createSessionGate — pageEntry 頁面進場包(C3:關閉 ADR 0017 的
 
 		unsub();
 		page.destroy();
-	});
-});
-
-describe('sessionIdentity(身分 key 單一來源)', () => {
-	it('未登入 → null', () => {
-		expect(sessionIdentity({ loggedIn: false, member: null })).toBeNull();
-	});
-	it('登入且有 member → member.id', () => {
-		expect(sessionIdentity({ loggedIn: true, member: { id: 'u1' } as never })).toBe('u1');
-	});
-	it('登入但無 member → 空字串(與未登入的 null 區分)', () => {
-		expect(sessionIdentity({ loggedIn: true, member: null })).toBe('');
-	});
-	it('未登入即使殘留 member 也是 null', () => {
-		expect(sessionIdentity({ loggedIn: false, member: { id: 'u1' } as never })).toBeNull();
 	});
 });

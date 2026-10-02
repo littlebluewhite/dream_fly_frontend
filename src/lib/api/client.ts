@@ -116,16 +116,29 @@ async function performRefreshExclusive(): Promise<boolean> {
   return locks.request(REFRESH_LOCK_NAME, performRefresh);
 }
 
+const sessionExpiredListeners = new Set<() => void>();
+
+/** Register a callback for the moment this tab's session really ends: a refresh
+ *  failed and performRefresh() cleared the tokens. Fires nowhere else. */
+export function onSessionExpired(fn: () => void): void {
+  sessionExpiredListeners.add(fn);
+}
+
 /** On failure, compare-and-clear: tokens are cleared only if the stored refresh
- *  token is still the one this call sent. If another tab or a fresh login
- *  replaced it while the request was in flight, that newer session stands. */
+ *  token is still the one this call sent, or storage is already empty (another
+ *  tab logged out while the request was in flight). If another tab or a fresh
+ *  login replaced it, that newer session stands. This is the single place
+ *  tokens are cleared on a failed refresh, and the single place
+ *  onSessionExpired fires. */
 async function performRefresh(): Promise<boolean> {
   const sent = getRefresh();
   if (sent && (await exchangeRefreshToken(sent))) {
     return true;
   }
-  if (getRefresh() === sent) {
+  const now = getRefresh();
+  if (now === sent || now === null) {
     clearTokens();
+    sessionExpiredListeners.forEach((fn) => fn());
   }
   return false;
 }

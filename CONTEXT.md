@@ -14,6 +14,19 @@ _Avoid_: 使用者(指訪客時), 家長
 尚未登入的瀏覽者;可瀏覽、可加入購物車,但**結帳前必須先登入成為會員**(auth-at-checkout)。
 _Avoid_: 使用者
 
+**登入狀態 (Login State)**:
+這個分頁此刻是不是登入、登入的是誰——`$authStore` 的 `{ loggedIn, member, roles }`,單一 owner 是
+`src/lib/stores/authStore.ts`(身分 key `sessionIdentity()` 也住這裡)。真相是共用的 refresh token
+(`dreamfly_refresh`);`dreamfly_auth` 只是首屏快取。三種事件會改變它,全都只是 `set` 這顆 store,
+守門導向、session 閘門重置與結帳導向都沿用既有的身分改變那條邊:本分頁登入/登出;refresh 失敗而
+`client.ts` 真的清掉 token(`onSessionExpired` 訊號,只在 `performRefresh()` 的唯一清除點發出);別的
+分頁改了 storage(`storage` listener,只看**目前 storage**:沒 refresh token → 登出;快取身分是另一位
+已登入者 → 重新水合;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
+各分頁記憶體,跨分頁變化時用 `forgetAccess()` 丟掉本分頁那顆,不碰共用的 refresh token(見
+`docs/adr/0006` R17 增補)。
+_Avoid_: 登入態(混用時統一用「登入狀態」), 看 `dreamfly_auth` 判斷是否登入(那是快取), 在 listener 裡
+因為 refresh key 變了就重新水合
+
 **本人帳號資料 (Self Account)**:
 任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
 上次登入時間——連同本人的通知偏好。真值在後端 `/users/me`,讀寫單一來源是 `src/lib/self-account.ts`
@@ -174,8 +187,8 @@ domain store 對「會員身分變更」(登入/登出、或不經整頁重載�
 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
 身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),mobile-admin
 訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
-`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由同檔匯出的
-純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
+`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由 `authStore.ts`
+(身分的 owner,見「登入狀態」)匯出的純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
 閘門內部與 member/mobile/mobile-admin layout 的暖機 key、mobile-admin `MessageThread` 都呼叫它,
 不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序

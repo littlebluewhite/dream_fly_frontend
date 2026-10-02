@@ -55,13 +55,8 @@
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { get } from 'svelte/store';
-import { authStore, type AuthState } from '$lib/stores/authStore';
+import { authStore, sessionIdentity } from '$lib/stores/authStore';
 import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
-
-/** session 身分 key 的單一來源:未登入 null;登入但無 member.id 退化為空字串。 */
-export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): string | null {
-	return a.loggedIn ? (a.member?.id ?? '') : null;
-}
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」

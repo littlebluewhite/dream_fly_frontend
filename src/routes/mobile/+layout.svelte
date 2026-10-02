@@ -15,8 +15,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { authStore, isLoggedIn } from '$lib/stores/authStore';
-  import { sessionIdentity } from '$lib/session-gate';
+  import { authStore, isLoggedIn, sessionIdentity } from '$lib/stores/authStore';
   import { overlay, toasts } from '$lib/mobile/stores';
   import { hydrateNotifications } from '$lib/member/notifications';
   import { warmStores } from '$lib/store-warm';

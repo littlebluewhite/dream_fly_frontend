@@ -262,3 +262,25 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
 - **R13 增補寫的會員資料 module 搬家**:`src/lib/member/profile.ts` 改為 `src/lib/self-account.ts`
   (本人帳號資料),教練的 `saveSettings` 也經它寫 `PATCH /users/me`,不再自己呼叫 `syncUser`。
 - **桌面 admin/coach 的「登出」真的呼叫 `authStore.logout()`**(先前只跳 toast,session 不變)。
+
+## 增補(2026-10-03,架構深化 R17)
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **§1「失敗則清 token」改成 compare-and-clear**(FE-2,`eba9ab1`):refresh 失敗時,`client.ts` 的
+  `performRefresh()` 只在「storage 裡的 refresh token 仍是這次送出的那一顆,或 storage 已經空了」時才
+  清 token。別的分頁或新的登入在 POST 進行中換上了新 token,那個新 session 保留不動。`performRefresh()`
+  是 refresh 失敗時唯一清 token 的地方;`exchangeRefreshToken()` 只負責傳輸,從不清。「storage 已空」
+  那一半是 R17 加的:別的分頁在我們的 POST 進行中登出,本分頁記憶體裡的 access token 也一起丟掉。
+- **§1「並導回登入頁」成真**(FE-3):以前 refresh 失敗只清 token,畫面仍顯示登入,要等下一次整頁重載
+  才發現。現在 `client.ts` 在上述唯一的清除點呼叫 `onSessionExpired` 訊號,`authStore` 收到就設成
+  登出。各 surface 的 layout 守門本來就跟著 `$authStore` 反應,所以導回登入頁、session 閘門重置、
+  `dreamfly_auth` 快取都走既有的身分改變那條邊,沒有新路徑。
+- **跨分頁同步**(FE-3):`authStore` 在瀏覽器端聽 `storage` 事件(`dreamfly_auth`、`dreamfly_refresh`
+  或 `key: null`),只依「目前 storage」決定:沒有 refresh token → 丟掉本分頁 access token 並登出;
+  `dreamfly_auth` 快取的身分是另一位已登入者 → 丟掉 access token 並重新 `hydrate()`;其他情況(包括
+  refresh token 只是被別的分頁輪替)不動。listener 永不寫共用的 refresh key。只看目前 storage 而不看
+  「refresh key 變了」,是為了避免分頁互相觸發 refresh、永不停止(每個等待中的分頁現在都會各輪替一次)。
+  詳見 CONTEXT.md「登入狀態」。
+- **「後果」第一條縮小範圍**:別的分頁登出、換帳號或 token 失效,現在本分頁會即時跟上。仍可能短暫看到
+  舊資料的,只剩**同一位登入者**的欄位(例如在別的分頁改名,這一頁要到下次 `/users/me` 或重整才更新)。

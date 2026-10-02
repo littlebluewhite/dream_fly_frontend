@@ -10,8 +10,7 @@
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { checkoutOpen, toasts, hydrateNotifications } from '$lib/member/stores';
-  import { authStore, isLoggedIn } from '$lib/stores/authStore';
-  import { sessionIdentity } from '$lib/session-gate';
+  import { authStore, isLoggedIn, sessionIdentity } from '$lib/stores/authStore';
   import { warmStores } from '$lib/store-warm';
   import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
   import { memberGuardTarget } from './guard';

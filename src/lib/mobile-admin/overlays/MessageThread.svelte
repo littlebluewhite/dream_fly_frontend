@@ -15,8 +15,7 @@
    * 未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { authStore } from '$lib/stores/authStore';
-  import { sessionIdentity } from '$lib/session-gate';
+  import { authStore, sessionIdentity } from '$lib/stores/authStore';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api, ApiError, refreshTokens } from './client';
+import { api, ApiError, refreshTokens, onSessionExpired } from './client';
 import { getAccess, getRefresh, setTokens, clearTokens } from './tokens';
 
 // Matches VITE_API_BASE_URL in .env / the spec's documented fallback, so
@@ -33,9 +33,14 @@ function passthroughLocks() {
   return { request: vi.fn((_name: string, callback: () => Promise<boolean>) => Promise.resolve().then(callback)) };
 }
 
+// The session-expired signal fires only at performRefresh's one clear point.
+const expired = vi.fn();
+onSessionExpired(expired);
+
 beforeEach(() => {
   clearTokens();
   localStorage.clear();
+  expired.mockClear();
 });
 
 afterEach(() => {
@@ -190,6 +195,7 @@ describe('api()', () => {
     expect(getAccess()).toBeNull();
     expect(getRefresh()).toBeNull();
     expect(localStorage.getItem('dreamfly_refresh')).toBeNull();
+    expect(expired).toHaveBeenCalledTimes(1);
   });
 
   it('a request made with auth: false never attempts a refresh, even on 401', async () => {
@@ -429,5 +435,24 @@ describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
 
     expect(ok).toBe(false);
     expect(getRefresh()).toBe('refresh-fresh');
+    expect(getAccess()).toBe('expired-access');
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it('another tab logged out while the failing POST was in flight: clears this tab too and signals expiry once', async () => {
+    setTokens('expired-access', 'refresh-stale');
+    vi.stubGlobal('navigator', {});
+    const fetchMock = vi.fn(async () => {
+      localStorage.removeItem('dreamfly_refresh'); // the other tab's logout
+      return jsonResponse({ error: 'invalid refresh token' }, 401, 'Unauthorized');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
+    expect(getAccess()).toBeNull();
+    expect(getRefresh()).toBeNull();
+    expect(expired).toHaveBeenCalledTimes(1);
   });
 });

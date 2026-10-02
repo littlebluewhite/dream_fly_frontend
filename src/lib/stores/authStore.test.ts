@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { authStore, isLoggedIn, toMember, type ApiUser } from './authStore';
-import { ApiError } from '$lib/api/client';
+import { authStore, isLoggedIn, toMember, sessionIdentity, type ApiUser } from './authStore';
+import { api, ApiError } from '$lib/api/client';
+import { createSessionGate } from '$lib/session-gate';
 import { getAccess, getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
 
 // Matches VITE_API_BASE_URL in .env / the spec's documented fallback (see
@@ -359,5 +360,166 @@ describe('toMember', () => {
     expect(member.initial).toBe('王');
     expect(member.since).toBe('2026-01-01');
     expect(member.points).toBe(0);
+  });
+});
+
+// R17(FE-3):refresh 失敗真的清掉 token 時,client 的 onSessionExpired 訊號讓 authStore 登出——
+// 畫面、dreamfly_auth 快取與 session 閘門都走既有的身分改變那條邊。
+describe('authStore — session expiry (onSessionExpired)', () => {
+  it('refresh 401 → api() throws ApiError(401), state LOGGED_OUT, cache follows, gate reset exactly once', async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER }));
+    vi.stubGlobal('fetch', fetchMock);
+    await authStore.login('a@test.com', 'pw');
+    const reset = vi.fn();
+    createSessionGate({ fetch: async () => null, apply: () => {}, reset });
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'token expired' }, 401, 'Unauthorized')); // original
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'invalid refresh token' }, 401, 'Unauthorized')); // refresh
+
+    const err = (await api('/users/me').catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(JSON.parse(localStorage.getItem('dreamfly_auth') ?? 'null')).toEqual(LOGGED_OUT);
+    expect(reset).toHaveBeenCalledTimes(1);
+  });
+});
+
+// R17(FE-3):跨分頁同步。listener 只看「目前 storage」決定(Controller 裁決 9):
+// 沒 refresh → 登出;快取身分 ≠ 我且為登入 → 重新水合;其他(含 refresh 只被輪替)不動。
+describe('authStore — cross-tab storage sync', () => {
+  const USER_B: ApiUser = { ...SAMPLE_USER, id: 'uuid-2', email: 'b@test.com', name: '李大華' };
+
+  function cacheOf(user: ApiUser | null): string {
+    return JSON.stringify(user ? { loggedIn: true, member: toMember(user), roles: user.roles } : LOGGED_OUT);
+  }
+
+  /** Another tab wrote `key`; storage already holds that tab's final values. */
+  function otherTabWrote(key: string | null): void {
+    window.dispatchEvent(new StorageEvent('storage', { key, storageArea: localStorage }));
+  }
+
+  async function loginAsA(): Promise<void> {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER })));
+    await authStore.login('a@test.com', 'pw');
+    vi.unstubAllGlobals();
+  }
+
+  function trackGateReset() {
+    const reset = vi.fn();
+    createSessionGate({ fetch: async () => null, apply: () => {}, reset });
+    return reset;
+  }
+
+  it('another tab logged out → forget the access token and go LOGGED_OUT (gate reset once)', async () => {
+    await loginAsA();
+    const reset = trackGateReset();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.removeItem('dreamfly_refresh');
+    localStorage.setItem('dreamfly_auth', cacheOf(null));
+
+    otherTabWrote('dreamfly_refresh');
+
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(getAccess()).toBeNull();
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('another tab logged in as B → forget A’s access token and hydrate as B', async () => {
+    await loginAsA();
+    const reset = trackGateReset();
+    const fetchMock = vi.fn(async (url: string, _init: RequestInit) =>
+      url.endsWith('/auth/refresh')
+        ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
+        : jsonResponse(USER_B)
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    expect(getAccess()).toBeNull(); // A's access is dropped synchronously
+    await vi.waitFor(() => expect(get(authStore).member?.id).toBe(USER_B.id));
+
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({ refresh_token: 'rB' });
+    expect(getAccess()).toBe('aB2');
+    expect(reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('only rotation (same identity, new refresh token) → no action: no refresh, access kept, no reset', async () => {
+    await loginAsA();
+    const reset = trackGateReset();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'r1-rotated-by-other-tab');
+
+    otherTabWrote('dreamfly_refresh');
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getAccess()).toBe('a1');
+    expect(get(authStore).member?.id).toBe(SAMPLE_USER.id);
+    expect(reset).not.toHaveBeenCalled();
+    expect(getRefresh()).toBe('r1-rotated-by-other-tab'); // the listener never writes the shared key
+  });
+
+  it('key: null (another tab cleared storage) → LOGGED_OUT', async () => {
+    await loginAsA();
+    localStorage.clear();
+
+    otherTabWrote(null);
+
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(getAccess()).toBeNull();
+  });
+
+  it('another tab logged out then straight back in as the same member → decided from current storage: no flash, no action', async () => {
+    await loginAsA();
+    const reset = trackGateReset();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const seen: boolean[] = [];
+    const unsubscribe = authStore.subscribe((s) => seen.push(s.loggedIn));
+    // Both writes landed before this tab handles the first event.
+    localStorage.setItem('dreamfly_refresh', 'r1-relogin');
+    localStorage.setItem('dreamfly_auth', cacheOf(SAMPLE_USER));
+
+    otherTabWrote('dreamfly_refresh'); // the logout's removal
+    otherTabWrote('dreamfly_auth'); // the logout's LOGGED_OUT cache write
+    otherTabWrote('dreamfly_refresh'); // the login's token
+    otherTabWrote('dreamfly_auth'); // the login's cache write
+    unsubscribe();
+
+    expect(seen).not.toContain(false);
+    expect(get(authStore).member?.id).toBe(SAMPLE_USER.id);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+  });
+
+  it('ignores keys it does not own', async () => {
+    await loginAsA();
+    localStorage.removeItem('dreamfly_refresh');
+
+    otherTabWrote('dreamfly_cart_v3');
+
+    expect(get(authStore).loggedIn).toBe(true);
+  });
+});
+
+describe('sessionIdentity(身分 key 單一來源)', () => {
+  it('未登入 → null', () => {
+    expect(sessionIdentity({ loggedIn: false, member: null })).toBeNull();
+  });
+  it('登入且有 member → member.id', () => {
+    expect(sessionIdentity({ loggedIn: true, member: { id: 'u1' } as never })).toBe('u1');
+  });
+  it('登入但無 member → 空字串(與未登入的 null 區分)', () => {
+    expect(sessionIdentity({ loggedIn: true, member: null })).toBe('');
+  });
+  it('未登入即使殘留 member 也是 null', () => {
+    expect(sessionIdentity({ loggedIn: false, member: { id: 'u1' } as never })).toBeNull();
   });
 });

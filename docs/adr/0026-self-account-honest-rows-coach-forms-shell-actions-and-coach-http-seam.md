@@ -254,3 +254,11 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
 - **`docs/adr/0023`**:兩條遞延項關閉(快取各自為政、場地/期別/堂數的顯示清理);會員資料 module
   改名搬家;教練閘門形狀改變(增補)。
 - **`docs/adr/0025`**:`LeaveStatus` 的住所改為 `api/wire.ts`(增補)。
+
+## 增補(2026-10-03,架構深化 R17)
+
+- **§6 的住所改變**:`sessionIdentity()` 從 `session-gate.ts` 搬到 `src/lib/stores/authStore.ts`(身分的
+  owner);呼叫端仍是同樣五處,只改 import 來源。四支 `sessionIdentity` 測試從 `session-gate.test.ts`
+  搬到 `authStore.test.ts`,內容不變。「不做 derived store」的決定與理由不變。
+- **§1 staff 登出的延伸**:除了按「登出」,refresh 失敗與別的分頁登出現在也會讓本分頁真的登出
+  (見 `docs/adr/0006` 增補)。
