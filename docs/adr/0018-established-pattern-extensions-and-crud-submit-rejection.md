@@ -486,3 +486,13 @@ R12 增補的其餘結論不變:mark 仍發生在 PATCH 落定之後,沒有在�
 R11/R12/R13 增補記的「`markMessageRead` 的 fire-and-forget 是既有裁決」自此不成立(使用者裁決 F5)。
 「在同一支 mutator 裡同時表達入帳與刻意不入帳 = 行為旗標寬介面」的警語仍然有效,也正是這一對沒有合併的
 原因。`markOrderPaid` 不受影響。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+**C7(通知已讀 mutator 雙生收斂)結案。** §7 遞延、R14 增補「不合併,各自歸隊」都留在原處;R17(`docs/adr/0027` §5)
+補上最後一塊:`hydration-gate` 的 `write()` 是唯一寫入動詞。member 側的樂觀 `markRead`/`markAllRead`
+(`optimistic` + `onFailure: 'keep'`,PATCH 記成尾流)與 mobile-admin 側的 `markOrderPaid`/`markMessageRead`
+(非樂觀,`commit` 在 `send` 落定後)是**同一個動詞的兩條路徑**——有沒有 `optimistic` 是參數,不是兩種協定。
+§7 要「先確認兩者 mutate 語意是否同構」的前提因此有了答案:協定同構、政策不同,政策以參數表達;不需要把
+兩個 mutator 家族合併成一個模組,也不再有「各自歸隊」的必要。:242-248、:339、:368-369、:410、:456、:481 的
+`markMutated()`/`session-gate` 的 `mutate()` 敘述一併以 `write()` 為準。

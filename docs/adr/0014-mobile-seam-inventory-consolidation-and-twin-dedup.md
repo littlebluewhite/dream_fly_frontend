@@ -499,3 +499,16 @@ vi.mock 整支 $lib/coach/api」防回退。§3 的劃界本身(單源只涵蓋�
   `ATT_CHOICES`(present/leave/absent,色用 success/info/error),`tally()` 回傳 `Record<AttDefault,
   number>`(零初始化)。手機頁因此多了「請假」,「已請假」徽章判準改 `r.def === 'leave'`(只看名冊,
   與桌面一致,本地點選請假不會把分段鈕換成徽章)。可見變更:手機「出席」由主色改綠。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。R17(`docs/adr/0027`)讓以下敘述過時,以本節為準:
+
+- **:258-260 的 `gate.mutate(request, writeBack)`**:`mutate` 已退役。`joinWaitlist`/`cancelWaitlist` 現在是
+  `gate.write({ send, commit })` + `resultOf(o)`;進場快照、跨登出作廢(`stale`)、寫回時重查完整度、翻旗與
+  條件式和解全部仍發生在工廠內(基礎閘門的 `write()`),呼叫端一行都不焊(`docs/adr/0027` §5)。
+- **:299-303 的 `validateCoupon` 保留 export**:已併入 `applyCouponCode`,不再有 export;404 與其他錯誤的分類契約
+  由 `applyCouponCode` 的案例釘住(`docs/adr/0003` 的 FE-5 增補、`0027` §3)。
+- **:438 `badgeCleared` 為 true 才呼叫 `markMessageRead(m.id)`**:現在 `MessageThread` 立即呼叫
+  `markMessageRead(id, badgeCleared)`,訊息閘門的 `write()` 等 ack 為 true 才翻已讀;ack 為 false 維持未讀,
+  ack 落地前換身分 → `stale`(`0027` §5)。使用者裁決(等後端確認才清角標)不變。

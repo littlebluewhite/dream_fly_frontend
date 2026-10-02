@@ -161,7 +161,10 @@ comment/string/template-aware import-specifier extraction (`importSpecifiers`), 
 (`makeReachPredicate`) — whose self-proving fixtures live in `import-scan.test.ts` (foundation-contracts
 uses its `walk`); `fake-router.ts` (`fakeRouter(overrides, defaults?)`, a fetch-path lookup stub with
 fn-eval support); `auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical
-`vi.mock('$lib/stores/authStore')` factories); and fixtures such as `coach-routes.ts` and
+`vi.mock('$lib/stores/authStore')` factories, both passing through the real `sessionIdentity`);
+`session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
+gate resets through its production path; there are no per-store `reset…ForTests` exports except
+`resetOpsForTests`, the identity-free ops gate's); and fixtures such as `coach-routes.ts` and
 `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
 `src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
 itself (it's the module being scanned *for*, not a production consumer).
@@ -175,7 +178,14 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   in memory only, refresh token in `localStorage` under `dreamfly_refresh` (`lib/api/tokens.ts`), rotated
   single-flight on 401 (see `docs/adr/0006`). The `dreamfly_auth` `localStorage` key is only a
   first-paint cache of the member profile (so the UI doesn't flash "logged out" before `hydrate()`
-  resolves) — the actual truth is whether the refresh token is still valid against the server.
+  resolves) — the actual truth is whether the refresh token is still valid against the server. Login state
+  follows that truth across tabs and on expiry (`docs/adr/0006` R17 addendum, `docs/adr/0027` §1): the
+  refresh single-flight clears tokens only on an explicit backend rejection and only if the stored
+  refresh token is still the one it sent (compare-and-clear), then fires `client.ts`'s
+  `onSessionExpired` signal, which `authStore` turns into `LOGGED_OUT`; `authStore` also listens for
+  `storage` events and decides from the *current* storage only (no refresh token → log out; cached
+  identity is a different logged-in member → drop this tab's access token and re-hydrate; plain
+  rotation → do nothing, otherwise tabs would trigger each other's refresh forever).
   `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
   user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any
   other user id and leaves the identity key alone, so no session gate resets.
@@ -307,7 +317,7 @@ one thing load-gate hands the source: "unmounted or superseded by a newer run" �
 read it, never touch phase or generation itself. `fetchGenStable` is a module-private function inside
 `hydration-gate.ts`, called only by its own `refreshRun` (`docs/adr/0016`, `docs/adr/0025`). The
 mutation-wins re-check compares `entered !== mutationGen || get(flag)` (both the entry-time generation
-*and* the flag), so "load in flight → `markMutated` → `invalidate()` → response lands" doesn't apply the
+*and* the flag), so "load in flight → `write()` → `invalidate()` → response lands" doesn't apply the
 stale snapshot.
 
 The refresh family is covered by a *fourth* decision point (`docs/adr/0020`): `fetchGenStable` —
@@ -318,21 +328,24 @@ mutation-wins-discard, with the reconcile chain owing the refetch; refresh's is 
 discard *must* be followed by one) — this asymmetry lives entirely inside `refreshRun`; no generation
 reader is exposed for a page to reach for, on purpose. A *fifth* decision point (`docs/adr/0021`) is the
 **mutation settle signal**, an axis orthogonal to the generation one. Optimistic mutators are
-mark-before-await (write the store + `markMutated()` *first*, `await` the PATCH after), so "the PATCH is
+mark-before-await (write the store *first*, `await` the PATCH after), so "the PATCH is
 in flight" is invisible to a generation check: a GET leaving inside that window reaches the server
-before the write does, gets the old truth back, finds the generation stable, and applies it. So
-`markMutated(tail?)` takes the mutation's network tail and books it with `tail.then(done, done)` (a
-rejection settles too — structurally, rather than trusting call sites to `catch`), an internal
+before the write does, gets the old truth back, finds the generation stable, and applies it. So an
+optimistic `write({ optimistic, send, … })` books `send()`'s promise as the mutation's network tail with
+`tail.then(done, done)` (a rejection settles too — structurally, rather than trusting call sites to
+`catch`; the tail *is* `send()`, so the old "caller must pass a pure network tail" obligation is now a
+type-level shape, `commit`/recovery run outside it), an internal
 `pendingSettle()` reports whether any tail is outstanding, and `fetchGenStable` waits on it in a
 re-asking loop *before* capturing the generation and firing. **Wait by tails, discard by generations,
 never swap the two** — the honest boundaries (a hung tail makes refresh wait with it; a continuous
 mutation stream starves refresh until the user stops) are in the ADR. When idle, `pendingSettle()`
 returns `undefined` **synchronously** — a hard contract, since one extra microtask would push the
-generation capture past a caller's "refresh then synchronously `markMutated`"; in port terms,
+generation capture past a caller's "refresh then synchronously optimistic `write()`"; in port terms,
 `source.refresh(isCurrent)` dispatches its fetch synchronously whenever there is no pending tail
 (`docs/adr/0021` addendum). The enrolled call sites are `member/notifications.ts`'s
-`markRead`/`markAllRead` (optimistic update + PATCH + `markMutated(tail)`), which are mobile's mutators
-too; the pages keep only the toast. The gate's own `generation`/`destroyed` bookkeeping (no page-local
+`markRead`/`markAllRead` (optimistic `write({ optimistic, send, onFailure: 'keep' })`) and the self
+account's `setPref` (optimistic PATCH, `onFailure: 'resync'`), which book their tails through `write()`;
+`markRead`/`markAllRead` are mobile's mutators too; the pages keep only the toast. The gate's own `generation`/`destroyed` bookkeeping (no page-local
 flag needed) discards a response that resolves after the page unmounts.
 
 Mobile-admin's ops collections and messages are store-owned: the fetch/apply/guard lifecycle lives in
@@ -346,7 +359,7 @@ right before the write, so a mutation racing an in-flight fetch always wins. The
 constant (four empty arrays, `pages` all `{ total: 0, perPage: 0 }`) is both the stores' boot value and
 what `opsGate`'s `reset: () => applyOps(EMPTY_OPS)` restores on identity reset — the admin home page's
 pending-payment banner and `CoachesScreen`'s subtitle read `0`/nothing before the gate is ready. The
-member/course/coach writes don't go through `markMutated()` at all: the store's per-entity, add/edit-split
+member/course/coach writes don't go through `write()` at all: the store's per-entity, add/edit-split
 write verbs (`docs/adr/0022`) — `addMember`/`saveMember`, `addCourse`/`saveCourse` (taking a
 `ValidCourse` from `course-request.ts`'s `checkCourseDraft` and building the body with
 `buildCreateCourseBody`/`buildUpdateCourseBody`) and `addCoach`/`saveCoach` (wrapping `coach-save.ts`,
@@ -359,13 +372,14 @@ deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `do
 see `docs/adr/0020`. `markOrderPaid(order)` is the one write that doesn't refetch: it goes through
 `order-status.ts`'s `changeOrderStatus` (`PATCH /orders/{id}/status`) and *returns* its outcome instead
 of throwing — only `changed` touches the store, applying the server's status to `$orders` with desktop's
-`applyStatusChange()` (so 收款時間 shows the order date), then `markMutated()`. The same gate also
+`applyStatusChange()` (so 收款時間 shows the order date) — the PATCH is the `send` of an `opsGate.write()`
+and `applyStatusChange` is its `commit`. The same gate also
 publishes `opsPages` (backend `total`/`perPage` for the page-1-only members/classes/orders lists), which
 the three pages show as header totals plus a `searchCapHint()` line once `total > perPage`.
 
 That store-owned guard + post-await re-check protocol is a shared factory, `src/lib/hydration-gate.ts`'s
 `createHydrationGate` (public surface: `hydrated: Readable<boolean>`, `hydrate`/`refresh`/`invalidate`/
-`markMutated(tail?)`/`pageEntry()`/`reset()` — the mutation-generation and settle readers never leave
+`write()`/`pageEntry()`/`reset()` — the mutation-generation and settle readers never leave
 the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s ops gate builds on it directly;
 every identity-scoped store builds on it through `src/lib/session-gate.ts` (`docs/adr/0017`, see the
 dedicated section below) — member's waitlist, leave-requests and notifications, mobile-admin's messages,
@@ -441,15 +455,16 @@ place, independent of any single page's own load-gate?
   (`markOrderPaid`/`markMessageRead`) can flip the guard, and none of them is "the page", so the
   fetch/apply/guard lifecycle has to live where the mutators do: the full `createHydrationGate` factory,
   store-owned. The store-level `refreshOps()` gets the generation-stable refetch for free — the
-  store-owned gate holds the mutation generation itself; "write → `markMutated` → `await refreshOps()`"
+  store-owned gate holds the mutation generation itself; "`await write()` → `await refreshOps()`"
   is a single fetch whose snapshot applies (`docs/adr/0020`'s conservation pin), and the pages' retry
   reaches the same ledger only indirectly, through `source.refresh(isCurrent)`. Neither mutator enrols a
-  settle tail in the fifth decision point, and neither needs to: both call `markMutated()` only after
-  their write has settled. `markOrderPaid` `PATCH`es first (see above); `markMessageRead` only flips the
-  local row and calls `markMutated()` — mobile-admin's `MessageThread` runs desktop's
-  `messages-controller` and calls it only once `badgeCleared` resolves true, i.e. after the backend
-  acknowledged the read (a failed `markRead` leaves the thread unread) (`docs/adr/0021`,
-  `docs/adr/0024`). The overlay screens on this store render their own three states: `CoachesScreen`
+  settle tail in the fifth decision point, and neither needs to: both are non-optimistic `write()`s, so
+  the store is touched (`commit`) and the generation bumped only after `send` has settled.
+  `markOrderPaid` `PATCH`es first (see above); `markMessageRead(id, ack)` takes the controller's
+  `badgeCleared` promise as the write's `send` — mobile-admin's `MessageThread` calls it immediately
+  and the gate waits for the ack; only `true` flips the local row (a failed `markRead` leaves the
+  thread unread), and an identity change before the ack lands makes the write `stale` so the new
+  identity's store is untouched (`docs/adr/0021`, `docs/adr/0024`, `docs/adr/0027` §5). The overlay screens on this store render their own three states: `CoachesScreen`
   uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...opsPageEntry })`, ready synchronously when
   the guard hits), so its coach cards never render stale rows during the hydrate window
   (`docs/adr/0016`).
@@ -483,19 +498,21 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   `hydrateSelfAccount()` + `GET /coaches`, the flag flipped back on `CoachNotFoundError` so a retry
   re-resolves) and mobile-admin's messages (`docs/adr/0023`). The coach and mobile-admin ones are
   staff-side consumers — staff logins write the same `authStore`. It builds a `HydrationGate`
-  (`createHydrationGate({ fetch, apply, reset })`, its own `reset()` layered with the reconcile/write-chain
-  reset below, `docs/adr/0025`) plus `mutate(request, writeBack)`, the one mutator skeleton: snapshot
-  hydration state + epoch before `await`, discard an epoch-stale write-back (result still returned — the
-  server-side effect already happened), re-check completeness on write-back (a prior reconcile may have
-  flipped the flag back to `false`), `markMutated()`, then conditionally queue a serialized, retryable
-  reconciliation refetch; and `queueWrite(task, skipped)`, one serialized write chain per gate: a queued
+  (`createHydrationGate({ fetch, apply, reset })`, whose `reset()` is layered with the write-chain reset
+  below, `docs/adr/0025`). The one mutator skeleton is the *base* gate's `write()` (`docs/adr/0027` §5):
+  it records the owner (reset epoch) and whether the gate was hydrated before `await`, discards a
+  write that landed after a reset as `stale` (the outcome still carries how `send` ended — the
+  server-side effect already happened), re-checks completeness on write-back (a prior reconcile may
+  have flipped the flag back to `false`), bumps the generation, then conditionally queues a serialized,
+  retryable reconciliation refetch (the reconcile chain lives in the base gate too). The session gate
+  adds only `queueWrite(task, skipped)`, one serialized write chain per gate: a queued
   write whose identity changed before its turn is skipped, the task gets a `stale()` probe for its failure
   handling, and an identity change resets the chain — the self account's `setPref`/`saveSelfAccount` run
   on it. Its **`pageEntry()`** (inherited from the hydration gate) is the pack a page spreads into its own
   load-gate: `{ source: LoadSource }`, where `source.load`/`source.refresh` are the *epoch-checking* fetch
   and refresh, and the mutation-generation ledger they compare against is the gate's own — the page's
   refresh and the store gate read **one** ledger, without exposing it as a separate reader. That closes
-  the reconcile window: `queueReconcile` needs no second queued reconcile, because a reconcile refetch
+  the reconcile window: the gate's `queueReconcile` needs no second queued reconcile, because a reconcile refetch
   whose snapshot predates a later mutation is discarded and refetched by `gate.refresh`'s own generation
   check (`docs/adr/0020`). A failed reconcile flips the flag back through `gate.invalidate()`; `hydrate()`
   shares one in-flight GET among concurrent callers, so no consumer module carries its own `inflight`
@@ -506,15 +523,15 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   the checkout's existing rejection chains).
 
 Both factories share one private identity core, keyed by `sessionIdentity(auth)` — an exported pure
-function (`null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
+function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
 mobile-admin layouts' warm keys and mobile-admin's `MessageThread` call too instead of hand-copying the
 formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
 immediate callback only records who is logged in, so a restored (or guest) boot fires no reset at all —
 reset value equals boot value, so nothing on screen differs — and declaration order at call sites is not
 a contract. On a real identity change `createSessionGate` calls its underlying `gate.reset()`
 (`opts.reset()`, flag false, drop the in-flight coalesced GET, bump the reset epoch, clear the
-settle-tail ledger and wake any waiters — the hydration gate's own general-purpose `reset()`,
-`docs/adr/0025`) and resets its reconcile and write chains.
+settle-tail ledger and reconcile chain, and wake any waiters — the hydration gate's own general-purpose
+`reset()`, `docs/adr/0025`) and resets its write chain.
 
 Each factory call opens its own `authStore` subscription (eight module-level subscriptions total — six
 `createSessionGate`s plus two `createSessionRefresher`s) rather than sharing a registry. Session-gate is
@@ -669,18 +686,28 @@ this class by `docs/adr/0014`. Its members:
   controller bullet above); the two surfaces differ in *wiring* (who supplies the cart and refresh lists,
   who drives the lifecycle), not in the machine, which supersedes `docs/adr/0016`'s original "非 twin"
   note. The twins' coupon-apply step is single-sourced as `member/checkout.ts`'s `applyCouponCode` (trim
-  guard + `validateCoupon` + one shared 404/network copy), injected into the controller as a dep, so the
-  components don't call it; `validateCoupon` stays exported because its three unit tests are the only pin
-  on the 404-vs-other-error split that `applyCouponCode` merges away.
+  guard + the real `GET /coupons/{code}/validate` + one shared 404/network copy), injected into the
+  controller as a dep, so the components don't call it; there is no separate `validateCoupon` any more
+  (`docs/adr/0027` §3).
 - `coach/messages-controller.ts` — mobile-admin's `MessageThread` builds it with the same five deps,
   imported directly from `$lib/coach/api` (`docs/adr/0024` F5). The one wiring difference is the badge:
-  `MessageThread` calls the store's `markMessageRead(id)` only when `badgeCleared` resolves true, so the
-  unread badge clears after the backend acknowledged the read, as on desktop.
+  `MessageThread` hands `badgeCleared` to the store's `markMessageRead(id, badgeCleared)`, whose
+  `write()` flips the row only when it resolves true, so the unread badge clears after the backend
+  acknowledged the read, as on desktop.
 - `coach/student-forms.ts` — `createCertificateForm`/`createReportCardForm` (one file, two factories, no
   mode flag) hold the required-field guard, double-submit guard, trimming, optional-field omission and
   local-date default shared by desktop's `CertificateDialog`/`ReportCardDialog` and mobile-admin's
   `StudentActionSheet`; toast copy and the `lastOpen` reset timing stay in the components
   (`docs/adr/0026`).
+- `coach/data.ts`'s `ATT_CHOICES` — the one attendance-status list (`present`/`leave`/`absent`; there is
+  no 遲到, the backend only has those three) shared by desktop's `AttSegment` and stat chips and
+  mobile-admin's attendance page; `tally()` is a zero-initialised `Record<AttDefault, number>`
+  (`docs/adr/0026` R17 addendum).
+- mobile-admin's `MemberForm`/`ClassForm`/`CoachForm` take `onCreate`/`onUpdate` (promise-returning, close
+  only on success) instead of `onSave(body, isNew)`, validate on submit with the same `checkX` modules as
+  desktop and show errors on the field; `CoachForm`'s `onCreate` also reports `'bind-failed'`, which
+  keeps the sheet open and locks email/name/password for the retry (`docs/adr/0023` R17 addendum,
+  `docs/adr/0027` §4).
 
 `src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)` pushes the pattern further still — an
 IO-callback orchestrator, not a deps-injected snapshot store, shared by *four* surfaces' login pages

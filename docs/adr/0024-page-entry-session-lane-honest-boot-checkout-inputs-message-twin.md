@@ -345,3 +345,18 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
   (admin 首頁待付款橫幅、`CoachesScreen` 副標教練數)水合前顯示假數字本身就是使用者可見的誠實性
   缺口,測試改動的規模本輪實際發生且已完成(19 個測試檔改走 fakeRouter,另有 10 個 `COACHES`
   值消費者改指向 `testing/seed-fixtures.ts`)。詳見 `docs/adr/0025` 候選 F-3、轉手退役。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。以下敘述被 `docs/adr/0027` §5、§6 取代:
+
+- **:76 的公開面「`hydrated`/`hydrate()`/`refresh()`/`markMutated(tail?)`/`pageEntry()`」、:86 的「`HydrationGate<T>` 多
+  `mutate`」**:公開面是 `hydrated`/`hydrate()`/`refresh()`/`invalidate()`/`write()`/`pageEntry()`/`reset()`;`mutate` 已退役。
+- **:110、:262、:323 的 pin 序列「load 在飛 → `markMutated` → `invalidate()` → 回應落地」**:由「未水合 `write()` 直寫 →
+  和解失敗把旗標翻回 false」驅動同一個狀態;load-gate 的 `load()` 只看旗標的潛伏窗(bug #3)仍由
+  `source.load` 的世代比對關閉。
+- **:202-208 的 `badgeCleared` 為 true 才呼叫 `markMessageRead(m.id)`、只做本地標已讀 + `messagesGate.markMutated()`、
+  終審修波追加的 `load()` 身分核對**:現為立即呼叫 `markMessageRead(id, badgeCleared)`,`write()` 等 ack 為 true 才翻
+  已讀,身分改變由閘門 `stale` 取代手寫核對(`MessageThread` 的核對已刪)。
+- **:328 的 `reset…ForTests()` 與「`gate.hydrated.set(true)` 只剩型別釘」**:各 store 的 `reset…ForTests` 已刪
+  (只剩 `resetOpsForTests`),測試用 `resetSessionStores()`。

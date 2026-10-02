@@ -141,26 +141,26 @@ _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合、消費端直讀
 **水合閘門 (Hydration Gate)**:
 共享 store 的水合協定(guard 短路、post-await 重查「mutation 勝出」、mutator 翻旗);單一來源
 `src/lib/hydration-gate.ts` 的 `createHydrationGate`。公開面是
-`hydrated: Readable<boolean>`/`hydrate()`/`refresh()`/`invalidate()`/`markMutated(tail?)`/
-`pageEntry()`/**`reset()`**。`hydrated` 唯讀,production 翻旗只能經 `invalidate()`(翻
+`hydrated: Readable<boolean>`/`hydrate()`/`refresh()`/`invalidate()`/**`write()`**/
+`pageEntry()`/**`reset()`**(`markMutated` 與 session 閘門的 `mutate()` 已退役,`write()` 是唯一寫入動詞)。`hydrated` 唯讀,production 翻旗只能經 `invalidate()`(翻
 false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-F2a、`docs/adr/0025`「閘門
 重置」)。`pageEntry()` 交出 `{ source: LoadSource }` 給 load-gate,`hydrate()` 與 `source.load`
 共用同一支在飛 GET(只併入同世代出發的那支,settle 即清);refresh 族(`refresh()`/`source.refresh`)
 一律真抓、不合併。第四決策點是**世代穩定重抓**(`fetchGenStable`,模組私有、refresh 族專用):進場
 捕捉 mutation 世代、落地比對,期間發生的本地 mutation 讓那份快照作廢並原地重抓;hydrate 路徑刻意不套
-(見 `docs/adr/0020`)。第五決策點是**mutation settle 訊號**(`markMutated(tail?)` 記帳、
+(見 `docs/adr/0020`)。第五決策點是**mutation settle 訊號**(樂觀 `write()` 把 `send()` 記成尾流、
 `pendingSettle` 內部讀取,同為 refresh 族專用):樂觀 mutation 是「先寫 store 再 await PATCH」,尾流
 在飛這件事對世代軸不可見——GET 搶跑會拿到 server 舊真值而世代此刻已穩定。故 refresh 族每次出發前先等
 未 settle 的尾流全數落地(reject 也算 settle),靜止時同步出發、零額外成本(見 `docs/adr/0021`)。
 **等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點只住
-`hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序還原內容、旗標翻 false、
-丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數、喚醒全部尾流等待者;重置前出發的
+`hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數與和解鏈、還原內容、
+旗標翻 false、喚醒全部尾流等待者;重置前出發的
 load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/messages)不再匯出測試專用的重置,測試用真的登入 → 登出
 (`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests = opsGate.reset`,
 production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯出 `*Hydrated`(`hydrated` 只留在閘門介面當唯讀探針)。
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
-自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「寫入 → markMutated →
-await refresh」序列會因此無窮重抓);把等待判準接上世代(同一條正常序列會永久掛住)或把丟棄判準接上
+自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「`await write()` →
+`await refresh()`」序列會因此無窮重抓);把等待判準接上世代(同一條正常序列會永久掛住)或把丟棄判準接上
 尾流(0020 關掉的窗當場復發)
 
 **頁面進場包 (Page Entry)**:
@@ -183,7 +183,7 @@ _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)�
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(水合閘門 + identity 重置 + epoch 核對 fetch
-+ `mutate()` + 寫入鏈 `queueWrite()`,頁面進場包繼承自水合閘門;供 waitlist/請假/通知/本人帳號資料/
++ 寫入鏈 `queueWrite()`,寫入動詞 `write()` 與頁面進場包都繼承自水合閘門;供 waitlist/請假/通知/本人帳號資料/
 教練身分/mobile-admin 訊息——通知是 member 與 mobile 共用的同一顆閘門,mobile 經自家
 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
 身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),mobile-admin
@@ -195,7 +195,7 @@ domain store 對「會員身分變更」(登入/登出、或不經整頁重載�
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序
 不是契約。`queueWrite` 排進同一條寫入鏈:輪到時身分已換就跳過,換帳號即重置這條鏈(見
 `docs/adr/0024`)。`reset()` 呼叫水合閘門通用的
-`gate.reset()`,再疊上 `reconcileChain`/`writeChain` 的重置(見 `docs/adr/0025`「閘門重置」);
+`gate.reset()`(連和解鏈一起清),再重置 `writeChain`(見 `docs/adr/0025`「閘門重置」、`docs/adr/0027` §5);
 「誰換人、何時換人」這個 session 專屬判斷只住本檔。
 _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活、
 開機時為了「對齊開機值」而觸發 reset

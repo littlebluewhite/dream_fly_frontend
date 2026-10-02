@@ -479,3 +479,20 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 `ApiLeaveRequest` 住 `src/lib/api/wire.ts`(member 與 coach 共用的 wire 形狀,`docs/adr/0007` 增補),
 `domain/leave-requests.ts` 改從 wire import、不再匯出。`STATUS_BADGE`/`leaveRow()` 的行為不變。
 詳見 `docs/adr/0026` §8。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。`docs/adr/0027` §5、§6 讓以下敘述過時:
+
+- **:93 的公開面「`markMutated(tail?)`、`pageEntry()`,以及新增的 `reset()`」**:`write()` 取代 `markMutated(tail?)`。
+- **:93-100 的 `reset()` 依序**:在「`pendingTails = 0`」與「`opts.reset?.()`」之間多一步:清和解鏈
+  (`reconcileChain = Promise.resolve()`,舊擁有者卡死的和解不得堵住新擁有者)。完整順序:丟在飛合併 GET → `resetEpoch += 1`
+  → `pendingTails = 0` → 清和解鏈 → `opts.reset?.()` → 旗標翻 false → 喚醒尾流等待者。
+- **:111「`reset()` = `gate.reset()` + 重置 `reconcileChain`/`writeChain`」**:session 的 `reset()` = `gate.reset()`(含和解鏈)+
+  重置 `writeChain`。
+- **:113-116、:127-131 的 `reset…ForTests = gate.reset`**:`resetNotificationsForTests`/`resetLeaveRequestsForTests`/
+  `resetWaitlistForTests`/`resetMessagesForTests` 已刪;只剩身分無關的 `resetOpsForTests`。測試用
+  `resetSessionStores()`(真登入 → 登出)。「production 原始碼零引用 `*ForTests`」契約不變。
+- **:30、:72、:399 與 :426 的 bug #3 pin 與 `opsHydrated.set(false)`**:見 `0024` 增補;`opsHydrated` 已刪。
+- **:300-333、:443 的 `submitOrder`(mobile adapter 委派、`placeOrder — 委派 submitOrder` describe)**:`submitOrder` 已刪,
+  序列是 `createCheckout` 的私有 `placeOrder`(`docs/adr/0003` FE-5 增補)。

@@ -21,7 +21,8 @@
    * CoachEditDialog 註解）。
    *
    * R13 Task 4：驗證與標籤拆分改用桌面同一份 coach-save.ts(checkNewCoach/
-   * checkCoachEdit)，主按鈕 disabled 依驗證結果。 */
+   * checkCoachEdit)；R17 起送出時才驗證(錯誤顯示在欄位上、不呼叫 handler)，
+   * 主按鈕只在存檔中 disabled。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';

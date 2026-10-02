@@ -361,3 +361,16 @@ generation,而 `hydrate()` 無條件翻旗)因 `isCurrent` 由呼叫方交入而
 「source 選項(pageEntry 整合)」,直接用真 `createHydrationGate(...).pageEntry()` 與假
 `LoadSource` 契約釘驗證,不再對著裸的 `{fetch, refresh, hydrate}` 形狀斷言。詳見 `docs/adr/0025`
 候選 F-1。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。R17(`docs/adr/0027` §5、§6)讓以下敘述過時:
+
+- **決定二表格與「對抗審後補強」的 `gate.markMutated()`、:105 的「`markMutated()` 帶單調世代」、:122-126 的
+  `createSessionGate` 的 `mutate()`**:`markMutated` 與 `mutate` 已退役,世代由基礎閘門 `write()` 內的
+  `bump()` 遞增;和解鏈與「進場捕捉 `wasHydrated`」都在 `write()` 裡。
+- **:325 的公開面清單**:`markMutated(tail?)` 換成 `write()`(另匯出 `resultOf`、`WriteOutcome`)。
+- **:159-164 的第 3 層「各 adapter 薄採用釘」**:現況是每個 mutator 一條接線釘,只斷言可觀察結果;跨登入、在飛
+  登出棄寫與序列化屬第 2 層,不再逐 store 重複(FE-9)。
+- **各 store 的 `*Hydrated`(`waitlistHydrated` 等)** 已刪(`opsHydrated`、`messagesHydrated` 亦同);測試改用
+  `resetSessionStores()`。

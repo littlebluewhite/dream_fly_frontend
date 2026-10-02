@@ -311,3 +311,19 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
   只是 `set(LOGGED_OUT)` 或重新 `hydrate()`。本檔的 `createSessionCore` 看到身分改變,照原樣重置閘門、
   遞增 epoch,沒有新路徑;本檔只改了 `sessionIdentity` 的 import 來源。refresh token 只是被別的分頁輪替時身分不變,閘門不動。
   消費者計數不變(六個 `createSessionGate` + 兩個 `createSessionRefresher`)。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。除上一則增補(`sessionIdentity` 搬家、過期與跨分頁走同一條身分邊)外,`docs/adr/0027` §5 讓以下
+敘述過時:
+
+- **「`mutate()` 吸收五份手焊骨架」整節(:67-85)與 :41、:130、:180 的 `mutate()`**:骨架的五個步驟(進場快照、
+  跨身分作廢、寫回時重查完整度、翻旗、條件式和解)現在是基礎閘門 `write()` 的演算法;`SessionGate` 不再有
+  `mutate`,只多 `queueWrite`。和解鏈(`queueReconcile`)搬進 `hydration-gate.ts`,軸由 session 世代換成
+  `resetEpoch`;身分改變 → `gate.reset()` → `resetEpoch` 推進,「跨身分作廢」語意不變。
+- **:85、:175「樂觀 mutator 直接呼叫 `gate.markMutated()`,故 `markMutated` 仍留在 `SessionGate` 介面上」**:樂觀
+  mutator 走 `write({ optimistic })`;`markMutated` 兩個介面都沒有。
+- **:61-64「`reconcileChain` 宣告在 subscribe 之前」的建構順序約束**:`reconcileChain` 已不在本檔,只剩 `writeChain`。
+- **:283「`gate.reset() + reconcileChain/writeChain 重置」**:和解鏈在 `gate.reset()` 內清,session 的 `reset()`
+  只再重置 `writeChain`。
+- 消費者計數不變(六個 `createSessionGate` + 兩個 `createSessionRefresher`)。

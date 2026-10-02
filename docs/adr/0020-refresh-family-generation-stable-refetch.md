@@ -309,3 +309,17 @@ R12 Task 3(`docs/adr/0022` §1)把 `mobile-admin/stores.ts` 的 `markOrderPaid` 
 什麼形狀無關;契約 2、4 描述的是 load-gate 整合面,`source.refresh(isCurrent)` 這條新介面下
 `run()` 的單一 phase 週期、`queueReconcile` 零 diff 兩點也原樣成立(斷言路徑改經
 `gate.pageEntry().source`,判準本身未變)。詳見 `docs/adr/0025` 候選 F-1。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。R17(`docs/adr/0027` §5)把寫入入口收成 `write()`,**丟棄軸(`fetchGenStable`)的決定與判準原樣
+成立**,以下敘述過時:
+
+- **:24、:111-114、:200-201 的 `queueReconcile`「零 diff」住在 `session-gate.ts`**:函式搬進 `hydration-gate.ts`
+  (檢查軸 `resetEpoch`),`mutate()`/和解鏈併入 `write()`。「閉合是 `gate.refresh` 的世代比對免費帶來的,不是在和解鏈上
+  加新機制」這個論證不變。
+- **:20、:59、:80、:231、:246、:259、:274 的 `markMutated`**:「寫入 → `markMutated` → `await refreshOps()`」
+  這條判準反例現在是「`await write()` → `await refresh()`」,斷言(`get(flag) === true` 後快照仍套用、`fetch` 恰一次)
+  不變;「遞增仍只走 `markMutated()`」現為「遞增只走 `write()` 內的 `bump()`」;`markOrderPaid` 的第 3 步是
+  `opsGate.write()`。
+- **:215 的 `markMutated(tail?)` 以 `tail.then(done, done)` 為在飛的樂觀 mutation 記帳**:同一個機制,入口是樂觀 `write()`。

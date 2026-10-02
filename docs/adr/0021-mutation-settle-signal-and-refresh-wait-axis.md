@@ -346,3 +346,21 @@ hydrate 則被 post-await 的 mutation-wins 丟棄。故第 3 層兩條釘打的
 「`pendingSettle()` 靜止回 `undefined` 即代表沒有排隊等待的尾流」是同一個保證,只是用
 `LoadSource` 的詞彙重寫,機制本體(`pendingTails`/`resolvePending` 佇列)一字未改。詳見
 `docs/adr/0025` 候選 F-1、閘門重置。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫。等待軸(尾流帳)的決定原樣成立;R17(`docs/adr/0027` §5)改變的是入口:
+
+- **`markMutated(tail?: Promise<unknown>)` 介面與「呼叫端義務:`tail` 必須是純網路尾流,不得是內部會等這顆閘門
+  refresh 的 promise」(:66-67、:73)**:`markMutated` 已退役。樂觀 `write({ optimistic, send, … })` 把 **`send()`
+  的 promise** 記成尾流;`commit`、`undo`、resync 都在尾流之外,所以「尾流內等本閘門 refresh」不再是呼叫端能犯的
+  錯,而是 `Write.send` 型別註解上的契約(「純網路,不得 await 本閘門的 refresh」)。
+- **記帳順序是契約(:169)**:原樣沿用——尾流先入帳,才推世代/翻旗,整段同步;順序現在寫在 `write()` 的樂觀分支。
+- **:9-10、:19「先寫 store + `markMutated()`」**:同序,入口是 `write()`;`markRead` 現為
+  `write({ optimistic, send, onFailure: 'keep' })`。
+- **:150、:153、:273、:285-286 的機制表與入帳呼叫點**:`then(done, done)` 在 `write()` 的尾流入帳;入帳的呼叫點是
+  `markRead`、`markAllRead`、`setPref`(第三處,PATCH 首次入帳,經 `write`)。
+- **:160-162、:229-230、:266 的「`session-gate.mutate()` 本體零 diff,那四支刻意不走 `mutate()`」**:`mutate` 已退役;
+  `markOrderPaid`/`markMessageRead` 仍**不入尾流帳**(非樂觀 `write()`:`commit` 在 `send` 落定後,沒有在飛尾流),只是
+  不再呼叫 `markMutated()`。`markMessageRead(id)` 現為 `markMessageRead(id, ack)`(:296-298、:319-321)。
+- **:196 的 `onChange` 清帳**:`clearPendingTails()` 與和解鏈現在都在 `gate.reset()` 內。

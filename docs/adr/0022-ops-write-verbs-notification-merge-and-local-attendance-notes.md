@@ -368,3 +368,15 @@ sheet)與 toast 文案仍留呼叫端,本篇候選 04 的這句話不變。
   「role sheet 的 role 必填,不可省略 props」保留;`@ts-expect-error` 行數不變,四種錯誤類別照舊涵蓋。
 - **R13 增補「§7 的 `prefSync` 單例」**:偏好寫入所在的 `$lib/member/profile` 搬到
   `$lib/self-account`,`saveProfile` 改名 `saveSelfAccount`;`setPref` 名字與「共用一條寫入鏈」不變。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+本篇原文不改寫,以下以 `docs/adr/0027` 為準:
+
+- **:26 的 `onSave(body, isNew)` 簽章不變**:mobile 三個表單已改 `onCreate(body)`/`onUpdate(body)`(§4,
+  `docs/adr/0023` R17 增補)。:104-106 提到的 `onSave` 型別與 `'email' in body` 收窄隨之消失。
+- **:31、:35 的「寫入動詞不呼叫 `markMutated()`」「`markOrderPaid` 最後 `opsGate.markMutated()`」**:`markMutated`
+  已退役;ops 的 create/save 仍是寫後無條件重抓(不走 `write()`),`markOrderPaid` 的 PATCH 現在是
+  `opsGate.write({ send, commit })` 的 `send`(仍不入尾流帳,非樂觀)。:303 同。
+- **:181 的「`PT_TYPE` 雖零消費者仍保留」**:member `PT_TYPE` 保留(會員點數頁使用,補了 `adjust`/`refund`);
+  **mobile 的 `PT_TYPE` 已刪**(`0027` §2)。

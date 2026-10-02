@@ -457,3 +457,16 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
   工作階段內持有 `{userId, email, name}`(第一次送出的身分),重試只再打 `POST /coaches`、沿用同一個
   user id,toast 指名實際建立的帳號而非重試時表單帶的值。重新開啟新增 sheet 時重置。這取代
   CoachesScreen 檔頭原本「儲存即關 sheet、哨兵刻意丟棄、請換一個 email」的設計。
+
+## 增補(2026-10-03,架構深化 R17,FE-10)
+
+在上一則增補(§4 的 mobile 表單)之外,`docs/adr/0027` §5 讓以下敘述過時:
+
+- **:53、:191、:433 的 `gate.mutate(PATCH, …)`**:`mutate` 已退役。本人帳號資料的 `patchMe` 現為
+  `gate.write({ send, commit })` + `resultOf`;`setPref` 走寫入鏈內的 `write({ optimistic, send, commit, onFailure:
+  'resync' })`(PATCH 入尾流帳;寫前水合失敗仍先 `gate.refresh()`、再失敗才單鍵回滾)。教練 `saveSettings` 本來就不經 gate
+  寫入(:433 已記)。
+- **:150、:200 的 `applyStatusChange` + `markMutated()`、「`markMessageRead → markMutated` 不變」**:`markOrderPaid`
+  的 PATCH 是 `opsGate.write()` 的 `send`、`applyStatusChange` 是它的 `commit`;`markMessageRead(id, ack)` 走
+  `messagesGate.write()`。對外匯出仍是這兩支。
+- **:346 與 :210 的 `opsHydrated`**:該匯出已刪(`0027` §6);測試改用 `resetOpsForTests()`/先 `hydrateOps()`。
