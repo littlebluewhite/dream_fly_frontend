@@ -35,7 +35,7 @@
 
   export let onClose: () => void;
   export let c: Coach | null = null;
-  export let onCreate: ((values: CoachFormValues) => Promise<boolean>) | undefined = undefined;
+  export let onCreate: ((values: CoachFormValues) => Promise<'saved' | 'kept' | 'bind-failed'>) | undefined = undefined;
   export let onUpdate: ((values: CoachFormValues) => Promise<boolean>) | undefined = undefined;
 
   const isNew = !c;
@@ -51,6 +51,9 @@
 
   let errors: CoachErrors = {};
   let saving = false;
+  // 'bind-failed'＝帳號已建立、教練綁定失敗：email/姓名/密碼已用掉，重試只補打綁定
+  // （同桌面 CoachEditDialog 的 pendingUserId 鎖），故鎖住這三欄直到 sheet 關閉。
+  let locked = false;
 
   async function save() {
     if (saving) return;
@@ -64,7 +67,13 @@
     errors = {};
     saving = true;
     try {
-      if (await (isNew ? onCreate : onUpdate)?.(r.values)) onClose();
+      if (isNew) {
+        const outcome = await onCreate?.(r.values);
+        if (outcome === 'bind-failed') locked = true;
+        if (outcome === 'saved') onClose();
+      } else if (await onUpdate?.(r.values)) {
+        onClose();
+      }
     } finally {
       saving = false;
     }
@@ -85,9 +94,9 @@
     </div>
 
     {#if isNew}
-      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" error={errors.email ?? ''} />
+      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" disabled={locked} error={errors.email ?? ''} />
     {/if}
-    <Input label="教練姓名" bind:value={name} error={errors.name ?? ''} />
+    <Input label="教練姓名" bind:value={name} disabled={locked} error={errors.name ?? ''} />
     <Input label="職稱 / 專業" required bind:value={title} error={errors.title ?? ''} />
     <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
     {#if isNew}
@@ -96,6 +105,7 @@
         type="password"
         bind:value={password}
         placeholder="至少 8 碼"
+        disabled={locked}
         error={errors.password ?? ''}
       />
     {/if}

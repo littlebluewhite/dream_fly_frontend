@@ -114,10 +114,11 @@ const V: CoachFormValues = {
 };
 
 /** 從目前開啟的 sheet 取出頁面帶入的 onCreate / onUpdate 閉包（同 mobile-admin/admin/members/
- *  page.test.ts 對 sheetProps 的取用慣例）；true＝已存（sheet 可關），false＝留著。 */
+ *  page.test.ts 對 sheetProps 的取用慣例）；onUpdate: true＝已存（sheet 可關）；onCreate: 'saved' 關、'kept' 留著、'bind-failed' 留著並鎖欄位。 */
 type SheetHandler = (v: CoachFormValues) => Promise<boolean>;
-function sheetProps(): { onCreate: SheetHandler; onUpdate: SheetHandler } {
-	const props = get(overlay).sheet?.props as { onCreate: SheetHandler; onUpdate: SheetHandler } | undefined;
+type CreateHandler = (v: CoachFormValues) => Promise<'saved' | 'kept' | 'bind-failed'>;
+function sheetProps(): { onCreate: CreateHandler; onUpdate: SheetHandler } {
+	const props = get(overlay).sheet?.props as { onCreate: CreateHandler; onUpdate: SheetHandler } | undefined;
 	if (!props) throw new Error('沒有開啟中的 sheet');
 	return props;
 }
@@ -143,7 +144,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
 
-		expect(await sheetOnCreate()(V)).toBe(true);
+		expect(await sheetOnCreate()(V)).toBe('saved');
 
 		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify({ email: V.email, name: V.name, password: V.password }) });
 		expect(api).toHaveBeenCalledWith('/coaches', { method: 'POST', body: JSON.stringify({ user_id: 'u-new', title: V.title, specialties: V.tags, is_active: V.isActive }) });
@@ -161,7 +162,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
-		expect(await sheetOnCreate()(V)).toBe(false);
+		expect(await sheetOnCreate()(V)).toBe('kept');
 
 		expect(callCount('POST', '/coaches')).toBe(0);
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '新增失敗' });
@@ -190,7 +191,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
 		const onCreate = sheetOnCreate();
-		expect(await onCreate(V)).toBe(false);
+		expect(await onCreate(V)).toBe('bind-failed');
 
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '教練綁定失敗' });
 		expect(get(toasts).at(-1)?.body).toBe(
@@ -201,8 +202,12 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		expect(callCount('GET', '/coaches')).toBe(0);
 
 		// 同一個 sheet 工作階段內重試：只補打 createCoach，沿用同一個 user id。
-		expect(await onCreate(V)).toBe(true);
+		// (toast store 會 dedup 相同內容，先清掉前面測試留下的同文 toast，at(-1) 才是這次的)
+		for (const t of get(toasts)) toasts.dismiss(t.id);
+		expect(await onCreate({ ...V, name: '改過的名字', email: 'other@test.com' })).toBe('saved');
 
+		// 成功 toast 指名實際建立的帳號(第一次的姓名)，不是重試時表單帶的值。
+		expect(get(toasts).at(-1)?.body).toBe('「新教練」已建立為教練。');
 		expect(createMemberCalls).toBe(1);
 		expect(createCoachCalls).toBe(2);
 		const secondCoachBody = JSON.parse(
@@ -229,9 +234,9 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
-		expect(await sheetOnCreate()(V)).toBe(false);
+		expect(await sheetOnCreate()(V)).toBe('bind-failed');
 		await fireEvent.click(getByLabelText('新增教練'));
-		expect(await sheetOnCreate()(V)).toBe(true);
+		expect(await sheetOnCreate()(V)).toBe('saved');
 		expect(createMemberCalls).toBe(2);
 	});
 });

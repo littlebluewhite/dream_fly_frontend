@@ -23,7 +23,7 @@ const EXISTING: Coach = {
 
 describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼）', () => {
 	it('builds a full CoachFormValues and calls onCreate(values)', async () => {
-		const onCreate = vi.fn().mockResolvedValue(true);
+		const onCreate = vi.fn().mockResolvedValue('saved');
 		const onClose = vi.fn();
 		render(CoachForm, { props: { onClose, onCreate } });
 
@@ -50,9 +50,9 @@ describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼�
 		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 	});
 
-	it('stays open when onCreate resolves false; button disabled only while saving', async () => {
-		let resolve!: (v: boolean) => void;
-		const onCreate = vi.fn(() => new Promise<boolean>((r) => (resolve = r)));
+	it('stays open when onCreate resolves kept; button disabled only while saving', async () => {
+		let resolve!: (v: 'saved' | 'kept' | 'bind-failed') => void;
+		const onCreate = vi.fn(() => new Promise<'saved' | 'kept' | 'bind-failed'>((r) => (resolve = r)));
 		const onClose = vi.fn();
 		render(CoachForm, { props: { onClose, onCreate } });
 		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
@@ -62,9 +62,29 @@ describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼�
 		await fireEvent.click(screen.getByText('建立教練'));
 
 		await waitFor(() => expect(screen.getByText('建立教練').closest('button')).toBeDisabled());
-		resolve(false);
+		resolve('kept');
 		await waitFor(() => expect(screen.getByText('建立教練').closest('button')).not.toBeDisabled());
 		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it("onCreate 'bind-failed': stays open and locks email/name/password; retry still calls onCreate", async () => {
+		const onCreate = vi.fn().mockResolvedValue('bind-failed');
+		const onClose = vi.fn();
+		render(CoachForm, { props: { onClose, onCreate } });
+		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
+		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '新教練' } });
+		await fireEvent.input(screen.getByLabelText('職稱 / 專業', { exact: false }), { target: { value: '兼任教練' } });
+		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
+		await fireEvent.click(screen.getByText('建立教練'));
+
+		await waitFor(() => expect(screen.getByLabelText('Email')).toBeDisabled());
+		expect(screen.getByLabelText('教練姓名')).toBeDisabled();
+		expect(screen.getByLabelText('初始密碼')).toBeDisabled();
+		expect(screen.getByLabelText('職稱 / 專業', { exact: false })).not.toBeDisabled();
+		expect(onClose).not.toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByText('建立教練'));
+		await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(2));
 	});
 
 	it('invalid password: submit shows COACH_PASSWORD_ERROR and does not call onCreate', async () => {

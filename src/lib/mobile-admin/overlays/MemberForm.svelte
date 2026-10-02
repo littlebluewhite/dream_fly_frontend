@@ -47,33 +47,30 @@
   let errors: MemberErrors = {};
   let saving = false;
 
-  async function finish(saved: Promise<boolean> | undefined) {
-    saving = true;
-    try {
-      if (await saved) onClose();
-    } finally {
-      saving = false;
-    }
-  }
-
-  function save() {
-    if (saving) return;
+  /* 新增/編輯各自驗證，結果收成同一形狀：errors，或一個送出的 thunk。 */
+  function check(): { errors: MemberErrors } | { send: () => Promise<boolean> | undefined } {
     if (isNew) {
       const r = checkNewMember({ email, name, phone, password, birthDate: '' });
-      if (r.kind === 'invalid') {
-        errors = r.errors;
-        return;
-      }
-      errors = {};
-      return finish(onCreate?.(r.body));
+      return r.kind === 'invalid' ? { errors: r.errors } : { send: () => onCreate?.(r.body) };
     }
     const r = checkMemberEdit({ name, phone, isActive });
-    if (r.kind === 'invalid') {
-      errors = r.errors;
+    return r.kind === 'invalid' ? { errors: r.errors } : { send: () => onUpdate?.(r.body) };
+  }
+
+  async function save() {
+    if (saving) return;
+    const c = check();
+    if ('errors' in c) {
+      errors = c.errors;
       return;
     }
     errors = {};
-    return finish(onUpdate?.(r.body));
+    saving = true;
+    try {
+      if (await c.send()) onClose();
+    } finally {
+      saving = false;
+    }
   }
 </script>
 

@@ -450,7 +450,10 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
 - **送出時驗證(同桌面)**:不再依驗證結果 disabled。送出時跑同一份 `checkX`,無效就把 module 既有
   常數(如 `MEMBER_PASSWORD_ERROR`)用 `<Input error=…>` 顯示在欄位上、不呼叫 handler;按鈕只在存檔中
   停用,防連點。
-- **教練新增重試**:`addCoach(v, pendingUserId)` 把 `pendingUserId` 傳進 `saveNewCoach`。
-  `CoachesScreen` 在每個新增 sheet 工作階段內持有哨兵:綁定失敗(`coachBindFailed`)後 sheet 留著,
-  重試只再打 `POST /coaches`、沿用同一個 user id,不重建帳號(避免 email 409)。重新開啟新增 sheet
-  時哨兵重置。這取代 CoachesScreen 檔頭原本「儲存即關 sheet、哨兵刻意丟棄、請換一個 email」的設計。
+- **教練新增重試**:`CoachForm` 的 `onCreate` 回 `Promise<'saved' | 'kept' | 'bind-failed'>`(Member/Class
+  仍是 boolean):`saved` 關閉、`kept` 留著、`bind-failed`(帳號已建、綁定失敗)留著**並鎖住 email/姓名/
+  密碼**到 sheet 關閉——同桌面 `CoachEditDialog` 的 `pendingUserId` 鎖,因為重試不再建帳號,這三欄改了
+  也會被忽略。`addCoach(v, pendingUserId)` 把哨兵傳進 `saveNewCoach`;`CoachesScreen` 在每個新增 sheet
+  工作階段內持有 `{userId, email, name}`(第一次送出的身分),重試只再打 `POST /coaches`、沿用同一個
+  user id,toast 指名實際建立的帳號而非重試時表單帶的值。重新開啟新增 sheet 時重置。這取代
+  CoachesScreen 檔頭原本「儲存即關 sheet、哨兵刻意丟棄、請換一個 email」的設計。

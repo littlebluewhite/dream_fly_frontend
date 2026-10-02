@@ -16,9 +16,10 @@
    * 只剩「呼叫動詞 → 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
    *
    * R17：表單送出時驗證、handler 回 Promise<boolean>（true＝已存才關 sheet，false＝sheet 留著）。
-   * 新增的第二步（教練綁定）失敗時，outcome.coachBindFailed 攜帶的 pendingUserId 存在
-   * 本頁的 pendingUserId（每次開新增 sheet 重置），同一個 sheet 內重試只補打 createCoach、
-   * 沿用同一個 user id，不重建帳號（避免 email 409）——同桌面 coaches 頁的哨兵。同桌面
+   * 新增的第二步（教練綁定）失敗時，outcome.coachBindFailed 攜帶的 pendingUserId 連同第一次的
+   * email/name 存在本頁的 pending（每次開新增 sheet 重置）；handler 回 'bind-failed'，CoachForm
+   * 鎖住 email/姓名/密碼，同一個 sheet 內重試只補打 createCoach、沿用同一個 user id，不重建帳號
+   * （避免 email 409），toast 指名實際建立的帳號——同桌面 coaches 頁的哨兵。同桌面
    * 一樣不做自動回滾（後端沒有複合建立端點，也沒有刪除使用者的端點可呼叫）。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -62,26 +63,29 @@
   };
 
   // 非 null＝本次新增 sheet 內第一步(createMember)已成功、第二步(createCoach)失敗待重試。
-  let pendingUserId: string | null = null;
+  // 連同第一次送出的 email/name 一起留著：toast 要指名「實際建立的帳號」，不是重試時
+  // 表單帶的值（重試不重建帳號，表單的 email/name 會被忽略；CoachForm 也已鎖住這些欄位）。
+  let pending: { userId: string; email: string; name: string } | null = null;
 
-  async function createAndRefresh(v: CoachFormValues): Promise<boolean> {
-    const outcome = await addCoach(v, pendingUserId);
+  async function createAndRefresh(v: CoachFormValues): Promise<'saved' | 'kept' | 'bind-failed'> {
+    const account = pending ?? { userId: null, email: v.email, name: v.name };
+    const outcome = await addCoach(v, pending?.userId ?? null);
     switch (outcome.kind) {
       case 'userCreateFailed':
         toasts.notify('error', '新增失敗', apiErrorMessage(outcome.error));
-        return false;
+        return 'kept';
       case 'coachBindFailed':
-        pendingUserId = outcome.pendingUserId;
+        pending = { userId: outcome.pendingUserId, email: account.email, name: account.name };
         toasts.notify(
           'error',
           '教練綁定失敗',
-          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請直接再按一次「建立教練」重試綁定。`
+          `帳號「${account.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請直接再按一次「建立教練」重試綁定。`
         );
-        return false;
+        return 'bind-failed';
       case 'created':
-        pendingUserId = null;
-        toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
-        return true;
+        pending = null;
+        toasts.notify('success', '已新增教練', `「${account.name}」已建立為教練。`);
+        return 'saved';
     }
   }
 
@@ -105,7 +109,7 @@
       onNew();
       return;
     }
-    pendingUserId = null;
+    pending = null;
     overlay.sheet('coachForm', { c: null, onCreate: createAndRefresh });
   }
   function editCoach(c: Coach) {
