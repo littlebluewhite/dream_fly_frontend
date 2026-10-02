@@ -35,8 +35,8 @@
  *
  * R17(候選 寫入動詞):和解鏈(原 queueReconcile)與 mutate 的協定本體搬進 HydrationGate 的
  * write(),軸由本檔的 session 世代換成閘門的 resetEpoch——身分變更即 reset(),resetEpoch 跟著
- * 推進,所以「跨身分作廢」語意不變。本檔只剩身分核心、epochFetch 與 queueWrite;mutate 暫留為
- * write 的薄別名(FE-8 退役)。
+ * 推進,所以「跨身分作廢」語意不變。本檔只剩身分核心、epochFetch 與 queueWrite;mutate 已於
+ * FE-8 退役(寫入一律走繼承自水合閘門的 write())。
  *
  * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
  * session 世代收進閘門——合併住 HydrationGate(hydrate 與頁面 load-gate 的 load 共用在飛 GET),
@@ -57,7 +57,7 @@
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { authStore, sessionIdentity } from '$lib/stores/authStore';
-import { createHydrationGate, resultOf, type HydrationGate } from '$lib/hydration-gate';
+import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
@@ -103,19 +103,16 @@ export interface SessionGateOptions<T> {
 }
 
 /**
- * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/invalidate/reset/markMutated/write/pageEntry)
- * 多 mutate 與 queueWrite;reset 覆寫為「閘門 reset + 重置寫入鏈」。pageEntry() 繼承自閘門
+ * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/invalidate/reset/write/pageEntry)
+ * 多 queueWrite;reset 覆寫為「閘門 reset + 重置寫入鏈」。pageEntry() 繼承自閘門
  * (R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠餵給水合閘門的那一支,
  * 不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })` 不再有機會繞過核對。
- * mutate 是 `resultOf(await write({ send: request, commit: writeBack }))`(R17 起;FE-8 退役),
- * production 已無呼叫端。
  * queueWrite(R14 F2,語意逐字取自 profile.ts 原 enqueue):排進本閘門的寫入鏈,前一筆
  * settle(成敗皆可)才輪到;輪到時 session 已換就回 `skipped`、task 不執行。task 拿到
  * `stale()` 供失敗處理判斷(換帳後不得回滾/重抓到新身分身上)。換帳號即重置這條鏈——
  * 舊身分卡住的寫入不得堵住新身分。
  */
 export interface SessionGate extends HydrationGate {
-	mutate<R>(request: () => Promise<R>, writeBack: (result: R) => void): Promise<R>;
 	queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R>;
 }
 
@@ -150,13 +147,6 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 	}
 	const core = createSessionCore(reset);
 
-	/** R17 起是 gate.write 的薄別名(FE-8 退役):進場快照、擁有者核對(身分變更即 reset →
-	 *  resetEpoch 推進)、寫回重查完整度與和解重抓都在閘門的 write() 裡。stale 仍交付結果
-	 *  (server 端事實已成立),失敗原樣拋出——resultOf 還原的就是 R7 的 mutate 語意。 */
-	async function mutate<R>(request: () => Promise<R>, writeBack: (result: R) => void): Promise<R> {
-		return resultOf(await gate.write({ send: request, commit: writeBack }));
-	}
-
 	function queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R> {
 		const mine = core.epoch();
 		const stale = () => mine !== core.epoch();
@@ -168,7 +158,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 		return run;
 	}
 
-	return { ...gate, reset, mutate, queueWrite };
+	return { ...gate, reset, queueWrite };
 }
 
 /**

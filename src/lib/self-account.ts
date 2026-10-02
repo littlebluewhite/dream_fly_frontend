@@ -186,9 +186,17 @@ export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 		try {
 			await hydrateSelfAccount();
 		} catch (err) {
-			console.error('profile: 偏好儲存前水合失敗,單鍵回滾', err);
-			if (!stale()) rollback();
-			return { kind: 'rolledBack' };
+			// 寫前水合失敗:同 write 的 resync 策略——先整包 resync,也失敗才單鍵回滾。
+			console.error('profile: 偏好儲存前水合失敗', err);
+			if (stale()) return { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
+			try {
+				await gate.refresh();
+				return { kind: 'resynced' };
+			} catch (resyncErr) {
+				console.error('profile: resync 失敗,退回單鍵回滾', resyncErr);
+				if (!stale()) rollback();
+				return { kind: 'rolledBack' };
+			}
 		}
 		const o = await gate.write({
 			optimistic: () => {

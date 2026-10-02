@@ -49,7 +49,7 @@
 
   // 出席明細載入（選課→fetch 協調 + stale-guard）與取消候補（busy 守衛）收進
   // controller（R10 架構深化 D 案，見檔頭附註）；deps 對齊 member/api.ts 的
-  // getEnrolmentAttendance、member/waitlist.ts 的 cancelWaitlist（經 gate.mutate）。
+  // getEnrolmentAttendance、member/waitlist.ts 的 cancelWaitlist（經 gate.write）。
   const ctrl = createMineController({ getEnrolmentAttendance, cancelWaitlist });
   $: ({ active, attState, attendance, cancellingId } = $ctrl);
 

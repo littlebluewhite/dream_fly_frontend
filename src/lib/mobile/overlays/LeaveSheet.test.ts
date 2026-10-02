@@ -16,7 +16,7 @@ import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
  * Task 1(架構深化 R14·F6):改走 $lib/api/client + fakeRouter(寫法照
  * self-account.test.ts) —— 不 mock deps，斷言改成
  * 「打了哪個端點、帶什麼 body」，同 profile.test.ts 的 fetch-adapter 慣例。成功
- * 送出後 createLeaveRequest 走 gate.mutate:leaveRequests store 進場未水合
+ * 送出後 createLeaveRequest 走 gate.write:leaveRequests store 進場未水合
  * (wasHydrated=false)，寫回後會尾隨一次和解重抓，故成功案例額外要 route
  * GET /leave-requests/me。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -75,7 +75,7 @@ describe('LeaveSheet — 送出真請假申請(POST /leave-requests)', () => {
 				start_time: '19:00:00', reason: '出國', status: 'pending', makeup_session_id: null,
 				makeup_session_date: null, makeup_start_time: null, created_at: '2026-07-01T00:00:00Z'
 			},
-			'GET /leave-requests/me': [] // gate.mutate 進場未水合，寫回後尾隨一次和解重抓
+			'GET /leave-requests/me': [] // gate.write 進場未水合，寫回後尾隨一次和解重抓
 		});
 		render(LeaveSheet, { props: { onClose: () => {}, course: COURSE } });
 		await screen.findByText('送出申請', { exact: false });

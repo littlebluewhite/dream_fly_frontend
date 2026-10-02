@@ -185,6 +185,34 @@ describe('回歸:GET 還沒落地就 setPref', () => {
 	});
 });
 
+describe('setPref 寫前水合失敗', () => {
+	it("水合失敗、resync 成功 → { kind: 'resynced' };store 是伺服器真值,不送 PATCH", async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		let gets = 0;
+		route({
+			'GET /users/me': () =>
+				++gets === 1 ? new Error('offline') : me({ preferences: { class_reminder: false, coach_msg: false, promo: true, dark: true } })
+		});
+
+		const outcome = await setPref('dark', false);
+
+		expect(outcome).toEqual({ kind: 'resynced' });
+		expect(get(prefs)).toEqual({ classReminder: false, coachMsg: false, promo: true, dark: true });
+		expect(patchBodies()).toEqual([]);
+	});
+
+	it("水合與 resync 都失敗 → { kind: 'rolledBack' };僅該鍵回滾", async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		route({ 'GET /users/me': new Error('offline') });
+
+		const outcome = await setPref('dark', true);
+
+		expect(outcome).toEqual({ kind: 'rolledBack' });
+		expect(get(prefs)).toEqual(DEFAULT_PREFS);
+		expect(getCount()).toBe(2); // 水合一次 + resync 一次
+	});
+});
+
 describe('setPref 三種 outcome(移植自 pref-sync.test.ts)', () => {
 	beforeEach(async () => {
 		route({ 'GET /users/me': me() });

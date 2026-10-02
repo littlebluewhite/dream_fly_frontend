@@ -223,7 +223,7 @@ describe('markOrderPaid', () => {
 		expect(after.status).toBe('paid');
 		expect(after.paidAt).toBe(pending!.date);
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
-		expect(get(opsHydrated)).toBe(true); // opsGate.markMutated()
+		expect(get(opsHydrated)).toBe(true); // opsGate.write() 翻旗
 		expect(getOpsCollections).not.toHaveBeenCalled();
 		resetOpsForTests();
 	});
@@ -393,10 +393,10 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 	});
 
 	/* R10 關鍵判準守恆釘(ADR-0020 點名;R12 Task 3 改寫成 markOrderPaid(order) 新簽名,
-	 * 判準不變)。「寫入 → markMutated → await refreshOps()」是 mobile-admin 的正常序列:
+	 * 判準不變)。「await write() → await refreshOps()」是 mobile-admin 的正常序列:
 	 * mutation 發生在 refresh **進場之前**,旗標當下雖為 true,快照仍必須套用、且 fetch
 	 * 恰一次。若把丟棄條件誤寫成「旗標/mutated 當下值為真」,這條釘會炸成無限重抓或永不套用。
-	 * markOrderPaid 現為先寫後改(await PATCH → 套回 → markMutated() 無尾流,ADR-0021),
+	 * markOrderPaid 現為先寫後改(opsGate.write 非樂觀:await PATCH → 套回 → 推世代,無尾流,ADR-0021),
 	 * 所以 refresh 也不會因尾流帳而等待。 */
 	it('判準守恆:await markOrderPaid(order) → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
 		resetOpsForTests();
@@ -511,14 +511,14 @@ function createDeferred<T>() {
 	return { promise, resolve };
 }
 
-describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某支 .markMutated() 呼叫仍測試全綠)', () => {
+describe('mutator → gate.write 接線(regression:防止未來悄悄繞過閘門的 write() 仍測試全綠)', () => {
 	// hydration-gate.test.ts 已經泛用地測過 factory 本身的競態語意(in-flight 期間
-	// markMutated() → apply 不被呼叫);這裡改成從 stores.ts 實際匯出的兩支 mutator
+	// 寫入 → 舊快照不套用);這裡改成從 stores.ts 實際匯出的兩支 mutator
 	// 出發,直接斷言「接線」本身還在——如果之後有人手滑拿掉 markOrderPaid／
-	// markMessageRead 裡任一個 .markMutated() 呼叫,上面既有的 describe 都不會發現
+	// markMessageRead 裡任一個閘門 write() 呼叫,上面既有的 describe 都不會發現
 	// (因為都在水合已完成後才呼叫 mutator),只有這裡的 in-flight 情境會炸。
 	// (saveCoach 的本地寫入版本已隨 Round 4 Task F5 coaches/users 兩步真寫入移除——
-	// 真寫入成功後改呼叫 refreshOps() 整包重抓,不再是 markMutated 站點。)
+	// 真寫入成功後改呼叫 refreshOps() 整包重抓,不再是寫入站點。)
 	it('markOrderPaid() 在 hydrateOps() in-flight 期間呼叫 → mutation 勝出,水合 resolve 後不覆寫剛標記的付款狀態,opsHydrated 為 true', async () => {
 		resetOpsForTests();
 		orders.set(ORDERS); // 誠實開機(R15 候選 F-3):開機為 `[]`,先灌一份含 pending 訂單的 fixture 當前置狀態

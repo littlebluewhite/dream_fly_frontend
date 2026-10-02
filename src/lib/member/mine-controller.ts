@@ -51,7 +51,7 @@ export interface MineControllerDeps {
 	 *  §3.12）。 */
 	getEnrolmentAttendance(id: string): Promise<AttRecord[]>;
 	/** 簽名對齊 member/waitlist.ts 的 cancelWaitlist（DELETE /waitlist/{id}，經
-	 *  waitlist.ts:77 gate.mutate；水合/和解重抓機制留在該模組，本 controller 只是
+	 *  waitlist.ts 的 gate.write；水合/和解重抓機制留在該模組，本 controller 只是
 	 *  呼叫端）。 */
 	cancelWaitlist(id: string): Promise<void>;
 }

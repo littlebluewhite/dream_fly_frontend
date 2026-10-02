@@ -8,14 +8,14 @@
  * 改建在 session-gate.ts 的 createSessionGate 上（換帳號即重置），仍間接用本 factory。
  *
  * 核心語意：hydrate() 開頭若已水合就短路、不打 API；fetch 進行中若發生 mutation
- * （markMutated()，或併發的另一方先套用並翻旗），await 結束後的 re-check 會
+ * （write()，或併發的另一方先套用並翻旗），await 結束後的 re-check 會
  * 讓 mutation 勝出、放棄套用剛抓回的資料——避免「水合前的本地寫入」被姍姍來遲的
  * 首次水合覆蓋（mobile-admin 的 C1 regression 即此類 bug）。refresh() 略過 guard、
  * 一律真抓，供使用者明確要求的「重新整理」與失敗重試共用；抓回的快照則走**世代穩定
  * 重抓**（fetchGenStable，R10 新增的第四決策點）——進場捕捉 mutation 世代、落地比對，
  * 期間發生的本地 mutation 會讓那份快照作廢並原地重抓，直到抓回一份「不早於最後一次
  * 本地 mutation 出發點」的快照才套用。R11 再補上**第五決策點：mutation settle 訊號**
- * ——refresh 族每次出發 fetch 之前，先等未 settle 的樂觀 mutation 尾流（markMutated 帶
+ * ——refresh 族每次出發 fetch 之前，先等未 settle 的樂觀 mutation 尾流（樂觀 write() 記帳
  * 的 PATCH promise）全數落地，關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代
  * 又已穩定」的 server-race 窗（ADR 0020 誠實界線）。等待軸與丟棄軸正交。
  *
@@ -48,7 +48,8 @@
  * R17(候選 寫入動詞):閘門自帶 write()——「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 →
  * 未水合時和解」整條收進閘門,和解鏈也自 session-gate 搬來(以 resetEpoch 為軸,reset() 一併清)。
  * 樂觀路徑沿用 markMutated(tail) 的記帳順序,非樂觀路徑沿用 session mutate 的 await-then-write;
- * 丟棄軸(fetchGenStable)與等待軸(尾流帳)都不動。
+ * 丟棄軸(fetchGenStable)與等待軸(尾流帳)都不動。FE-8 起 markMutated 與 session mutate 退役,
+ * write() 是唯一的寫入動詞(推世代、翻旗、尾流入帳都只經由它)。
  *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
@@ -66,7 +67,7 @@ import type { LoadSource } from './load-gate'; // type-only:零 runtime 邊(執�
  * 直到世代穩定為止。
  *
  * 判準只認「進場之後才發生的 mutation」，**絕不可**改讀旗標／世代的當下值：像
- * mobile-admin 的「寫入 → markMutated → await refreshOps()」是正常序列，mutation 發生
+ * mobile-admin 的「await write() → await refreshOps()」是正常序列，mutation 發生
  * 在進場之前，那份快照必須照常套用、且只能發一次 fetch。
  *
  * `opts.iterate` 是棄追判準（即 refreshRun 收到的 isCurrent；store 層的 refresh() 傳恆真＝抓到
@@ -75,8 +76,8 @@ import type { LoadSource } from './load-gate'; // type-only:零 runtime 邊(執�
  *
  * `opts.pendingSettle` 是**第五決策點（R11）：mutation settle 訊號**——迴圈前導（每次
  * 出發前，含第 N 次補抓輪）先問「還有未 settle 的樂觀 mutation 尾流嗎」，有就等到全數
- * settle 再捕捉世代、出發 fetch。理由：樂觀 mutation 是 mark-before-await（先寫 store
- * ＋ markMutated，才 await PATCH），GET 若在 PATCH 仍在飛時出發，server 回的是舊真值、
+ * settle 再捕捉世代、出發 fetch。理由：樂觀 mutation 是 mark-before-await（write() 先寫
+ * store ＋ 宣告 mutation，才 await PATCH），GET 若在 PATCH 仍在飛時出發，server 回的是舊真值、
  * 而世代此刻**已經穩定**，舊快照照樣落地（ADR 0020 誠實界線記載的 GET/PATCH
  * server-race）。**等待軸與丟棄軸正交**：等待不看世代，丟棄仍只看進出場世代比對，兩者
  * 不得互換。等待期間醒來後先問一次 `iterate()`——這一輪可能已被取代／卸載。
@@ -99,10 +100,9 @@ async function fetchGenStable<T>(
 	for (;;) {
 		// 第五決策點:未 settle 的 mutation 尾流在場就等,不讓 GET 搶在 PATCH 前面出發。
 		// 靜止時 pendingSettle() **同步**回 undefined,迴圈體一次都不跑、一個 microtask 都不
-		// 多花——世代捕捉因此仍與呼叫端同步發生,「refresh 之後才 markMutated」的在飛判準
-		// 不鬆動。
+		// 多花——世代捕捉因此仍與呼叫端同步發生,「refresh 之後才寫入」的在飛判準不鬆動。
 		// 必須是**迴圈**不是單次 await:等待的 promise 已 resolve、本函式卻還沒恢復執行,這
-		// 中間的 microtask 仍可能跑一筆 markMutated(tail)(pendingSettle 內部的醒後重查補不到
+		// 中間的 microtask 仍可能跑一筆樂觀 write()(尾流入帳;pendingSettle 內部的醒後重查補不到
 		// 這一段)。醒來一律重問,不靜止就再等;從最後一次重問到下面的 gen()/fetch() 之間全
 		// 程同步,沒有第三方插隊的餘地。
 		for (let wait = pendingSettle(); wait; wait = pendingSettle()) {
@@ -179,7 +179,7 @@ export function resultOf<R>(o: WriteOutcome<R>): R {
 }
 
 export interface HydrationGate {
-	/** 是否已水合(唯讀投影)。翻 true 走 markMutated()/水合落地,翻 false 走 `invalidate()`/`reset()`。 */
+	/** 是否已水合(唯讀投影)。翻 true 走 write()/水合落地,翻 false 走 `invalidate()`/`reset()`。 */
 	hydrated: Readable<boolean>;
 	/** 併發呼叫(含頁面 load-gate 的 load)共用同一支在飛 GET,settle 即清掉;只併入「同世代出發」
 	 *  的那支——出發後有 mutation 的舊快照不借給之後進場者。 */
@@ -192,16 +192,13 @@ export interface HydrationGate {
 	 *  重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
 	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
 	reset(): void;
-	/** `tail` 在場＝這筆 mutation 有網路尾流（樂觀 mutation 的 PATCH）：閘門以
-	 *  `tail.then(done, done)` 記帳,**reject 也算 settle**——失敗路徑出帳是結構保證,不靠
-	 *  呼叫端記得 catch。省略 `tail` ＝無尾流(如 demo mutation),行為與 R11 前完全相同。
-	 *  呼叫端義務:`tail` 必須是純網路尾流,不得是「內部會等這顆閘門 refresh」的 promise
-	 *  (那會互等)。 */
-	markMutated(tail?: Promise<unknown>): void;
-	/** 寫入動詞(R17)。進場記 owner(resetEpoch)與 wasHydrated:
+	/** 寫入動詞(R17;FE-8 起是唯一的寫入動詞)。進場記 owner(resetEpoch)與 wasHydrated:
 	 *   - 樂觀(有 optimistic):同一同步段 optimistic() → send() → 尾流入帳 → 世代 +1 翻旗,再 await;
+	 *     尾流以 `then(done, done)` 記帳,**reject 也算 settle**;
 	 *   - 非樂觀:await send() 之後才 commit → 世代 +1 翻旗;
-	 *   - send 落地時 owner 已變 → stale,不碰 store;成功 → commit;失敗 → 依 onFailure 復原;
+	 *   - send 同步拋出等同回傳 rejected promise(走失敗路徑,不讓 write 本身 reject);
+	 *   - send 落地時 owner 已變 → stale,不碰 store;成功 → commit;失敗 → 依 onFailure 復原
+	 *     (rollback/resync 退回 undo 時沒有 undo 可呼叫 → recovery 'kept';resync 期間 owner 變了 → stale);
 	 *   - 寫入翻了旗而 store 可能不完整(寫入前未水合,或非樂觀寫回時旗標已被翻回 false)→ 排和解重抓。 */
 	write<R>(w: Write<R>): Promise<WriteOutcome<R>>;
 	/** 頁面進場包。source 的三支是閘門自己的閉包(不是複本):
@@ -212,19 +209,19 @@ export interface HydrationGate {
 	 *     (session 閘門餵進來的是 epochFetch,故自帶 epoch 核對),世代穩定重抓與尾流等待讀的是
 	 *     閘門**同一本**世代帳與尾流帳(ADR-0020 形 1:世代由閘門持有)。
 	 *     【硬契約】尾流帳靜止時 pendingSettle **同步**回 `undefined`,不得回 resolved promise:
-	 *     多一個 microtask 會讓 fetchGenStable 的世代捕捉晚於「refresh 之後同步 markMutated」,
+	 *     多一個 microtask 會讓 fetchGenStable 的世代捕捉晚於「refresh 之後同步的樂觀 write()」,
 	 *     在飛丟棄的時序判準就此鬆掉(可觀察面:靜止時頁面 refresh() 同步呼叫 fetch)。 */
 	pageEntry(): PageEntry;
 }
 
 export function createHydrationGate<T>(opts: HydrationGateOptions<T>): HydrationGate {
 	const flag = writable(false);
-	// 帳本閉合輪：markMutated 帶單調世代，與「完整度」旗標分離。旗標可被呼叫端翻回
+	// 帳本閉合輪：寫入(write)帶單調世代，與「完整度」旗標分離。旗標可被呼叫端翻回
 	// false（如 waitlist/leave 的和解重抓失敗留可重試路徑）——若 mutation-wins 只讀
 	// 旗標當下值，翻回 false 等於拆掉 in-flight hydrate 的武裝，舊快照落地、直寫列
 	// 蒸發。世代只增不減，hydrate 進場時捕捉、resolve 後比對，不受旗標之後的起落影響。
 	let mutationGen = 0;
-	// 第五決策點（R11）：未 settle 的 mutation 尾流帳。markMutated(tail) 入帳、tail settle
+	// 第五決策點（R11）：未 settle 的 mutation 尾流帳。樂觀 write() 的 PATCH 入帳、settle
 	// （fulfil 或 reject 都算）出帳；帳上非空時 refresh 族等待,不讓 GET 搶在 PATCH 前面。
 	// 與世代帳分離:世代管「丟棄」、尾流帳管「等待」,兩軸正交。
 	let pendingTails = 0;
@@ -241,10 +238,10 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 
 	// 水合協定的三個決策點(C1 詞彙,ADR-0016):
 	//  - guarded():進場 guard——已水合就短路、不發 fetch。
-	//  - mutationWins(entered):fetch 落地後的 re-check——進場之後世代變了(markMutated),或旗標
+	//  - mutationWins(entered):fetch 落地後的 re-check——進場之後世代變了(write),或旗標
 	//    被直接翻 true(併發的另一方先套用並翻旗),都算 mutation 勝出、放棄套用。只看旗標不夠:
 	//    旗標可被 invalidate() 翻回 false,那等於拆掉在飛那一輪的武裝(見上方 mutationGen 註解)。
-	//  - commit():套用完成(或 mutator 直寫)後翻旗,宣告水合真相成立。
+	//  - commit():套用完成(或寫入)後翻旗,宣告水合真相成立。
 	const guarded = (): boolean => get(flag);
 	const mutationWins = (entered: number): boolean => entered !== mutationGen || get(flag);
 	const commit = (): void => flag.set(true);
@@ -323,17 +320,13 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		commit();
 	}
 
-	function markMutated(tail?: Promise<unknown>): void {
-		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。commit() 的翻旗 set(true) 在
-		// 旗標原為 false 時(mutation 前尚未水合、或和解失敗把旗標翻回 false)走的是 false→true
-		// 這道邊沿,會同步通知 subscriber(svelte writable 只對 primitive **相同值**短路,
-		// true→true 才不通知),subscriber 若在那個回呼裡同步
-		// 重入 refresh(),而尾流還沒入帳,pendingSettle() 就會回 undefined —— GET 帶著已遞增
-		// 的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住,世代已穩)。
-		// 入帳全程同步(pendingTails += 1 與 then 掛載都不 await),靜止路徑一個 microtask 都不多花。
-		// 無尾流的 mutation(如 demo mutation)略過入帳,行為與 R11 前逐字相同。
-		if (tail) track(tail);
-		bump();
+	/** send 同步拋出收成 rejected promise:同步 throw 與非同步 reject 走同一條失敗路徑。 */
+	function sendOf<R>(w: Write<R>): Promise<R> {
+		try {
+			return w.send();
+		} catch (e) {
+			return Promise.reject(e);
+		}
 	}
 
 	/** 和解重抓:序列化 + 失敗可重試 + 幽靈取消(語意逐字取自 R7 session-gate 的 queueReconcile)。
@@ -357,14 +350,19 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		let undo: (() => void) | void = undefined;
 		let settled: PromiseSettledResult<R>;
 		if (w.optimistic) {
-			// 樂觀路徑:整段同步(即 markMutated(tail) 的順序)——尾流先入帳,才推世代/翻旗。
+			// 樂觀路徑:整段同步——尾流**先**入帳,才推世代/翻旗(記帳順序是契約)。bump() 的翻旗在
+			// 旗標原為 false 時(寫入前尚未水合、或和解失敗把旗標翻回 false)走 false→true 這道邊沿,
+			// 會同步通知 subscriber(svelte writable 只對 primitive **相同值**短路);subscriber 若在
+			// 那個回呼裡同步重入 refresh(),而尾流還沒入帳,pendingSettle() 就會回 undefined —— GET
+			// 帶著已遞增的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住)。
+			// 入帳全程同步,靜止路徑一個 microtask 都不多花。
 			undo = w.optimistic();
-			const tail = w.send();
+			const tail = sendOf(w);
 			track(tail); // 出帳回呼掛在下面的 await 之前:失敗時 resync 的 refresh 不會等到自己
 			bump();
 			settled = await settle(tail);
 		} else {
-			settled = await settle(w.send());
+			settled = await settle(sendOf(w));
 		}
 		if (owner !== resetEpoch) return { kind: 'stale', settled }; // 擁有者換人:store 不碰
 
@@ -380,18 +378,18 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		const error = settled.reason;
 		const policy = w.onFailure ?? 'keep';
 		if (policy === 'resync') {
-			try {
-				await refreshRun(ALWAYS);
-				return { kind: 'failed', error, recovery: 'resynced' };
-			} catch {
-				if (owner !== resetEpoch) return { kind: 'stale', settled };
-				// 重抓也失敗:退回 undo
-			}
+			const resynced = await refreshRun(ALWAYS).then(
+				() => true,
+				() => false // 重抓也失敗:退回 undo
+			);
+			// 重抓期間擁有者換人:refreshRun 靜默收束(不寫),不得謊報 resynced,也不得 undo 到新擁有者身上。
+			if (owner !== resetEpoch) return { kind: 'stale', settled };
+			if (resynced) return { kind: 'failed', error, recovery: 'resynced' };
 		}
 		let recovery: WriteRecovery = 'kept';
-		if (policy !== 'keep') {
-			undo?.();
-			recovery = 'rolledBack';
+		if (policy !== 'keep' && undo) {
+			undo();
+			recovery = 'rolledBack'; // 沒有 undo(非樂觀或 optimistic 沒回傳)就什麼都沒做:kept
 		}
 		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標)。
 		if (w.optimistic && !wasHydrated) queueReconcile();
@@ -434,5 +432,5 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		return { source: { guarded, load: loadRun, refresh: refreshRun } };
 	}
 
-	return { hydrated: { subscribe: flag.subscribe }, hydrate, refresh, invalidate, reset, markMutated, write, pageEntry };
+	return { hydrated: { subscribe: flag.subscribe }, hydrate, refresh, invalidate, reset, write, pageEntry };
 }

@@ -185,7 +185,7 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     /* MyCourseDetail 開詳情時呼叫 refreshLeaveRequests()「刷新最新請假狀態」;使用者在
      * 這個飛行窗口內按下取消,舊碼會讓姍姍來遲的舊快照(server 端仍 pending)無條件落地,
      * 剛取消的假單復活成 pending。判準是「refresh 進場之後才發生的 mutation」,cancel 的
-     * markMutated 正落在窗口內 → 舊快照丟棄、原地重抓 server 已更新的版本。 */
+     * 寫入正落在窗口內 → 舊快照丟棄、原地重抓 server 已更新的版本。 */
     const deferred = createDeferred<unknown[]>();
     let gets = 0;
     vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [API_LR_PENDING] }));
@@ -197,7 +197,7 @@ describe('refreshLeaveRequests — GET /leave-requests/me', () => {
     }));
 
     const p = refreshLeaveRequests(); // 開詳情的刷新在飛
-    await cancelLeaveRequest('lr-1'); // 飛行窗口內取消 → 本地 cancelled + markMutated
+    await cancelLeaveRequest('lr-1'); // 飛行窗口內取消 → 本地 cancelled + 推世代
     expect(get(leaveRequests)[0].status).toBe('cancelled');
 
     deferred.resolve([API_LR_PENDING]); // 舊快照:server 端當時仍是 pending
@@ -225,7 +225,7 @@ describe('createLeaveRequest — POST /leave-requests', () => {
 
   it('P1′(mutator):create 在飛登出 → 棄寫不落地,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
     /* 薄 happy-path 釘只證明「create 成功時 prepend」，證明不了 createLeaveRequest 仍
-     * 委派 gate.mutate——若被誤改成「直接 await api + store 直寫」，這條釘與
+     * 委派 gate.write——若被誤改成「直接 await api + store 直寫」，這條釘與
      * session-gate.test 的泛型 mutate 釘會兩邊皆綠，但跨帳號資料仍會落地。 */
     const deferred = createDeferred<unknown>();
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -247,7 +247,7 @@ describe('createLeaveRequest — POST /leave-requests', () => {
 
     expect(result.id).toBe('lr-1');
     expect(get(leaveRequests)).toEqual([]); // 棄寫:新單不落地,舊單也沒有復活——維持 reset 後狀態
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('omits reason from the body when not provided (contract: reason? 選填)', async () => {
@@ -294,9 +294,9 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
 
   it('P1′(mutator):cancel 在飛登出 → 棄寫不落地,同 id canary 原封不動(mutator 回傳值本為 void,只斷言不寫回)', async () => {
     /* 薄 happy-path 釘只證明「cancel 成功時原地標記 cancelled」，證明不了
-     * cancelLeaveRequest 仍委派 gate.mutate——理由同 createLeaveRequest 上方的
+     * cancelLeaveRequest 仍委派 gate.write——理由同 createLeaveRequest 上方的
      * P1′(mutator)釘。不可證偽補強(帳本閉合輪 R3):登出後 store 已被 reset 清空,
-     * 若直接斷言 toEqual([]),繞過 gate.mutate、直接 await api 後 map 空陣列的壞
+     * 若直接斷言 toEqual([]),繞過 gate.write、直接 await api 後 map 空陣列的壞
      * 實作一樣得 []——斷言恆真、抓不到退化。改在登出後、resolve 前植入一筆「B
      * session 的 canary」,id 與在飛 cancel 的目標同(lr-1,模擬 B 剛好也載入了同
      * id 資料);正確實作核對 epoch 後棄寫、canary 原封不動,壞實作的 map 會把它的
@@ -322,8 +322,8 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     deferred.resolve(undefined);
     await p;
 
-    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.mutate 直寫會被 map 改掉 status → 紅
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
+    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.write 直寫會被 map 改掉 status → 紅
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('leaves the store untouched when the DELETE call fails', async () => {
@@ -338,7 +338,7 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
 
   it('F2 完整性釘:未 hydrate 直接 cancelLeaveRequest → 和解重抓收斂為完整 server 清單(含本地沒有的既有列),旗標 true,之後 hydrate 被 guarded() 短路', async () => {
     /* 寫入當下旗標 false（從未 hydrate）→ 本地只有直寫的 lr-1,server 上的 lr-2
-     * 缺席;而 markMutated 的 commit 會讓 guarded() 從此短路——沒有和解重抓,
+     * 缺席;而寫入的翻旗會讓 guarded() 從此短路——沒有和解重抓,
      * 既有列永不補回。 */
     leaveRequests.set([API_LR_PENDING as never]); // 本地僅 lr-1（例如上個畫面直寫）
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -379,9 +379,9 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
 
   it('P1′(mutator):makeup 在飛登出 → 棄寫不落地,同 id canary 原封不動,回傳值仍交付(mutate 契約:server 端事實已成立)', async () => {
     /* 薄 happy-path 釘只證明「makeup 成功時原地取代」，證明不了 bookMakeup 仍委派
-     * gate.mutate——理由同 createLeaveRequest 上方的 P1′(mutator)釘。不可證偽補強
+     * gate.write——理由同 createLeaveRequest 上方的 P1′(mutator)釘。不可證偽補強
      * (帳本閉合輪 R3):登出後 store 已被 reset 清空,若直接斷言 toEqual([]),繞過
-     * gate.mutate、直接 await api 後 map 空陣列的壞實作一樣得 []——斷言恆真、抓不
+     * gate.write、直接 await api 後 map 空陣列的壞實作一樣得 []——斷言恆真、抓不
      * 到退化。改在登出後、resolve 前植入一筆「B session 的 canary」,id 與在飛
      * makeup 的目標同(lr-2,模擬 B 剛好也載入了同 id 資料);正確實作核對 epoch 後
      * 棄寫、canary 原封不動,壞實作的 map 會把它整筆取代成 server 回應。 */
@@ -408,8 +408,8 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
     const result = await p; // server 端已成立,回傳值照舊交付(mutate 契約)
 
     expect(result.makeup_session_id).toBe('sess-9');
-    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.mutate 直寫會被 map 整筆取代 → 紅
-    expect(get(leaveRequestsHydrated)).toBe(false); // 不 markMutated
+    expect(get(leaveRequests)).toEqual([canary]); // canary 原封不動:繞過 gate.write 直寫會被 map 整筆取代 → 紅
+    expect(get(leaveRequestsHydrated)).toBe(false); // 不翻旗
   });
 
   it('propagates 409 (該場次名額已滿) unhandled', async () => {

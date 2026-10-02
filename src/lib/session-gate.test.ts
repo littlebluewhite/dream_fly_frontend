@@ -2,8 +2,9 @@
  * onSessionReset 退役,pageEntry 進場包入列)。
  *
  * 泛型 session 協定的**單源**測試:F1 登出重置 / P1′ 在飛作廢 / P1″ A→B 直換 /
- * mutate 在飛丟棄 / 訪客·restored 開機零觸發 / F2 序列化可重試和解鏈家族 / queueWrite 寫入鏈 /
- * refresher 無條件套用 + 靜默丟棄 / pageEntry 進場包。六個 domain store 各自只留薄
+ * 寫入中換身分 → stale / 訪客·restored 開機零觸發 / queueWrite 寫入鏈 /
+ * refresher 無條件套用 + 靜默丟棄 / pageEntry 進場包。和解鏈家族自 R17(FE-8)搬到
+ * hydration-gate.test.ts(和解鏈住在基礎閘門,擁有者換人即 reset())。六個 domain store 各自只留薄
  * adapter 釘(證明本 store 已註冊 + endpoint/writeBack 接對),不再逐檔手抄整套協定
  * 鏡射(原 checkout-api/leave-requests-api 兩檔的深層鏡射家族已移入本檔)。
  *
@@ -34,8 +35,7 @@ function createDeferred<T>() {
 	return { promise, resolve };
 }
 
-/** 和解重抓(mutate 尾隨的 fire-and-forget refresh)——macrotask 跳一拍,讓其 fetch →
- *  apply 鏈完整收束後再斷言。 */
+/** macrotask 跳一拍,讓在飛的 refresh / 和解重抓的 fetch → apply 鏈完整收束後再斷言。 */
 function settleReconcile() {
 	return new Promise<void>((r) => setTimeout(r, 0));
 }
@@ -77,7 +77,7 @@ describe('createSessionGate — session 家族', () => {
 		});
 
 		await authStore.login('a@dreamfly.test', 'pw'); // null → u-f1
-		gate.markMutated(); // 模擬已水合(旗標唯讀,改走 mutation 翻旗)
+		await gate.hydrate(); // 已水合
 		reset.mockClear(); // 只數登出那次
 
 		await authStore.logout();
@@ -127,22 +127,26 @@ describe('createSessionGate — session 家族', () => {
 		expect(get(store)).toEqual([{ id: 'b' }]); // 不是 A 的殘留
 	});
 
-	it('mutate:在飛換帳丟棄寫回但仍回傳結果(server 端事實成立)', async () => {
+	it('寫入中換身分 → stale:不寫回、不翻旗,send 的結果照實交付(server 端事實成立)', async () => {
 		const post = createDeferred<Item>();
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': AUTH_RES, 'POST /auth/logout': undefined }));
 		const store = writable<Item[]>([]);
 		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: (d) => store.set(d), reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		const p = gate.mutate(() => post.promise, (r) => store.update((l) => [r, ...l]));
-		await authStore.logout(); // 在飛期間登出
+		const p = gate.write({ send: () => post.promise, commit: (r) => store.update((l) => [r, ...l]) });
+		await authStore.logout(); // 在飛期間登出 → identity 重置 = gate.reset()
 
 		post.resolve({ id: 'a-new' });
-		const result = await p;
 
-		expect(result).toEqual({ id: 'a-new' }); // 回傳照舊(呼叫端已隨登出卸載,無害)
-		expect(get(store)).toEqual([]); // 棄寫:不落在 B 的 store
-		expect(get(gate.hydrated)).toBe(false); // 不 markMutated
+		expect(await p).toEqual({ kind: 'stale', settled: { status: 'fulfilled', value: { id: 'a-new' } } });
+		expect(get(store)).toEqual([]); // 棄寫:不落在新身分的 store
+		expect(get(gate.hydrated)).toBe(false); // 不翻旗
+	});
+
+	it('mutate 已退役:session 閘門的寫入一律走繼承自水合閘門的 write()', () => {
+		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
+		expect('mutate' in gate).toBe(false);
 	});
 
 	/* 跨 session 尾流帳(R11 終審修波 F2)。identity 重置原本只清內容/旗標/和解鏈,**不清尾流
@@ -160,7 +164,7 @@ describe('createSessionGate — session 家族', () => {
 		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		gate.markMutated(new Promise(() => {})); // A 的樂觀 mutation:PATCH 掛死,永不 settle
+		void gate.write({ optimistic: () => {}, send: () => new Promise(() => {}) }); // A 的樂觀寫入:PATCH 掛死,永不 settle
 		await authStore.login('b@dreamfly.test', 'pw'); // A→B 直換 → identity 重置即清帳
 
 		const p = gate.refresh(); // B 的第一次重新整理
@@ -186,21 +190,22 @@ describe('createSessionGate — session 家族', () => {
 		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		gate.markMutated(staleTail.promise); // A 的尾流
+		void gate.write({ optimistic: () => {}, send: () => staleTail.promise }); // A 的尾流
 		await authStore.login('b@dreamfly.test', 'pw'); // 清帳
-		gate.markMutated(freshTail.promise); // B 自己的尾流入帳
+		await gate.hydrate(); // B 先水合:B 的寫入不排和解,GET 次數只看等待軸
+		void gate.write({ optimistic: () => {}, send: () => freshTail.promise }); // B 自己的尾流入帳
 		staleTail.resolve(); // A 的殘留尾流此刻才 settle——它已不在帳上,不得出帳
 		await settleReconcile();
 
 		const p = gate.refresh();
 		await settleReconcile();
 
-		expect(gets).toBe(0); // B 的尾流仍在飛 → GET 不出發
+		expect(gets).toBe(1); // 只有 B 的水合;B 的尾流仍在飛 → refresh 的 GET 不出發
 
 		freshTail.resolve();
 		await p;
 
-		expect(gets).toBe(1); // B 的尾流 settle 後才出發,而且只出發一次
+		expect(gets).toBe(2); // B 的尾流 settle 後才出發,而且只出發一次
 		expect(get(store)).toEqual([{ id: 'b' }]);
 	});
 
@@ -210,7 +215,7 @@ describe('createSessionGate — session 家族', () => {
 		 * 回呼裡重入新身分的樂觀 mutation → 新尾流記在舊帳本上、兩行後被同一輪清帳一併沖掉。前提
 		 * 不成立:identity onChange 本身跑在 authStore 自己的通知 flush 裡,svelte writable 的
 		 * subscriber_queue 會把巢狀 set 的通知**排到外層 flush 跑完之後**(實測序列:reset:enter →
-		 * reset:exit → subscriber),故重入的 markMutated(tail) 必然落在整個 onChange(含清帳)
+		 * reset:exit → subscriber),故重入的樂觀寫入(尾流入帳)必然落在整個 onChange(含清帳)
 		 * 之後、記在新帳本上。此釘鎖住的正是那個真行為:同拍進場的新尾流仍擋得住 B 的 refresh。 */
 		const tailB = createDeferred<void>();
 		let logins = 0;
@@ -223,16 +228,16 @@ describe('createSessionGate — session 家族', () => {
 		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
 
 		await authStore.login('a@dreamfly.test', 'pw');
-		gate.markMutated(new Promise(() => {})); // A 的樂觀 mutation:PATCH 掛死,永不 settle
+		void gate.write({ optimistic: () => {}, send: () => new Promise(() => {}) }); // A 的樂觀寫入:PATCH 掛死,永不 settle
 
-		// 模擬頁面 subscriber:reset() 寫 store 的那次通知一到,新身分的樂觀 mutation 就進場(恰一次)。
+		// 模擬頁面 subscriber:reset() 寫 store 的那次通知一到,新身分的樂觀寫入就進場(恰一次)。
 		let armed = false;
 		let reentered = false;
 		const unsub = store.subscribe(() => {
 			if (!armed) return;
 			armed = false;
 			reentered = true;
-			gate.markMutated(tailB.promise);
+			void gate.write({ optimistic: () => {}, send: () => tailB.promise });
 		});
 
 		armed = true;
@@ -249,8 +254,10 @@ describe('createSessionGate — session 家族', () => {
 
 		tailB.resolve();
 		await p;
+		await settleReconcile();
 
-		expect(gets).toBe(1); // 尾流 settle 後才出發,而且只出發一次
+		// 尾流 settle 後才出發:refresh 一發 + B 的寫入進場時未水合、落地後排的和解一發。
+		expect(gets).toBe(2);
 		expect(get(store)).toEqual([{ id: 'b' }]);
 	});
 
@@ -370,190 +377,6 @@ describe('createSessionGate — queueWrite 寫入鏈', () => {
 		await authStore.login('b@dreamfly.test', 'pw');
 
 		await expect(gate.queueWrite(async () => 'b-saved', 'skipped')).resolves.toBe('b-saved');
-	});
-});
-
-describe('createSessionGate — 和解家族(序列化 + 可重試 + 幽靈取消)', () => {
-	it('F2:未水合 mutate → 和解重抓收斂為完整清單,旗標 true,之後 hydrate 被 guarded() 短路', async () => {
-		const NEW = { id: 'new' };
-		const OLD = { id: 'old' };
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => { gets++; return [NEW, OLD]; } }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await gate.mutate(async () => NEW, (r) => store.update((l) => [r, ...l]));
-		await settleReconcile();
-
-		expect(gets).toBe(1); // 和解重抓真的發生
-		expect(get(store)).toEqual([NEW, OLD]);
-		expect(get(gate.hydrated)).toBe(true);
-
-		const calls = vi.mocked(api).mock.calls.length;
-		await gate.hydrate(); // 水合真相已成立——guarded() 短路
-		expect(vi.mocked(api).mock.calls.length).toBe(calls);
-	});
-
-	it('P2′ 序列化非空證:兩支未水合 mutation 併發 → 前和解未 settle 後和解不起跑,晚(完整)快照最後套用', async () => {
-		const A = { id: 'a' };
-		const B = { id: 'b' };
-		const r1 = createDeferred<Item[]>();
-		let gets = 0;
-		// 首快照掛起且漏 B(server 端 race),次快照完整。
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => (++gets === 1 ? r1.promise : [B, A]) }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		const p1 = gate.mutate(async () => A, (r) => store.update((l) => [r, ...l]));
-		const p2 = gate.mutate(async () => B, (r) => store.update((l) => [r, ...l])); // 兩支都在旗標 false 時進場
-		await Promise.all([p1, p2]);
-		await settleReconcile();
-
-		expect(gets).toBe(1); // 序列化:首和解仍在飛,次和解不得起跑
-		r1.resolve([A]); // 舊快照(漏 B)先套用
-		await settleReconcile();
-
-		expect(gets).toBe(2); // 首和解 settle 後,次和解才起跑(兩支各自和解)
-		expect(get(store)).toEqual([B, A]); // 完整快照最後套用——B 存活,不被首快照倒序覆寫
-		expect(get(gate.hydrated)).toBe(true);
-	});
-
-	it('R10 和解窗口閉合:R1 在飛期間 M2 完成(不排 R2)→ R1 的舊快照丟棄並原地重抓,M2 的直寫不被蓋掉', async () => {
-		/* 和解快照 vs 後續 mutation 的殘窗:M1 未水合 → 排 R1;R1 掛起期間 M2 進場時旗標
-		 * 已是 true、寫回時仍完整,故**不排** R2——R1 的舊快照(server 尚未看見 B)落地後
-		 * 舊碼會無條件套用,B 蒸發。refresh 收進世代穩定重抓後,R1 進場捕捉的世代早於 M2
-		 * 的 markMutated,落地比對不符 → 丟棄並原地重抓,窗口免費閉合(queueReconcile 零改)。 */
-		const A = { id: 'a' };
-		const B = { id: 'b' };
-		const r1 = createDeferred<Item[]>();
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => (++gets === 1 ? r1.promise : [B, A]) }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await gate.mutate(async () => A, (r) => store.update((l) => [r, ...l])); // M1 未水合 → markMutated + 排 R1
-		await settleReconcile();
-		expect(gets).toBe(1); // R1 的 GET 出發(掛起)
-
-		await gate.mutate(async () => B, (r) => store.update((l) => [r, ...l])); // M2:進場已水合且寫回時仍完整 → 不排 R2
-		expect(get(store)).toEqual([B, A]);
-		expect(gets).toBe(1); // 確認真的沒有第二支和解——閉合只能靠 R1 自己的世代比對
-
-		r1.resolve([A]); // R1 的舊快照(server 尚未看見 B)此刻才落地
-		await settleReconcile();
-
-		expect(gets).toBe(2); // 世代已變 → 舊快照丟棄、原地重抓
-		expect(get(store)).toEqual([B, A]); // B 沒有被舊快照蓋掉
-		expect(get(gate.hydrated)).toBe(true);
-	});
-
-	it('可重試翻旗:和解重抓失敗 → 旗標翻回 false 留重試路徑,下一次 hydrate 重新真抓完整清單', async () => {
-		const NEW = { id: 'new' };
-		const OLD = { id: 'old' };
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => (++gets === 1 ? new Error('和解重抓網路失敗') : [NEW, OLD]) }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await gate.mutate(async () => NEW, (r) => store.update((l) => [r, ...l]));
-		await settleReconcile();
-
-		expect(get(gate.hydrated)).toBe(false); // 失敗不佯裝完整——可重試
-
-		await gate.hydrate(); // 重試
-		expect(get(store)).toEqual([NEW, OLD]);
-		expect(get(gate.hydrated)).toBe(true);
-	});
-
-	it('stillIncomplete 重排:和解失敗翻回 false 後,進場自以為已水合的 mutation 寫回時重查旗標 → 重排和解', async () => {
-		const A = { id: 'a' };
-		const B = { id: 'b' };
-		let rejectR1!: (e: Error) => void;
-		const r1 = new Promise<Item[]>((_, rej) => { rejectR1 = rej; });
-		const post2 = createDeferred<Item>();
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /list': () => (++gets === 1 ? r1 : [B, A]) }));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await gate.mutate(async () => A, (r) => store.update((l) => [r, ...l])); // M1 未水合 → markMutated + 排 R1
-		await settleReconcile(); // R1 的 GET 出發(掛起)
-		const p2 = gate.mutate(() => post2.promise, (r) => store.update((l) => [r, ...l])); // M2 進場:旗標 true
-		rejectR1(new Error('和解重抓網路失敗')); // R1 失敗 → 旗標翻回 false
-		await settleReconcile();
-		expect(get(gate.hydrated)).toBe(false);
-
-		post2.resolve(B); // M2 寫回:發現旗標已 false → 必須再排 R2
-		await p2;
-		await settleReconcile();
-
-		expect(gets).toBe(2); // R2 真的排了(只看進場快照的舊法不會排)
-		expect(get(store)).toEqual([B, A]); // R2 的完整快照落地
-		expect(get(gate.hydrated)).toBe(true); // 完整之後才重新標完整
-	});
-
-	it('幽靈和解:登出時「已排隊、尚未起跑」的和解 callback 不得在下一個 session 起跑', async () => {
-		const A = { id: 'a' };
-		const B = { id: 'b' };
-		const post1 = createDeferred<Item>();
-		const post2 = createDeferred<Item>();
-		const r1 = createDeferred<Item[]>();
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({
-			'POST /auth/login': AUTH_RES,
-			'POST /auth/logout': undefined,
-			'GET /list': () => { ++gets; return gets === 1 ? r1.promise : [B, A]; }
-		}));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await authStore.login('a@dreamfly.test', 'pw');
-		const p1 = gate.mutate(() => post1.promise, (r) => store.update((l) => [r, ...l]));
-		const p2 = gate.mutate(() => post2.promise, (r) => store.update((l) => [r, ...l])); // R1 起跑(掛起)、R2 排隊
-		post1.resolve(A);
-		post2.resolve(B);
-		await Promise.all([p1, p2]);
-		await settleReconcile();
-		expect(gets).toBe(1); // R1 在飛,R2 尚未起跑
-
-		await authStore.logout(); // session 結束:epoch+1、reset
-		r1.resolve([A]); // R1 的舊 session 回應此刻才到
-		await settleReconcile();
-
-		expect(gets).toBe(1); // R2 沒有以新 session 起跑——幽靈和解不存在
-		expect(get(store)).toEqual([]); // 舊 session 的套用全數作廢
-		expect(get(gate.hydrated)).toBe(false);
-	});
-
-	it('跨帳號卡鏈重置:上一個 session 卡死的和解不得堵住下一個帳號的和解鏈', async () => {
-		const A = { id: 'a' };
-		const B = { id: 'b' };
-		const B_OLD = { id: 'b-old' };
-		let logins = 0;
-		let posts = 0;
-		let gets = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({
-			'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B),
-			'POST /auth/logout': undefined,
-			'POST /add': () => (++posts === 1 ? A : B),
-			'GET /list': () => (++gets === 1 ? new Promise(() => {}) : [B, B_OLD]) // R1 永不 settle
-		}));
-		const store = writable<Item[]>([]);
-		const gate = createSessionGate<Item[]>({ fetch: () => api<Item[]>('/list'), apply: (d) => store.set(d), reset: () => store.set([]) });
-
-		await authStore.login('a@dreamfly.test', 'pw');
-		await gate.mutate(() => api<Item>('/add', { method: 'POST' }), (r) => store.update((l) => [r, ...l])); // A:R1 起跑 → 永掛
-		await settleReconcile();
-		expect(gets).toBe(1);
-
-		await authStore.logout();
-		await authStore.login('b@dreamfly.test', 'pw'); // 換帳號 → 鏈重置
-		await gate.mutate(() => api<Item>('/add', { method: 'POST' }), (r) => store.update((l) => [r, ...l])); // B 的未水合 mutation → 排 B 的和解
-		await settleReconcile();
-
-		expect(gets).toBe(2); // B 的和解沒有堵在 A 的殭屍後面
-		expect(get(store)).toEqual([B, B_OLD]); // B 收斂到完整清單
-		expect(get(gate.hydrated)).toBe(true);
 	});
 });
 

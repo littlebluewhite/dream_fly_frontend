@@ -17,7 +17,7 @@ import type { LeaveRequest } from '$lib/member/leave';
  * Task 1(架構深化 R14·F6):改走 $lib/api/client + fakeRouter(寫法照
  * self-account.test.ts) —— 不 mock deps，斷言改成
  * 「打了哪個端點、帶什麼 body」。leaveRequests store 在本檔進場未水合，bookMakeup
- * 走 gate.mutate 寫回後會尾隨一次和解重抓，成功案例額外要 route
+ * 走 gate.write 寫回後會尾隨一次和解重抓，成功案例額外要 route
  * GET /leave-requests/me。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -75,7 +75,7 @@ describe('MakeupSheet — 確認預約(POST /leave-requests/{id}/makeup)', () =>
 			'POST /leave-requests/lr1/makeup': {
 				...LEAVE_REQUEST, makeup_session_id: 's1', makeup_session_date: '2026-07-10', makeup_start_time: '19:00:00'
 			},
-			'GET /leave-requests/me': [] // gate.mutate 進場未水合，寫回後尾隨一次和解重抓
+			'GET /leave-requests/me': [] // gate.write 進場未水合，寫回後尾隨一次和解重抓
 		});
 		render(MakeupSheet, { props: { onClose: () => {}, leaveRequest: LEAVE_REQUEST } });
 

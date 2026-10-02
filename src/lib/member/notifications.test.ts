@@ -240,9 +240,9 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
     page.destroy();
   });
 
-  /* R11(第五決策點:mutation settle 訊號)。上一條釘的是「GET 已落地、之後才 markMutated」
+  /* R11(第五決策點:mutation settle 訊號)。上一條釘的是「GET 已落地、之後才寫入」
    * 的世代軸;這一條釘的是 ADR 0020 誠實界線記載的另一半——markRead 是 mark-before-await
-   * (先寫 store、markMutated,才 await PATCH)。舊碼的 refresh 只看世代穩定,對「PATCH 還在
+   * (先寫 store、宣告 mutation,才 await PATCH)。舊碼的 refresh 只看世代穩定,對「PATCH 還在
    * 飛」是盲的:GET 在 PATCH 落庫前出發 → server 回未讀、而世代此刻已穩定 → 舊快照照套,
    * 已讀被打回未讀。現在 refresh 族先等尾流 settle 才出發。 */
   it('mutation settle:markRead 的 PATCH 未 settle → 頁面 refresh 的 GET 不出發;PATCH settle 後才出發,已讀不回退', async () => {
@@ -317,7 +317,7 @@ describe('跨帳號 session 重置(移植自 mobile/notifications.test.ts)', () 
 });
 
 describe('markAllRead 的 allSettled 尾流(移植自 mobile/notifications.test.ts:218-248)', () => {
-  /* markAllRead 是 mark-before-await(先寫 store、markMutated,才 await 那批 PATCH)。
+  /* markAllRead 是 mark-before-await(先寫 store、宣告 mutation,才 await 那批 PATCH)。
    * 舊碼的 refresh 只看世代穩定,對「PATCH 群還在飛」是盲的:GET 在落庫前出發 → server
    * 回未讀、而世代此刻已穩定 → 舊快照照套,已讀被打回未讀(ADR 0020 誠實界線記載的
    * GET/PATCH server-race)。allSettled 的尾流「含失敗也 settle」,不得因為某一筆 PATCH
