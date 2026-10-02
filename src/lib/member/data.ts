@@ -118,8 +118,7 @@ export const ATT_STATE: Record<AttState, [Tone, string]> = {
   absent: ['error', '缺席']
   // 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
   // present/absent/leave 三值，逐堂出勤明細改走真 GET /enrolments/{id}/attendance
-  // 後不會再吐出 'late'。教練點名頁的 'late' 是完全獨立的本地 UI 草稿狀態（送出時
-  // 併入 'present'，見 coach/api.ts saveAttendance()），與這裡的顯示對照表無關。
+  // 後不會再吐出 'late'。
 };
 
 // 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a

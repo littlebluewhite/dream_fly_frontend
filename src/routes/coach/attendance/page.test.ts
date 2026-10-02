@@ -24,8 +24,7 @@ type WireRosterEntry = { enrolment_id: string; user_id: string; user_name: strin
  * 前提)。R16 Task 8:改為 wire 形狀。C1 的 4 筆名冊:1 筆 present(王承恩,index 0,
  * 供多個斷言鎖定第一列)+ 1 筆 absent(林佳穎)+ 1 筆 leave(張雅婷,供「已請假」
  * 靜態 badge 分支)+ 1 筆 absent(吳柏宇)——非 present 筆數(3)對到「初始 3 筆變更」
- * 的既有斷言。原 fixture 林佳穎是既有 late,但 wire 的 attendance_status 沒有 late
- * (§3.19 三態),「本批含遲到標記」測試改為先點一列「遲到」再儲存。 */
+ * 的既有斷言。 */
 const C1 = {
 	session: { id: 'ac1', course_id: 'c1', course_name: '兒童體操初階班', coach_name: null, start_time: '16:00:00', end_time: '17:30:00', enrolled_count: 4, venue: 'A 教室' } as ApiTodaySession,
 	roster: [
@@ -134,9 +133,9 @@ describe('/coach/attendance (+page) — switch class', () => {
 			const opt = getAllByText(to).find((el) => el.closest('button'));
 			await fireEvent.click(opt!);
 		};
-		// edit row 1 in C1 → 遲到, dirty climbs 3 → 4.
-		const lateBtn = getAllByText('遲到').find((el) => el.tagName === 'BUTTON');
-		await fireEvent.click(lateBtn!);
+		// edit row 1 in C1 → 缺席, dirty climbs 3 → 4.
+		const absentBtn = getAllByText('缺席').find((el) => el.tagName === 'BUTTON');
+		await fireEvent.click(absentBtn!);
 		expect(container.textContent).toContain('4 筆變更');
 		// switch away to C2, then back to C1(sessionChipLabel 的時間前綴完整字串)。
 		await switchTo('16:00 兒童體操初階班', '13:30 青少年體操中級班');
@@ -177,10 +176,10 @@ describe('/coach/attendance (+page) — undo', () => {
 		// no 復原 control before any unsaved edit.
 		expect(queryByText('復原')).toBeNull();
 
-		// edit row 1 (王承恩, default present) → click its 遲到 segment button.
-		// "遲到" also appears as a stats-chip <span>; target the AttSegment <button>.
-		const lateBtn = getAllByText('遲到').find((el) => el.tagName === 'BUTTON');
-		await fireEvent.click(lateBtn!);
+		// edit row 1 (王承恩, default present) → click its 缺席 segment button.
+		// "缺席" also appears as a stats-chip <span>; target the AttSegment <button>.
+		const absentBtn = getAllByText('缺席').find((el) => el.tagName === 'BUTTON');
+		await fireEvent.click(absentBtn!);
 
 		// dirty count climbed to 4 and 復原 is now offered.
 		expect(container.textContent).toContain('4 筆變更');
@@ -270,45 +269,6 @@ describe('/coach/attendance (+page) — 儲存點名 PUT /sessions/{id}/attendan
 
 		await vi.waitFor(() => {
 			expect(notifySpy).toHaveBeenCalledWith('error', '點名儲存失敗', '連線發生問題，請稍後再試。');
-		});
-	});
-
-	it('本批含「遲到」標記時，成功 toast 追加折疊說明(後端不區分遲到、以出席紀錄)', async () => {
-		const notifySpy = vi.spyOn(toasts, 'notify');
-		notifySpy.mockClear();
-		const { getByText, getAllByText, findByText } = render(AttendancePage);
-		await findByText(C1.first);
-
-		// 先把第一列(王承恩)標為遲到，本批即屬「含遲到」批次。
-		const lateBtn = getAllByText('遲到').find((el) => el.tagName === 'BUTTON');
-		await fireEvent.click(lateBtn!);
-		await fireEvent.click(getByText('儲存點名'));
-
-		await vi.waitFor(() => {
-			expect(notifySpy).toHaveBeenCalledWith(
-				'success',
-				'點名已儲存',
-				expect.stringContaining('遲到已以出席紀錄（系統不區分遲到）')
-			);
-		});
-		// 送出的 PUT body 已把遲到併入 present(後端只有三態)。
-		expect(putBody()?.records[0]).toEqual({ enrolment_id: 'GY2024001', status: 'present' });
-	});
-
-	it('本批不含「遲到」標記時，成功 toast 不出現折疊說明', async () => {
-		const notifySpy = vi.spyOn(toasts, 'notify');
-		const { getByText, getAllByText, findByText } = render(AttendancePage);
-		await findByText(C1.first);
-
-		// 先全部標記出席(請假列除外) → marks 不再含 late，再儲存。
-		await fireEvent.click(getAllByText('全部標記出席')[0]);
-		notifySpy.mockClear(); // 清掉先前累積的呼叫,只驗證本次儲存產生的 toast
-		await fireEvent.click(getByText('儲存點名'));
-
-		await vi.waitFor(() => {
-			const successCall = notifySpy.mock.calls.find((c) => c[0] === 'success' && c[1] === '點名已儲存');
-			expect(successCall).toBeTruthy();
-			expect(successCall![2]).not.toContain('遲到已以出席紀錄');
 		});
 	});
 });

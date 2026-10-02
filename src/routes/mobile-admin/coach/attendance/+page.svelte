@@ -37,15 +37,9 @@
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
   import { apiErrorText } from '$lib/api/error-text';
-  import type { AttClassFull, AttRow, AttDefault } from '$lib/coach/data';
+  import { ATT_CHOICES, type AttClassFull, type AttRow, type AttDefault } from '$lib/coach/data';
   import { createAttendanceController, sessionChipLabel } from '$lib/coach/attendance-controller';
   import { tally } from '$lib/coach/attendance-tally';
-
-  const ATT_STATES = [
-    { key: 'present', label: '出席', color: 'var(--df-primary)' },
-    { key: 'late', label: '遲到', color: 'var(--df-warning)' },
-    { key: 'absent', label: '缺席', color: 'var(--df-error)' }
-  ] as const;
 
   /* 本地牆鐘日期(YYYY/MM/DD)，非 toISOString()——後者取 UTC 日期，在 Asia/Taipei
    * (UTC+8)的凌晨會早報一天(同 CertificateDialog.svelte 的 today() 慣例)。 */
@@ -107,12 +101,7 @@
   }
 
   $: tallyCounts = tally(marks, roster);
-  $: counts = [
-    { label: '出席', color: 'var(--df-primary)', n: tallyCounts.present || 0 },
-    { label: '遲到', color: 'var(--df-warning)', n: tallyCounts.late || 0 },
-    { label: '缺席', color: 'var(--df-error)', n: tallyCounts.absent || 0 },
-    { label: '請假', color: 'var(--df-info)', n: tallyCounts.leave || 0 }
-  ];
+  $: counts = ATT_CHOICES.map((c) => ({ ...c, n: tallyCounts[c.key] }));
 
   function markAllPresent() {
     ctrl.markAllPresent();
@@ -155,7 +144,7 @@
 
 <LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
   <div class="df-scroll df-view" data-testid="attendance-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;" slot="loading">
-    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:9px;">
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:9px;">
       {#each [0, 1, 2, 3] as i (i)}
         <SkelCard><Skeleton w="100%" h={62} r={13} /></SkelCard>
       {/each}
@@ -178,8 +167,8 @@
   <div class="df-scroll df-view">
     <div style="padding:16px; display:flex; flex-direction:column; gap:14px;">
       <!-- summary -->
-      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:9px;">
-        {#each counts as c (c.label)}
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:9px;">
+        {#each counts as c (c.key)}
           <div style="background:#fff; border:1px solid var(--df-border); border-radius:13px; padding:11px 4px; text-align:center; box-shadow:var(--df-shadow-card);">
             <div style="font-size:23px; font-weight:800; color:{c.color}; font-family:var(--df-font-heading);">{c.n}</div>
             <div style="font-size:11px; color:var(--df-text-light); margin-top:2px;">{c.label}</div>
@@ -196,7 +185,7 @@
       <!-- roster -->
       <Panel title="學員出勤" sub={roster.length + ' 位 · ' + (current ? sessionChipLabel(current) : '')}>
         {#each roster as r, i (r.mid)}
-          {@const onLeave = marks[r.mid] === 'leave'}
+          {@const onLeave = r.def === 'leave'}
           <div style="padding:11px 14px; border-bottom:{i < roster.length - 1 ? '1px solid var(--df-border)' : 'none'};">
             <div style="display:flex; align-items:center; gap:11px;">
               <span style="font-family:var(--df-font-mono); font-size:12.5px; font-weight:600; color:var(--df-text-muted); width:20px; flex:none; text-align:center;">{String(i + 1).padStart(2, '0')}</span>
@@ -209,7 +198,7 @@
                 <span style="display:inline-flex; align-items:center; gap:5px; background:#DBEAFE; color:var(--df-primary-dark); border-radius:7px; padding:6px 11px; font-size:12.5px; font-weight:700;"><Icon name="calendar-off" size={13} color="var(--df-primary-dark)" />已請假</span>
               {:else}
                 <div style="display:inline-flex; background:var(--df-bg-light); border:1px solid var(--df-border); border-radius:9px; padding:3px;">
-                  {#each ATT_STATES as s (s.key)}
+                  {#each ATT_CHOICES as s (s.key)}
                     {@const on = marks[r.mid] === s.key}
                     <button
                       on:click={() => setMark(r.mid, s.key)}

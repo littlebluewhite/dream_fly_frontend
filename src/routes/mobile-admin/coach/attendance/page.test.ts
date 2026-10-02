@@ -124,6 +124,33 @@ describe('mobile-admin/coach/attendance 頁', () => {
 		expect(get(toasts).some((t) => t.title === '點名已儲存' && t.body === '19:00 測試班甲 · 2 位學員出勤已記錄。')).toBe(true);
 	});
 
+	it('手機頁提供「請假」，點選後 PUT status=leave(不再只有出席/遲到/缺席)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': ROSTER_1 }));
+		const { findByText, getByText, getAllByText, queryByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+		expect(queryByText('遲到')).toBeNull();
+
+		// 統計卡 [0] 為標籤、名冊列按鈕在後；T-001(甲)為第一列，唯一有請假鈕的列(乙已請假只顯示徽章)。
+		const leaveBtn = getAllByText('請假').find((el) => el.tagName === 'BUTTON');
+		await fireEvent.click(leaveBtn!);
+		await fireEvent.click(getByText('儲存點名'));
+
+		await vi.waitFor(() => expect(putBody('/sessions/s1/attendance')).toBeDefined());
+		expect(putBody('/sessions/s1/attendance')?.records).toContainEqual({ enrolment_id: 'T-001', status: 'leave' });
+	});
+
+	it('「已請假」徽章只看名冊(r.def)：本地點選請假不會把分段鈕換成徽章', async () => {
+		const { findByText, getAllByText, queryAllByText } = render(AttendancePage);
+		await findByText('測試學員甲');
+		expect(getAllByText('已請假')).toHaveLength(1); // 只有名冊本就請假的乙
+
+		const leaveBtn = getAllByText('請假').find((el) => el.tagName === 'BUTTON');
+		await fireEvent.click(leaveBtn!);
+
+		expect(queryAllByText('已請假')).toHaveLength(1); // 甲仍可再改選，沒有被換成徽章
+		expect(getAllByText('出席').some((el) => el.tagName === 'BUTTON')).toBe(true);
+	});
+
 	it('備註 Sheet 明示「僅存本機，重新整理後會消失」；已儲存後只改備註仍顯示「點名已儲存」(D1)', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...defaultRoutes(), 'PUT /sessions/s1/attendance': ROSTER_1 }));
 		const { findByText, getByText, getAllByText, getByPlaceholderText } = render(AttendancePage);

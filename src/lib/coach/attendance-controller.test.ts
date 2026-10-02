@@ -14,7 +14,7 @@ import type { AttRow, AttDefault, AttClassFull } from './data';
 
 const ROSTER_A: AttRow[] = [
 	{ n: '01', name: '王承恩', initial: '王', color: '#0066CC', mid: 'GY001', def: 'present' },
-	{ n: '02', name: '林佳穎', initial: '林', color: '#EC4899', mid: 'GY014', def: 'late' },
+	{ n: '02', name: '林佳穎', initial: '林', color: '#EC4899', mid: 'GY014', def: 'absent' },
 	{ n: '03', name: '張雅婷', initial: '張', color: '#8B5CF6', mid: 'GY030', def: 'leave' },
 	{ n: '04', name: '吳柏宇', initial: '吳', color: '#EF4444', mid: 'GY063', def: 'absent' }
 ];
@@ -26,7 +26,7 @@ const CLASS_B: AttClassFull = { id: 'ac2', name: '青少年體操中級班', tim
 /** 同日第二場同課名（id 相異、名冊相異）——ADR 0014「同日兩場同課名取第一場」限制的撤銷釘。 */
 const CLASS_A_DUP: AttClassFull = { id: 'ac1b', name: '兒童體操初階班', time: '', start: '', room: '', coach: '', roster: ROSTER_B };
 
-/** 伺服器回應：全員 present（'late' 於後端併入 present，回應永不含 late）。 */
+/** 伺服器回應：全員 present。 */
 const serverAllPresent = (roster: AttRow[]): AttRow[] => roster.map((r) => ({ ...r, def: 'present' as const }));
 
 /** 手動控制 resolve/reject 時序的 promise，用於驗 await 前/後的快照語意。 */
@@ -75,8 +75,8 @@ describe('createAttendanceController — 建構 / init', () => {
 		const view = get(ctrl);
 		expect(view.classes).toHaveLength(2);
 		expect(view.curClassId).toBe('ac1');
-		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
-		expect(view.dirtyCount).toBe(3); // late/leave/absent；present 不算
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'absent', GY030: 'leave', GY063: 'absent' });
+		expect(view.dirtyCount).toBe(3); // leave、absent×2；present 不算
 		expect(view.state).toBe('dirty');
 		expect(view.savedAt).toBeNull();
 	});
@@ -105,9 +105,9 @@ describe('createAttendanceController — 建構 / init', () => {
 describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 	it('setMark 更新指定 mid、dirtyCount +1、state dirty、canUndo 轉為 true', () => {
 		ctrl.init([CLASS_A]);
-		ctrl.setMark('GY001', 'late');
+		ctrl.setMark('GY001', 'absent');
 		const view = get(ctrl);
-		expect(view.marks.GY001).toBe('late');
+		expect(view.marks.GY001).toBe('absent');
 		expect(view.dirtyCount).toBe(4); // 3 → 4
 		expect(view.state).toBe('dirty');
 		expect(view.canUndo).toBe(true); // 修改前已捕捉快照
@@ -119,7 +119,7 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 		const view = get(ctrl);
 		expect(view.notes).toEqual({ GY014: '本週表現進步' });
 		expect(view.dirtyCount).toBe(3); // 不變：後端點名 PUT 無備註欄位，備註不是待同步變更
-		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'absent', GY030: 'leave', GY063: 'absent' });
 		expect(view.canUndo).toBe(true);
 	});
 
@@ -153,13 +153,13 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 		ctrl.markAllPresent();
 		const view = get(ctrl);
 		expect(view.marks).toEqual({ GY001: 'present', GY014: 'present', GY030: 'leave', GY063: 'present' });
-		expect(view.dirtyCount).toBe(5); // 3 + 2（GY014 late→present、GY063 absent→present；GY030 leave 不動、GY001 已 present）
+		expect(view.dirtyCount).toBe(5); // 3 + 2（GY014 absent→present、GY063 absent→present；GY030 leave 不動、GY001 已 present）
 		expect(view.canUndo).toBe(true);
 	});
 
 	it('markAllPresent：目前草稿已是 present 的列（不論名冊預設）不重複計入', () => {
 		ctrl.init([CLASS_A]);
-		ctrl.setMark('GY014', 'present'); // 預設 late，手動標成 present：3 → 4
+		ctrl.setMark('GY014', 'present'); // 預設 absent，手動標成 present：3 → 4
 		ctrl.markAllPresent();
 		expect(get(ctrl).dirtyCount).toBe(5); // 只剩 GY063(absent→present) +1
 	});
@@ -183,7 +183,7 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 
 	it('undo 還原前一步快照（marks + dirtyCount）並清空快照（canUndo false）', () => {
 		ctrl.init([CLASS_A]);
-		ctrl.setMark('GY001', 'late'); // dirty 4, canUndo true
+		ctrl.setMark('GY001', 'absent'); // dirty 4, canUndo true
 		ctrl.undo();
 		const view = get(ctrl);
 		expect(view.marks.GY001).toBe('present');
@@ -206,14 +206,14 @@ describe('編輯快照 — setMark / applyNote / markAllPresent / undo', () => {
 
 	it('undo 為單步快照：兩次編輯後只回退最後一步（dirtyCount 逐次累加、非回到初始）', () => {
 		ctrl.init([CLASS_A]);
-		ctrl.setMark('GY001', 'late'); // 3 → 4
+		ctrl.setMark('GY001', 'absent'); // 3 → 4
 		ctrl.setMark('GY063', 'present'); // 4 → 5
 		expect(get(ctrl).dirtyCount).toBe(5);
 		ctrl.undo(); // 只回退第二步
 		const view = get(ctrl);
 		expect(view.dirtyCount).toBe(4); // 回到第一次編輯後，不是初始 3
 		expect(view.marks.GY063).toBe('absent'); // 第二步被還原
-		expect(view.marks.GY001).toBe('late'); // 第一步保留
+		expect(view.marks.GY001).toBe('absent'); // 第一步保留
 		expect(view.canUndo).toBe(false);
 	});
 });
@@ -256,23 +256,23 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 
 	it('byClass 往返：A 的未存編輯切走再切回仍在（dirtyCount 不被重置為預設）', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
-		ctrl.setMark('GY001', 'late'); // A dirty 3 → 4
+		ctrl.setMark('GY001', 'absent'); // A dirty 3 → 4
 		expect(get(ctrl).dirtyCount).toBe(4);
 		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
 		expect(ctrl.selectClass(CLASS_A.id)).toBe('switched');
 		const view = get(ctrl);
 		expect(view.curClassId).toBe('ac1');
 		expect(view.dirtyCount).toBe(4); // A 草稿原封還原，不是回到初始 3
-		expect(view.marks.GY001).toBe('late'); // 編輯保留
+		expect(view.marks.GY001).toBe('absent'); // 編輯保留
 	});
 
 	it('byClass 往返：兩班各自的未存編輯互不覆蓋（切回 B 時 B 的草稿仍在）', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
-		ctrl.setMark('GY001', 'late'); // A 編輯
+		ctrl.setMark('GY001', 'absent'); // A 編輯
 		ctrl.selectClass(CLASS_B.id);
 		ctrl.setMark('GY012', 'absent'); // B 編輯：0 → 1
 		ctrl.selectClass(CLASS_A.id);
-		expect(get(ctrl).marks.GY001).toBe('late');
+		expect(get(ctrl).marks.GY001).toBe('absent');
 		ctrl.selectClass(CLASS_B.id);
 		const view = get(ctrl);
 		expect(view.marks).toEqual({ GY012: 'absent' });
@@ -289,7 +289,7 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 
 	it('切班清空復原快照（切換後 canUndo 回到 false）', () => {
 		ctrl.init([CLASS_A, CLASS_B]);
-		ctrl.setMark('GY001', 'late');
+		ctrl.setMark('GY001', 'absent');
 		expect(get(ctrl).canUndo).toBe(true);
 		ctrl.selectClass(CLASS_B.id);
 		expect(get(ctrl).canUndo).toBe(false);
@@ -297,29 +297,11 @@ describe('selectClass — switched / blocked / noop / byClass 往返', () => {
 });
 
 describe('save — 生命週期與 state-based stale guard', () => {
-	it('saved outcome 攜帶 className / rosterCount / hadLate 素材', async () => {
+	it('saved outcome 攜帶 className / rosterCount', async () => {
 		ctrl.init([CLASS_A]);
 		deps.saveAttendance.mockResolvedValue(serverAllPresent(ROSTER_A));
 		const outcome = await ctrl.save();
-		expect(outcome).toEqual({ kind: 'saved', className: '兒童體操初階班', rosterCount: 4, hadLate: true });
-	});
-
-	it('hadLate 於 await 前以本地 marks 快照（伺服器回應全 present 仍為 true——時序釘）', async () => {
-		const d = deferred<AttRow[]>();
-		deps.saveAttendance.mockReturnValue(d.promise);
-		ctrl.init([CLASS_A]); // 本地含一筆 late（GY014）
-		const p = ctrl.save();
-		// 伺服器回應全員 present（不含 late）——若 hadLate 於 await 後由回應推導，會誤判為 false。
-		d.resolve(serverAllPresent(ROSTER_A));
-		const outcome = await p;
-		expect(outcome).toEqual({ kind: 'saved', className: '兒童體操初階班', rosterCount: 4, hadLate: true });
-	});
-
-	it('hadLate：送出時無 late 標記即為 false', async () => {
-		ctrl.init([CLASS_B]); // 全 present
-		deps.saveAttendance.mockResolvedValue(ROSTER_B);
-		const outcome = await ctrl.save();
-		expect(outcome).toEqual({ kind: 'saved', className: '青少年體操中級班', rosterCount: 1, hadLate: false });
+		expect(outcome).toEqual({ kind: 'saved', className: '兒童體操初階班', rosterCount: 4 });
 	});
 
 	it('stale guard：await 後 state 已非 saving（in-flight 期間又編輯過）即丟棄回應', async () => {
@@ -348,7 +330,7 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		const view = get(ctrl);
 		expect(view.state).toBe('dirty');
 		expect(view.dirtyCount).toBe(3); // 不歸零——未存變更仍在
-		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'absent', GY030: 'leave', GY063: 'absent' });
 		expect(view.savedAt).toBeNull();
 	});
 
@@ -394,7 +376,7 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		const view = get(ctrl);
 		expect(view.state).toBe('saving');
 		expect(view.dirtyCount).toBe(3); // 進入儲存中只翻 state，其餘不動
-		expect(view.marks).toEqual({ GY001: 'present', GY014: 'late', GY030: 'leave', GY063: 'absent' });
+		expect(view.marks).toEqual({ GY001: 'present', GY014: 'absent', GY030: 'leave', GY063: 'absent' });
 	});
 
 	it('出勤變更 + 備註 → save：notes 保留、saveAttendance 只收到 marks（備註不上送）', async () => {
@@ -406,7 +388,7 @@ describe('save — 生命週期與 state-based stale guard', () => {
 		expect(deps.saveAttendance).toHaveBeenCalledTimes(1);
 		expect(deps.saveAttendance).toHaveBeenCalledWith('ac1', {
 			GY001: 'present',
-			GY014: 'late',
+			GY014: 'absent',
 			GY030: 'leave',
 			GY063: 'present'
 		});
@@ -439,7 +421,7 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 		ctrl.init([CLASS_A, CLASS_B]);
 
 		const pA = ctrl.save(); // A（ac1）save 起飛，state saving
-		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → state 打回 dirty，放行切班
+		ctrl.setMark('GY001', 'absent'); // 儲存中先編輯 → state 打回 dirty，放行切班
 		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched'); // 切到 B（ac2）
 		void ctrl.save(); // B（ac2）save 起飛，seq 遞增、state saving
 
@@ -461,7 +443,7 @@ describe('save-token guard — ABA 併發（K1 c3；對 c1 版應紅，證明 la
 		ctrl.init([CLASS_A, CLASS_B]);
 
 		const pA = ctrl.save(); // A save
-		ctrl.setMark('GY001', 'late'); // 儲存中先編輯 → dirty，放行切班
+		ctrl.setMark('GY001', 'absent'); // 儲存中先編輯 → dirty，放行切班
 		expect(ctrl.selectClass(CLASS_B.id)).toBe('switched');
 		void ctrl.save(); // B save，state saving
 

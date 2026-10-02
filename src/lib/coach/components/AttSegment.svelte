@@ -1,23 +1,16 @@
 <script lang="ts">
-  /* 出勤狀態分段選擇器 — 4 個小藥丸按鈕；active 填色 + 白字，其餘白底 + 細邊框。
+  /* 出勤狀態分段選擇器 — ATT_CHOICES 小藥丸按鈕；active 填色 + 白字，其餘白底 + 細邊框。
    * Props:
    *   value    — 目前選中的狀態 (AttDefault)
    *   onChange — 點擊時回傳新值 */
-  import type { AttDefault } from '$lib/coach/data';
+  import { ATT_CHOICES, type AttDefault } from '$lib/coach/data';
 
   export let value: AttDefault;
   export let onChange: (v: AttDefault) => void;
-
-  const SEG: Array<{ key: AttDefault; label: string; color: string }> = [
-    { key: 'present', label: '出席', color: 'var(--df-success)' },
-    { key: 'late',    label: '遲到', color: 'var(--df-warning)' },
-    { key: 'leave',   label: '請假', color: 'var(--df-info)' },
-    { key: 'absent',  label: '缺席', color: 'var(--df-error)' },
-  ];
 </script>
 
 <div style="display:inline-flex;gap:4px;flex-wrap:nowrap;">
-  {#each SEG as seg}
+  {#each ATT_CHOICES as seg (seg.key)}
     <button
       type="button"
       on:click={() => onChange(seg.key)}

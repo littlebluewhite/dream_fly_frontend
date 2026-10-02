@@ -28,7 +28,14 @@ import type { TodayStatus } from '$lib/domain/sessions';
 // 查表鍵單源收斂)，這裡改 type re-export，呼叫端(coach/api.ts、頁面、components)
 // 的 import 路徑不動。
 export type { TodayStatus };
-export type AttDefault = 'present' | 'late' | 'leave' | 'absent';
+export type AttDefault = 'present' | 'leave' | 'absent';
+/** 點名可選狀態(桌面 AttSegment/統計 chips 與手機點名頁共用的單一來源)。後端 attendance_status
+ *  僅 present/absent/leave 三值(§3.19)，沒有「遲到」。 */
+export const ATT_CHOICES: ReadonlyArray<{ key: AttDefault; label: string; color: string }> = [
+	{ key: 'present', label: '出席', color: 'var(--df-success)' },
+	{ key: 'leave', label: '請假', color: 'var(--df-info)' },
+	{ key: 'absent', label: '缺席', color: 'var(--df-error)' }
+];
 export type ThreadWho = 'them' | 'me';
 
 /* ──────────────── interfaces ──────────────── */

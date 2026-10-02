@@ -557,22 +557,21 @@ describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§
 });
 
 describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
-	it('送出 { records: [{ enrolment_id, status }] }；late(遲到)併入 present', async () => {
+	it('送出 { records: [{ enrolment_id, status }] }，三態原樣送出', async () => {
 		const UPDATED_ROSTER = [
 			{ enrolment_id: 'en-1', user_id: 'u1', user_name: '王小明', attendance_status: 'present' }
 		];
 		vi.mocked(api).mockImplementation(fakeRouter({ 'PUT /sessions/s1/attendance': UPDATED_ROSTER }));
 
-		const result = await saveAttendance('s1', { 'en-1': 'present', 'en-2': 'late', 'en-3': 'leave', 'en-4': 'absent' });
+		const result = await saveAttendance('s1', { 'en-1': 'present', 'en-2': 'absent', 'en-3': 'leave' });
 
 		expect(api).toHaveBeenCalledWith('/sessions/s1/attendance', {
 			method: 'PUT',
 			body: JSON.stringify({
 				records: [
 					{ enrolment_id: 'en-1', status: 'present' },
-					{ enrolment_id: 'en-2', status: 'present' }, // late → present
-					{ enrolment_id: 'en-3', status: 'leave' },
-					{ enrolment_id: 'en-4', status: 'absent' }
+					{ enrolment_id: 'en-2', status: 'absent' },
+					{ enrolment_id: 'en-3', status: 'leave' }
 				]
 			})
 		});

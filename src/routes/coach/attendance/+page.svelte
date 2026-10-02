@@ -16,8 +16,7 @@
    *
    * 儲存(doSave)呼叫真實 saveAttendance(sessionId, marks) → PUT /sessions/{id}/
    * attendance；成功以伺服器回傳的最新名冊同步 marks/classes(而非樂觀本地值 ——
-   * 'late'(遲到)沒有對應後端狀態、送出時併入 'present'，若不用伺服器回應同步，畫面會
-   * 持續顯示「遲到」但後端其實已存成「出席」)；失敗依 ApiError.status 顯示對應繁中
+   * 以伺服器為準)；失敗依 ApiError.status 顯示對應繁中
    * 錯誤 toast，state 退回 'dirty' 讓教練可以重試。
    *
    * SaveBar(草稿狀態機)的轉移與其上的編排(鏡射、snapshot/undo、byClass 切班暫存、save
@@ -30,7 +29,7 @@
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
-  import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
+  import { ATT_CHOICES, type AttRow, type AttDefault, type AttClassFull } from '$lib/coach/data';
   import { toasts } from '$lib/coach/stores';
   import { tally } from '$lib/coach/attendance-tally';
   import { createAttendanceController, sessionChipLabel, nowHHMM } from '$lib/coach/attendance-controller';
@@ -152,12 +151,10 @@
   async function doSave() {
     const outcome = await ctrl.save();
     if (outcome.kind === 'saved') {
-      // 成功 toast 據 await 前的 hadLate 快照追加一句折疊說明,避免教練誤以為點選沒存到。
       toasts.notify(
         'success',
         '點名已儲存',
-        outcome.className + ' · ' + outcome.rosterCount + ' 位學員出勤已同步至雲端。' +
-          (outcome.hadLate ? '遲到已以出席紀錄（系統不區分遲到）。' : '')
+        outcome.className + ' · ' + outcome.rosterCount + ' 位學員出勤已同步至雲端。'
       );
     } else if (outcome.kind === 'failed') {
       toasts.notify('error', '點名儲存失敗', attendanceErrorMessage(outcome.error));
@@ -169,10 +166,7 @@
   $: tallyCounts = tally(marks, roster);
 
   $: chips = [
-    { key: 'present', label: '出席',               color: 'var(--df-success)',      n: tallyCounts.present || 0 },
-    { key: 'late',    label: '遲到',               color: 'var(--df-warning)',      n: tallyCounts.late    || 0 },
-    { key: 'leave',   label: '請假',               color: 'var(--df-info)',         n: tallyCounts.leave   || 0 },
-    { key: 'absent',  label: '缺席',               color: 'var(--df-error)',        n: tallyCounts.absent  || 0 },
+    ...ATT_CHOICES.map((c) => ({ ...c, n: tallyCounts[c.key] })),
     { key: 'total',   label: '共 ' + roster.length + ' 人', color: 'var(--df-text-muted)', n: roster.length },
   ];
 

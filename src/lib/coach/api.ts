@@ -213,8 +213,7 @@ interface ApiRosterEntry {
  *  排序後(後端回應本就依姓名排序)的顯示序號，純前端呈現;color 無代表色欄位,固定預設值
  *  (P2，同 mapScheduleEntry 慣例)。attendance_status 為 null(尚未點名)時，本地草稿預設
  *  'present'(同既有「全部標記出席」/dirtyCount 以出席為基準狀態的慣例，未儲存前不代表
- *  已送出任何資料)；'late'(遲到)沒有對應後端狀態(§3.19：status 僅 present/absent/leave
- *  三選一)——維持既有 UI 分段可選，儲存時併入 'present'(見 saveAttendance)。 */
+ *  已送出任何資料)。 */
 function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
 	return {
 		n: String(i + 1).padStart(2, '0'),
@@ -288,18 +287,16 @@ export const getAttendance = async (): Promise<AttendanceData> => {
 };
 
 /** PUT /sessions/{id}/attendance —— 頁面本地 marks(mid→狀態草稿)轉成 API 的
- *  { records: [{ enrolment_id, status }] } 送出；'late'(遲到)沒有對應後端狀態，併入
- *  'present'(有到場、非缺席也非請假，三態語意上最接近的對應，見 mapRosterRow 附註)。
- *  回應為更新後的完整名冊，重新映射回傳讓頁面拿來同步 marks(以伺服器為準，而非樂觀
- *  本地值)——避免一位學員被標記「遲到」存檔後，畫面仍顯示遲到、但後端其實已存成
- *  「出席」的視覺落差。 */
+ *  { records: [{ enrolment_id, status }] } 送出(AttDefault 與後端 status 同為
+ *  present/absent/leave 三值，原樣送出)。回應為更新後的完整名冊，重新映射回傳讓頁面
+ *  拿來同步 marks(以伺服器為準，而非樂觀本地值)。 */
 export const saveAttendance = async (
 	sessionId: string,
 	marks: Record<string, AttDefault>
 ): Promise<AttRow[]> => {
 	const records = Object.entries(marks).map(([enrolment_id, mark]) => ({
 		enrolment_id,
-		status: mark === 'late' ? 'present' : mark
+		status: mark
 	}));
 	const roster = await api<ApiRosterEntry[]>(`/sessions/${sessionId}/attendance`, {
 		method: 'PUT',

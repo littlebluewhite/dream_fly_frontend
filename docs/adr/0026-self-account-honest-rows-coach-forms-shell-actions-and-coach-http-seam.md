@@ -262,3 +262,7 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
   搬到 `authStore.test.ts`,內容不變。「不做 derived store」的決定與理由不變。
 - **§1 staff 登出的延伸**:除了按「登出」,refresh 失敗與別的分頁登出現在也會讓本分頁真的登出
   (見 `docs/adr/0006` 增補)。
+- **R6 的延伸:點名頁的「遲到」刪除**:教練點名的「遲到」與 R6 同病灶——能點、畫面會留著,但後端
+  `attendance_status` 只有 present/absent/leave,送出時被默默併成「出席」,手機版 `onSave` 還忽略
+  `hadLate`。`AttDefault` 收成三值,`coach/api.ts` 的 late→present 與 controller 的
+  `draftHadLate`/`SaveOutcome.hadLate` 一併刪除,桌面成功 toast 不再追加折疊說明。

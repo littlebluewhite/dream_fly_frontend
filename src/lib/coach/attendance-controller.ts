@@ -91,12 +91,6 @@ function stashAndRestore(
 	return { byClass: nextByClass, draft };
 }
 
-/** 送出前是否含「遲到」標記——需在呼叫 saveAttendance 之前（await 前）以目前 marks
- *  捕捉，不受 in-flight 期間的後續編輯影響（成功 toast 的折疊說明依這個快照決定）。 */
-function draftHadLate(marks: Record<string, AttDefault>): boolean {
-	return Object.values(marks).some((m) => m === 'late');
-}
-
 /** 進入儲存中——只翻轉 state，其餘欄位不動。 */
 function beginSave(draft: SaveBar): SaveBar {
 	return { ...draft, state: 'saving' };
@@ -138,7 +132,7 @@ export interface AttendanceViewState {
 /** save() 的結果：文案所需素材隨 outcome 攜帶，toast 文案逐字留頁面（不注入 toast 回呼）。
  *  stale = 回應過期被丟棄（頁面不做任何事，同現行 guard 的 `return`）。 */
 export type SaveOutcome =
-	| { kind: 'saved'; className: string; rosterCount: number; hadLate: boolean }
+	| { kind: 'saved'; className: string; rosterCount: number }
 	| { kind: 'stale' }
 	| { kind: 'failed'; error: unknown };
 
@@ -261,9 +255,6 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 	async function save(): Promise<SaveOutcome> {
 		applyDraft(beginSave(currentDraft()));
 		publish();
-		// 送出前（await 前）先快照是否含「遲到」——不受 in-flight 期間後續編輯影響，且不能
-		// 由 await 後的伺服器回應推導（回應永不含 late，見 saveAttendance）。
-		const hadLate = draftHadLate(marks);
 		const token = ++seq;
 		try {
 			const updatedRoster = await deps.saveAttendance(curClassId, marks);
@@ -276,7 +267,7 @@ export function createAttendanceController(deps: AttendanceControllerDeps): Atte
 			classes = classes.map((c) => (c.id === curClassId ? { ...c, roster: updatedRoster } : c));
 			applyDraft(applySaveResult(currentDraft(), updatedRoster, now()));
 			publish();
-			return { kind: 'saved', className: curClass()?.name ?? '', rosterCount: updatedRoster.length, hadLate };
+			return { kind: 'saved', className: curClass()?.name ?? '', rosterCount: updatedRoster.length };
 		} catch (error) {
 			// save-token guard（K1 c3）：舊請求失敗的 token 已非最新即丟棄——不可把新班打成
 			// failed（c1 此處全無 guard，是已知 latent 缺陷）。疊加在既有 catch 行為之上。

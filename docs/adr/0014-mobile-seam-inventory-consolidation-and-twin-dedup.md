@@ -490,3 +490,12 @@ COACH_ROUTES)`(`src/lib/testing/coach-routes.ts`),全倉不再有測試整支 mo
 (import 自 `./api`,不成環)。`load-error-copy.test.ts` 的「name-only 假物會命中」改寫成「不命中,
 回 `GENERIC_LOAD_ERROR`」(案例數不變)。`import-scan.test.ts` 加上可執行契約「測試 seam 契約:零
 vi.mock 整支 $lib/coach/api」防回退。§3 的劃界本身(單源只涵蓋載入文案、動作錯誤表留呼叫端)不變。
+
+
+## 增補(2026-10-03,架構深化 R17)
+
+- **§2 雙生頁共用 `ATT_CHOICES`**:桌面 `AttSegment`、桌面統計 chips、手機點名頁的分段鈕與統計卡,
+  原本各自手抄一份狀態清單(顏色、順序、是否含「請假」都不一致)。現在共用 `coach/data.ts` 的
+  `ATT_CHOICES`(present/leave/absent,色用 success/info/error),`tally()` 回傳 `Record<AttDefault,
+  number>`(零初始化)。手機頁因此多了「請假」,「已請假」徽章判準改 `r.def === 'leave'`(只看名冊,
+  與桌面一致,本地點選請假不會把分段鈕換成徽章)。可見變更:手機「出席」由主色改綠。
