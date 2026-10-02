@@ -79,7 +79,7 @@ describe('mobile-admin/coach/messages 頁', () => {
 		await hydrateMessages(); // fetch 替身回 WIRE_MESSAGES(旗標唯讀,經真水合翻 true)
 		vi.mocked(api).mockClear();
 		const firstUnreadId = WIRE_MESSAGES[0].id;
-		markMessageRead(firstUnreadId);
+		await markMessageRead(firstUnreadId, Promise.resolve(true));
 
 		render(MessagesPage);
 		await new Promise((r) => setTimeout(r, 0));

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
-import { createHydrationGate } from './hydration-gate';
+import { createHydrationGate, resultOf } from './hydration-gate';
 import { createLoadGate, type LoadPhase } from './load-gate';
 
 /** 手動控時序的 deferred promise——測 in-flight 競態不用 fake timers（抄
@@ -749,5 +749,339 @@ describe('reset()', () => {
 		const gate = createHydrationGate({ fetch: async () => 1, apply: () => {} });
 		// @ts-expect-error hydrated 是 Readable,沒有 set
 		expect(() => gate.hydrated.set(true)).toThrow(TypeError);
+	});
+});
+
+describe('write()(R17:寫入動詞,取代 markMutated/mutate 的呼叫端自組協定)', () => {
+	/* write() 把「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 → 未水合時和解」收進閘門:
+	 *  - 樂觀路徑(有 optimistic):同一同步段 optimistic() → send() → 尾流入帳 → 世代 +1 翻旗;
+	 *  - 非樂觀路徑:await send() 之後才 commit + 世代 +1 翻旗(無尾流可記);
+	 *  - send 落地時 resetEpoch 已變 → stale,不碰 store;
+	 *  - 失敗依 onFailure:keep / rollback(undo)/ resync(refresh,失敗退回 undo);
+	 *  - 寫入前未水合(或寫回時已不完整)→ 排和解重抓(和解鏈自 R17 住在基礎閘門)。 */
+	function makeGate(fetch: () => Promise<string[]>) {
+		const store = writable<string[]>([]);
+		const apply = vi.fn((list: string[]) => store.set(list));
+		const gate = createHydrationGate({ fetch, apply, reset: () => store.set([]) });
+		return { store, apply, gate };
+	}
+
+	it('非樂觀 written:send 落地後才 commit、翻旗;回傳 written{result};已水合時不和解', async () => {
+		const fetch = vi.fn(async () => ['server']);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+		const d = createDeferred<string>();
+		const commit = vi.fn((r: string) => store.update((l) => [r, ...l]));
+
+		const p = gate.write({ send: () => d.promise, commit });
+		expect(commit).not.toHaveBeenCalled(); // 非樂觀:await 之前不寫
+		d.resolve('new');
+
+		expect(await p).toEqual({ kind: 'written', result: 'new' });
+		expect(get(store)).toEqual(['new', 'server']);
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(1); // 已水合:不排和解
+	});
+
+	it('非樂觀 written 的 mutation 勝出:hydrate 在飛期間 write 落地 → 舊快照不套用', async () => {
+		const dGet = createDeferred<string[]>();
+		const fetch = vi.fn().mockReturnValueOnce(dGet.promise).mockResolvedValue(['server', 'new']);
+		const { store, apply, gate } = makeGate(fetch);
+
+		const hydrating = gate.hydrate();
+		await gate.write({ send: async () => 'new', commit: (r) => store.update((l) => [r, ...l]) });
+		dGet.resolve(['server']); // 出發早於寫入的舊快照
+		await hydrating;
+
+		expect(apply).not.toHaveBeenCalledWith(['server']);
+		expect(get(gate.hydrated)).toBe(true);
+	});
+
+	it('非樂觀失敗:不寫 store、不翻旗、不推世代(在飛 hydrate 照常套用)', async () => {
+		const dGet = createDeferred<string[]>();
+		const { store, gate } = makeGate(() => dGet.promise);
+		const err = new Error('409');
+		const commit = vi.fn();
+
+		const hydrating = gate.hydrate();
+		const o = await gate.write({ send: () => Promise.reject(err), commit });
+		expect(o).toEqual({ kind: 'failed', error: err, recovery: 'kept' });
+		expect(commit).not.toHaveBeenCalled();
+		expect(get(gate.hydrated)).toBe(false);
+
+		dGet.resolve(['server']);
+		await hydrating;
+		expect(get(store)).toEqual(['server']); // 世代未動:水合不被誤判 mutation 勝出
+	});
+
+	it('stale:send 在飛期間 reset → 不 commit、不碰 store;結果仍交付(settled)', async () => {
+		const { store, gate } = makeGate(async () => ['server']);
+		await gate.hydrate();
+		const d = createDeferred<string>();
+		const commit = vi.fn();
+
+		const p = gate.write({ send: () => d.promise, commit });
+		gate.reset();
+		store.set(['canary']); // 新擁有者的資料
+		d.resolve('new');
+
+		expect(await p).toEqual({ kind: 'stale', settled: { status: 'fulfilled', value: 'new' } });
+		expect(commit).not.toHaveBeenCalled();
+		expect(get(store)).toEqual(['canary']);
+		expect(get(gate.hydrated)).toBe(false);
+	});
+
+	it('stale(樂觀):尾流在飛期間 reset、之後失敗 → 不 undo、不 resync', async () => {
+		const fetch = vi.fn(async () => ['server']);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+		const d = createDeferred<void>();
+		const undo = vi.fn();
+		const err = new Error('network');
+
+		const p = gate.write({ optimistic: () => undo, send: () => d.promise, onFailure: 'resync' });
+		gate.reset();
+		d.reject(err);
+
+		expect(await p).toEqual({ kind: 'stale', settled: { status: 'rejected', reason: err } });
+		expect(undo).not.toHaveBeenCalled();
+		expect(fetch).toHaveBeenCalledTimes(1); // 只有最初的水合
+		expect(get(store)).toEqual([]);
+	});
+
+	it('樂觀:optimistic 與 send 同步發生,翻旗也同步(await 之前)', async () => {
+		const { store, gate } = makeGate(async () => ['server']);
+		const d = createDeferred<void>();
+		const send = vi.fn(() => d.promise);
+
+		const p = gate.write({ optimistic: () => store.set(['local']), send });
+		expect(get(store)).toEqual(['local']);
+		expect(send).toHaveBeenCalledTimes(1);
+		expect(get(gate.hydrated)).toBe(true);
+		d.resolve();
+		await p;
+	});
+
+	it('樂觀失敗 keep:不 undo,recovery kept', async () => {
+		const { store, gate } = makeGate(async () => ['server']);
+		await gate.hydrate();
+		const undo = vi.fn();
+		const err = new Error('network');
+
+		const o = await gate.write({
+			optimistic: () => {
+				store.set(['local']);
+				return undo;
+			},
+			send: () => Promise.reject(err),
+			onFailure: 'keep'
+		});
+
+		expect(o).toEqual({ kind: 'failed', error: err, recovery: 'kept' });
+		expect(undo).not.toHaveBeenCalled();
+		expect(get(store)).toEqual(['local']);
+	});
+
+	it('樂觀失敗 rollback:呼叫 undo,recovery rolledBack', async () => {
+		const { store, gate } = makeGate(async () => ['server']);
+		await gate.hydrate();
+		const err = new Error('network');
+
+		const o = await gate.write({
+			optimistic: () => {
+				store.set(['local']);
+				return () => store.set(['server']);
+			},
+			send: () => Promise.reject(err),
+			onFailure: 'rollback'
+		});
+
+		expect(o).toEqual({ kind: 'failed', error: err, recovery: 'rolledBack' });
+		expect(get(store)).toEqual(['server']);
+	});
+
+	it('樂觀失敗 resync:整包重抓伺服器真值、不 undo,recovery resynced', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(['server']).mockResolvedValueOnce(['truth']);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+		const undo = vi.fn();
+		const err = new Error('network');
+
+		const o = await gate.write({
+			optimistic: () => {
+				store.set(['local']);
+				return undo;
+			},
+			send: () => Promise.reject(err),
+			onFailure: 'resync'
+		});
+
+		expect(o).toEqual({ kind: 'failed', error: err, recovery: 'resynced' });
+		expect(fetch).toHaveBeenCalledTimes(2); // 自己的尾流已出帳:resync 不等自己
+		expect(get(store)).toEqual(['truth']);
+		expect(undo).not.toHaveBeenCalled();
+	});
+
+	it('樂觀失敗 resync 也失敗:退回 undo,recovery rolledBack', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(['server']).mockRejectedValueOnce(new Error('offline'));
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+		const err = new Error('network');
+
+		const o = await gate.write({
+			optimistic: () => {
+				store.set(['local']);
+				return () => store.set(['server']);
+			},
+			send: () => Promise.reject(err),
+			onFailure: 'resync'
+		});
+
+		expect(o).toEqual({ kind: 'failed', error: err, recovery: 'rolledBack' });
+		expect(get(store)).toEqual(['server']);
+	});
+
+	it('樂觀成功:commit 收到伺服器回覆', async () => {
+		const { store, gate } = makeGate(async () => ['server']);
+		await gate.hydrate();
+
+		const o = await gate.write({
+			optimistic: () => store.set(['local']),
+			send: async () => 'ack',
+			commit: (r) => store.update((l) => [...l, r])
+		});
+
+		expect(o).toEqual({ kind: 'written', result: 'ack' });
+		expect(get(store)).toEqual(['local', 'ack']);
+	});
+
+	it('ADR-0021:樂觀寫入的 PATCH 在飛 → refresh() 不出發 GET,等尾流 settle 才恰出發一次', async () => {
+		const fetch = vi.fn(async () => ['server']);
+		const { gate } = makeGate(fetch);
+		await gate.hydrate();
+		fetch.mockClear();
+		const patch = createDeferred<void>();
+
+		const writing = gate.write({ optimistic: () => {}, send: () => patch.promise });
+		const refreshing = gate.refresh();
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled(); // PATCH 在飛:GET 不得搶先
+
+		patch.resolve();
+		await Promise.all([writing, refreshing]);
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('記帳順序:樂觀寫入翻旗的同步通知裡重入 refresh() → GET 不得出發(尾流先入帳,才推世代/翻旗)', async () => {
+		const fetch = vi.fn(async () => ['server']);
+		const { gate } = makeGate(fetch);
+		const patch = createDeferred<void>();
+		let reentrant: Promise<void> | undefined;
+		const unsub = gate.hydrated.subscribe((h) => {
+			if (h && !reentrant) reentrant = gate.refresh();
+		});
+
+		const writing = gate.write({ optimistic: () => {}, send: () => patch.promise });
+		expect(reentrant).toBeDefined();
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+
+		patch.resolve();
+		await writing;
+		await reentrant;
+		unsub();
+		expect(fetch).toHaveBeenCalled();
+	});
+
+	it('ADR-0020 反例(非樂觀):await write() → await refresh() 恰一次 GET,快照照常套用', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(['server']).mockResolvedValueOnce(['after']);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+
+		await gate.write({ send: async () => 'new', commit: (r) => store.update((l) => [r, ...l]) });
+		await gate.refresh();
+
+		expect(fetch).toHaveBeenCalledTimes(2); // 水合 1 + refresh 1:寫入在 refresh 進場之前,不補抓
+		expect(get(store)).toEqual(['after']);
+	});
+
+	it('ADR-0020 反例(樂觀):await write() → await refresh() 恰一次 GET', async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(['server']).mockResolvedValueOnce(['after']);
+		const { store, gate } = makeGate(fetch);
+		await gate.hydrate();
+
+		await gate.write({ optimistic: () => store.set(['local']), send: async () => undefined });
+		await gate.refresh();
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(get(store)).toEqual(['after']);
+	});
+
+	it('未水合寫入 → 和解重抓收斂成伺服器完整清單,之後 hydrate 被 guard 短路', async () => {
+		const fetch = vi.fn(async () => ['new', 'old']);
+		const { store, gate } = makeGate(fetch);
+
+		await gate.write({ send: async () => 'new', commit: (r) => store.update((l) => [r, ...l]) });
+		expect(get(store)).toEqual(['new']); // 只有直寫那筆
+		await settleRetry();
+
+		expect(get(store)).toEqual(['new', 'old']);
+		expect(get(gate.hydrated)).toBe(true);
+		await gate.hydrate();
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('未水合的樂觀寫入同樣排和解(等尾流 settle 才出發)', async () => {
+		const fetch = vi.fn(async () => ['a', 'b']);
+		const { store, gate } = makeGate(fetch);
+		const patch = createDeferred<void>();
+
+		const writing = gate.write({ optimistic: () => store.set(['a']), send: () => patch.promise });
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+		patch.resolve();
+		await writing;
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(get(store)).toEqual(['a', 'b']);
+	});
+
+	it('和解失敗 → 旗標翻回 false,下一次 hydrate 重新真抓', async () => {
+		const fetch = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(['new', 'old']);
+		const { store, gate } = makeGate(fetch);
+
+		await gate.write({ send: async () => 'new', commit: (r) => store.update((l) => [r, ...l]) });
+		await settleRetry();
+		expect(get(gate.hydrated)).toBe(false);
+
+		await gate.hydrate();
+		expect(get(store)).toEqual(['new', 'old']);
+	});
+
+	it('reset 清掉和解鏈:重置前排隊的和解不在新擁有者身上起跑', async () => {
+		const first = createDeferred<string[]>();
+		const fetch = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(['x']);
+		const { store, gate } = makeGate(fetch);
+
+		await gate.write({ send: async () => 'a', commit: (r) => store.update((l) => [r, ...l]) }); // R1 起跑、卡住
+		await gate.write({ send: async () => 'b', commit: (r) => store.update((l) => [r, ...l]) }); // R2 排在 R1 後
+		await settleRetry();
+		expect(fetch).toHaveBeenCalledTimes(1);
+
+		gate.reset();
+		first.resolve(['stale']);
+		await settleRetry();
+
+		expect(fetch).toHaveBeenCalledTimes(1); // R2 未起跑
+		expect(get(store)).toEqual([]); // R1 的舊快照不寫
+	});
+
+	it('resultOf:written → result;failed → 拋出 error;stale → 交付 settled(成功給值、失敗拋出)', () => {
+		const err = new Error('x');
+		expect(resultOf({ kind: 'written', result: 1 })).toBe(1);
+		expect(() => resultOf({ kind: 'failed', error: err, recovery: 'kept' })).toThrow(err);
+		expect(resultOf({ kind: 'stale', settled: { status: 'fulfilled', value: 2 } })).toBe(2);
+		expect(() => resultOf({ kind: 'stale', settled: { status: 'rejected', reason: err } })).toThrow(err);
 	});
 });

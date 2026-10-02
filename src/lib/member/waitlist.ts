@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
+import { resultOf } from '$lib/hydration-gate';
 
 /* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
  * 取代原本掛在 cart 底下、隨 dreamfly_cart_v3 一起存進 localStorage 的
@@ -39,7 +40,7 @@ function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
  *  骨架(與 leave.ts 位元組級雙生)全數吸收進工廠(見 $lib/session-gate 的協定說明)。
  *  fetch 是純域 fetch:P1′ 的 epoch 核對由工廠外包。gate.refresh 不匯出——候補域沒有
  *  「無視守衛強制重抓」的外部消費者(YAGNI,同 notifications 先例;courses 頁有本地
- *  store 狀態 + 後端 409 擋重複候補雙保險),模組內僅 mutate 尾隨的和解重抓呼叫它。 */
+ *  store 狀態 + 後端 409 擋重複候補雙保險),模組內僅 write 尾隨的和解重抓呼叫它。 */
 const gate = createSessionGate<WaitlistEntry[]>({
   fetch: async () => {
     const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
@@ -57,30 +58,32 @@ export const hydrateWaitlist = gate.hydrate;
  *  直接塞進 store 最前面（同 GET /waitlist/me 的新到舊排序），不用整包重新
  *  hydrate。重複候補（後端 409 "already on waitlist"）由呼叫端用
  *  joinWaitlistErrorMessage(err) 轉繁中文案；這裡原樣拋出錯誤，不吞。
- *  API→domain 映射(toWaitlistEntry)在 request closure 內完成,故 gate.mutate 的
- *  R = WaitlistEntry、匯出回傳型別成立;進場快照/epoch 作廢/寫回重查完整度/和解
- *  重抓全由工廠處理(見 $lib/session-gate 的 mutate)。 */
+ *  API→domain 映射(toWaitlistEntry)在 send 內完成,故 write 的 R = WaitlistEntry、
+ *  匯出回傳型別成立;進場快照/換身分作廢/寫回重查完整度/和解重抓全由閘門的 write()
+ *  處理,resultOf 交回結果(換身分作廢時仍交付:server 端事實已成立)、失敗原樣拋出。 */
 export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
-  return gate.mutate(
-    async () => {
+  const o = await gate.write({
+    send: async () => {
       const res = await api<ApiWaitlistEntry>('/waitlist', {
         method: 'POST',
         body: JSON.stringify({ course_id: courseId })
       });
       return toWaitlistEntry(res);
     },
-    (entry) => waitlist.update((list) => [entry, ...list])
-  );
+    commit: (entry) => waitlist.update((list) => [entry, ...list])
+  });
+  return resultOf(o);
 }
 
 /** DELETE /waitlist/{id} → 204 No Content（同 syncCartToServer 的 DELETE /cart
  *  慣例，api() 對 204 回傳 undefined，見 client.ts）。成功後從 store 移除該筆。
- *  filter 用參數 id（不是回應），故 writeBack 忽略 result。 */
+ *  filter 用參數 id（不是回應），故 commit 忽略 result。 */
 export async function cancelWaitlist(id: string): Promise<void> {
-  await gate.mutate(
-    () => api(`/waitlist/${id}`, { method: 'DELETE' }),
-    () => waitlist.update((list) => list.filter((w) => w.id !== id))
-  );
+  const o = await gate.write({
+    send: () => api(`/waitlist/${id}`, { method: 'DELETE' }),
+    commit: () => waitlist.update((list) => list.filter((w) => w.id !== id))
+  });
+  resultOf(o); // 失敗原樣拋出
 }
 
 /** POST /waitlist 409 的繁中文案。後端訊息逐字對照 waitlist service 原始碼

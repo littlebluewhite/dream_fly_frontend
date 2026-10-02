@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import MessageThread from './MessageThread.svelte';
 import { markMessageRead } from '$lib/mobile-admin/stores';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { authStore } from '$lib/stores/authStore';
 import type { MessageRow } from '$lib/mobile-admin/data';
 
 /* Task 20：前身是本地 echo 假聊天室(送出只是把文字塞進本地陣列，"家長" 泡泡永遠
@@ -15,11 +14,10 @@ import type { MessageRow } from '$lib/mobile-admin/data';
  * markRead ack 才清」——下方新增 3 支釘住這個時序(ack 之前/之後、reject 時維持
  * 未讀)，以及 1 支載入失敗→重試成功。
  *
- * R14 終審修波：badgeCleared.then 落在 await 之後、原無身分核對——下方「身分切換
- * guard」describe 釘住 load() 捕捉的身分與 ack 落地時的身分不同即不呼叫
- * markMessageRead(同 session-gate.ts / messagesGate 的 identity 源：authStore 的
- * loggedIn/member.id)。用真 authStore.login 驅動 identity(同 session-gate.test.ts
- * 慣用式)，只替換 $lib/api/client 的 api()。
+ * R17：ack(badgeCleared)原樣交給 markMessageRead(id, ack)，由訊息閘門的 write() 等 ack、
+ * 核對擁有者(換身分即作廢)——本檔原本手寫的身分核對與其「身分切換 guard」測試退役，
+ * 換身分作廢改釘在 stores.test.ts(「ack 前換身分 → 維持未讀」)。這裡只釘接線：交出去的
+ * ack 在後端 ack 後為 true、失敗為 false。
  *
  * R15 Task 3a(候選 轉手退役)：getThread/sendMessage/markRead(畫面直取
  * $lib/coach/api)改走真實呼叫，同其餘 fakeRouter 化的測試檔慣例。 */
@@ -33,21 +31,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
-
-/** authStore.login() 走真實 applySession(setTokens + 登入態)，身分切換才有得測。 */
-const AUTH_RES_A = {
-	access_token: 'at-a',
-	refresh_token: 'rt-a',
-	user: {
-		id: 'u-a', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false,
-		avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['coach']
-	}
-};
-const AUTH_RES_B = {
-	access_token: 'at-b',
-	refresh_token: 'rt-b',
-	user: { ...AUTH_RES_A.user, id: 'u-b', email: 'b@dreamfly.test', name: '乙' }
-};
 
 const M: MessageRow = { id: 'conv-1', from: '王媽媽', initial: '王', color: '#000', preview: '哈囉', time: '09:10', unread: false };
 
@@ -135,64 +118,31 @@ describe('MessageThread — 真對話串', () => {
 		await vi.waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/conv-1/read', { method: 'PATCH' }));
 	});
 
-	it('ack 之前仍是未讀，ack 之後才清(用 deferred 控時序)', async () => {
+	it('ack 交給 markMessageRead:後端 ack 之後才 resolve 為 true(清除與否由閘門等它)', async () => {
 		let resolveAck!: (v: { updated: number }) => void;
 		const ack = new Promise<{ updated: number }>((res) => (resolveAck = res));
 		vi.mocked(api).mockImplementation(fakeRouter({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: () => ack }));
 		render(MessageThread, { props: { onBack: () => {}, m: M } });
 		await screen.findByPlaceholderText('輸入回覆…');
 
-		expect(markMessageRead).not.toHaveBeenCalled();
+		expect(markMessageRead).toHaveBeenCalledWith('conv-1', expect.any(Promise));
+		const cleared = vi.mocked(markMessageRead).mock.calls[0][1];
+		let settled = false;
+		cleared.then(() => (settled = true));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(settled).toBe(false); // ack 之前不落定
 
 		resolveAck({ updated: 1 });
-		await new Promise((r) => setTimeout(r, 0));
-
-		expect(markMessageRead).toHaveBeenCalledWith('conv-1');
+		await expect(cleared).resolves.toBe(true);
 	});
 
-	it('reject 時維持未讀', async () => {
+	it('reject 時交出去的 ack 為 false(維持未讀)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: new Error('network') })
 		);
 		render(MessageThread, { props: { onBack: () => {}, m: M } });
 		await screen.findByPlaceholderText('輸入回覆…');
-		await new Promise((r) => setTimeout(r, 0));
 
-		expect(markMessageRead).not.toHaveBeenCalled();
-	});
-});
-
-describe('MessageThread — 身分切換 guard(R14 終審修波)', () => {
-	beforeEach(async () => {
-		vi.mocked(api).mockReset();
-		vi.mocked(api).mockResolvedValue(undefined); // logout 的 best-effort revoke .catch 安全
-		await authStore.logout();
-	});
-
-	afterEach(async () => {
-		vi.mocked(api).mockReset();
-		vi.mocked(api).mockResolvedValue(undefined);
-		await authStore.logout();
-	});
-
-	it('ack 落地前身分已切換：markMessageRead 不呼叫', async () => {
-		let resolveAck!: (v: { updated: number }) => void;
-		const ack = new Promise<{ updated: number }>((res) => (resolveAck = res));
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: () => ack })
-		);
-		vi.mocked(api).mockResolvedValueOnce(AUTH_RES_A);
-		await authStore.login('a@dreamfly.test', 'pw'); // load() 捕捉這個身分
-
-		render(MessageThread, { props: { onBack: () => {}, m: M } });
-		await screen.findByPlaceholderText('輸入回覆…');
-
-		vi.mocked(api).mockResolvedValueOnce(AUTH_RES_B);
-		await authStore.login('b@dreamfly.test', 'pw'); // 身分切換，ack 尚未落地
-
-		resolveAck({ updated: 1 });
-		await new Promise((r) => setTimeout(r, 0));
-
-		expect(markMessageRead).not.toHaveBeenCalled();
+		await expect(vi.mocked(markMessageRead).mock.calls[0][1]).resolves.toBe(false);
 	});
 });

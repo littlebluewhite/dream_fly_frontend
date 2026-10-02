@@ -45,6 +45,11 @@
  * (取代 R14 只給 session-gate 的內部「擁有者換人」出口);hydrated 自此唯讀(收掉
  * ADR-0024 D-F2a),測試不再直寫旗標。
  *
+ * R17(候選 寫入動詞):閘門自帶 write()——「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 →
+ * 未水合時和解」整條收進閘門,和解鏈也自 session-gate 搬來(以 resetEpoch 為軸,reset() 一併清)。
+ * 樂觀路徑沿用 markMutated(tail) 的記帳順序,非樂觀路徑沿用 session mutate 的 await-then-write;
+ * 丟棄軸(fetchGenStable)與等待軸(尾流帳)都不動。
+ *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
  * fetch rejection 一律原樣拋出、不在此攔截——呼叫端的 load-gate 接手轉 error 態。
@@ -111,6 +116,14 @@ async function fetchGenStable<T>(
 	}
 }
 
+/** promise 結局收成值(不拋):write() 落地後才依結局分流。 */
+function settle<R>(p: Promise<R>): Promise<PromiseSettledResult<R>> {
+	return p.then(
+		(value): PromiseSettledResult<R> => ({ status: 'fulfilled', value }),
+		(reason): PromiseSettledResult<R> => ({ status: 'rejected', reason })
+	);
+}
+
 /** 對外的 hydrate()/refresh() 沒有頁面 run 可追:棄追判準恆真。 */
 const ALWAYS = (): boolean => true;
 
@@ -135,6 +148,36 @@ export interface PageEntry {
 	source: LoadSource;
 }
 
+/** 寫入失敗後閘門做了什麼:keep 不動 / rollback 呼叫 undo / resync 整包重抓(重抓也失敗則退回 undo)。 */
+export type WriteRecovery = 'kept' | 'rolledBack' | 'resynced';
+
+/** write() 的結果。stale = send 落地時閘門已重置(擁有者換人),store 一律不碰;settled 照實交付
+ *  send 的結局(server 端事實可能已成立,呼叫端要不要用由它決定)。 */
+export type WriteOutcome<R> =
+	| { kind: 'written'; result: R }
+	| { kind: 'stale'; settled: PromiseSettledResult<R> }
+	| { kind: 'failed'; error: unknown; recovery: WriteRecovery };
+
+export interface Write<R> {
+	/** send 之前同步寫本地 store(樂觀),回傳 undo。有它即走樂觀路徑(send 記成尾流)。 */
+	optimistic?: () => (() => void) | void;
+	/** 純網路。不得 await 本閘門的 refresh(樂觀路徑下 refresh 會等它,互等即死結)。 */
+	send: () => Promise<R>;
+	/** 伺服器回覆寫回 store(send 成功且閘門未重置才呼叫)。 */
+	commit?: (result: R) => void;
+	/** 失敗復原策略,預設 keep。 */
+	onFailure?: 'keep' | 'rollback' | 'resync';
+}
+
+/** 把 WriteOutcome 還原成「await send 的結果」語意:written/stale 成功給值,失敗(含 stale 的失敗)
+ *  原樣拋出。給回傳 server 結果、失敗即拋的 mutator 用。 */
+export function resultOf<R>(o: WriteOutcome<R>): R {
+	if (o.kind === 'written') return o.result;
+	if (o.kind === 'failed') throw o.error;
+	if (o.settled.status === 'fulfilled') return o.settled.value;
+	throw o.settled.reason;
+}
+
 export interface HydrationGate {
 	/** 是否已水合(唯讀投影)。翻 true 走 markMutated()/水合落地,翻 false 走 `invalidate()`/`reset()`。 */
 	hydrated: Readable<boolean>;
@@ -144,7 +187,7 @@ export interface HydrationGate {
 	refresh(): Promise<void>;
 	/** 只把旗標翻 false(下次 hydrate 重新真抓);不碰世代帳、尾流帳、在飛合併。 */
 	invalidate(): void;
-	/** 整顆閘門還原開機態:丟在飛合併 GET → 換尾流帳本(resetEpoch)→ 清尾流帳 → opts.reset()
+	/** 整顆閘門還原開機態:丟在飛合併 GET → 換尾流帳本(resetEpoch)→ 清尾流帳與和解鏈 → opts.reset()
 	 *  → 翻旗 false → 喚醒全部等待者(帳本清算先於通知,重入 hydrate() 不併到重置前的舊 GET)。
 	 *  重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
 	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
@@ -155,6 +198,12 @@ export interface HydrationGate {
 	 *  呼叫端義務:`tail` 必須是純網路尾流,不得是「內部會等這顆閘門 refresh」的 promise
 	 *  (那會互等)。 */
 	markMutated(tail?: Promise<unknown>): void;
+	/** 寫入動詞(R17)。進場記 owner(resetEpoch)與 wasHydrated:
+	 *   - 樂觀(有 optimistic):同一同步段 optimistic() → send() → 尾流入帳 → 世代 +1 翻旗,再 await;
+	 *   - 非樂觀:await send() 之後才 commit → 世代 +1 翻旗;
+	 *   - send 落地時 owner 已變 → stale,不碰 store;成功 → commit;失敗 → 依 onFailure 復原;
+	 *   - 寫入翻了旗而 store 可能不完整(寫入前未水合,或非樂觀寫回時旗標已被翻回 false)→ 排和解重抓。 */
+	write<R>(w: Write<R>): Promise<WriteOutcome<R>>;
 	/** 頁面進場包。source 的三支是閘門自己的閉包(不是複本):
 	 *   - guarded:讀閘門自己的 hydrated **同一實例**;
 	 *   - load:= hydrate() 的同一支 loadRun,只多帶頁面的 isCurrent——與 hydrate() 共用在飛 GET、
@@ -186,6 +235,9 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	let resetEpoch = 0;
 	// hydrate 合併(R14 F2):在飛的那支 GET 與它出發時的世代。reset() 丟掉它。
 	let inflight: { gen: number; data: Promise<T> } | null = null;
+	// 和解鏈(R17 自 session-gate 搬來,軸由 session 世代換成 resetEpoch):序列化、失敗翻旗可重試、
+	// 重置前排隊的不在新擁有者身上起跑。reset() 換一條新鏈——舊擁有者卡死的和解不得堵住新擁有者。
+	let reconcileChain: Promise<void> = Promise.resolve();
 
 	// 水合協定的三個決策點(C1 詞彙,ADR-0016):
 	//  - guarded():進場 guard——已水合就短路、不發 fetch。
@@ -250,6 +302,27 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	const hydrate = (): Promise<void> => loadRun(ALWAYS);
 	const refresh = (): Promise<void> => refreshRun(ALWAYS);
 
+	/** 尾流入帳(第五決策點):tail settle(fulfil 或 reject 都算)才出帳。 */
+	function track(tail: Promise<unknown>): void {
+		const epoch = resetEpoch; // 這筆尾流記在哪一本帳上
+		pendingTails += 1;
+		const settled = (): void => {
+			if (epoch !== resetEpoch) return; // 帳已被清(reset):這筆不再出帳
+			pendingTails -= 1;
+			if (pendingTails > 0) return;
+			const waiters = settleWaiters;
+			settleWaiters = []; // 先清空再喚醒：醒來者若重新排隊，排的是新一批
+			waiters.forEach((wake) => wake());
+		};
+		tail.then(settled, settled); // reject 也出帳（失敗的 mutation 一樣是「不再在飛」）
+	}
+
+	/** 宣告 mutation:推世代(在飛快照作廢)+ 翻旗(水合真相成立)。 */
+	function bump(): void {
+		mutationGen += 1;
+		commit();
+	}
+
 	function markMutated(tail?: Promise<unknown>): void {
 		// 記帳順序是契約:尾流**先**入帳,才推世代/翻旗。commit() 的翻旗 set(true) 在
 		// 旗標原為 false 時(mutation 前尚未水合、或和解失敗把旗標翻回 false)走的是 false→true
@@ -258,22 +331,71 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		// 重入 refresh(),而尾流還沒入帳,pendingSettle() 就會回 undefined —— GET 帶著已遞增
 		// 的世代同步出發,settle 後世代比對相符、server 舊真值照樣落地(丟棄軸接不住,世代已穩)。
 		// 入帳全程同步(pendingTails += 1 與 then 掛載都不 await),靜止路徑一個 microtask 都不多花。
-		if (tail) {
-			const epoch = resetEpoch; // 這筆尾流記在哪一本帳上
-			pendingTails += 1;
-			const settled = (): void => {
-				if (epoch !== resetEpoch) return; // 帳已被清(reset):這筆不再出帳
-				pendingTails -= 1;
-				if (pendingTails > 0) return;
-				const waiters = settleWaiters;
-				settleWaiters = []; // 先清空再喚醒：醒來者若重新排隊，排的是新一批
-				waiters.forEach((wake) => wake());
-			};
-			tail.then(settled, settled); // reject 也出帳（失敗的 mutation 一樣是「不再在飛」）
+		// 無尾流的 mutation(如 demo mutation)略過入帳,行為與 R11 前逐字相同。
+		if (tail) track(tail);
+		bump();
+	}
+
+	/** 和解重抓:序列化 + 失敗可重試 + 幽靈取消(語意逐字取自 R7 session-gate 的 queueReconcile)。
+	 *  - 序列化:多支未水合寫入各自排隊、先進先出——後出發的和解快照必然較新且最後套用。
+	 *  - 可重試:和解失敗把旗標翻回 false(僅限同一擁有者),下一次 hydrate 重新真抓。
+	 *  - 幽靈取消:排隊時的擁有者在起跑前已換人(reset),直接跳過。
+	 *  和解快照 vs 後續寫入的殘窗由 refreshRun 的世代穩定重抓閉合(ADR-0020),這裡不多排。 */
+	function queueReconcile(): void {
+		const owner = resetEpoch;
+		reconcileChain = reconcileChain.then(() => {
+			if (owner !== resetEpoch) return;
+			return refreshRun(ALWAYS).catch(() => {
+				if (owner === resetEpoch) invalidate();
+			});
+		});
+	}
+
+	async function write<R>(w: Write<R>): Promise<WriteOutcome<R>> {
+		const owner = resetEpoch;
+		const wasHydrated = guarded();
+		let undo: (() => void) | void = undefined;
+		let settled: PromiseSettledResult<R>;
+		if (w.optimistic) {
+			// 樂觀路徑:整段同步(即 markMutated(tail) 的順序)——尾流先入帳,才推世代/翻旗。
+			undo = w.optimistic();
+			const tail = w.send();
+			track(tail); // 出帳回呼掛在下面的 await 之前:失敗時 resync 的 refresh 不會等到自己
+			bump();
+			settled = await settle(tail);
+		} else {
+			settled = await settle(w.send());
 		}
-		// 無尾流的 mutation(如 demo mutation)略過上面整段,行為與 R11 前逐字相同。
-		mutationGen += 1;
-		commit();
+		if (owner !== resetEpoch) return { kind: 'stale', settled }; // 擁有者換人:store 不碰
+
+		if (settled.status === 'fulfilled') {
+			// 寫回時重查完整度:進場後旗標可能被「和解失敗」翻回 false(進場快照已失真)。
+			const stillIncomplete = !guarded();
+			w.commit?.(settled.value);
+			if (!w.optimistic) bump(); // 非樂觀:寫回之後才宣告(樂觀路徑進場時已宣告)
+			if (!wasHydrated || stillIncomplete) queueReconcile();
+			return { kind: 'written', result: settled.value };
+		}
+
+		const error = settled.reason;
+		const policy = w.onFailure ?? 'keep';
+		if (policy === 'resync') {
+			try {
+				await refreshRun(ALWAYS);
+				return { kind: 'failed', error, recovery: 'resynced' };
+			} catch {
+				if (owner !== resetEpoch) return { kind: 'stale', settled };
+				// 重抓也失敗:退回 undo
+			}
+		}
+		let recovery: WriteRecovery = 'kept';
+		if (policy !== 'keep') {
+			undo?.();
+			recovery = 'rolledBack';
+		}
+		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標)。
+		if (w.optimistic && !wasHydrated) queueReconcile();
+		return { kind: 'failed', error, recovery };
 	}
 
 	function pendingSettle(): Promise<void> | undefined {
@@ -300,6 +422,7 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		inflight = null; // 重置前的在飛 GET 不借給之後進場者
 		resetEpoch += 1; // 先換帳本:在飛舊尾流的出帳回呼、重置前出發的落地就此作廢
 		pendingTails = 0;
+		reconcileChain = Promise.resolve(); // 舊擁有者卡死的和解不得堵住新擁有者的和解鏈
 		opts.reset?.();
 		flag.set(false);
 		const waiters = settleWaiters;
@@ -311,5 +434,5 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		return { source: { guarded, load: loadRun, refresh: refreshRun } };
 	}
 
-	return { hydrated: { subscribe: flag.subscribe }, hydrate, refresh, invalidate, reset, markMutated, pageEntry };
+	return { hydrated: { subscribe: flag.subscribe }, hydrate, refresh, invalidate, reset, markMutated, write, pageEntry };
 }

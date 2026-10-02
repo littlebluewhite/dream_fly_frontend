@@ -206,9 +206,10 @@ describe('markOrderPaid', () => {
 	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store,
 	// paidAt 用訂單日期(同 mapAdminOrder 讀取規則),不再是「剛剛」。
 	it('PATCH 成功 → 該筆翻為 paid、paidAt 為訂單日期,且不重抓(無 refreshOps)', async () => {
-		// 誠實開機(R15 候選 F-3):$orders 開機為 `[]`,自己灌一份含 pending 訂單的
-		// fixture 當前置狀態(不再靠同步 seed)。
-		orders.set(ORDERS);
+		// 誠實開機(R15 候選 F-3):$orders 開機為 `[]`,經真水合鋪含 pending 訂單的 fixture。
+		// R17:write() 對寫入前未水合會排和解重抓,本釘的前提是已水合(訂單頁的真實情境)。
+		resetOpsForTests();
+		await hydrateOps();
 		const pending = get(orders).find((o) => o.status === 'pending');
 		expect(pending, 'fixture should contain a pending order').toBeTruthy();
 		const pendingBefore = get(orders).filter((o) => o.status === 'pending').length;
@@ -246,7 +247,7 @@ describe('markOrderPaid', () => {
 
 	it('store 以 server 回的 status 為準(不硬寫 paid)', async () => {
 		resetOpsForTests();
-		orders.set(ORDERS);
+		await hydrateOps(); // R17:已水合前提(未水合會排和解重抓)
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'processing' });
 
@@ -262,21 +263,65 @@ describe('markMessageRead + coachMsgUnread', () => {
 	beforeEach(() => messages.set(MESSAGES.map((m) => ({ ...m }))));
 	// Regression: the coach 訊息 badge + row highlight read a static seed, so opening
 	// a thread never lowered the unread count — it stayed frozen for the session.
-	it('clears a thread unread flag and lowers the derived coach badge count', () => {
+	it('clears a thread unread flag and lowers the derived coach badge count', async () => {
+		await hydrateMessages(); // R17:已水合前提(未水合的寫入會排和解重抓)
 		const unread0 = get(coachMsgUnread);
 		expect(unread0, 'seed should have unread threads').toBeGreaterThan(0);
 		const firstUnread = get(messages).find((m) => m.unread)!;
-		markMessageRead(firstUnread.id);
+		await markMessageRead(firstUnread.id, Promise.resolve(true));
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		expect(get(coachMsgUnread)).toBe(unread0 - 1);
 		resetMessagesForTests(); // markMessageRead now also flips the flag (C1) — reset for other tests
 		messages.set(MESSAGES.map((m) => ({ ...m }))); // restore the shared singleton for other tests
 	});
 
-	it('reading an already-read thread is a no-op for the count', () => {
+	it('ack 為 false(markRead 失敗)→ 維持未讀、不翻旗', async () => {
+		resetMessagesForTests();
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+		const firstUnread = get(messages).find((m) => m.unread)!;
+
+		await markMessageRead(firstUnread.id, Promise.resolve(false));
+
+		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(true);
+		expect(get(messagesHydrated)).toBe(false);
+	});
+
+	it('ack 落地前換身分 → 不碰新身分的 store(R17:取代 MessageThread 手寫的身分核對)', async () => {
+		const coach = (id: string) => ({
+			id, email: `${id}@dreamfly.test`, name: '教練' + id, phone: null, phone_verified: false, avatar_url: null,
+			is_active: true, created_at: '2024-01-01T00:00:00Z', roles: ['coach']
+		});
+		const login = async (u: ReturnType<typeof coach>) => {
+			vi.mocked(api).mockImplementation(
+				fakeRouter({ 'POST /auth/logout': undefined, 'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: u } })
+			);
+			await authStore.login(u.email, 'pw');
+		};
+		await login(coach('ua'));
+		await hydrateMessages();
+		const firstUnread = get(messages).find((m) => m.unread)!;
+		const ack = createDeferred<boolean>();
+
+		const p = markMessageRead(firstUnread.id, ack.promise); // A 開啟對話串,ack 在飛
+		await login(coach('ub')); // 換成 B:訊息閘門重置
+		const canary = MESSAGES.map((m) => ({ ...m })); // B 的列表剛好含同 id 的未讀串
+		messages.set(canary);
+		ack.resolve(true);
+		await p;
+
+		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(true);
+		expect(get(messagesHydrated)).toBe(false);
+		// restore for other tests
+		await authStore.logout();
+		resetMessagesForTests();
+		messages.set(MESSAGES.map((m) => ({ ...m })));
+	});
+
+	it('reading an already-read thread is a no-op for the count', async () => {
+		await hydrateMessages();
 		const read = get(messages).find((m) => !m.unread)!;
 		const before = get(coachMsgUnread);
-		markMessageRead(read.id);
+		await markMessageRead(read.id, Promise.resolve(true));
 		expect(get(coachMsgUnread)).toBe(before);
 		resetMessagesForTests(); // markMessageRead now also flips the flag (C1) — reset for other tests
 	});
@@ -355,7 +400,7 @@ describe('hydrateOps / refreshOps / opsHydrated', () => {
 	 * 所以 refresh 也不會因尾流帳而等待。 */
 	it('判準守恆:await markOrderPaid(order) → await refreshOps() → 快照照常套用且 fetch 恰一次(丟棄條件是「進場之後」的 mutation,不是旗標當下值)', async () => {
 		resetOpsForTests();
-		orders.set(ORDERS);
+		await hydrateOps(); // R17:已水合前提(未水合的寫入會多排一支和解重抓)
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
 		await markOrderPaid(pending); // refresh 進場「之前」的 mutation
@@ -415,7 +460,7 @@ describe('hydrateMessages / messagesHydrated', () => {
 		await hydrateMessages();
 		expect(get(messagesHydrated)).toBe(true);
 		const firstUnread = get(messages).find((m) => m.unread)!;
-		markMessageRead(firstUnread.id);
+		await markMessageRead(firstUnread.id, Promise.resolve(true));
 		await hydrateMessages();
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
 		// restore for other tests
@@ -478,18 +523,21 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 		resetOpsForTests();
 		orders.set(ORDERS); // 誠實開機(R15 候選 F-3):開機為 `[]`,先灌一份含 pending 訂單的 fixture 當前置狀態
 		const d = createDeferred<OpsCollections>();
-		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise);
+		const pending = ORDERS.find((o) => o.status === 'pending')!;
+		// R17:寫入前未水合 → 閘門排和解重抓;第二支 GET 是 PATCH 之後的伺服器真值(該筆已 paid)。
+		const paidOrders = ORDERS.map((o) => (o.id === pending.id ? { ...o, status: 'paid' as const, paidAt: o.date } : o));
+		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise).mockResolvedValueOnce(opsFixture({ orders: paidOrders }));
 
 		const hydrating = hydrateOps();
 		expect(get(opsHydrated)).toBe(false); // in-flight,尚未水合
 
-		const pending = ORDERS.find((o) => o.status === 'pending')!;
 		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
-		await markOrderPaid(pending); // R12 Task 3 新簽名:先寫後改,PATCH 落定後才 markMutated
-		expect(get(opsHydrated)).toBe(true); // markOrderPaid 已呼叫 opsGate.markMutated()
+		await markOrderPaid(pending); // 先寫後改:PATCH 落定後才經 opsGate.write 寫回 + 宣告
+		expect(get(opsHydrated)).toBe(true); // opsGate.write 已宣告水合真相
 
 		d.resolve(opsFixture()); // 模擬水合帶回「該筆仍 pending」的舊資料
 		await hydrating;
+		await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
 
 		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid'); // mutation 保留,沒被水合覆寫
 		expect(get(opsHydrated)).toBe(true);
@@ -501,17 +549,20 @@ describe('mutator → markMutated 接線(regression:防止未來悄悄拿掉某�
 		resetMessagesForTests();
 		messages.set(MESSAGES.map((m) => ({ ...m }))); // reset 還原開機值 [];本段需要有未讀的串列
 		const d = createDeferred<typeof MESSAGES>();
-		vi.mocked(getMessages).mockReturnValueOnce(d.promise);
+		const firstUnread = get(messages).find((m) => m.unread)!;
+		// R17:寫入前未水合 → 閘門排和解重抓;第二支 GET 是 markRead 之後的伺服器真值(該則已讀)。
+		const readMessages = MESSAGES.map((m) => ({ ...m, unread: m.id === firstUnread.id ? false : m.unread }));
+		vi.mocked(getMessages).mockReturnValueOnce(d.promise).mockResolvedValueOnce(readMessages);
 
 		const hydrating = hydrateMessages();
 		expect(get(messagesHydrated)).toBe(false); // in-flight,尚未水合
 
-		const firstUnread = get(messages).find((m) => m.unread)!;
-		markMessageRead(firstUnread.id);
-		expect(get(messagesHydrated)).toBe(true); // markMessageRead 已呼叫 messagesGate.markMutated()
+		await markMessageRead(firstUnread.id, Promise.resolve(true));
+		expect(get(messagesHydrated)).toBe(true); // messagesGate.write 已宣告水合真相
 
 		d.resolve(MESSAGES.map((m) => ({ ...m }))); // 模擬水合帶回「該則仍未讀」的舊資料
 		await hydrating;
+		await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
 
 		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false); // mutation 保留,沒被水合覆寫
 		expect(get(messagesHydrated)).toBe(true);

@@ -9,13 +9,11 @@
    *
    * 已讀角標改成「等後端 markRead ack 才清」(使用者裁決 F5,跟桌面一樣)：onMount 呼叫
    * ctrl.selectThread(m.id)取回 threadReady/badgeCleared 兩條互不等待的 promise——
-   * threadReady 決定畫面顯示/失敗 ErrorState,badgeCleared 為 true 才呼叫
-   * markMessageRead(m.id)(stores.ts,現只做本地標記 + gate.markMutated(),不再自帶
-   * fire-and-forget 網路呼叫)；badgeCleared 為 false(markRead 失敗)則不呼叫,角標維持
-   * 未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
+   * threadReady 決定畫面顯示/失敗 ErrorState,badgeCleared 原樣交給
+   * markMessageRead(m.id, badgeCleared)(stores.ts:走訊息閘門的 write(),ack 為 true 才翻已讀,
+   * ack 落地前換了身分則由閘門作廢——R17 起本檔不再手寫身分核對)；badgeCleared 為 false
+   * (markRead 失敗)角標維持未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
-  import { authStore, sessionIdentity } from '$lib/stores/authStore';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
@@ -41,23 +39,15 @@
   let reply = '';
   let sending = false;
 
-  /** 與 session-gate 同源(sessionIdentity)。 */
-  function identity(): string | null {
-    return sessionIdentity(get(authStore));
-  }
-
   function load() {
     if (!m) { phase = 'error'; return; }
     const target = m;
-    const identityAtLoad = identity(); // load() 開始時捕捉，ack 落地時核對是否仍是同一人
     phase = 'loading';
     const { threadReady, badgeCleared } = ctrl.selectThread(target.id);
     threadReady.then((outcome) => {
       phase = outcome.kind === 'threadLoadFailed' ? 'error' : 'ready';
     });
-    badgeCleared.then((cleared) => {
-      if (cleared && identity() === identityAtLoad) markMessageRead(target.id);
-    });
+    markMessageRead(target.id, badgeCleared);
   }
   onMount(load);
 

@@ -14,7 +14,7 @@
  *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(修掉 prefs 與
  *    profile 跨登入殘留)。併發的 hydrateSelfAccount() 共用同一支在飛 GET(閘門的 hydrate 合併)。
  *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite;每一筆輪到時:session 變了就跳過 →
- *    await 水合(「寫前先水合」不再是呼叫端的義務)→ gate.mutate(PATCH, ...)。
+ *    await 水合(「寫前先水合」不再是呼叫端的義務)→ gate.write(PATCH, ...)。
  *  - 後端對 preferences 是整包覆寫,送出時 = 後端原始物件 + 本地 4 鍵,前端不認識的
  *    鍵也保得住。
  *  - PATCH/GET 成功都經 authStore.syncUser 同步名字(identity 不變,不觸發任何 gate)。
@@ -24,6 +24,7 @@ import { writable, derived, get, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { initialOf, isoDateTime } from '$lib/api/wire';
 import { createSessionGate } from '$lib/session-gate';
+import { resultOf } from '$lib/hydration-gate';
 import { authStore, type ApiUser } from '$lib/stores/authStore';
 
 /** GET/PATCH /users/me 的回應:authStore 的 ApiUser 再加上兩個會員資料欄位。
@@ -162,38 +163,48 @@ const gate = createSessionGate<ApiMe>({
  *  呼叫端自行 catch。 */
 export const hydrateSelfAccount = gate.hydrate;
 
-function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {
-	return gate.mutate(() => api<ApiMe>('/users/me', { method: 'PATCH', body: JSON.stringify(body) }), writeBack);
+function sendPatch(body: Record<string, unknown>): Promise<ApiMe> {
+	return api<ApiMe>('/users/me', { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+async function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {
+	return resultOf(await gate.write({ send: () => sendPatch(body), commit: writeBack }));
 }
 
 /** 切換一個偏好:樂觀更新後排進寫入鏈。整包快照在「輪到時」才從 store 取(不是排隊時
- *  凍結),後一筆永遠疊在前一筆(含其 resync/回滾)之後的最新狀態上。失敗先整包 resync
- *  成伺服器真值(resynced),resync 也失敗才單鍵回滾(rolledBack)。toast 由呼叫端依
- *  outcome 決定。 */
+ *  凍結),後一筆永遠疊在前一筆(含其 resync/回滾)之後的最新狀態上。輪到時走閘門的
+ *  write({ optimistic, send: PATCH, commit: applyMe, onFailure: 'resync' }):PATCH 記成尾流
+ *  (同拍的 refresh 族等它 settle,ADR-0021)。失敗先整包 resync 成伺服器真值(resynced),
+ *  resync 也失敗才單鍵回滾(rolledBack)。toast 由呼叫端依 outcome 決定。 */
 export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 	const before = get(prefsStore)[k];
 	const wasHydrated = get(gate.hydrated);
-	prefsStore.update((p) => ({ ...p, [k]: v }));
+	const toggle = () => prefsStore.update((p) => ({ ...p, [k]: v }));
+	const rollback = () => prefsStore.update((p) => ({ ...p, [k]: before }));
+	toggle(); // 開關立即反映;真正送出要等輪到
 	return gate.queueWrite<PrefSetOutcome>(async (stale) => {
 		try {
 			await hydrateSelfAccount();
-			// 切換發生在水合落地之前:水合的 apply 已用後端值蓋掉這次樂觀切換,補回。
-			if (!wasHydrated) prefsStore.update((p) => ({ ...p, [k]: v }));
-			// 寫回只同步 me/名字、不動 prefsStore:本筆飛行期間使用者可能又切了別的鍵。
-			await patchMe({ preferences: prefsToWire(get(me)?.preferences ?? null, get(prefsStore)) }, applyMe);
-			return { kind: 'saved' };
 		} catch (err) {
-			console.error('profile: 偏好儲存失敗', err);
-			if (stale()) return { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
-			try {
-				await gate.refresh();
-				return { kind: 'resynced' };
-			} catch (resyncErr) {
-				console.error('profile: resync 失敗,退回單鍵回滾', resyncErr);
-				if (!stale()) prefsStore.update((p) => ({ ...p, [k]: before }));
-				return { kind: 'rolledBack' };
-			}
+			console.error('profile: 偏好儲存前水合失敗,單鍵回滾', err);
+			if (!stale()) rollback();
+			return { kind: 'rolledBack' };
 		}
+		const o = await gate.write({
+			optimistic: () => {
+				// 切換發生在水合落地之前:水合的 apply 已用後端值蓋掉這次樂觀切換,補回。
+				if (!wasHydrated) toggle();
+				return rollback;
+			},
+			send: () => sendPatch({ preferences: prefsToWire(get(me)?.preferences ?? null, get(prefsStore)) }),
+			// 寫回只同步 me/名字、不動 prefsStore:本筆飛行期間使用者可能又切了別的鍵。
+			commit: applyMe,
+			onFailure: 'resync'
+		});
+		if (o.kind === 'written') return { kind: 'saved' };
+		if (o.kind === 'stale') return o.settled.status === 'fulfilled' ? { kind: 'saved' } : { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
+		console.error('profile: 偏好儲存失敗', o.error);
+		return { kind: o.recovery === 'resynced' ? 'resynced' : 'rolledBack' };
 	}, { kind: 'rolledBack' });
 }
 

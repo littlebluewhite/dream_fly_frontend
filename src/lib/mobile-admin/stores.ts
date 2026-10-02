@@ -13,7 +13,7 @@
 
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { createHydrationGate } from '$lib/hydration-gate';
+import { createHydrationGate, resultOf } from '$lib/hydration-gate';
 import { createSessionGate } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
@@ -46,6 +46,7 @@ import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '
 // changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後
 // 直接假設成功)。
 import { applyStatusChange, changeOrderStatus, type ChangeOrderStatusOutcome } from '$lib/admin/components/order-status';
+import type { OrderStatus } from '$lib/api/wire';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
@@ -119,8 +120,8 @@ export function searchCapHint(p: PageInfo): string | null {
 /** 集合水合守衛(members/classes/coaches/orders 一次到位)。誠實開機(R15 候選
  *  F-3):開機值 = reset 值 = EMPTY_OPS(四個 store 皆為 `[]`,分頁 meta 全為 0/0)——
  *  沒水合過就不假裝有資料,不再走「同步 seed、水合只是覆寫一次」的舊慣例。hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發;markOrderPaid 呼叫
- *  opsGate.markMutated()(mutation 即宣告水合真相),防止「水合前的本地寫入」被首次
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發;markOrderPaid 走
+ *  opsGate.write()(mutation 即宣告水合真相),防止「水合前的本地寫入」被首次
  *  水合的 seed clone 無聲清除(C1 regression)。refreshOps() 保持一律真抓,供「重新
  *  整理」/ErrorState 重試與寫入動詞的寫後重抓共用(使用者明確要求最新資料,不受 guard
  *  短路保護);架構深化 R10 起落地改走世代穩定重抓——只丟棄「refresh **進場之後**」才
@@ -195,21 +196,24 @@ export async function saveCoach(v: CoachFormValues, target: Coach): Promise<Save
 	return outcome;
 }
 
-/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 成功(changed)後,用桌面
- *  同一支 applyStatusChange() 把 server 回的 status 套回 $orders(以 orderId 比對,
- *  paidAt 取訂單日期,同 mapAdminOrder 的讀取規則),再 opsGate.markMutated()(防
- *  首次水合覆寫)。PATCH 已落定才 mark,沒有在飛尾流可入帳——**不帶 tail**
- *  (ADR-0021)。不重抓:KPI / 橫幅都由 $orders 衍生,局部套回即足夠。
- *  R13 Task 5(C4):改回傳 changeOrderStatus 的 outcome(不再 throw)——只有
- *  'changed' 才套回 store + markMutated();illegalTransition/pointsShortfall/
- *  failed 皆不動 store,由呼叫端(OrderSheet)依 kind 翻繁中 toast。 */
+/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 走 opsGate.write()(非樂觀:沒有
+ *  在飛尾流可入帳,ADR-0021),成功才用桌面同一支 applyStatusChange() 把 server 回的 status
+ *  套回 $orders(以 orderId 比對,paidAt 取訂單日期,同 mapAdminOrder 的讀取規則)並宣告水合
+ *  真相(防首次水合覆寫);寫入前未水合則由閘門排和解重抓。已水合時不重抓:KPI / 橫幅都由
+ *  $orders 衍生,局部套回即足夠。
+ *  R13 Task 5(C4):回傳 changeOrderStatus 的 outcome(不 throw)——閘門的 write 包在它注入的
+ *  updateOrderStatus 裡,PATCH 失敗經 resultOf 原樣拋回給它分類;illegalTransition/
+ *  pointsShortfall/failed 皆不動 store、不翻旗,由呼叫端(OrderSheet)依 kind 翻繁中 toast。 */
 export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusOutcome> {
-	const outcome = await changeOrderStatus(order.orderId, 'paid', { updateOrderStatus });
-	if (outcome.kind === 'changed') {
-		orders.update((rows) => applyStatusChange(rows, order.orderId, outcome.status));
-		opsGate.markMutated();
-	}
-	return outcome;
+	return changeOrderStatus(order.orderId, 'paid', {
+		updateOrderStatus: async (id, next) =>
+			resultOf(
+				await opsGate.write({
+					send: () => updateOrderStatus(id, next),
+					commit: (res) => orders.update((rows) => applyStatusChange(rows, order.orderId, res.status as OrderStatus))
+				})
+			)
+	});
 }
 
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from
@@ -219,20 +223,24 @@ export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusO
 export const messages = writable<MessageRow[]>([]);
 /** Mark a thread read (the coach opened it). Also flips `messagesHydrated` true
  *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
- *  覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)已搬進
- *  $lib/coach/messages-controller 的 selectThread()，由 MessageThread.svelte 呼叫端
- *  等 badgeCleared(該 PATCH 的 ack)為 true 才呼叫本函式——本函式因此只做「本地翻
- *  已讀 + 宣告水合真相」兩件事，不再自帶網路呼叫(取代 Task 20 的 fire-and-forget
- *  best-effort 版本;失敗時維持未讀，同桌面)。 */
-export function markMessageRead(id: string) {
-	messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)));
-	messagesGate.markMutated();
+ *  覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)住在
+ *  $lib/coach/messages-controller 的 selectThread()，MessageThread.svelte 把它的 ack
+ *  (badgeCleared)交進來。R17 起本函式走 messagesGate.write():等 ack 為 true 才本地翻已讀
+ *  (ack 為 false = markRead 失敗,維持未讀,同桌面);ack 落地前換了身分(閘門已重置)→ stale,
+ *  不碰新身分的 store——取代 MessageThread 原本手寫的身分核對。 */
+export async function markMessageRead(id: string, ack: Promise<boolean>): Promise<void> {
+	await messagesGate.write({
+		send: async () => {
+			if (!(await ack)) throw new Error('markRead 未獲後端確認');
+		},
+		commit: () => messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)))
+	});
 }
 export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
 
 /** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
  *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。開機為 `[]`(R14 F3
- *  誠實開機;原同步 seed 退役,值搬進 $lib/testing/seed-fixtures);markMessageRead 呼叫 messagesGate.markMutated()
+ *  誠實開機;原同步 seed 退役,值搬進 $lib/testing/seed-fixtures);markMessageRead 走 messagesGate.write()
  *  (mutation 即宣告水合真相)。訊息頁經 messagesPageEntry 建 load-gate,重試走 load-gate
  *  的 refresh(一律真抓、落地同走世代穩定重抓,理由與判準見上方 opsGate 註解)。
  *  R13 Task 7(C6):對話列表是**登入教練本人**的資料,改用 createSessionGate——換帳號/

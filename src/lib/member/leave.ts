@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
+import { resultOf } from '$lib/hydration-gate';
 import type { ApiLeaveRequest } from '$lib/api/wire';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
@@ -57,7 +58,7 @@ export const hydrateLeaveRequests = gate.hydrate;
  *  最新請假狀態」的既有語意（mobile stores 的 re-export 與 identity pin 均繫於
  *  此名）。走工廠的 wrappedFetch,故一併獲得 P1′ 在飛作廢(跨登出/換帳號的在飛
  *  refresh 回應整包作廢);並自架構深化 R10 起改走世代穩定重抓——飛行窗口內的併發
- *  取消(cancelLeaveRequest 的 markMutated)會讓姍姍來遲的舊快照作廢、原地重抓,已取消
+ *  取消(cancelLeaveRequest 的 write)會讓姍姍來遲的舊快照作廢、原地重抓,已取消
  *  的假單不再被蓋回 pending(ADR 0016 known-latent #2 閉合;判準是「refresh 進場之後
  *  才發生的 mutation」,見 $lib/hydration-gate 的 fetchGenStable)。 */
 export const refreshLeaveRequests = gate.refresh;
@@ -68,30 +69,32 @@ export const refreshLeaveRequests = gate.refresh;
  *  不用整包重新 hydrate。404（未報名此課程/場次不存在）/422（場次已開始）/409
  *  （已有請假紀錄）原樣拋出，不吞——呼叫端用 leaveRequestErrorMessage() 轉繁中文案
  *  （這個模組後端本身就已回繁中，見該函式註解）。API→domain 映射(toLeaveRequest)在
- *  request closure 內完成,故 gate.mutate 的 R = LeaveRequest、匯出回傳型別成立;進場
- *  快照/epoch 作廢/寫回重查完整度/和解重抓全由工廠處理(見 $lib/session-gate)。 */
+ *  send 內完成,故 write 的 R = LeaveRequest、匯出回傳型別成立;進場快照/換身分作廢/
+ *  寫回重查完整度/和解重抓全由閘門的 write() 處理,resultOf 交回結果、失敗原樣拋出。 */
 export async function createLeaveRequest(sessionId: string, reason?: string): Promise<LeaveRequest> {
-  return gate.mutate(
-    async () => {
+  const o = await gate.write({
+    send: async () => {
       const body: { session_id: string; reason?: string } = { session_id: sessionId };
       if (reason) body.reason = reason;
       const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
       return toLeaveRequest(res);
     },
-    (entry) => leaveRequests.update((list) => [entry, ...list])
-  );
+    commit: (entry) => leaveRequests.update((list) => [entry, ...list])
+  });
+  return resultOf(o);
 }
 
 /** DELETE /leave-requests/{id} → 204 No Content。僅 pending 假單可取消(409 否則)；
  *  取消不是刪除——後端把狀態改成 cancelled，「我的請假」清單仍要看得到歷史紀錄
  *  （同 Order 清單保留 cancelled 訂單的慣例），所以這裡是原地更新 status，不是
  *  從 store 過濾移除(對比 cancelWaitlist：候補只認 waiting，取消後從清單消失)。
- *  patch-in-place 用參數 id（不是回應），故 writeBack 忽略 result。 */
+ *  patch-in-place 用參數 id（不是回應），故 commit 忽略 result。 */
 export async function cancelLeaveRequest(id: string): Promise<void> {
-  await gate.mutate(
-    () => api(`/leave-requests/${id}`, { method: 'DELETE' }),
-    () => leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)))
-  );
+  const o = await gate.write({
+    send: () => api(`/leave-requests/${id}`, { method: 'DELETE' }),
+    commit: () => leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)))
+  });
+  resultOf(o); // 失敗原樣拋出
 }
 
 /** POST /leave-requests/{id}/makeup（帶欲預約的補課場次 session_id）。成功回應含
@@ -99,16 +102,17 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
  *  不用整包重新 hydrate）。409（非 approved／已預約過／名額已滿）/422（跨課程／
  *  已開始）原樣拋出。replace 用參數 id 定位 + 回應 entry 取代。 */
 export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRequest> {
-  return gate.mutate(
-    async () => {
+  const o = await gate.write({
+    send: async () => {
       const res = await api<ApiLeaveRequest>(`/leave-requests/${id}/makeup`, {
         method: 'POST',
         body: JSON.stringify({ session_id: sessionId })
       });
       return toLeaveRequest(res);
     },
-    (entry) => leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)))
-  );
+    commit: (entry) => leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)))
+  });
+  return resultOf(o);
 }
 
 /** leave 模組的後端錯誤字串本身就是繁中，逐字對照 integration-contract.md §3.20

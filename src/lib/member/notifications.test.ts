@@ -120,7 +120,7 @@ describe('markRead', () => {
     expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
   });
 
-  it('呼叫 gate.markMutated()——把 notificationsHydrated 設為 true', async () => {
+  it('經 gate.write() 宣告水合真相——把 notificationsHydrated 設為 true', async () => {
     expect(get(notificationsHydrated)).toBe(false);
 
     await markRead('n1');
@@ -156,7 +156,7 @@ describe('markAllRead', () => {
     expect(get(notifications).every((n) => n.read)).toBe(true);
   });
 
-  it('呼叫 gate.markMutated()——把 notificationsHydrated 設為 true', async () => {
+  it('經 gate.write() 宣告水合真相——把 notificationsHydrated 設為 true', async () => {
     expect(get(notificationsHydrated)).toBe(false);
 
     await markAllRead();
@@ -216,6 +216,9 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
    * 當時的舊碼無條件套用，姍姍來遲的舊快照(server 端仍未讀)會把剛剛的
    * 樂觀已讀打回未讀。 */
   it('頁面 load-gate 的 refresh 在飛期間 markRead → 已讀不回退,舊快照丟棄並原地重抓(GET×2)', async () => {
+    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
+    vi.mocked(api).mockResolvedValueOnce([apiNotif(false)]);
+    await hydrateNotifications();
     const d = createDeferred<unknown[]>();
     let gets = 0;
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -225,7 +228,7 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
 
     const page = createLoadGate({ ...notificationsPageEntry });
     const p = page.refresh(); // 使用者按「重新整理」/retry — 顯式新鮮度
-    await markRead('n1'); // 飛行窗口內點已讀 → 樂觀更新 + markMutated
+    await markRead('n1'); // 飛行窗口內點已讀 → 樂觀更新 + 推世代
     expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
 
     d.resolve([apiNotif(false)]); // 舊快照:server 端當時仍未讀
@@ -243,6 +246,9 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
    * 飛」是盲的:GET 在 PATCH 落庫前出發 → server 回未讀、而世代此刻已穩定 → 舊快照照套,
    * 已讀被打回未讀。現在 refresh 族先等尾流 settle 才出發。 */
   it('mutation settle:markRead 的 PATCH 未 settle → 頁面 refresh 的 GET 不出發;PATCH settle 後才出發,已讀不回退', async () => {
+    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
+    vi.mocked(api).mockResolvedValueOnce([apiNotif(false)]);
+    await hydrateNotifications();
     const patch = createDeferred<unknown>();
     let gets = 0;
     let serverRead = false; // 後端真相:PATCH 落庫後才翻已讀
@@ -252,7 +258,7 @@ describe('notificationsPageEntry(C3 接線釘)', () => {
     }));
 
     const page = createLoadGate({ ...notificationsPageEntry });
-    const readP = markRead('n1'); // 樂觀已讀 + markMutated(尾流)
+    const readP = markRead('n1'); // 樂觀已讀 + 尾流入帳
     const refreshP = page.refresh(); // 使用者同時按「重新整理」
     await new Promise((r) => setTimeout(r, 0));
 
@@ -327,6 +333,9 @@ describe('markAllRead 的 allSettled 尾流(移植自 mobile/notifications.test.
     const okPatch = createDeferred<unknown>();
     const badPatch = createDeferred<unknown>();
     const [id1, id2] = NOTIFS_SEED.slice(0, 2).map((n) => n.id);
+    // R17:write() 對「寫入前未水合」會排和解重抓(多一支 GET)——本釘只看 refresh 競態,先水合。
+    vi.mocked(api).mockResolvedValueOnce([apiNotif(false, id1), apiNotif(false, id2)]);
+    await hydrateNotifications();
     let gets = 0;
     let serverRead1 = false; // 後端真相:n1 落庫後才翻已讀;n2 的 PATCH 失敗,始終未讀
     vi.mocked(api).mockImplementation(fakeRouter({
@@ -336,7 +345,7 @@ describe('markAllRead 的 allSettled 尾流(移植自 mobile/notifications.test.
     }));
 
     const page = createLoadGate({ ...notificationsPageEntry });
-    const allP = markAllRead(); // 樂觀全已讀 + markMutated(allSettled 尾流)
+    const allP = markAllRead(); // 樂觀全已讀 + allSettled 尾流入帳
     const refreshP = page.refresh(); // 使用者同時按「重新整理」
     await new Promise((r) => setTimeout(r, 0));
 

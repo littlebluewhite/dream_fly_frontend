@@ -1,6 +1,7 @@
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
+import { resultOf } from '$lib/hydration-gate';
 import { mapNotification, type ApiNotification, type Notification } from './data';
 
 /* ---- Notifications ----
@@ -31,7 +32,7 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  notificationsPageEntry(同一顆閘門吐出的進場包)。
  *  架構深化 R10:通知頁 load-gate 的 refresh 族讀閘門同一本 mutation 世代帳,
  *  refresh()/silentRefresh() 因此獲得世代穩定重抓——使用者按「重新整理」的飛行窗口內
- *  點的已讀(markRead/markAllRead 的 markMutated)不再被姍姍來遲的舊快照打回未讀,舊
+ *  點的已讀(markRead/markAllRead 的 write)不再被姍姍來遲的舊快照打回未讀,舊
  *  快照丟棄後原地重抓(見 $lib/hydration-gate 的 fetchGenStable)。 */
 const gate = createSessionGate<Notification[]>({
   fetch: async () => {
@@ -54,41 +55,35 @@ export const notificationsPageEntry = gate.pageEntry();
 
 /** 已讀 mutation(自 routes/member/notifications/+page.svelte 搬遷，C1)——樂觀更新
  *  本地 store，再送 PATCH 到後端；失敗只記錄錯誤、不還原(避免使用者感覺「點了又
- *  跳回未讀」的閃爍)。呼叫 gate.markMutated() 讓 in-flight 的 hydrateNotifications()
- *  (若有)不會拿姍姍來遲的舊資料蓋掉這筆已讀 mutation(同 hydration-gate.ts 的
- *  post-await re-check 語意)。toast 留在頁面——本模組不碰 toast。
- *  架構深化 R11:PATCH 的 promise 一併交給 markMutated 當**尾流**。這是 mark-before-await
- *  (先寫 store、翻旗,才 await 網路),世代軸看不見「PATCH 還在飛」——refresh 的 GET 若搶
- *  在 PATCH 前面出發,server 回的仍是未讀、而世代此刻已穩定,舊快照照套、已讀被打回未讀
- *  (ADR 0020 誠實界線)。入帳後 refresh 族會等尾流 settle 才出發;失敗也算 settle,故下方
- *  的 catch 不需要為閘門多做什麼。 */
+ *  跳回未讀」的閃爍)。toast 留在頁面——本模組不碰 toast。
+ *  R17 起走閘門的 write({ optimistic, send, onFailure: 'keep' }):樂觀寫入、PATCH 尾流入帳
+ *  (refresh 族等它 settle 才出發,ADR-0021)、推世代(在飛的舊快照作廢,ADR-0020)與翻旗都在
+ *  閘門的同一個同步段裡,未水合時另排和解重抓。 */
 export async function markRead(id: string): Promise<void> {
-  notifications.update((list) => list.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  const patch = api(`/notifications/${id}/read`, { method: 'PATCH' });
-  gate.markMutated(patch);
-  try {
-    await patch;
-  } catch (err) {
-    console.error('Failed to mark notification as read:', err);
-  }
+  const o = await gate.write({
+    optimistic: () => notifications.update((list) => list.map((n) => (n.id === id ? { ...n, read: true } : n))),
+    send: () => api(`/notifications/${id}/read`, { method: 'PATCH' }),
+    onFailure: 'keep'
+  });
+  if (o.kind === 'failed') console.error('Failed to mark notification as read:', o.error);
 }
 
 /** 全部已讀：同 markRead 的樂觀更新，但後端只有單筆 PATCH 端點(無批次已讀)，對每個
- *  「目前未讀」的 id 各發一次(allSettled 併發；已讀的不重發)。全部成功回 'ok'；
- *  任何失敗回 'partial'——本地已讀狀態一律不還原(與 markRead 的不閃爍原則一致；
+ *  「目前未讀」的 id 各發一次(allSettled 併發；已讀的不重發)，整批當一條尾流。全部成功
+ *  回 'ok'；任何失敗回 'partial'——本地已讀狀態一律不還原(與 markRead 的不閃爍原則一致；
  *  成功的那些後端已落地，失敗的重新整理後會恢復未讀)。呼叫端(頁面)依回傳值決定
  *  toast 文案，本模組不碰 toast。 */
 export async function markAllRead(): Promise<'ok' | 'partial'> {
   const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
-  // 空集零帳(R11 終審修波):沒有未讀就真的無事可做——不樂觀更新、不 markMutated、不
+  // 空集零帳(R11 終審修波):沒有未讀就真的無事可做——不樂觀更新、不 write、不
   // allSettled。行為等價,但同拍呼叫的 refresh 族不必為一筆空尾流多等三個 microtask。
   if (unreadIds.length === 0) return 'ok';
-  notifications.update((list) => list.map((n) => ({ ...n, read: true })));
-  const settled = Promise.allSettled(
-    unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))
-  );
-  gate.markMutated(settled); // 整批當一條尾流(allSettled 含失敗也 settle,不會卡死 refresh)
-  const results = await settled;
+  const o = await gate.write({
+    optimistic: () => notifications.update((list) => list.map((n) => ({ ...n, read: true }))),
+    send: () => Promise.allSettled(unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))),
+    onFailure: 'keep'
+  });
+  const results = resultOf(o); // allSettled 不會 reject
   const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (failures.length > 0) {
     failures.forEach((f) => console.error('Failed to mark notification as read:', f.reason));
