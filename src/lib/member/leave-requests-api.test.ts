@@ -151,6 +151,23 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     expect(list.find((r) => r.id === 'lr-2')?.status).toBe('approved'); // untouched
   });
 
+  // 接線釘:cancelLeaveRequest 繞過 gate.write() 的話,未水合時 store 只剩本地那筆,不會和解成完整清單。
+  it('未水合就取消 → 和解成完整的 server 清單', async () => {
+    leaveRequests.set([API_LR_PENDING as never]);
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'DELETE /leave-requests/lr-1': undefined,
+      'GET /leave-requests/me': [{ ...API_LR_PENDING, status: 'cancelled' }, API_LR_APPROVED]
+    }));
+
+    await cancelLeaveRequest('lr-1');
+    await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
+
+    expect(get(leaveRequests).map((r) => [r.id, r.status])).toEqual([
+      ['lr-1', 'cancelled'],
+      ['lr-2', 'approved']
+    ]);
+  });
+
   it('leaves the store untouched when the DELETE call fails', async () => {
     leaveRequests.set([API_LR_PENDING as never]);
     vi.mocked(api).mockImplementation(

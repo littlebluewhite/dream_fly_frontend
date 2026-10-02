@@ -39,7 +39,7 @@ import { ADMIN_NOTIFS } from './data';
 import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
 import { MESSAGES, COACHES } from '$lib/testing/seed-fixtures';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
-import { getOpsCollections, type OpsCollections } from './api';
+import { getOpsCollections, getMessages, type OpsCollections } from './api';
 // R15 Task 3b(候選 轉手退役)：createMember/updateMember/createCourse/updateCourse/
 // createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
 // re-export 轉手，已退役——stores.ts 改直接向擁有者模組 $lib/admin/api 取用，這裡的
@@ -254,6 +254,30 @@ describe('markOrderPaid', () => {
 	});
 });
 
+describe('markOrderPaid 的閘門接線', () => {
+	// 接線釘(只斷言可觀察結果,不碰閘門內部):若 markOrderPaid 繞過 opsGate.write()(直接 await PATCH
+	// 再寫 store),水合在飛期間帶回的舊快照會把剛標記的付款狀態蓋掉。閘門協定本身住 hydration-gate.test.ts。
+	it('hydrateOps() 在飛期間 markOrderPaid → 舊快照不蓋掉已付款,且有一次和解重抓', async () => {
+		resetOpsForTests();
+		const d = createDeferred<OpsCollections>();
+		const pending = ORDERS.find((o) => o.status === 'pending')!;
+		const paidOrders = ORDERS.map((o) => (o.id === pending.id ? { ...o, status: 'paid' as const, paidAt: o.date } : o));
+		vi.mocked(getOpsCollections).mockClear();
+		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise).mockResolvedValueOnce(opsFixture({ orders: paidOrders }));
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
+
+		const hydrating = hydrateOps();
+		await markOrderPaid(pending);
+		d.resolve(opsFixture()); // 舊快照:該筆仍 pending
+		await hydrating;
+		await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
+
+		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid');
+		expect(getOpsCollections).toHaveBeenCalledTimes(2); // 在飛的水合 + 和解重抓
+		resetOpsForTests();
+	});
+});
+
 describe('markMessageRead + coachMsgUnread', () => {
 	// R14(候選 F3):messages 開機為 `[]`——本段需要有未讀的串列,先灌夾具。
 	beforeEach(async () => {
@@ -307,6 +331,24 @@ describe('markMessageRead + coachMsgUnread', () => {
 		await authStore.logout(); // 下一個 it 的 beforeEach 會再重置
 	});
 
+	// 接線釘:markMessageRead 繞過 messagesGate.write() 的話,在飛水合的舊快照會把已讀蓋回未讀。
+	it('hydrateMessages() 在飛期間 markMessageRead → 舊快照不蓋回未讀,且有一次和解重抓', async () => {
+		const d = createDeferred<typeof MESSAGES>();
+		const firstUnread = get(messages).find((m) => m.unread)!;
+		const readMessages = MESSAGES.map((m) => ({ ...m, unread: m.id === firstUnread.id ? false : m.unread }));
+		vi.mocked(getMessages).mockClear();
+		vi.mocked(getMessages).mockReturnValueOnce(d.promise).mockResolvedValueOnce(readMessages);
+
+		const hydrating = hydrateMessages();
+		await markMessageRead(firstUnread.id, Promise.resolve(true));
+		d.resolve(MESSAGES.map((m) => ({ ...m }))); // 舊快照:該則仍未讀
+		await hydrating;
+		await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
+
+		expect(get(messages).find((m) => m.id === firstUnread.id)?.unread).toBe(false);
+		expect(getMessages).toHaveBeenCalledTimes(2);
+	});
+
 	it('reading an already-read thread is a no-op for the count', async () => {
 		await hydrateMessages();
 		const read = get(messages).find((m) => !m.unread)!;
@@ -321,7 +363,7 @@ describe('hydrateOps / refreshOps', () => {
 	// the synchronous seed at module load」釘——四個集合開機值改為 `[]`,opsPages 全為
 	// 0/0,不再有「同步 seed、水合只是覆寫一次」的假資料。fresh import(同 hydrateMessages
 	// 區塊既有寫法)避開本檔其他 it 已對共享 singleton 動過手腳的殘留狀態。
-	it('fresh import 後 members/classes/coaches/orders 皆為 []、opsPages 全為 0、(誠實開機)', async () => {
+	it('fresh import 後 members/classes/coaches/orders 皆為 []、opsPages 全為 0(誠實開機)', async () => {
 		vi.resetModules();
 		const fresh = await import('./stores');
 		expect(get(fresh.members)).toEqual([]);

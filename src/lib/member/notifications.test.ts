@@ -115,7 +115,43 @@ describe('markRead', () => {
   });
 });
 
+// 接線釘:markRead 繞過 gate.write()(不入尾流帳)的話,PATCH 還在飛時頁面 refresh 的 GET 會搶先出發。
+describe('markRead 的閘門接線', () => {
+  it('PATCH 未 settle → 頁面 refresh 的 GET 不出發;settle 後才出發', async () => {
+    vi.mocked(api).mockResolvedValueOnce([apiNotif(false)]);
+    await hydrateNotifications(); // 先水合:本釘只看 refresh 等待,不看和解
+    let release!: () => void;
+    const patch = new Promise<void>((r) => { release = r; });
+    let gets = 0;
+    vi.mocked(api).mockImplementation(fakeRouter({
+      'GET /notifications': () => { gets += 1; return [apiNotif(true)]; },
+      'PATCH /notifications/n1/read': () => patch
+    }));
+    const page = createLoadGate({ ...notificationsPageEntry });
+
+    const readP = markRead('n1');
+    const refreshP = page.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gets).toBe(0);
+
+    release();
+    await Promise.all([readP, refreshP]);
+    expect(gets).toBe(1);
+    expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
+    page.destroy();
+  });
+});
+
 describe('markAllRead', () => {
+  it("無未讀 → 回 'ok' 且不送任何請求", async () => {
+    notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: true })));
+    vi.mocked(api).mockClear();
+
+    expect(await markAllRead()).toBe('ok');
+
+    expect(api).not.toHaveBeenCalled();
+  });
+
   it('對每個未讀通知各發一次 PATCH(已讀的不重發)，全部成功回 \'ok\'', async () => {
     const result = await markAllRead();
 
