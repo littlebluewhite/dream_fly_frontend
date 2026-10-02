@@ -659,7 +659,7 @@ describe('ops 寫入動詞', () => {
 			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-new' } as never);
 			vi.mocked(createCoach).mockResolvedValueOnce({} as never);
 			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
-			const outcome = await addCoach(V);
+			const outcome = await addCoach(V, null);
 			expect(outcome).toEqual({ kind: 'created' });
 			expect(createCoach).toHaveBeenCalledWith({ user_id: 'u-new', title: V.title, specialties: V.tags, is_active: V.isActive });
 			expect(getOpsCollections).toHaveBeenCalledTimes(1);
@@ -671,14 +671,24 @@ describe('ops 寫入動詞', () => {
 			const error = new Error('bind');
 			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-x' } as never);
 			vi.mocked(createCoach).mockRejectedValueOnce(error);
-			const outcome = await addCoach(V);
+			const outcome = await addCoach(V, null);
 			expect(outcome).toEqual({ kind: 'coachBindFailed', pendingUserId: 'u-x', error });
 			expect(getOpsCollections).not.toHaveBeenCalled();
+		});
+		it('帶 pendingUserId → 不再 createMember,只用同一個 user id 打 createCoach', async () => {
+			reset();
+			vi.mocked(createMember).mockClear();
+			vi.mocked(createCoach).mockResolvedValueOnce({} as never);
+			vi.mocked(getOpsCollections).mockResolvedValueOnce(refreshedOps());
+			expect(await addCoach(V, 'u-pending')).toEqual({ kind: 'created' });
+			expect(createMember).not.toHaveBeenCalled();
+			expect(createCoach).toHaveBeenCalledWith({ user_id: 'u-pending', title: V.title, specialties: V.tags, is_active: V.isActive });
+			reset();
 		});
 		it('重抓失敗 → 不丟出,仍回 created', async () => {
 			vi.mocked(createMember).mockResolvedValueOnce({ id: 'u-new' } as never);
 			vi.mocked(createCoach).mockResolvedValueOnce({} as never);
-			await expectRefreshFailureSwallowed(async () => expect(await addCoach(V)).toEqual({ kind: 'created' }));
+			await expectRefreshFailureSwallowed(async () => expect(await addCoach(V, null)).toEqual({ kind: 'created' }));
 		});
 	});
 

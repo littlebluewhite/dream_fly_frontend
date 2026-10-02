@@ -43,34 +43,33 @@
 
   // 409(email 重複)/422(驗證) 皆已是後端給的繁中使用者可讀文字 → apiErrorMessage
   // 直接透傳 e.message，同桌面 admin/members/+page.svelte 慣例。
-  async function createAndRefresh(body: CreateMemberBody) {
+  // 回 true＝已存（表單可關），false＝失敗（表單留著重試）。
+  async function createAndRefresh(body: CreateMemberBody): Promise<boolean> {
     try {
       await addMember(body);
     } catch (e) {
       toasts.notify('error', '新增失敗', apiErrorMessage(e));
-      return;
+      return false;
     }
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
+    return true;
   }
-  async function updateAndRefresh(id: string, body: UpdateMemberBody) {
+  async function updateAndRefresh(id: string, body: UpdateMemberBody): Promise<boolean> {
     try {
       await saveMember(id, body);
     } catch (e) {
       toasts.notify('error', '儲存失敗', apiErrorMessage(e));
-      return;
+      return false;
     }
     toasts.notify('success', '已儲存', `${body.name ?? ''} 學員資料已更新。`);
-  }
-  function handleSave(body: CreateMemberBody | UpdateMemberBody, isNew: boolean, id?: string): Promise<void> {
-    if (isNew) return createAndRefresh(body as CreateMemberBody);
-    return id ? updateAndRefresh(id, body as UpdateMemberBody) : Promise.resolve();
+    return true;
   }
 
   function openNew() {
-    overlay.sheet('memberForm', { m: null, onSave: (body: CreateMemberBody | UpdateMemberBody) => handleSave(body, true) });
+    overlay.sheet('memberForm', { m: null, onCreate: createAndRefresh });
   }
   function openEdit(m: MemberRow) {
-    overlay.sheet('memberForm', { m, onSave: (body: CreateMemberBody | UpdateMemberBody) => handleSave(body, false, m.id) });
+    overlay.sheet('memberForm', { m, onUpdate: (body: UpdateMemberBody) => updateAndRefresh(m.id, body) });
   }
   function openDetail(m: MemberRow) {
     overlay.sheet('member', { m, onEdit: openEdit });

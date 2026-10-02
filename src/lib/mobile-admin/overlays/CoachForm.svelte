@@ -8,7 +8,8 @@
    * /coaches；編輯＝姓名有變才 PATCH /users/{user_id}，教練欄位一律 PATCH
    * /coaches/{id}。契約 §3.2/§3.4 兩組端點接受的欄位完全不同，故本表單依 isNew
    * 顯示不同欄位組合，同 MemberForm 的分工慣例——保留單一元件、內部切換（不拆兩個
-   * 檔案）。儲存 → onSave(values, isNew)；沒有 onSave 時單純不送出，不再有本地
+   * 檔案）。新增 → onCreate(values)、編輯 → onUpdate(values)，皆回 Promise<boolean>
+   * （true＝已存才關閉，false＝sheet 留著重試）；沒有對應 handler 時單純不送出，不再有本地
    * saveCoach() 假寫入 fallback（同 MemberForm/ClassForm 的決定：沒有後端呼叫者
    * 就不假裝成功）——兩步 API 呼叫、失敗訊息、成功後刷新皆由呼叫端
    * （CoachesScreen.svelte）決定。
@@ -30,11 +31,12 @@
   import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/admin/data';
   import { initialOf } from '$lib/api/wire';
-  import { checkNewCoach, checkCoachEdit } from '$lib/admin/components/coach-save';
+  import { checkNewCoach, checkCoachEdit, type CoachErrors } from '$lib/admin/components/coach-save';
 
   export let onClose: () => void;
   export let c: Coach | null = null;
-  export let onSave: ((values: CoachFormValues, isNew: boolean) => void | Promise<unknown>) | undefined = undefined;
+  export let onCreate: ((values: CoachFormValues) => Promise<boolean>) | undefined = undefined;
+  export let onUpdate: ((values: CoachFormValues) => Promise<boolean>) | undefined = undefined;
 
   const isNew = !c;
 
@@ -46,14 +48,26 @@
   let isActive = c ? c.isActive : true;
 
   $: initial = initialOf(name, '教');
-  $: check = isNew
-    ? checkNewCoach({ email, password, name, title, tagsText, isActive })
-    : checkCoachEdit({ name, title, tagsText, isActive });
 
-  function save() {
-    if (check.kind !== 'valid') return;
-    onSave?.(check.values, isNew);
-    onClose();
+  let errors: CoachErrors = {};
+  let saving = false;
+
+  async function save() {
+    if (saving) return;
+    const r = isNew
+      ? checkNewCoach({ email, password, name, title, tagsText, isActive })
+      : checkCoachEdit({ name, title, tagsText, isActive });
+    if (r.kind === 'invalid') {
+      errors = r.errors;
+      return;
+    }
+    errors = {};
+    saving = true;
+    try {
+      if (await (isNew ? onCreate : onUpdate)?.(r.values)) onClose();
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -71,10 +85,10 @@
     </div>
 
     {#if isNew}
-      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" />
+      <Input label="Email" type="email" bind:value={email} placeholder="coach@example.com" error={errors.email ?? ''} />
     {/if}
-    <Input label="教練姓名" bind:value={name} />
-    <Input label="職稱 / 專業" required bind:value={title} />
+    <Input label="教練姓名" bind:value={name} error={errors.name ?? ''} />
+    <Input label="職稱 / 專業" required bind:value={title} error={errors.title ?? ''} />
     <Input label="專長標籤（以、分隔）" bind:value={tagsText} />
     {#if isNew}
       <Input
@@ -82,6 +96,7 @@
         type="password"
         bind:value={password}
         placeholder="至少 8 碼"
+        error={errors.password ?? ''}
       />
     {/if}
     <div style="display:flex; flex-direction:column; gap:4px;">
@@ -97,7 +112,7 @@
 
   <svelte:fragment slot="footer">
     <Button variant="secondary" on:click={onClose}>取消</Button>
-    <Button variant="primary" disabled={check.kind !== 'valid'} style="flex:1;" on:click={save}>
+    <Button variant="primary" disabled={saving} style="flex:1;" on:click={save}>
       <Icon name="check" size={16} style="margin-right:6px;" />{isNew ? '建立教練' : '儲存'}
     </Button>
   </svelte:fragment>

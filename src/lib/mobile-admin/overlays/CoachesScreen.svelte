@@ -1,8 +1,8 @@
 <script lang="ts">
   /* 教練管理 push screen。admin2.jsx CoachesScreen (68)。
    * $coaches 卡片（Avatar + 公開顯示狀態 + 標籤 + 課表）；
-   * 新增 → onNew()（未提供時 overlay.sheet('coachForm',{c:null,onSave})）；
-   * 編輯鉛筆 → overlay.sheet('coachForm',{c,onSave})。
+   * 新增 → onNew()（未提供時 overlay.sheet('coachForm',{c:null,onCreate})）；
+   * 編輯鉛筆 → overlay.sheet('coachForm',{c,onUpdate})。
    *
    * Task F5：新增/編輯改接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
    * routes/admin/coaches/+page.svelte 的兩步流程（先建 user 帳號、再綁 coach）與
@@ -15,14 +15,11 @@
    * addCoach/saveCoach 動詞包起來(成功 outcome → 動詞內 await refreshOps())，本頁
    * 只剩「呼叫動詞 → 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
    *
-   * 本頁沿用既有的「儲存即關閉 sheet、成功/失敗 toast 非同步顯示」慣例（同
-   * MemberForm 對照的 members/+page.svelte handleSave），跟桌面「失敗時保留對話框
-   * 供重試」的慣例不同——故第二步（教練綁定）失敗時，本頁不提供「同一個 sheet
-   * 工作階段內重試」的機制（sheet 已經關閉）：outcome.coachBindFailed 攜帶的
-   * pendingUserId 因此刻意丟棄（桌面版存回哨兵供同一對話框工作階段內重試，本頁
-   * 沒有這個工作階段可以重試），錯誤 toast 改為建議至「學員管理」頁確認帳號、或
-   * 重新執行一次新增教練（換一個 email）。同桌面一樣不做自動回滾（後端沒有複合
-   * 建立端點，也沒有刪除使用者的端點可呼叫）。 */
+   * R17：表單送出時驗證、handler 回 Promise<boolean>（true＝已存才關 sheet，false＝sheet 留著）。
+   * 新增的第二步（教練綁定）失敗時，outcome.coachBindFailed 攜帶的 pendingUserId 存在
+   * 本頁的 pendingUserId（每次開新增 sheet 重置），同一個 sheet 內重試只補打 createCoach、
+   * 沿用同一個 user id，不重建帳號（避免 email 409）——同桌面 coaches 頁的哨兵。同桌面
+   * 一樣不做自動回滾（後端沒有複合建立端點，也沒有刪除使用者的端點可呼叫）。 */
   import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -64,54 +61,55 @@
     422: '輸入資料不符規則，請確認後再試。'
   };
 
-  async function createAndRefresh(v: CoachFormValues) {
-    const outcome = await addCoach(v);
+  // 非 null＝本次新增 sheet 內第一步(createMember)已成功、第二步(createCoach)失敗待重試。
+  let pendingUserId: string | null = null;
+
+  async function createAndRefresh(v: CoachFormValues): Promise<boolean> {
+    const outcome = await addCoach(v, pendingUserId);
     switch (outcome.kind) {
       case 'userCreateFailed':
         toasts.notify('error', '新增失敗', apiErrorMessage(outcome.error));
-        return;
+        return false;
       case 'coachBindFailed':
-        // outcome.pendingUserId 刻意丟棄——見檔頭註解：本頁「儲存即關 sheet」，沒有
-        // 同一個 sheet 工作階段內重試第二步的機制，不像桌面存回哨兵。文案因此不能
-        // 沿用桌面「可重新點擊建立教練重試綁定」（那句話預設有哨兵可以跳過
-        // createMember、只補打 createCoach）——本頁重新整個跑一次一定會用同一個
-        // email 重打 createMember，會撞 409。指引改為「換一個 email」，同 ADR 0018
-        // 該段裁決文字。
+        pendingUserId = outcome.pendingUserId;
         toasts.notify(
           'error',
           '教練綁定失敗',
-          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請至「學員管理」頁確認該帳號，或重新執行一次新增教練（換一個 email）。`
+          `帳號「${v.email}」已建立，但綁定教練身分失敗（${apiErrorText(outcome.error, COACH_ERROR_TEXT)}）。請直接再按一次「建立教練」重試綁定。`
         );
-        return;
+        return false;
       case 'created':
+        pendingUserId = null;
         toasts.notify('success', '已新增教練', `「${v.name}」已建立為教練。`);
+        return true;
     }
   }
 
-  async function updateAndRefresh(coach: Coach, v: CoachFormValues) {
+  async function updateAndRefresh(coach: Coach, v: CoachFormValues): Promise<boolean> {
     const outcome = await saveCoach(v, coach);
     switch (outcome.kind) {
       case 'nameUpdateFailed':
         toasts.notify('error', '儲存失敗', apiErrorMessage(outcome.error));
-        return;
+        return false;
       case 'coachUpdateFailed':
         toasts.notify('error', '儲存失敗', apiErrorText(outcome.error, COACH_ERROR_TEXT));
-        return;
+        return false;
       case 'saved':
         toasts.notify('success', '已儲存', `${v.name} 教練資料已更新。`);
+        return true;
     }
   }
 
-  function handleSave(v: CoachFormValues, isNew: boolean, coach?: Coach): Promise<void> {
-    return isNew ? createAndRefresh(v) : coach ? updateAndRefresh(coach, v) : Promise.resolve();
-  }
-
   function newCoach() {
-    if (onNew) onNew();
-    else overlay.sheet('coachForm', { c: null, onSave: (v: CoachFormValues) => handleSave(v, true) });
+    if (onNew) {
+      onNew();
+      return;
+    }
+    pendingUserId = null;
+    overlay.sheet('coachForm', { c: null, onCreate: createAndRefresh });
   }
   function editCoach(c: Coach) {
-    overlay.sheet('coachForm', { c, onSave: (v: CoachFormValues) => handleSave(v, false, c) });
+    overlay.sheet('coachForm', { c, onUpdate: (v: CoachFormValues) => updateAndRefresh(c, v) });
   }
 </script>
 

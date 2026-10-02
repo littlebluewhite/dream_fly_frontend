@@ -181,11 +181,11 @@ export async function saveCourse(id: string, course: ValidCourse): Promise<void>
 	await refetchAfterWrite();
 }
 
-/** 教練兩步寫入(coach-save.ts):失敗不丟出,outcome 原樣回傳給頁面翻譯 toast。新增不帶
- *  pendingUserId(行動版「儲存即關 sheet」,沒有同工作階段重試第二步的哨兵,見
- *  CoachesScreen.svelte 檔頭)。 */
-export async function addCoach(v: CoachFormValues): Promise<SaveNewCoachOutcome> {
-	const outcome = await saveNewCoach(v, null, { createMember, createCoach });
+/** 教練兩步寫入(coach-save.ts):失敗不丟出,outcome 原樣回傳給頁面翻譯 toast。新增的
+ *  pendingUserId 是上次綁定失敗留下的 user id(sheet 工作階段內由 CoachesScreen 持有),
+ *  非 null 時只重打 createCoach,避免重建 user 撞 email 409。 */
+export async function addCoach(v: CoachFormValues, pendingUserId: string | null): Promise<SaveNewCoachOutcome> {
+	const outcome = await saveNewCoach(v, pendingUserId, { createMember, createCoach });
 	if (outcome.kind === 'created') await refetchAfterWrite();
 	return outcome;
 }

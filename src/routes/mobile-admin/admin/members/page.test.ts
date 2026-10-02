@@ -124,32 +124,30 @@ describe('mobile-admin/admin/members 頁', () => {
 
 	/* Task 20 — 新增/編輯改接真 POST /users、PATCH /users/{id}，不再是本地假寫入。
 	 * mobile 的 overlay 是全域 store，MemberForm 由另一個 OverlayHost 渲染——這裡
-	 * 直接呼叫「新增學員」/「編輯」開出的 sheet 帶入的 onSave（頁面自己的閉包），
+	 * 直接呼叫「新增學員」/「編輯」開出的 sheet 帶入的 onCreate/onUpdate（頁面自己的閉包），
 	 * 驗證它真的打 createMember/updateMember，同 ClassesPage 的驗證慣例。 */
 	function callCount(method: string, path: string): number {
 		return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
 	}
 
-	it('「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onSave', async () => {
+	it('「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onCreate', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_MEMBERS), 'POST /users': mkWireUser({ id: 'u-new', name: '新學員' }) }));
 		const { findByText, getByLabelText } = render(MembersPage);
 		await findByText('測試學員甲');
 
 		await fireEvent.click(getByLabelText('新增學員'));
-		const sheetProps = get(overlay).sheet?.props as {
-			onSave: (body: CreateMemberBody | UpdateMemberBody) => Promise<void>;
-		};
+		const sheetProps = get(overlay).sheet?.props as { onCreate: (body: CreateMemberBody) => Promise<boolean> };
 		expect(sheetProps).toBeTruthy();
 
 		const body: CreateMemberBody = { email: 'a@test.com', name: '新學員', password: 'password123' };
-		await sheetProps.onSave(body);
+		expect(await sheetProps.onCreate(body)).toBe(true);
 
 		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
 		expect(callCount('PATCH', '/users/zz1')).toBe(0);
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});
 
-	it('點學員卡片 → 編輯 開出的 sheet 帶入呼叫 updateMember(id, …) 的 onSave', async () => {
+	it('點學員卡片 → 編輯 開出的 sheet 帶入呼叫 updateMember(id, …) 的 onUpdate', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_MEMBERS), 'PATCH /users/zz1': mkWireUser({ id: 'zz1', name: '改名後' }) }));
 		const { findByText } = render(MembersPage);
 		await findByText('測試學員甲');
@@ -162,13 +160,11 @@ describe('mobile-admin/admin/members 頁', () => {
 		expect(detailProps).toBeTruthy();
 		detailProps.onEdit(FIXTURE_MEMBERS[0]);
 
-		const sheetProps = get(overlay).sheet?.props as {
-			onSave: (body: CreateMemberBody | UpdateMemberBody) => Promise<void>;
-		};
+		const sheetProps = get(overlay).sheet?.props as { onUpdate: (body: UpdateMemberBody) => Promise<boolean> };
 		expect(sheetProps).toBeTruthy();
 
 		const body: UpdateMemberBody = { name: '改名後', is_active: true };
-		await sheetProps.onSave(body);
+		expect(await sheetProps.onUpdate(body)).toBe(true);
 
 		expect(api).toHaveBeenCalledWith('/users/zz1', { method: 'PATCH', body: JSON.stringify(body) });
 		expect(callCount('POST', '/users')).toBe(0);
@@ -180,10 +176,8 @@ describe('mobile-admin/admin/members 頁', () => {
 		await findByText('測試學員甲');
 
 		await fireEvent.click(getByLabelText('新增學員'));
-		const sheetProps = get(overlay).sheet?.props as {
-			onSave: (body: CreateMemberBody | UpdateMemberBody) => Promise<void>;
-		};
-		await sheetProps.onSave({ email: 'a@test.com', name: '新學員', password: 'password123' });
+		const sheetProps = get(overlay).sheet?.props as { onCreate: (body: CreateMemberBody) => Promise<boolean> };
+		expect(await sheetProps.onCreate({ email: 'a@test.com', name: '新學員', password: 'password123' })).toBe(false);
 
 		expect(get(toasts).some((t) => t.title === '新增失敗')).toBe(true);
 	});

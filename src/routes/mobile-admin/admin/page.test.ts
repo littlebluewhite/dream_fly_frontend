@@ -192,7 +192,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	});
 
 	/* Task 20 — 快速操作「新增學員」改開真表單並接 createMember，不再是本地假寫入。 */
-	it('快速操作「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onSave', async () => {
+	it('快速操作「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onCreate', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE), 'POST /users': wireMember({}) })
 		);
@@ -200,11 +200,11 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		await findByText('新增學員');
 
 		await fireEvent.click(await findByText('新增學員'));
-		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };
+		const sheetProps = get(overlay).sheet?.props as { onCreate: (body: CreateMemberBody) => Promise<boolean> };
 		expect(sheetProps).toBeTruthy();
 
 		const body: CreateMemberBody = { email: 'a@test.com', name: '新學員', password: 'password123' };
-		await sheetProps.onSave(body);
+		expect(await sheetProps.onCreate(body)).toBe(true);
 
 		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify(body) });
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
@@ -226,9 +226,9 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		);
 		const { findByText } = render(AdminHomePage);
 		await fireEvent.click(await findByText('新增學員'));
-		const sheetProps = get(overlay).sheet?.props as { onSave: (body: CreateMemberBody) => Promise<void> };
+		const sheetProps = get(overlay).sheet?.props as { onCreate: (body: CreateMemberBody) => Promise<boolean> };
 
-		await sheetProps.onSave({ email: 'q@test.com', name: '快速新增的學員', password: 'password123' });
+		await sheetProps.onCreate({ email: 'q@test.com', name: '快速新增的學員', password: 'password123' });
 
 		expect(callCount('GET', '/users?page=1')).toBeGreaterThan(usersCallsBefore); // 寫入成功後真的 refreshOps()
 		expect(get(members).some((m) => m.id === 'zz-quick')).toBe(true);

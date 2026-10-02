@@ -8,10 +8,13 @@
    * 改 email/roles/password），故本表單依 isNew 顯示不同欄位組合，同桌面
    * MemberCreateDialog/MemberEditDialog 兩支各自負責一種模式的分工——但保留單一
    * 元件、內部切換（不拆兩個檔案），對齊行動版既有的「一個 overlay 元件」慣例。
-   * 儲存 → onSave(body, isNew)；沒有 onSave 時單純不送出，不再有本地 store 假寫入
-   * fallback（同 ClassForm 的決定：沒有後端呼叫者就不假裝成功）。
+   * 新增 → onCreate(CreateMemberBody)、編輯 → onUpdate(UpdateMemberBody)，皆回
+   * Promise<boolean>（true＝已存才關閉，false＝sheet 留著讓使用者重試）；沒有對應
+   * handler 時單純不送出，不再有本地 store 假寫入 fallback（同 ClassForm 的決定：
+   * 沒有後端呼叫者就不假裝成功）。
    * R13 Task 4：驗證與 body 組裝改用桌面同一份 member-request.ts（checkNewMember/
-   * checkMemberEdit），主按鈕 disabled 依驗證結果。 */
+   * checkMemberEdit）。R17：同桌面「送出時驗證」（ADR-0023 §4）——無效就把 module
+   * 常數顯示在欄位上、不呼叫 handler；按鈕只在存檔中停用。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Input from '$lib/components/ui/Input.svelte';
@@ -21,11 +24,12 @@
   import type { MemberAccount as MemberRow } from '$lib/admin/data';
   import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
   import { initialOf } from '$lib/api/wire';
-  import { checkNewMember, checkMemberEdit } from '$lib/admin/components/member-request';
+  import { checkNewMember, checkMemberEdit, type MemberErrors } from '$lib/admin/components/member-request';
 
   export let onClose: () => void;
   export let m: MemberRow | null = null;
-  export let onSave: ((body: CreateMemberBody | UpdateMemberBody, isNew: boolean) => void | Promise<unknown>) | undefined = undefined;
+  export let onCreate: ((body: CreateMemberBody) => Promise<boolean>) | undefined = undefined;
+  export let onUpdate: ((body: UpdateMemberBody) => Promise<boolean>) | undefined = undefined;
 
   const isNew = !m;
 
@@ -39,14 +43,37 @@
   let isActive = m ? m.status === 'active' : true;
 
   $: initial = initialOf(name, '學');
-  $: check = isNew
-    ? checkNewMember({ email, name, phone, password, birthDate: '' })
-    : checkMemberEdit({ name, phone, isActive });
+
+  let errors: MemberErrors = {};
+  let saving = false;
+
+  async function finish(saved: Promise<boolean> | undefined) {
+    saving = true;
+    try {
+      if (await saved) onClose();
+    } finally {
+      saving = false;
+    }
+  }
 
   function save() {
-    if (check.kind !== 'valid') return;
-    onSave?.(check.body, isNew);
-    onClose();
+    if (saving) return;
+    if (isNew) {
+      const r = checkNewMember({ email, name, phone, password, birthDate: '' });
+      if (r.kind === 'invalid') {
+        errors = r.errors;
+        return;
+      }
+      errors = {};
+      return finish(onCreate?.(r.body));
+    }
+    const r = checkMemberEdit({ name, phone, isActive });
+    if (r.kind === 'invalid') {
+      errors = r.errors;
+      return;
+    }
+    errors = {};
+    return finish(onUpdate?.(r.body));
   }
 </script>
 
@@ -66,10 +93,10 @@
     </div>
 
     {#if isNew}
-      <Input label="Email" type="email" bind:value={email} placeholder="member@example.com" />
+      <Input label="Email" type="email" bind:value={email} placeholder="member@example.com" error={errors.email ?? ''} />
     {/if}
-    <Input label="學員姓名" bind:value={name} />
-    <Input label="聯絡電話（選填）" bind:value={phone} />
+    <Input label="學員姓名" bind:value={name} error={errors.name ?? ''} />
+    <Input label="聯絡電話（選填）" bind:value={phone} error={errors.phone ?? ''} />
 
     {#if isNew}
       <Input
@@ -77,6 +104,7 @@
         type="password"
         bind:value={password}
         placeholder="至少 8 碼"
+        error={errors.password ?? ''}
       />
     {:else}
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top:4px;">
@@ -88,7 +116,7 @@
 
   <svelte:fragment slot="footer">
     <Button variant="secondary" on:click={onClose}>取消</Button>
-    <Button variant="primary" disabled={check.kind !== 'valid'} style="flex:1;" on:click={save}>
+    <Button variant="primary" disabled={saving} style="flex:1;" on:click={save}>
       <Icon name="check" size={16} style="margin-right:6px;" />{isNew ? '建立學員' : '儲存資料'}
     </Button>
   </svelte:fragment>

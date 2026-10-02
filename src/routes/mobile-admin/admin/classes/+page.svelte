@@ -50,10 +50,10 @@
   const cats = ['全部', ...CATS];
 
   function openNew() {
-    overlay.sheet('classForm', { k: null, coaches: $coaches, onSave: create });
+    overlay.sheet('classForm', { k: null, coaches: $coaches, onCreate: create });
   }
   function openEdit(k: ClassRow) {
-    overlay.sheet('classForm', { k, coaches: $coaches, onSave: (course) => update(k.id, course) });
+    overlay.sheet('classForm', { k, coaches: $coaches, onUpdate: (course) => update(k.id, course) });
   }
   function openDetail(k: ClassRow) {
     overlay.sheet('class', { k, onEdit: openEdit });
@@ -68,20 +68,25 @@
     409: '課程名稱或代碼已存在，請調整後再試。'
   };
 
-  async function create(course: ValidCourse) {
+  // 回 true＝已存（表單可關），false＝失敗（表單留著重試）。
+  async function create(course: ValidCourse): Promise<boolean> {
     try {
       await addCourse(course);
       toasts.notify('success', '已新增班級', `「${course.name}」已建立。`);
+      return true;
     } catch (e) {
       toasts.notify('error', '新增失敗', apiErrorText(e, COURSE_ERROR_TEXT));
+      return false;
     }
   }
-  async function update(id: string, course: ValidCourse) {
+  async function update(id: string, course: ValidCourse): Promise<boolean> {
     try {
       await saveCourse(id, course);
       toasts.notify('success', '已儲存課程', `「${course.name}」已更新。`);
+      return true;
     } catch (e) {
       toasts.notify('error', '儲存失敗', apiErrorText(e, COURSE_ERROR_TEXT));
+      return false;
     }
   }
 

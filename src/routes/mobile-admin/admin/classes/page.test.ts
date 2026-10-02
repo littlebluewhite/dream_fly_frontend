@@ -88,20 +88,23 @@ describe('mobile-admin/admin/classes 頁', () => {
 	/* Task 20 — 新增/編輯班級改接真 POST/PATCH /courses，不再是 saveClass 本地假寫入。
 	 * mobile 的 overlay 是全域 store（非頁面自己的元件樹），ClassForm 由另一個
 	 * OverlayHost 渲染——這裡不重新渲染 ClassForm，改為直接呼叫「新增班級」按鈕開出的
-	 * sheet 所帶入的 onSave（即頁面自己的 create/update 閉包），驗證它真的打 createCourse/
+	 * sheet 所帶入的 onCreate/onUpdate（即頁面自己的 create/update 閉包），驗證它真的打 createCourse/
 	 * updateCourse，同 OrderSheet.test.ts 對 mobile overlay 架構的驗證慣例。
-	 * R13 Task 4:onSave 收 ClassForm 驗證過的 ValidCourse。 */
+	 * R13 Task 4:onCreate/onUpdate 收 ClassForm 驗證過的 ValidCourse。 */
 	const COURSE: ValidCourse = {
 		name: '新班級', level: '基礎', category: '幼兒體操', coachId: COACHES[0].id, scheduleText: null,
 		minAge: null, maxAge: null, maxStudents: 10, price: 1000, durationMinutes: 60
 	};
-	type SheetSave = { onSave: (c: ValidCourse, isNew: boolean) => Promise<void> };
+	type SheetSave = {
+		onCreate: (c: ValidCourse) => Promise<boolean>;
+		onUpdate: (c: ValidCourse) => Promise<boolean>;
+	};
 
 	function callCount(method: string, path: string): number {
 		return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
 	}
 
-	it('「新增班級」開出的 sheet 帶入真正呼叫 createCourse 的 onSave（不是本地假寫入）', async () => {
+	it('「新增班級」開出的 sheet 帶入真正呼叫 createCourse 的 onCreate（不是本地假寫入）', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes([WIRE_CLASS]), 'POST /courses': { id: 'new-1' } }));
 		const { findByText, getByLabelText } = render(ClassesPage);
 		await findByText('測試班級甲');
@@ -110,7 +113,7 @@ describe('mobile-admin/admin/classes 頁', () => {
 		const sheetProps = get(overlay).sheet?.props as SheetSave;
 		expect(sheetProps).toBeTruthy();
 
-		await sheetProps.onSave(COURSE, true);
+		expect(await sheetProps.onCreate(COURSE)).toBe(true);
 
 		expect(callCount('POST', '/courses')).toBe(1);
 		const body = JSON.parse(vi.mocked(api).mock.calls.find(([p, init]) => p === '/courses' && init?.method === 'POST')![1]!.body as string);
@@ -118,7 +121,7 @@ describe('mobile-admin/admin/classes 頁', () => {
 		expect(callCount('PATCH', `/courses/${FIXTURE_CLASSES[0].id}`)).toBe(0);
 	});
 
-	it('編輯既有班級的 sheet 帶入呼叫 updateCourse(id, …) 的 onSave', async () => {
+	it('編輯既有班級的 sheet 帶入呼叫 updateCourse(id, …) 的 onUpdate', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ ...opsRoutes([WIRE_CLASS]), [`PATCH /courses/${FIXTURE_CLASSES[0].id}`]: { id: FIXTURE_CLASSES[0].id } })
 		);
@@ -129,7 +132,7 @@ describe('mobile-admin/admin/classes 頁', () => {
 		const sheetProps = get(overlay).sheet?.props as SheetSave;
 		expect(sheetProps).toBeTruthy();
 
-		await sheetProps.onSave({ ...COURSE, name: '改名後的班級' }, false);
+		expect(await sheetProps.onUpdate({ ...COURSE, name: '改名後的班級' })).toBe(true);
 
 		expect(callCount('PATCH', `/courses/${FIXTURE_CLASSES[0].id}`)).toBe(1);
 		expect(api).toHaveBeenCalledWith(`/courses/${FIXTURE_CLASSES[0].id}`, {
@@ -146,7 +149,7 @@ describe('mobile-admin/admin/classes 頁', () => {
 
 		await fireEvent.click(getByLabelText('新增班級'));
 		const sheetProps = get(overlay).sheet?.props as SheetSave;
-		await sheetProps.onSave(COURSE, true);
+		expect(await sheetProps.onCreate(COURSE)).toBe(false);
 
 		expect(get(toasts).some((t) => t.title === '新增失敗')).toBe(true);
 	});

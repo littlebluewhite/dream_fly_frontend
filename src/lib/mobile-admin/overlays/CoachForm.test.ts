@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/svelte';
+import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import CoachForm from './CoachForm.svelte';
 import type { Coach } from '$lib/domain/coaches';
+import { COACH_PASSWORD_ERROR, COACH_TITLE_ERROR } from '$lib/admin/components/coach-save';
 
 /* Task F5：教練新增/編輯改接真 POST /coaches、PATCH /coaches/{id}（契約 §3.4，
  * 兩步流程的第二步）——這裡驗證新增/編輯兩種模式各自組出正確的 CoachFormValues
- * 並呼叫 onSave(values, isNew)，取代舊版驗證「本地 store 假寫入」的測試（見桌面
+ * 並呼叫 onCreate(values) / onUpdate(values)（回 true 才關閉），取代舊版驗證「本地 store 假寫入」的測試（見桌面
  * CoachEditDialog.test.ts 的對應收斂）。R13 Task 4：驗證規則住 coach-save.ts，
- * 這裡只驗接線與 disabled。 */
+ * 這裡只驗接線與送出時顯示 module 常數（不 disable）。 */
 
 const EXISTING: Coach = {
 	id: 'c1',
@@ -21,9 +22,10 @@ const EXISTING: Coach = {
 };
 
 describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼）', () => {
-	it('builds a full CoachFormValues and calls onSave(values, true)', async () => {
-		const onSave = vi.fn();
-		render(CoachForm, { props: { onClose: () => {}, onSave } });
+	it('builds a full CoachFormValues and calls onCreate(values)', async () => {
+		const onCreate = vi.fn().mockResolvedValue(true);
+		const onClose = vi.fn();
+		render(CoachForm, { props: { onClose, onCreate } });
 
 		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
 		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '新教練' } });
@@ -36,23 +38,38 @@ describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼�
 		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
 		await fireEvent.click(screen.getByText('建立教練'));
 
-		expect(onSave).toHaveBeenCalledTimes(1);
-		expect(onSave).toHaveBeenCalledWith(
-			{
-				email: 'new@test.com',
-				password: 'password123',
-				name: '新教練',
-				title: '兼任教練',
-				tags: ['跑酷', '體操'],
-				isActive: true
-			},
-			true
-		);
+		expect(onCreate).toHaveBeenCalledTimes(1);
+		expect(onCreate).toHaveBeenCalledWith({
+			email: 'new@test.com',
+			password: 'password123',
+			name: '新教練',
+			title: '兼任教練',
+			tags: ['跑酷', '體操'],
+			isActive: true
+		});
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 	});
 
-	it('blocks submit (disabled 建立教練) when the password is under 8 chars', async () => {
-		const onSave = vi.fn();
-		render(CoachForm, { props: { onClose: () => {}, onSave } });
+	it('stays open when onCreate resolves false; button disabled only while saving', async () => {
+		let resolve!: (v: boolean) => void;
+		const onCreate = vi.fn(() => new Promise<boolean>((r) => (resolve = r)));
+		const onClose = vi.fn();
+		render(CoachForm, { props: { onClose, onCreate } });
+		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
+		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '新教練' } });
+		await fireEvent.input(screen.getByLabelText('職稱 / 專業', { exact: false }), { target: { value: '兼任教練' } });
+		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
+		await fireEvent.click(screen.getByText('建立教練'));
+
+		await waitFor(() => expect(screen.getByText('建立教練').closest('button')).toBeDisabled());
+		resolve(false);
+		await waitFor(() => expect(screen.getByText('建立教練').closest('button')).not.toBeDisabled());
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it('invalid password: submit shows COACH_PASSWORD_ERROR and does not call onCreate', async () => {
+		const onCreate = vi.fn();
+		render(CoachForm, { props: { onClose: () => {}, onCreate } });
 
 		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
 		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '新教練' } });
@@ -61,8 +78,11 @@ describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼�
 		});
 		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'short' } });
 
-		expect(screen.getByText('建立教練').closest('button')).toBeDisabled();
-		expect(onSave).not.toHaveBeenCalled();
+		const btn = screen.getByText('建立教練').closest('button')!;
+		expect(btn).not.toBeDisabled();
+		await fireEvent.click(btn);
+		expect(screen.getByText(COACH_PASSWORD_ERROR)).toBeInTheDocument();
+		expect(onCreate).not.toHaveBeenCalled();
 	});
 
 	it('公開顯示 defaults to on (checked) for a brand-new coach', () => {
@@ -72,9 +92,9 @@ describe('CoachForm — 新增模式（兩步流程第一步：收 email/密碼�
 });
 
 describe('CoachForm — 編輯模式（PATCH /coaches/{id}，姓名變動另觸發 PATCH /users/{user_id}）', () => {
-	it('pre-fills name/title/tags from the coach and calls onSave(values, false)', async () => {
-		const onSave = vi.fn();
-		render(CoachForm, { props: { onClose: () => {}, onSave, c: EXISTING } });
+	it('pre-fills name/title/tags from the coach and calls onUpdate(values)', async () => {
+		const onUpdate = vi.fn().mockResolvedValue(true);
+		render(CoachForm, { props: { onClose: () => {}, onUpdate, c: EXISTING } });
 
 		expect(screen.getByLabelText('教練姓名')).toHaveValue('林雅婷');
 		expect(screen.getByLabelText('職稱 / 專業', { exact: false })).toHaveValue('資深競技體操教練');
@@ -86,41 +106,49 @@ describe('CoachForm — 編輯模式（PATCH /coaches/{id}，姓名變動另觸�
 		await fireEvent.input(screen.getByLabelText('教練姓名'), { target: { value: '林雅婷（改名）' } });
 		await fireEvent.click(screen.getByText('儲存'));
 
-		expect(onSave).toHaveBeenCalledWith(
-			{
-				email: '',
-				password: '',
-				name: '林雅婷（改名）',
-				title: '資深競技體操教練',
-				tags: ['競技體操', '競技啦啦隊'],
-				isActive: true
-			},
-			false
-		);
+		expect(onUpdate).toHaveBeenCalledWith({
+			email: '',
+			password: '',
+			name: '林雅婷（改名）',
+			title: '資深競技體操教練',
+			tags: ['競技體操', '競技啦啦隊'],
+			isActive: true
+		});
 	});
 
 	it('公開顯示 switch defaults from coach.isActive and can be toggled to false', async () => {
-		const onSave = vi.fn();
-		render(CoachForm, { props: { onClose: () => {}, onSave, c: { ...EXISTING, isActive: false } } });
+		const onUpdate = vi.fn().mockResolvedValue(true);
+		render(CoachForm, { props: { onClose: () => {}, onUpdate, c: { ...EXISTING, isActive: false } } });
 
 		expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
 		await fireEvent.click(screen.getByText('儲存'));
-		expect(onSave.mock.calls[0][0]).toMatchObject({ isActive: false });
+		expect(onUpdate.mock.calls[0][0]).toMatchObject({ isActive: false });
 	});
 
-	it('disables 儲存 when 職稱 is cleared (title 必填，規則住 coach-save.ts)', async () => {
-		const onSave = vi.fn();
-		render(CoachForm, { props: { onClose: () => {}, onSave, c: EXISTING } });
+	it('cleared 職稱: submit shows COACH_TITLE_ERROR and does not call onUpdate', async () => {
+		const onUpdate = vi.fn();
+		render(CoachForm, { props: { onClose: () => {}, onUpdate, c: EXISTING } });
 
 		await fireEvent.input(screen.getByLabelText('職稱 / 專業', { exact: false }), {
 			target: { value: '   ' }
 		});
 
-		expect(screen.getByText('儲存').closest('button')).toBeDisabled();
-		expect(onSave).not.toHaveBeenCalled();
+		await fireEvent.click(screen.getByText('儲存'));
+		expect(screen.getByText(COACH_TITLE_ERROR)).toBeInTheDocument();
+		expect(onUpdate).not.toHaveBeenCalled();
 	});
 
-	it('does nothing (no throw) when no onSave is provided — no silent fake-write fallback', async () => {
+	it('stays open when onUpdate resolves false', async () => {
+		const onUpdate = vi.fn().mockResolvedValue(false);
+		const onClose = vi.fn();
+		render(CoachForm, { props: { onClose, onUpdate, c: EXISTING } });
+		await fireEvent.click(screen.getByText('儲存'));
+		await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+		await Promise.resolve();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it('does nothing (no throw) when no handler is provided — no silent fake-write fallback', async () => {
 		render(CoachForm, { props: { onClose: () => {}, c: EXISTING } });
 		await fireEvent.click(screen.getByText('儲存'));
 		// reaching here without throwing is the assertion — there is no local

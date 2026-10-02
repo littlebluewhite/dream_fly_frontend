@@ -436,3 +436,21 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
 - §6 寫的「coach 兩支 mapper 的目標形狀另帶 `level`/`cat`」不再成立:`TodayClass.level/cat` 隨 R16
   Task 2a 拿掉(後端沒有這兩個欄位)。
 - 「教練身分快取到登出為止」仍然成立(閘門仍快取 `ApiCoach` 到換帳號為止)。
+
+## 增補(2026-10-03,架構深化 R17):§4 的 mobile 表單現在與桌面一致
+
+§4 寫「mobile `ClassForm` 主按鈕依驗證結果 disabled」「`MemberForm`/`CoachForm` 共用驗證」,但 mobile
+三個表單仍是單一 `onSave(body, isNew)`,呼叫端要靠 `as` 與 `'email' in body` 收窄,且驗證不過只是
+把按鈕停用、不告訴使用者哪一欄錯。R17 Task FE-6 補齊,本篇原文不改寫,以本節為準:
+
+- **新增與編輯分開**:`MemberForm`/`ClassForm`/`CoachForm` 的 `onSave(body, isNew)` 拆成
+  `onCreate(body: CreateX) => Promise<boolean>` 與 `onUpdate(body: UpdateX) => Promise<boolean>`
+  (`true` = 已存,表單才 `onClose()`;`false` = 失敗,表單留著重試)。頁面端的 `as` 與 `'email' in body`
+  刪除。沒有對應 handler 時不送出也不關閉。
+- **送出時驗證(同桌面)**:不再依驗證結果 disabled。送出時跑同一份 `checkX`,無效就把 module 既有
+  常數(如 `MEMBER_PASSWORD_ERROR`)用 `<Input error=…>` 顯示在欄位上、不呼叫 handler;按鈕只在存檔中
+  停用,防連點。
+- **教練新增重試**:`addCoach(v, pendingUserId)` 把 `pendingUserId` 傳進 `saveNewCoach`。
+  `CoachesScreen` 在每個新增 sheet 工作階段內持有哨兵:綁定失敗(`coachBindFailed`)後 sheet 留著,
+  重試只再打 `POST /coaches`、沿用同一個 user id,不重建帳號(避免 email 409)。重新開啟新增 sheet
+  時哨兵重置。這取代 CoachesScreen 檔頭原本「儲存即關 sheet、哨兵刻意丟棄、請換一個 email」的設計。

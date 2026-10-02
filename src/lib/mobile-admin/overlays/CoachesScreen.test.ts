@@ -113,13 +113,16 @@ const V: CoachFormValues = {
 	isActive: true
 };
 
-/** 從目前開啟的 sheet 取出頁面帶入的 onSave 閉包（同 mobile-admin/admin/members/
- *  page.test.ts 對 sheetProps.onSave 的取用慣例）。 */
-function sheetOnSave(): (v: CoachFormValues) => Promise<void> {
-	const props = get(overlay).sheet?.props as { onSave: (v: CoachFormValues) => Promise<void> } | undefined;
+/** 從目前開啟的 sheet 取出頁面帶入的 onCreate / onUpdate 閉包（同 mobile-admin/admin/members/
+ *  page.test.ts 對 sheetProps 的取用慣例）；true＝已存（sheet 可關），false＝留著。 */
+type SheetHandler = (v: CoachFormValues) => Promise<boolean>;
+function sheetProps(): { onCreate: SheetHandler; onUpdate: SheetHandler } {
+	const props = get(overlay).sheet?.props as { onCreate: SheetHandler; onUpdate: SheetHandler } | undefined;
 	if (!props) throw new Error('沒有開啟中的 sheet');
-	return props.onSave;
+	return props;
 }
+const sheetOnCreate = () => sheetProps().onCreate;
+const sheetOnUpdate = () => sheetProps().onUpdate;
 
 function callCount(method: string, path: string): number {
 	return vi.mocked(api).mock.calls.filter(([p, init]) => p === path && (init?.method ?? 'GET') === method).length;
@@ -140,7 +143,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
 
-		await sheetOnSave()(V);
+		expect(await sheetOnCreate()(V)).toBe(true);
 
 		expect(api).toHaveBeenCalledWith('/users', { method: 'POST', body: JSON.stringify({ email: V.email, name: V.name, password: V.password }) });
 		expect(api).toHaveBeenCalledWith('/coaches', { method: 'POST', body: JSON.stringify({ user_id: 'u-new', title: V.title, specialties: V.tags, is_active: V.isActive }) });
@@ -158,7 +161,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
-		await sheetOnSave()(V);
+		expect(await sheetOnCreate()(V)).toBe(false);
 
 		expect(callCount('POST', '/coaches')).toBe(0);
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '新增失敗' });
@@ -166,14 +169,14 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		expect(callCount('GET', '/coaches')).toBe(0);
 	});
 
-	it('coachBindFailed：帳號已建立但綁定失敗 → 教練綁定失敗 toast(逐字含確認學員管理頁文案)，且不打第二步重試(pendingUserId 刻意丟棄，第二次呼叫仍重打 createMember，不是只補打 createCoach)', async () => {
+	it('coachBindFailed：綁定失敗 → 教練綁定失敗 toast、回 false(sheet 留著)；重試沿用同一 user id，只再打 POST /coaches(不再建 user，避免 email 409)', async () => {
 		let createMemberCalls = 0;
 		let createCoachCalls = 0;
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'POST /users': () => {
 					createMemberCalls += 1;
-					return apiUserAccount({ id: createMemberCalls === 1 ? 'u-orphan-1' : 'u-orphan-2' });
+					return apiUserAccount({ id: 'u-orphan-1' });
 				},
 				'POST /coaches': () => {
 					createCoachCalls += 1;
@@ -186,32 +189,50 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 
 		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
 		await fireEvent.click(getByLabelText('新增教練'));
-		const onSave = sheetOnSave();
-		await onSave(V);
+		const onCreate = sheetOnCreate();
+		expect(await onCreate(V)).toBe(false);
 
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '教練綁定失敗' });
-		// 文案指引「換一個 email」——本頁沒有 pendingUserId 哨兵，若只說「重新新增一次
-		// 教練」不夠明確，使用者拿同一個 email 重試會在 createMember 撞 409(同
-		// ADR 0018 該段裁決文字；不可沿用桌面「重新點擊建立教練重試」的語意，桌面有
-		// 哨兵可以只補打第二步，本頁沒有)。
 		expect(get(toasts).at(-1)?.body).toBe(
-			'帳號「coach@test.com」已建立，但綁定教練身分失敗（找不到對應的使用者帳號。）。請至「學員管理」頁確認該帳號，或重新執行一次新增教練（換一個 email）。'
+			'帳號「coach@test.com」已建立，但綁定教練身分失敗（找不到對應的使用者帳號。）。請直接再按一次「建立教練」重試綁定。'
 		);
 		expect(createMemberCalls).toBe(1);
 		expect(createCoachCalls).toBe(1);
 		expect(callCount('GET', '/coaches')).toBe(0);
 
-		// 桌面版把這次的 user_id 存回 pendingUserId 哨兵，同一對話框工作階段內重試只
-		// 補打第二步(createCoach)；本頁「儲存即關 sheet」沒有這個重試工作階段，
-		// pendingUserId 刻意丟棄——同一個 onSave 再呼叫一次仍會從頭重打 createMember。
-		await onSave(V);
+		// 同一個 sheet 工作階段內重試：只補打 createCoach，沿用同一個 user id。
+		expect(await onCreate(V)).toBe(true);
 
-		expect(createMemberCalls).toBe(2);
+		expect(createMemberCalls).toBe(1);
 		expect(createCoachCalls).toBe(2);
 		const secondCoachBody = JSON.parse(
 			vi.mocked(api).mock.calls.filter(([p, init]) => p === '/coaches' && init?.method === 'POST')[1][1]!.body as string
 		);
-		expect(secondCoachBody).toMatchObject({ user_id: 'u-orphan-2' });
+		expect(secondCoachBody).toMatchObject({ user_id: 'u-orphan-1' });
+	});
+
+	it('重新開啟新增教練 sheet 不沿用上一輪的 pendingUserId', async () => {
+		let createMemberCalls = 0;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'POST /users': () => {
+					createMemberCalls += 1;
+					return apiUserAccount({ id: `u-${createMemberCalls}` });
+				},
+				'POST /coaches': () => {
+					if (createMemberCalls === 1) throw new ApiError(404, 'x');
+					return {};
+				},
+				...opsRoutes(WIRE_COACHES_BASE)
+			})
+		);
+
+		const { getByLabelText } = render(CoachesScreen, { props: { onBack: () => {} } });
+		await fireEvent.click(getByLabelText('新增教練'));
+		expect(await sheetOnCreate()(V)).toBe(false);
+		await fireEvent.click(getByLabelText('新增教練'));
+		expect(await sheetOnCreate()(V)).toBe(true);
+		expect(createMemberCalls).toBe(2);
 	});
 });
 
@@ -228,7 +249,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[0]);
 
-		await sheetOnSave()({ email: '', password: '', name: target.name, title: '改職稱', tags: target.tags, isActive: target.isActive });
+		await sheetOnUpdate()({ email: '', password: '', name: target.name, title: '改職稱', tags: target.tags, isActive: target.isActive });
 
 		expect(callCount('PATCH', '/users/u1')).toBe(0);
 		expect(api).toHaveBeenCalledWith('/coaches/c1', { method: 'PATCH', body: JSON.stringify({ title: '改職稱', specialties: target.tags, is_active: target.isActive }) });
@@ -259,7 +280,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[1]);
-		await sheetOnSave()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
+		await sheetOnUpdate()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
 
 		expect(callOrder).toEqual(['updateMember', 'updateCoach']);
 		expect(api).toHaveBeenCalledWith('/users/u2', { method: 'PATCH', body: JSON.stringify({ name: '改名教練' }) });
@@ -276,7 +297,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[2]);
-		await sheetOnSave()({ email: '', password: '', name: target.name, title: target.title, tags: target.tags, isActive: target.isActive });
+		await sheetOnUpdate()({ email: '', password: '', name: target.name, title: target.title, tags: target.tags, isActive: target.isActive });
 
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '儲存失敗' });
 		expect(get(toasts).at(-1)?.body).toBe('輸入資料不符規則，請確認後再試。');
@@ -293,7 +314,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		await waitFor(() => expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBeGreaterThan(0));
 		const pencils = container.querySelectorAll('button[aria-label="編輯教練"]');
 		await fireEvent.click(pencils[3]);
-		await sheetOnSave()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
+		await sheetOnUpdate()({ email: '', password: '', name: '改名教練', title: target.title, tags: target.tags, isActive: target.isActive });
 
 		expect(callCount('PATCH', '/coaches/c4')).toBe(0);
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'error', title: '儲存失敗' });

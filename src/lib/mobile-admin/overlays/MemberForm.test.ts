@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/svelte';
+import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import MemberForm from './MemberForm.svelte';
 import type { MemberAccount as MemberRow } from '$lib/admin/data';
+import { MEMBER_NAME_ERROR, MEMBER_PASSWORD_ERROR } from '$lib/admin/components/member-request';
 
 /* Task 20：學員新增/編輯改接真 POST /users、PATCH /users/{id}（契約 §3.2 兩個端點
- * 接受的欄位完全不同）——這裡驗證新增/編輯兩種模式各自呼叫 onSave(body, isNew)。
+ * 接受的欄位完全不同）——這裡驗證新增/編輯兩種模式各自呼叫 onCreate(body) / onUpdate(body)（回 true＝已存才關閉，false＝留著）。
+ * 驗證在送出時做（同桌面，ADR-0023 §4）：無效 → 欄位顯示 module 常數、不呼叫。
  * R13 Task 4：body 規則住 member-request.ts(桌面同一份)，由 member-request.test.ts
  * 覆蓋；這裡只剩接線與 disabled。 */
 
@@ -18,43 +20,71 @@ const EXISTING: MemberRow = {
 	points: 50
 };
 
+const fillNew = async (password = 'password123') => {
+	await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
+	await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '測試生' } });
+	await fireEvent.input(screen.getByLabelText('聯絡電話（選填）'), { target: { value: '0900-000-000' } });
+	await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: password } });
+};
+const submitNew = () => fireEvent.click(screen.getByText('建立學員').closest('button')!);
+
 describe('MemberForm — 新增模式（POST /users）', () => {
-	it('builds a CreateMemberBody (email/name/phone/password) and calls onSave(body, true)', async () => {
-		const onSave = vi.fn();
-		render(MemberForm, { props: { onClose: () => {}, onSave } });
+	it('builds a CreateMemberBody and calls onCreate(body); closes after it resolves true', async () => {
+		const onCreate = vi.fn().mockResolvedValue(true);
+		const onClose = vi.fn();
+		render(MemberForm, { props: { onClose, onCreate } });
+		await fillNew();
+		await submitNew();
 
-		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
-		await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '測試生' } });
-		await fireEvent.input(screen.getByLabelText('聯絡電話（選填）'), { target: { value: '0900-000-000' } });
-		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'password123' } });
-		await fireEvent.click(screen.getByText('建立學員').closest('button')!);
-
-		expect(onSave).toHaveBeenCalledTimes(1);
-		expect(onSave).toHaveBeenCalledWith(
-			{ email: 'new@test.com', name: '測試生', password: 'password123', phone: '0900-000-000' },
-			true
-		);
+		expect(onCreate).toHaveBeenCalledTimes(1);
+		expect(onCreate).toHaveBeenCalledWith({ email: 'new@test.com', name: '測試生', password: 'password123', phone: '0900-000-000' });
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 	});
 
-	it('disables submit when the password is under 8 chars (does not call onSave)', async () => {
-		const onSave = vi.fn();
-		render(MemberForm, { props: { onClose: () => {}, onSave } });
+	it('invalid password: submit shows MEMBER_PASSWORD_ERROR and does not call onCreate (button not disabled)', async () => {
+		const onCreate = vi.fn();
+		render(MemberForm, { props: { onClose: () => {}, onCreate } });
+		await fillNew('short');
 
-		await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'new@test.com' } });
-		await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '測試生' } });
-		await fireEvent.input(screen.getByLabelText('初始密碼'), { target: { value: 'short' } });
+		const btn = screen.getByText('建立學員').closest('button')!;
+		expect(btn).not.toBeDisabled();
+		await fireEvent.click(btn);
 
-		// The submit button is disabled while the form is incomplete/invalid
-		// (mirrors the create button's `disabled={!valid}` guard elsewhere).
-		expect(screen.getByText('建立學員').closest('button')).toBeDisabled();
-		expect(onSave).not.toHaveBeenCalled();
+		expect(screen.getByText(MEMBER_PASSWORD_ERROR)).toBeInTheDocument();
+		expect(onCreate).not.toHaveBeenCalled();
+	});
+
+	it('stays open when onCreate resolves false', async () => {
+		const onCreate = vi.fn().mockResolvedValue(false);
+		const onClose = vi.fn();
+		render(MemberForm, { props: { onClose, onCreate } });
+		await fillNew();
+		await submitNew();
+
+		await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
+		await Promise.resolve();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(screen.getByText('建立學員').closest('button')).not.toBeDisabled();
+	});
+
+	it('disables the button only while saving', async () => {
+		let resolve!: (v: boolean) => void;
+		const onCreate = vi.fn(() => new Promise<boolean>((r) => (resolve = r)));
+		render(MemberForm, { props: { onClose: () => {}, onCreate } });
+		await fillNew();
+		await submitNew();
+
+		await waitFor(() => expect(screen.getByText('建立學員').closest('button')).toBeDisabled());
+		resolve(false);
+		await waitFor(() => expect(screen.getByText('建立學員').closest('button')).not.toBeDisabled());
 	});
 });
 
 describe('MemberForm — 編輯模式（PATCH /users/{id}）', () => {
-	it('pre-fills name/phone from the member and calls onSave(UpdateMemberBody, false)', async () => {
-		const onSave = vi.fn();
-		render(MemberForm, { props: { onClose: () => {}, onSave, m: EXISTING } });
+	it('pre-fills name/phone from the member and calls onUpdate(UpdateMemberBody)', async () => {
+		const onUpdate = vi.fn().mockResolvedValue(true);
+		const onClose = vi.fn();
+		render(MemberForm, { props: { onClose, onUpdate, m: EXISTING } });
 
 		expect(screen.getByLabelText('學員姓名')).toHaveValue('王小明');
 		expect(screen.getByLabelText('聯絡電話（選填）')).toHaveValue('0912-345-678');
@@ -65,21 +95,43 @@ describe('MemberForm — 編輯模式（PATCH /users/{id}）', () => {
 		await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '王小明（改名）' } });
 		await fireEvent.click(screen.getByText('儲存資料').closest('button')!);
 
-		expect(onSave).toHaveBeenCalledWith({ name: '王小明（改名）', is_active: true, phone: '0912-345-678' }, false);
+		expect(onUpdate).toHaveBeenCalledWith({ name: '王小明（改名）', is_active: true, phone: '0912-345-678' });
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 	});
 
 	it('帳號啟用 switch defaults from status and can be toggled to is_active:false', async () => {
-		const onSave = vi.fn();
-		render(MemberForm, { props: { onClose: () => {}, onSave, m: { ...EXISTING, status: 'inactive' } } });
+		const onUpdate = vi.fn().mockResolvedValue(true);
+		render(MemberForm, { props: { onClose: () => {}, onUpdate, m: { ...EXISTING, status: 'inactive' } } });
 
 		await fireEvent.click(screen.getByText('儲存資料').closest('button')!);
-		expect(onSave.mock.calls[0][0]).toMatchObject({ is_active: false });
+		expect(onUpdate.mock.calls[0][0]).toMatchObject({ is_active: false });
 	});
 
-	it('does nothing (no throw) when no onSave is provided — no silent fake-write fallback', async () => {
-		render(MemberForm, { props: { onClose: () => {}, m: EXISTING } });
+	it('invalid name: shows the error and does not call onUpdate', async () => {
+		const onUpdate = vi.fn();
+		render(MemberForm, { props: { onClose: () => {}, onUpdate, m: EXISTING } });
+		await fireEvent.input(screen.getByLabelText('學員姓名'), { target: { value: '王' } });
 		await fireEvent.click(screen.getByText('儲存資料').closest('button')!);
-		// reaching here without throwing is the assertion — there is no local
-		// store to inspect for a fake write anymore.
+
+		expect(screen.getByText(MEMBER_NAME_ERROR)).toBeInTheDocument();
+		expect(onUpdate).not.toHaveBeenCalled();
+	});
+
+	it('stays open when onUpdate resolves false', async () => {
+		const onUpdate = vi.fn().mockResolvedValue(false);
+		const onClose = vi.fn();
+		render(MemberForm, { props: { onClose, onUpdate, m: EXISTING } });
+		await fireEvent.click(screen.getByText('儲存資料').closest('button')!);
+
+		await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+		await Promise.resolve();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	it('does nothing (no throw) when no handler is provided — no silent fake-write fallback', async () => {
+		const onClose = vi.fn();
+		render(MemberForm, { props: { onClose, m: EXISTING } });
+		await fireEvent.click(screen.getByText('儲存資料').closest('button')!);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 });

@@ -26,7 +26,7 @@
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
-  import type { CreateMemberBody, UpdateMemberBody } from '$lib/admin/api';
+  import type { CreateMemberBody } from '$lib/admin/api';
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
 
@@ -58,22 +58,21 @@
   const openRole = () => overlay.sheet('role', { role: 'admin' });
 
   // POST /users 的錯誤訊息已是後端給的繁中使用者可讀文字 → apiErrorMessage 直接透傳，
-  // 同 members 頁慣例。參數對齊 MemberForm 的 onSave(body, isNew)聯集;m: null 的表單只會送
-  // CreateMemberBody,以 'email' in 收窄(不用 as)。
-  async function quickCreateMember(body: CreateMemberBody | UpdateMemberBody) {
-    if (!('email' in body)) return;
+  // 同 members 頁慣例。對齊 MemberForm 的 onCreate(回 true＝已存才關閉)。
+  async function quickCreateMember(body: CreateMemberBody): Promise<boolean> {
     try {
       await addMember(body);
     } catch (e) {
       toasts.notify('error', '新增失敗', apiErrorMessage(e));
-      return;
+      return false;
     }
     toasts.notify('success', '已新增學員', `「${body.name}」已建立。`);
+    return true;
   }
 
   const actions: [IconName, string, () => void][] = [
     ['plus', '新增課程', () => { go('classes'); toasts.notify('info', '新增課程', '已開啟新班級建立精靈。'); }],
-    ['user-plus', '新增學員', () => overlay.sheet('memberForm', { m: null, onSave: quickCreateMember })],
+    ['user-plus', '新增學員', () => overlay.sheet('memberForm', { m: null, onCreate: quickCreateMember })],
     ['download', '匯出報表', () => toasts.notify('info', '報表匯出中', '本月營運報表將寄送至您的信箱。')]
   ];
 </script>
