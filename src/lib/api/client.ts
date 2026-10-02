@@ -100,53 +100,51 @@ export async function refreshTokens(): Promise<boolean> {
  *  at the same moment must not both replay it — the backend treats a
  *  replayed refresh token as theft and revokes the whole family (see module
  *  docstring). Where the Web Locks API is available, only one tab across the
- *  whole browser runs a refresh at a time; a tab that had to wait re-reads
- *  the stored refresh token once inside the lock, and if it no longer
- *  matches what this tab saw before requesting the lock, some other tab
- *  already rotated it while this one waited — so this tab is already
- *  refreshed and returns true without a second network round trip. Browsers
- *  without navigator.locks (and jsdom in tests) fall back to the direct
- *  call, unchanged from before this cross-tab layer existed. */
+ *  whole browser runs a refresh at a time, and performRefresh() reads the
+ *  stored refresh token only once inside the lock: a tab that waited while
+ *  another tab rotated the pair therefore exchanges the *current* token for
+ *  an access token of its own (access tokens live in each tab's memory, so
+ *  the other tab's rotation alone leaves this tab without one). Each refresh
+ *  token is presented exactly once; the cost is one extra rotation per
+ *  waiting tab. Browsers without navigator.locks (and jsdom in tests) fall
+ *  back to the direct call. */
 async function performRefreshExclusive(): Promise<boolean> {
   const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
   if (!locks) {
     return performRefresh();
   }
-
-  const before = getRefresh();
-  return locks.request(REFRESH_LOCK_NAME, async () => {
-    const current = getRefresh();
-    if (current && current !== before) {
-      return true;
-    }
-    return performRefresh();
-  });
+  return locks.request(REFRESH_LOCK_NAME, performRefresh);
 }
 
+/** On failure, compare-and-clear: tokens are cleared only if the stored refresh
+ *  token is still the one this call sent. If another tab or a fresh login
+ *  replaced it while the request was in flight, that newer session stands. */
 async function performRefresh(): Promise<boolean> {
-  const refresh = getRefresh();
-  if (!refresh) {
-    clearTokens();
-    return false;
+  const sent = getRefresh();
+  if (sent && (await exchangeRefreshToken(sent))) {
+    return true;
   }
+  if (getRefresh() === sent) {
+    clearTokens();
+  }
+  return false;
+}
 
+/** POST /auth/refresh; stores the rotated pair and returns true on success. */
+async function exchangeRefreshToken(refresh: string): Promise<boolean> {
   try {
     const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refresh })
     });
-
     if (!response.ok) {
-      clearTokens();
       return false;
     }
-
     const data = (await response.json()) as { access_token: string; refresh_token: string };
     setTokens(data.access_token, data.refresh_token);
     return true;
   } catch {
-    clearTokens();
     return false;
   }
 }
