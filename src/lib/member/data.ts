@@ -206,5 +206,6 @@ export function mapNotification(n: ApiNotification): Notification {
 export const PT_TYPE: Record<LedgerType, [Tone, string]> = {
   earn: ['success', '獲得'],
   redeem: ['primary', '折抵'],
-  expire: ['neutral', '到期']
+  adjust: ['neutral', '調整'],
+  refund: ['info', '退款']
 };

@@ -29,13 +29,12 @@ export interface ApiPointsMe {
   ledger: ApiLedgerEntry[];
 }
 
-/** reason → 中文 desc + 本地 LedgerType 對照。checkout_earn/checkout_redeem 依契約
- *  恆為正/負，可以直接定案；redeem（Task 14：兌換獎勵扣點，integration-contract.md
- *  §3.23）與 checkout_redeem 是不同 reason，desc 分開文案以免使用者誤以為是結帳折抵；
- *  admin_adjust 可正可負且沒有專屬的 UI bucket（LedgerType 只有 earn/redeem/expire
- *  三值），借用既有兩值、依 delta 正負號分類 —— desc 文字仍誠實描述「管理員調整」，
- *  只有 badge 的分類/色調是借用近似值。 */
-function describeLedgerReason(reason: string, delta: number): { type: LedgerType; desc: string } {
+/** reason → 中文 desc + 本地 LedgerType 對照，後端 PointReason 六值全數列出：
+ *  checkout_earn/checkout_redeem（結帳賺/折抵）、redeem（兌換獎勵扣點，契約 §3.23，
+ *  desc 與 checkout_redeem 分開以免誤認為結帳折抵）、refund_restore/refund_clawback
+ *  （退款沖回，type 皆為 refund，desc 分辨退回折抵或收回回饋）、admin_adjust（可正可負，
+ *  type adjust）。default 只兜後端日後新增、前端尚未認得的 reason，同樣歸 adjust。 */
+function describeLedgerReason(reason: string): { type: LedgerType; desc: string } {
   switch (reason) {
     case 'checkout_earn':
       return { type: 'earn', desc: '消費獲得點數' };
@@ -43,10 +42,13 @@ function describeLedgerReason(reason: string, delta: number): { type: LedgerType
       return { type: 'redeem', desc: '消費折抵點數' };
     case 'redeem':
       return { type: 'redeem', desc: '兌換點數獎勵' };
+    case 'refund_restore':
+      return { type: 'refund', desc: '訂單退款・退回折抵點數' };
+    case 'refund_clawback':
+      return { type: 'refund', desc: '訂單退款・收回回饋點數' };
+    case 'admin_adjust':
     default:
-      return delta < 0
-        ? { type: 'expire', desc: '會員點數調整（扣除）' }
-        : { type: 'earn', desc: '會員點數調整（增加）' };
+      return { type: 'adjust', desc: '會員點數調整' };
   }
 }
 
@@ -66,7 +68,7 @@ export const refreshPoints = createSessionRefresher<ApiPointsMe>({
     points.set(data.balance);
     pointsLedger.set(
       data.ledger.map((l) => {
-        const { type, desc } = describeLedgerReason(l.reason, l.delta);
+        const { type, desc } = describeLedgerReason(l.reason);
         return { id: l.id, date: isoDate(l.created_at).replace(/-/g, '/'), desc, type, delta: l.delta };
       })
     );

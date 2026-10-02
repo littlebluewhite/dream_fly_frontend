@@ -175,8 +175,8 @@ export const NOTIF_CATS: [string, string][] = [
 ];
 
 /* ---- 點數明細(member 稱 LedgerEntry、mobile 稱 PointsEntry，同形;LedgerType
- * 兩側是同一組三個字面值，member 額外具名匯出這個型別) ---- */
-export type LedgerType = 'earn' | 'redeem' | 'expire';
+ * 兩側是同一組四個字面值，member 額外具名匯出這個型別) ---- */
+export type LedgerType = 'earn' | 'redeem' | 'adjust' | 'refund';
 export interface LedgerEntry {
 	id: string;
 	date: string;

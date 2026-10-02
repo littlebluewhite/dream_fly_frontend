@@ -264,7 +264,7 @@ describe('refreshPoints', () => {
     ]);
   });
 
-  it('admin_adjust 沒有專屬 UI bucket，依 delta 正負號借用 earn/expire', async () => {
+  it('admin_adjust 有專屬 adjust bucket，正負號都用同一個「會員點數調整」', async () => {
     vi.mocked(api).mockResolvedValue({
       balance: 0,
       ledger: [
@@ -277,8 +277,26 @@ describe('refreshPoints', () => {
     await refreshPoints();
 
     expect(get(pointsLedger)).toEqual([
-      { id: 'l3', date: '2026/05/01', desc: '會員點數調整（增加）', type: 'earn', delta: 50 },
-      { id: 'l4', date: '2026/05/02', desc: '會員點數調整（扣除）', type: 'expire', delta: -20 }
+      { id: 'l3', date: '2026/05/01', desc: '會員點數調整', type: 'adjust', delta: 50 },
+      { id: 'l4', date: '2026/05/02', desc: '會員點數調整', type: 'adjust', delta: -20 }
+    ]);
+  });
+
+  it('refund_restore / refund_clawback 各有專屬退款文案，type 皆為 refund', async () => {
+    vi.mocked(api).mockResolvedValue({
+      balance: 0,
+      ledger: [
+        { id: 'r1', delta: 300, balance_after: 300, reason: 'refund_restore', order_id: 'o1', created_at: '2026-07-02T00:00:00Z' },
+        { id: 'r2', delta: -120, balance_after: 180, reason: 'refund_clawback', order_id: 'o1', created_at: '2026-07-03T00:00:00Z' }
+      ],
+      total: 2, page: 1, per_page: 20
+    });
+
+    await refreshPoints();
+
+    expect(get(pointsLedger)).toEqual([
+      { id: 'r1', date: '2026/07/02', desc: '訂單退款・退回折抵點數', type: 'refund', delta: 300 },
+      { id: 'r2', date: '2026/07/03', desc: '訂單退款・收回回饋點數', type: 'refund', delta: -120 }
     ]);
   });
 
