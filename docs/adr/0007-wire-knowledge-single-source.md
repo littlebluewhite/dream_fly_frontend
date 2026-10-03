@@ -172,3 +172,50 @@ R13 增補寫的「`coach/api.ts` 的窄化版改 import `stores/authStore.ts` �
 R16 Task 1b 起 `coach/api.ts` 不讀 `/users/me`,也不 import `ApiUser`,本人資料一律讀
 `$selfAccount`。「`member/profile.ts` 以 `ApiUser & { preferences, birth_date }` 延伸同一份」改讀作
 `src/lib/self-account.ts` 的私有 `ApiMe`。倉內仍只有 authStore 一個宣告處。
+
+## 增補(2026-10-03,deepening-2026-10 W-5～W-7):response 型別改由後端產生,本篇放置規則被取代
+
+完整背景見後端 ADR 0016(wire 型別產生)與前端 ADR 0027。後端 Rust DTO 經 ts-rs 產生 TypeScript,
+`scripts/wire.mjs` 逐位元組同步到 `src/lib/api/generated/`(不得手改),`npm run check` 會擋不同步。
+W-5(點數、今日場次)、W-6(請假、訂單)、W-7(其餘 surface)把手寫的 `Api*` response 型別全數換掉。
+
+### 1. response 型別的放置規則被取代
+
+本篇「≥2 個 surface 共用才收進 `wire.ts`」的判準**不再適用於後端回應形狀**:回應形狀只有一個來源,
+就是 `$lib/api/generated`,任何 surface 都不再手寫。隨之刪除的有 `ApiPage<K, T>`(改用各
+`*ListResponse`)、`ApiReportCard`/`ApiCertificate`(改用 `ReportCardResponse`/`CertificateResponse`)、
+W-5/W-6 已刪的 `ApiTodaySession`/`ApiLeaveRequest`。`wire.ts` 仍收「≥2 surface 共用、由回應導出的
+顯示知識」——`ORDER_STATUS`/`orderStatusBadge`、`orderIdentity`、`taxFromGross`、`pageMeta`、日期切片等——
+以及產生型別的轉出。判準本身對這類知識照舊有效。
+
+仍手寫的只有三類,都不是後端回應形狀:
+
+- **request body**(`*Body`、`ContactPayload`、`SettingsWriteBody` 等):產生型別只含 response(後端 ADR 0016
+  R4)。
+- **後端刻意留 `String` / `JsonValue` 的欄位上,前端依契約所做的值域斷言**:`ActivityKind`、報表
+  `AdminRevenueSource`/`Admin*Bucket`、settings 三組慣例 key 的形狀(`ApiStudioProfile` 等)。在映射處
+  cast 進來,不回頭改寫產生型別。
+- **UI 目標型別**:照本篇原判準,留在各 surface。
+
+後端產生的封閉 enum 拿來做查表時寫成 `Record<GeneratedEnum, …>`(例如 `ORDER_STATUS`、`NOTIF_TYPE_MAP`),
+後端新增值就在前端編譯紅;部署落差時的未知值 fallback 照舊保留。
+
+### 2. 「窄化投影天生不會漂移」不成立
+
+本篇「`ApiUser` 三處窄化投影——刻意不合併」一節主張:每份窄化 interface 只是「後端至少要有這些欄位」
+的局部斷言,結構型別下沒有漂移風險。實際上反例已經出現:coach 端 `decideLeaveRequest` 把 `PATCH /leave-requests/{id}` 的回應
+當成帶 `user_name` 的手寫型別映射給頁面,但後端那支回應(會員形狀 `LeaveRequestResponse`)從沒送過這個欄位,
+`user_name` 拿到 `undefined` 約 12 週(2026-07-07 請假審核上線,到 2026-09-30 R16 Task 7 人工讀碼才發現;
+check 從頭到尾是綠的)。手寫的窄化型別只是**前端自己的斷言**,沒有任何東西拿它去對後端驗證——宣告了
+不存在的欄位一樣能過 check。改用產生型別後,同類錯誤會在 svelte-check 直接紅。
+
+因此:窄化投影仍可以用(只讀少數欄位的消費端不必背整個回應),但**必須寫成產生型別的 `Pick<…>`**,
+讓後端改名或刪欄時在前端變紅。W-7 起 `ApiUser = Pick<AuthUserResponse, 'id' | 'name' | 'created_at' |
+'roles'>`(auth 與 `/users/me` 回應皆滿足,`UserResponse` 是其欄位超集)、self-account 的
+`ApiMe = ApiUser & Pick<UserResponse, …>`、admin 的 `ApiUserAccount = Pick<UserResponse, …>`。
+
+### 3. import 規則
+
+- 手寫程式碼可直接 `import type` 自 `$lib/api/generated`,也可經 `wire.ts` 的轉出;不強制單一入口。
+- 自 generated 的 import 一律是 type-only(`import type` / `export type { … } from './generated'`)。
+- `wire.ts` 不得有任何自 `./generated` 的 runtime import。
