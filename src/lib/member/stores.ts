@@ -41,7 +41,6 @@ export { points, pointsLedger, pointsEarnedThisMonth, refreshPoints, redeemRewar
 export type { ApiRedeemResult } from './points';
 
 export { subscriptions, refreshSubscriptions } from './subscriptions';
-export type { ApiSubscription } from './subscriptions';
 
 export { createCheckout } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';

@@ -4,6 +4,7 @@ import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
 import { ntd } from '$lib/public/adapters';
 import { SUBS_SEED, type Subscription } from './data';
+import type { SubscriptionResponse } from '$lib/api/generated';
 
 /* ---- Subscriptions / entitlements ----
  * Task 17: localStorage persistence removed — truth is the server now
@@ -14,18 +15,6 @@ import { SUBS_SEED, type Subscription } from './data';
  * entitlement (e.g. an admin-side change) with no event to invalidate it, so
  * the store simply starts empty/seeded and is hydrated on demand instead. */
 export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ...s })));
-
-export interface ApiSubscription {
-  id: string;
-  product_id: string;
-  product_name: string;
-  status: 'active' | 'expired' | 'cancelled';
-  started_at: string;
-  expires_at: string | null;
-  total_sessions: number | null;
-  remaining_sessions: number | null;
-  price_cents: number;
-}
 
 /** 訂閱清單 — 從 GET /subscriptions/me 重新 hydrate 本地 subscriptions store。
  *  只留 status active 的項目：expired/cancelled 不算「已持有」，不該擋掉會員
@@ -41,8 +30,8 @@ export interface ApiSubscription {
 /** C1（架構深化 R7）抬升為 createSessionRefresher:同 refreshPoints——保留「無條件重抓」
  *  語意(桌面帳戶頁進頁暖機 + placeOrder afterOrder 依賴,不套 guard),只加 identity 清空
  *  (reset 歸 boot 態空)+ 在飛換帳靜默丟棄(不 throw)。 */
-export const refreshSubscriptions = createSessionRefresher<ApiSubscription[]>({
-  fetch: () => api<ApiSubscription[]>('/subscriptions/me'),
+export const refreshSubscriptions = createSessionRefresher<SubscriptionResponse[]>({
+  fetch: () => api<SubscriptionResponse[]>('/subscriptions/me'),
   apply: (list) =>
     subscriptions.set(
       list
