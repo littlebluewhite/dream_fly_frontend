@@ -6,6 +6,7 @@ import { toasts } from '$lib/member/stores';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { pointsMe } from '$lib/testing/wire-fixtures';
 
 // R13 Task 3(C1):個人資料改由會員資料 module($lib/self-account)持有,頁面讀
 // $selfAccount、存檔走 saveSelfAccount。測試改走 $lib/api/client + fakeRouter(ADR-0022
@@ -56,7 +57,7 @@ beforeEach(async () => {
 		'POST /auth/login': { access_token: 'at', refresh_token: 'rt', user: USER },
 		'GET /users/me': ME,
 		'GET /orders/me?per_page=100': ORDERS_RES,
-		'GET /points/me': { balance: 1250, ledger: [] },
+		'GET /points/me': pointsMe({ balance: 1250 }),
 		'GET /subscriptions/me': []
 	};
 	vi.mocked(api).mockImplementation((path, init) => fakeRouter(routes)(path, init));

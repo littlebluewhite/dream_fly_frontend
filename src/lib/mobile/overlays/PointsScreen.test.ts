@@ -7,6 +7,7 @@ import { toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import PointsScreen from './PointsScreen.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { pointsMe } from '$lib/testing/wire-fixtures';
 
 /* Task 19：PointsScreen 改真後端 —— 兌換品項復用桌面 getPoints()(Task 14 rewards
  * seam)；餘額/明細/兌換動作改讀 $lib/member/points 的真 points/pointsLedger/
@@ -95,10 +96,10 @@ describe('PointsScreen — 兌換流程(Task 14：POST /rewards/{id}/redeem，�
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'POST /rewards/rw-1/redeem': { redemption_id: 'red-1', points_spent: 100, balance_after: 900 },
-				'GET /points/me': {
+				'GET /points/me': pointsMe({
 					balance: 900,
 					ledger: [{ id: 'l1', delta: -100, balance_after: 900, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }]
-				}
+				})
 			})
 		);
 		const notifySpy = vi.spyOn(toasts, 'notify');
@@ -136,7 +137,7 @@ describe('PointsScreen — 兌換流程(Task 14：POST /rewards/{id}/redeem，�
 		vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
 			const method = (init.method ?? 'GET').toString().toUpperCase();
 			if (method === 'POST' && path === '/rewards/rw-1/redeem') return pending;
-			if (path === '/points/me') return { balance: 900, ledger: [] };
+			if (path === '/points/me') return pointsMe({ balance: 900 });
 			throw new Error('unexpected api call: ' + method + ' ' + path);
 		});
 		render(PointsScreen, { props: { onBack: () => {} } });

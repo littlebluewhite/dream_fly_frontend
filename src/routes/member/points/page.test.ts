@@ -8,6 +8,7 @@ import type { PointsMeResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { pointsMe } from '$lib/testing/wire-fixtures';
 
 vi.mock('$lib/member/api', () => ({ getPoints: vi.fn() }));
 
@@ -139,10 +140,10 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'POST /rewards/rw-1/redeem': { redemption_id: 'red-1', points_spent: 100, balance_after: 900 },
-        'GET /points/me': {
+        'GET /points/me': pointsMe({
           balance: 900,
           ledger: [{ id: 'l1', delta: -100, balance_after: 900, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }]
-        }
+        })
       })
     );
     const notifySpy = vi.spyOn(toasts, 'notify');
@@ -216,7 +217,7 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (method === 'POST' && path === '/rewards/rw-1/redeem') return pending;
-      if (path === '/points/me') return { balance: 900, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 900 });
       throw new Error('unexpected api call: ' + method + ' ' + path);
     });
     render(Page);

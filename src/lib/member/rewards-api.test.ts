@@ -11,6 +11,7 @@ import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from './stores';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { pointsMe } from '$lib/testing/wire-fixtures';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -29,10 +30,10 @@ describe('redeemReward — POST /rewards/{id}/redeem', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'POST /rewards/rw-1/redeem': { redemption_id: 'redemption-1', points_spent: 100, balance_after: 900 },
-        'GET /points/me': {
+        'GET /points/me': pointsMe({
           balance: 900,
           ledger: [{ id: 'l1', delta: -100, balance_after: 900, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }]
-        }
+        })
       })
     );
 
@@ -53,7 +54,7 @@ describe('redeemReward — POST /rewards/{id}/redeem', () => {
       if (method === 'POST' && path === '/rewards/rw-1/redeem') {
         return { redemption_id: 'r1', points_spent: 100, balance_after: 400 };
       }
-      if (path === '/points/me') return { balance: 400, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 400 });
       throw new Error('unexpected api call: ' + method + ' ' + path);
     });
 
