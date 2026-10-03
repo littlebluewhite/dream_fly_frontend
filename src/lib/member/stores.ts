@@ -38,7 +38,6 @@ export {
 export type { LeaveRequest, CourseSession } from './leave';
 
 export { points, pointsLedger, pointsEarnedThisMonth, refreshPoints, redeemReward, redeemRewardErrorMessage } from './points';
-export type { ApiRedeemResult } from './points';
 
 export { subscriptions, refreshSubscriptions } from './subscriptions';
 

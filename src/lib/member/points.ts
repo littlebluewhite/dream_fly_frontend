@@ -3,7 +3,7 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
-import type { PointReason, PointsMeResponse } from '$lib/api/generated';
+import type { PointReason, PointsMeResponse, RedeemResponse } from '$lib/api/generated';
 import type { LedgerEntry, LedgerType } from '$lib/domain/member-app';
 
 /* ---- Points ----
@@ -82,17 +82,12 @@ export const refreshPoints = createSessionRefresher<PointsMeResponse>({
  * 一次快速的網路來回，等它 resolve 再視為兌換完成，呼叫端（points 頁）用
  * in-flight guard（submitting 旗標）蓋掉這段空檔，比維護「樂觀值之後又被
  * refreshPoints 覆蓋」兩套餘額真相簡單。 */
-export interface ApiRedeemResult {
-  redemption_id: string;
-  points_spent: number;
-  balance_after: number;
-}
 
 /** POST /rewards/{id}/redeem — 無 body。成功後呼叫 refreshPoints()（見上方裁決）；
  *  回應原樣（snake_case）回傳給呼叫端，同 placeOrder() 對 OrderResponse 的處理慣例——
  *  呼叫端目前只需要知道「成功了」，沒有欄位需要改名成 UI 形狀。 */
-export async function redeemReward(rewardId: string): Promise<ApiRedeemResult> {
-  const result = await api<ApiRedeemResult>(`/rewards/${rewardId}/redeem`, { method: 'POST' });
+export async function redeemReward(rewardId: string): Promise<RedeemResponse> {
+  const result = await api<RedeemResponse>(`/rewards/${rewardId}/redeem`, { method: 'POST' });
   await refreshPoints();
   return result;
 }
