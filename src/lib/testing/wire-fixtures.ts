@@ -9,6 +9,7 @@ import type {
 	AdminOrderSummary,
 	AdminReportResponse,
 	CoachResponse,
+	ConversationSummaryResponse,
 	CouponResponse,
 	CourseResponse,
 	InquiryResponse,
@@ -268,5 +269,15 @@ export const courseResponse = (over: Partial<CourseResponse> = {}): CourseRespon
 	updated_at: '',
 	enrolled_count: 0,
 	waitlist_count: 0,
+	...over
+});
+
+export const conversationSummary = (over: Partial<ConversationSummaryResponse> = {}): ConversationSummaryResponse => ({
+	id: 'conv-1',
+	peer_id: 'user-2',
+	peer_name: '王先生',
+	last_message_body: null,
+	last_message_at: null,
+	unread_count: 0,
 	...over
 });
