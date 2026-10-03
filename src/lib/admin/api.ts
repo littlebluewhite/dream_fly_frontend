@@ -7,7 +7,7 @@ import { api } from '$lib/api/client';
 import { listCoaches, listVenues } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate } from '$lib/api/wire';
+import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate, paidAtLabel } from '$lib/api/wire';
 import type { TodaySessionResponse } from '$lib/api/wire';
 import { SESSION_STATUS, toTodaySession } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
@@ -40,7 +40,6 @@ import type {
 	UserResponse,
 	VenueResponse
 } from '$lib/api/generated';
-import { paidAtLabel } from './components/order-status';
 import type { Activity } from '$lib/domain/activity';
 import type { IconName } from '$lib/icon-registry';
 
@@ -177,7 +176,7 @@ export const updateProduct = (id: string, body: ProductWriteBody): Promise<Produ
  *  (已於 data.ts 擴充至 6 態)。orderId 是真實後端 UUID（`o.id`）——Task 8 piece 2
  *  的 PATCH /orders/{id}/status 要用這個，`id` 欄位其實是 order_number（顯示用，
  *  維持既有 UI 不變)。 */
-function mapAdminOrder(o: AdminOrderSummary, i: number): Order {
+export function mapAdminOrder(o: AdminOrderSummary, i: number): Order {
 	const amount = ntd(o.total_cents);
 	const { tax, net } = taxFromGross(amount);
 	const { display, uuid } = orderIdentity(o);

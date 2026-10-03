@@ -20,7 +20,7 @@
  * 文案留呼叫端（ADR-0011「per-entity 知識留頁」精神）：本模組只回傳判別聯集，
  * 由桌面 orders 頁把 outcome 翻成繁中 toast。 */
 import type { Order } from '$lib/admin/data';
-import { isoDate, type OrderStatus } from '$lib/api/wire';
+import { paidAtLabel, type OrderStatus } from '$lib/api/wire';
 import type { OrderResponse } from '$lib/api/generated';
 import { ApiError } from '$lib/api/client';
 
@@ -38,14 +38,6 @@ const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
 
 export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
 	return LEGAL_NEXT[current];
-}
-
-/** 收款時間顯示（W-6）：讀後端真實 `paid_at`（AdminOrderSummary / OrderResponse）。
- *  null 時 pending →「—（待付款）」、其他狀態 →「—」；有值則同訂單日期欄的 isoDate
- *  格式。讀取（admin/api.ts 的 mapAdminOrder）與 PATCH 後套回（applyStatusChange）共用。 */
-export function paidAtLabel(status: OrderStatus, paidAt: string | null): string {
-	if (paidAt === null) return status === 'pending' ? '—（待付款）' : '—';
-	return isoDate(paidAt);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross } from './wire';
+import { orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross, paidAtLabel } from './wire';
 
 /* Expected [tone, label] pairs are copied verbatim from the current
  * admin/data.ts ORDER_STATUS / member/api.ts ORDER_STATUS (confirmed
@@ -110,5 +110,20 @@ describe('taxFromGross', () => {
 
   it('returns { tax: 0, net: 0 } for a zero amount', () => {
     expect(taxFromGross(0)).toEqual({ tax: 0, net: 0 });
+  });
+});
+
+/* W-6：收款時間改讀後端真實 paid_at（原本以訂單日期冒充）。 */
+describe('paidAtLabel — 收款時間顯示（後端 paid_at）', () => {
+  it('paid_at 有值 → 同訂單日期欄的 YYYY-MM-DD 格式', () => {
+    expect(paidAtLabel('paid', '2026-06-09T03:15:00Z')).toBe('2026-06-09');
+  });
+
+  it('paid_at 為 null 且 pending →「—（待付款）」', () => {
+    expect(paidAtLabel('pending', null)).toBe('—（待付款）');
+  });
+
+  it('paid_at 為 null 且非 pending →「—」（不再以訂單日期冒充）', () => {
+    expect(paidAtLabel('cancelled', null)).toBe('—');
   });
 });

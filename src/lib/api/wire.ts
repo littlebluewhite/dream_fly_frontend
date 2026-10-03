@@ -99,6 +99,15 @@ export const initialOf = (name: string, fallback = '?'): string => name.trim().c
 export const isoDateTime = (iso: string): string => iso.slice(0, 16).replace('T', ' ');
 /** ISO 日期（時間）字串 → 'YYYY-MM-DD'（顯示用途；isoDateTime 的日期截斷版）。 */
 export const isoDate = (iso: string): string => iso.slice(0, 10);
+
+/** 收款時間顯示（W-6）：讀後端真實 `paid_at`（AdminOrderSummary / OrderResponse）。
+ *  null 時 pending →「—（待付款）」、其他狀態 →「—」；有值則同訂單日期欄的 isoDate
+ *  格式。讀取（admin/api.ts 的 mapAdminOrder）與 PATCH 後套回（order-status.ts 的
+ *  applyStatusChange）共用。 */
+export function paidAtLabel(status: OrderStatus, paidAt: string | null): string {
+  if (paidAt === null) return status === 'pending' ? '—（待付款）' : '—';
+  return isoDate(paidAt);
+}
 /** time-only 欄位 'HH:MM(:SS)' → 'HH:MM'（顯示用途；完整 ISO 走 isoDate/isoDateTime）。 */
 export const hhmm = (t: string): string => t.slice(0, 5);
 

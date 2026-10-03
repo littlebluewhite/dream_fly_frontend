@@ -2,11 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Order } from '$lib/admin/data';
 import type { OrderStatus } from '$lib/api/wire';
 import { ApiError } from '$lib/api/client';
-import { orderResponse } from '$lib/testing/wire-fixtures';
+import { adminOrderSummary, orderResponse } from '$lib/testing/wire-fixtures';
+import { mapAdminOrder } from '$lib/admin/api';
 import {
 	legalNextStatuses,
 	applyStatusChange,
-	paidAtLabel,
 	isRevenueStatus,
 	revenueTotal,
 	changeOrderStatus
@@ -16,22 +16,16 @@ import {
  * 原樣搬自 orders-filter.ts（fixture 逐字照搬，行為不變）；paidRevenue 改名
  * revenueTotal 並改按 isRevenueStatus 加總（新增的 processing/completed 兩態）。 */
 function makeOrder(status: OrderStatus, id: string): Order {
-	return {
-		id,
-		member: '測試員',
-		initial: '測',
-		color: '#0066CC',
-		item: '測試項目',
-		amount: 1000,
-		status,
-		method: '信用卡',
-		date: '06/01 00:00',
-		discount: '—',
-		tax: 48,
-		net: 952,
-		paidAt: status === 'pending' ? '—（待付款）' : '06/01 00:00',
-		orderId: 'uuid-' + id
-	};
+	return mapAdminOrder(
+		adminOrderSummary({
+			id: 'uuid-' + id,
+			order_number: id,
+			status,
+			total_cents: 100000,
+			paid_at: status === 'pending' ? null : '2026-06-01T00:00:00Z'
+		}),
+		0
+	);
 }
 
 describe('isRevenueStatus — 同後端 OrderStatus::is_revenue（orders/model.rs）', () => {
@@ -82,21 +76,6 @@ describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', (
 	it('cancelled/refunded are terminal (no legal next state to offer in the UI)', () => {
 		expect(legalNextStatuses('cancelled')).toEqual([]);
 		expect(legalNextStatuses('refunded')).toEqual([]);
-	});
-});
-
-/* W-6：收款時間改讀後端真實 paid_at（原本以訂單日期冒充）。 */
-describe('paidAtLabel — 收款時間顯示（後端 paid_at）', () => {
-	it('paid_at 有值 → 同訂單日期欄的 YYYY-MM-DD 格式', () => {
-		expect(paidAtLabel('paid', '2026-06-09T03:15:00Z')).toBe('2026-06-09');
-	});
-
-	it('paid_at 為 null 且 pending →「—（待付款）」', () => {
-		expect(paidAtLabel('pending', null)).toBe('—（待付款）');
-	});
-
-	it('paid_at 為 null 且非 pending →「—」（不再以訂單日期冒充）', () => {
-		expect(paidAtLabel('cancelled', null)).toBe('—');
 	});
 });
 

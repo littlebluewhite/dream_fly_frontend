@@ -236,7 +236,7 @@ mutator)。語意:
 
 **決定**:
 
-- `AdminOrderSummary.paid_at` 為真值來源。`admin/components/order-status.ts` 新增 `paidAtLabel(status, paidAt)`:
+- `AdminOrderSummary.paid_at` 為真值來源。`$lib/api/wire.ts` 的 `paidAtLabel(status, paidAt)`(原放 `admin/components/order-status.ts`,後移到 wire 讓 `admin/api.ts` 不依賴 components):
   `paid_at` 為 null 時,pending 顯示「—（待付款）」,其餘顯示「—」;否則 `isoDate(paid_at)`(與訂單日期同格式)。
   `mapAdminOrder` 與 `applyStatusChange(rows, id, status, paidAt)` 都用它;`PATCH /orders/{id}/status` 的
   回應(`OrderResponse`)帶 `paid_at`,`changeOrderStatus` 的 deps 型別是
