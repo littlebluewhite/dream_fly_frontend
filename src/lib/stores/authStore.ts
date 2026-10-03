@@ -82,7 +82,12 @@ function createAuthStore() {
     set({ loggedIn: true, member: toMember(user), roles: user.roles });
   }
 
+  // session 世代:登入、登出、過期、跨分頁登出/換身分時 +1;refresh token 輪替(同一 session)不動。
+  // hydrate() 進場記下,/users/me 落地時世代變了就是別的 session 的回應,不套用。
+  let generation = 0;
+
   function applySession(res: AuthResponse): void {
+    generation += 1;
     setTokens(res.access_token, res.refresh_token);
     applyUser(res.user);
   }
@@ -128,6 +133,7 @@ function createAuthStore() {
     // while the slow revoke is in flight, and its continuation would then wipe
     // the fresh session. Snapshot the token first — clearTokens() drops it.
     const refresh = getRefresh();
+    generation += 1;
     clearTokens();
     set(LOGGED_OUT);
     if (refresh) {
@@ -142,6 +148,7 @@ function createAuthStore() {
   }
 
   async function hydrate(): Promise<void> {
+    const gen = generation;
     if (!getRefresh()) {
       set(LOGGED_OUT);
       return;
@@ -150,12 +157,11 @@ function createAuthStore() {
     // 失敗時若 token 真的被清掉(後端明確拒絕),onSessionExpired 已設 LOGGED_OUT;沒清掉代表
     // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給下方的 storage listener)。
     if (!refreshed) return;
-    const session = getRefresh();
     try {
       const user = await api<UserResponse>('/users/me');
-      // 回應落地前 refresh token 換人了(別的分頁換帳號/本分頁重新登入):這份是舊 session 的身分,
-      // 不套用、直接結束——新 session 的水合(或 storage listener 的收尾)才是真相。
-      if (getRefresh() !== session) return;
+      // 進場後 session 世代變了(登入/登出/過期/別的分頁換身分):這份是舊 session 的身分,不套用——
+      // 新 session 的水合(或 storage listener 的收尾)才是真相。refresh token 只是輪替不算換 session。
+      if (generation !== gen) return;
       applyUser(user);
     } catch {
       // 真的 401 已由 api() → refreshTokens() 處理;其他失敗(5xx/網路)不是 session 過期,
@@ -172,7 +178,10 @@ function createAuthStore() {
   }
 
   // refresh 失敗、client 真的清掉 token 的那一刻(唯一來源見 client.ts performRefresh)。
-  onSessionExpired(() => set(LOGGED_OUT));
+  onSessionExpired(() => {
+    generation += 1;
+    set(LOGGED_OUT);
+  });
 
   // 跨分頁同步:別的分頁改了登入狀態(storage 事件只送到其他分頁)。只看「目前 storage」決定,
   // 不看事件帶的新舊值——refresh key 只是被別的分頁輪替時不得重新水合,否則分頁互相觸發 refresh
@@ -181,6 +190,7 @@ function createAuthStore() {
     window.addEventListener('storage', (event) => {
       if (event.key !== null && event.key !== AUTH_STORAGE_KEY && event.key !== REFRESH_KEY) return;
       if (!getRefresh()) {
+        generation += 1;
         forgetAccess();
         set(LOGGED_OUT);
         return;
@@ -188,6 +198,7 @@ function createAuthStore() {
       const cached = loadCache();
       const expected = sessionIdentity(cached);
       if (cached.loggedIn && expected !== sessionIdentity(get({ subscribe }))) {
+        generation += 1;
         forgetAccess();
         void hydrate().then(() => {
           // hydrate 沒能換成事件當下 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時

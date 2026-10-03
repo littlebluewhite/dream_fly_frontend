@@ -47,13 +47,18 @@ refresh token 換新而 401、購物車總額把已持有方案算進去。本�
   打 API(最終檢視 M-3);其餘(含 refresh token 被別的分頁輪替)不動。listener 永不寫共用的
   refresh key。(Controller 裁決 9:若「refresh key 變了」就重新水合,每個等待鎖的分頁都會各輪替一次、互相
   觸發,永不停止。)
+- **session 世代**:`authStore` 內部計數,登入、登出、過期、跨分頁登出/換身分時 +1,refresh token 輪替不動。
+  `hydrate()` 進場記下世代,`/users/me` 落地時世代已變就不套用(舊 session 的回應不得蓋掉新身分);不用 refresh
+  token 相等比對——別的分頁或 `api()` 401 重試的輪替不是換 session。
 - **`sessionIdentity()` 搬進 `stores/authStore.ts`**;`$lib/testing/auth-mock` 兩個家族轉手真實作。
 
 **測試**:`client.test.ts`(跟隨分頁 POST 剛好一次且用輪替後的 token、兩分頁競態的假後端偵測重用、在飛期間
 被換掉不清、暫時性錯誤不清——含 408/429 不可用不清、不發訊號、401 清且發一次訊號、在飛期間換上新登入時成功的
 舊輪替結果被丟棄)、`authStore.test.ts`(過期 → `LOGGED_OUT` + 閘門 reset 恰一次;`StorageEvent`:別分頁登出、
 換成 B、換成 B 但 `/users/me` 失敗 → `LOGGED_OUT`、換成 B 而水合期間遲到的 A 快取寫入落地且水合失敗 →
-`LOGGED_OUT`(絕不停在 A)、只輪替、`key: null`、登出後立刻同一人重登;`/users/me` 503 與 refresh 429 不動 token)。
+`LOGGED_OUT`(絕不停在 A)、只輪替、`key: null`、登出後立刻同一人重登;`/users/me` 503 與 refresh 429 不動 token;
+換成 B 時較早水合的 A `/users/me` 遲到不套用;輪替不擋套用:重載時別分頁輪替、`/users/me` 401 重試、三分頁換 B 時
+兄弟分頁輪替仍停在 B)。
 
 ### 2. 點名選項單一來源 `ATT_CHOICES`;點數原因標籤補齊(FE-4、FE-1)
 

@@ -565,6 +565,58 @@ describe('authStore — cross-tab storage sync', () => {
     expect(getRefresh()).toBe('rB2');
   });
 
+  it('reload: another tab rotates the refresh token while /users/me is in flight → fresh profile still applied', async () => {
+    localStorage.setItem('dreamfly_refresh', 'r1');
+    const renamed = { ...SAMPLE_USER, name: 'NEW', roles: ['member', 'admin'] };
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'a2', refresh_token: 'r2' });
+      localStorage.setItem('dreamfly_refresh', 'r3'); // the other tab's own hydrate rotates (same session)
+      otherTabWrote('dreamfly_refresh');
+      return jsonResponse(renamed);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authStore.hydrate();
+
+    expect(get(authStore).roles).toEqual(['member', 'admin']);
+  });
+
+  it('same tab: /users/me 401 → api() refresh + retry (rotation) → fresh profile still applied', async () => {
+    localStorage.setItem('dreamfly_refresh', 'r1');
+    let me = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh'))
+        return getRefresh() === 'r1'
+          ? jsonResponse({ access_token: 'a2', refresh_token: 'r2' })
+          : jsonResponse({ access_token: 'a3', refresh_token: 'r3' });
+      me += 1;
+      return me === 1 ? jsonResponse({ error: 'expired' }, 401, 'Unauthorized') : jsonResponse(SAMPLE_USER);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authStore.hydrate();
+
+    expect(get(authStore).member?.id).toBe(SAMPLE_USER.id);
+  });
+
+  it('3 tabs: B switch, a sibling tab rotates B while this tab’s /users/me is in flight → still ends as B', async () => {
+    await loginAsA();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      localStorage.setItem('dreamfly_refresh', 'rB3'); // sibling tab's own B hydrate rotates rB2→rB3
+      return jsonResponse(USER_B);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+  });
+
   it('only rotation (same identity, new refresh token) → no action: no refresh, access kept, no reset', async () => {
     await loginAsA();
     const reset = trackGateReset();
