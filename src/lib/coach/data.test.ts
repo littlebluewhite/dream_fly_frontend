@@ -23,7 +23,7 @@ describe('coach data — shape', () => {
  * CAT_COLOR 隨後端沒有的 level/cat 欄位退役,其涵蓋率斷言一併刪除,只剩 CLASS_STATUS。 */
 describe('coach data — referential integrity (live lookup tables)', () => {
 	it('every TodayStatus value resolves in CLASS_STATUS', () => {
-		const statuses: TodayStatus[] = ['done', 'live', 'soon', 'wait'];
+		const statuses: TodayStatus[] = ['done', 'live', 'wait'];
 		for (const s of statuses) expect(CLASS_STATUS[s]).toBeDefined();
 	});
 });

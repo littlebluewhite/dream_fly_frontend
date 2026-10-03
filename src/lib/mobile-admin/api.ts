@@ -73,7 +73,7 @@ export const getMore = async (): Promise<MoreData> => {
 /** coach TodayClass.status(TodayStatus 窄型別)→ 行動版今日課表卡的 tone/label。單源
  *  改查 $lib/domain/sessions 的 SESSION_STATUS（admin/coach/mobile-admin 三處原本各自
  *  手抄一份查表，已隨 C4 收斂；標籤沿用原本這裡就已經是 canonical 的字面——
- *  done→已結束、live→上課中、soon→即將開始、wait→尚未開始）。t.status 現直接是
+ *  done→已結束、live→上課中、wait→尚未開始）。t.status 現直接是
  *  TodayStatus 窄型別（C5：coach/api.ts 的 mapTodayClass 回傳形狀本就是窄型別，先前
  *  這裡的寬鍵 Record<string,…> ?? fallback 是不必要的轉型——查表恆有對應，直接索引
  *  即可，查無鍵是編譯期錯誤而非執行期 fallback）。既有的 taken(是否已點名)欄位無

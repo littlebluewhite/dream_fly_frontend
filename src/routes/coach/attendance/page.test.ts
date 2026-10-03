@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import AttendancePage from './+page.svelte';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 import { toasts } from '$lib/coach/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -26,7 +26,7 @@ type WireRosterEntry = { enrolment_id: string; user_id: string; user_name: strin
  * 靜態 badge 分支)+ 1 筆 absent(吳柏宇)——非 present 筆數(3)對到「初始 3 筆變更」
  * 的既有斷言。 */
 const C1 = {
-	session: { id: 'ac1', course_id: 'c1', course_name: '兒童體操初階班', coach_name: null, start_time: '16:00:00', end_time: '17:30:00', enrolled_count: 4, venue: 'A 教室' } as ApiTodaySession,
+	session: { id: 'ac1', course_id: 'c1', course_name: '兒童體操初階班', coach_name: null, start_time: '16:00:00', end_time: '17:30:00', enrolled_count: 4, venue: 'A 教室', status: 'upcoming' } satisfies TodaySessionResponse,
 	roster: [
 		{ enrolment_id: 'GY2024001', user_id: 'm1', user_name: '王承恩', attendance_status: 'present' },
 		{ enrolment_id: 'GY2024014', user_id: 'm2', user_name: '林佳穎', attendance_status: 'absent' },
@@ -37,7 +37,7 @@ const C1 = {
 	first: '王承恩'
 };
 const C2 = {
-	session: { id: 'ac2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '13:30:00', end_time: '15:00:00', enrolled_count: 2, venue: 'B 教室' } as ApiTodaySession,
+	session: { id: 'ac2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '13:30:00', end_time: '15:00:00', enrolled_count: 2, venue: 'B 教室', status: 'upcoming' } satisfies TodaySessionResponse,
 	roster: [
 		{ enrolment_id: 'GY2023012', user_id: 'm5', user_name: '周彥廷', attendance_status: 'present' },
 		{ enrolment_id: 'GY2023027', user_id: 'm6', user_name: '簡子涵', attendance_status: 'present' }

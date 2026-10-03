@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import TodayPage from './+page.svelte';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 import { todayLabel } from '$lib/coach/schedule-dates';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -17,19 +17,19 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-// 場次狀態由 deriveSessionStatus 依牆鐘推導、todayLabel 由真實日期算出——兩者都吃系統
-// 時鐘，固定在本地 2026-05-30 11:00(只 fake Date，testing-library 的輪詢計時器照常)。
+// todayLabel 由真實日期算出、吃系統時鐘，固定在本地 2026-05-30 11:00(只 fake Date，
+// testing-library 的輪詢計時器照常)。場次狀態由後端 status 帶來(W-5)，不再吃時鐘。
 const NOW = new Date(2026, 4, 30, 11, 0, 0);
 const TODAY_LABEL = todayLabel(NOW);
 
 // Task 1(C2 死種子退役):inline fixture(3 筆)。R16 Task 8:改為 GET /sessions/today 的
-// wire 形狀；11:00 下 tc1(09:00–10:00)=done、tc2(10:30–11:30)=live、tc4(14:00–)=wait，
-// 涵蓋三態供下方 KPI/直播 banner 斷言。
-const TODAY_CLASSES: ApiTodaySession[] = [
-	{ id: 'tc1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 12, venue: '主場館 A 教室' },
-	{ id: 'tc2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8, venue: '主場館 B 教室' },
-	{ id: 'tc4', course_id: 'c4', course_name: '競技體操選手班', coach_name: null, start_time: '14:00:00', end_time: '15:30:00', enrolled_count: 6, venue: '競技訓練館' }
-];
+// wire 形狀；status 對齊 11:00 的牆鐘：tc1(09:00–10:00)=done、tc2(10:30–11:30)=ongoing、
+// tc4(14:00–)=upcoming，涵蓋三態供下方 KPI/直播 banner 斷言。
+const TODAY_CLASSES = [
+	{ id: 'tc1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 12, venue: '主場館 A 教室', status: 'done' },
+	{ id: 'tc2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8, venue: '主場館 B 教室', status: 'ongoing' },
+	{ id: 'tc4', course_id: 'c4', course_name: '競技體操選手班', coach_name: null, start_time: '14:00:00', end_time: '15:30:00', enrolled_count: 6, venue: '競技訓練館', status: 'upcoming' }
+] satisfies TodaySessionResponse[];
 const DONE_COUNT = 1;
 
 const route = (overrides: Record<string, unknown> = {}) =>
@@ -62,7 +62,7 @@ describe('/coach/today (+page)', () => {
 	});
 
 	it('renders the live-class banner for the class currently in progress', async () => {
-		const live = TODAY_CLASSES[1]; // 10:30–11:30，NOW=11:00 → live
+		const live = TODAY_CLASSES[1]; // status=ongoing → live
 		const { container, findByText } = render(TodayPage);
 		await findByText(TODAY_LABEL);
 		const txt = container.textContent ?? '';

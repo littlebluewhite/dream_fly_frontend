@@ -34,24 +34,13 @@ import {
 	putSettings
 } from './api';
 import { api, ApiError } from '$lib/api/client';
-import { toTodaySession } from '$lib/domain/sessions';
 import { mapMemberAccount } from './data';
-import { ORDER_STATUS } from '$lib/api/wire';
+import { ORDER_STATUS, type TodaySessionResponse } from '$lib/api/wire';
 import { fakeRouter } from '$lib/testing/fake-router';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
-});
-
-// toTodaySession 預設沿用真實實作(其餘既有測試靠 vi.setSystemTime 驅動真實時間比較
-// 邏輯)——只有下面「soon 分支」測試會用 mockReturnValueOnce 強制覆寫一次，驗證
-// SESSION_STATUS 已補齊的第 4 值查表分支(Important #2(b) 終審修正；C5 起 admin/api.ts
-// 的 mapTodaySession 改投影 $lib/domain/sessions 的 toTodaySession()，不再直接呼叫
-// deriveSessionStatus，mock 路徑同步改包 toTodaySession)。
-vi.mock('$lib/domain/sessions', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/domain/sessions')>();
-	return { ...actual, toTodaySession: vi.fn(actual.toTodaySession) };
 });
 
 beforeEach(() => {
@@ -921,43 +910,34 @@ describe('updateMember — PATCH /users/{id}（admin，Task 16）', () => {
 });
 
 describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Task F11：儀表板今日課表接真）', () => {
-	it('映射 time(HH:MM)/name/count；coach_name/venue 皆有值時直接映射；state 依目前時間推導(09:30 落在 09:00–10:00 場次中 → live)', async () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date(2026, 6, 10, 9, 30, 0));
-		try {
-			vi.mocked(api).mockImplementation(
-				fakeRouter({
-					'GET /sessions/today': [
-						{
-							id: 's1', course_id: 'c1', course_name: '兒童體操 初階班', coach_name: '黃詩涵',
-							start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 6, venue: 'C 軟墊區'
-						}
-					]
-				})
-			);
+	/** 後端產生型別強制 fixture 形狀(W-5)；個別案例只覆寫關心的欄位。 */
+	const SESSION = {
+		id: 's1', course_id: 'c1', course_name: 'X', coach_name: null,
+		start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null, status: 'upcoming'
+	} satisfies TodaySessionResponse;
 
-			const d = await getTodaySessions();
-
-			expect(api).toHaveBeenCalledWith('/sessions/today');
-			expect(d.sessions).toEqual([
-				{ time: '09:00', name: '兒童體操 初階班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live', tone: 'success', label: '上課中' }
-			]);
-		} finally {
-			vi.useRealTimers();
-		}
-	});
-
-	it('coach_name 為 null(尚未指定教練)、venue 為 null(反推不到對應 slot)時皆映射為「—」', async () => {
+	it('映射 time(HH:MM)/name/count；coach_name/venue 皆有值時直接映射；後端 status=ongoing → live/上課中', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /sessions/today': [
 					{
-						id: 's2', course_id: 'c2', course_name: '跑酷體驗班', coach_name: null,
-						start_time: '08:00:00', end_time: '09:00:00', enrolled_count: 3, venue: null
-					}
+						...SESSION, course_name: '兒童體操 初階班', coach_name: '黃詩涵',
+						enrolled_count: 6, venue: 'C 軟墊區', status: 'ongoing'
+					} satisfies TodaySessionResponse
 				]
 			})
 		);
+
+		const d = await getTodaySessions();
+
+		expect(api).toHaveBeenCalledWith('/sessions/today');
+		expect(d.sessions).toEqual([
+			{ time: '09:00', name: '兒童體操 初階班', coach: '黃詩涵', room: 'C 軟墊區', count: 6, state: 'live', tone: 'success', label: '上課中' }
+		]);
+	});
+
+	it('coach_name 為 null(尚未指定教練)、venue 為 null(反推不到對應 slot)時皆映射為「—」', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /sessions/today': [SESSION] }));
 
 		const d = await getTodaySessions();
 
@@ -965,71 +945,26 @@ describe('getTodaySessions — GET /sessions/today（admin 分支，§3.18，Tas
 		expect(d.sessions[0].room).toBe('—');
 	});
 
-	it('state 推導(復用 $lib/domain/sessions 的 deriveSessionStatus)：now < start_time → wait/尚未開始', async () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date(2026, 6, 10, 7, 0, 0));
-		try {
-			vi.mocked(api).mockImplementation(
-				fakeRouter({
-					'GET /sessions/today': [
-						{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
-					]
-				})
-			);
+	it('後端 status=upcoming → wait/尚未開始', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /sessions/today': [SESSION] }));
 
-			const d = await getTodaySessions();
-			expect(d.sessions[0]).toMatchObject({ state: 'wait', tone: 'neutral', label: '尚未開始' });
-		} finally {
-			vi.useRealTimers();
-		}
+		const d = await getTodaySessions();
+		expect(d.sessions[0]).toMatchObject({ state: 'wait', tone: 'neutral', label: '尚未開始' });
 	});
 
-	it('state 推導：now >= end_time → done/已結束', async () => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date(2026, 6, 10, 11, 0, 0));
-		try {
-			vi.mocked(api).mockImplementation(
-				fakeRouter({
-					'GET /sessions/today': [
-						{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
-					]
-				})
-			);
+	it('後端 status=done → done/已結束', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /sessions/today': [{ ...SESSION, status: 'done' } satisfies TodaySessionResponse] })
+		);
 
-			const d = await getTodaySessions();
-			expect(d.sessions[0]).toMatchObject({ state: 'done', tone: 'neutral', label: '已結束' });
-		} finally {
-			vi.useRealTimers();
-		}
+		const d = await getTodaySessions();
+		expect(d.sessions[0]).toMatchObject({ state: 'done', tone: 'neutral', label: '已結束' });
 	});
 
 	it('今日無場次時回傳空陣列，不是 500', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /sessions/today': [] }));
 		const d = await getTodaySessions();
 		expect(d.sessions).toEqual([]);
-	});
-
-	/* Important #2(b)(終審)：deriveSessionStatus 宣告的回傳型別 TodayStatus 是 4 值
-	 * 聯集(soon 是現行實作推導不到、但型別上合法的第 4 值)。之前 mapTodaySession 把
-	 * 回傳值窄化 cast 成 'wait'|'live'|'done' 3 態去查一張只有 3 個 key 的表——查表
-	 * 一旦真的遇到 soon 就會 destructure 到 undefined 而炸掉。SESSION_STATUS(C4 起
-	 * 單源收斂至 $lib/domain/sessions)現已補齊 soon 分支、移除窄化 cast；C5 起
-	 * mapTodaySession 改投影 toTodaySession() 的回傳值，這裡改用 mock 強制
-	 * toTodaySession 回傳 state: 'soon' 驗證查表能正確降級，不會炸。 */
-	it('state 推導：toTodaySession 回傳 soon(現行實作不會產生，但型別合法的第 4 態)時查表仍有對應 tone/label，不會炸掉', async () => {
-		vi.mocked(toTodaySession).mockReturnValueOnce({
-			id: 's1', start: '09:00', end: '10:00', name: 'X', coach: '—', room: '—', count: 1, state: 'soon'
-		});
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /sessions/today': [
-					{ id: 's1', course_id: 'c1', course_name: 'X', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 1, venue: null }
-				]
-			})
-		);
-
-		const d = await getTodaySessions();
-		expect(d.sessions[0]).toMatchObject({ state: 'soon', tone: 'warning', label: '即將開始' });
 	});
 });
 

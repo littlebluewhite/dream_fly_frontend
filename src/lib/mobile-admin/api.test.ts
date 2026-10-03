@@ -25,7 +25,7 @@ import { OPS_ROUTES, USERS_FIXTURE, COURSES_FIXTURE, COACHES_FIXTURE, ORDERS_FIX
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 import { initialOf, isoDate, orderIdentity, taxFromGross } from '$lib/api/wire';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { mapMemberAccount, MEMBER_COLORS } from '$lib/admin/data';
@@ -131,7 +131,7 @@ describe('getMore', () => {
 });
 
 describe('getCoachHome', () => {
-	const SESSION: ApiTodaySession = { id: 's1', course_id: 'c1', course_name: '測試班', coach_name: ME.name, start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 5, venue: 'A' };
+	const SESSION = { id: 's1', course_id: 'c1', course_name: '測試班', coach_name: ME.name, start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 5, venue: 'A', status: 'ongoing' } satisfies TodaySessionResponse;
 	const routes = () => ({
 		'GET /users/me': ME,
 		'GET /coaches': [MY_COACH],
@@ -171,7 +171,7 @@ describe('getAdminHome', () => {
 	};
 
 	it('resolves the two real KPIs from getReports(), and real today/activity from getTodaySessions()/getRecentActivity() (Task F11), drops the removed KPIs', async () => {
-		const SESSION: ApiTodaySession = { id: 's1', course_id: 'c1', course_name: '兒童基礎 B 班', coach_name: '陳冠宇', start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 8, venue: 'B 教室' };
+		const SESSION = { id: 's1', course_id: 'c1', course_name: '兒童基礎 B 班', coach_name: '陳冠宇', start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 8, venue: 'B 教室', status: 'ongoing' } satisfies TodaySessionResponse;
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /reports/admin': WIRE_REPORTS,
@@ -190,7 +190,7 @@ describe('getAdminHome', () => {
 	});
 
 	it('propagates a null-mapped(「—」) coach/venue straight through from getTodaySessions() (already substituted upstream)', async () => {
-		const SESSION: ApiTodaySession = { id: 's2', course_id: 'c2', course_name: '跑酷體驗班', coach_name: null, start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 3, venue: null };
+		const SESSION = { id: 's2', course_id: 'c2', course_name: '跑酷體驗班', coach_name: null, start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 3, venue: null, status: 'upcoming' } satisfies TodaySessionResponse;
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /reports/admin': WIRE_REPORTS, 'GET /sessions/today': [SESSION], 'GET /reports/admin/activity': { items: [] } })
 		);

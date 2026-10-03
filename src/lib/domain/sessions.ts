@@ -2,49 +2,37 @@
  *
  * admin/coach/mobile-admin 三處原本各自手抄一份「場次狀態 → tone/中文標籤」查表，字面
  * 已經分歧（admin 的 live 是「進行中」、coach/mobile-admin 是「上課中」）——單源收斂到
- * 這裡，正字＝「上課中」（見 SESSION_STATUS.live）。deriveSessionStatus（§3.18 裁決 2：
- * 場次時間為牆鐘語意，前端以本地時間直接比較，不做時區換算）與其私有的 wallClockTime
- * 亦自 coach/api.ts 整段移入（語意零改）——coach/api.ts 只留 re-export，admin/api.ts 改
- * 直接從這裡 import，消除原本 admin → coach 的跨 surface 借實作。 */
-import type { ApiTodaySession, Tone } from '$lib/api/wire';
+ * 這裡，正字＝「上課中」（見 SESSION_STATUS.live）。場次狀態由後端推導（W-5：
+ * TodaySessionResponse.status，工作室牆鐘時間），前端只做 wire 值 → UI 鍵的對應，不再
+ * 自行比較時間。 */
+import type { SessionStatus, Tone, TodaySessionResponse } from '$lib/api/wire';
 import { hhmm } from '$lib/api/wire';
 
 /** 今日場次狀態 union（admin/coach/mobile-admin 共用查表鍵，自 coach/data.ts 升遷）。 */
-export type TodayStatus = 'wait' | 'live' | 'done' | 'soon';
+export type TodayStatus = 'wait' | 'live' | 'done';
 
 /** 場次狀態 → [Tone, 中文標籤]。canonical 標籤——live 是「上課中」，不是 admin 舊值
  *  「進行中」（語意相同但字面各自維護導致靜默發散，隨本次單源收斂統一）。 */
 export const SESSION_STATUS: Record<TodayStatus, [Tone, string]> = {
 	wait: ['neutral', '尚未開始'],
 	live: ['success', '上課中'],
-	done: ['neutral', '已結束'],
-	soon: ['warning', '即將開始']
+	done: ['neutral', '已結束']
 };
 
-/** now 轉為本地牆鐘 "HH:MM:SS"，供與 start_time/end_time 直接字典序比較(§3.18 裁決 2：
- *  場次時間為牆鐘語意，前端以本地時間直接比較，不做時區換算)。 */
-function wallClockTime(now: Date): string {
-	const pad = (n: number) => String(n).padStart(2, '0');
-	return `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-}
+/** 後端 SessionStatus → UI 狀態鍵。Record 窮舉：後端新增值域時這裡是編譯錯誤。 */
+const TODAY_STATUS: Record<SessionStatus, TodayStatus> = {
+	upcoming: 'wait',
+	ongoing: 'live',
+	done: 'done'
+};
 
-/** 場次狀態推導：now < start_time → 'wait'；start_time ≤ now < end_time → 'live'；
- *  now ≥ end_time → 'done'。now 由呼叫端傳入的純函式，不吃系統時鐘，獨立可測。 */
-export function deriveSessionStatus(startTime: string, endTime: string, now: Date): TodayStatus {
-	const wall = wallClockTime(now);
-	if (wall < startTime) return 'wait';
-	if (wall < endTime) return 'live';
-	return 'done';
-}
-
-/** 今日場次投影（C5：wire 形狀 ApiTodaySession 單源在 $lib/api/wire）。production
+/** 今日場次投影（C5：wire 形狀 TodaySessionResponse 由後端產生）。production
  *  呼叫端是 admin/api.ts 的 mapTodaySession（mobile-admin 的 admin 分支經它取得
  *  state）與 coach/api.ts 的 mapTodayClass/mapAttendanceClass（R13 終審收斂，見
  *  docs/adr/0023）——coach 兩支 mapper 目標形狀另帶 level/cat 等欄位，疊在本函式的
- *  投影結果上，不再自行重算 hhmm/venue 預設值/deriveSessionStatus。
+ *  投影結果上，不再自行重算 hhmm/venue 預設值/狀態。
  *  coach_name/venue 為 null 時皆給
- *  '—'（誠實預設值，P2：後端無對應資料時的既有慣例）；state 仍委派 deriveSessionStatus
- *  依目前時間推導，語意零改。 */
+ *  '—'（誠實預設值，P2：後端無對應資料時的既有慣例）；state 直接對應後端 status。 */
 export interface TodaySession {
 	id: string;
 	start: string;
@@ -56,7 +44,7 @@ export interface TodaySession {
 	state: TodayStatus;
 }
 
-export function toTodaySession(s: ApiTodaySession, now: Date): TodaySession {
+export function toTodaySession(s: TodaySessionResponse): TodaySession {
 	return {
 		id: s.id,
 		start: hhmm(s.start_time),
@@ -65,6 +53,6 @@ export function toTodaySession(s: ApiTodaySession, now: Date): TodaySession {
 		coach: s.coach_name ?? '—',
 		room: s.venue ?? '—',
 		count: s.enrolled_count,
-		state: deriveSessionStatus(s.start_time, s.end_time, now)
+		state: TODAY_STATUS[s.status]
 	};
 }

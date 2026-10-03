@@ -8,7 +8,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach } from '$lib/public/api';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：getAttendance/saveAttendance 原經 mobile-admin/api.ts 零映射
  * re-export，已退役，本頁直取 $lib/coach/api 實作，改 mock $lib/api/client 的 api()，讓它們走真實
@@ -25,15 +25,15 @@ const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, titl
 interface WireRosterEntry { enrolment_id: string; user_id: string; user_name: string; attendance_status: 'present' | 'absent' | 'leave' | null }
 
 // 兩堂課同一天，證明「切換班級」FilterChips 恢復多選功能(舊 mock 因限制只給一堂課)。
-const SESSION_1: ApiTodaySession = { id: 's1', course_id: 'c1', course_name: '測試班甲', coach_name: null, start_time: '19:00:00', end_time: '20:30:00', enrolled_count: 2, venue: null };
-const SESSION_2: ApiTodaySession = { id: 's2', course_id: 'c2', course_name: '測試班乙', coach_name: null, start_time: '20:00:00', end_time: '21:00:00', enrolled_count: 1, venue: null };
+const SESSION_1 = { id: 's1', course_id: 'c1', course_name: '測試班甲', coach_name: null, start_time: '19:00:00', end_time: '20:30:00', enrolled_count: 2, venue: null, status: 'upcoming' } satisfies TodaySessionResponse;
+const SESSION_2 = { id: 's2', course_id: 'c2', course_name: '測試班乙', coach_name: null, start_time: '20:00:00', end_time: '21:00:00', enrolled_count: 1, venue: null, status: 'upcoming' } satisfies TodaySessionResponse;
 const ROSTER_1: WireRosterEntry[] = [
 	{ enrolment_id: 'T-001', user_id: 'zu1', user_name: '測試學員甲', attendance_status: 'present' },
 	{ enrolment_id: 'T-002', user_id: 'zu2', user_name: '測試學員乙', attendance_status: 'leave' }
 ];
 const ROSTER_2: WireRosterEntry[] = [{ enrolment_id: 'T-003', user_id: 'zu3', user_name: '測試學員丙', attendance_status: 'absent' }];
 
-const defaultRoutes = (sessions: ApiTodaySession[] = [SESSION_1, SESSION_2]) => ({
+const defaultRoutes = (sessions: TodaySessionResponse[] = [SESSION_1, SESSION_2]) => ({
 	'GET /users/me': ME,
 	'GET /coaches': [MY_COACH],
 	'GET /sessions/today': sessions,
@@ -226,7 +226,7 @@ describe('mobile-admin/coach/attendance 頁', () => {
 	});
 
 	it('部分場次名冊載入失敗時顯示提示 toast，其餘場次仍可點名', async () => {
-		const SESSION_3: ApiTodaySession = { id: 's3', course_id: 'c3', course_name: '測試班丙', coach_name: null, start_time: '08:00:00', end_time: '09:00:00', enrolled_count: 1, venue: null };
+		const SESSION_3 = { id: 's3', course_id: 'c3', course_name: '測試班丙', coach_name: null, start_time: '08:00:00', end_time: '09:00:00', enrolled_count: 1, venue: null, status: 'done' } satisfies TodaySessionResponse;
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ ...defaultRoutes([SESSION_1, SESSION_2, SESSION_3]), 'GET /sessions/s3/roster': new Error('boom') })
 		);

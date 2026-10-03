@@ -6,7 +6,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
 import type { ApiCoach } from '$lib/public/api';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getCoachHome()(組合器，
  * 3b 留任；轉呼叫 coach/api.ts 真 getDashboard())走真實 fetch adapter。教練身分由
@@ -24,19 +24,17 @@ const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', p
 const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
 
 // 3 堂課、共 30 位學員 — 與桌面 seed 慣例刻意不同,證明「今日課堂/今日學員」統計
-// 讀 payload 動態算出,而非殘留頁面硬編字面。deriveSessionStatus() 只會推導
-// wait/live/done(見 $lib/domain/sessions)——'soon' 這個 TodayStatus 分支在真實
-// wire 路徑推導不到,原 fixture 的第二堂課狀態已改用可構造的極端時間窗,狀態本身
+// 讀 payload 動態算出,而非殘留頁面硬編字面。status 由後端帶來(W-5),狀態本身
 // 這頁也不顯示(見上方模組註解),不影響本檔任何斷言。
-const SESSIONS_TODAY: ApiTodaySession[] = [
-	{ id: 's1', course_id: 'c1', course_name: '測試班 A', coach_name: ME.name, start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室' },
-	{ id: 's2', course_id: 'c2', course_name: '測試班 B', coach_name: ME.name, start_time: '23:59:00', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室' },
-	{ id: 's3', course_id: 'c3', course_name: '測試班 C', coach_name: ME.name, start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室' }
-];
+const SESSIONS_TODAY = [
+	{ id: 's1', course_id: 'c1', course_name: '測試班 A', coach_name: ME.name, start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室', status: 'ongoing' },
+	{ id: 's2', course_id: 'c2', course_name: '測試班 B', coach_name: ME.name, start_time: '23:59:00', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室', status: 'upcoming' },
+	{ id: 's3', course_id: 'c3', course_name: '測試班 C', coach_name: ME.name, start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 10, venue: '測試教室', status: 'upcoming' }
+] satisfies TodaySessionResponse[];
 
 const REPORTS = { today_sessions: 3, pending_attendance: 2, unread_messages: 4, student_count: 30, attendance_rate_30d: 0.9 };
 
-const homeRoutes = (sessions: ApiTodaySession[], reports = REPORTS) => ({
+const homeRoutes = (sessions: TodaySessionResponse[], reports = REPORTS) => ({
 	'GET /users/me': ME,
 	'GET /coaches': [MY_COACH],
 	'GET /sessions/today': sessions,

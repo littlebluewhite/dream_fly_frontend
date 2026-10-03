@@ -173,7 +173,6 @@ export const COACH: Coach = {
 export const CLASS_STATUS: Record<TodayStatus, { label: string; bg: string; fg: string }> = {
 	done: { label: SESSION_STATUS.done[1], bg: '#F1F5F9', fg: '#475569' },
 	live: { label: SESSION_STATUS.live[1], bg: 'var(--df-success-bg)', fg: 'var(--df-success-strong)' },
-	soon: { label: SESSION_STATUS.soon[1], bg: 'var(--df-warning-bg)', fg: '#92400E' },
 	wait: { label: SESSION_STATUS.wait[1], bg: 'var(--df-primary-bg)', fg: 'var(--df-primary-dark)' }
 };
 

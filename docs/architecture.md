@@ -72,7 +72,7 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
 - **Per-entity display lookups** — each entity file single-sources a status/type → tone-and-label
   lookup: `VENUE_STATUS` (`venues.ts`), `TICKET_TYPE` (`tickets.ts`), `MEMBER_ACCOUNT_STATUS`
   (`members.ts`), `STATUS_TONE` (`classes.ts`), `LEVEL_TONE` (`course-level.ts`) and `SESSION_STATUS`
-  (`sessions.ts`, alongside the `TodayStatus` union and `deriveSessionStatus`) (`docs/adr/0013`,
+  (`sessions.ts`, alongside the `TodayStatus` union) (`docs/adr/0013`,
   `docs/adr/0018`). `SESSION_STATUS` is the one today's-session-status table for `coach`, `admin` and
   `mobile-admin`; its canonical `live` label is `上課中`.
 - **`session-format.ts`** — pure per-session display derivation, imported directly by its six
@@ -92,9 +92,9 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
   and mobile's `MyCourseDetail` both destructure `leaveRow()`'s result. It lives in an entity file rather
   than `member-app.ts`, whose header restricts it to constants and lookups, and mobile imports it directly
   as a pure function (`docs/adr/0022`, `docs/adr/0025`).
-- **`sessions.ts`'s `toTodaySession(s, now)`** — projects the wire `ApiTodaySession` (single-sourced in
-  `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the `deriveSessionStatus`
-  state. `admin`'s `mapTodaySession` and `coach`'s `mapTodayClass`/`mapAttendanceClass` build on it
+- **`sessions.ts`'s `toTodaySession(s)`** — projects the generated wire `TodaySessionResponse`
+  (re-exported from `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the
+  backend-derived `status` mapped to a `TodayStatus` (`upcoming`→`wait`, `ongoing`→`live`, `done`→`done`). `admin`'s `mapTodaySession` and `coach`'s `mapTodayClass`/`mapAttendanceClass` build on it
   instead of re-deriving `hhmm`/venue defaults/status themselves (`docs/adr/0023`).
 - **`course-category.ts`** — `COURSE_CATEGORIES` (key/chip/trial label/icon/age) plus
   `courseCategoryIcon(cat)` (unknown → `graduation-cap`), the single source for `mobile`'s home, courses
@@ -265,7 +265,7 @@ directly rather than through the `member/stores` barrel. There is no import-dire
 mobile → member imports (`docs/adr/0014` §1, `docs/adr/0025`).
 
 Backend wire shapes shared across ≥2 surfaces — order-status badges (`orderStatusBadge`, with a fallback
-for unknown statuses), list-page envelopes, member/coach paired DTOs, the admin/coach `ApiTodaySession`,
+for unknown statuses), list-page envelopes, member/coach paired DTOs, the admin/coach `TodaySessionResponse` (generated, re-exported),
 the member/coach `ApiLeaveRequest`/`LeaveStatus`, display atoms like `ageRange`/`initialOf` — live in the
 single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy
 (`docs/adr/0007`). Wire also owns two pieces of order knowledge as zero-import pure helpers:

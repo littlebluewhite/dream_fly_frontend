@@ -19,7 +19,7 @@ import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiLeaveRequest, ApiCertificate, ApiReportCard, ApiTodaySession } from '$lib/api/wire';
+import type { ApiPage, ApiLeaveRequest, ApiCertificate, ApiReportCard, TodaySessionResponse } from '$lib/api/wire';
 import { toTodaySession } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import type {
@@ -110,15 +110,15 @@ function mapCoach(account: SelfAccount, coach: ApiCoach): Coach {
 
 /* ═════════════════════════ 今日課程 / 儀表板（GET /sessions/today，見 integration-contract.md §3.18） ═════════════════════════ */
 
-/** TodaySessionResponse(§3.18，教練/admin 兩分支共用同一形狀，$lib/api/wire 單源，C5)。
+/** TodaySessionResponse(§3.18，教練/admin 兩分支共用同一形狀，後端產生型別，W-5)。
  *  教練呼叫時後端已只回自己課程（courses.coach_id 對應呼叫者 coaches.id）的今日場次，
  *  並依 start_time 排序——前端不再需要自行過濾/排序。 */
 
 /** TodaySessionResponse → 既有 TodayClass 形狀，經 domain/sessions 的 toTodaySession 投影
  *  （C5：admin/coach/mobile-admin 共用同一支純函式，不再自行重算 hhmm/venue 預設值/狀態，
  *  見 docs/adr/0023）。課程等級/分類無對應欄位，R16 Task 2a 起從 TodayClass 拿掉。 */
-function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
-	const t = toTodaySession(s, now);
+function mapTodayClass(s: TodaySessionResponse): TodayClass {
+	const t = toTodaySession(s);
 	return {
 		id: t.id,
 		start: t.start,
@@ -131,9 +131,8 @@ function mapTodayClass(s: ApiTodaySession, now: Date): TodayClass {
 }
 
 async function myTodayClasses(): Promise<TodayClass[]> {
-	const sessions = await api<ApiTodaySession[]>('/sessions/today');
-	const now = new Date();
-	return sessions.map((s) => mapTodayClass(s, now));
+	const sessions = await api<TodaySessionResponse[]>('/sessions/today');
+	return sessions.map(mapTodayClass);
 }
 
 /* ═════════════════════════ 報表彙總（GET /reports/coach，見 integration-contract.md §3.24） ═════════════════════════ */
@@ -230,12 +229,11 @@ function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
  *  mock 格式慣例)；start 另帶起始 HH:MM 供 sessionChipLabel 直接使用；room 經投影(null →
  *  '—')；coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)，不是 t.coach。 */
 function mapAttendanceClass(
-	s: ApiTodaySession,
+	s: TodaySessionResponse,
 	roster: ApiRosterEntry[],
-	coachName: string,
-	now: Date
+	coachName: string
 ): AttClassFull {
-	const t = toTodaySession(s, now);
+	const t = toTodaySession(s);
 	return {
 		id: t.id,
 		name: t.name,
@@ -265,8 +263,7 @@ export interface AttendanceData {
  *  不存在時兩者一致丟 CoachNotFoundError。 */
 export const getAttendance = async (): Promise<AttendanceData> => {
 	const { account } = await requireCoach();
-	const sessions = await api<ApiTodaySession[]>('/sessions/today');
-	const now = new Date();
+	const sessions = await api<TodaySessionResponse[]>('/sessions/today');
 	const results = await Promise.allSettled(
 		sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`))
 	);
@@ -275,7 +272,7 @@ export const getAttendance = async (): Promise<AttendanceData> => {
 	sessions.forEach((s, i) => {
 		const r = results[i];
 		if (r.status === 'fulfilled') {
-			classes.push(mapAttendanceClass(s, r.value, account.name, now));
+			classes.push(mapAttendanceClass(s, r.value, account.name));
 		} else {
 			failedClasses.push(s.course_name);
 			console.error(`getAttendance: ${s.course_name} 名冊載入失敗`, r.reason);

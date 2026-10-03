@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import CoachHomePage from './+page.svelte';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 import { todayLabel } from '$lib/coach/schedule-dates';
 import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
 import { toasts } from '$lib/coach/stores';
@@ -34,11 +34,11 @@ const NOW = new Date(2099, 11, 31, 11, 0, 0);
 const TODAY_LABEL = todayLabel(NOW);
 const COACH_DISPLAY = '林教練'; // COACH_USER.name 林雅婷 → 首字姓氏推導
 
-const TODAY_CLASSES: ApiTodaySession[] = [
-	{ id: 'tc1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 12, venue: '主場館 A 教室' },
-	{ id: 'tc2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8, venue: '主場館 B 教室' },
-	{ id: 'tc3', course_id: 'c3', course_name: '幼兒體操啟蒙班', coach_name: null, start_time: '11:45:00', end_time: '12:45:00', enrolled_count: 10, venue: '主場館 A 教室' }
-];
+const TODAY_CLASSES = [
+	{ id: 'tc1', course_id: 'c1', course_name: '兒童體操初級班', coach_name: null, start_time: '09:00:00', end_time: '10:00:00', enrolled_count: 12, venue: '主場館 A 教室', status: 'done' },
+	{ id: 'tc2', course_id: 'c2', course_name: '青少年體操中級班', coach_name: null, start_time: '10:30:00', end_time: '11:30:00', enrolled_count: 8, venue: '主場館 B 教室', status: 'ongoing' },
+	{ id: 'tc3', course_id: 'c3', course_name: '幼兒體操啟蒙班', coach_name: null, start_time: '11:45:00', end_time: '12:45:00', enrolled_count: 10, venue: '主場館 A 教室', status: 'upcoming' }
+] satisfies TodaySessionResponse[];
 const CONVERSATIONS = [
 	{ id: 'cv1', peer_id: 'm1', peer_name: '張大文', last_message_body: '教練這週六可以加練嗎？', last_message_at: '2026-07-05T09:42:00Z', unread_count: 3 },
 	{ id: 'cv2', peer_id: 'm2', peer_name: '劉品妍', last_message_body: '謝謝老師的指導！', last_message_at: '2026-07-05T09:20:00Z', unread_count: 0 },

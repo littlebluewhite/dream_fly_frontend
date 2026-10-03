@@ -17,11 +17,10 @@
  * PayStatus/AttMark(連同它們唯一的消費者 PAY_STATUS/ATT_MARK 與
  * MemberDialog 的死 member 分支)隨 Task 1(R13 小 bug 包)一併退役。 */
 import type { Tone } from '$lib/api/wire';
+import type { TodayStatus } from '$lib/domain/sessions';
 import type { MemberAccountStatus } from '$lib/domain/members';
 import type { VenueStatus } from '$lib/domain/venues';
 import type { TicketType } from '$lib/domain/tickets';
-
-export type TodayState = 'done' | 'prep' | 'live' | 'soon' | 'wait';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
  * The seed (coaches/classes/members/orders + venues/tickets/activity) lives in
@@ -150,17 +149,14 @@ export interface TodayClass {
 	coach: string;
 	room: string;
 	count: number;
-	state: TodayState;
+	state: TodayStatus;
 	tone: Tone;
 	label: string;
 }
 // Task F11：TODAY live-mock 退役(唯一消費者 TodayPanel 改吃 props；真資料見 admin/api.ts
 // 的 getTodaySessions()，對應 GET /sessions/today admin 分支，integration-contract.md
-// §3.18)。TodayState 5 態聯集維持不窄化——真資料的 deriveSessionStatus()(單源於
-// $lib/domain/sessions.ts，C4 起 admin/api.ts 與 coach/api.ts 皆直接 import，不再是
-// admin 借道 coach/api.ts 復用，見 docs/adr/0018)只會推導 wait/live/done 3 態，
-// 'prep'/'soon' 兩個緩衝態不會再被產生，但保留超集型別可讓真資料的 3 態直接指派、
-// 不需額外 cast。
+// §3.18)。state 用 $lib/domain/sessions 的 TodayStatus(W-5：後端 status 3 態的 UI 鍵；
+// 原 5 態 TodayState 的 prep/soon 緩衝態無人產生，隨之刪除)。
 
 /* ═════════════════════════ 報表分析 ═════════════════════════
  * Task 15: getReports() now maps real GET /reports/admin data (revenue/members/

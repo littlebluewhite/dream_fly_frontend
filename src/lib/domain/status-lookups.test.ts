@@ -71,12 +71,11 @@ describe('literal table invariants (independent of the facades)', () => {
 		});
 	});
 
-	it('SESSION_STATUS matches the known 4-state literal (尚未開始/上課中/已結束/即將開始)', () => {
+	it('SESSION_STATUS matches the known 3-state literal (尚未開始/上課中/已結束)', () => {
 		expect(SESSION_STATUS).toEqual({
 			wait: ['neutral', '尚未開始'],
 			live: ['success', '上課中'],
-			done: ['neutral', '已結束'],
-			soon: ['warning', '即將開始']
+			done: ['neutral', '已結束']
 		});
 	});
 
@@ -95,5 +94,5 @@ describe('key counts', () => {
 	it('VENUE_STATUS has 2 keys', () => expect(Object.keys(VENUE_STATUS)).toHaveLength(2));
 	it('TICKET_TYPE has 3 keys', () => expect(Object.keys(TICKET_TYPE)).toHaveLength(3));
 	it('STATUS_TONE has 3 keys', () => expect(Object.keys(STATUS_TONE)).toHaveLength(3));
-	it('SESSION_STATUS has 4 keys', () => expect(Object.keys(SESSION_STATUS)).toHaveLength(4));
+	it('SESSION_STATUS has 3 keys', () => expect(Object.keys(SESSION_STATUS)).toHaveLength(3));
 });

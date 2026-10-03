@@ -8,7 +8,7 @@ import type { CreateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
-import type { ApiTodaySession } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getAdminHome/
  * createMember/getOpsCollections(getAdminHome 為組合器，3b 留任)走真實 fetch
@@ -16,18 +16,15 @@ import type { ApiTodaySession } from '$lib/api/wire';
  * 不再是呼叫端可任意指定的獨立欄位——「label 與 state 脫鉤」這兩則舊回歸測試在
  * wire 層已無法構造出矛盾輸入(SESSION_STATUS 是唯一來源),故改測「只有 state 才
  * 決定橫幅、tone/label 不是頁面自己判斷」這件事仍成立即可(見下方兩則同義測試)。
- * state 由 deriveSessionStatus() 依牆鐘時間比較 start_time/end_time 推導(見
- * $lib/domain/sessions)：用極端時間窗規避跑測試當下實際時刻，不需要 fake timers
- * (元件測試混 fake timers 容易卡住 @testing-library 的 waitFor 輪詢)。 */
+ * state 直接對應後端 status(W-5，見 $lib/domain/sessions)：fixture 明寫 status，
+ * 不吃跑測試當下的牆鐘時刻。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
 
-// 00:00:00–23:59:59 幾乎必然落在「進行中」；23:59:58–23:59:59 幾乎必然「尚未開始」
-// (deriveSessionStatus 依目前牆鐘時間比較,見上方模組註解)。
-const LIVE_SESSION: ApiTodaySession = { id: 's-live', course_id: 'c-live', course_name: '測試進行中班', coach_name: '測試教練甲', start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 5, venue: '測試教室' };
-const WAIT_SESSION: ApiTodaySession = { id: 's-wait', course_id: 'c-wait', course_name: '測試備課班', coach_name: '測試教練乙', start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 3, venue: '測試教室2' };
+const LIVE_SESSION = { id: 's-live', course_id: 'c-live', course_name: '測試進行中班', coach_name: '測試教練甲', start_time: '00:00:00', end_time: '23:59:59', enrolled_count: 5, venue: '測試教室', status: 'ongoing' } satisfies TodaySessionResponse;
+const WAIT_SESSION = { id: 's-wait', course_id: 'c-wait', course_name: '測試備課班', coach_name: '測試教練乙', start_time: '23:59:58', end_time: '23:59:59', enrolled_count: 3, venue: '測試教室2', status: 'upcoming' } satisfies TodaySessionResponse;
 
 const ACTIVITY_ITEMS = [
 	{ kind: 'user' as const, label: '測試動態一', occurred_at: '2026-01-01T00:00:00Z' },
@@ -61,7 +58,7 @@ const WIRE_REPORTS = {
 	coaches: []
 };
 
-const homeRoutes = (sessions: ApiTodaySession[], items: typeof ACTIVITY_ITEMS) => ({
+const homeRoutes = (sessions: TodaySessionResponse[], items: typeof ACTIVITY_ITEMS) => ({
 	'GET /reports/admin': WIRE_REPORTS,
 	'GET /sessions/today': sessions,
 	'GET /reports/admin/activity': { items }
@@ -155,15 +152,15 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	/* C5 回歸(pin-first)：liveNow 原本比對 payload 自帶的獨立 label 欄位——wire 邊界
 	 * 已無「label」可餵(tone/label 一律由 SESSION_STATUS 查表依 state 推導,見上方模組
 	 * 註解),「label 與 state 脫鉤」這個矛盾輸入在 wire 層構造不出來，故以下兩則改為
-	 * 直接驗證：橫幅只認 state(由極端 start_time/end_time 推導)，不是任何呼叫端可
+	 * 直接驗證：橫幅只認 state(由後端 status 對應)，不是任何呼叫端可
 	 * 另外指定的欄位——回歸精神不變，構造方式改走 wire。 */
-	it('state 推導為 live 的課堂 → 進行中課堂橫幅出現', async () => {
+	it('status=ongoing(state=live)的課堂 → 進行中課堂橫幅出現', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 	});
 
-	it('state 推導為 wait 的課堂 → 進行中課堂橫幅不出現', async () => {
+	it('status=upcoming(state=wait)的課堂 → 進行中課堂橫幅不出現', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試備課班');

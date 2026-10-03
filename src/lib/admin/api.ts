@@ -9,7 +9,7 @@ import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api'
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate } from '$lib/api/wire';
-import type { ApiPage, ApiTodaySession } from '$lib/api/wire';
+import type { ApiPage, TodaySessionResponse } from '$lib/api/wire';
 import { SESSION_STATUS, toTodaySession } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 // C4 批4(facade 純轉手退役):Ticket/TicketType/ClassStatus/Coach/Venue/
@@ -258,15 +258,13 @@ export type {
 /* ═════════════════════════ 今日課表（GET /sessions/today，admin 分支，見 integration-
  * contract.md §3.18，Task F11：admin 儀表板今日課表接真） ═════════════════════════ */
 
-/** ApiTodaySession(§3.18，admin/coach 兩分支共用同一形狀，$lib/api/wire 單源)→ 既有
+/** TodaySessionResponse(§3.18，admin/coach 兩分支共用同一形狀，後端產生型別)→ 既有
  *  TodayClass 形狀。coach_name/venue 為 null 時皆顯示「—」；hhmm 裁切、null 代換、
- *  state 推導三件事已收斂進 $lib/domain/sessions 的 toTodaySession()（C5：admin/coach/
- *  mobile-admin 三處原本各自手抄一份 ApiTodaySession → 目標形狀映射，單源收斂），
- *  這裡只再投影出 tone/label（查 SESSION_STATUS，C4 既有裁決：live 正字標籤「上課中」，
- *  soon 雖然 deriveSessionStatus 目前推導不到，四鍵查表仍齊全，不需要窄化 cast 掩蓋
- *  兩者落差)。 */
-function mapTodaySession(s: ApiTodaySession, now: Date): TodayClass {
-	const t = toTodaySession(s, now);
+ *  status 對應三件事已收斂進 $lib/domain/sessions 的 toTodaySession()（C5：admin/coach/
+ *  mobile-admin 三處原本各自手抄一份 wire → 目標形狀映射，單源收斂），
+ *  這裡只再投影出 tone/label（查 SESSION_STATUS，C4 既有裁決：live 正字標籤「上課中」）。 */
+function mapTodaySession(s: TodaySessionResponse): TodayClass {
+	const t = toTodaySession(s);
 	const [tone, label] = SESSION_STATUS[t.state];
 	return {
 		time: t.start,
@@ -286,9 +284,8 @@ export interface TodaySessionsData {
 
 /** GET /sessions/today——admin 分支回全站當日場次，後端已依 start_time 排序。 */
 export const getTodaySessions = async (): Promise<TodaySessionsData> => {
-	const sessions = await api<ApiTodaySession[]>('/sessions/today');
-	const now = new Date();
-	return { sessions: sessions.map((s) => mapTodaySession(s, now)) };
+	const sessions = await api<TodaySessionResponse[]>('/sessions/today');
+	return { sessions: sessions.map(mapTodaySession) };
 };
 
 /* ═════════════════════════ 最新動態（GET /reports/admin/activity，見 integration-
