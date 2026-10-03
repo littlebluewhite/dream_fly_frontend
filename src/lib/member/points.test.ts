@@ -137,4 +137,29 @@ describe('refreshPoints', () => {
 
     expect(get(pointsEarnedThisMonth)).toBe(0);
   });
+
+  it('換身分(A 直接換登 B，不經登出)同樣把 A 的本月累積歸零', async () => {
+    const user = (id: string, email: string) => ({
+      id, email, name: id, phone: null, phone_verified: false,
+      avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member']
+    });
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'POST /auth/login': (init: RequestInit) => {
+          const { email } = JSON.parse(init.body as string) as { email: string };
+          return { access_token: `at-${email}`, refresh_token: `rt-${email}`, user: user(email === 'a@dreamfly.test' ? 'u-a' : 'u-b', email) };
+        },
+        'POST /auth/logout': undefined,
+        'GET /points/me': { balance: 10, earned_this_month: 77, ledger: [], total: 0, page: 1, per_page: 20 } satisfies PointsMeResponse
+      })
+    );
+    await authStore.login('a@dreamfly.test', 'pw');
+    await refreshPoints();
+    expect(get(pointsEarnedThisMonth)).toBe(77);
+
+    await authStore.login('b@dreamfly.test', 'pw');
+
+    expect(get(pointsEarnedThisMonth)).toBe(0);
+    await authStore.logout();
+  });
 });
