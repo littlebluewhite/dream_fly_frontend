@@ -25,11 +25,10 @@ import { initialOf } from '$lib/api/wire';
  *
  * R10：本頁 onMount 加了 hydrateOps() 自保呼叫(水合缺口修補，見 CoachesScreen.svelte
  * 檔頭新增註解)。既有 8 it 驗證的是「使用者互動」觸發的 refreshOps，跟 onMount 的
- * hydrateOps 是兩條不同呼叫路徑，但兩者共用同一個 getOpsCollections mock 與
- * opsHydrated guard——beforeEach 先把 opsHydrated 設為 true，讓 onMount 的
- * hydrateOps() 因 guard 短路直接 return，不會偷打 getOpsCollections，才不會弄假紅
- * 既有斷言（:90/:94/:184/:198 四處呼叫次數斷言）。「開啟即水合」測試則反過來，自己
- * 把 opsHydrated 設回 false 才 render，驗證 guard 開啟時 onMount 真的會呼叫。
+ * hydrateOps 是兩條不同呼叫路徑，但兩者共用同一組 ops 端點與 ops 水合 guard——beforeEach
+ * 先真水合一次(ops 已水合)，讓 onMount 的 hydrateOps() 因 guard 短路直接 return，不會偷打
+ * getOpsCollections，才不會弄假紅既有的呼叫次數斷言。「開啟即水合」測試則反過來，先
+ * resetOpsForTests()(ops 未水合時)才 render，驗證 guard 開啟時 onMount 真的會呼叫。
  *
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓
  * createMember/createCoach/updateMember/updateCoach/getOpsCollections(stores.ts
@@ -329,7 +328,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 });
 
 describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁→本 overlay 動線上此前無人呼叫 hydrateOps，$coachesStore 只見 domain seed)', () => {
-	it('opsHydrated 為 false 時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
+	it('ops 未水合時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
 		resetOpsForTests();
 		const hydratedWire: CoachResponse = { id: 'c-hydrated', user_id: 'u-hydrated', name: '水合教練', title: '主任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
 		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([hydratedWire])));
@@ -355,7 +354,7 @@ function createDeferred<T>() {
 }
 
 describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 getOpsCollections)', () => {
-	it('loading：opsHydrated 為 false 時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
+	it('loading：ops 未水合時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
 		resetOpsForTests();
 		const d = createDeferred<CoachResponse[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_COACHES_BASE), 'GET /coaches': () => d.promise }));

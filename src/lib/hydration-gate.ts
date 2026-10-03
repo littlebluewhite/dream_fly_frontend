@@ -45,11 +45,10 @@
  * (取代 R14 只給 session-gate 的內部「擁有者換人」出口);hydrated 自此唯讀(收掉
  * ADR-0024 D-F2a),測試不再直寫旗標。
  *
- * R17(候選 寫入動詞):閘門自帶 write()——「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 →
- * 未水合時和解」整條收進閘門,和解鏈也自 session-gate 搬來(以 resetEpoch 為軸,reset() 一併清)。
- * 樂觀路徑沿用 markMutated(tail) 的記帳順序,非樂觀路徑沿用 session mutate 的 await-then-write;
- * 丟棄軸(fetchGenStable)與等待軸(尾流帳)都不動。FE-8 起 markMutated 與 session mutate 退役,
- * write() 是唯一的寫入動詞(推世代、翻旗、尾流入帳都只經由它)。
+ * 寫入動詞 write()(docs/adr/0027 §5):「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 → 未水合時
+ * 和解」整條在閘門內,和解鏈以 resetEpoch 為軸(reset() 一併清)。樂觀路徑同一同步段先寫 store 再記
+ * 尾流,非樂觀路徑 await send 之後才寫;丟棄軸(fetchGenStable)與等待軸(尾流帳)各自獨立。write()
+ * 是唯一的寫入動詞(推世代、翻旗、尾流入帳都只經由它)。
  *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
@@ -192,7 +191,7 @@ export interface HydrationGate {
 	 *  重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
 	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
 	reset(): void;
-	/** 寫入動詞(R17;FE-8 起是唯一的寫入動詞)。進場記 owner(resetEpoch)與 wasHydrated:
+	/** 唯一的寫入動詞(docs/adr/0027 §5)。進場記 owner(resetEpoch)與 wasHydrated:
 	 *   - 樂觀(有 optimistic):同一同步段 optimistic() → send() → 尾流入帳 → 世代 +1 翻旗,再 await;
 	 *     尾流以 `then(done, done)` 記帳,**reject 也算 settle**;
 	 *   - 非樂觀:await send() 之後才 commit → 世代 +1 翻旗;
@@ -232,7 +231,7 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	let resetEpoch = 0;
 	// hydrate 合併(R14 F2):在飛的那支 GET 與它出發時的世代。reset() 丟掉它。
 	let inflight: { gen: number; data: Promise<T> } | null = null;
-	// 和解鏈(R17 自 session-gate 搬來,軸由 session 世代換成 resetEpoch):序列化、失敗翻旗可重試、
+	// 和解鏈(以 resetEpoch 為軸):序列化、失敗翻旗可重試、
 	// 重置前排隊的不在新擁有者身上起跑。reset() 換一條新鏈——舊擁有者卡死的和解不得堵住新擁有者。
 	let reconcileChain: Promise<void> = Promise.resolve();
 

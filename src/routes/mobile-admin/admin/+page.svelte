@@ -5,9 +5,8 @@
    *
    * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
    * ready)。$orders 是跨頁共享 store(待付款橫幅,與本頁 payload 無關)——onMount
-   * 補呼叫 hydrateOps() 真的水合;誠實開機(R15 候選 F-3)下 $orders 開機即為
-   * `[]`,水合前 pending 天然是 0,不需要再靠 $opsHydrated 守衛(取代 Task 1，
-   * R13 小 bug 包當年的做法)。
+   * 補呼叫 hydrateOps() 真的水合;$orders 開機即為 `[]`(誠實開機,docs/adr/0025),
+   * 水合前 pending 天然是 0。
    *
    * Task 20：Hero KPI 改讀真 GET /reports/admin(admin/api.ts getReports())——同
    * 桌面 admin/+page.svelte 的裁決 9：原 4 張 KPI 卡中「本週課堂」「出席偏低」在

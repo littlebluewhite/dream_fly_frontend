@@ -114,8 +114,8 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 		expect(txt).not.toContain('2026 年 6 月 10 日');
 	});
 
-	/* R15(候選 F-3，誠實開機):$orders 開機即為 `[]`，不再需要 $opsHydrated 守衛——
-	 * 水合前 pending 天然是 0，水合落地後才反映 fixture 裡的 pending 數。 */
+	/* $orders 開機即為 `[]`(誠實開機,docs/adr/0025)——水合前 pending 天然是 0，
+	 * 水合落地後才反映 fixture 裡的 pending 數。 */
 	it('水合前待付款為 0(橫幅不出現)，水合後等於 fixture 裡的 pending 數', async () => {
 		// 四路 ops 端點故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中。
 		vi.mocked(api).mockImplementation(

@@ -15,14 +15,12 @@ import { subscriptions } from './subscriptions';
 import { points } from './points';
 import type { CartItem, ChargeableLine } from '$lib/cart-item';
 
-/* ---- Checkout — 每個 surface 的結帳工廠（Task 9(R15·F-5)：取代原本焊死在本檔的
- * member 專屬 `placeOrder`）。desktop CheckoutDialog 與 mobile/stores 各自的購物車
- * store 不同、下單後／開啟即要暖的 store 也不同（desktop 兩者都是
- * [refreshSubscriptions, refreshPoints]；mobile 只有 [refreshPoints]），但兩者共用
- * 同一套「lines 衍生、送單、開啟即水合」組裝方式——組裝本身收進這裡，
- * 呼叫端只需注入自己的 cart 與兩份 refresh 清單。FE-5 起送單序列（sync → POST
- * /orders → allSettled refreshAfterOrder → cart.clear）也是本檔的私有 placeOrder，
- * 不再是 lib-root 的 submitOrder relay（已刪）。 */
+/* ---- Checkout — 每個 surface 的結帳工廠（docs/adr/0025 §9、docs/adr/0027 §3）。desktop
+ * CheckoutDialog 與 mobile/stores 各自的購物車 store 不同、下單後／開啟即要暖的 store
+ * 也不同（desktop 兩者都是 [refreshSubscriptions, refreshPoints]；mobile 只有
+ * [refreshPoints]），但兩者共用同一套「lines 衍生、送單、開啟即水合」組裝方式——組裝
+ * 本身收在這裡，呼叫端只需注入自己的 cart 與兩份 refresh 清單。送單序列（sync → POST
+ * /orders → allSettled refreshAfterOrder → cart.clear）是本檔的私有 placeOrder。 */
 
 export interface CheckoutSyncDeps {
 	cart: Readable<CartItem[]> & { clear(): void };
