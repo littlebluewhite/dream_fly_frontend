@@ -265,7 +265,8 @@ mutator)。語意:
 - 十個 admin 頁測試改 `vi.mock('$lib/api/client')` + `fakeRouter(overrides, ADMIN_ROUTES)`,斷言 HTTP 路徑、方法與
   JSON body;案例數逐檔不變(147 → 147)。
 - **Ruling W8a**:`import-scan.test.ts` 新增契約「零整支 `vi.mock('$lib/admin/api')`」。「整支」指 automock 或
-  零參數 factory;帶 `importOriginal` 的部分替換不在此列。
+  零參數 factory;帶 `importOriginal` 的部分替換不在此列。後續收緊:契約改為零 mock `$lib/admin/api`／`$lib/mobile-admin/api`
+  (含 `importOriginal` 部分替換、`vi.doMock`、解析後落在兩者的相對路徑),`mobile-admin/stores.test.ts` 改走同一個 HTTP seam。
 - **淨效果**:W-4 基線 2530 → W-8 結束 2528 個測試(2 skipped 不變);W-8 本身 2527 → 2528(+1,新契約)。
 
 ## 明確不做的事(供未來止步)
@@ -331,8 +332,6 @@ mutator)。語意:
   4 個未動檔案的既有 unused-local 警告未碰(FE-9)。
 
 - **wire 型別採用(W-4～W-8)**:
-  - **`mobile-admin/stores.test.ts` 仍以 `importOriginal` 局部 mock `$lib/admin/api`**(換掉六支寫入函式):
-    W8a 契約只擋整支 mock,這支屬 mobile-admin store 測試,不在 W-8 範圍(W-8)。
   - **member/mobile/public 頁面測試仍 mock 各自的 api 模組**(`docs/adr/0026` 的遞延,W-8 只對 admin 重開並結案)。
   - **`ADMIN_ROUTES` 部分預設回應目前沒有測試命中**(各頁都覆寫自己的主路由);保留是依任務要求,屬預備(W-8)。
   - **「發送催繳」仍在手機 `OrderSheet` 的 pending 頁尾**:純本機 toast、無後端呼叫;若「唯讀」也要拿掉它是一行刪除(W-6)。

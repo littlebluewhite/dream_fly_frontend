@@ -297,8 +297,9 @@ seam — `vi.mock('$lib/api/client')` + `fakeRouter` with `src/lib/testing/coach
 `COACH_ROUTES` — and an `import-scan.test.ts` contract pins zero whole-module `vi.mock('$lib/coach/api')`
 (`docs/adr/0014` addenda, `docs/adr/0026`). The ten `routes/admin/**/page.test.ts` files do the same with
 `src/lib/testing/admin-routes.ts`'s `ADMIN_ROUTES` (`{ ...OPS_ROUTES, … }`, plus the `apiCalls`/`apiBody`
-inspection helpers), and a sibling contract pins zero whole-module `vi.mock('$lib/admin/api')`
-(`importOriginal` partial mocks are exempt; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). Per-entity *action* error tables stay at call sites —
+inspection helpers), and a sibling contract pins zero mocks of `$lib/admin/api` or `$lib/mobile-admin/api` in any
+form — whole-module, `importOriginal` partial, `vi.doMock`, or a relative path resolving to either (`mobile-admin/stores.test.ts`
+uses the same HTTP seam; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). Per-entity *action* error tables stay at call sites —
 `docs/adr/0014` draws that boundary. mobile-admin's coach attendance page's `ATTENDANCE_ERROR_TEXT` is
 one: it maps 403/404/422 to the same wording desktop's inline attendance-error table uses, so a save
 failure shows the specific reason (`docs/adr/0011` addendum).
