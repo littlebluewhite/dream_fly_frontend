@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross } from './wire';
-import type { ApiPage } from './wire';
 
 /* Expected [tone, label] pairs are copied verbatim from the current
  * admin/data.ts ORDER_STATUS / member/api.ts ORDER_STATUS (confirmed
@@ -26,16 +25,6 @@ describe('orderStatusBadge', () => {
 describe('pageMeta', () => {
   it('maps the snake_case envelope meta fields to camelCase', () => {
     expect(pageMeta({ total: 42, page: 2, per_page: 20 })).toEqual({ total: 42, page: 2, perPage: 20 });
-  });
-});
-
-describe('ApiPage', () => {
-  it('is assignable to a plain object keyed by the given field name plus the meta fields', () => {
-    type OrdersPage = ApiPage<'orders', { id: string }>;
-    const page: OrdersPage = { orders: [{ id: 'o1' }], total: 1, page: 1, per_page: 20 };
-
-    expect(page.orders).toEqual([{ id: 'o1' }]);
-    expect(page.total).toBe(1);
   });
 });
 

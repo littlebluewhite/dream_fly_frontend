@@ -75,11 +75,8 @@ export const taxFromGross = (amount: number): { tax: number; net: number } => {
   return { tax, net: amount - tax };
 };
 
-/** 後端清單信封：{ [K]: T[], total, page, per_page }。
- *  mapped type，不能被 interface extends——消費端一律用 type alias。 */
-export type ApiPage<K extends string, T> = { [P in K]: T[] } & { total: number; page: number; per_page: number };
-
-/** 信封 meta → camelCase（前端慣用）。 */
+/** 後端清單信封（產生型別 *ListResponse 的 { total, page, per_page }）meta → camelCase
+ *  （前端慣用）。W-7 起信封型別一律用產生型別，手寫的 ApiPage 泛型已刪。 */
 export const pageMeta = (r: { total: number; page: number; per_page: number }) =>
   ({ total: r.total, page: r.page, perPage: r.per_page });
 
