@@ -1018,6 +1018,22 @@ describe('getRecentActivity — GET /reports/admin/activity（§3.24，Task F11�
 		]);
 	});
 
+	it('未知 kind（後端先送出新來源）走後備圖示，不拋錯；label/時間照常映射', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin/activity': {
+					items: [{ kind: 'refund', label: '訂單 DF-1 已退款', occurred_at: '2026-07-10T09:12:00Z' }]
+				}
+			})
+		);
+
+		const d = await getRecentActivity();
+
+		expect(d.activity).toEqual([
+			{ icon: 'bell', tone: 'var(--df-text-muted)', bg: 'var(--df-bg-light)', text: '訂單 DF-1 已退款', time: '2026-07-10 09:12' }
+		]);
+	});
+
 	it('空庫：items 為 [] 時回傳空陣列，不是 500', async () => {
 		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin/activity': { items: [] } }));
 		const d = await getRecentActivity();

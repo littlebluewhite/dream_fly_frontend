@@ -300,13 +300,21 @@ const ACTIVITY_KIND_ICON: Record<ActivityKind, { icon: IconName; tone: string; b
 	enrolment: { icon: 'book-open', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
 	inquiry: { icon: 'message-circle', tone: 'var(--df-warning)', bg: 'var(--df-warning-bg)' }
 };
+/** 未知 kind(部署落差時後端先送出新來源)的後備：不讓整個最新動態面板因查無圖示而拋錯。 */
+const DEFAULT_ACTIVITY_META: { icon: IconName; tone: string; bg: string } = {
+	icon: 'bell',
+	tone: 'var(--df-text-muted)',
+	bg: 'var(--df-bg-light)'
+};
 
 /** ActivityItem → 既有 Activity 形狀。label 已是後端組好的繁中人讀字串(含 NT$ 金額)，
  *  原樣穿透為 text；occurred_at(ISO8601)轉為顯示用 "YYYY-MM-DD HH:MM"(同 mapCoach.
  *  lastLogin 的 isoDateTime 慣例，這裡沒有既有的相對時間("N 分鐘前")格式化工具，不
  *  另外發明一套)。 */
 function mapActivityItem(item: ActivityItem): Activity {
-	const { icon, tone, bg } = ACTIVITY_KIND_ICON[item.kind as ActivityKind];
+	const { icon, tone, bg } =
+		(ACTIVITY_KIND_ICON as Record<string, (typeof ACTIVITY_KIND_ICON)[ActivityKind] | undefined>)[item.kind] ??
+		DEFAULT_ACTIVITY_META;
 	return { icon, tone, bg, text: item.label, time: isoDateTime(item.occurred_at) };
 }
 
