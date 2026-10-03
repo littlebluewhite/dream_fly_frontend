@@ -14,21 +14,13 @@
   import { onMount } from 'svelte';
   import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { PT_TYPE } from '$lib/member/data';
-  import { points, pointsLedger, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
+  import { points, pointsLedger, pointsEarnedThisMonth, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getPoints, type PointsData, type Reward } from '$lib/member/api';
 
   let confirm: Reward | null = null;
   let redeeming = false;
   let data: PointsData | null = null;
-
-  // 「本月累積」動態取當下月份（與 pointsLedger 的 date 同為補零 YYYY/MM/DD 格式，
-  // 見 stores.ts 的 refreshPoints）——寫死月份會讓這個統計在真實資料下永遠是 0。
-  const now = new Date();
-  const thisMonthPrefix = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`;
-  $: earnedThisMonth = $pointsLedger
-    .filter((l) => l.date.startsWith(thisMonthPrefix) && l.delta > 0)
-    .reduce((s, l) => s + l.delta, 0);
 
   const gate = createLoadGate({
     fetch: getPoints,
@@ -106,7 +98,7 @@
         <div style="display:flex;gap:18px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.15);font-size:12.5px">
           <div>
             <div style="opacity:0.7">本月累積</div>
-            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px">+{earnedThisMonth}</div>
+            <div style="font-size:17px;font-weight:700;font-family:var(--df-font-heading);margin-top:2px">+{$pointsEarnedThisMonth}</div>
           </div>
           <div>
             <div style="opacity:0.7">即將到期</div>

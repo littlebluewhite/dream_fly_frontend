@@ -3,6 +3,7 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
+import type { PointReason, PointsMeResponse } from '$lib/api/generated';
 import type { LedgerEntry, LedgerType } from '$lib/domain/member-app';
 
 /* ---- Points ----
@@ -14,27 +15,17 @@ export const points = writable<number>(0);
 // sync with the visible history across route navigation. 誠實開機(R14 候選 F3):開機值 =
 // reset 值 = `[]`,由 refreshPoints 水合成真明細。
 export const pointsLedger = writable<LedgerEntry[]>([]);
-
-export interface ApiLedgerEntry {
-  id: string;
-  delta: number;
-  balance_after: number;
-  reason: string;
-  order_id: string | null;
-  created_at: string;
-}
-
-export interface ApiPointsMe {
-  balance: number;
-  ledger: ApiLedgerEntry[];
-}
+/** 本月累積：後端 `earned_this_month`（工作室月份、只計 checkout_earn，與明細分頁無關）。
+ *  開機值 = reset 值 = 0，隨 refreshPoints 水合、隨身分變更歸零。 */
+export const pointsEarnedThisMonth = writable<number>(0);
 
 /** reason → 中文 desc + 本地 LedgerType 對照，後端 PointReason 六值全數列出：
  *  checkout_earn/checkout_redeem（結帳賺/折抵）、redeem（兌換獎勵扣點，契約 §3.23，
  *  desc 與 checkout_redeem 分開以免誤認為結帳折抵）、refund_restore/refund_clawback
  *  （退款沖回，type 皆為 refund，desc 分辨退回折抵或收回回饋）、admin_adjust（可正可負，
- *  type adjust）。default 只兜後端日後新增、前端尚未認得的 reason，同樣歸 adjust。 */
-function describeLedgerReason(reason: string): { type: LedgerType; desc: string } {
+ *  type adjust）。PointReason 為後端產生型別，窮舉 switch：後端新增值域時 default 的
+ *  `satisfies never` 成為編譯錯誤，逼前端補文案。 */
+function describeLedgerReason(reason: PointReason): { type: LedgerType; desc: string } {
   switch (reason) {
     case 'checkout_earn':
       return { type: 'earn', desc: '消費獲得點數' };
@@ -47,25 +38,28 @@ function describeLedgerReason(reason: string): { type: LedgerType; desc: string 
     case 'refund_clawback':
       return { type: 'refund', desc: '訂單退款・收回回饋點數' };
     case 'admin_adjust':
+      return { type: 'adjust', desc: '會員點數調整' };
     default:
+      // 編譯期窮舉守衛；執行期遇到部署時差送來的新值仍降級為 adjust，不讓整包明細 hydrate 炸掉。
+      reason satisfies never;
       return { type: 'adjust', desc: '會員點數調整' };
   }
 }
 
-/** 點數餘額 + 明細 — 從 GET /points/me 重新 hydrate。balance 給 checkout 用；
- *  ledger（Task 17 接線）用 date 的 YYYY/MM/DD 切法而非 ISO 切法，是因為
- *  points 頁的「本月累積」依 `date.startsWith(當月 YYYY/MM prefix)` 篩選
- *  （見 points/+page.svelte），格式依賴仍在 —— 換成 ISO 會讓那段篩選永遠不
- *  match、悄悄把統計歸零。
+/** 點數餘額 + 明細 + 本月累積 — 從 GET /points/me 重新 hydrate。balance 給 checkout 用；
+ *  ledger（Task 17 接線）的 date 為 YYYY/MM/DD 顯示格式；本月累積直接讀後端
+ *  earned_this_month（W-5：原本 points 頁從第一頁明細以 UTC 日期切當月加總，跨頁與
+ *  台灣月初都會算錯）。
  *  C1（架構深化 R7）抬升為 createSessionRefresher:保留「無條件重抓」語意(
  *  account 頁進頁經 warmStores 暖機 + CheckoutDialog/CartSheet 每次開啟 + placeOrder afterOrder
  *  都依賴每次真抓,不套 guard),只加 identity 清空(reset:歸 boot 態)+ 在飛換帳「靜默
  *  丟棄」(不 throw——redeemReward/placeOrder 會傳播 rejection,不得新增換帳失敗模式)。
  *  修殘影窗口(換帳後 A 的餘額殘留),呼叫端語意不變。 */
-export const refreshPoints = createSessionRefresher<ApiPointsMe>({
-  fetch: () => api<ApiPointsMe>('/points/me'),
+export const refreshPoints = createSessionRefresher<PointsMeResponse>({
+  fetch: () => api<PointsMeResponse>('/points/me'),
   apply: (data) => {
     points.set(data.balance);
+    pointsEarnedThisMonth.set(data.earned_this_month);
     pointsLedger.set(
       data.ledger.map((l) => {
         const { type, desc } = describeLedgerReason(l.reason);
@@ -76,6 +70,7 @@ export const refreshPoints = createSessionRefresher<ApiPointsMe>({
   reset: () => {
     points.set(0);
     pointsLedger.set([]); // boot 態(開機值 = reset 值 = [])
+    pointsEarnedThisMonth.set(0);
   }
 });
 
