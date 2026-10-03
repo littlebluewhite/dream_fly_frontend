@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
+import type { WaitlistResponse } from '$lib/api/generated';
 
 /* ---- Waitlist (候補) — Task 3（feat/backend-integration round 2）----
  * 取代原本掛在 cart 底下、隨 dreamfly_cart_v3 一起存進 localStorage 的
@@ -17,17 +18,9 @@ export interface WaitlistEntry {
   course_name: string;
 }
 
-interface ApiWaitlistEntry {
-  id: string;
-  course_id: string;
-  course_name: string;
-  status: 'waiting' | 'cancelled';
-  created_at: string;
-}
-
 export const waitlist = writable<WaitlistEntry[]>([]);
 
-function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
+function toWaitlistEntry(w: WaitlistResponse): WaitlistEntry {
   return { id: w.id, course_id: w.course_id, course_name: w.course_name };
 }
 
@@ -43,7 +36,7 @@ function toWaitlistEntry(w: ApiWaitlistEntry): WaitlistEntry {
  *  store 狀態 + 後端 409 擋重複候補雙保險),模組內僅 write 尾隨的和解重抓呼叫它。 */
 const gate = createSessionGate<WaitlistEntry[]>({
   fetch: async () => {
-    const list = await api<ApiWaitlistEntry[]>('/waitlist/me');
+    const list = await api<WaitlistResponse[]>('/waitlist/me');
     return list.filter((w) => w.status === 'waiting').map(toWaitlistEntry);
   },
   apply: (list) => waitlist.set(list),
@@ -61,7 +54,7 @@ export const hydrateWaitlist = gate.hydrate;
 export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
   const o = await gate.write({
     send: async () => {
-      const res = await api<ApiWaitlistEntry>('/waitlist', {
+      const res = await api<WaitlistResponse>('/waitlist', {
         method: 'POST',
         body: JSON.stringify({ course_id: courseId })
       });
