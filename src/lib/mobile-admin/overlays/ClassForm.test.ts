@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import ClassForm from './ClassForm.svelte';
 import { COACHES } from '$lib/testing/seed-fixtures';
-import { COURSE_NAME_ERROR, COURSE_CAP_ERROR } from '$lib/admin/components/course-request';
+import { COURSE_NAME_ERROR, COURSE_CAP_ERROR, COURSE_COACH_ERROR } from '$lib/admin/components/course-request';
 
 /* R13 Task 4(C2)：ClassForm 與桌面 ClassEditDialog 共用 course-request.ts 的
  * draft/check。驗證規則的逐欄測試住 course-request.test.ts，這裡只驗接線：
@@ -68,6 +68,16 @@ describe('ClassForm', () => {
 		await fireEvent.click(btn());
 		expect(onUpdate).toHaveBeenCalledTimes(1);
 		expect(onUpdate.mock.calls[0][0]).toMatchObject({ name: '改名班' });
+	});
+
+	it('教練不在清單 → 送出時教練欄以錯誤樣式顯示 COURSE_COACH_ERROR(同其他欄位錯誤)', async () => {
+		const onUpdate = vi.fn().mockResolvedValue(true);
+		render(ClassForm, { props: { onClose: () => {}, onUpdate, coaches: COACHES, k: { ...K, coach: '已離職教練' } } });
+		await fireEvent.click(screen.getByText(/儲存課程/).closest('button')!);
+
+		expect(screen.getByText(COURSE_COACH_ERROR)).toHaveClass('err');
+		expect(screen.getByLabelText('授課教練')).toHaveClass('has-error');
+		expect(onUpdate).not.toHaveBeenCalled();
 	});
 
 	it('不再有 教室 / 場地 與 招生狀態 輸入(D2)', () => {

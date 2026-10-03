@@ -66,7 +66,7 @@
       <Input label="班級名稱" bind:value={d.name} error={errors.name ?? ''} style="grid-column:span 2" />
       <Select label="分級" bind:value={d.level} options={LEVELS} />
       <Select label="課程類別" bind:value={d.cat} options={CATS} />
-      <Select label="授課教練" bind:value={d.coach} options={coachOptions} helper={errors.coach ?? ''} />
+      <Select label="授課教練" bind:value={d.coach} options={coachOptions} error={errors.coach ?? ''} />
       <div class="status">
         <span class="status-label">招生狀態</span>
         <StatusBadge kind="classStatus" value={klass.status} />

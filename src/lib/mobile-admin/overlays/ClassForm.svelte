@@ -71,7 +71,7 @@
       <Select label="分級" bind:value={d.level} options={F_LEVELS} />
       <Select label="課程類別" bind:value={d.cat} options={CATS} />
     </div>
-    <Select label="授課教練" bind:value={d.coach} options={coachOpts.map((c) => c.name)} helper={errors.coach ?? ''} />
+    <Select label="授課教練" bind:value={d.coach} options={coachOpts.map((c) => c.name)} error={errors.coach ?? ''} />
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:13px;">
       <Input label="上課日" bind:value={d.day} />
       <Input label="時段" bind:value={d.time} />

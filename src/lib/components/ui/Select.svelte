@@ -12,6 +12,7 @@
   export let required = false;
   export let disabled = false;
   export let helper = '';
+  export let error = '';
   export let style = '';
   let className = '';
   export { className as class };
@@ -30,6 +31,7 @@
       id={selId}
       class="control"
       class:is-placeholder={!value}
+      class:has-error={error}
       {disabled}
       {required}
       bind:value
@@ -42,7 +44,7 @@
     </select>
     <span class="chev"><Icon name="chevron-down" size={16} color="var(--df-text-light)" /></span>
   </div>
-  {#if helper}<span class="hint">{helper}</span>{/if}
+  {#if error || helper}<span class="hint" class:err={error}>{error || helper}</span>{/if}
 </div>
 
 <style>
@@ -90,6 +92,12 @@
     border-color: var(--df-primary);
     box-shadow: var(--df-shadow-focus);
   }
+  .control.has-error {
+    border-color: var(--df-error);
+  }
+  .control.has-error:focus {
+    box-shadow: none;
+  }
   .control:disabled {
     background: var(--df-bg-light);
   }
@@ -102,5 +110,8 @@
   .hint {
     font-size: var(--df-text-xs);
     color: var(--df-text-light);
+  }
+  .hint.err {
+    color: var(--df-error);
   }
 </style>
