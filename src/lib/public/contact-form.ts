@@ -34,7 +34,8 @@
  * 因此照樣攔截得到，是佈線正確的證明。 */
 import { get, writable, type Readable, type Writable } from 'svelte/store';
 import { ApiError } from '../api/client';
-import type { ApiInquiry, ContactPayload } from './api';
+import type { ContactPayload } from './api';
+import type { InquiryResponse } from '$lib/api/generated';
 
 export interface ContactDraft {
 	name: string;
@@ -84,7 +85,7 @@ export type ContactFormOutcome =
 
 export interface ContactFormDeps {
 	/** 簽名對齊 public/api.ts 的 sendContactInquiry（POST /contact）。 */
-	send(payload: ContactPayload): Promise<ApiInquiry>;
+	send(payload: ContactPayload): Promise<InquiryResponse>;
 	/** setTimeout 的抽象注入，回傳 cancel()；submit() 於送出前用它取消上一輪
 	 *  殘留的重置排程（見模組頂部附註的 bug 修復）。 */
 	schedule(fn: () => void, ms: number): () => void;

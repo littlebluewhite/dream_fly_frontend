@@ -5,7 +5,7 @@
  * 表單規則、寫入序列化都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)與 mobile
  * (SettingsScreen / EditProfileSheet / 首頁·帳戶 hero / TrialScreen / CartSheet)直接
  * import $lib/self-account 取同一顆單例。R16 Task 1b 起教練端(coach/api.ts 的教練 gate 與
- * saveSettings)也經這裡讀寫本人資料,教練 gate 只另快取 ApiCoach——改名後 $selfAccount 與
+ * saveSettings)也經這裡讀寫本人資料,教練 gate 只另快取 CoachResponse——改名後 $selfAccount 與
  * 教練頁同一份快取(關掉 ADR-0023 記的「快取各自為政」)。取代了三份各自為政的來源:
  * member/api.ts 的 mapProfile/saveBirthDate、mobile/stores.ts 的本地 profile/prefs
  * store,以及 mobile/pref-sync.ts 的偏好同步機(其 outcome 與序列鏈語意原樣移入)。

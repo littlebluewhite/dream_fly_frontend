@@ -3,7 +3,7 @@ import { render } from '@testing-library/svelte';
 import VenuesScreen from './VenuesScreen.svelte';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { ApiVenue } from '$lib/public/api';
+import type { VenueResponse } from '$lib/api/generated';
 
 /* 場館管理 push screen — C4：接真 GET /venues(復用桌面 admin/api.ts 的 getVenues()，畫面
  * 直接 import $lib/admin/api)。fixture 刻意異於 domain/venues.ts seed(場地
@@ -18,7 +18,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 const UUID_A = '3f9a1c02-7b4e-4d1a-9c88-000000000001';
 const UUID_B = '3f9a1c02-7b4e-4d1a-9c88-000000000002';
-const PAYLOAD: ApiVenue[] = [
+const PAYLOAD: VenueResponse[] = [
 	{ id: UUID_A, category_id: null, slug: 'zeta-hall', name: 'Zeta 訓練場', description: '測試競技場', features: ['測試彈翻床', '測試單槓'], image_url: null, is_active: true, created_at: '' },
 	{ id: UUID_B, category_id: null, slug: 'omega-room', name: 'Omega 教室', description: '測試律動室', features: ['測試地墊'], image_url: null, is_active: false, created_at: '' }
 ];

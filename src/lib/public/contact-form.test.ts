@@ -11,7 +11,9 @@ import {
 	RESET_DELAY_MS
 } from './contact-form';
 import { ApiError } from '../api/client';
-import type { ApiInquiry, ContactPayload } from './api';
+import type { ContactPayload } from './api';
+import type { InquiryResponse } from '$lib/api/generated';
+import { inquiryResponse } from '$lib/testing/wire-fixtures';
 
 /* contact-form.ts — public 洽詢表單機的單元測試（R10 架構深化 Wave 1 C 案）。只測
  * machine 機制（4 道守衛文案與 regex 邊界／phone 省略／送出生命週期／schedule 排程
@@ -24,18 +26,7 @@ import type { ApiInquiry, ContactPayload } from './api';
  * （TrialScreen.test.ts:36-38 明文警告：fake timers 會跟 findByText/waitFor 這類
  * 仰賴真實計時器 polling 的斷言打架）。 */
 
-const INQUIRY: ApiInquiry = {
-	id: 'inq-1',
-	name: '王小明',
-	email: 'a@b.com',
-	phone: null,
-	subject: '一般諮詢',
-	message: '想詢問課程時間',
-	status: 'new',
-	assigned_to: null,
-	created_at: '',
-	updated_at: ''
-};
+const INQUIRY: InquiryResponse = inquiryResponse();
 
 /** state 的 idle 初始快照——本地複本（同 leave-form.test.ts INITIAL_VIEW 慣例，
  *  INITIAL_STATE 本就不是模組的 exported 成員）。 */
@@ -47,7 +38,7 @@ const INITIAL_STATE = { status: 'idle', errorMessage: '' };
 function makeDeps() {
 	const scheduled: { fn: () => void; ms: number; cancel: ReturnType<typeof vi.fn> }[] = [];
 	return {
-		send: vi.fn<(payload: ContactPayload) => Promise<ApiInquiry>>(),
+		send: vi.fn<(payload: ContactPayload) => Promise<InquiryResponse>>(),
 		schedule: vi.fn((fn: () => void, ms: number) => {
 			const cancel = vi.fn();
 			scheduled.push({ fn, ms, cancel });
@@ -229,7 +220,7 @@ describe('createContactForm — 殘留 timer 取消（bug 修復）', () => {
 
 describe('createContactForm — in-flight 守衛（程式層新增，原僅 markup disabled）', () => {
 	it('deferred 送出期間再呼叫 submit() → alreadySubmitting，deps.send 只呼叫一次；resolve 後狀態復位', async () => {
-		const d = deferred<ApiInquiry>();
+		const d = deferred<InquiryResponse>();
 		deps.send.mockReturnValue(d.promise);
 		fillValid();
 

@@ -5,7 +5,7 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getCoachHome()(組合器，
@@ -21,7 +21,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', phone: null, last_login: null, created_at: '2026-01-01T00:00:00Z' };
-const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
+const MY_COACH: CoachResponse = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
 
 // 3 堂課、共 30 位學員 — 與桌面 seed 慣例刻意不同,證明「今日課堂/今日學員」統計
 // 讀 payload 動態算出,而非殘留頁面硬編字面。status 由後端帶來(W-5),狀態本身

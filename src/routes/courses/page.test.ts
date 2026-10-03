@@ -3,7 +3,7 @@ import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/s
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { listCourses, listCoaches } from '$lib/public/api';
-import type { ApiCourse, ApiCoach } from '$lib/public/api';
+import type { CourseResponse, CoachResponse } from '$lib/api/generated';
 import { cart, joinWaitlist } from '$lib/member/stores';
 import { toasts } from '$lib/stores/marketingToasts';
 import { authStore } from '$lib/stores/authStore';
@@ -30,7 +30,7 @@ vi.mock('$lib/stores/authStore', async () => {
 	return makeAuthMockA();
 });
 
-const COURSE: ApiCourse = {
+const COURSE: CourseResponse = {
 	id: 'course-uuid-1',
 	name: '幼兒體操 啟蒙班',
 	slug: 'kids-gym-intro',
@@ -53,7 +53,7 @@ const COURSE: ApiCourse = {
 	waitlist_count: 0
 };
 
-const COACH: ApiCoach = {
+const COACH: CoachResponse = {
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
 	// name(教練真實姓名)與 title(職稱)不同字 —— 課程卡的授課教練應顯示 name，
@@ -72,7 +72,7 @@ const COACH: ApiCoach = {
 };
 
 // spots = max_students(8) - enrolled_count(8) = 0 → 額滿，加入購物車走候補分支。
-const FULL_COURSE: ApiCourse = { ...COURSE, id: 'course-uuid-full', max_students: 8, enrolled_count: 8 };
+const FULL_COURSE: CourseResponse = { ...COURSE, id: 'course-uuid-full', max_students: 8, enrolled_count: 8 };
 
 beforeEach(() => {
 	vi.mocked(listCourses).mockReset();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ntd, toCents, toCatalogCourse, toMarketingCoach, toPass, orderItemsSummary } from './adapters';
-import type { ApiCourse, ApiCoach, ApiProduct } from './api';
+import type { CourseLevel, CourseResponse, CoachResponse, ProductResponse } from '$lib/api/generated';
 
 describe('ntd — 全前端唯一 cents→NT$ 轉換點', () => {
 	it('converts whole-dollar cents', () => {
@@ -34,7 +34,7 @@ describe('toCents — 全前端唯一 NT$→cents 轉換點（ntd 的反向)', (
 	});
 });
 
-function makeApiCourse(overrides: Partial<ApiCourse> = {}): ApiCourse {
+function makeApiCourse(overrides: Partial<CourseResponse> = {}): CourseResponse {
 	return {
 		id: 'course-uuid-1',
 		name: '幼兒體操 啟蒙班',
@@ -79,7 +79,8 @@ describe('toCatalogCourse', () => {
 	});
 
 	it('falls back to the raw level string for an unknown enum value', () => {
-		const c = makeApiCourse({ level: 'expert' });
+		// 型別上 CourseLevel 已封閉；cast 模擬前後端部署落差時後端先送出新值。
+		const c = makeApiCourse({ level: 'expert' as CourseLevel });
 		expect(toCatalogCourse(c).level).toBe('expert');
 	});
 
@@ -121,7 +122,7 @@ describe('toCatalogCourse', () => {
 	});
 });
 
-function makeApiCoach(overrides: Partial<ApiCoach> = {}): ApiCoach {
+function makeApiCoach(overrides: Partial<CoachResponse> = {}): CoachResponse {
 	return {
 		id: 'coach-uuid-1',
 		user_id: 'user-uuid-1',
@@ -169,7 +170,7 @@ describe('toMarketingCoach', () => {
 	});
 });
 
-function makeApiProduct(overrides: Partial<ApiProduct> = {}): ApiProduct {
+function makeApiProduct(overrides: Partial<ProductResponse> = {}): ProductResponse {
 	return {
 		id: 'product-uuid-1',
 		name: '月票 · 自由練習',

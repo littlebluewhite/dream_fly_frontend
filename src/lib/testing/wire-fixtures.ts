@@ -6,6 +6,7 @@
 import type {
 	AdminLeaveRequestResponse,
 	AdminOrderSummary,
+	InquiryResponse,
 	LeaveRequestResponse,
 	OrderResponse,
 	OrderSummary,
@@ -86,5 +87,21 @@ export const pointsMe = (over: Partial<PointsMeResponse> = {}): PointsMeResponse
 	total: 0,
 	page: 1,
 	per_page: 20,
+	...over
+});
+
+export const inquiryResponse = (over: Partial<InquiryResponse> = {}): InquiryResponse => ({
+	id: 'inq-1',
+	name: '王小明',
+	email: 'a@b.com',
+	phone: null,
+	subject: '一般諮詢',
+	message: '想詢問課程時間',
+	status: 'new',
+	assigned_to: null,
+	inquiry_type: 'general',
+	metadata: null,
+	created_at: '',
+	updated_at: '',
 	...over
 });

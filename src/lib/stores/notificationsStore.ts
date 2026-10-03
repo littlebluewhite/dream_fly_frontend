@@ -4,10 +4,11 @@
 
 import { writable, derived } from 'svelte/store';
 import type { Notification } from '$lib/types';
-import { listPosts, type ApiPost } from '$lib/public/api';
+import { listPosts } from '$lib/public/api';
+import type { PostResponse } from '$lib/api/generated';
 
 /** 公開公告貼文 → 通知形狀。公開端點沒有已讀狀態，一律預設未讀。 */
-export function toAnnouncement(p: ApiPost): Notification {
+export function toAnnouncement(p: PostResponse): Notification {
   return {
     id: p.id,
     type: 'announcement',

@@ -5,7 +5,8 @@
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import { createLoadGate } from '$lib/load-gate';
-  import { getSchedule, type ApiDaySchedule, type ApiTimeSlot } from '$lib/public/api';
+  import { getSchedule } from '$lib/public/api';
+  import type { DaySchedule, TimeSlotResponse } from '$lib/api/generated';
   import {
     makeIsoDate,
     sundayGridDays,
@@ -39,7 +40,7 @@
   }
 
   // seam 接真 API：一次拉當月排課（每日一筆 slots），取代先前的 Math.random() 假資料。
-  let days: ApiDaySchedule[] = [];
+  let days: DaySchedule[] = [];
 
   const gate = createLoadGate({
     fetch: () => getSchedule(currentDate.getFullYear(), currentDate.getMonth() + 1),
@@ -76,7 +77,7 @@
     apply(selectDateSel(sel(), day));
   }
 
-  function selectTimeSlot(slot: ApiTimeSlot) {
+  function selectTimeSlot(slot: TimeSlotResponse) {
     apply(selectTimeSlotSel(sel(), slot));
   }
 

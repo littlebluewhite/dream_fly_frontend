@@ -5,6 +5,7 @@ import ContactForm from './ContactForm.svelte';
 import { sendContactInquiry } from '$lib/public/api';
 import { ApiError } from '$lib/api/client';
 import { toasts } from '$lib/stores/marketingToasts';
+import { inquiryResponse } from '$lib/testing/wire-fixtures';
 
 vi.mock('$lib/public/api', () => ({ sendContactInquiry: vi.fn() }));
 
@@ -26,18 +27,7 @@ afterEach(resetToasts);
 
 describe('ContactForm — 送出 POST /contact', () => {
 	it('submits the validated fields via sendContactInquiry and shows the success message + toast', async () => {
-		vi.mocked(sendContactInquiry).mockResolvedValue({
-			id: 'inq-1',
-			name: '王小明',
-			email: 'a@b.com',
-			phone: null,
-			subject: '一般諮詢',
-			message: '想詢問課程時間',
-			status: 'new',
-			assigned_to: null,
-			created_at: '',
-			updated_at: ''
-		});
+		vi.mocked(sendContactInquiry).mockResolvedValue(inquiryResponse());
 
 		const { getByLabelText, findByText } = render(ContactForm);
 		fillValidForm(getByLabelText);
@@ -55,18 +45,7 @@ describe('ContactForm — 送出 POST /contact', () => {
 	});
 
 	it('omits phone from the payload when left blank', async () => {
-		vi.mocked(sendContactInquiry).mockResolvedValue({
-			id: 'inq-1',
-			name: '王小明',
-			email: 'a@b.com',
-			phone: null,
-			subject: '一般諮詢',
-			message: '想詢問課程時間',
-			status: 'new',
-			assigned_to: null,
-			created_at: '',
-			updated_at: ''
-		});
+		vi.mocked(sendContactInquiry).mockResolvedValue(inquiryResponse());
 		const { getByLabelText } = render(ContactForm);
 		fillValidForm(getByLabelText);
 

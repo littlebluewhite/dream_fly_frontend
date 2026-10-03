@@ -5,11 +5,10 @@
  * （見各函式註解），呼叫端不用改。 */
 import { api } from '$lib/api/client';
 import { listCoaches, listVenues } from '$lib/public/api';
-import type { ApiCourse, ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate } from '$lib/api/wire';
-import type { ApiPage, TodaySessionResponse } from '$lib/api/wire';
+import type { TodaySessionResponse } from '$lib/api/wire';
 import { SESSION_STATUS, toTodaySession } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
 // C4 批4(facade 純轉手退役):Ticket/TicketType/ClassStatus/Coach/Venue/
@@ -28,12 +27,18 @@ import type {
 	ActivityResponse,
 	AdminOrderListResponse,
 	AdminOrderSummary,
+	CoachResponse,
 	CouponListResponse,
 	CouponResponse,
+	CourseListResponse,
+	CourseResponse,
 	OrderResponse,
+	ProductListResponse,
+	ProductResponse,
 	SettingsResponse,
 	UserListResponse,
-	UserResponse
+	UserResponse,
+	VenueResponse
 } from '$lib/api/generated';
 import { paidAtLabel } from './components/order-status';
 import type { Activity } from '$lib/domain/activity';
@@ -45,7 +50,7 @@ import type { IconName } from '$lib/icon-registry';
  *  對應可預約狀態(status，下線視為維護中)；type 借用 description(後端沒有專門的
  *  「場地類型」欄位)。area/cap/今日排課(today) 是無後端來源的裝飾欄位，Task F4 已
  *  隨 VenueEditDialog/venues 頁欄位收斂一併移除(不留假數字)。 */
-function mapVenue(v: ApiVenue): Venue {
+function mapVenue(v: VenueResponse): Venue {
 	return {
 		id: v.id,
 		slug: v.slug,
@@ -78,11 +83,11 @@ export interface VenueWriteBody {
 	is_active?: boolean;
 }
 
-export const createVenue = (body: VenueWriteBody): Promise<ApiVenue> =>
-	api<ApiVenue>('/venues', { method: 'POST', body: JSON.stringify(body) });
+export const createVenue = (body: VenueWriteBody): Promise<VenueResponse> =>
+	api<VenueResponse>('/venues', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateVenue = (id: string, body: VenueWriteBody): Promise<ApiVenue> =>
-	api<ApiVenue>(`/venues/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateVenue = (id: string, body: VenueWriteBody): Promise<VenueResponse> =>
+	api<VenueResponse>(`/venues/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 票券（GET /products，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
@@ -98,7 +103,7 @@ export const updateVenue = (id: string, body: VenueWriteBody): Promise<ApiVenue>
  *  已被 getTickets() 濾除）。null 顯示層由 routes/admin/tickets/+page.svelte 渲染
  *  「不限」，不用 0 頂替（0 在既有 UI 語意上會誤讀成「已無配額」）。圖示固定用通用
  *  icon(後端無圖示欄位)；color 依序輪替既有色票(後端無代表色欄位，純視覺裝飾)。 */
-function mapProduct(p: ApiProduct, i: number): Ticket {
+function mapProduct(p: ProductResponse, i: number): Ticket {
 	return {
 		id: p.id,
 		name: p.name,
@@ -112,13 +117,11 @@ function mapProduct(p: ApiProduct, i: number): Ticket {
 	};
 }
 
-type ApiProductListResponse = ApiPage<'products', ApiProduct>;
-
 /** admin 專用分頁抓取（Task 17）——不假道 public listProducts()：那支固定
  *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
  *  admin 自己的真實分頁請求，per_page 省略即吃後端預設 20。 */
-const listProductsPaged = (page: number): Promise<ApiProductListResponse> =>
-	api<ApiProductListResponse>(`/products?page=${page}`);
+const listProductsPaged = (page: number): Promise<ProductListResponse> =>
+	api<ProductListResponse>(`/products?page=${page}`);
 
 export interface TicketsData {
 	tickets: Ticket[];
@@ -157,11 +160,11 @@ export interface ProductWriteBody {
 	session_count?: number;
 }
 
-export const createProduct = (body: ProductWriteBody): Promise<ApiProduct> =>
-	api<ApiProduct>('/products', { method: 'POST', body: JSON.stringify(body) });
+export const createProduct = (body: ProductWriteBody): Promise<ProductResponse> =>
+	api<ProductResponse>('/products', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateProduct = (id: string, body: ProductWriteBody): Promise<ApiProduct> =>
-	api<ApiProduct>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateProduct = (id: string, body: ProductWriteBody): Promise<ProductResponse> =>
+	api<ProductResponse>(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 訂單（GET /orders，admin-only） ═════════════════════════ */
 
@@ -343,7 +346,7 @@ function classStatusOf(enrolled: number, cap: number, wait: number): ClassStatus
  *  的共用 5 級對照常數轉繁中(FE#17：後端 course_level 現為 5 值，這裡不再是舊
  *  3→5 折疊)；duration_minutes 直接映射為 durationMinutes(FE#18)。教室/期別/堂數/
  *  開課日/到課率/補課名額後端無對應欄位，R16 Task 2b 起從 ClassRow 拿掉。 */
-export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): ClassRow {
+export function mapCourse(c: CourseResponse, coachNameById: Map<string, string>): ClassRow {
 	const { day, time } = splitSchedule(c.schedule_text);
 	return {
 		id: c.id,
@@ -363,13 +366,11 @@ export function mapCourse(c: ApiCourse, coachNameById: Map<string, string>): Cla
 	};
 }
 
-type ApiCourseListResponse = ApiPage<'courses', ApiCourse>;
-
 /** admin 專用分頁抓取（Task 17）——不假道 public listCourses()：那支固定
  *  per_page=100，是行銷頁一次拉滿全量、前端篩選用的既有行為，不能動；這裡改走
  *  admin 自己的真實分頁請求，per_page 省略即吃後端預設 20。 */
-const listCoursesPaged = (page: number): Promise<ApiCourseListResponse> =>
-	api<ApiCourseListResponse>(`/courses?page=${page}`);
+const listCoursesPaged = (page: number): Promise<CourseListResponse> =>
+	api<CourseListResponse>(`/courses?page=${page}`);
 
 export interface ClassesData {
 	classes: ClassRow[];
@@ -430,11 +431,11 @@ export interface UpdateCourseBody {
 	is_highlighted?: boolean;
 }
 
-export const createCourse = (body: CreateCourseBody): Promise<ApiCourse> =>
-	api<ApiCourse>('/courses', { method: 'POST', body: JSON.stringify(body) });
+export const createCourse = (body: CreateCourseBody): Promise<CourseResponse> =>
+	api<CourseResponse>('/courses', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateCourse = (id: string, body: UpdateCourseBody): Promise<ApiCourse> =>
-	api<ApiCourse>(`/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateCourse = (id: string, body: UpdateCourseBody): Promise<CourseResponse> =>
+	api<CourseResponse>(`/courses/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 教練（GET /coaches，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
@@ -448,7 +449,7 @@ export const updateCourse = (id: string, body: UpdateCourseBody): Promise<ApiCou
  *  phone/年資/學員/班級/獲獎統計欄位已隨欄位收斂移除(P2：無後端來源；
  *  classes/students 有真實來源——見 getReports() 的 AdminReportCoachRow，屬於
  *  唯讀彙總，不是這裡或表單該手填的數字)。 */
-function mapCoach(c: ApiCoach, i: number): Coach {
+function mapCoach(c: CoachResponse, i: number): Coach {
 	return {
 		id: c.id,
 		userId: c.user_id,
@@ -488,11 +489,11 @@ export interface CoachWriteBody {
 	is_active?: boolean;
 }
 
-export const createCoach = (body: CoachWriteBody): Promise<ApiCoach> =>
-	api<ApiCoach>('/coaches', { method: 'POST', body: JSON.stringify(body) });
+export const createCoach = (body: CoachWriteBody): Promise<CoachResponse> =>
+	api<CoachResponse>('/coaches', { method: 'POST', body: JSON.stringify(body) });
 
-export const updateCoach = (id: string, body: CoachWriteBody): Promise<ApiCoach> =>
-	api<ApiCoach>(`/coaches/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateCoach = (id: string, body: CoachWriteBody): Promise<CoachResponse> =>
+	api<CoachResponse>(`/coaches/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 學員（GET /users，admin-only） ═════════════════════════
  * GET /users 是通用帳號端點，跟 MembersTable 完整 Member 型別(課程/教練/出席/繳費/

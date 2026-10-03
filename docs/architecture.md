@@ -194,7 +194,7 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
 - **Self account** (本人帳號資料; 會員資料 is its member-side view): the logged-in user's own
   name/phone/birthday (plus read-only email, join month and last login) and four notification preferences
   live in one module, `src/lib/self-account.ts` (`docs/adr/0023`, `docs/adr/0026`), imported directly by
-  `member`, `mobile` and `coach`; coach's private coach gate caches only the `ApiCoach` row and reads the
+  `member`, `mobile` and `coach`; coach's private coach gate caches only the `CoachResponse` row and reads the
   person from `$selfAccount`, so a rename shows up on every surface at once. It sits on a
   `createSessionGate` (one `GET /users/me` per identity, reset on account switch) and serializes every
   `PATCH /users/me` through one write chain that hydrates first. It owns the `prefs` store: `setPref` is
@@ -495,7 +495,7 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
 
 - **`createSessionGate<T>({ fetch, apply, reset })`** — waitlist / leave / notifications (one gate shared
   by member and mobile), the self account (`self-account.ts`, shared by member, mobile and coach), the
-  coach identity (private to `coach/api.ts`: just `ApiCoach | null`, resolved once per session from
+  coach identity (private to `coach/api.ts`: just `CoachResponse | null`, resolved once per session from
   `hydrateSelfAccount()` + `GET /coaches`, the flag flipped back on `CoachNotFoundError` so a retry
   re-resolves) and mobile-admin's messages (`docs/adr/0023`). The coach and mobile-admin ones are
   staff-side consumers — staff logins write the same `authStore`. It builds a `HydrationGate`

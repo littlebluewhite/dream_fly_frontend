@@ -3,10 +3,11 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
-  import { listVenues, type ApiVenue } from '$lib/public/api';
+  import { listVenues } from '$lib/public/api';
+  import type { VenueResponse } from '$lib/api/generated';
   // Venues Page - 場館介紹（僅列表接真 API；12 個詳頁保留在地文案，不在本任務範圍）
 
-  let venues: ApiVenue[] = [];
+  let venues: VenueResponse[] = [];
 
   const gate = createLoadGate({
     fetch: listVenues,

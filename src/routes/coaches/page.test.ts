@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { listCoaches } from '$lib/public/api';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 
 vi.mock('$lib/public/api', () => ({ listCoaches: vi.fn() }));
 
-const COACH: ApiCoach = {
+const COACH: CoachResponse = {
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
 	name: '王雅婷',

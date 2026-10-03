@@ -7,7 +7,7 @@ import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：getAttendance/saveAttendance 原經 mobile-admin/api.ts 零映射
@@ -20,7 +20,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', phone: null, last_login: null, created_at: '2026-01-01T00:00:00Z' };
-const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
+const MY_COACH: CoachResponse = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
 
 interface WireRosterEntry { enrolment_id: string; user_id: string; user_name: string; attendance_status: 'present' | 'absent' | 'leave' | null }
 

@@ -9,7 +9,7 @@ import {
 	formatDate,
 	slotsForDay
 } from './calendar-grid';
-import type { ApiDaySchedule } from '$lib/public/api';
+import type { DaySchedule } from '$lib/api/generated';
 
 describe('makeIsoDate', () => {
 	it('個位月/日補零', () => {
@@ -89,7 +89,7 @@ describe('formatDate', () => {
 });
 
 describe('slotsForDay', () => {
-	const days: ApiDaySchedule[] = [
+	const days: DaySchedule[] = [
 		{
 			date: '2026-07-15',
 			slots: [
@@ -102,7 +102,8 @@ describe('slotsForDay', () => {
 					course_id: 'course-1',
 					capacity: 10,
 					booked: 3,
-					status: 'available'
+					status: 'available',
+					price_cents: 0
 				}
 			]
 		}

@@ -5,6 +5,7 @@ import ClassesPage from './+page.svelte';
 import { COACHES } from '$lib/testing/seed-fixtures';
 import type { Coach } from '$lib/domain/coaches';
 import type { ClassRow } from '$lib/admin/data';
+import type { CourseResponse } from '$lib/api/generated';
 import { getClasses, createCourse, updateCourse } from '$lib/admin/api';
 import { ApiError } from '$lib/api/client';
 import { toasts } from '$lib/admin/stores';
@@ -91,7 +92,7 @@ describe('課程管理 (+page)', () => {
 
 describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH /courses）', () => {
 	it('新增課程：填寫班級名稱後點擊建立班級，呼叫 createCourse 並把回應映射回列表', async () => {
-		const created = {
+		const created: CourseResponse = {
 			id: 'c-new', name: '新班級', slug: 'x', level: 'intermediate', description: null,
 			duration_minutes: 90, price_cents: 320000, max_students: 12, min_age: null, max_age: null,
 			features: [], is_active: true, coach_id: null, category: '兒童基礎', schedule_text: null,
@@ -120,7 +121,7 @@ describe('課程管理 — 新增/編輯接真 API（Task 8 piece 1：POST/PATCH
 
 	it('編輯課程：點擊儲存課程，呼叫 updateCourse(真實 id, body) 並把回應映射回該列；FE#18 編輯模式時長欄位可改且會送出新值', async () => {
 		const target = CLASSES[0];
-		const updated = {
+		const updated: CourseResponse = {
 			id: target.id, name: '改名後的班級', slug: 'x', level: 'advanced', description: null,
 			duration_minutes: 75, price_cents: 500000, max_students: target.cap, min_age: null, max_age: null,
 			features: [], is_active: true, coach_id: null, category: target.cat, schedule_text: null,

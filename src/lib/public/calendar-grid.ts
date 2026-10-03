@@ -3,7 +3,7 @@
  * （Monday-leading、42 格、MonthCell 型別、注入式 todayRef）形狀不相容——兩者
  * 各自服務不同 surface，絕不可合併、絕不可互相 import。 */
 
-import type { ApiDaySchedule, ApiTimeSlot } from '$lib/public/api';
+import type { DaySchedule, TimeSlotResponse } from '$lib/api/generated';
 
 /** 補零 YYYY-MM-DD；month0 一律 0-based（與 Date 相容）。 */
 export function makeIsoDate(year: number, month0: number, day: number): string {
@@ -72,6 +72,6 @@ export function formatDate(date: Date): string {
 }
 
 /** 在 `days` 裡找 `date === dateStr` 的那天，回傳其 slots；找不到回空陣列。 */
-export function slotsForDay(days: ApiDaySchedule[], dateStr: string): ApiTimeSlot[] {
+export function slotsForDay(days: DaySchedule[], dateStr: string): TimeSlotResponse[] {
 	return days.find((d) => d.date === dateStr)?.slots ?? [];
 }

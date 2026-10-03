@@ -7,7 +7,7 @@
  * find(user_id === account.id) 是本檔案的核心（登入的使用者本人就是教練，教練姓名只能從
  * users.name 來，見 integration-contract.md §3.4 附註）。R13 Task 7(C6)起由私有 session
  * 閘門快取：每個登入身分只解析一次，換帳號/登出即重置。R16 Task 1b 起這顆閘門只快取
- * ApiCoach | null，本人資料一律讀 $selfAccount(與會員端同一份快取)。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
+ * CoachResponse | null，本人資料一律讀 $selfAccount(與會員端同一份快取)。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
  * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面經 coachLoadErrorCopy
  * (instanceof 判別，R16 Task 8)改顯示「此帳號未綁定教練檔案」。 */
 import { get } from 'svelte/store';
@@ -17,7 +17,7 @@ import { authStore } from '$lib/stores/authStore';
 import { selfAccount, hydrateSelfAccount, saveSelfAccount, type SelfAccount } from '$lib/self-account';
 import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
 import type { TodaySessionResponse } from '$lib/api/wire';
 import type {
@@ -62,11 +62,11 @@ export class CoachNotFoundError extends Error {
 
 /** 登入者本人對應的教練檔案(GET /coaches 只回 active 教練;找不到為 null)。本人資料
  *  由 $lib/self-account 持有(已水合就不重打 GET /users/me)。 */
-let myCoach: ApiCoach | null = null;
+let myCoach: CoachResponse | null = null;
 
 /** 每個登入身分只解析一次;換帳號/登出(authStore identity 變更)即清空,在飛的舊回應由
  *  閘門的 epoch 核對作廢(本人帳號資料的閘門同一時刻各自重置)。 */
-const gate = createSessionGate<ApiCoach | null>({
+const gate = createSessionGate<CoachResponse | null>({
 	fetch: async () => {
 		const [, coaches] = await Promise.all([hydrateSelfAccount(), listCoaches()]);
 		const id = get(selfAccount)?.id;
@@ -83,7 +83,7 @@ const gate = createSessionGate<ApiCoach | null>({
 /** 教練身分(快取命中不打 API;併發呼叫共用同一支在飛解析——閘門的 hydrate 合併)。沒有
  *  教練檔案時 invalidate 再拋 CoachNotFoundError——管理員綁定教練檔案後,使用者按重試就會
  *  重新解析。 */
-async function requireCoach(): Promise<{ account: SelfAccount; coach: ApiCoach }> {
+async function requireCoach(): Promise<{ account: SelfAccount; coach: CoachResponse }> {
 	await gate.hydrate();
 	const coach = myCoach;
 	if (!coach) {
@@ -97,11 +97,11 @@ async function requireCoach(): Promise<{ account: SelfAccount; coach: ApiCoach }
 /** 教練身分(本人帳號資料 + coach)組合成既有 Coach 形狀，getDashboard/getSettings 共用。
  *  name/display/full/initial 由 account.name 推導（東亞姓名慣例：首字視為姓氏，同 mock 原始
  *  資料「李志偉」→「李教練」/「李志偉 教練」的推導方式一致）；role/bio/chips 來自
- *  ApiCoach 的 title/bio/certifications；id 改用教練真實 uuid（舊「DF-C2019-007」員編
+ *  CoachResponse 的 title/bio/certifications；id 改用教練真實 uuid（舊「DF-C2019-007」員編
  *  格式後端無對應欄位，P2）；birth 讀 account.birth(GET /users/me 的真實生日)；英文姓名/
  *  性別/緊急聯絡人後端無對應欄位，R16 Task 2a 起從 Coach 形狀拿掉(不再誠實給空字串)；
  *  registered 用 coach.created_at；lastLogin 用 account.lastLogin。 */
-function mapCoach(account: SelfAccount, coach: ApiCoach): Coach {
+function mapCoach(account: SelfAccount, coach: CoachResponse): Coach {
 	const surname = account.initial;
 	return {
 		name: account.name,

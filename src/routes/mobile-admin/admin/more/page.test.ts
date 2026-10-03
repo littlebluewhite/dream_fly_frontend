@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import MorePage from './+page.svelte';
 import { PROFILES } from '$lib/mobile-admin/data';
-import type { ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
+import type { CoachResponse, VenueResponse, ProductResponse } from '$lib/api/generated';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 
@@ -15,17 +15,17 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-const WIRE_COACHES: ApiCoach[] = [
+const WIRE_COACHES: CoachResponse[] = [
 	{ id: 'tc1', user_id: 'u-tc1', name: '測試教練甲', title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' }
 ];
-const WIRE_VENUES: ApiVenue[] = [
+const WIRE_VENUES: VenueResponse[] = [
 	{ id: 'tv1', category_id: null, slug: 'tv1', name: '測試場地甲', description: '測試類型', features: [], image_url: null, is_active: true, created_at: '' }
 ];
-const WIRE_PRODUCTS: ApiProduct[] = [
+const WIRE_PRODUCTS: ProductResponse[] = [
 	{ id: 'tt1', name: '測試票券甲', slug: 'tt1', product_type: 'ticket', description: null, price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false, badge: null, stock: null, quota: null, sold: 0, valid_days: null, session_count: null, is_active: true, created_at: '', updated_at: '' }
 ];
 
-const routes = (coaches: ApiCoach[], venues: ApiVenue[], products: ApiProduct[]) => ({
+const routes = (coaches: CoachResponse[], venues: VenueResponse[], products: ProductResponse[]) => ({
 	'GET /coaches': coaches,
 	'GET /venues': venues,
 	'GET /products?page=1': { products, total: products.length, page: 1, per_page: 20 }

@@ -5,7 +5,7 @@ import CoachesScreen from './CoachesScreen.svelte';
 import type { CoachFormValues } from '$lib/admin/data';
 import { overlay, coaches, toasts, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
 import type { Coach } from '$lib/domain/coaches';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
@@ -45,9 +45,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 /** WIRE_COACHES_BASE 逐欄位對齊 $lib/domain/coaches 的 COACHES 9 筆(姓名/職稱/標籤/
- *  在職狀態)，但用真實 wire 形狀(ApiCoach)表達——真正的顯示值(含 color)一律由
+ *  在職狀態)，但用真實 wire 形狀(CoachResponse)表達——真正的顯示值(含 color)一律由
  *  expectedFromWire() 經真實 mapCoach() 推導邏輯算出，不手抄。 */
-const WIRE_COACHES_BASE: ApiCoach[] = [
+const WIRE_COACHES_BASE: CoachResponse[] = [
 	{ id: 'c1', user_id: 'u1', name: '林雅婷', title: '資深競技體操教練 · 國家級認證', bio: null, experience: null, specialties: ['競技啦啦隊', '競技體操'], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' },
 	{ id: 'c2', user_id: 'u2', name: '陳冠宇', title: '兒童體操主教練 · 體操C級教練', bio: null, experience: null, specialties: ['兒童基礎', '幼兒體操'], certifications: [], is_active: true, display_order: 2, slug: null, photo_url: null, created_at: '' },
 	{ id: 'c3', user_id: 'u3', name: '黃詩涵', title: '幼兒啟蒙教練 · 幼兒體適能認證', bio: null, experience: null, specialties: ['幼兒體操', '親子課'], certifications: [], is_active: true, display_order: 3, slug: null, photo_url: null, created_at: '' },
@@ -60,7 +60,7 @@ const WIRE_COACHES_BASE: ApiCoach[] = [
 ];
 
 /** 鏡射 admin/api.ts 私有 mapCoach()：color 依陣列位置 i % MEMBER_COLORS.length。 */
-function expectedFromWire(wire: ApiCoach[]): Coach[] {
+function expectedFromWire(wire: CoachResponse[]): Coach[] {
 	return wire.map((c, i) => ({
 		id: c.id,
 		userId: c.user_id,
@@ -85,7 +85,7 @@ const apiUserAccount = (over: Partial<{ id: string; name: string }> = {}) => ({
 
 /** getOpsCollections() 平行拉取的其餘三路端點沿用 OPS_ROUTES 預設值(內容與本檔
  *  斷言無關)，只覆寫 GET /coaches。 */
-const opsRoutes = (wireCoaches: ApiCoach[]) => ({ ...OPS_ROUTES, 'GET /coaches': wireCoaches });
+const opsRoutes = (wireCoaches: CoachResponse[]) => ({ ...OPS_ROUTES, 'GET /coaches': wireCoaches });
 
 beforeEach(async () => {
 	vi.mocked(api).mockReset();
@@ -131,7 +131,7 @@ function callCount(method: string, path: string): number {
 
 describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMember → createCoach)', () => {
 	it('兩步皆成功：createCoach 帶正確 user_id 綁定，顯示成功 toast，且 refreshOps 被喚(coaches store 反映最新資料)', async () => {
-		const newWire: ApiCoach = { id: 'c-new', user_id: 'u-new', name: '新教練', title: '兼任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 10, slug: null, photo_url: null, created_at: '' };
+		const newWire: CoachResponse = { id: 'c-new', user_id: 'u-new', name: '新教練', title: '兼任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 10, slug: null, photo_url: null, created_at: '' };
 		const refreshedWire = [...WIRE_COACHES_BASE, newWire];
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
@@ -331,7 +331,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁→本 overlay 動線上此前無人呼叫 hydrateOps，$coachesStore 只見 domain seed)', () => {
 	it('opsHydrated 為 false 時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
 		resetOpsForTests();
-		const hydratedWire: ApiCoach = { id: 'c-hydrated', user_id: 'u-hydrated', name: '水合教練', title: '主任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
+		const hydratedWire: CoachResponse = { id: 'c-hydrated', user_id: 'u-hydrated', name: '水合教練', title: '主任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
 		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([hydratedWire])));
 
 		const { getByText } = render(CoachesScreen, { props: { onBack: () => {} } });
@@ -357,7 +357,7 @@ function createDeferred<T>() {
 describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 getOpsCollections)', () => {
 	it('loading：opsHydrated 為 false 時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
 		resetOpsForTests();
-		const d = createDeferred<ApiCoach[]>();
+		const d = createDeferred<CoachResponse[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_COACHES_BASE), 'GET /coaches': () => d.promise }));
 
 		const { getByTestId, queryByTestId, container, findByText } = render(CoachesScreen, {
@@ -409,7 +409,7 @@ describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 ge
 	 * 人數,loading 時只顯示「專任教練」四字。 */
 	it('header 副標:loading 時只顯示「專任教練」;ready 後顯示「N 位專任教練」', async () => {
 		resetOpsForTests();
-		const d = createDeferred<ApiCoach[]>();
+		const d = createDeferred<CoachResponse[]>();
 		vi.mocked(api).mockImplementation(fakeRouter({ ...opsRoutes(WIRE_COACHES_BASE), 'GET /coaches': () => d.promise }));
 
 		const { findByText, getByText, queryByText } = render(CoachesScreen, { props: { onBack: () => {} } });

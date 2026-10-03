@@ -5,7 +5,7 @@ import ClassesPage from './+page.svelte';
 import { overlay, resetOpsForTests, toasts } from '$lib/mobile-admin/stores';
 import type { ValidCourse } from '$lib/admin/components/course-request';
 import { mapCourse } from '$lib/admin/api';
-import type { ApiCourse, ApiCoach } from '$lib/public/api';
+import type { CourseResponse, CoachResponse } from '$lib/api/generated';
 import { COACHES } from '$lib/testing/seed-fixtures';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -13,15 +13,15 @@ import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
  * createCourse/updateCourse(stores.ts 直取 $lib/admin/api)走真實
- * fetch adapter。FIXTURE_CLASS 改為 wire 形狀(ApiCourse)，經真實 mapCourse() 映射，
+ * fetch adapter。FIXTURE_CLASS 改為 wire 形狀(CourseResponse)，經真實 mapCourse() 映射，
  * 而非手造已映射的 ClassRow。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
 
-const WIRE_COACH: ApiCoach = { id: 'co-fixture', user_id: 'u-fixture', name: COACHES[0].name, title: COACHES[0].title, bio: null, experience: null, specialties: COACHES[0].tags, certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
-const WIRE_CLASS: ApiCourse = {
+const WIRE_COACH: CoachResponse = { id: 'co-fixture', user_id: 'u-fixture', name: COACHES[0].name, title: COACHES[0].title, bio: null, experience: null, specialties: COACHES[0].tags, certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
+const WIRE_CLASS: CourseResponse = {
 	id: 'zz1', name: '測試班級甲', slug: 'zz1', level: 'intermediate', description: null,
 	duration_minutes: 90, price_cents: 100000, max_students: 10, min_age: 3, max_age: 5,
 	features: [], is_active: true, coach_id: WIRE_COACH.id, category: '幼兒體操',
@@ -30,7 +30,7 @@ const WIRE_CLASS: ApiCourse = {
 };
 const FIXTURE_CLASSES = [mapCourse(WIRE_CLASS, new Map([[WIRE_COACH.id, WIRE_COACH.name]]))];
 
-const opsRoutes = (wireClasses: ApiCourse[], wireCoaches: ApiCoach[] = [WIRE_COACH]) => ({
+const opsRoutes = (wireClasses: CourseResponse[], wireCoaches: CoachResponse[] = [WIRE_COACH]) => ({
 	...OPS_ROUTES,
 	'GET /courses?page=1': { courses: wireClasses, total: wireClasses.length, page: 1, per_page: 100 },
 	'GET /coaches': wireCoaches

@@ -6,7 +6,7 @@
  * `Coach` 型別直接沿用既有行銷用型別（lib/data/coaches.ts），該檔的 `id` 欄位已
  * 放寬為 `number | string` 以容納真實教練的 uuid。 */
 
-import type { ApiCourse, ApiCoach, ApiProduct } from './api';
+import type { CourseResponse, CoachResponse, ProductResponse } from '$lib/api/generated';
 import type { Coach } from '$lib/data/coaches';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { ageRange } from '$lib/api/wire';
@@ -51,7 +51,7 @@ export interface CatalogCourse {
 
 /** `coachName` 由呼叫端解出（`CourseResponse` 本身沒有教練姓名欄位，需靠
  *  course.coach_id 對照教練列表後傳入 —— 教練列表現在帶 `name`，見 toMarketingCoach）。 */
-export function toCatalogCourse(c: ApiCourse, coachName?: string): CatalogCourse {
+export function toCatalogCourse(c: CourseResponse, coachName?: string): CatalogCourse {
 	return {
 		id: c.id,
 		name: c.name,
@@ -70,7 +70,7 @@ export function toCatalogCourse(c: ApiCourse, coachName?: string): CatalogCourse
 /** CoachResponse 現帶 `name`（教練真實姓名，join users.name）與 `title`（職稱，如
  *  「資深體操教練」）——兩者不同語意，分開映射（見 integration-contract.md §3.4）。
  *  `years`（資歷純數字）仍無對應欄位，誠實留空而非用正規表示式硬猜 `experience` 段落。 */
-export function toMarketingCoach(c: ApiCoach): Coach {
+export function toMarketingCoach(c: CoachResponse): Coach {
 	return {
 		id: c.id,
 		slug: c.slug ?? '',
@@ -100,7 +100,7 @@ export interface Ticket {
 	originalPrice?: number; // NT$（原價，有折扣時才有）
 }
 
-export function toPass(p: ApiProduct): Ticket {
+export function toPass(p: ProductResponse): Ticket {
 	return {
 		id: p.id,
 		name: p.name,

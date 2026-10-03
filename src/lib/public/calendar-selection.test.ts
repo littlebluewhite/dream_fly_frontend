@@ -8,9 +8,9 @@ import {
 	isSlotDisabled,
 	type CalendarSelection
 } from './calendar-selection';
-import type { ApiTimeSlot } from '$lib/public/api';
+import type { TimeSlotResponse } from '$lib/api/generated';
 
-function makeSlot(overrides: Partial<ApiTimeSlot> = {}): ApiTimeSlot {
+function makeSlot(overrides: Partial<TimeSlotResponse> = {}): TimeSlotResponse {
 	return {
 		id: 'slot-1',
 		date: '2026-07-15',
@@ -21,6 +21,7 @@ function makeSlot(overrides: Partial<ApiTimeSlot> = {}): ApiTimeSlot {
 		capacity: 10,
 		booked: 3,
 		status: 'available',
+		price_cents: 0,
 		...overrides
 	};
 }

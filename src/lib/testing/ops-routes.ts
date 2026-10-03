@@ -5,7 +5,7 @@
  * fixture，形狀取自 admin/api.test.ts :221(orders)/:366(courses)/:407(coaches)/
  * :786(users)。供各 mobile-admin 測試檔當 fakeRouter 的 defaults 使用，測試只需
  * 覆寫自己關心的路徑。 */
-import type { AdminOrderSummary } from '$lib/api/generated';
+import type { AdminOrderSummary, CoachResponse, CourseResponse } from '$lib/api/generated';
 import { adminOrderSummary } from './wire-fixtures';
 
 export const USERS_FIXTURE = [
@@ -13,7 +13,7 @@ export const USERS_FIXTURE = [
 	{ id: 'u2', name: '陳小華', phone: null, created_at: '2026-02-01T00:00:00Z', is_active: false, points_balance: 0 }
 ];
 
-export const COURSES_FIXTURE = [
+export const COURSES_FIXTURE: CourseResponse[] = [
 	{
 		id: 'c1', name: '競技體操 選手班', slug: 'x', level: 'advanced', description: null,
 		duration_minutes: 90, price_cents: 620000, max_students: 12, min_age: 8, max_age: 14,
@@ -23,7 +23,7 @@ export const COURSES_FIXTURE = [
 	}
 ];
 
-export const COACHES_FIXTURE = [
+export const COACHES_FIXTURE: CoachResponse[] = [
 	{
 		id: 'co1', user_id: 'u1', name: '林教練', title: '資深體操教練', bio: null, experience: null,
 		specialties: ['競技體操'], certifications: [], is_active: true, display_order: 1,

@@ -7,7 +7,8 @@
  * 的欄位，這裡原樣沿用同一份 mock/預設值——不發明桌面沒有的假來源，也不重新
  * 實作桌面已經做過的映射邏輯。逐函式來源見 task-19-report.md 的盤點表。 */
 import type { CatalogCourse } from '$lib/public/adapters';
-import { sendContactInquiry, type ApiInquiry } from '$lib/public/api';
+import { sendContactInquiry } from '$lib/public/api';
+import type { InquiryResponse } from '$lib/api/generated';
 // 刻意從 $lib/domain/member-app 取寬鬆版型別(tone/status 為 string，非窄化
 // union)，不是 member/data.ts 的窄版——桌面 seam 回傳的窄型別值可以安全widen
 // 進寬鬆型別(結構相容)，但反過來不行；mobile 既有呼叫端(overlay/測試 fixture)
@@ -103,7 +104,7 @@ export interface TrialInquiryInput {
 	note: string;
 }
 
-export const submitTrialInquiry = (input: TrialInquiryInput): Promise<ApiInquiry> =>
+export const submitTrialInquiry = (input: TrialInquiryInput): Promise<InquiryResponse> =>
 	sendContactInquiry({
 		name: input.parentName,
 		email: TRIAL_INQUIRY_EMAIL_PLACEHOLDER,

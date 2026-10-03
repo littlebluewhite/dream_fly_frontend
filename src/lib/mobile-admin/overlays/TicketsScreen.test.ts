@@ -3,7 +3,7 @@ import { render } from '@testing-library/svelte';
 import TicketsScreen from './TicketsScreen.svelte';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { ApiProduct } from '$lib/public/api';
+import type { ProductResponse } from '$lib/api/generated';
 import { fmtNT } from '$lib/format';
 
 /* 票券管理 push screen — C4：接真 GET /products(復用桌面 admin/api.ts 的 getTickets()，
@@ -21,7 +21,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 const UUID_A = 'a1b2c3d4-0000-4000-8000-000000000001';
 const UUID_B = 'a1b2c3d4-0000-4000-8000-000000000002';
 const UUID_C = 'a1b2c3d4-0000-4000-8000-000000000003';
-const PRODUCTS: ApiProduct[] = [
+const PRODUCTS: ProductResponse[] = [
 	{ id: UUID_A, name: 'Alpha 測試月票', slug: 'alpha', product_type: 'membership', description: '測試說明甲', price_cents: 300000, original_price_cents: null, features: [], is_highlighted: false, badge: null, stock: 50, quota: 50, sold: 10, valid_days: null, session_count: null, is_active: true, created_at: '', updated_at: '' },
 	{ id: UUID_B, name: 'Beta 測試體驗券', slug: 'beta', product_type: 'ticket', description: '測試說明乙', price_cents: 50000, original_price_cents: null, features: [], is_highlighted: false, badge: null, stock: null, quota: null, sold: 4, valid_days: null, session_count: null, is_active: true, created_at: '', updated_at: '' },
 	// quota 0（後端可回的合法值,≠ null 的「不限」）——F4 釘 soldPct 的零值防呆。

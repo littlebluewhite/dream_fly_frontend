@@ -24,7 +24,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES, USERS_FIXTURE, COURSES_FIXTURE, COACHES_FIXTURE, ORDERS_FIXTURE } from '$lib/testing/ops-routes';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
-import type { ApiCoach, ApiVenue, ApiProduct } from '$lib/public/api';
+import type { CoachResponse, VenueResponse, ProductResponse } from '$lib/api/generated';
 import type { TodaySessionResponse } from '$lib/api/wire';
 import { initialOf, isoDate, orderIdentity, taxFromGross } from '$lib/api/wire';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
@@ -39,7 +39,7 @@ import { PROFILES } from './data';
  * CoachesScreen.test.ts 的 expectedFromWire() precedent)，把每個 wire fixture 經
  * 「真實映射邏輯」算出精確期望值，斷言改回 toEqual(逐欄位，含 pages)。mapCourse()
  * 本身有 export，直接沿用(同 admin/classes/page.test.ts 的 FIXTURE_CLASSES 慣例)。 */
-function expectedCoach(c: ApiCoach, i: number) {
+function expectedCoach(c: CoachResponse, i: number) {
 	return {
 		id: c.id,
 		userId: c.user_id,
@@ -51,7 +51,7 @@ function expectedCoach(c: ApiCoach, i: number) {
 		isActive: c.is_active
 	};
 }
-function expectedVenue(v: ApiVenue) {
+function expectedVenue(v: VenueResponse) {
 	return {
 		id: v.id,
 		slug: v.slug,
@@ -61,7 +61,7 @@ function expectedVenue(v: ApiVenue) {
 		status: v.is_active ? 'available' : 'maintenance'
 	};
 }
-function expectedTicket(p: ApiProduct, i: number) {
+function expectedTicket(p: ProductResponse, i: number) {
 	return {
 		id: p.id,
 		name: p.name,
@@ -97,7 +97,7 @@ function expectedOrder(o: (typeof ORDERS_FIXTURE)[number], i: number) {
 }
 
 const ME: TestUser = { id: 'u-c1', email: 'c1@test.com', name: '測試教練', phone: null, last_login: null, created_at: '2026-01-01T00:00:00Z' };
-const MY_COACH: ApiCoach = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
+const MY_COACH: CoachResponse = { id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試職稱', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' };
 
 // 每個測試先登出再登入(同 coach/page.test.ts 慣例)：避免同一個 ME 連續 loginAs 不觸發
 // identity 變更、教練身分閘門快取跨測試殘留。只有 getCoachHome 實際會經過
@@ -112,9 +112,9 @@ beforeEach(async () => {
 
 describe('getMore', () => {
 	it('resolves coaches/venues/tickets from the real admin seam (parallel), profiles stays mock', async () => {
-		const coaches: ApiCoach[] = [MY_COACH];
-		const venues: ApiVenue[] = [{ id: 'v1', category_id: null, slug: 'v1', name: '測試場地', description: null, features: [], image_url: null, is_active: true, created_at: '' }];
-		const products: ApiProduct[] = [{ id: 't1', name: '測試票券', slug: 't1', product_type: 'ticket', description: null, price_cents: 1000, original_price_cents: null, features: [], is_highlighted: false, badge: null, stock: null, quota: null, sold: 0, valid_days: null, session_count: null, is_active: true, created_at: '', updated_at: '' }];
+		const coaches: CoachResponse[] = [MY_COACH];
+		const venues: VenueResponse[] = [{ id: 'v1', category_id: null, slug: 'v1', name: '測試場地', description: null, features: [], image_url: null, is_active: true, created_at: '' }];
+		const products: ProductResponse[] = [{ id: 't1', name: '測試票券', slug: 't1', product_type: 'ticket', description: null, price_cents: 1000, original_price_cents: null, features: [], is_highlighted: false, badge: null, stock: null, quota: null, sold: 0, valid_days: null, session_count: null, is_active: true, created_at: '', updated_at: '' }];
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /coaches': coaches, 'GET /venues': venues, 'GET /products?page=1': { products, total: 1, page: 1, per_page: 20 } })
 		);

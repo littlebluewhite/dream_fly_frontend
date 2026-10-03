@@ -329,7 +329,7 @@ describe('getSchedule — GET /coaches/{id}/schedule 週班表映射', () => {
 });
 
 describe('getSettings — GET /users/me + GET /coaches → 既有 Coach 形狀', () => {
-	it('name/display/full/initial 由 user.name 推導；role/bio/chips 來自 ApiCoach；id 改用教練 uuid；birth 讀本人帳號資料的真實生日(GET /users/me birth_date)', async () => {
+	it('name/display/full/initial 由 user.name 推導；role/bio/chips 來自 CoachResponse；id 改用教練 uuid；birth 讀本人帳號資料的真實生日(GET /users/me birth_date)', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] })
 		);

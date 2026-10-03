@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getSchedule } from '$lib/public/api';
-import type { ApiDaySchedule } from '$lib/public/api';
+import type { DaySchedule } from '$lib/api/generated';
 
 vi.mock('$lib/public/api', () => ({ getSchedule: vi.fn() }));
 
@@ -13,7 +13,7 @@ function todayISO(): string {
 	return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-function daySchedule(): ApiDaySchedule[] {
+function daySchedule(): DaySchedule[] {
 	const date = todayISO();
 	return [
 		{
@@ -28,7 +28,8 @@ function daySchedule(): ApiDaySchedule[] {
 					course_id: null,
 					capacity: 10,
 					booked: 2,
-					status: 'available'
+					status: 'available',
+					price_cents: 0
 				},
 				{
 					id: 'slot-2',
@@ -39,7 +40,8 @@ function daySchedule(): ApiDaySchedule[] {
 					course_id: null,
 					capacity: 10,
 					booked: 10,
-					status: 'full'
+					status: 'full',
+					price_cents: 0
 				}
 			]
 		}

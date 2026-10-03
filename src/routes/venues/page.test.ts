@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { listVenues } from '$lib/public/api';
-import type { ApiVenue } from '$lib/public/api';
+import type { VenueResponse } from '$lib/api/generated';
 
 vi.mock('$lib/public/api', () => ({ listVenues: vi.fn() }));
 
-const VENUE: ApiVenue = {
+const VENUE: VenueResponse = {
 	id: 'venue-uuid-1',
 	category_id: 'cat-uuid-1',
 	name: '大跳床',

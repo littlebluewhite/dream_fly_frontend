@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, subscriptions } from '$lib/member/stores';
 import { listProducts } from '$lib/public/api';
-import type { ApiProduct } from '$lib/public/api';
+import type { ProductResponse } from '$lib/api/generated';
 
 // The /tickets marketing page sells PASSES (方案/購票). cart v3: the page now
 // fetches products via the public seam (mock ticketTypes' string-price/number-id
@@ -13,7 +13,7 @@ import type { ApiProduct } from '$lib/public/api';
 
 vi.mock('$lib/public/api', () => ({ listProducts: vi.fn() }));
 
-const PRODUCT: ApiProduct = {
+const PRODUCT: ProductResponse = {
 	id: 'product-uuid-1',
 	name: '單堂體驗課',
 	slug: 'trial',

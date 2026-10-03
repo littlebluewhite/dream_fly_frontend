@@ -5,7 +5,7 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs, type TestUser } from '$lib/testing/coach-session';
 import { authStore } from '$lib/stores/authStore';
-import type { ApiCoach } from '$lib/public/api';
+import type { CoachResponse } from '$lib/api/generated';
 
 /* R15 Task 3a(候選 轉手退役)：getCsettings/saveSettings/CoachNotFoundError 原經
  * mobile-admin/api.ts 零映射 re-export，已退役，改 mock $lib/api/client 的 api()，走真實
@@ -21,7 +21,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // 與桌面 PROFILES.coach mock(林雅婷)刻意不同的真實教練 fixture，證明頁面讀
 // getCsettings() 的真 Coach 物件(經真 mapCoach() 映射)，而非殘留的 mock 對照。
 const ME: TestUser = { id: 'u-c1', email: 'test.coach@dreamfly.tw', name: '測試教練', phone: '0900-000-000', last_login: null, created_at: '2026-01-01T00:00:00Z' };
-const MY_COACH: ApiCoach = {
+const MY_COACH: CoachResponse = {
 	id: 'coach-1', user_id: 'u-c1', name: ME.name, title: '測試特級教練', bio: '測試簡介', experience: null,
 	specialties: [], certifications: ['測試專長'], is_active: true, display_order: 1, slug: null, photo_url: null,
 	created_at: '2020-01-01T00:00:00Z'

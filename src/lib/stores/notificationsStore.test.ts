@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { toAnnouncement } from './notificationsStore';
-import type { ApiPost } from '$lib/public/api';
+import type { PostResponse } from '$lib/api/generated';
 
 vi.mock('$lib/public/api', () => ({ listPosts: vi.fn() }));
 
-function makePost(overrides: Partial<ApiPost> = {}): ApiPost {
+function makePost(overrides: Partial<PostResponse> = {}): PostResponse {
 	return {
 		id: 'post-1',
 		author_id: 'author-1',
@@ -21,7 +21,7 @@ function makePost(overrides: Partial<ApiPost> = {}): ApiPost {
 	};
 }
 
-describe('toAnnouncement — ApiPost → Notification（公開端點無已讀狀態，一律預設未讀）', () => {
+describe('toAnnouncement — PostResponse → Notification（公開端點無已讀狀態，一律預設未讀）', () => {
 	it('maps id/title/excerpt/published_at and defaults read to false', () => {
 		expect(toAnnouncement(makePost())).toEqual({
 			id: 'post-1',

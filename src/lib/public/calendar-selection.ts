@@ -4,7 +4,7 @@
  * 月變必 refetch——gate.refresh() 副作用留在元件呼叫點（loadMonth），這裡不設
  * shouldRefetch 旗標（恆真，無資訊量）。 */
 
-import type { ApiTimeSlot } from '$lib/public/api';
+import type { TimeSlotResponse } from '$lib/api/generated';
 
 /** ScheduleCalendar 的選取三元組；selectedTimeSlot 存 slotLabel 字串（非 slot id）。 */
 export interface CalendarSelection {
@@ -14,12 +14,12 @@ export interface CalendarSelection {
 }
 
 /** 「HH:MM-HH:MM」時段標籤（start/end_time 各截前 5 碼、去秒）。 */
-export function slotLabel(slot: ApiTimeSlot): string {
+export function slotLabel(slot: TimeSlotResponse): string {
 	return `${slot.start_time.slice(0, 5)}-${slot.end_time.slice(0, 5)}`;
 }
 
 /** 額滿（full）或不開放（closed）的時段不可選。 */
-export function isSlotDisabled(slot: ApiTimeSlot): boolean {
+export function isSlotDisabled(slot: TimeSlotResponse): boolean {
 	return slot.status === 'full' || slot.status === 'closed';
 }
 
@@ -52,7 +52,7 @@ export function selectDate(sel: CalendarSelection, day: number): CalendarSelecti
 }
 
 /** 選取時段；停用時段為 no-op——回傳同一參照（呼叫端/測試可據以判定未發生轉移）。 */
-export function selectTimeSlot(sel: CalendarSelection, slot: ApiTimeSlot): CalendarSelection {
+export function selectTimeSlot(sel: CalendarSelection, slot: TimeSlotResponse): CalendarSelection {
 	if (isSlotDisabled(slot)) return sel;
 	return { ...sel, selectedTimeSlot: slotLabel(slot) };
 }
