@@ -26,13 +26,17 @@ import { initialOf, isoDateTime } from '$lib/api/wire';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
 import { authStore, type ApiUser } from '$lib/stores/authStore';
+import type { JsonValue, UserResponse } from '$lib/api/generated';
 
-/** GET/PATCH /users/me 的回應:authStore 的 ApiUser 再加上兩個會員資料欄位。
- *  preferences 是後端的通用 JSON bag(未設定為 null)。 */
-type ApiMe = ApiUser & {
-	preferences: Record<string, unknown> | null;
-	birth_date: string | null;
-};
+/** GET/PATCH /users/me 的回應(UserResponse)中本模組讀的欄位:authStore 的 ApiUser
+ *  再加上會員資料欄位。preferences 是後端的通用 JSON bag(未設定為 null,後端不驗形狀)。 */
+type ApiMe = ApiUser &
+	Pick<UserResponse, 'email' | 'phone' | 'last_login' | 'preferences' | 'birth_date'>;
+
+/** preferences 只認 JSON 物件;其他形狀(後端不驗)視同未設定。 */
+function prefsObject(raw: ApiMe['preferences']): { [key: string]: JsonValue } | null {
+	return raw !== null && typeof raw === 'object' && !Array.isArray(raw) ? raw : null;
+}
 
 export interface Prefs {
 	classReminder: boolean;
@@ -80,8 +84,9 @@ const PREF_KEYS = Object.keys(PREF_WIRE) as (keyof Prefs)[];
 
 function prefsFromWire(raw: ApiMe['preferences']): Prefs {
 	const out = { ...PREFS_DEFAULT };
+	const obj = prefsObject(raw);
 	for (const k of PREF_KEYS) {
-		const v = raw?.[PREF_WIRE[k]];
+		const v = obj?.[PREF_WIRE[k]];
 		if (typeof v === 'boolean') out[k] = v;
 	}
 	return out;
@@ -89,7 +94,7 @@ function prefsFromWire(raw: ApiMe['preferences']): Prefs {
 
 /** 後端原始物件 + 本地 4 鍵(整包覆寫下保住前端不認識的鍵)。 */
 function prefsToWire(raw: ApiMe['preferences'], p: Prefs): Record<string, unknown> {
-	const out: Record<string, unknown> = { ...(raw ?? {}) };
+	const out: Record<string, unknown> = { ...(prefsObject(raw) ?? {}) };
 	for (const k of PREF_KEYS) out[PREF_WIRE[k]] = p[k];
 	return out;
 }
@@ -147,7 +152,7 @@ function applyMe(u: ApiMe): void {
 }
 
 const gate = createSessionGate<ApiMe>({
-	fetch: () => api<ApiMe>('/users/me'),
+	fetch: () => api<UserResponse>('/users/me'),
 	apply: (u) => {
 		applyMe(u);
 		prefsStore.set(prefsFromWire(u.preferences));
@@ -164,7 +169,7 @@ const gate = createSessionGate<ApiMe>({
 export const hydrateSelfAccount = gate.hydrate;
 
 function sendPatch(body: Record<string, unknown>): Promise<ApiMe> {
-	return api<ApiMe>('/users/me', { method: 'PATCH', body: JSON.stringify(body) });
+	return api<UserResponse>('/users/me', { method: 'PATCH', body: JSON.stringify(body) });
 }
 
 async function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {

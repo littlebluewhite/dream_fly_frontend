@@ -23,7 +23,8 @@
  * - `ntd`/`toCents`/`orderItemsSummary` —— 留在 public/adapters.ts（ADR 0006
  *   既定的 cents 邊界）
  * - `COURSE_LEVEL_LABEL` —— 已在 domain/course-level.ts 單一來源
- * - 三份窄化 `ApiUser` —— 不同投影非重複，結構型別無漂移風險
+ * - 窄化的 `ApiUser`/`ApiMe`/`ApiUserAccount` —— W-7 起皆為產生型別的 `Pick<…>` 投影，
+ *   留在各自消費端（「結構型別無漂移風險」不成立，見 ADR 0007 增補）
  * - mobile 雙 surface 的 tuple 型 `Tone` 與 3 值子集 —— 與後端接線狀態無關，本次整合刻意不
  *   預先收斂（見 ADR 0007）
  * - 各 surface 的 UI 目標型別與 member-only 查表

@@ -11,6 +11,7 @@ import { api, refreshTokens, onSessionExpired } from '$lib/api/client';
 import { getRefresh, setTokens, clearTokens, forgetAccess, REFRESH_KEY } from '$lib/api/tokens';
 import { isoDate, initialOf } from '$lib/api/wire';
 import type { Member } from '$lib/domain/member-app';
+import type { AuthResponse, AuthUserResponse, UserResponse } from '$lib/api/generated';
 
 const AUTH_STORAGE_KEY = 'dreamfly_auth';
 // Backend has no per-member avatar colour; default to the brand primary token
@@ -30,28 +31,11 @@ export function sessionIdentity(a: Pick<AuthState, 'loggedIn' | 'member'>): stri
   return a.loggedIn ? (a.member?.id ?? '') : null;
 }
 
-/** User shape returned by POST /auth/{register,login,refresh} (nested under
- *  `user`) and GET /users/me (flat). `last_login` only appears on the latter,
- *  so it's optional here to cover both (see docs/api/integration-contract.md
- *  §3.1/§3.2). */
-export interface ApiUser {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  phone_verified: boolean;
-  avatar_url: string | null;
-  is_active: boolean;
-  created_at: string;
-  last_login?: string | null;
-  roles: string[];
-}
-
-interface AuthResponse {
-  access_token: string;
-  refresh_token: string;
-  user: ApiUser;
-}
+/** The fields the session reads from a user: POST /auth/{register,login,refresh,google}
+ *  nest an AuthUserResponse under `user`; GET/PATCH /users/me return a UserResponse
+ *  (a field superset of it), so both satisfy this projection (see
+ *  docs/api/integration-contract.md §3.1/§3.2). */
+export type ApiUser = Pick<AuthUserResponse, 'id' | 'name' | 'created_at' | 'roles'>;
 
 /** id=uuid, initial=name[0], since=created_at 前 10 碼. points/color/age have no
  *  backend counterpart yet — points defaults to 0 here and is filled in later
@@ -167,7 +151,7 @@ function createAuthStore() {
     // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給下方的 storage listener)。
     if (!refreshed) return;
     try {
-      const user = await api<ApiUser>('/users/me');
+      const user = await api<UserResponse>('/users/me');
       applyUser(user);
     } catch {
       // 真的 401 已由 api() → refreshTokens() 處理;其他失敗(5xx/網路)不是 session 過期,

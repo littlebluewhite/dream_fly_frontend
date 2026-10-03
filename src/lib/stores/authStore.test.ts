@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { authStore, isLoggedIn, toMember, sessionIdentity, type ApiUser } from './authStore';
+import type { AuthUserResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
 import { getAccess, getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
@@ -11,7 +12,7 @@ const BASE = 'http://localhost:3000/api/v1';
 
 const LOGGED_OUT = { loggedIn: false, member: null, roles: [] as string[] };
 
-const SAMPLE_USER: ApiUser = {
+const SAMPLE_USER: AuthUserResponse = {
   id: 'uuid-1',
   email: 'a@test.com',
   name: '王小明',
@@ -330,7 +331,7 @@ describe('authStore.hydrate — /users/me unavailable', () => {
 // R13 Task 3(T0):會員資料 module 的 PATCH /users/me 成功後,用回應同步 Topbar 等讀
 // authStore 的名字——identity key(loggedIn + member.id)不變,不得觸發任何 session gate 重置。
 describe('authStore.syncUser', () => {
-  async function loginAs(user: ApiUser) {
+  async function loginAs(user: AuthUserResponse) {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user })));
     await authStore.login(user.email, 'pw');
     vi.unstubAllGlobals();
@@ -415,7 +416,7 @@ describe('authStore — session expiry (onSessionExpired)', () => {
 // R17(FE-3):跨分頁同步。listener 只看「目前 storage」決定(Controller 裁決 9):
 // 沒 refresh → 登出;快取身分 ≠ 我且為登入 → 重新水合;其他(含 refresh 只被輪替)不動。
 describe('authStore — cross-tab storage sync', () => {
-  const USER_B: ApiUser = { ...SAMPLE_USER, id: 'uuid-2', email: 'b@test.com', name: '李大華' };
+  const USER_B: AuthUserResponse = { ...SAMPLE_USER, id: 'uuid-2', email: 'b@test.com', name: '李大華' };
 
   function cacheOf(user: ApiUser | null): string {
     return JSON.stringify(user ? { loggedIn: true, member: toMember(user), roles: user.roles } : LOGGED_OUT);
