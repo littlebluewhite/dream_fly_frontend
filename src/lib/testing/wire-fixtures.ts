@@ -10,6 +10,7 @@ import type {
 	AdminReportResponse,
 	CoachResponse,
 	CouponResponse,
+	CourseResponse,
 	InquiryResponse,
 	LeaveRequestResponse,
 	OrderResponse,
@@ -243,5 +244,29 @@ export const userResponse = (over: Partial<UserResponse> = {}): UserResponse => 
 	points_balance: 0,
 	preferences: null,
 	birth_date: null,
+	...over
+});
+
+export const courseResponse = (over: Partial<CourseResponse> = {}): CourseResponse => ({
+	id: 'course-1',
+	name: '體操基礎班',
+	slug: 'basic',
+	level: 'intermediate',
+	description: null,
+	duration_minutes: 90,
+	price_cents: 320000,
+	max_students: 12,
+	min_age: null,
+	max_age: null,
+	features: [],
+	is_active: true,
+	coach_id: null,
+	category: null,
+	schedule_text: null,
+	is_highlighted: false,
+	created_at: '',
+	updated_at: '',
+	enrolled_count: 0,
+	waitlist_count: 0,
 	...over
 });
