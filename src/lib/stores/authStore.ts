@@ -150,8 +150,12 @@ function createAuthStore() {
     // 失敗時若 token 真的被清掉(後端明確拒絕),onSessionExpired 已設 LOGGED_OUT;沒清掉代表
     // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給下方的 storage listener)。
     if (!refreshed) return;
+    const session = getRefresh();
     try {
       const user = await api<UserResponse>('/users/me');
+      // 回應落地前 refresh token 換人了(別的分頁換帳號/本分頁重新登入):這份是舊 session 的身分,
+      // 不套用、直接結束——新 session 的水合(或 storage listener 的收尾)才是真相。
+      if (getRefresh() !== session) return;
       applyUser(user);
     } catch {
       // 真的 401 已由 api() → refreshTokens() 處理;其他失敗(5xx/網路)不是 session 過期,

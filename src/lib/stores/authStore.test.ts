@@ -535,6 +535,36 @@ describe('authStore — cross-tab storage sync', () => {
     expect(getAccess()).toBeNull();
   });
 
+  it('an earlier hydrate’s /users/me (sent under A) resolving after the B switch does not apply A', async () => {
+    await loginAsA();
+    let releaseA!: (r: unknown) => void;
+    let meCalls = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        return getRefresh() === 'rB'
+          ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
+          : jsonResponse({ access_token: 'a2', refresh_token: 'r2' });
+      }
+      meCalls += 1;
+      return meCalls === 1 ? new Promise((r) => (releaseA = r)) : jsonResponse(USER_B);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const hydratingA = authStore.hydrate(); // e.g. a reload-time hydrate, /users/me in flight under A
+    await vi.waitFor(() => expect(meCalls).toBe(1));
+
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(get(authStore).member?.id).toBe(USER_B.id));
+
+    releaseA(jsonResponse(SAMPLE_USER)); // A's stale /users/me lands last
+    await hydratingA;
+
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+    expect(getRefresh()).toBe('rB2');
+  });
+
   it('only rotation (same identity, new refresh token) → no action: no refresh, access kept, no reset', async () => {
     await loginAsA();
     const reset = trackGateReset();
