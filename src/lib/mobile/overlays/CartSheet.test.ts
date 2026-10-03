@@ -6,6 +6,7 @@ import { cart, toasts, checkout } from '$lib/mobile/stores';
 import { points } from '$lib/member/points';
 import { api, ApiError } from '$lib/api/client';
 import type { Course } from '$lib/mobile/data';
+import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
 
 /* CartSheet 結帳接真（複審後）：confirmPayment 現在打真實 POST /orders（復用
  * desktop member 的 syncCartToServer + api()，見 $lib/mobile/stores.ts 的
@@ -39,19 +40,15 @@ function courseFixture(overrides: Partial<Course> = {}): Course {
 }
 const COURSE = courseFixture();
 
-const SAMPLE_ORDER = {
+const SAMPLE_ORDER = orderResponse({
   id: 'order-1',
   order_number: 'DF-0001',
-  status: 'paid',
   total_cents: 480000,
-  discount_cents: 0,
-  coupon_code: null,
-  points_used: 0,
   points_earned: 240,
   paid_at: '2026-07-07T00:00:00Z',
   created_at: '2026-07-07T00:00:00Z',
   items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
-};
+});
 
 beforeEach(() => {
   cart.clear();
@@ -65,7 +62,7 @@ describe('CartSheet — 確認付款打真實下單 API（不是本地假成功�
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (path === '/orders' && method === 'POST') return SAMPLE_ORDER;
-      if (path === '/points/me') return { balance: 240, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 240 });
       return undefined; // DELETE /cart、POST /cart/items
     });
     const { getByText } = render(CartSheet, { props: { onClose: () => {} } });
@@ -118,7 +115,7 @@ describe('CartSheet — 優惠碼改走真實 GET /coupons/{code}/validate', () 
   it('成功 → 套用優惠碼並顯示折抵金額', async () => {
     cart.add(COURSE);
     vi.mocked(api).mockImplementation(async (path: string) => {
-      if (path === '/points/me') return { balance: 0, ledger: [] };
+      if (path === '/points/me') return pointsMe();
       if (path.startsWith('/coupons/')) return { code: 'DREAMFLY100', discount_cents: 10000 };
       return undefined;
     });
@@ -136,7 +133,7 @@ describe('CartSheet — 優惠碼改走真實 GET /coupons/{code}/validate', () 
   it('404（查無優惠碼）→ 顯示「優惠碼無效或已過期」', async () => {
     cart.add(COURSE);
     vi.mocked(api).mockImplementation(async (path: string) => {
-      if (path === '/points/me') return { balance: 0, ledger: [] };
+      if (path === '/points/me') return pointsMe();
       if (path.startsWith('/coupons/')) throw new ApiError(404, 'coupon not found');
       return undefined;
     });
@@ -153,7 +150,7 @@ describe('CartSheet — 點數改讀真 $lib/member/points（不是本地 mock �
   it('開啟時打 GET /points/me 水合真餘額並顯示（不是行動版本地 mock 的 ME.points）', async () => {
     cart.add(COURSE);
     vi.mocked(api).mockImplementation(async (path: string) => {
-      if (path === '/points/me') return { balance: 777, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 777 });
       return undefined;
     });
     const { getByText } = render(CartSheet, { props: { onClose: () => {} } });
@@ -195,7 +192,7 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (path === '/orders' && method === 'POST') return d.promise;
-      if (path === '/points/me') return { balance: 0, ledger: [] };
+      if (path === '/points/me') return pointsMe();
       return undefined; // DELETE /cart、POST /cart/items
     });
     const utils = render(CartSheet, { props: { onClose } });
@@ -259,7 +256,7 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (path === '/orders' && method === 'POST') return d.promise;
-      if (path === '/points/me') return { balance: 300, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 300 });
       if (path.startsWith('/coupons/')) return { code: 'DREAMFLY100', discount_cents: 10000 };
       return undefined;
     });
@@ -306,7 +303,7 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (path === '/orders' && method === 'POST') return SAMPLE_ORDER;
-      if (path === '/points/me') return { balance: 300, ledger: [] };
+      if (path === '/points/me') return pointsMe({ balance: 300 });
       if (path.startsWith('/coupons/')) return { code: 'DREAMFLY100', discount_cents: 10000 };
       return undefined;
     });
@@ -340,7 +337,7 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
         if (call === 1) throw new ApiError(409, 'course is full');
         return SAMPLE_ORDER;
       }
-      if (path === '/points/me') return { balance: 0, ledger: [] };
+      if (path === '/points/me') return pointsMe();
       return undefined;
     });
     const { getByText } = render(CartSheet, { props: { onClose: () => {} } });
@@ -364,7 +361,7 @@ describe('CartSheet — C3(R13)：結帳生命週期比 sheet 活得久（checko
     vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
       const method = (init.method ?? 'GET').toString().toUpperCase();
       if (path === '/orders' && method === 'POST') return SAMPLE_ORDER;
-      if (path === '/points/me') return { balance: 0, ledger: [] };
+      if (path === '/points/me') return pointsMe();
       return undefined;
     });
 

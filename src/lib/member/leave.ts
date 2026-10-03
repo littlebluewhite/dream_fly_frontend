@@ -3,7 +3,7 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
-import type { ApiLeaveRequest } from '$lib/api/wire';
+import type { LeaveRequestResponse } from '$lib/api/generated';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
  * 全新 UI 流（repo 原無請假 UI，比照 Round 1 打卡 UI 先例：新寫網路層，不是替換
@@ -13,11 +13,11 @@ import type { ApiLeaveRequest } from '$lib/api/wire';
  * 舊 mock 版 LeaveDialog 的「同時保留補課額度」開關已不適用,一併移除。 */
 
 /** UI 形狀 = wire 形狀去掉 decided_at（目前沒有畫面需要顯示決定時間）。 */
-export type LeaveRequest = Omit<ApiLeaveRequest, 'decided_at'>;
+export type LeaveRequest = Omit<LeaveRequestResponse, 'decided_at'>;
 
 /** LeaveRequestResponse → LeaveRequest。decided_at 未進 UI 形狀——目前沒有畫面
  *  需要顯示決定時間，維持誠實窄化(同 api.ts 窄化 local interface 的慣例)。 */
-function toLeaveRequest(r: ApiLeaveRequest): LeaveRequest {
+function toLeaveRequest(r: LeaveRequestResponse): LeaveRequest {
   return {
     id: r.id,
     course_id: r.course_id,
@@ -44,7 +44,7 @@ export const leaveRequests = writable<LeaveRequest[]>([]);
  *  P1′ 的 epoch 核對由工廠外包。 */
 const gate = createSessionGate<LeaveRequest[]>({
   fetch: async () => {
-    const list = await api<ApiLeaveRequest[]>('/leave-requests/me');
+    const list = await api<LeaveRequestResponse[]>('/leave-requests/me');
     return list.map(toLeaveRequest);
   },
   apply: (list) => leaveRequests.set(list),
@@ -73,7 +73,7 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
     send: async () => {
       const body: { session_id: string; reason?: string } = { session_id: sessionId };
       if (reason) body.reason = reason;
-      const res = await api<ApiLeaveRequest>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
+      const res = await api<LeaveRequestResponse>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
       return toLeaveRequest(res);
     },
     commit: (entry) => leaveRequests.update((list) => [entry, ...list])
@@ -101,7 +101,7 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
 export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRequest> {
   const o = await gate.write({
     send: async () => {
-      const res = await api<ApiLeaveRequest>(`/leave-requests/${id}/makeup`, {
+      const res = await api<LeaveRequestResponse>(`/leave-requests/${id}/makeup`, {
         method: 'POST',
         body: JSON.stringify({ session_id: sessionId })
       });

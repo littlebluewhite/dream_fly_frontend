@@ -3,7 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import LeaveRequestsPage from './+page.svelte';
 import { toasts } from '$lib/coach/stores';
 import { api, ApiError } from '$lib/api/client';
-import type { ApiLeaveRequest } from '$lib/api/wire';
+import type { AdminLeaveRequestResponse, LeaveRequestListResponse } from '$lib/api/generated';
+import { adminLeaveRequest, leaveRequest } from '$lib/testing/wire-fixtures';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginAs } from '$lib/testing/coach-session';
 import { COACH_ROUTES, COACH_USER } from '$lib/testing/coach-routes';
@@ -22,23 +23,22 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-type WireLeaveRequest = ApiLeaveRequest & { user_id: string; user_name: string };
-const wire = (r: Pick<WireLeaveRequest, 'id' | 'course_name' | 'user_name' | 'session_date' | 'start_time' | 'reason' | 'created_at'>): WireLeaveRequest => ({
-	course_id: 'c-x', session_id: `s-${r.id}`, user_id: `u-${r.id}`, status: 'pending',
-	makeup_session_id: null, makeup_session_date: null, makeup_start_time: null, decided_at: null, ...r
-});
-const REQUESTS: WireLeaveRequest[] = [
-	wire({ id: 'lr-1', course_name: '兒童體操初階班', user_name: '王小明', session_date: '2026-07-10', start_time: '19:00:00', reason: '生病', created_at: '2026-07-01T00:00:00Z' }),
-	wire({ id: 'lr-2', course_name: '競技選手班', user_name: '陳小華', session_date: '2026-07-12', start_time: '10:00:00', reason: null, created_at: '2026-07-02T00:00:00Z' })
+const REQUESTS: AdminLeaveRequestResponse[] = [
+	adminLeaveRequest({ id: 'lr-1', course_name: '兒童體操初階班', user_name: '王小明', session_date: '2026-07-10', start_time: '19:00:00', reason: '生病', created_at: '2026-07-01T00:00:00Z' }),
+	adminLeaveRequest({ id: 'lr-2', course_name: '競技選手班', user_name: '陳小華', session_date: '2026-07-12', start_time: '10:00:00', reason: null, created_at: '2026-07-02T00:00:00Z' })
 ];
+/** PATCH 回應是會員形狀 LeaveRequestResponse（無 user_name）——頁面 toast 的申請人
+ *  姓名取自清單列，不讀回應。 */
+const DECIDED_LR1 = leaveRequest({ id: 'lr-1', status: 'approved' });
+const DECIDED_LR2 = leaveRequest({ id: 'lr-2', status: 'rejected' });
 
 const LIST_PATH = 'GET /leave-requests?status=pending&per_page=100';
-const page = (leave_requests: WireLeaveRequest[], total = leave_requests.length) => ({ leave_requests, total, page: 1, per_page: 100 });
+const page = (leave_requests: AdminLeaveRequestResponse[], total = leave_requests.length): LeaveRequestListResponse => ({ leave_requests, total, page: 1, per_page: 100 });
 
 const route = (overrides: Record<string, unknown> = {}) =>
 	vi.mocked(api).mockImplementation(
 		fakeRouter(
-			{ [LIST_PATH]: page(REQUESTS), 'PATCH /leave-requests/lr-1': REQUESTS[0], 'PATCH /leave-requests/lr-2': REQUESTS[1], ...overrides },
+			{ [LIST_PATH]: page(REQUESTS), 'PATCH /leave-requests/lr-1': DECIDED_LR1, 'PATCH /leave-requests/lr-2': DECIDED_LR2, ...overrides },
 			COACH_ROUTES
 		)
 	);

@@ -11,6 +11,8 @@ const SEED_POINTS = 1250;
 import { passToCartItem } from '$lib/cart-item';
 import { fmtNT } from '$lib/format';
 import { api, ApiError } from '$lib/api/client';
+import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
+import type { OrderResponse } from '$lib/api/generated';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // 只替換 api()，ApiError 用回真實類別（confirmPay 的 orderErrorMessage 靠
@@ -65,7 +67,7 @@ async function payThrough(getByText: (t: string) => HTMLElement) {
  *  有狀態：subsAfter/pointsAfter 是「下單後」的世界 —— dialog 開啟時的水合
  *  （下單前）回傳「未持有／餘額 0」，POST /orders 之後才回傳購買後狀態，忠實
  *  模擬後端（否則開啟即水合會把『這次要買的 pass』誤判成已持有而擋下付款）。 */
-function mockOrdersApi(order: Record<string, unknown>, subsAfter: unknown[] = [], pointsAfter = 0) {
+function mockOrdersApi(order: OrderResponse, subsAfter: unknown[] = [], pointsAfter = 0) {
 	let ordered = false;
 	vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
 		const method = (init.method ?? 'GET').toString().toUpperCase();
@@ -74,7 +76,7 @@ function mockOrdersApi(order: Record<string, unknown>, subsAfter: unknown[] = []
 			return order;
 		}
 		if (path === '/subscriptions/me') return ordered ? subsAfter : [];
-		if (path === '/points/me') return { balance: ordered ? pointsAfter : 0, ledger: [] };
+		if (path === '/points/me') return pointsMe({ balance: ordered ? pointsAfter : 0 });
 		return undefined; // DELETE /cart、POST /cart/items
 	});
 }
@@ -84,12 +86,11 @@ describe('CheckoutDialog — pure-pass checkout creates a Subscription (使用�
 		cart.addItem(PASS);
 		checkoutOpen.set(true);
 		mockOrdersApi(
-			{
-				id: 'order-1', order_number: 'DF-0001', status: 'paid',
-				total_cents: 450000, discount_cents: 0, coupon_code: null,
-				points_used: 0, points_earned: 225, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+			orderResponse({
+				id: 'order-1', order_number: 'DF-0001', total_cents: 450000,
+				points_earned: 225, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
 				items: [{ id: 'oi-1', item_type: 'product', product_id: PASS.id, course_id: null, quantity: 1, unit_price_cents: 450000 }]
-			},
+			}),
 			[{ id: 'sub-1', product_id: PASS.id, product_name: PASS.name, status: 'active', started_at: '2026-06-22T00:00:00Z', expires_at: null, total_sessions: null, remaining_sessions: null, price_cents: 450000 }],
 			SEED_POINTS + 225
 		);
@@ -128,12 +129,11 @@ describe('CheckoutDialog — course checkout stays a mock (points only, 報名 c
 		cart.addItem(COURSE);
 		checkoutOpen.set(true);
 		mockOrdersApi(
-			{
-				id: 'order-2', order_number: 'DF-0002', status: 'paid',
-				total_cents: 480000, discount_cents: 0, coupon_code: null,
-				points_used: 0, points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+			orderResponse({
+				id: 'order-2', order_number: 'DF-0002', total_cents: 480000,
+				points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
 				items: [{ id: 'oi-2', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
-			},
+			}),
 			[],
 			SEED_POINTS + 240
 		);
@@ -229,7 +229,7 @@ describe('CheckoutDialog — 付款飛行中的關閉/重開競態（Idempotency
 			const method = (init.method ?? 'GET').toString().toUpperCase();
 			if (path === '/orders' && method === 'POST') return new Promise(() => {}); // 永不落定
 			if (path === '/subscriptions/me') return [];
-			if (path === '/points/me') return { balance: 0, ledger: [] };
+			if (path === '/points/me') return pointsMe();
 			return undefined; // DELETE /cart、POST /cart/items
 		});
 		const utils = render(CheckoutDialog);
@@ -292,7 +292,7 @@ describe('CheckoutDialog — 開啟時水合點數餘額（GET /points/me）', (
 		// beforeEach 已把本地 points 設成 mock 殘值 SEED_POINTS=1250；開啟後必須被
 		// API 的真實餘額（300）蓋掉，否則折抵預覽是照虛構餘額算的。
 		vi.mocked(api).mockImplementation(async (path: string) => {
-			if (path === '/points/me') return { balance: 300, ledger: [] };
+			if (path === '/points/me') return pointsMe({ balance: 300 });
 			if (path === '/subscriptions/me') return [];
 			return undefined;
 		});
@@ -320,7 +320,7 @@ describe('CheckoutDialog — 全數已持有（chargeable 為空）不可送單'
 					total_sessions: null, remaining_sessions: null, price_cents: 450000
 				}];
 			}
-			if (path === '/points/me') return { balance: 0, ledger: [] };
+			if (path === '/points/me') return pointsMe();
 			return undefined;
 		});
 		checkoutOpen.set(true);
@@ -343,12 +343,11 @@ describe('CheckoutDialog — 付款方式（payment_method）單選（Round 4 Ta
 	it('不動單選（預設 credit_card）→ POST /orders body 帶 payment_method: credit_card', async () => {
 		cart.addItem(COURSE);
 		checkoutOpen.set(true);
-		mockOrdersApi({
-			id: 'order-pm-1', order_number: 'DF-PM1', status: 'paid',
-			total_cents: 480000, discount_cents: 0, coupon_code: null,
-			points_used: 0, points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+		mockOrdersApi(orderResponse({
+			id: 'order-pm-1', order_number: 'DF-PM1', total_cents: 480000,
+			points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
 			items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
-		});
+		}));
 		const { getByText } = render(CheckoutDialog);
 
 		await payThrough(getByText);
@@ -361,12 +360,11 @@ describe('CheckoutDialog — 付款方式（payment_method）單選（Round 4 Ta
 	it('選 LINE Pay → POST /orders body 帶 payment_method: line_pay', async () => {
 		cart.addItem(COURSE);
 		checkoutOpen.set(true);
-		mockOrdersApi({
-			id: 'order-pm-2', order_number: 'DF-PM2', status: 'paid',
-			total_cents: 480000, discount_cents: 0, coupon_code: null,
-			points_used: 0, points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
+		mockOrdersApi(orderResponse({
+			id: 'order-pm-2', order_number: 'DF-PM2', total_cents: 480000,
+			points_earned: 240, paid_at: '2026-06-22T00:00:00Z', created_at: '2026-06-22T00:00:00Z',
 			items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
-		});
+		}));
 		const { getByText, getByLabelText } = render(CheckoutDialog);
 
 		await fireEvent.click(getByText('前往付款'));

@@ -23,6 +23,8 @@ import type { ClassStatus } from '$lib/domain/classes';
 import type { Coach } from '$lib/domain/coaches';
 import type { Venue } from '$lib/domain/venues';
 import type { OrderStatus } from '$lib/api/wire';
+import type { AdminOrderListResponse, AdminOrderSummary, OrderResponse } from '$lib/api/generated';
+import { paidAtLabel } from './components/order-status';
 import type { Activity } from '$lib/domain/activity';
 import type { IconName } from '$lib/icon-registry';
 
@@ -152,20 +154,6 @@ export const updateProduct = (id: string, body: ProductWriteBody): Promise<ApiPr
 
 /* ═════════════════════════ 訂單（GET /orders，admin-only） ═════════════════════════ */
 
-interface ApiAdminOrder {
-	id: string;
-	order_number: string;
-	user_name: string;
-	user_email: string;
-	status: OrderStatus;
-	total_cents: number;
-	points_used: number;
-	coupon_code: string | null;
-	created_at: string;
-	items: { name: string; quantity: number }[];
-}
-type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
-
 /** `AdminOrderSummary` → 既有 Order 形狀，讓 OrdersTable/OrderDialog 樣板不用改。
  *  AdminOrderSummary 沒有發票/經手人/分校/統編欄位 —— R16 Task 2b 起從 Order
  *  形狀拿掉(不再給「—」佔位)；item 現由 items 摘要組成(orderItemsSummary，與 member/api.ts
@@ -175,7 +163,7 @@ type ApiAdminOrderListResponse = ApiPage<'orders', ApiAdminOrder>;
  *  (已於 data.ts 擴充至 6 態)。orderId 是真實後端 UUID（`o.id`）——Task 8 piece 2
  *  的 PATCH /orders/{id}/status 要用這個，`id` 欄位其實是 order_number（顯示用，
  *  維持既有 UI 不變)。 */
-function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
+function mapAdminOrder(o: AdminOrderSummary, i: number): Order {
 	const amount = ntd(o.total_cents);
 	const { tax, net } = taxFromGross(amount);
 	const { display, uuid } = orderIdentity(o);
@@ -193,7 +181,7 @@ function mapAdminOrder(o: ApiAdminOrder, i: number): Order {
 		discount: o.coupon_code ?? '',
 		tax,
 		net,
-		paidAt: o.status === 'pending' ? '—（待付款）' : isoDate(o.created_at)
+		paidAt: paidAtLabel(o.status, o.paid_at)
 	};
 }
 
@@ -205,7 +193,7 @@ export interface OrdersData {
 	perPage: number;
 }
 export const getOrders = (page = 1): Promise<OrdersData> =>
-	api<ApiAdminOrderListResponse>(`/orders?page=${page}`).then((r) => ({
+	api<AdminOrderListResponse>(`/orders?page=${page}`).then((r) => ({
 		orders: r.orders.map(mapAdminOrder),
 		...pageMeta(r)
 	}));
@@ -214,16 +202,10 @@ export const getOrders = (page = 1): Promise<OrdersData> =>
  * `id` here MUST be the real backend UUID (Order.orderId — see admin/data.ts),
  * not the display order_number (Order.id). Response is the FULL OrderResponse
  * (契約 §3.10）——不同於清單用的 AdminOrderSummary（缺 user_name/user_email，items
- * 也沒有 name），呼叫端只取其中的 status 套回本地working copy（orders-filter.ts 的
- * applyStatusChange），不整包重新映射。 */
-export interface ApiOrderStatusResponse {
-	id: string;
-	order_number: string;
-	status: string;
-}
-
-export const updateOrderStatus = (id: string, status: OrderStatus): Promise<ApiOrderStatusResponse> =>
-	api<ApiOrderStatusResponse>(`/orders/${id}/status`, {
+ * 也沒有 name），呼叫端只取其中的 status/paid_at 套回本地working copy
+ * （order-status.ts 的 applyStatusChange），不整包重新映射。 */
+export const updateOrderStatus = (id: string, status: OrderStatus): Promise<OrderResponse> =>
+	api<OrderResponse>(`/orders/${id}/status`, {
 		method: 'PATCH',
 		body: JSON.stringify({ status })
 	});

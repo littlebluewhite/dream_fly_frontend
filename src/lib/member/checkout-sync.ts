@@ -1,6 +1,7 @@
 import { derived, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
-import { syncCartToServer, type ApiOrder } from '$lib/checkout-order';
+import { syncCartToServer } from '$lib/checkout-order';
+import type { OrderResponse } from '$lib/api/generated';
 import { ntd } from '$lib/public/adapters';
 import {
 	createCheckoutController,
@@ -50,7 +51,7 @@ export function createCheckout(w: CheckoutSyncDeps): CheckoutController {
 	 *  ChargeableLine[]——與預覽同一產地，型別強制「預覽合計 ≡ 實際請款」。 */
 	async function placeOrder(orderLines: ChargeableLine[], order: PlaceOrderInput): Promise<PaidSummary> {
 		await syncCartToServer(orderLines);
-		const placed = await api<ApiOrder>('/orders', {
+		const placed = await api<OrderResponse>('/orders', {
 			method: 'POST',
 			body: JSON.stringify({
 				coupon_code: order.coupon || undefined,

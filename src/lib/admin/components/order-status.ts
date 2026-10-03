@@ -20,7 +20,8 @@
  * 文案留呼叫端（ADR-0011「per-entity 知識留頁」精神）：本模組只回傳判別聯集，
  * 桌面 orders 頁與 mobile-admin OrderSheet 各自把 outcome 翻成繁中 toast。 */
 import type { Order } from '$lib/admin/data';
-import type { OrderStatus } from '$lib/api/wire';
+import { isoDate, type OrderStatus } from '$lib/api/wire';
+import type { OrderResponse } from '$lib/api/generated';
 import { ApiError } from '$lib/api/client';
 
 /** 契約 §3.10 訂單狀態機：目前狀態 → 合法的下一狀態清單（不含同狀態幂等）。
@@ -38,18 +39,24 @@ export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
 	return LEGAL_NEXT[current];
 }
 
+/** 收款時間顯示（W-6）：讀後端真實 `paid_at`（AdminOrderSummary / OrderResponse）。
+ *  null 時 pending →「—（待付款）」、其他狀態 →「—」；有值則同訂單日期欄的 isoDate
+ *  格式。讀取（admin/api.ts 的 mapAdminOrder）與 PATCH 後套回（applyStatusChange）共用。 */
+export function paidAtLabel(status: OrderStatus, paidAt: string | null): string {
+	if (paidAt === null) return status === 'pending' ? '—（待付款）' : '—';
+	return isoDate(paidAt);
+}
+
 /**
  * Fold a successful PATCH /orders/{id}/status response into the working copy.
  * Matches by `orderId` (the real backend UUID — `id` above is actually the
- * display order_number, see admin/api.ts's mapAdminOrder). paidAt mirrors the
- * same rule mapAdminOrder already applies on read (pending → placeholder, any
- * other status → the order's date), so the row stays consistent with what a
- * fresh getOrders() would show. Returns a NEW array; the input is never mutated.
+ * display order_number, see admin/api.ts's mapAdminOrder). `paidAt` is the
+ * response's real `paid_at`, rendered by the same paidAtLabel mapAdminOrder uses
+ * on read, so the row stays consistent with what a fresh getOrders() would show.
+ * Returns a NEW array; the input is never mutated.
  */
-export function applyStatusChange(rows: Order[], orderId: string, status: OrderStatus): Order[] {
-	return rows.map((o) =>
-		o.orderId === orderId ? { ...o, status, paidAt: status === 'pending' ? '—（待付款）' : o.date } : o
-	);
+export function applyStatusChange(rows: Order[], orderId: string, status: OrderStatus, paidAt: string | null): Order[] {
+	return rows.map((o) => (o.orderId === orderId ? { ...o, status, paidAt: paidAtLabel(status, paidAt) } : o));
 }
 
 /** 同後端 OrderStatus::is_revenue（orders/model.rs）：paid/processing/completed
@@ -67,17 +74,17 @@ export function revenueTotal(rows: Order[]): number {
 /** changeOrderStatus 的呼叫端注入依賴——最小結構型別，只描述本模組實際用到的
  *  形狀（同 coach-save.ts 的 deps 慣例），不 import admin/api.ts 的真簽名。 */
 export interface ChangeOrderStatusDeps {
-	updateOrderStatus: (id: string, status: OrderStatus) => Promise<{ status: string }>;
+	updateOrderStatus: (id: string, status: OrderStatus) => Promise<Pick<OrderResponse, 'status' | 'paid_at'>>;
 }
 
 /** PATCH /orders/{id}/status 的判別聯集結果：
- * - `changed` — 成功，`status` 是 server 回的新狀態（以此為準，不硬寫 next）。
+ * - `changed` — 成功，`status`/`paidAt` 是 server 回的新狀態與收款時間（以此為準，不硬寫 next）。
  * - `illegalTransition` — 400，非法轉換或並發衝突（decide_transition 拒絕）。
  * - `pointsShortfall` — 409，退款/取消的點數回收餘額不足（Conflict("點數不足")）。
  * - `failed` — 其他 ApiError（如 403）或非 ApiError（連線問題等），原始 error
  *   原樣回傳，文案由呼叫端決定（同 coach-save.ts 的 outcome 慣例）。 */
 export type ChangeOrderStatusOutcome =
-	| { kind: 'changed'; status: OrderStatus }
+	| { kind: 'changed'; status: OrderStatus; paidAt: string | null }
 	| { kind: 'illegalTransition' }
 	| { kind: 'pointsShortfall' }
 	| { kind: 'failed'; error: unknown };
@@ -91,7 +98,7 @@ export async function changeOrderStatus(
 ): Promise<ChangeOrderStatusOutcome> {
 	try {
 		const res = await deps.updateOrderStatus(id, next);
-		return { kind: 'changed', status: res.status as OrderStatus };
+		return { kind: 'changed', status: res.status, paidAt: res.paid_at };
 	} catch (error) {
 		if (error instanceof ApiError) {
 			if (error.status === 400) return { kind: 'illegalTransition' };

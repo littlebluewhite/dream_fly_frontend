@@ -9,7 +9,8 @@ import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiReportCard, ApiCertificate } from '$lib/api/wire';
+import type { ApiReportCard, ApiCertificate } from '$lib/api/wire';
+import type { OrderListResponse, OrderSummary } from '$lib/api/generated';
 import { refreshPoints } from './stores';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
@@ -276,21 +277,10 @@ export interface AccountData {
   ordersTotal: number;
 }
 
-interface ApiOrderSummary {
-  id: string;
-  order_number: string;
-  status: string;
-  total_cents: number;
-  created_at: string;
-  items: { name: string; quantity: number }[];
-}
-
-type ApiOrderListResponse = ApiPage<'orders', ApiOrderSummary>;
-
 /** OrderSummary 現含 items 摘要(見 integration-contract.md §3.10：`{ name, quantity }[]`，
  *  name 是下單當時的快照)；item 欄由 orderItemsSummary 組成(與 admin/api.ts
  *  mapAdminOrder 共用同一份措辭，見 public/adapters.ts)。 */
-function mapOrder(o: ApiOrderSummary): Order {
+function mapOrder(o: OrderSummary): Order {
   return {
     id: orderIdentity(o).display,
     item: orderItemsSummary(o.items, `訂單 ${o.order_number}`),
@@ -310,7 +300,7 @@ function mapOrder(o: ApiOrderSummary): Order {
  *  暖哪些是頁面自己的決定(見 member/account/+page.svelte、mobile/account/
  *  +page.svelte 的 gate.fetch，兩處清單不同：桌面暖點數＋訂閱，行動版只暖點數)。 */
 export const getAccount = async (): Promise<AccountData> => {
-  const orderList = await api<ApiOrderListResponse>('/orders/me?per_page=100');
+  const orderList = await api<OrderListResponse>('/orders/me?per_page=100');
   return {
     orders: orderList.orders.map(mapOrder),
     ordersTotal: orderList.total

@@ -164,8 +164,10 @@ fn-eval support); `auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical
 `vi.mock('$lib/stores/authStore')` factories, both passing through the real `sessionIdentity`);
 `session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
 gate resets through its production path; there are no per-store `reset…ForTests` exports except
-`resetOpsForTests`, the identity-free ops gate's); and fixtures such as `coach-routes.ts` and
-`seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
+`resetOpsForTests`, the identity-free ops gate's); `wire-fixtures.ts` (builders such as
+`orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
+with defaults and take `Partial<T>` overrides, so a new backend field is one default to add); and fixtures
+such as `coach-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
 `src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
 itself (it's the module being scanned *for*, not a production consumer).
 
@@ -266,7 +268,8 @@ mobile → member imports (`docs/adr/0014` §1, `docs/adr/0025`).
 
 Backend wire shapes shared across ≥2 surfaces — order-status badges (`orderStatusBadge`, with a fallback
 for unknown statuses), list-page envelopes, member/coach paired DTOs, the admin/coach `TodaySessionResponse` (generated, re-exported),
-the member/coach `ApiLeaveRequest`/`LeaveStatus`, display atoms like `ageRange`/`initialOf` — live in the
+the `OrderStatus`/`LeaveStatus` unions (generated, re-exported; leave and order DTOs are imported straight from
+`$lib/api/generated`), display atoms like `ageRange`/`initialOf` — live in the
 single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy
 (`docs/adr/0007`). Wire also owns two pieces of order knowledge as zero-import pure helpers:
 `orderIdentity`, the dual-identity protocol picking the display `order_number` vs the real uuid for
@@ -372,7 +375,8 @@ deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `do
 see `docs/adr/0020`. `markOrderPaid(order)` is the one write that doesn't refetch: it goes through
 `order-status.ts`'s `changeOrderStatus` (`PATCH /orders/{id}/status`) and *returns* its outcome instead
 of throwing — only `changed` touches the store, applying the server's status to `$orders` with desktop's
-`applyStatusChange()` (so 收款時間 shows the order date) — the PATCH is the `send` of an `opsGate.write()`
+`applyStatusChange()` (收款時間 comes from the response's real `paid_at` via `paidAtLabel`, the same helper
+`mapAdminOrder` uses on read) — the PATCH is the `send` of an `opsGate.write()`
 and `applyStatusChange` is its `commit`. The same gate also
 publishes `opsPages` (backend `total`/`perPage` for the page-1-only members/classes/orders lists), which
 the three pages show as header totals plus a `searchCapHint()` line once `total > perPage`.

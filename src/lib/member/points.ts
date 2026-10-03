@@ -89,7 +89,7 @@ export interface ApiRedeemResult {
 }
 
 /** POST /rewards/{id}/redeem — 無 body。成功後呼叫 refreshPoints()（見上方裁決）；
- *  回應原樣（snake_case）回傳給呼叫端，同 placeOrder() 對 ApiOrder 的處理慣例——
+ *  回應原樣（snake_case）回傳給呼叫端，同 placeOrder() 對 OrderResponse 的處理慣例——
  *  呼叫端目前只需要知道「成功了」，沒有欄位需要改名成 UI 形狀。 */
 export async function redeemReward(rewardId: string): Promise<ApiRedeemResult> {
   const result = await api<ApiRedeemResult>(`/rewards/${rewardId}/redeem`, { method: 'POST' });

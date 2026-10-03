@@ -7,6 +7,8 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 import { type OrderStatus } from '$lib/api/wire';
+import type { AdminOrderSummary } from '$lib/api/generated';
+import { adminOrderSummary } from '$lib/testing/wire-fixtures';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api(),讓 getOpsCollections
  * (組合器,3b 留任)走真實 fetch adapter,頁面讀 hydrateOps() 水合後的 $orders store,
@@ -16,33 +18,17 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-interface WireOrder {
-	id: string;
-	order_number: string;
-	user_name: string;
-	user_email: string;
-	status: OrderStatus;
-	total_cents: number;
-	points_used: number;
-	coupon_code: string | null;
-	created_at: string;
-	items: { name: string; quantity: number }[];
-}
-
-const mkWireOrder = (over: Partial<WireOrder>): WireOrder => ({
-	id: 'uuid-x', order_number: 'DF-X', user_name: 'X', user_email: 'x@test.com', status: 'paid',
-	total_cents: 100000, points_used: 0, coupon_code: null, created_at: '2026-01-01T00:00:00Z',
-	items: [], ...over
-});
+const mkWireOrder = (over: Partial<AdminOrderSummary>): AdminOrderSummary =>
+	adminOrderSummary({ id: 'uuid-x', order_number: 'DF-X', user_name: 'X', user_email: 'x@test.com', created_at: '2026-01-01T00:00:00Z', ...over });
 
 // 與 seed 相異的 fixture(訂單編號/金額皆改過),證明頁面讀 hydrateOps() 水合後
 // 的 $orders store。
-const WIRE_ORDERS: WireOrder[] = [
+const WIRE_ORDERS: AdminOrderSummary[] = [
 	mkWireOrder({ id: 'uuid-test01', order_number: 'DF-TEST01', user_name: '測試學員甲', total_cents: 1234500, status: 'paid' }),
-	mkWireOrder({ id: 'uuid-test02', order_number: 'DF-TEST02', user_name: '測試學員乙', total_cents: 50000, status: 'pending' })
+	mkWireOrder({ id: 'uuid-test02', order_number: 'DF-TEST02', user_name: '測試學員乙', total_cents: 50000, status: 'pending', paid_at: null })
 ];
 
-const opsRoutes = (wireOrders: WireOrder[], total = wireOrders.length) => ({
+const opsRoutes = (wireOrders: AdminOrderSummary[], total = wireOrders.length) => ({
 	...OPS_ROUTES,
 	'GET /orders?page=1': { orders: wireOrders, total, page: 1, per_page: 20 }
 });

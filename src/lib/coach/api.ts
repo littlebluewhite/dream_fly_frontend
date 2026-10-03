@@ -19,7 +19,8 @@ import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiLeaveRequest, ApiCertificate, ApiReportCard, TodaySessionResponse } from '$lib/api/wire';
+import type { ApiPage, ApiCertificate, ApiReportCard, TodaySessionResponse } from '$lib/api/wire';
+import type { AdminLeaveRequestResponse, LeaveRequestListResponse, LeaveRequestResponse } from '$lib/api/generated';
 import { toTodaySession } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import type {
@@ -513,15 +514,10 @@ export interface CoachLeaveRequest {
 	created_at: string;
 }
 
-/** 教練/admin 清單版 LeaveRequestResponse = 會員形狀另加申請人。 */
-type ApiCoachLeaveRequest = ApiLeaveRequest & { user_id: string; user_name: string };
-
-type ApiLeaveRequestListResponse = ApiPage<'leave_requests', ApiCoachLeaveRequest>;
-
-/** LeaveRequestResponse(教練/admin 清單版) → 待審核清單只需要的窄化形狀——course_id/
- *  user_id/session_id/status/makeup_* 對這個頁面(只列 pending、決定後就從清單消失)
+/** AdminLeaveRequestResponse(教練/admin 清單版，會員形狀另加申請人) → 待審核清單只需要的
+ *  窄化形狀——course_id/user_id/session_id/status/makeup_* 對這個頁面(只列 pending、決定後就從清單消失)
  *  沒有顯示用途，同 api.ts 窄化 local interface 的慣例。 */
-function mapCoachLeaveRequest(r: ApiCoachLeaveRequest): CoachLeaveRequest {
+function mapCoachLeaveRequest(r: AdminLeaveRequestResponse): CoachLeaveRequest {
 	return {
 		id: r.id,
 		course_name: r.course_name,
@@ -547,7 +543,7 @@ export interface PendingLeaveRequestsData {
  *  coaches 資料列時後端本身回空頁而非錯誤（§3.20 引用 §3.18/§3.19 既有慣例）。教練
  *  只會看到自己課程的待審核假單，後端已按 courses.coach_id 過濾，前端不需要另外篩選。 */
 export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsData> => {
-	const res = await api<ApiLeaveRequestListResponse>('/leave-requests?status=pending&per_page=100');
+	const res = await api<LeaveRequestListResponse>('/leave-requests?status=pending&per_page=100');
 	return { requests: res.leave_requests.map(mapCoachLeaveRequest), total: res.total };
 };
 
@@ -555,9 +551,10 @@ export const getPendingLeaveRequests = async (): Promise<PendingLeaveRequestsDat
  *  交易內把該場次寫入 attendance leave 紀錄；駁回僅更新假單狀態(見 §3.20)——兩者對
  *  前端來說是同一個動作,差別只在送出的 status 值。404/403/409/422 原樣拋出，呼叫端
  *  (leave-requests/+page.svelte)依 ApiError 顯示對應繁中錯誤(這個模組後端本身就已
- *  回繁中訊息，同 member/stores.ts 的 leaveRequestErrorMessage 慣例)。 */
+ *  回繁中訊息，同 member/stores.ts 的 leaveRequestErrorMessage 慣例)。回應是會員形狀
+ *  LeaveRequestResponse(無 user_name)——呼叫端不讀回應，決定後假單直接自清單移除。 */
 export const decideLeaveRequest = async (id: string, status: 'approved' | 'rejected'): Promise<void> => {
-	await api<ApiLeaveRequest>(`/leave-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+	await api<LeaveRequestResponse>(`/leave-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
 };
 
 /* ═════════════════════════ 個人設定（本人帳號資料；儲存 → saveSelfAccount → PATCH /users/me） ═════════════════════════ */

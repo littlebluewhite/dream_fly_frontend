@@ -46,7 +46,6 @@ import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '
 // changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後
 // 直接假設成功)。
 import { applyStatusChange, changeOrderStatus, type ChangeOrderStatusOutcome } from '$lib/admin/components/order-status';
-import type { OrderStatus } from '$lib/api/wire';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
@@ -197,7 +196,7 @@ export async function saveCoach(v: CoachFormValues, target: Coach): Promise<Save
 
 /** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 走 opsGate.write()(非樂觀:沒有
  *  在飛尾流可入帳,ADR-0021),成功才用桌面同一支 applyStatusChange() 把 server 回的 status
- *  套回 $orders(以 orderId 比對,paidAt 取訂單日期,同 mapAdminOrder 的讀取規則)並宣告水合
+ *  與 paid_at 套回 $orders(以 orderId 比對,收款時間同 mapAdminOrder 的 paidAtLabel)並宣告水合
  *  真相(防首次水合覆寫);寫入前未水合則由閘門排和解重抓。已水合時不重抓:KPI / 橫幅都由
  *  $orders 衍生,局部套回即足夠。
  *  R13 Task 5(C4):回傳 changeOrderStatus 的 outcome(不 throw)——閘門的 write 包在它注入的
@@ -209,7 +208,7 @@ export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusO
 			resultOf(
 				await opsGate.write({
 					send: () => updateOrderStatus(id, next),
-					commit: (res) => orders.update((rows) => applyStatusChange(rows, order.orderId, res.status as OrderStatus))
+					commit: (res) => orders.update((rows) => applyStatusChange(rows, order.orderId, res.status, res.paid_at))
 				})
 			)
 	});

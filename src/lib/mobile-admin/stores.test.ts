@@ -37,6 +37,7 @@ import {
 } from './stores';
 import { ADMIN_NOTIFS } from './data';
 import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
+import { orderResponse } from '$lib/testing/wire-fixtures';
 import { MESSAGES, COACHES } from '$lib/testing/seed-fixtures';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import { getOpsCollections, getMessages, type OpsCollections } from './api';
@@ -201,9 +202,9 @@ describe('openCoachNotif (教練四頁的 bell icon 共用)', () => {
 describe('markOrderPaid', () => {
 	// Regression: 標記已付款 used to only toast, leaving the order pending so the
 	// orders KPIs (revenue / 待付款 count) and the admin home banner never updated.
-	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store,
-	// paidAt 用訂單日期(同 mapAdminOrder 讀取規則),不再是「剛剛」。
-	it('PATCH 成功 → 該筆翻為 paid、paidAt 為訂單日期,且不重抓(無 refreshOps)', async () => {
+	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store。
+	// W-6:paidAt 取 PATCH 回應的真實 paid_at(同 mapAdminOrder 的 paidAtLabel),不再冒用訂單日期。
+	it('PATCH 成功 → 該筆翻為 paid、paidAt 為回應的 paid_at,且不重抓(無 refreshOps)', async () => {
 		// 誠實開機(R15 候選 F-3):$orders 開機為 `[]`,經真水合鋪含 pending 訂單的 fixture。
 		// R17:write() 對寫入前未水合會排和解重抓,本釘的前提是已水合(訂單頁的真實情境)。
 		resetOpsForTests();
@@ -211,7 +212,9 @@ describe('markOrderPaid', () => {
 		const pending = get(orders).find((o) => o.status === 'pending');
 		expect(pending, 'fixture should contain a pending order').toBeTruthy();
 		const pendingBefore = get(orders).filter((o) => o.status === 'pending').length;
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending!.orderId, order_number: pending!.id, status: 'paid' });
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce(
+			orderResponse({ id: pending!.orderId, order_number: pending!.id, status: 'paid', paid_at: '2026-06-09T01:00:00Z' })
+		);
 		vi.mocked(getOpsCollections).mockClear();
 
 		await markOrderPaid(pending!);
@@ -219,7 +222,7 @@ describe('markOrderPaid', () => {
 		expect(updateOrderStatus).toHaveBeenCalledWith(pending!.orderId, 'paid');
 		const after = get(orders).find((o) => o.id === pending!.id)!;
 		expect(after.status).toBe('paid');
-		expect(after.paidAt).toBe(pending!.date);
+		expect(after.paidAt).toBe('2026-06-09');
 		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
 		expect(getOpsCollections).not.toHaveBeenCalled();
 		resetOpsForTests();
@@ -245,7 +248,7 @@ describe('markOrderPaid', () => {
 		resetOpsForTests();
 		await hydrateOps(); // R17:已水合前提(未水合會排和解重抓)
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'processing' });
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce(orderResponse({ id: pending.orderId, order_number: pending.id, status: 'processing' }));
 
 		await markOrderPaid(pending);
 
@@ -261,10 +264,10 @@ describe('markOrderPaid 的閘門接線', () => {
 		resetOpsForTests();
 		const d = createDeferred<OpsCollections>();
 		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		const paidOrders = ORDERS.map((o) => (o.id === pending.id ? { ...o, status: 'paid' as const, paidAt: o.date } : o));
+		const paidOrders = ORDERS.map((o) => (o.id === pending.id ? { ...o, status: 'paid' as const, paidAt: '2026-06-08' } : o));
 		vi.mocked(getOpsCollections).mockClear();
 		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise).mockResolvedValueOnce(opsFixture({ orders: paidOrders }));
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce({ id: pending.orderId, order_number: pending.id, status: 'paid' });
+		vi.mocked(updateOrderStatus).mockResolvedValueOnce(orderResponse({ id: pending.orderId, order_number: pending.id, status: 'paid' }));
 
 		const hydrating = hydrateOps();
 		await markOrderPaid(pending);

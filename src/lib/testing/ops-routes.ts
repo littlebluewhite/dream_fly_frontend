@@ -5,6 +5,9 @@
  * fixture，形狀取自 admin/api.test.ts :221(orders)/:366(courses)/:407(coaches)/
  * :786(users)。供各 mobile-admin 測試檔當 fakeRouter 的 defaults 使用，測試只需
  * 覆寫自己關心的路徑。 */
+import type { AdminOrderSummary } from '$lib/api/generated';
+import { adminOrderSummary } from './wire-fixtures';
+
 export const USERS_FIXTURE = [
 	{ id: 'u1', name: '王小明', phone: '0912345678', created_at: '2026-01-15T00:00:00Z', is_active: true, points_balance: 1250 },
 	{ id: 'u2', name: '陳小華', phone: null, created_at: '2026-02-01T00:00:00Z', is_active: false, points_balance: 0 }
@@ -28,12 +31,11 @@ export const COACHES_FIXTURE = [
 	}
 ];
 
-export const ORDERS_FIXTURE = [
-	{
-		id: '1', order_number: 'DF-1', user_name: '王小明', user_email: 'a@b.com', status: 'pending',
-		total_cents: 480000, points_used: 0, coupon_code: null as string | null, created_at: '2026-06-08T14:22:00Z',
-		items: [{ name: '競技體操 選手班', quantity: 1 }]
-	}
+export const ORDERS_FIXTURE: AdminOrderSummary[] = [
+	adminOrderSummary({
+		id: '1', order_number: 'DF-1', user_name: '王小明', user_email: 'a@b.com', status: 'pending', paid_at: null,
+		total_cents: 480000, created_at: '2026-06-08T14:22:00Z', items: [{ name: '競技體操 選手班', quantity: 1 }]
+	})
 ];
 
 /** fakeRouter 的 defaults 表——getOpsCollections() 平行拉取的四個端點都有交代，

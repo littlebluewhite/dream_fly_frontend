@@ -2,9 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import type { Order } from '$lib/admin/data';
 import type { OrderStatus } from '$lib/api/wire';
 import { ApiError } from '$lib/api/client';
+import { orderResponse } from '$lib/testing/wire-fixtures';
 import {
 	legalNextStatuses,
 	applyStatusChange,
+	paidAtLabel,
 	isRevenueStatus,
 	revenueTotal,
 	changeOrderStatus
@@ -83,6 +85,21 @@ describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', (
 	});
 });
 
+/* W-6：收款時間改讀後端真實 paid_at（原本以訂單日期冒充）。 */
+describe('paidAtLabel — 收款時間顯示（後端 paid_at）', () => {
+	it('paid_at 有值 → 同訂單日期欄的 YYYY-MM-DD 格式', () => {
+		expect(paidAtLabel('paid', '2026-06-09T03:15:00Z')).toBe('2026-06-09');
+	});
+
+	it('paid_at 為 null 且 pending →「—（待付款）」', () => {
+		expect(paidAtLabel('pending', null)).toBe('—（待付款）');
+	});
+
+	it('paid_at 為 null 且非 pending →「—」（不再以訂單日期冒充）', () => {
+		expect(paidAtLabel('cancelled', null)).toBe('—');
+	});
+});
+
 describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地working copy', () => {
 	const rows: Order[] = [
 		makeOrder('paid', 'DF-1'),
@@ -90,26 +107,30 @@ describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地w
 	];
 
 	it('matches by orderId (真實後端 UUID)，不是顯示用的 id (order_number)', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing', '2026-06-01T00:00:00Z');
 		expect(out.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('processing');
 		expect(out.find((o) => o.orderId === 'uuid-DF-2')!.status).toBe('pending'); // 其餘不動
 	});
 
 	it('never mutates the input array', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing');
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'processing', '2026-06-01T00:00:00Z');
 		expect(out).not.toBe(rows);
 		expect(rows.find((o) => o.orderId === 'uuid-DF-1')!.status).toBe('paid');
 	});
 
-	it('sets paidAt to the order date for any non-pending target status (mirrors mapAdminOrder)', () => {
-		const out = applyStatusChange(rows, 'uuid-DF-1', 'refunded');
-		const o = out.find((x) => x.orderId === 'uuid-DF-1')!;
-		expect(o.paidAt).toBe(o.date);
+	it('paidAt 取回應的 paid_at（退款後仍保留原收款時間），不是訂單日期', () => {
+		const out = applyStatusChange(rows, 'uuid-DF-1', 'refunded', '2026-06-03T08:00:00Z');
+		expect(out.find((x) => x.orderId === 'uuid-DF-1')!.paidAt).toBe('2026-06-03');
+	});
+
+	it('回應 paid_at 為 null → 依新狀態顯示佔位', () => {
+		const out = applyStatusChange(rows, 'uuid-DF-2', 'cancelled', null);
+		expect(out.find((x) => x.orderId === 'uuid-DF-2')!.paidAt).toBe('—');
 	});
 
 	it('is a no-op for an unknown orderId', () => {
-		const out = applyStatusChange(rows, '___nope___', 'refunded');
-		expect(out.map((o) => o.status)).toEqual(rows.map((o) => o.status));
+		const out = applyStatusChange(rows, '___nope___', 'refunded', null);
+		expect(out).toEqual(rows);
 	});
 });
 
@@ -117,11 +138,11 @@ describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地w
  * /並發衝突一律 400，409 只在退款/取消的點數回收餘額不足時發生，其餘（含 403）
  * 走 failed，由呼叫端翻文案。 */
 describe('changeOrderStatus — PATCH /orders/{id}/status 呼叫 + 狀態碼判別', () => {
-	it('200 成功 → changed{status}，status 以 server 回的為準（不硬寫 next）', async () => {
-		const updateOrderStatus = vi.fn().mockResolvedValue({ status: 'processing' });
+	it('200 成功 → changed{status, paidAt}，兩者皆以 server 回的為準（不硬寫 next）', async () => {
+		const updateOrderStatus = vi.fn().mockResolvedValue(orderResponse({ status: 'processing', paid_at: '2026-06-02T00:00:00Z' }));
 		const outcome = await changeOrderStatus('uuid-1', 'refunded', { updateOrderStatus });
 		expect(updateOrderStatus).toHaveBeenCalledWith('uuid-1', 'refunded');
-		expect(outcome).toEqual({ kind: 'changed', status: 'processing' });
+		expect(outcome).toEqual({ kind: 'changed', status: 'processing', paidAt: '2026-06-02T00:00:00Z' });
 	});
 
 	it('400 → illegalTransition（非法轉換／並發衝突）', async () => {

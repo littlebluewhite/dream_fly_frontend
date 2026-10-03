@@ -1,9 +1,10 @@
-/* Dream Fly — 結帳 wire 層（跨 surface）：後端訂單的 wire 型別與購物車同步。
+/* Dream Fly — 結帳 wire 層（跨 surface）：付款方式值域與購物車同步。
  *
  * 送單序列（同步購物車 → POST /orders → 後續刷新 → 清購物車）已收進 member 的
  * `createCheckout`（`member/checkout-sync.ts`）的私有 placeOrder，本模組只留兩個
- * 兩 surface 都要用的東西：wire 形狀（`ApiOrderItem`/`ApiOrder`/`PaymentMethod`）與
- * `syncCartToServer`。本模組不 import 任何 surface 的 store（ADR 0003 精神）。 */
+ * 兩 surface 都要用的東西：`PaymentMethod` 值域與 `syncCartToServer`（訂單 wire 形狀
+ * 自 W-6 起是後端產生型別 `OrderResponse`，見 $lib/api/generated）。本模組不 import
+ * 任何 surface 的 store（ADR 0003 精神）。 */
 
 import { api } from '$lib/api/client';
 import type { CartItem } from '$lib/cart-item';
@@ -12,29 +13,6 @@ import type { CartItem } from '$lib/cart-item';
  *  值域，非 DB enum。不帶時後端預設 credit_card；帶入值域外字串回 422。目前仍是
  *  模擬金流（見 §1.8），這裡只是把使用者的選擇如實送出，不影響下單流程本身。 */
 export type PaymentMethod = 'credit_card' | 'line_pay' | 'atm' | 'jkopay' | 'cash';
-
-export interface ApiOrderItem {
-  id: string;
-  item_type: 'product' | 'course';
-  product_id: string | null;
-  course_id: string | null;
-  quantity: number;
-  unit_price_cents: number;
-}
-
-export interface ApiOrder {
-  id: string;
-  order_number: string;
-  status: string;
-  total_cents: number;
-  discount_cents: number;
-  coupon_code: string | null;
-  points_used: number;
-  points_earned: number;
-  paid_at: string | null;
-  created_at: string;
-  items: ApiOrderItem[];
-}
 
 /** 購物車同步到後端：先 DELETE 清空 server 端購物車，再逐項 POST /cart/items（upsert）。
  *  課程項目一律送 quantity 1 — cart.updateQty 已在 store 層把課程 qty 鎖 1，

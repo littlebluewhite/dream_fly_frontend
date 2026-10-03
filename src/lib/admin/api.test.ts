@@ -37,6 +37,8 @@ import { api, ApiError } from '$lib/api/client';
 import { mapMemberAccount } from './data';
 import { ORDER_STATUS, type TodaySessionResponse } from '$lib/api/wire';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { adminOrderSummary, orderResponse } from '$lib/testing/wire-fixtures';
+import type { AdminOrderSummary } from '$lib/api/generated';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -199,22 +201,24 @@ describe('getTickets — GET /products（admin 自帶分頁抓取，不假道 pu
 });
 
 describe('getOrders — GET /orders（admin）', () => {
-	const base = {
-		user_email: 'a@b.com', points_used: 0, coupon_code: null as string | null, created_at: '2026-06-08T14:22:00Z',
-		items: [{ name: '競技體操 選手班', quantity: 1 }]
-	};
+	/* W-6：wire 夾具走 adminOrderSummary builder；paid_at 是後端真實收款時間。 */
+	const order = (over: Partial<AdminOrderSummary>) =>
+		adminOrderSummary({
+			total_cents: 480000, created_at: '2026-06-08T14:22:00Z', paid_at: '2026-06-09T01:00:00Z',
+			items: [{ name: '競技體操 選手班', quantity: 1 }], ...over
+		});
 
 	it('映射 id/member/initial/amount/method/date/discount，涵蓋全部 6 種 status', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /orders?page=1': {
 					orders: [
-						{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'pending', total_cents: 480000, ...base },
-						{ id: '2', order_number: 'DF-2', user_name: '陳小華', status: 'paid', total_cents: 480000, ...base },
-						{ id: '3', order_number: 'DF-3', user_name: '林小美', status: 'processing', total_cents: 480000, ...base },
-						{ id: '4', order_number: 'DF-4', user_name: '張小強', status: 'completed', total_cents: 480000, ...base },
-						{ id: '5', order_number: 'DF-5', user_name: '李小芳', status: 'cancelled', total_cents: 480000, ...base },
-						{ id: '6', order_number: 'DF-6', user_name: '吳小龍', status: 'refunded', total_cents: 480000, ...base, coupon_code: 'SPRING10' }
+						order({ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'pending', total_cents: 480000, paid_at: null }),
+						order({ id: '2', order_number: 'DF-2', user_name: '陳小華', status: 'paid', total_cents: 480000 }),
+						order({ id: '3', order_number: 'DF-3', user_name: '林小美', status: 'processing', total_cents: 480000 }),
+						order({ id: '4', order_number: 'DF-4', user_name: '張小強', status: 'completed', total_cents: 480000 }),
+						order({ id: '5', order_number: 'DF-5', user_name: '李小芳', status: 'cancelled', total_cents: 480000 }),
+						order({ id: '6', order_number: 'DF-6', user_name: '吳小龍', status: 'refunded', total_cents: 480000, coupon_code: 'SPRING10' })
 					],
 					total: 6,
 					page: 1,
@@ -238,15 +242,35 @@ describe('getOrders — GET /orders（admin）', () => {
 		expect(first.method).toBe('線上');
 		expect(first.date).toBe('2026-06-08');
 		expect(first.discount).toBe(''); // coupon_code ?? ''
-		expect(first.paidAt).toBe('—（待付款）'); // pending → placeholder
+		expect(first.paidAt).toBe('—（待付款）'); // pending、paid_at null → placeholder
 		// R16 Task 2b:後端沒有的發票/經手人/分校/統編不再給「—」佔位
 		for (const k of ['invoice', 'handler', 'campus', 'taxId']) expect(first).not.toHaveProperty(k);
 
-		expect(d.orders[1].paidAt).toBe('2026-06-08'); // paid → real date
+		expect(d.orders[1].paidAt).toBe('2026-06-09'); // 後端 paid_at，不是 created_at（2026-06-08）
 		expect(d.orders[5].discount).toBe('SPRING10');
 		expect(d.total).toBe(6);
 		expect(d.page).toBe(1);
 		expect(d.perPage).toBe(100);
+	});
+
+	it('收款時間讀後端 paid_at：有值 → 日期；null 且非 pending →「—」（不再以 created_at 冒充）', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /orders?page=1': {
+					orders: [
+						order({ id: '1', status: 'refunded', paid_at: '2026-06-10T02:00:00Z' }),
+						order({ id: '2', status: 'cancelled', paid_at: null })
+					],
+					total: 2,
+					page: 1,
+					per_page: 100
+				}
+			})
+		);
+
+		const d = await getOrders();
+
+		expect(d.orders.map((o) => o.paidAt)).toEqual(['2026-06-10', '—']);
 	});
 
 	it('page 參數帶入 query string；total/page/per_page 穿透為 total/page/perPage（Task 17）', async () => {
@@ -269,7 +293,7 @@ describe('getOrders — GET /orders（admin）', () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				'GET /orders?page=1': {
-					orders: [{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 480000, ...base }],
+					orders: [order({ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 480000 })],
 					total: 1,
 					page: 1,
 					per_page: 100
@@ -291,16 +315,16 @@ describe('getOrders — GET /orders（admin）', () => {
 			fakeRouter({
 				'GET /orders?page=1': {
 					orders: [
-						{ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [] },
-						{ id: '2', order_number: 'DF-2', user_name: '王小明', status: 'paid', total_cents: 100000, ...base, items: [{ name: '體操基礎班', quantity: 1 }] },
-						{
-							id: '3', order_number: 'DF-3', user_name: '王小明', status: 'paid', total_cents: 100000, ...base,
+						order({ id: '1', order_number: 'DF-1', user_name: '王小明', status: 'paid', total_cents: 100000, items: [] }),
+						order({ id: '2', order_number: 'DF-2', user_name: '王小明', status: 'paid', total_cents: 100000, items: [{ name: '體操基礎班', quantity: 1 }] }),
+						order({
+							id: '3', order_number: 'DF-3', user_name: '王小明', status: 'paid', total_cents: 100000,
 							items: [
 								{ name: '體操基礎班', quantity: 1 },
 								{ name: '護具組', quantity: 2 },
 								{ name: '月票 · 自由練習', quantity: 1 }
 							]
-						}
+						})
 					],
 					total: 3,
 					page: 1,
@@ -319,7 +343,7 @@ describe('getOrders — GET /orders（admin）', () => {
 
 describe('updateOrderStatus — PATCH /orders/{id}/status（admin，Task 8 piece 2）', () => {
 	it('PATCHes /orders/{real uuid}/status with { status } and returns the response', async () => {
-		const response = { id: 'uuid-1', order_number: 'DF-1', status: 'processing' };
+		const response = orderResponse({ id: 'uuid-1', order_number: 'DF-1', status: 'processing' });
 		vi.mocked(api).mockImplementation(fakeRouter({ 'PATCH /orders/uuid-1/status': response }));
 
 		const result = await updateOrderStatus('uuid-1', 'processing');

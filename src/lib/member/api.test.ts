@@ -14,6 +14,8 @@ import { resetSessionStores } from '$lib/testing/session-reset';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { orderSummary, pointsMe } from '$lib/testing/wire-fixtures';
+import type { OrderStatus } from '$lib/api/wire';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -413,10 +415,10 @@ describe('getAccount', () => {
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'GET /orders/me?per_page=100': {
-          orders: [{
+          orders: [orderSummary({
             id: 'order-1', order_number: 'DF-20260701AAAA', status: 'paid', total_cents: 480000, created_at: '2026-07-01T10:00:00Z',
             items: [{ name: '競技啦啦隊 進階班', quantity: 1 }]
-          }],
+          })],
           total: 1, page: 1, per_page: 100
         }
       })
@@ -433,8 +435,8 @@ describe('getAccount', () => {
   });
 
   it('訂單筆數超過單頁上限(如 total 57)時，orders.length 只有 20 但 ordersTotal 回真正的 57(pin：帳戶頁該顯示 57 筆，不是被截斷的 20)', async () => {
-    const twentyOrders = Array.from({ length: 20 }, (_, i) => ({
-      id: `order-${i}`, order_number: `DF-2026070${i}AAAA`, status: 'paid', total_cents: 100000, created_at: '2026-07-01T10:00:00Z',
+    const twentyOrders = Array.from({ length: 20 }, (_, i) => orderSummary({
+      id: `order-${i}`, order_number: `DF-2026070${i}AAAA`, created_at: '2026-07-01T10:00:00Z',
       items: [{ name: '測試課程', quantity: 1 }]
     }));
     vi.mocked(api).mockImplementation(
@@ -454,16 +456,16 @@ describe('getAccount', () => {
       fakeRouter({
         'GET /orders/me?per_page=100': {
           orders: [
-            { id: 'o1', order_number: 'DF-1', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [] },
-            { id: 'o2', order_number: 'DF-2', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: '體操基礎班', quantity: 1 }] },
-            {
+            orderSummary({ id: 'o1', order_number: 'DF-1', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [] }),
+            orderSummary({ id: 'o2', order_number: 'DF-2', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: '體操基礎班', quantity: 1 }] }),
+            orderSummary({
               id: 'o3', order_number: 'DF-3', status: 'paid', total_cents: 100000, created_at: '2026-01-01T00:00:00Z',
               items: [
                 { name: '體操基礎班', quantity: 1 },
                 { name: '護具組', quantity: 2 },
                 { name: '月票 · 自由練習', quantity: 1 }
               ]
-            }
+            })
           ],
           total: 3, page: 1, per_page: 20
         }
@@ -482,11 +484,11 @@ describe('getAccount', () => {
       fakeRouter({
         'GET /orders/me?per_page=100': {
           orders: [
-            { id: 'o1', order_number: 'DF-1', status: 'pending', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
-            { id: 'o2', order_number: 'DF-2', status: 'processing', total_cents: 200000, created_at: '2026-01-02T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
-            { id: 'o3', order_number: 'DF-3', status: 'cancelled', total_cents: 300000, created_at: '2026-01-03T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
-            { id: 'o4', order_number: 'DF-4', status: 'refunded', total_cents: 400000, created_at: '2026-01-04T00:00:00Z', items: [{ name: 'X', quantity: 1 }] },
-            { id: 'o5', order_number: 'DF-5', status: 'brand_new_status', total_cents: 500000, created_at: '2026-01-05T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }
+            orderSummary({ id: 'o1', order_number: 'DF-1', status: 'pending', total_cents: 100000, created_at: '2026-01-01T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }),
+            orderSummary({ id: 'o2', order_number: 'DF-2', status: 'processing', total_cents: 200000, created_at: '2026-01-02T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }),
+            orderSummary({ id: 'o3', order_number: 'DF-3', status: 'cancelled', total_cents: 300000, created_at: '2026-01-03T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }),
+            orderSummary({ id: 'o4', order_number: 'DF-4', status: 'refunded', total_cents: 400000, created_at: '2026-01-04T00:00:00Z', items: [{ name: 'X', quantity: 1 }] }),
+            orderSummary({ id: 'o5', order_number: 'DF-5', status: 'brand_new_status' as OrderStatus, total_cents: 500000, created_at: '2026-01-05T00:00:00Z', items: [{ name: 'X', quantity: 1 }] })
           ],
           total: 5, page: 1, per_page: 20
         }
@@ -588,10 +590,10 @@ describe('getPoints — Task 14：rewards 換成真 GET /rewards（expiring/expi
             { id: 'rw-2', name: '限量托特包', description: null, points_cost: 300, stock: 0, is_active: true, display_order: 2, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' }
           ]
         },
-        'GET /points/me': {
+        'GET /points/me': pointsMe({
           balance: 999,
           ledger: [{ id: 'l1', delta: 120, balance_after: 999, reason: 'checkout_earn', order_id: 'o1', created_at: '2026-07-01T00:00:00Z' }]
-        }
+        })
       })
     );
 
@@ -611,7 +613,7 @@ describe('getPoints — Task 14：rewards 換成真 GET /rewards（expiring/expi
 
   it('沒有任何品項時 rewards 回傳空陣列', async () => {
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': { balance: 0, ledger: [] } })
+      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': pointsMe() })
     );
     const d = await getPoints();
     expect(d.rewards).toEqual([]);
@@ -619,7 +621,7 @@ describe('getPoints — Task 14：rewards 換成真 GET /rewards（expiring/expi
 
   it('是 async 接縫(回 Promise)', () => {
     vi.mocked(api).mockImplementation(
-      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': { balance: 0, ledger: [] } })
+      fakeRouter({ 'GET /rewards': { rewards: [] }, 'GET /points/me': pointsMe() })
     );
     expect(getPoints()).toBeInstanceOf(Promise);
   });

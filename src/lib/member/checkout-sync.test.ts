@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createCart } from '$lib/cart';
-import type { ApiOrder } from '$lib/checkout-order';
+import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
 import { createCheckout } from './checkout-sync';
 import { subscriptions, refreshSubscriptions } from './subscriptions';
 import { points, refreshPoints } from './points';
@@ -21,19 +21,16 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-const SAMPLE_ORDER: ApiOrder = {
+const SAMPLE_ORDER = orderResponse({
 	id: 'order-1',
 	order_number: 'DF-20260704ABCD1234',
-	status: 'paid',
 	total_cents: 470000,
 	discount_cents: 10000,
-	coupon_code: null,
-	points_used: 0,
 	points_earned: 235,
 	paid_at: '2026-06-22T00:00:00Z',
 	created_at: '2026-06-22T00:00:00Z',
 	items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: 'course-uuid-9', quantity: 1, unit_price_cents: 480000 }]
-};
+});
 
 /** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined（同
  *  checkout-api.test.ts 既有慣例）。 */
@@ -55,7 +52,7 @@ describe('createCheckout — 送單呼叫序列（sync → orders → hydrate �
 				{
 					'POST /orders': SAMPLE_ORDER,
 					'GET /subscriptions/me': [],
-					'GET /points/me': { balance: 235 }
+					'GET /points/me': pointsMe({ balance: 235 })
 				},
 				CART_DEFAULTS
 			)
@@ -95,7 +92,7 @@ describe('createCheckout — 送單呼叫序列（sync → orders → hydrate �
 		cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
 		cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': { balance: 0 } }, CART_DEFAULTS)
+			fakeRouter({ 'POST /orders': SAMPLE_ORDER, 'GET /subscriptions/me': [], 'GET /points/me': pointsMe() }, CART_DEFAULTS)
 		);
 
 		const checkout = createCheckout({ cart, refreshAfterOrder: [refreshSubscriptions, refreshPoints], refreshOnOpen: [] });
@@ -170,7 +167,7 @@ describe('createCheckout — 送單內容（confirmPay 經 placeOrder）', () =>
 	});
 
 	it('成交快照各欄位取自後端回應（hasCourse/hasPass 由 items 推得）', async () => {
-		const order: ApiOrder = {
+		const order = {
 			...SAMPLE_ORDER,
 			points_used: 100,
 			items: [

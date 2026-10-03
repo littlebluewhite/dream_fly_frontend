@@ -8,6 +8,7 @@ import { fmtNT } from '$lib/format';
 import { countByStatus } from '$lib/admin/components/orders-filter';
 import { revenueTotal } from '$lib/admin/components/order-status';
 import { getOrders, updateOrderStatus } from '$lib/admin/api';
+import { orderResponse } from '$lib/testing/wire-fixtures';
 import { ApiError } from '$lib/api/client';
 
 vi.mock('$lib/admin/api', () => ({ getOrders: vi.fn(), updateOrderStatus: vi.fn() }));
@@ -74,11 +75,7 @@ describe('orders +page — 變更狀態接真 API（Task 8 piece 2：PATCH /orde
 	it('點開一筆 paid 訂單、選「已退款」並套用 → 呼叫 updateOrderStatus(真實 orderId, next)，成功後 KPI/表格反映新狀態', async () => {
 		const target = ORDERS.find((o) => o.status === 'paid')!;
 		const initial = countByStatus(ORDERS);
-		vi.mocked(updateOrderStatus).mockResolvedValue({
-			id: target.orderId,
-			order_number: target.id,
-			status: 'refunded'
-		});
+		vi.mocked(updateOrderStatus).mockResolvedValue(orderResponse({ id: target.orderId, order_number: target.id, status: 'refunded' }));
 
 		const { getByText, getByLabelText, findByText, container } = render(Page);
 		await findByText(target.id);

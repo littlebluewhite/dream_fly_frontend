@@ -5,6 +5,7 @@ import OrderSheet from './OrderSheet.svelte';
 import { orders, toasts } from '$lib/mobile-admin/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { orderResponse } from '$lib/testing/wire-fixtures';
 import type { Order as OrderRow } from '$lib/admin/data';
 
 /* R15 Task 3a(候選 轉手退役):改 mock $lib/api/client 的 api(),讓 updateOrderStatus
@@ -32,7 +33,14 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 		const pending = get(orders).find((o) => o.status === 'pending');
 		expect(pending, 'seed should contain a pending order').toBeTruthy();
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ [`PATCH /orders/${pending!.orderId}/status`]: { id: pending!.orderId, order_number: 'DF-X', status: 'paid' } })
+			fakeRouter({
+				[`PATCH /orders/${pending!.orderId}/status`]: orderResponse({
+					id: pending!.orderId,
+					order_number: 'DF-X',
+					status: 'paid',
+					paid_at: '2026-06-09T01:00:00Z'
+				})
+			})
 		);
 
 		const { getByText } = render(OrderSheet, { props: { onClose: () => {}, o: pending } });
@@ -43,8 +51,8 @@ describe('OrderSheet — 標記已付款 (Task 20: PATCH /orders/{id}/status, ad
 			method: 'PATCH',
 			body: JSON.stringify({ status: 'paid' })
 		});
-		// R12 Task 3:store 經桌面 applyStatusChange 套回——paidAt 取訂單日期,不再是「剛剛」。
-		expect(get(orders).find((o) => o.id === pending!.id)?.paidAt).toBe(pending!.date);
+		// R12 Task 3:store 經桌面 applyStatusChange 套回;W-6:paidAt 取回應的真實 paid_at。
+		expect(get(orders).find((o) => o.id === pending!.id)?.paidAt).toBe('2026-06-09');
 	});
 
 	it('API 失敗時不更動 store 狀態，也不關閉 sheet（不假裝成功）', async () => {

@@ -30,11 +30,15 @@
  *
  * 本檔是最底層的知識檔：只放純型別＋純函式＋常數，不 import 任何 $lib 模組。 */
 
+import type { OrderStatus } from './generated';
+
 export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-export type OrderStatus = 'pending' | 'paid' | 'processing' | 'completed' | 'cancelled' | 'refunded';
+/** 訂單狀態值域——W-6 起由後端 DTO 產生（src/lib/api/generated/），這裡只轉出。 */
+export type { OrderStatus };
 
-/** 訂單狀態 → [badge tone, 中文標籤]。標籤內容必須與現行程式碼逐字相同。 */
+/** 訂單狀態 → [badge tone, 中文標籤]。標籤內容必須與現行程式碼逐字相同。
+ *  Record<OrderStatus, …>：後端新增狀態時這裡編譯紅（orderStatusBadge 的後備仍保留）。 */
 export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
   pending: ['warning', '待付款'],
   paid: ['success', '已付款'],
@@ -54,9 +58,9 @@ export const orderStatusBadge = (s: string): [Tone, string] =>
 
 /** 訂單雙身分：後端同一筆訂單有兩個識別欄——`order_number` 是給人看的單號（UI 沿用
  *  的顯示 `id` 欄），`id` 才是打 `PATCH /orders/{id}/status` 要用的真 uuid。單點此協定，
- *  三個 surface 不再各自記憶「哪個欄位餵哪條路徑」。四處 wire interface（admin
- *  ApiAdminOrder、member ApiOrderSummary、checkout ApiOrder、PATCH 回應
- *  ApiOrderStatusResponse）皆必填 `order_number: string`、無 fallback。註：mobile-admin
+ *  三個 surface 不再各自記憶「哪個欄位餵哪條路徑」。四處 wire 型別（admin
+ *  AdminOrderSummary、member OrderSummary、checkout 與 PATCH 回應 OrderResponse，皆為
+ *  後端產生型別）皆必填 `order_number: string`、無 fallback。註：mobile-admin
  *  的 mock ORDERS 用自參照（orderId = 顯示 id）不走此協定；checkout-order.ts 的
  *  `orderNumber` 為具名欄位、無混用風險，亦不經此。 */
 export const orderIdentity = (o: { id: string; order_number: string }): { display: string; uuid: string } =>
@@ -78,26 +82,10 @@ export type ApiPage<K extends string, T> = { [P in K]: T[] } & { total: number; 
 export const pageMeta = (r: { total: number; page: number; per_page: number }) =>
   ({ total: r.total, page: r.page, perPage: r.per_page });
 
-/** 請假申請狀態（integration-contract.md §3.20 四態）。 */
-export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
-
-/** LeaveRequestResponse wire 形狀（§3.20）——member 的 POST/GET me/makeup 與教練清單
- *  （另加 user_id/user_name，見 coach/api.ts）共用的單一來源。 */
-export interface ApiLeaveRequest {
-  id: string;
-  course_id: string;
-  course_name: string;
-  session_id: string;
-  session_date: string; // "YYYY-MM-DD"
-  start_time: string; // "HH:MM:SS"
-  reason: string | null;
-  status: LeaveStatus;
-  makeup_session_id: string | null;
-  makeup_session_date: string | null;
-  makeup_start_time: string | null;
-  decided_at: string | null;
-  created_at: string;
-}
+/** 請假申請狀態（integration-contract.md §3.20 四態）——W-6 起由後端 DTO 產生，這裡只轉出。
+ *  請假 wire 形狀（LeaveRequestResponse / 教練清單版 AdminLeaveRequestResponse）由
+ *  消費端直接 `import type` 自 $lib/api/generated。 */
+export type { LeaveStatus } from './generated';
 
 /** GET /report-cards/me（member）與 POST /report-cards（coach）共用的成績單 wire
  *  形狀（integration-contract.md §3.22）。自現行 member/api.ts 與 coach/api.ts

@@ -15,7 +15,7 @@
    * OrderDialog 只提供合法選項，理論上不會踩到，這裡是防禦性 fallback）；
    * 409（pointsShortfall）是退款/取消補償撞點數不足時才會發生；其餘（含 403）
    * 走 failed，用 apiErrorText 查表。成功後 applyStatusChange() 折回 server 回的
-   * 新狀態，KPI/表格保持與已持久化的真值一致。 */
+   * 新狀態與 paid_at，KPI/表格保持與已持久化的真值一致。 */
   import { onMount } from 'svelte';
   import { Button, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
@@ -52,7 +52,7 @@
     const outcome = await changeOrderStatus(o.orderId, next, { updateOrderStatus });
     switch (outcome.kind) {
       case 'changed':
-        orders = applyStatusChange(orders, o.orderId, outcome.status);
+        orders = applyStatusChange(orders, o.orderId, outcome.status, outcome.paidAt);
         toasts.notify('success', '狀態已更新', o.id + ' 已更新為「' + orderStatusBadge(outcome.status)[1] + '」。');
         break;
       case 'illegalTransition':
