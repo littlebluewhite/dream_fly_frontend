@@ -133,7 +133,7 @@ mutator)。語意:
 | `notifications.markRead`/`markAllRead` | `write({ optimistic, send, onFailure: 'keep' })`;`markAllRead` 以 `resultOf` 讀 allSettled 結果 |
 | `waitlist.joinWaitlist`/`cancelWaitlist`、`leave.createLeaveRequest`/`cancelLeaveRequest`/`bookMakeup`、`self-account.patchMe` | `write({ send, commit })` + `resultOf` |
 | `self-account.setPref` | 寫入鏈內 `write({ optimistic, send: PATCH, commit: applyMe, onFailure: 'resync' })`;PATCH 尾流首次入帳。寫前水合失敗仍是先 `gate.refresh()`(`resynced`),再失敗才單鍵回滾 |
-| `mobile-admin.markOrderPaid` | `changeOrderStatus` 注入 `updateOrderStatus`,包 `opsGate.write({ send, commit: applyStatusChange })` + `resultOf`;錯誤仍交給 `changeOrderStatus` 的分類器 |
+| `mobile-admin.markOrderPaid` | FE-7 時遷成 `opsGate.write({ send, commit: applyStatusChange })` + `resultOf`;**W-6 已刪**(§9),`opsGate.write()` 此後沒有 production 呼叫者 |
 | `mobile-admin.markMessageRead(id, ack)` | `messagesGate.write({ send: await ack(false 則拋), commit: 本地標已讀 })`;`MessageThread` 把 `badgeCleared` 直接交進來,手寫的身分核對與 `authStore`/`sessionIdentity` import 刪除 |
 
 不動:ops 的 create/save(寫後無條件重抓,不走 `write`)、`saveSelfAccount` 本體、`requireCoach`。production
@@ -162,7 +162,8 @@ mutator)。語意:
   mock 時暫時換一個 fakeRouter 實作,結束還原),讓 session 閘門經 production 的身分改變路徑重置。放在
   `beforeEach` 最前面。
 - store 測試只留**接線**:每個 mutator 一條「用對了哪個政策」的釘(markRead 的 PATCH 未 settle 擋住 refresh、
-  markOrderPaid/markMessageRead 在飛 hydrate 時不被舊快照蓋、cancelLeaveRequest 未水合會和解成完整清單……),
+  markMessageRead 在飛 hydrate 時不被舊快照蓋(FE-9 時另有一條 markOrderPaid 的,隨 W-6 刪除)、
+  cancelLeaveRequest 未水合會和解成完整清單……),
   只斷言可觀察結果。協定層重複的案例刪除(見下方測試表)。`member/checkout-api.test.ts` 依主題拆進
   `waitlist.test.ts`/`points.test.ts`/`subscriptions.test.ts`/`notifications.test.ts`。
 - F8a 的四個測試收緊併入:記帳順序 pin 改精確次數、清帳同拍新尾流計數、resync 在飛期間 reset 後才 reject → stale、
@@ -325,8 +326,6 @@ mutator)。語意:
     `client.test.ts` in-flight 測試未釘 fetch 次數與 `getAccess()` 狀態。
 - **點數**:`seed-fixtures.ts` 的 desc「管理員點數調整」與 production「會員點數調整」不一致;`admin_adjust` 與 default
   共用文案,未知的新 reason 會顯示「會員點數調整」(窮舉 `never` 檢查可解)(FE-1)。
-- **`markOrderPaid` 的 commit 重複 `res.status as OrderStatus` 轉型**(`changeOrderStatus` 內也有一份);替代方案是從
-  `send` 丟 outcome 物件(FE-7)。
 - **`track`/`bump` 各只有 `write` 一個呼叫者**,保留具名步驟因為記帳順序讀起來更清楚(FE-8)。
 - **`setPref`/教練 `CoachNotFound` 重試/序列化測試保留**(模組專屬行為,非閘門協定),若審查要刪是各自獨立的區塊(FE-9)。
 - **`mobile-admin/stores.test.ts` fresh-import 測試標題殘留「、」**已於 `56eb88c` 修正;`tsc --noUnusedLocals` 在
@@ -358,12 +357,12 @@ mutator)。語意:
 | `0017` :61-64、:283、`0025` :111 | `reset()` = `gate.reset()` + 重置 `reconcileChain`/`writeChain`;工廠內宣告順序 `reconcileChain` 先於訂閱 | 和解鏈在 `gate.reset()` 內清;session 的 `reset()` 只再重置 `writeChain` |
 | `0018` §7(:239 起)、:242-248、:339 | C7 遞延:兩族 mutator 的 mutate 語意是否同構待確認 | **C7 結案**(§5):同一動詞的兩條路徑,差異在參數 |
 | `0020` :20、:24、:111-114、:200-201 | `queueReconcile`「零 diff」,住 `session-gate.ts`,檢查軸是 session 世代 | 該函式搬進 `hydration-gate.ts`,軸是 `resetEpoch`;`mutate()`/和解鏈已併入 `write()` |
-| `0020` :59、:231、:259、:274、:246 | 「寫入 → `markMutated` → `await refreshOps()`」;「遞增仍只走 `markMutated()`」;`opsGate.markMutated()` | 「`await write()` → `await refresh`」判準反例成立;遞增經 `write()` 內的 `bump()`;`markOrderPaid` 走 `opsGate.write()` |
+| `0020` :59、:231、:259、:274、:246 | 「寫入 → `markMutated` → `await refreshOps()`」;「遞增仍只走 `markMutated()`」;`opsGate.markMutated()` | 「`await write()` → `await refresh`」判準反例成立;遞增經 `write()` 內的 `bump()`;`markOrderPaid` 曾走 `opsGate.write()`,W-6 已刪(§9),ops 寫入動詞全是寫後無條件重抓 |
 | `0021` :9-10、:19、:66-67、:73 | 「先寫 store + `markMutated()`」;`markMutated(tail?: Promise<unknown>)` 介面,「呼叫端義務:`tail` 必須是純網路尾流」 | 樂觀 `write()` 同序做;尾流就是 `send()` 的 promise,commit/復原在尾流之外(義務成為型別形狀) |
 | `0021` :150、:153、:273、:285-286 | 機制表 `markMutated(tail?)`;呼叫點「4 點」`markMutated(patch)`/`markMutated(settled)`;`then(done, done)` 在 `markMutated` | `then(done, done)` 在 `write()` 的尾流入帳;入帳呼叫點是 `markRead`、`markAllRead`、`setPref` 三處(經 `write`) |
-| `0021` :160-162、:229-230、:266、:296-298、:320-321 | 「`session-gate.mutate()` 本體零 diff,那四支刻意不走 `mutate()`」;`markOrderPaid`/`markMessageRead` 無尾流、`markMutated()` 在 PATCH 落定後 | `mutate` 已退役;兩者仍不入尾流帳,但走非樂觀 `write()`(`commit` 在 `send` 落定後),無 `markMutated()` |
+| `0021` :160-162、:229-230、:266、:296-298、:320-321 | 「`session-gate.mutate()` 本體零 diff,那四支刻意不走 `mutate()`」;`markOrderPaid`/`markMessageRead` 無尾流、`markMutated()` 在 PATCH 落定後 | `mutate` 已退役;`markMessageRead` 仍不入尾流帳,走非樂觀 `write()`(`commit` 在 `send` 落定後),無 `markMutated()`;`markOrderPaid` W-6 已刪(§9) |
 | `0022` :26 | 三個 mobile 表單的 `onSave(body, isNew)` 簽章不變,由頁面分派 | `onCreate`/`onUpdate`,見 §4 與 `0023` R17 增補 |
-| `0022` :31、:35、:303 | 寫入動詞「不呼叫 `markMutated()`」;`markOrderPaid` 最後 `opsGate.markMutated()` | 寫入動詞不走 `write()`(仍是寫後無條件重抓);`markOrderPaid` 走 `opsGate.write()` |
+| `0022` :31、:35、:303 | 寫入動詞「不呼叫 `markMutated()`」;`markOrderPaid` 最後 `opsGate.markMutated()` | 寫入動詞不走 `write()`(仍是寫後無條件重抓);`markOrderPaid` 曾走 `opsGate.write()`,W-6 已刪(§9) |
 | `0022` :181 | 「`PT_TYPE` 雖零消費者仍保留」 | member `PT_TYPE` 保留(`/member/points` 使用,補 `adjust`/`refund`);**mobile `PT_TYPE` 已刪**(§2) |
 | `0023` :53、:191、:433 | `gate.mutate(PATCH, …)`(本人帳號資料、教練設定) | `gate.write({ send, commit })`(`patchMe`);教練 `saveSettings` 本就不走 gate |
 | `0023` :150、:200 | `changed` 才 `applyStatusChange` + `markMutated()`;`markMessageRead → markMutated` 不變 | 都是 `write()` 的 `commit`(§5) |
@@ -390,7 +389,7 @@ mutator)。語意:
 | `0024`/`0025` bug #3 pin(load 在飛 → 旗標翻回 false) | `hydration-gate.test.ts`、`load-gate.test.ts` | `markMutated(); invalidate()` 手動模擬失敗和解 | 未水合 `write()` + 和解 GET reject(真的和解失敗) |
 | `0025` `reset…ForTests` 與 `*Hydrated.set(true)` | member/mobile/mobile-admin 各 store 與頁面測試、layout 測試 | `reset…ForTests()`、`*Hydrated` 斷言 | `resetSessionStores()`;`*Hydrated` 斷言刪除,改斷言可觀察結果 |
 | `0024` MessageThread 身分守衛 | `MessageThread.test.ts` → `mobile-admin/stores.test.ts` | 元件層的「身分切換 guard」 | store 層「ack 落地前換身分 → 不碰新身分的 store」(對 `markMessageRead` 做過 mutation 檢查:繞過閘門即紅);元件測試改釘接線 `markMessageRead('conv-1', badgeCleared)` |
-| `0023` `markOrderPaid` 與 `opsHydrated` | `mobile-admin/stores.test.ts` | 同步 seed + `opsHydrated` | 先 `hydrateOps()`;「mutation 勝出」兩支把和解 GET 當 server 真值 |
+| `0023` `markOrderPaid` 與 `opsHydrated` | `mobile-admin/stores.test.ts` | 同步 seed + `opsHydrated` | FE-9 改成先 `hydrateOps()`、「mutation 勝出」兩支把和解 GET 當 server 真值;這兩支已隨 `markOrderPaid` 在 W-6 刪除(§9) |
 
 對象已退役、隨之刪除的釘:點名「遲到」的 `hadLate` 案例與桌面 late toast 案例(`attendance-controller.test`、`attendance-tally.test`、`routes/coach/attendance/page.test`,FE-4;late fixture 改 absent,沒有任何 ADR 點名它們)。FE-9(協定層已各驗一次):`coach/api.test` 的 getter-dedupe/concurrent-share/A→B 身分(58 → 55)、
 `leave-requests-api.test`(22 → 14)、`notifications.test`(15 → 9,含 1 支搬入的 mapping)、`mobile-admin/stores.test`
