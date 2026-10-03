@@ -29,6 +29,10 @@ const PAID = ORDERS[0];
 const COUNTS = { all: 3, pending: 1, refunded: 1 };
 const PAID_REVENUE = 4800;
 
+/** StatCard 的 value 文字(label 前一個兄弟節點)，用來精確斷言 KPI，不靠子字串。 */
+const kpi = (container: HTMLElement, label: string) =>
+	[...container.querySelectorAll('div')].find((d) => d.textContent === label)?.previousElementSibling?.textContent?.trim();
+
 const page = (n: number, total = ORDERS.length) => ({ orders: ORDERS, total, page: n, per_page: 20 });
 
 const route = (overrides: Record<string, unknown> = {}) =>
@@ -65,8 +69,7 @@ describe('orders +page', () => {
 		expect(container.textContent).toContain(COUNTS.pending + ' 筆');
 		expect(container.textContent).toContain('本頁訂單');
 		expect(container.textContent).toContain(COUNTS.all + ' 筆');
-		expect(container.textContent).toContain('退款');
-		expect(container.textContent).toContain(COUNTS.refunded + ' 筆');
+		expect(kpi(container, '退款')).toBe(COUNTS.refunded + ' 筆');
 	});
 
 	it('renders real order rows with a StatusBadge and fmtNT amount', async () => {
@@ -97,7 +100,7 @@ describe('orders +page — 變更狀態接真 API（Task 8 piece 2：PATCH /orde
 		expect(apiBody(`PATCH /orders/${target.id}/status`)).toEqual({ status: 'refunded' });
 
 		await vi.waitFor(() => {
-			expect(container.textContent).toContain(COUNTS.refunded + 1 + ' 筆'); // 退款 KPI +1
+			expect(kpi(container, '退款')).toBe(COUNTS.refunded + 1 + ' 筆'); // 退款 KPI +1
 		});
 	});
 
