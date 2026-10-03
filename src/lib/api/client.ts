@@ -133,14 +133,19 @@ export function onSessionExpired(fn: () => void): void {
  *  (another tab logged out while the request was in flight). If another tab or
  *  a fresh login replaced it, that newer session stands. This is the single
  *  place tokens are cleared on a failed refresh, and the single place
- *  onSessionExpired fires. */
+ *  onSessionExpired fires. A success is compare-and-set the same way: the
+ *  rotated pair is stored only if the stored refresh token is still the one
+ *  sent; otherwise (a newer login, or a logout, landed during the flight) the
+ *  result is dropped and false returned — the newer tokens win. */
 async function performRefresh(): Promise<boolean> {
   const sent = getRefresh();
   const outcome: RefreshOutcome = sent ? await exchangeRefreshToken(sent) : 'rejected';
-  if (outcome === 'ok') {
+  const now = getRefresh();
+  if (typeof outcome === 'object') {
+    if (now !== sent) return false;
+    setTokens(outcome.access_token, outcome.refresh_token);
     return true;
   }
-  const now = getRefresh();
   if (outcome === 'rejected' && (now === sent || now === null)) {
     clearTokens();
     sessionExpiredListeners.forEach((fn) => fn());
@@ -148,17 +153,18 @@ async function performRefresh(): Promise<boolean> {
   return false;
 }
 
-/** `rejected`: the backend answered 400/401/403 (token invalid/revoked/expired).
- *  `unavailable`: network error, any other non-2xx (408, 429 rate limit, 5xx…),
- *  or an unreadable success body. */
-type RefreshOutcome = 'ok' | 'rejected' | 'unavailable';
+/** The rotated pair on success. `rejected`: the backend answered 400/401/403
+ *  (token invalid/revoked/expired). `unavailable`: network error, any other
+ *  non-2xx (408, 429 rate limit, 5xx…), or an unreadable success body. */
+type RefreshOutcome = RotatedPair | 'rejected' | 'unavailable';
+type RotatedPair = Pick<AuthResponse, 'access_token' | 'refresh_token'>;
 
 /** The only /auth/refresh statuses that are a verdict on the token itself. A 429
  *  (the strict auth rate-limit bucket) or 408 says nothing about the token, so it
  *  must not log every tab out. */
 const TOKEN_REJECTED_STATUSES = new Set([400, 401, 403]);
 
-/** POST /auth/refresh; stores the rotated pair on success. Transport only — never clears. */
+/** POST /auth/refresh. Transport only — never stores or clears tokens. */
 async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
   try {
     const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
@@ -169,9 +175,8 @@ async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
     if (!response.ok) {
       return TOKEN_REJECTED_STATUSES.has(response.status) ? 'rejected' : 'unavailable';
     }
-    const data = (await response.json()) as Pick<AuthResponse, 'access_token' | 'refresh_token'>;
-    setTokens(data.access_token, data.refresh_token);
-    return 'ok';
+    const data = (await response.json()) as RotatedPair;
+    return { access_token: data.access_token, refresh_token: data.refresh_token };
   } catch {
     return 'unavailable';
   }

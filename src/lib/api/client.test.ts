@@ -495,4 +495,22 @@ describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
     expect(getRefresh()).toBeNull();
     expect(expired).toHaveBeenCalledTimes(1);
   });
+
+  it('a fresh login stored while a successful POST was in flight wins: the stale rotated pair is dropped', async () => {
+    setTokens('expired-access', 'refresh-stale');
+    vi.stubGlobal('navigator', {});
+    const fetchMock = vi.fn(async () => {
+      setTokens('login-access', 'refresh-login'); // a new login lands mid-flight
+      return jsonResponse({ access_token: 'stale-access', refresh_token: 'stale-refresh' });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getRefresh()).toBe('refresh-login');
+    expect(getAccess()).toBe('login-access');
+    expect(expired).not.toHaveBeenCalled();
+  });
 });
