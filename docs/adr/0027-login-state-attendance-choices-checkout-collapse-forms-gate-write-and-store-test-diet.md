@@ -310,7 +310,6 @@ mutator)。語意:
 
 ## 已知、刻意遞延
 
-- **mobile-admin 教練點名載入骨架仍畫 4 格**(摘要格已是 3 欄)(FE-4)。
 - **購物車頁訂閱暖身只在 `onMount` 且已登入時跑**:auth 晚水合則先顯示未過濾總額;`CartDropdown` 是 reactive 不受影響。
   購物車頁的「項目總數」仍計全部行(FE-5)。
 - **`ChargeableLine` brand 的 `it.skip` 編譯期反例隨 `submitOrder` 刪除**;`checkout-math.test.ts` 仍有反例(FE-5)。

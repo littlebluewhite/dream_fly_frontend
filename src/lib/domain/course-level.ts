@@ -10,6 +10,7 @@
  * import，不再各自分歧；建課/篩選/badge 全走這 5 級。 */
 
 import type { Tone } from '$lib/api/wire';
+import type { CourseLevel } from '$lib/api/generated';
 
 /** 前端顯示用的 5 級繁中標籤（單一 source of truth，供 admin/coach/member 共用）。 */
 export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
@@ -18,14 +19,16 @@ export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 export const LEVELS: Level[] = ['啟蒙', '入門', '基礎', '進階', '選手'];
 
 /** 後端 course_level enum → 繁中標籤。未知值由呼叫端自行決定 fallback（例如
- *  admin 的 mapCourse() 用 `?? '基礎'`），這裡不預設 fallback，維持純對照表。 */
+ *  admin 的 mapCourse() 用 `?? '基礎'`），這裡不預設 fallback，維持純對照表。
+ *  對外型別維持 string 鍵（讀者傳 wire 字串）；字面以 `satisfies` 對產生的 CourseLevel
+ *  窮舉——後端新增等級時 bindings 同步後這裡是編譯錯誤。 */
 export const COURSE_LEVEL_LABEL: Record<string, Level> = {
 	foundation: '啟蒙',
 	beginner: '入門',
 	intermediate: '基礎',
 	advanced: '進階',
 	elite: '選手'
-};
+} satisfies Record<CourseLevel, Level>;
 
 /** 5 級課程分級 → Badge tone。批次 1 W2a 單源收斂：production `src` 內原有 4 份
  *  facade 複本（admin/data.ts、mobile-admin/data.ts、member/data.ts、mobile/data.ts）

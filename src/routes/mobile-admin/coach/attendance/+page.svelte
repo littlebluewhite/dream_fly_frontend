@@ -145,7 +145,7 @@
 <LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
   <div class="df-scroll df-view" data-testid="attendance-skeleton" style="padding:16px; display:flex; flex-direction:column; gap:14px;" slot="loading">
     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:9px;">
-      {#each [0, 1, 2, 3] as i (i)}
+      {#each [0, 1, 2] as i (i)}
         <SkelCard><Skeleton w="100%" h={62} r={13} /></SkelCard>
       {/each}
     </div>

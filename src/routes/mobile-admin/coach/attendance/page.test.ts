@@ -66,7 +66,10 @@ describe('mobile-admin/coach/attendance 頁', () => {
 			fakeRouter({ ...defaultRoutes(), 'GET /sessions/s1/roster': () => new Promise(() => {}), 'GET /sessions/s2/roster': () => new Promise(() => {}) })
 		);
 		const { container } = render(AttendancePage);
-		expect(container.querySelector('[data-testid="attendance-skeleton"]')).not.toBeNull();
+		const skeleton = container.querySelector('[data-testid="attendance-skeleton"]');
+		expect(skeleton).not.toBeNull();
+		// 摘要格是 3 欄,骨架格數與之一致(FE-4 遺留的 4 格)
+		expect(skeleton!.firstElementChild!.children).toHaveLength(3);
 	});
 
 	it('async 載入後顯示第一堂課的名冊(相異 fixture，真 GET /sessions/today × roster)', async () => {
