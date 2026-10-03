@@ -8,6 +8,7 @@ import type {
 	AdminLeaveRequestResponse,
 	AdminOrderSummary,
 	AdminReportResponse,
+	CoachResponse,
 	CouponResponse,
 	InquiryResponse,
 	LeaveRequestResponse,
@@ -17,6 +18,7 @@ import type {
 	ProductResponse,
 	SettingsResponse,
 	TodaySessionResponse,
+	UserResponse,
 	VenueResponse
 } from '$lib/api/generated';
 
@@ -207,5 +209,39 @@ export const todaySession = (over: Partial<TodaySessionResponse> = {}): TodaySes
 	enrolled_count: 0,
 	venue: null,
 	status: 'upcoming',
+	...over
+});
+
+export const coachResponse = (over: Partial<CoachResponse> = {}): CoachResponse => ({
+	id: 'coach-1',
+	user_id: 'user-1',
+	name: '林教練',
+	title: '體操教練',
+	bio: null,
+	experience: null,
+	specialties: [],
+	certifications: [],
+	is_active: true,
+	display_order: 0,
+	slug: null,
+	photo_url: null,
+	created_at: '',
+	...over
+});
+
+export const userResponse = (over: Partial<UserResponse> = {}): UserResponse => ({
+	id: 'user-1',
+	email: 'a@b.com',
+	name: '王小明',
+	phone: null,
+	phone_verified: false,
+	avatar_url: null,
+	is_active: true,
+	last_login: null,
+	created_at: '2026-01-15T00:00:00Z',
+	roles: ['member'],
+	points_balance: 0,
+	preferences: null,
+	birth_date: null,
 	...over
 });
