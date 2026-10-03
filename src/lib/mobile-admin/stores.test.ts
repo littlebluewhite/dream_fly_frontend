@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { ApiError, api } from '$lib/api/client';
+import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { resetSessionStores } from '$lib/testing/session-reset';
@@ -15,7 +15,6 @@ import {
 	coachUnreadCount,
 	adminNotifs,
 	orders,
-	markOrderPaid,
 	messages,
 	markMessageRead,
 	coachMsgUnread,
@@ -37,22 +36,21 @@ import {
 } from './stores';
 import { ADMIN_NOTIFS } from './data';
 import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
-import { orderResponse } from '$lib/testing/wire-fixtures';
 import { MESSAGES, COACHES } from '$lib/testing/seed-fixtures';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
 import { getOpsCollections, getMessages, type OpsCollections } from './api';
 // R15 Task 3b(候選 轉手退役)：createMember/updateMember/createCourse/updateCourse/
-// createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
+// createCoach/updateCoach 原經 mobile-admin/api.ts 零映射
 // re-export 轉手，已退役——stores.ts 改直接向擁有者模組 $lib/admin/api 取用，這裡的
 // mock 目標跟著換。
-import { updateOrderStatus, createMember, updateMember, createCourse, updateCourse, createCoach, updateCoach } from '$lib/admin/api';
+import { createMember, updateMember, createCourse, updateCourse, createCoach, updateCoach } from '$lib/admin/api';
 
 // Task 20：getOpsCollections()/getMessages() 現委派桌面 admin/coach seams 真呼叫
 // 後端——這裡的測試關心的是 store 自己的水合守衛/樂觀更新機制(與資料來源無關)，
 // 故明確 mock 這三支(而非 importOriginal passthrough)，預設解析回舊測試假設的
 // MEMBERS/CLASSES/COACHES/ORDERS/MESSAGES 靜態陣列；個別測試仍可用
 // mockResolvedValueOnce/mockRejectedValueOnce 覆寫單次行為(race 測試等)。
-// R12 Task 3：ops store 自有寫入動詞(addMember/saveCourse/markOrderPaid…)內部呼叫的
+// R12 Task 3：ops store 自有寫入動詞(addMember/saveCourse…)內部呼叫的
 // 寫入端點一併 mock——否則 passthrough 會打到真 api()。
 // 真 authStore 的 login/logout 走 $lib/api/client 的 api()——只替換這一支(C6 換帳號測試用)。
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -73,7 +71,6 @@ vi.mock('$lib/admin/api', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/admin/api')>();
 	return {
 		...actual,
-		updateOrderStatus: vi.fn(),
 		createMember: vi.fn(),
 		updateMember: vi.fn(),
 		createCourse: vi.fn(),
@@ -196,88 +193,6 @@ describe('openCoachNotif (教練四頁的 bell icon 共用)', () => {
 		expect(get(coachUnreadCount)).toBe(0);
 		expect(get(overlay).sheet).toBe(null);
 		coachNotifs.set(before); // restore the shared singleton for other tests
-	});
-});
-
-describe('markOrderPaid', () => {
-	// Regression: 標記已付款 used to only toast, leaving the order pending so the
-	// orders KPIs (revenue / 待付款 count) and the admin home banner never updated.
-	// R12 Task 3:先寫後改——PATCH 成功才經 applyStatusChange(桌面同一支)套回 store。
-	// W-6:paidAt 取 PATCH 回應的真實 paid_at(同 mapAdminOrder 的 paidAtLabel),不再冒用訂單日期。
-	it('PATCH 成功 → 該筆翻為 paid、paidAt 為回應的 paid_at,且不重抓(無 refreshOps)', async () => {
-		// 誠實開機(R15 候選 F-3):$orders 開機為 `[]`,經真水合鋪含 pending 訂單的 fixture。
-		// R17:write() 對寫入前未水合會排和解重抓,本釘的前提是已水合(訂單頁的真實情境)。
-		resetOpsForTests();
-		await hydrateOps();
-		const pending = get(orders).find((o) => o.status === 'pending');
-		expect(pending, 'fixture should contain a pending order').toBeTruthy();
-		const pendingBefore = get(orders).filter((o) => o.status === 'pending').length;
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce(
-			orderResponse({ id: pending!.orderId, order_number: pending!.id, status: 'paid', paid_at: '2026-06-09T01:00:00Z' })
-		);
-		vi.mocked(getOpsCollections).mockClear();
-
-		await markOrderPaid(pending!);
-
-		expect(updateOrderStatus).toHaveBeenCalledWith(pending!.orderId, 'paid');
-		const after = get(orders).find((o) => o.id === pending!.id)!;
-		expect(after.status).toBe('paid');
-		expect(after.paidAt).toBe('2026-06-09');
-		expect(get(orders).filter((o) => o.status === 'pending')).toHaveLength(pendingBefore - 1);
-		expect(getOpsCollections).not.toHaveBeenCalled();
-		resetOpsForTests();
-	});
-
-	// R13 Task 5(C4):markOrderPaid 改共用 changeOrderStatus,PATCH 失敗不再 throw
-	// ——回傳 illegalTransition(400,已對過後端:非法轉換/並發衝突一律 400),
-	// store 不動(同舊行為的「不動」語意,只是不再用 throw 表達)。
-	it('PATCH 400 → 回傳 illegalTransition,store 不動', async () => {
-		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		vi.mocked(updateOrderStatus).mockRejectedValueOnce(new ApiError(400, 'cannot transition order'));
-		resetOpsForTests();
-		orders.set(ORDERS);
-
-		const outcome = await markOrderPaid(pending);
-
-		expect(outcome).toEqual({ kind: 'illegalTransition' });
-		expect(get(orders)).toEqual(ORDERS);
-		resetOpsForTests();
-	});
-
-	it('store 以 server 回的 status 為準(不硬寫 paid)', async () => {
-		resetOpsForTests();
-		await hydrateOps(); // R17:已水合前提(未水合會排和解重抓)
-		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce(orderResponse({ id: pending.orderId, order_number: pending.id, status: 'processing' }));
-
-		await markOrderPaid(pending);
-
-		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('processing');
-		resetOpsForTests();
-	});
-});
-
-describe('markOrderPaid 的閘門接線', () => {
-	// 接線釘(只斷言可觀察結果,不碰閘門內部):若 markOrderPaid 繞過 opsGate.write()(直接 await PATCH
-	// 再寫 store),水合在飛期間帶回的舊快照會把剛標記的付款狀態蓋掉。閘門協定本身住 hydration-gate.test.ts。
-	it('hydrateOps() 在飛期間 markOrderPaid → 舊快照不蓋掉已付款,且有一次和解重抓', async () => {
-		resetOpsForTests();
-		const d = createDeferred<OpsCollections>();
-		const pending = ORDERS.find((o) => o.status === 'pending')!;
-		const paidOrders = ORDERS.map((o) => (o.id === pending.id ? { ...o, status: 'paid' as const, paidAt: '2026-06-08' } : o));
-		vi.mocked(getOpsCollections).mockClear();
-		vi.mocked(getOpsCollections).mockReturnValueOnce(d.promise).mockResolvedValueOnce(opsFixture({ orders: paidOrders }));
-		vi.mocked(updateOrderStatus).mockResolvedValueOnce(orderResponse({ id: pending.orderId, order_number: pending.id, status: 'paid' }));
-
-		const hydrating = hydrateOps();
-		await markOrderPaid(pending);
-		d.resolve(opsFixture()); // 舊快照:該筆仍 pending
-		await hydrating;
-		await new Promise((r) => setTimeout(r, 0)); // 和解重抓收束
-
-		expect(get(orders).find((o) => o.id === pending.id)?.status).toBe('paid');
-		expect(getOpsCollections).toHaveBeenCalledTimes(2); // 在飛的水合 + 和解重抓
-		resetOpsForTests();
 	});
 });
 

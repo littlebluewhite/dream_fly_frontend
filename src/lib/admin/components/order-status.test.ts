@@ -63,8 +63,8 @@ describe('revenueTotal — 按 isRevenueStatus 加總（取代 paidRevenue，含
 });
 
 describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', () => {
-	it('pending → paid | cancelled', () => {
-		expect(legalNextStatuses('pending')).toEqual(['paid', 'cancelled']);
+	it('pending → cancelled only（後端 BE-3 拒絕待付款→已付款）', () => {
+		expect(legalNextStatuses('pending')).toEqual(['cancelled']);
 	});
 
 	it('paid → processing | refunded | cancelled', () => {

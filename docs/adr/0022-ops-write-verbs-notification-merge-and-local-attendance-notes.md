@@ -380,3 +380,7 @@ sheet)與 toast 文案仍留呼叫端,本篇候選 04 的這句話不變。
   `opsGate.write({ send, commit })` 的 `send`(仍不入尾流帳,非樂觀)。:303 同。
 - **:181 的「`PT_TYPE` 雖零消費者仍保留」**:member `PT_TYPE` 保留(會員點數頁使用,補了 `adjust`/`refund`);
   **mobile 的 `PT_TYPE` 已刪**(`0027` §2)。
+
+## 增補(2026-10-03,W-6 修正 1)
+
+mobile-admin「標記已付款」(`markOrderPaid`)已移除、`OrderSheet` 改唯讀:後端 BE-3 起拒絕待付款→已付款(400),桌面 `LEGAL_NEXT` 的 pending 只剩 cancelled(詳見 `0027`)。

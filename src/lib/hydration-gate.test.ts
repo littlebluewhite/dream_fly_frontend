@@ -132,7 +132,7 @@ describe('createHydrationGate', () => {
 
 	/* R10 第四決策點——世代穩定重抓(fetchGenStable)。判準是「refresh **進場之後**才發生
 	 * 的 mutation」:進場捕捉世代、落地比對世代,**不看旗標當下值**——否則「await write()
-	 * → refresh」這個正常序列(mobile-admin markOrderPaid → await refreshOps)
+	 * → refresh」這個正常序列(寫入動詞 await write() 後再 await refresh)
 	 * 會被誤丟。與 hydrate 的不對稱是協定本體:hydrate 丟棄了事(本地即真相),refresh 是
 	 * 顯式新鮮度、丟棄之後必須補抓。 */
 	it('世代穩定重抓:refresh() in-flight 期間 write() 落地 → 舊快照丟棄並原地重抓,只套用重抓那份(fetch×2)', async () => {
@@ -405,7 +405,7 @@ describe('createHydrationGate', () => {
 		await gate.hydrate();
 		fetch.mockClear();
 
-		await landWrite(gate); // mobile-admin markOrderPaid(先寫後改,PATCH 已落定才宣告)等:無網路尾流
+		await landWrite(gate); // mobile-admin markMessageRead(先寫後改,ack 已落定才宣告)等:無網路尾流
 		const p = gate.refresh();
 
 		expect(fetch).toHaveBeenCalledTimes(1); // 尚未 await 就已出發

@@ -352,7 +352,7 @@ account's `setPref` (optimistic PATCH, `onFailure: 'resync'`), which book their 
 flag needed) discards a response that resolves after the page unmounts.
 
 Mobile-admin's ops collections and messages are store-owned: the fetch/apply/guard lifecycle lives in
-`stores.ts`'s `opsGate`/`messagesGate`, because several mutators (`markOrderPaid`/`markMessageRead`) flip
+`stores.ts`'s `opsGate`/`messagesGate`, because a mutator (`markMessageRead`) flips
 the guard true (a mutation *is* the session's source of truth) and none of them is "the page". The pages
 spread the gate's own entry pack — `createLoadGate({ ...opsPageEntry })`/
 `createLoadGate({ ...messagesPageEntry })` — so the store write goes through the source's `load` closure
@@ -372,12 +372,9 @@ outcome) and otherwise awaits the refetch before resolving, so a caller's succes
 with the updated list; a failed refetch after a successful write is only `console.error`ed. There's
 deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `docs/adr/0012`).
 "Unconditional" describes the refetch *call*, nothing guards it; what it *applies* is generation-stable,
-see `docs/adr/0020`. `markOrderPaid(order)` is the one write that doesn't refetch: it goes through
-`order-status.ts`'s `changeOrderStatus` (`PATCH /orders/{id}/status`) and *returns* its outcome instead
-of throwing — only `changed` touches the store, applying the server's status to `$orders` with desktop's
-`applyStatusChange()` (收款時間 comes from the response's real `paid_at` via `paidAtLabel`, the same helper
-`mapAdminOrder` uses on read) — the PATCH is the `send` of an `opsGate.write()`
-and `applyStatusChange` is its `commit`. The same gate also
+see `docs/adr/0020`. Mobile-admin orders are read-only: 「標記已付款」(`markOrderPaid`) was removed in W-6
+fix 1 because the backend rejects pending→paid since BE-3, so no ops mutator goes through `opsGate.write()`
+any more (desktop's `LEGAL_NEXT` offers pending → cancelled only). The same gate also
 publishes `opsPages` (backend `total`/`perPage` for the page-1-only members/classes/orders lists), which
 the three pages show as header totals plus a `searchCapHint()` line once `total > perPage`.
 
@@ -455,16 +452,16 @@ place, independent of any single page's own load-gate?
   `stores.ts`, not the page; the pages build their load-gate from the gate's entry pack
   (`opsPageEntry`/`messagesPageEntry`), the same wiring the notifications pages use. The messages gate is
   a `createSessionGate`, so a second coach logging in doesn't see the first one's conversation list; the
-  ops gate is a plain `createHydrationGate` because ops is organisation-wide data. Several mutators
-  (`markOrderPaid`/`markMessageRead`) can flip the guard, and none of them is "the page", so the
+  ops gate is a plain `createHydrationGate` because ops is organisation-wide data. A mutator
+  (`markMessageRead`) can flip the guard, and it is not "the page", so the
   fetch/apply/guard lifecycle has to live where the mutators do: the full `createHydrationGate` factory,
   store-owned. The store-level `refreshOps()` gets the generation-stable refetch for free — the
   store-owned gate holds the mutation generation itself; "`await write()` → `await refreshOps()`"
   is a single fetch whose snapshot applies (`docs/adr/0020`'s conservation pin), and the pages' retry
-  reaches the same ledger only indirectly, through `source.refresh(isCurrent)`. Neither mutator enrols a
-  settle tail in the fifth decision point, and neither needs to: both are non-optimistic `write()`s, so
+  reaches the same ledger only indirectly, through `source.refresh(isCurrent)`. The mutator enrols no
+  settle tail in the fifth decision point, and doesn't need to: it is a non-optimistic `write()`, so
   the store is touched (`commit`) and the generation bumped only after `send` has settled.
-  `markOrderPaid` `PATCH`es first (see above); `markMessageRead(id, ack)` takes the controller's
+  `markMessageRead(id, ack)` takes the controller's
   `badgeCleared` promise as the write's `send` — mobile-admin's `MessageThread` calls it immediately
   and the gate waits for the ack; only `true` flips the local row (a failed `markRead` leaves the
   thread unread), and an identity change before the ack lands makes the write `stale` so the new

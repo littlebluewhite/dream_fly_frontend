@@ -1,24 +1,16 @@
 <script lang="ts">
-  /* 訂單明細 sheet。admin.jsx OrderSheet (346)。
-   * Task 20：標記已付款改真打 PATCH /orders/{id}/status。R12 起整段(用 orderId
-   * ——真實後端 UUID，非顯示用的 order_number——PATCH、成功後以 applyStatusChange
-   * 套回 $orders)收進 store 的 markOrderPaid(order)；本頁只留 saving 防連點與
-   * toast / 錯誤文案表。
+  /* 訂單明細 sheet。admin.jsx OrderSheet (346)。詳情欄位列共用 domain/order-detail.ts 的
+   * orderDetailRows（與桌面 OrderDialog 共用同一份查表）。
    *
-   * R13 Task 5(C4)：markOrderPaid 改回傳 changeOrderStatus 的 outcome（不再
-   * throw）；詳情欄位列改共用 domain/order-detail.ts 的 orderDetailRows（與桌面
-   * OrderDialog 共用同一份查表）。舊碼把「並發衝突」文案掛在 409 上是判錯狀態
-   * 碼——已對過後端 update_order_status：非法轉換/並發衝突一律 400，改掛
-   * illegalTransition；409（pointsShortfall）是退款/取消補償撞點數不足，
-   * markOrderPaid 只會 pending→paid（無補償路徑），理論上打不到，仍給文案以求
-   * 判別完整、不留 unreachable 的 UI 空白。 */
+   * W-6 修正 1：唯讀明細。原「標記已付款」（markOrderPaid，PATCH pending→paid）已移除——
+   * 後端 BE-3 起拒絕待付款→已付款（400），執行期也不產生 pending 訂單（僅月度種子對照單，
+   * 只能取消，取消走桌面後台）。pending 列只留本地「發送催繳」提示。 */
   import Sheet from '$lib/components/mobile/Sheet.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import Button from '$lib/components/ui/Button.svelte';
-  import { toasts, markOrderPaid } from '$lib/mobile-admin/stores';
+  import { toasts } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
   import type { Order as OrderRow } from '$lib/admin/data';
-  import { apiErrorText } from '$lib/api/error-text';
   import { orderStatusBadge } from '$lib/api/wire';
   import { orderDetailRows } from '$lib/domain/order-detail';
 
@@ -27,13 +19,6 @@
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  let saving = false;
-
-  // PATCH /orders/{id}/status:403 權限 → 繁中文案查表(apiErrorText)，其餘通用訊息。
-  const STATUS_ERROR_TEXT: Record<number, string> = {
-    403: '沒有權限執行此操作。'
-  };
-
   $: [tone, label] = (o ? orderStatusBadge(o.status) : ['neutral', '-']) as [Tone, string];
   $: rows = o ? orderDetailRows(o) : [];
 
@@ -41,26 +26,6 @@
     if (!o) return;
     toasts.notify('info', '已發送催繳', o.member + ' 將收到繳費提醒。');
     onClose();
-  }
-  async function markPaid() {
-    if (!o || saving) return;
-    const target = o;
-    saving = true;
-    try {
-      const outcome = await markOrderPaid(target);
-      if (outcome.kind === 'changed') {
-        toasts.notify('success', '已標記收款', target.id + ' · ' + fmtNT(target.amount) + ' 已入帳。');
-        onClose();
-      } else if (outcome.kind === 'illegalTransition') {
-        toasts.notify('error', '標記失敗', '訂單狀態已變更，請重新整理後再試。');
-      } else if (outcome.kind === 'pointsShortfall') {
-        toasts.notify('error', '標記失敗', '會員已使用本單回饋點數，餘額不足以扣回，無法退款或取消。');
-      } else {
-        toasts.notify('error', '標記失敗', apiErrorText(outcome.error, STATUS_ERROR_TEXT));
-      }
-    } finally {
-      saving = false;
-    }
   }
 </script>
 
@@ -95,7 +60,7 @@
         style="flex:1; height:48px; border-radius:12px; border:1.5px solid var(--df-border); background:#fff;
           color:var(--df-text-dark); font-size:14.5px; font-weight:700; cursor:pointer;"
       >發送催繳</button>
-      <Button variant="primary" disabled={saving} on:click={markPaid} style="flex:1;">{saving ? '處理中…' : '標記已付款'}</Button>
+      <Button variant="secondary" on:click={onClose} style="flex:1;">關閉</Button>
     {:else}
       <Button variant="secondary" fullWidth on:click={onClose}>關閉</Button>
     {/if}

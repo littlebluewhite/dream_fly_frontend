@@ -4,8 +4,8 @@
  * §3.10 狀態機 + PATCH 成功後套回working copy，行為逐字不變）；同批新增
  * isRevenueStatus（同後端 orders/model.rs 的 OrderStatus::is_revenue）與
  * changeOrderStatus，把「呼叫 PATCH /orders/{id}/status + 依 ApiError 狀態碼判
- * 別」收成一支，桌面 admin orders 頁與 mobile-admin markOrderPaid 共用同一份判
- * 別，不再各自維護、各自猜 400/409 語意。
+ * 別」收成一支，不再各自維護、各自猜 400/409 語意。W-6 修正 1 起唯一呼叫端是桌面 admin
+ * orders 頁（mobile-admin 的 markOrderPaid 已隨後端拒絕待付款→已付款移除）。
  *
  * 已對過 dream_fly_backend 的 update_order_status（orders/service.rs）：
  * - 非法轉換／並發衝突一律 400 —— `refund::decide_transition` 的
@@ -18,16 +18,17 @@
  * 衝突」文案掛在 409 上，正確應是 400）——本檔起兩端統一依真後端語意判別。
  *
  * 文案留呼叫端（ADR-0011「per-entity 知識留頁」精神）：本模組只回傳判別聯集，
- * 桌面 orders 頁與 mobile-admin OrderSheet 各自把 outcome 翻成繁中 toast。 */
+ * 由桌面 orders 頁把 outcome 翻成繁中 toast。 */
 import type { Order } from '$lib/admin/data';
 import { isoDate, type OrderStatus } from '$lib/api/wire';
 import type { OrderResponse } from '$lib/api/generated';
 import { ApiError } from '$lib/api/client';
 
 /** 契約 §3.10 訂單狀態機：目前狀態 → 合法的下一狀態清單（不含同狀態幂等）。
- * cancelled/refunded 無合法的下一狀態（終態），回傳空陣列。 */
+ * cancelled/refunded 無合法的下一狀態（終態），回傳空陣列。pending 只能取消——後端
+ * BE-3 起拒絕待付款→已付款（400；執行期不產生 pending，只有月度種子對照單）。 */
 const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
-	pending: ['paid', 'cancelled'],
+	pending: ['cancelled'],
 	paid: ['processing', 'refunded', 'cancelled'],
 	processing: ['completed', 'refunded'],
 	completed: ['refunded'],

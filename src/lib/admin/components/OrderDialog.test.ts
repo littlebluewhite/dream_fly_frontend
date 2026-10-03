@@ -97,12 +97,12 @@ describe('OrderDialog', () => {
 	/* Task 8 piece 2: 變更狀態 Select 只提供 legalNextStatuses(order.status)，讓 admin
 	 * 不會踩到後端狀態機的 400 非法轉換。 */
 	describe('變更狀態（legalNextStatuses 驅動）', () => {
-		it('a pending order offers exactly 已付款/已取消 and defaults to the first option', () => {
+		it('a pending order offers only 已取消 — 已付款 is gone (backend BE-3 rejects pending→paid)', () => {
 			const { getByLabelText } = render(OrderDialog, { order: pending });
 			const select = getByLabelText('變更狀態為') as HTMLSelectElement;
 			const labels = [...select.options].map((o) => o.textContent);
-			expect(labels).toEqual(['已付款', '已取消']);
-			expect(select.value).toBe('paid');
+			expect(labels).toEqual(['已取消']);
+			expect(select.value).toBe('cancelled');
 		});
 
 		it('a paid order offers 處理中/已退款/已取消 (3 legal transitions)', () => {
@@ -143,7 +143,7 @@ describe('OrderDialog', () => {
 
 			await rerender({ order: pending });
 
-			expect((getByLabelText('變更狀態為') as HTMLSelectElement).value).toBe('paid');
+			expect((getByLabelText('變更狀態為') as HTMLSelectElement).value).toBe('cancelled');
 		});
 
 		it('re-derives nextStatus after close/re-open, discarding the dirty selection', async () => {

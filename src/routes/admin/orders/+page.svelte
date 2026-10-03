@@ -9,8 +9,8 @@
    * working copy.
    *
    * R13 Task 5(C4)：變更狀態改共用 order-status.ts 的 changeOrderStatus——PATCH
-   * /orders/{id}/status 的呼叫 + ApiError 狀態碼判別收進該模組（與 mobile-admin
-   * markOrderPaid 共用同一份判別，不再各自維護 400/409 語意）。已對過後端
+   * /orders/{id}/status 的呼叫 + ApiError 狀態碼判別收進該模組（原與 mobile-admin
+   * markOrderPaid 共用；W-6 修正 1 移除後本頁是唯一呼叫端）。已對過後端
    * update_order_status：非法轉換/並發衝突一律 400（illegalTransition，
    * OrderDialog 只提供合法選項，理論上不會踩到，這裡是防禦性 fallback）；
    * 409（pointsShortfall）是退款/取消補償撞點數不足時才會發生；其餘（含 403）

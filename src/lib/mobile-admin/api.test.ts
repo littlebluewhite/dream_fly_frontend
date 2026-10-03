@@ -30,7 +30,6 @@ import { initialOf, isoDate, orderIdentity, taxFromGross } from '$lib/api/wire';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { mapMemberAccount, MEMBER_COLORS } from '$lib/admin/data';
 import { mapCourse } from '$lib/admin/api';
-import { paidAtLabel } from '$lib/admin/components/order-status';
 import { getMore, getCoachHome, getAdminHome, getOpsCollections, getMessages } from './api';
 import { PROFILES } from './data';
 
@@ -93,7 +92,7 @@ function expectedOrder(o: (typeof ORDERS_FIXTURE)[number], i: number) {
 		discount: o.coupon_code ?? '',
 		tax,
 		net,
-		paidAt: paidAtLabel(o.status, o.paid_at)
+		paidAt: '—（待付款）' // ORDERS_FIXTURE 唯一一筆是 pending、paid_at null
 	};
 }
 

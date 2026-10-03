@@ -13,7 +13,7 @@
 
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
-import { createHydrationGate, resultOf } from '$lib/hydration-gate';
+import { createHydrationGate } from '$lib/hydration-gate';
 import { createSessionGate } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
@@ -27,7 +27,7 @@ import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow, CoachForm
 import type { Coach } from '$lib/domain/coaches';
 import { getOpsCollections, getMessages, type OpsCollections, type OpsPages, type PageInfo } from './api';
 // R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
-// createCoach/updateCoach/updateOrderStatus 原經 mobile-admin/api.ts 零映射
+// createCoach/updateCoach 原經 mobile-admin/api.ts 零映射
 // re-export 轉手,已退役——直接向擁有者模組 $lib/admin/api 取用。
 import {
 	createMember,
@@ -36,16 +36,11 @@ import {
 	updateCourse,
 	createCoach,
 	updateCoach,
-	updateOrderStatus,
 	type CreateMemberBody,
 	type UpdateMemberBody
 } from '$lib/admin/api';
 import { saveNewCoach, saveCoachEdit, type SaveNewCoachOutcome, type SaveCoachEditOutcome } from '$lib/admin/components/coach-save';
 import { buildCreateCourseBody, buildUpdateCourseBody, type ValidCourse } from '$lib/admin/components/course-request';
-// R13 Task 5(C4):applyStatusChange 搬到 order-status.ts,markOrderPaid 改共用
-// changeOrderStatus 的 PATCH + 狀態碼判別(不再自己 await updateOrderStatus 後
-// 直接假設成功)。
-import { applyStatusChange, changeOrderStatus, type ChangeOrderStatusOutcome } from '$lib/admin/components/order-status';
 
 /* ---------- Overlay (push-screen stack + one bottom sheet) ----------
  * 單源於 `$lib/components/mobile/overlay`(mobile 與 mobile-admin 兩 surface 共用
@@ -90,7 +85,7 @@ export const classes = writable<ClassRow[]>(EMPTY_OPS.classes);
 // 寫入不局部樂觀更新這些 store:寫入成功後一律 refreshOps() 整包重抓(見下方寫入動詞)。
 export const coaches = writable<Coach[]>(EMPTY_OPS.coaches);
 
-/** Live orders, so 標記已付款 actually persists. The orders screen KPIs (本頁已收
+/** Live orders (read-only on mobile since W-6 fix 1). The orders screen KPIs (本頁已收
  *  revenue, 待付款 count) and the admin home 待付款 banner all derive from this
  *  store — keep it the single source of truth for order status. */
 export const orders = writable<OrderRow[]>(EMPTY_OPS.orders);
@@ -119,12 +114,11 @@ export function searchCapHint(p: PageInfo): string | null {
 /** 集合水合守衛(members/classes/coaches/orders 一次到位)。誠實開機(R15 候選
  *  F-3):開機值 = reset 值 = EMPTY_OPS(四個 store 皆為 `[]`,分頁 meta 全為 0/0)——
  *  沒水合過就不假裝有資料,不再走「同步 seed、水合只是覆寫一次」的舊慣例。hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發;markOrderPaid 走
- *  opsGate.write()(mutation 即宣告水合真相),防止「水合前的本地寫入」被首次
- *  水合的 seed clone 無聲清除(C1 regression)。refreshOps() 保持一律真抓,供「重新
- *  整理」/ErrorState 重試與寫入動詞的寫後重抓共用(使用者明確要求最新資料,不受 guard
+ *  由 classes/members/orders 任一消費頁在 onMount 觸發(W-6 修正 1 起 ops 沒有走
+ *  opsGate.write() 的 mutator;唯一的 markOrderPaid 已隨後端拒絕待付款→已付款移除)。
+ *  refreshOps() 保持一律真抓,供「重新整理」/ErrorState 重試與寫入動詞的寫後重抓共用(使用者明確要求最新資料,不受 guard
  *  短路保護);架構深化 R10 起落地改走世代穩定重抓——只丟棄「refresh **進場之後**」才
- *  發生的 mutation,故「await markOrderPaid() → await refreshOps()」這種寫後重抓的正常
+ *  發生的 mutation,故「await 寫入 → await refreshOps()」這種寫後重抓的正常
  *  序列零變化(fetch 恰一次、快照照常套用),只有真的在飛期間才發生的 mutation 會讓舊
  *  快照作廢、原地補抓。guard 短路 + post-await re-check(mutation 勝出)的機制本身由
  *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭
@@ -194,34 +188,13 @@ export async function saveCoach(v: CoachFormValues, target: Coach): Promise<Save
 	return outcome;
 }
 
-/** 標記已付款:先寫後改——PATCH /orders/{orderId}/status 走 opsGate.write()(非樂觀:沒有
- *  在飛尾流可入帳,ADR-0021),成功才用桌面同一支 applyStatusChange() 把 server 回的 status
- *  與 paid_at 套回 $orders(以 orderId 比對,收款時間同 mapAdminOrder 的 paidAtLabel)並宣告水合
- *  真相(防首次水合覆寫);寫入前未水合則由閘門排和解重抓。已水合時不重抓:KPI / 橫幅都由
- *  $orders 衍生,局部套回即足夠。
- *  R13 Task 5(C4):回傳 changeOrderStatus 的 outcome(不 throw)——閘門的 write 包在它注入的
- *  updateOrderStatus 裡,PATCH 失敗經 resultOf 原樣拋回給它分類;illegalTransition/
- *  pointsShortfall/failed 皆不動 store、不翻旗,由呼叫端(OrderSheet)依 kind 翻繁中 toast。 */
-export async function markOrderPaid(order: OrderRow): Promise<ChangeOrderStatusOutcome> {
-	return changeOrderStatus(order.orderId, 'paid', {
-		updateOrderStatus: async (id, next) =>
-			resultOf(
-				await opsGate.write({
-					send: () => updateOrderStatus(id, next),
-					commit: (res) => orders.update((rows) => applyStatusChange(rows, order.orderId, res.status, res.paid_at))
-				})
-			)
-	});
-}
-
 /** Live parent-message threads. The coach 訊息 badge + row highlight derive from
  *  this store, so reading a thread updates both — the static seed only ever showed
  *  the original unread count for the whole session. 誠實開機(R14 候選 F3):開機值 =
  *  reset 值 = `[]`,教練分區的 layout 暖機後才顯示真數(不再顯示種子的假 3 則)。 */
 export const messages = writable<MessageRow[]>([]);
 /** Mark a thread read (the coach opened it). Also declares hydration truth on the messages gate
- *  (同 ops 集合的 markOrderPaid — mutation 即宣告水合真相,防止首次水合
- *  覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)住在
+ *  (mutation 即宣告水合真相,防止首次水合覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)住在
  *  $lib/coach/messages-controller 的 selectThread()，MessageThread.svelte 把它的 ack
  *  (badgeCleared)交進來。R17 起本函式走 messagesGate.write():等 ack 為 true 才本地翻已讀
  *  (ack 為 false = markRead 失敗,維持未讀,同桌面);ack 落地前換了身分(閘門已重置)→ stale,
