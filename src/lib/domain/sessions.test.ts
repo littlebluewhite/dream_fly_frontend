@@ -61,4 +61,9 @@ describe('toTodaySession — TodaySessionResponse → TodaySession 投影(C5：�
 		const t = toTodaySession({ ...BASE, status: 'done' });
 		expect(t.state).toBe('done');
 	});
+
+	it('未知 status(後端先上線、前端未同步)→ state=wait,不讓下游查表 throw', () => {
+		const t = toTodaySession({ ...BASE, status: 'paused' as TodaySessionResponse['status'] });
+		expect(t.state).toBe('wait');
+	});
 });

@@ -19,7 +19,8 @@ export const SESSION_STATUS: Record<TodayStatus, [Tone, string]> = {
 	done: ['neutral', '已結束']
 };
 
-/** 後端 SessionStatus → UI 狀態鍵。Record 窮舉：後端新增值域時這裡是編譯錯誤。 */
+/** 後端 SessionStatus → UI 狀態鍵。Record 窮舉：bindings 同步後新增值域是編譯錯誤；
+ *  後端先上線、前端未同步時的未知值在 toTodaySession 退回 'wait'（不讓下游查表 throw）。 */
 const TODAY_STATUS: Record<SessionStatus, TodayStatus> = {
 	upcoming: 'wait',
 	ongoing: 'live',
@@ -53,6 +54,6 @@ export function toTodaySession(s: TodaySessionResponse): TodaySession {
 		coach: s.coach_name ?? '—',
 		room: s.venue ?? '—',
 		count: s.enrolled_count,
-		state: TODAY_STATUS[s.status]
+		state: TODAY_STATUS[s.status] ?? 'wait'
 	};
 }

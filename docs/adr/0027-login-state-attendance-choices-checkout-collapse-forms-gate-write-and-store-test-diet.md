@@ -220,7 +220,10 @@ mutator)。語意:
   (`upcoming`→`wait`、`ongoing`→`live`、`done`→`done`)。刪 `deriveSessionStatus`、`wallClockTime`、
   `TodayStatus`/`SESSION_STATUS`/`CLASS_STATUS` 的 `'soon'`、admin 的 `TodayState`(5 值 union,含 prep);
   `toTodaySession(s)` 不再收 `now`,`mapTodaySession`/`mapTodayClass`/`mapAttendanceClass` 一併去掉 `now` 管線。
-  狀態仍是頁面載入當下的值,與以前一樣不輪詢。
+  狀態仍是頁面載入當下的值,與以前一樣不輪詢。編譯期 `Record<SessionStatus, …>` 在 bindings 同步後擋新值;
+  後端先上線、前端未同步時的未知 `status` 在 `toTodaySession` 退回 `'wait'`(最終檢視 M-1),否則下游
+  `SESSION_STATUS`/`CLASS_STATUS` 查表會 throw,admin 儀表板整頁、手機教練首頁與桌面教練畫面都會壞
+  (同 `describeLedgerReason` 與活動 `kind` 的執行期 fallback)。
 
 **可見變更**見下方清單第 10、11 條。
 
@@ -330,9 +333,6 @@ mutator)。語意:
   4 個未動檔案的既有 unused-local 警告未碰(FE-9)。
 
 - **wire 型別採用(W-4～W-8)**:
-  - **未知 `SessionStatus` 在執行期會 throw**:`TODAY_STATUS[s.status]` 取不到時 `toTodaySession` 後續失敗。
-    編譯期 `Record<SessionStatus, …>` 會在 bindings 同步後變紅,但後端先上線、前端未同步時執行期會壞(W-5)。
-    (對照:`describeLedgerReason` 刻意保留執行期 fallback。)
   - **`mobile-admin/stores.test.ts` 仍以 `importOriginal` 局部 mock `$lib/admin/api`**(換掉六支寫入函式):
     W8a 契約只擋整支 mock,這支屬 mobile-admin store 測試,不在 W-8 範圍(W-8)。
   - **member/mobile/public 頁面測試仍 mock 各自的 api 模組**(`docs/adr/0026` 的遞延,W-8 只對 admin 重開並結案)。
