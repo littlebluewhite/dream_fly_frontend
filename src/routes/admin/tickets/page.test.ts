@@ -2,26 +2,45 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import TicketsPage from './+page.svelte';
-import { TICKETS, TICKET_TYPE } from '$lib/domain/tickets';
+import { TICKET_TYPE } from '$lib/domain/tickets';
 import { fmtNT } from '$lib/format';
 import { soldPct } from '$lib/admin/tickets-util';
-import { getTickets, createProduct, updateProduct } from '$lib/admin/api';
+import type { ProductResponse } from '$lib/api/generated';
 import { toasts } from '$lib/admin/stores';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { ADMIN_ROUTES, apiBody, apiCalls } from '$lib/testing/admin-routes';
+import { productResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/admin/api', () => ({ getTickets: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn() }));
+/* W-8：改 mock $lib/api/client 的 api()，getTickets/createProduct/updateProduct 走真
+ * mapper(GET /products?page=n、POST /products、PATCH /products/{id})。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
+// 三種票券類型都有；不放 merchandise(getTickets 會濾掉，KPI「販售方案」數才等於列數)。
+const TICKETS: ProductResponse[] = [
+	productResponse({ id: 'P-MONTH', name: '月票 · 自由練習', product_type: 'membership', price_cents: 280000, sold: 128, stock: 200, quota: 200, description: '當月不限堂數自由練習' }),
+	productResponse({ id: 'P-TRIAL', name: '體驗券 · 單堂', product_type: 'ticket', price_cents: 60000, sold: 86, stock: 120, quota: 120, description: '首次報名單堂體驗' }),
+	productResponse({ id: 'P-CLASS10', name: '10 堂回數票', product_type: 'course_package', price_cents: 540000, sold: 64, stock: 100, quota: 100, description: '彈性使用 · 半年內有效' }),
+	productResponse({ id: 'P-FAMILY', name: '親子體驗組', product_type: 'ticket', price_cents: 100000, sold: 73, stock: 150, quota: 150, description: '親子雙人單堂體驗' })
+];
+
+const page = (products: ProductResponse[], n: number, total = products.length) => ({ products, total, page: n, per_page: 20 });
+
+const route = (overrides: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /products?page=1': page(TICKETS, 1), ...overrides }, ADMIN_ROUTES));
 
 beforeEach(() => {
-	vi.mocked(getTickets).mockReset();
-	vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: TICKETS.length, page: 1, perPage: 20 });
-	vi.mocked(createProduct).mockReset();
-	vi.mocked(updateProduct).mockReset();
+	vi.mocked(api).mockReset();
+	route();
 });
 
 /* 票券管理 (reports.jsx TicketsView): PageHead + 3 KPI StatCards + a card grid
  * over TICKETS. Each card: icon chip, name, type StatusBadge, price, the
- * 已售/配額 line with a ProgressBar, and the desc. Data now arrives through the
- * getTickets() seam (async), so every assertion first awaits the ready phase. */
+ * 已售/配額 line with a ProgressBar, and the desc. Data now arrives through
+ * GET /products?page=n (async), so every assertion first awaits the ready phase. */
 describe('票券管理 (+page)', () => {
 	it('renders the PageHead title and 新增票券 action', async () => {
 		const { container, findByText } = render(TicketsPage);
@@ -36,7 +55,7 @@ describe('票券管理 (+page)', () => {
 		await findByText(TICKETS[0].name);
 		const txt = container.textContent ?? '';
 		const totalSold = TICKETS.reduce((s, t) => s + t.sold, 0);
-		const revenue = TICKETS.reduce((s, t) => s + t.sold * t.price, 0);
+		const revenue = TICKETS.reduce((s, t) => s + t.sold * (t.price_cents / 100), 0);
 		expect(txt).toContain('已售票券');
 		expect(txt).toContain(totalSold + ' 張');
 		expect(txt).toContain('票券營收');
@@ -45,7 +64,7 @@ describe('票券管理 (+page)', () => {
 		expect(txt).toContain(TICKETS.length + ' 種');
 	});
 
-	it('renders every ticket name from TICKETS', async () => {
+	it('renders every ticket name from GET /products', async () => {
 		const { container, findByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		const txt = container.textContent ?? '';
@@ -68,7 +87,7 @@ describe('票券管理 (+page)', () => {
 		await findByText(TICKETS[0].name);
 		const txt = container.textContent ?? '';
 		const t0 = TICKETS[0]; // 月票: price 2800, 128/200
-		expect(txt).toContain(fmtNT(t0.price));
+		expect(txt).toContain(fmtNT(t0.price_cents / 100));
 		expect(txt).toContain(`${t0.sold} / ${t0.quota} 張`);
 	});
 
@@ -102,66 +121,55 @@ describe('票券管理 (+page)', () => {
 });
 
 describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /products）', () => {
-	it('新增票券：填寫名稱後點擊建立票券，呼叫 createProduct 並在成功後重新整包刷新列表', async () => {
-		vi.mocked(createProduct).mockResolvedValue({
-			id: 'p-new', name: '新票券', slug: 'new', product_type: 'ticket', description: '',
-			price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false,
-			badge: null, stock: 100, quota: 100, sold: 0, valid_days: null, session_count: null,
-			is_active: true, created_at: '', updated_at: ''
-		});
-		const refreshed = [...TICKETS, { ...TICKETS[0], id: 'p-new', name: '新票券' }];
+	it('新增票券：填寫名稱後點擊建立票券，POST /products 並在成功後重新整包刷新列表', async () => {
+		const created = productResponse({ id: 'p-new', name: '新票券', price_cents: 100000, stock: 100, quota: 100 });
+		const refreshed = [...TICKETS, created];
 
 		const { getByText, getByLabelText, findByText, queryByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		await fireEvent.click(getByText('新增票券'));
 		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '新票券' } });
 
-		vi.mocked(getTickets).mockResolvedValue({ tickets: refreshed, total: refreshed.length, page: 1, perPage: 20 }); // 下一次 GET（刷新）回傳含新票券的清單
+		route({ 'GET /products?page=1': page(refreshed, 1), 'POST /products': created }); // 下一次 GET（刷新）回傳含新票券的清單
 		await fireEvent.click(getByText('建立票券'));
 
-		await vi.waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
-		const body = vi.mocked(createProduct).mock.calls[0][0];
+		await vi.waitFor(() => expect(apiCalls('POST /products')).toHaveLength(1));
+		const body = apiBody('POST /products') as Record<string, unknown>;
 		expect(body.name).toBe('新票券');
 		expect(body.product_type).toBe('ticket'); // blankTicket 預設類型（TICKET_TYPES[0]）
 		expect(body.price_cents).toBe(100000); // toCents(1000)，blankTicket 預設票價
 		expect(body.stock).toBe(100); // quota → stock 反向映射，blankTicket 預設配額
 
 		await findByText('新票券'); // 刷新後的列表包含新票券
-		expect(getTickets).toHaveBeenCalledTimes(2); // 初次載入 + 建立成功後刷新
+		expect(apiCalls('GET /products?page=1')).toHaveLength(2); // 初次載入 + 建立成功後刷新
 		expect(queryByText('建立票券')).toBeNull(); // 對話框已關閉
 	});
 
-	it('編輯票券：修改後點擊儲存票券，呼叫 updateProduct(真實 id, body) 並在成功後重新整包刷新列表', async () => {
+	it('編輯票券：修改後點擊儲存票券，PATCH /products/{真實 id} 並在成功後重新整包刷新列表', async () => {
 		const target = TICKETS[0];
-		vi.mocked(updateProduct).mockResolvedValue({
-			id: target.id, name: '改名票券', slug: 'x', product_type: target.type, description: target.desc,
-			price_cents: target.price * 100, original_price_cents: null, features: [], is_highlighted: false,
-			badge: null, stock: target.quota, quota: target.quota, sold: target.sold, valid_days: null,
-			session_count: null, is_active: true, created_at: '', updated_at: ''
-		});
-		const refreshed = TICKETS.map((t) => (t.id === target.id ? { ...t, name: '改名票券' } : t));
+		const updated = { ...target, name: '改名票券' };
+		const refreshed = TICKETS.map((t) => (t.id === target.id ? updated : t));
 
 		const { getByText, getAllByText, getByDisplayValue, findByText } = render(TicketsPage);
 		await findByText(target.name);
 		await fireEvent.click(getAllByText('編輯')[0]);
 		await fireEvent.input(getByDisplayValue(target.name), { target: { value: '改名票券' } });
 
-		vi.mocked(getTickets).mockResolvedValue({ tickets: refreshed, total: refreshed.length, page: 1, perPage: 20 });
+		route({ 'GET /products?page=1': page(refreshed, 1), [`PATCH /products/${target.id}`]: updated });
 		await fireEvent.click(getByText('儲存票券'));
 
-		await vi.waitFor(() => expect(updateProduct).toHaveBeenCalledTimes(1));
-		expect(vi.mocked(updateProduct).mock.calls[0][0]).toBe(target.id); // 真實 id
-		const body = vi.mocked(updateProduct).mock.calls[0][1];
+		await vi.waitFor(() => expect(apiCalls(`PATCH /products/${target.id}`)).toHaveLength(1)); // 真實 id
+		const body = apiBody(`PATCH /products/${target.id}`) as Record<string, unknown>;
 		expect(body.name).toBe('改名票券');
-		expect(body.product_type).toBe(target.type); // 讀寫共用同一組真實值，直接透傳
+		expect(body.product_type).toBe(target.product_type); // 讀寫共用同一組真實值，直接透傳
 		expect(body.stock).toBe(target.quota); // quota → stock 反向映射，未改動的配額原樣送出
 
 		await findByText('改名票券'); // 刷新後的列表反映改名
-		expect(getTickets).toHaveBeenCalledTimes(2); // 初次載入 + 編輯成功後刷新
+		expect(apiCalls('GET /products?page=1')).toHaveLength(2); // 初次載入 + 編輯成功後刷新
 	});
 
 	it('新增票券失敗（409 名稱已存在）→ 顯示繁中錯誤 toast，對話框維持開啟，列表不變', async () => {
-		vi.mocked(createProduct).mockRejectedValue(new ApiError(409, 'product slug already exists'));
+		route({ 'POST /products': new ApiError(409, 'product slug already exists') });
 		const before = get(toasts).length;
 
 		const { getByText, getByLabelText, findByText, queryByText } = render(TicketsPage);
@@ -175,20 +183,19 @@ describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /produ
 		expect(get(toasts).at(-1)?.body).toContain('已存在');
 		expect(queryByText('重複票券')).toBeNull(); // 未進入列表
 		expect(await findByText('建立票券')).toBeInTheDocument(); // 對話框仍開著，可修正重試（EditModal busy 鎖落定後才回到這個標籤，見 findByText）
-		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+		expect(apiCalls('GET /products?page=1')).toHaveLength(1); // 失敗不重新整包刷新
 	});
 
 	/* Important #1(終審)：EditModal 的 busy 鎖是共用機制(見 EditModal.test.ts)，這裡
-	 * 補一個代表性頁面的端對端驗證——連點「建立票券」兩次，createProduct 只送出一次
+	 * 補一個代表性頁面的端對端驗證——連點「建立票券」兩次，POST /products 只送出一次
 	 * (其餘四個呼叫端 tickets/venues/coupons/coaches/members 靠同一支 EditModal 機制，
 	 * 不逐一重複整合測試)。 */
-	it('連點「建立票券」兩次只送出一次 createProduct（EditModal 防連點鎖）', async () => {
-		let resolveCreate!: (v: Awaited<ReturnType<typeof createProduct>>) => void;
-		vi.mocked(createProduct).mockReturnValue(
-			new Promise((resolve) => {
-				resolveCreate = resolve;
-			})
-		);
+	it('連點「建立票券」兩次只送出一次 POST /products（EditModal 防連點鎖）', async () => {
+		let resolveCreate!: (v: ProductResponse) => void;
+		const pendingCreate = new Promise<ProductResponse>((resolve) => {
+			resolveCreate = resolve;
+		});
+		route({ 'POST /products': () => pendingCreate });
 
 		const { getByText, getByLabelText, findByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
@@ -199,22 +206,17 @@ describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /produ
 		await fireEvent.click(saveBtn);
 		await fireEvent.click(saveBtn); // 連點第二次：按鈕此時應已被 busy 鎖 disabled
 
-		resolveCreate({
-			id: 'p-new', name: '連點票券', slug: 'new', product_type: 'ticket', description: '',
-			price_cents: 100000, original_price_cents: null, features: [], is_highlighted: false,
-			badge: null, stock: 100, quota: 100, sold: 0, valid_days: null, session_count: null,
-			is_active: true, created_at: '', updated_at: ''
-		});
+		resolveCreate(productResponse({ id: 'p-new', name: '連點票券', price_cents: 100000, stock: 100, quota: 100 }));
 
-		await vi.waitFor(() => expect(createProduct).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(apiCalls('POST /products')).toHaveLength(1));
 		// 等整條成功流程(closeEdit + toast + gate.silentRefresh，皆在 save() 內接續 await)
 		// 完整跑完，不留下未 await 的 promise 尾巴——toasts/gate 是跨測試共用的 module-level
-		// 狀態，沒等到底會讓殘留的 toast/getTickets 呼叫污染下一個測試。
-		await vi.waitFor(() => expect(getTickets).toHaveBeenCalledTimes(2));
+		// 狀態，沒等到底會讓殘留的 toast/GET /products 呼叫污染下一個測試。
+		await vi.waitFor(() => expect(apiCalls('GET /products?page=1')).toHaveLength(2));
 	});
 
 	it('編輯票券失敗（422 驗證）→ 顯示繁中錯誤 toast，列表維持原值', async () => {
-		vi.mocked(updateProduct).mockRejectedValue(new ApiError(422, 'invalid product_type'));
+		route({ [`PATCH /products/${TICKETS[0].id}`]: new ApiError(422, 'invalid product_type') });
 
 		const { getByText, getAllByText, findByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
@@ -228,29 +230,27 @@ describe('票券管理 — 新增/編輯接真 API（Task F1：POST/PATCH /produ
 		await vi.waitFor(() => expect(get(toasts).at(-1)?.body).toContain('不符規則'));
 		expect(get(toasts).at(-1)?.tone).toBe('error');
 		expect(await findByText(TICKETS[0].name)).toBeInTheDocument(); // 原名稱仍在
-		expect(getTickets).toHaveBeenCalledTimes(1); // 失敗不重新整包刷新
+		expect(apiCalls('GET /products?page=1')).toHaveLength(1); // 失敗不重新整包刷新
 	});
 });
 
 describe('票券管理 — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
-		vi.mocked(getTickets).mockReset();
-		vi.mocked(getTickets).mockRejectedValue(new Error('network'));
+		route({ 'GET /products?page=1': new Error('network') });
 		const { findByText } = render(TicketsPage);
 		await findByText('載入失敗');
 	});
 
 	it('loading:顯示骨架', () => {
-		vi.mocked(getTickets).mockReset();
-		vi.mocked(getTickets).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(TicketsPage);
 		expect(getByTestId('tickets-skeleton')).toBeTruthy();
 	});
 });
 
-describe('票券管理 — 分頁（Task 17：PaginationBar 接上 getTickets() 的 total/page/perPage）', () => {
-	it('依 getTickets() 回應渲染「第 x 頁，共 M 筆」，邊界頁按鈕 disabled', async () => {
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+describe('票券管理 — 分頁（Task 17：PaginationBar 接上 GET /products 的 total/page/per_page）', () => {
+	it('依 GET /products 回應渲染「第 x 頁，共 M 筆」，邊界頁按鈕 disabled', async () => {
+		route({ 'GET /products?page=1': page(TICKETS, 1, 45) });
 		const { findByText, getByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 
@@ -259,21 +259,20 @@ describe('票券管理 — 分頁（Task 17：PaginationBar 接上 getTickets() 
 		expect((getByText('下一頁').closest('button') as HTMLButtonElement).disabled).toBe(false);
 	});
 
-	it('點擊下一頁 → 呼叫 getTickets(2)，並依新回應重新渲染頁碼', async () => {
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+	it('點擊下一頁 → GET /products?page=2，並依新回應重新渲染頁碼', async () => {
+		route({ 'GET /products?page=1': page(TICKETS, 1, 45), 'GET /products?page=2': page(TICKETS, 2, 45) });
 		const { findByText, getByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 2, perPage: 20 });
 		await fireEvent.click(getByText('下一頁'));
 
 		await findByText('第 2 頁，共 45 筆');
-		expect(getTickets).toHaveBeenCalledWith(2);
+		expect(apiCalls('GET /products?page=2')).toHaveLength(1);
 	});
 
 	it('最末頁時下一頁 disabled', async () => {
 		// ceil(45/20) = 3 頁
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 3, perPage: 20 });
+		route({ 'GET /products?page=1': page(TICKETS, 3, 45) });
 		const { findByText, getByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 
@@ -287,14 +286,14 @@ describe('票券管理 — 分頁範圍提示（G6：五頁統一 range hint）'
 	const HINT = '搜尋與篩選僅套用於目前頁面，若找不到資料請嘗試切換頁碼查看其他頁。';
 
 	it('total > perPage（還有下一頁）時顯示提示', async () => {
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+		route({ 'GET /products?page=1': page(TICKETS, 1, 45) });
 		const { findByText, getByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		expect(getByText(HINT)).toBeInTheDocument();
 	});
 
 	it('total <= perPage（只有一頁）時不顯示提示，避免全部資料一頁裝得下時的多餘雜訊', async () => {
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: TICKETS.length, page: 1, perPage: 20 });
+		route({ 'GET /products?page=1': page(TICKETS, 1) });
 		const { findByText, queryByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 		expect(queryByText(HINT)).toBeNull();
@@ -302,19 +301,22 @@ describe('票券管理 — 分頁範圍提示（G6：五頁統一 range hint）'
 });
 
 describe('票券管理 — 複審修復（Finding 3）：換頁失敗後重試對到正確頁碼', () => {
-	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新呼叫 getTickets', async () => {
-		vi.mocked(getTickets).mockResolvedValue({ tickets: TICKETS, total: 45, page: 1, perPage: 20 });
+	it('換到第 2 頁失敗 → 點「重新載入」重試 → 以第 2 頁（而非第 1 頁）重新 GET /products', async () => {
+		let page2Calls = 0;
+		route({
+			'GET /products?page=1': page(TICKETS, 1, 45),
+			'GET /products?page=2': () => (++page2Calls === 1 ? new Error('network') : page(TICKETS, 2, 45))
+		});
 		const { findByText, getByText } = render(TicketsPage);
 		await findByText(TICKETS[0].name);
 
-		vi.mocked(getTickets).mockRejectedValueOnce(new Error('network'));
 		await fireEvent.click(getByText('下一頁')); // page 1 → 2，此次請求失敗
 		await findByText('載入失敗');
 
-		vi.mocked(getTickets).mockResolvedValueOnce({ tickets: TICKETS, total: 45, page: 2, perPage: 20 });
 		await fireEvent.click(getByText('重新載入')); // 重試
 
 		await findByText('第 2 頁，共 45 筆');
-		expect(getTickets).toHaveBeenLastCalledWith(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+		expect(apiCalls('GET /products?page=2')).toHaveLength(2); // 重試對到失敗當下的目標頁，不是退回第 1 頁
+		expect(apiCalls('GET /products?page=1')).toHaveLength(1);
 	});
 });
