@@ -149,15 +149,15 @@ describe('匯入掃描器（Import Scan）', () => {
 	it('測試 seam 契約：零 vi.mock／vi.doMock admin seam 模組(W-8)', () => {
 		// admin 頁與 mobile-admin 測試走 HTTP seam(mock $lib/api/client + fakeRouter(…, ADMIN_ROUTES))。
 		// 任何形式換掉 $lib/admin/api 或 $lib/mobile-admin/api 都算：automock、零參數 factory、
-		// 帶 importOriginal 的部分替換、vi.doMock，以及解析後落在這兩支的相對路徑。
+		// 帶 importOriginal 的部分替換、vi.doMock、vi.mock(import('…')) 模組 promise 形，以及解析後落在這兩支的相對路徑。
 		const SEAMS = [r('src/lib/admin/api'), r('src/lib/mobile-admin/api')];
 		const mocksSeam = (file: string, src: string): boolean =>
-			[...src.matchAll(/vi\.(?:mock|doMock)\(\s*(['"`])([^'"`]+)\1/g)].some(([, , spec]) => {
+			[...src.matchAll(/vi\.(?:mock|doMock)\(\s*(?:import\(\s*)?(['"`])([^'"`]+)\1/g)].some(([, , spec]) => {
 				const abs = spec.startsWith('$lib/') ? r('src/lib/' + spec.slice(5)) : spec.startsWith('.') ? resolve(dirname(file), spec) : spec;
 				return SEAMS.includes(abs.replace(/\.(ts|js)$/, '').replace(/\/index$/, ''));
 			});
 
-		// 自證：四種形式全數命中，近似形不誤中。
+		// 自證：各形式全數命中，近似形不誤中。
 		const inMobileAdmin = r('src/lib/mobile-admin/Fake.test.ts');
 		const inAdmin = r('src/lib/admin/Fake.test.ts');
 		const POSITIVE: [string, string][] = [
@@ -168,7 +168,9 @@ describe('匯入掃描器（Import Scan）', () => {
 			[inMobileAdmin, "vi.mock('./api', async (importOriginal) => ({ ...(await importOriginal()) }));"],
 			[inAdmin, "vi.mock('./api.ts');"],
 			[inMobileAdmin, "vi.mock('../admin/api');"],
-			[inMobileAdmin, "vi.mock(\n\t'$lib/mobile-admin/api'\n);"]
+			[inMobileAdmin, "vi.mock(\n\t'$lib/mobile-admin/api'\n);"],
+			[inMobileAdmin, "vi.mock(import('$lib/admin/api'), async (importOriginal) => ({ ...(await importOriginal()) }));"],
+			[inAdmin, "vi.doMock(import('./api'));"]
 		];
 		const NEGATIVE: [string, string][] = [
 			[inMobileAdmin, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
