@@ -25,6 +25,13 @@ npm run dev   # 啟動開發伺服器：http://localhost:5173
 
 `.env`（見 `.env.example`）：`VITE_API_BASE_URL`，未設定時預設為 `http://localhost:3000/api/v1`。
 
+### wire 型別（後端 → 前端）
+
+後端把 Rust DTO 產生的 TypeScript 型別 commit 在 `dream_fly_backend/bindings/`。前端用 `npm run wire:sync` 鏡像到
+`src/lib/api/generated/`（逐位元相同，勿手改、勿 reformat）；`npm run check` 會先跑 `npm run wire:check`，過期／缺檔／多餘檔案
+就失敗。後端有改 DTO 時：在後端 `WIRE_BINDINGS=write cargo test --test wire_types` 重新產生，再回前端 `npm run wire:sync`。
+隔壁沒有後端 checkout 或沒有 `bindings/` 時印 skipped 並 exit 0；可用 `DREAMFLY_BACKEND_DIR` 指向別處。
+
 ## 指令表
 
 | 指令 | 說明 |

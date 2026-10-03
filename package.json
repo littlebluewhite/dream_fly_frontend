@@ -6,7 +6,9 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "wire:sync": "node scripts/wire.mjs sync",
+    "wire:check": "node scripts/wire.mjs check",
+    "check": "node scripts/wire.mjs check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "test": "vitest run",
     "test:watch": "vitest"
