@@ -30,7 +30,7 @@ export const POINTS_LEDGER: LedgerEntry[] = [
 	{ id: 'pl3', date: '2026/05/01', desc: '生日禮金點數', type: 'earn', delta: 200 },
 	{ id: 'pl4', date: '2026/04/12', desc: '推薦好友報名獎勵', type: 'earn', delta: 150 },
 	{ id: 'pl5', date: '2026/03/01', desc: '完課獎勵 · 兒童翻滾 技巧班', type: 'earn', delta: 120 },
-	{ id: 'pl6', date: '2026/02/15', desc: '管理員點數調整', type: 'adjust', delta: -50 }
+	{ id: 'pl6', date: '2026/02/15', desc: '會員點數調整', type: 'adjust', delta: -50 }
 ];
 
 /* 教練訊息串列:m1/m2/m9 未讀。 */
