@@ -514,6 +514,27 @@ describe('authStore — cross-tab storage sync', () => {
     expect(getRefresh()).toBe('rB2'); // the shared refresh key is not touched
   });
 
+  it('another tab logged in as B, a stale A cache write lands mid-hydrate and hydrate fails → LOGGED_OUT, never A', async () => {
+    await loginAsA();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      // A third tab's late syncUser(A) rewrites the shared cache while this tab's hydrate is in flight.
+      localStorage.setItem('dreamfly_auth', cacheOf(SAMPLE_USER));
+      otherTabWrote('dreamfly_auth');
+      return jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(get(authStore)).toEqual(LOGGED_OUT);
+    expect(getAccess()).toBeNull();
+  });
+
   it('only rotation (same identity, new refresh token) → no action: no refresh, access kept, no reset', async () => {
     await loginAsA();
     const reset = trackGateReset();

@@ -182,12 +182,14 @@ function createAuthStore() {
         return;
       }
       const cached = loadCache();
-      if (cached.loggedIn && sessionIdentity(cached) !== sessionIdentity(get({ subscribe }))) {
+      const expected = sessionIdentity(cached);
+      if (cached.loggedIn && expected !== sessionIdentity(get({ subscribe }))) {
         forgetAccess();
         void hydrate().then(() => {
-          // hydrate 沒能換成 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時不可用):
-          // 不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。
-          if (sessionIdentity(loadCache()) !== sessionIdentity(get({ subscribe }))) {
+          // hydrate 沒能換成事件當下 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時
+          // 不可用):不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。比對事件當下的快照,
+          // 不重讀共用快取:別的分頁遲到的 syncUser 可能已把它改寫回舊身分。
+          if (expected !== sessionIdentity(get({ subscribe }))) {
             forgetAccess();
             set(LOGGED_OUT);
           }
