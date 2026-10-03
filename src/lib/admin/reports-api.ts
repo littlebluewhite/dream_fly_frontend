@@ -5,33 +5,23 @@
 import { api } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
 import type { TrendBar } from './data';
+import type {
+	AdminCoachReportRow,
+	AdminCourseReportRow,
+	AdminReportResponse,
+	CategorySplitEntry,
+	IncomeSourceEntry,
+	IncomeSourceMonthEntry,
+	KpisSection,
+	RetentionMonthRow
+} from '$lib/api/generated';
 
 /* ═════════════════════════ 報表分析（GET /reports/admin，admin-only，見 integration-contract.md §3.24） ═════════════════════════ */
 
-interface ApiAdminRevenueTrendPoint {
-	month: string; // "YYYY-MM"
-	revenue_cents: number;
-}
-interface ApiAdminReportsCourse {
-	course_id: string;
-	name: string;
-	enrolled: number;
-	max_students: number;
-	fill_rate: number | null;
-	waitlist_count: number;
-}
-interface ApiAdminReportsCoach {
-	coach_id: string;
-	name: string;
-	course_count: number;
-	student_count: number;
-	revenue_cents_12m: number;
-	attendance_rate: number | null;
-}
-
 /** revenue_breakdown/income_sources_12m 固定 6 桶 canonical 序；category_split 少
  *  venue_rental(場租非 order line)只剩 5 桶(契約 §3.24 裁決)。這組字串 wire→FE 原樣
- *  穿透、不重新命名，故 wire/FE 兩層共用同一組型別(同 data.ts 的 OrderStatus 慣例)。 */
+ *  穿透、不重新命名。後端產生型別刻意把 source/bucket 留 String(報表桶不收 enum)，
+ *  這裡的 union 是前端依契約固定桶所做的斷言，在映射處 cast 進來。 */
 export type AdminRevenueSource = 'course' | 'ticket' | 'membership' | 'course_package' | 'merchandise' | 'venue_rental';
 export type AdminCategorySource = Exclude<AdminRevenueSource, 'venue_rental'>;
 
@@ -41,95 +31,6 @@ export type AdminCategorySource = Exclude<AdminRevenueSource, 'venue_rental'>;
 export type AdminAttendanceBucket = 'gte_95' | '85_94' | '75_84' | 'lt_75';
 export type AdminAgeBucket = '0-6' | '7-12' | '13-17' | '18-25' | '26-40' | '41+';
 export type AdminTierBucket = 'regular' | 'bronze' | 'silver' | 'gold';
-
-interface ApiAdminKpiPair {
-	this_month: number;
-	last_month: number;
-}
-interface ApiAdminAttendanceKpiPair {
-	this_month: number | null;
-	last_month: number | null;
-}
-interface ApiAdminKpis {
-	new_members: ApiAdminKpiPair;
-	new_enrolments: ApiAdminKpiPair;
-	paid_orders_count: ApiAdminKpiPair;
-	attendance_rate: ApiAdminAttendanceKpiPair;
-}
-interface ApiAdminRevenueBreakdownRow {
-	source: AdminRevenueSource;
-	gross_cents: number;
-	orders_count: number;
-	units: number;
-}
-interface ApiAdminIncomeSourceRow {
-	month: string; // "YYYY-MM"
-	source: AdminRevenueSource;
-	gross_cents: number;
-	orders_count: number;
-	units: number;
-}
-interface ApiAdminCategorySplitRow {
-	source: AdminCategorySource;
-	gross_cents: number;
-	ratio: number | null;
-}
-interface ApiAdminPaymentSplitRow {
-	method: string; // 應用層自由字串(非 DB enum)；NULL 已由後端轉 "unknown"
-	count: number;
-}
-interface ApiAdminAttendanceDistRow {
-	bucket: AdminAttendanceBucket;
-	count: number;
-}
-interface ApiAdminAgeDistRow {
-	bucket: AdminAgeBucket;
-	count: number;
-}
-interface ApiAdminTierDistRow {
-	bucket: AdminTierBucket;
-	count: number;
-}
-interface ApiAdminRetentionRow {
-	month: string; // "YYYY-MM"
-	new_count: number;
-	returning_count: number;
-	rate: number | null;
-}
-interface ApiAdminFunnel {
-	trial_inquiries: number;
-	new_enrolments: number;
-}
-interface ApiAdminWeekdayLoadRow {
-	weekday: number; // 0=週日..6=週六
-	present_count: number;
-}
-interface ApiAdminVenueUsageRow {
-	venue: string;
-	minutes: number;
-}
-interface ApiAdminReports {
-	revenue: {
-		this_month_cents: number;
-		last_month_cents: number;
-		trend: ApiAdminRevenueTrendPoint[];
-	};
-	kpis: ApiAdminKpis;
-	revenue_breakdown: ApiAdminRevenueBreakdownRow[];
-	income_sources_12m: ApiAdminIncomeSourceRow[];
-	category_split: ApiAdminCategorySplitRow[];
-	payment_split: ApiAdminPaymentSplitRow[];
-	attendance_distribution: ApiAdminAttendanceDistRow[];
-	age_distribution: ApiAdminAgeDistRow[];
-	tier_distribution: ApiAdminTierDistRow[];
-	retention: ApiAdminRetentionRow[];
-	funnel: ApiAdminFunnel;
-	weekday_load: ApiAdminWeekdayLoadRow[];
-	venue_usage: ApiAdminVenueUsageRow[];
-	members: { total: number; new_this_month: number; active: number };
-	courses: ApiAdminReportsCourse[];
-	coaches: ApiAdminReportsCoach[];
-}
 
 /** courses[]/coaches[] 的 UI 形狀——`fillRate`/`attendanceRate` 維持契約的 0–1 比例
  *  (null 為防禦性情境：courses 見裁決 4／coaches 見裁決「無資料 → null」)，由頁面
@@ -251,7 +152,7 @@ export interface ReportsData {
 	coaches: AdminReportCoachRow[];
 }
 
-function mapAdminReportCourse(c: ApiAdminReportsCourse): AdminReportCourseRow {
+function mapAdminReportCourse(c: AdminCourseReportRow): AdminReportCourseRow {
 	return {
 		id: c.course_id,
 		name: c.name,
@@ -262,7 +163,7 @@ function mapAdminReportCourse(c: ApiAdminReportsCourse): AdminReportCourseRow {
 	};
 }
 
-function mapAdminReportCoach(c: ApiAdminReportsCoach): AdminReportCoachRow {
+function mapAdminReportCoach(c: AdminCoachReportRow): AdminReportCoachRow {
 	return {
 		id: c.coach_id,
 		name: c.name,
@@ -273,7 +174,7 @@ function mapAdminReportCoach(c: ApiAdminReportsCoach): AdminReportCoachRow {
 	};
 }
 
-function mapAdminKpis(k: ApiAdminKpis): AdminReportKpis {
+function mapAdminKpis(k: KpisSection): AdminReportKpis {
 	return {
 		newMembers: { thisMonth: k.new_members.this_month, lastMonth: k.new_members.last_month },
 		newEnrolments: { thisMonth: k.new_enrolments.this_month, lastMonth: k.new_enrolments.last_month },
@@ -282,28 +183,28 @@ function mapAdminKpis(k: ApiAdminKpis): AdminReportKpis {
 	};
 }
 
-const mapRevenueBreakdownRow = (r: ApiAdminRevenueBreakdownRow): AdminRevenueBreakdownRow => ({
-	source: r.source,
+const mapRevenueBreakdownRow = (r: IncomeSourceEntry): AdminRevenueBreakdownRow => ({
+	source: r.source as AdminRevenueSource,
 	grossCents: r.gross_cents,
 	ordersCount: r.orders_count,
 	units: r.units
 });
 
-const mapIncomeSourceRow = (r: ApiAdminIncomeSourceRow): AdminIncomeSourceRow => ({
+const mapIncomeSourceRow = (r: IncomeSourceMonthEntry): AdminIncomeSourceRow => ({
 	month: r.month,
-	source: r.source,
+	source: r.source as AdminRevenueSource,
 	grossCents: r.gross_cents,
 	ordersCount: r.orders_count,
 	units: r.units
 });
 
-const mapCategorySplitRow = (r: ApiAdminCategorySplitRow): AdminCategorySplitRow => ({
-	source: r.source,
+const mapCategorySplitRow = (r: CategorySplitEntry): AdminCategorySplitRow => ({
+	source: r.source as AdminCategorySource,
 	grossCents: r.gross_cents,
 	ratio: r.ratio
 });
 
-const mapRetentionRow = (r: ApiAdminRetentionRow): AdminRetentionRow => ({
+const mapRetentionRow = (r: RetentionMonthRow): AdminRetentionRow => ({
 	month: r.month,
 	newCount: r.new_count,
 	returningCount: r.returning_count,
@@ -320,7 +221,7 @@ const mapRetentionRow = (r: ApiAdminRetentionRow): AdminRetentionRow => ({
  *  members 全 0、courses/coaches/payment_split/venue_usage 皆 []，固定桶各段零填
  *  其固定桶數，此處原樣穿透(裁決文末「空庫」段落)。 */
 export const getReports = (): Promise<ReportsData> =>
-	api<ApiAdminReports>('/reports/admin').then((r) => ({
+	api<AdminReportResponse>('/reports/admin').then((r) => ({
 		revenue: {
 			thisMonth: ntd(r.revenue.this_month_cents),
 			lastMonth: ntd(r.revenue.last_month_cents),
@@ -331,9 +232,9 @@ export const getReports = (): Promise<ReportsData> =>
 		incomeSources12m: r.income_sources_12m.map(mapIncomeSourceRow),
 		categorySplit: r.category_split.map(mapCategorySplitRow),
 		paymentSplit: r.payment_split.map((p) => ({ method: p.method, count: p.count })),
-		attendanceDistribution: r.attendance_distribution.map((a) => ({ bucket: a.bucket, count: a.count })),
-		ageDistribution: r.age_distribution.map((a) => ({ bucket: a.bucket, count: a.count })),
-		tierDistribution: r.tier_distribution.map((t) => ({ bucket: t.bucket, count: t.count })),
+		attendanceDistribution: r.attendance_distribution.map((a) => ({ bucket: a.bucket as AdminAttendanceBucket, count: a.count })),
+		ageDistribution: r.age_distribution.map((a) => ({ bucket: a.bucket as AdminAgeBucket, count: a.count })),
+		tierDistribution: r.tier_distribution.map((t) => ({ bucket: t.bucket as AdminTierBucket, count: t.count })),
 		retention: r.retention.map(mapRetentionRow),
 		funnel: { trialInquiries: r.funnel.trial_inquiries, newEnrolments: r.funnel.new_enrolments },
 		weekdayLoad: r.weekday_load.map((w) => ({ weekday: w.weekday, presentCount: w.present_count })),
