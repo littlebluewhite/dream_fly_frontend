@@ -9,8 +9,18 @@ import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
 import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiReportCard, ApiCertificate } from '$lib/api/wire';
-import type { OrderListResponse, OrderSummary } from '$lib/api/generated';
+import type {
+  AttendanceEntryResponse,
+  CertificateResponse,
+  MemberReportResponse,
+  MyEnrolmentResponse,
+  MyScheduleEntryResponse,
+  OrderListResponse,
+  OrderSummary,
+  ReportCardResponse,
+  RewardListResponse,
+  RewardResponse
+} from '$lib/api/generated';
 import { refreshPoints } from './stores';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
@@ -25,22 +35,10 @@ export interface DashboardData {
   nextClass: string; // banner「下一堂課」— 進接縫(原為 markup 硬編)
 }
 
-interface ApiEnrolment {
-  id: string;
-  course_id: string;
-  course_name: string;
-  course_level: string;
-  schedule_text: string | null;
-  status: string;
-  enrolled_at: string;
-  attended: number;
-  total: number;
-}
-
 /** GET /enrolments/me 是純陣列、新到舊；member 端只認 active —— cancelled 不算「已
  *  報名」（同 stores.ts 的 refreshSubscriptions 對 subscription status 的處理）。 */
-async function activeEnrolments(): Promise<ApiEnrolment[]> {
-  const list = await api<ApiEnrolment[]>('/enrolments/me');
+async function activeEnrolments(): Promise<MyEnrolmentResponse[]> {
+  const list = await api<MyEnrolmentResponse[]>('/enrolments/me');
   return list.filter((e) => e.status === 'active');
 }
 
@@ -85,7 +83,7 @@ export interface Certificate {
   createdAt: string;
 }
 
-function mapReportCard(r: ApiReportCard): ReportCard {
+function mapReportCard(r: ReportCardResponse): ReportCard {
   return {
     id: r.id,
     courseName: r.course_name,
@@ -97,7 +95,7 @@ function mapReportCard(r: ApiReportCard): ReportCard {
   };
 }
 
-function mapCertificate(c: ApiCertificate): Certificate {
+function mapCertificate(c: CertificateResponse): Certificate {
   return {
     id: c.id,
     title: c.title,
@@ -109,15 +107,6 @@ function mapCertificate(c: ApiCertificate): Certificate {
   };
 }
 
-/** GET /reports/me 回應（integration-contract.md §3.24）。 */
-interface ApiMemberReportStats {
-  attended_total: number;
-  attendance_rate: number | null;
-  points_balance: number;
-  active_enrolments: number;
-  upcoming_sessions_7d: number;
-}
-
 export interface MemberReportStats {
   attendedTotal: number;
   attendanceRate: number | null; // null = 無出勤資料(裁決 3)，非 0
@@ -126,7 +115,7 @@ export interface MemberReportStats {
   upcomingSessions7d: number;
 }
 
-function mapReportStats(s: ApiMemberReportStats): MemberReportStats {
+function mapReportStats(s: MemberReportResponse): MemberReportStats {
   return {
     attendedTotal: s.attended_total,
     attendanceRate: s.attendance_rate,
@@ -140,7 +129,7 @@ function mapReportStats(s: ApiMemberReportStats): MemberReportStats {
  *  getMine() 共用同一支端點，不透過下面的 getReports()(那支順帶抓 report-cards/
  *  certificates，兩處都用不到)。 */
 export const getReportStats = async (): Promise<MemberReportStats> => {
-  const stats = await api<ApiMemberReportStats>('/reports/me');
+  const stats = await api<MemberReportResponse>('/reports/me');
   return mapReportStats(stats);
 };
 
@@ -156,8 +145,8 @@ export interface ReportsData {
  *  彙總(出席次數/出席率/點數餘額/有效報名/未來 7 天場次)。 */
 export const getReports = async (): Promise<ReportsData> => {
   const [reportCards, certificates, stats] = await Promise.all([
-    api<ApiReportCard[]>('/report-cards/me'),
-    api<ApiCertificate[]>('/certificates/me'),
+    api<ReportCardResponse[]>('/report-cards/me'),
+    api<CertificateResponse[]>('/certificates/me'),
     getReportStats()
   ]);
   return {
@@ -169,28 +158,16 @@ export const getReports = async (): Promise<ReportsData> => {
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 
-/** MyScheduleEntryResponse（integration-contract.md §3.18）。與 GET /schedule(場館時段
- *  行事曆，§3.6)是完全不同的資源(§3.18 裁決 1)——這裡是呼叫者 active enrolments 對應
- *  課程的週模式,不物化、不查日期範圍。 */
-interface ApiScheduleEntry {
-  course_id: string;
-  course_name: string;
-  coach_name: string | null;
-  day_of_week: number; // 0=Sun..6=Sat（PostgreSQL EXTRACT(DOW) / JS Date.getDay() 慣例）
-  start_time: string; // "HH:MM:SS"
-  end_time: string;
-  venue: string | null;
-}
-
-/** day_of_week(後端 0=Sun..6=Sat)→ ScheduleBlock.day(既有 UI 週欄位索引 0=Mon..6=Sun，
+/** day_of_week(後端 0=Sun..6=Sat，PostgreSQL EXTRACT(DOW) / JS Date.getDay() 慣例)→ ScheduleBlock.day(既有 UI 週欄位索引 0=Mon..6=Sun，
  *  即 WEEK[0]='一'…WEEK[6]='日'；見 +page.svelte 的 colOf 慣例與 SCHEDULE mock 的既有
  *  day 用法)。 */
 const DOW_TO_SCHEDULE_DAY = [6, 0, 1, 2, 3, 4, 5];
 
-/** MyScheduleEntryResponse → 既有 ScheduleBlock 形狀。coach_name 為 null(尚未指定教練)
+/** MyScheduleEntryResponse（§3.18；與 GET /schedule 場館時段行事曆 §3.6 是不同資源，
+ *  §3.18 裁決 1）→ 既有 ScheduleBlock 形狀。coach_name 為 null(尚未指定教練)
  *  /venue 為 null(無場地資料)時一律給空字串；color/tone 無對應後端欄位，一律給預設
  *  主色(P2，後端無品牌色欄位時的預設慣例)。 */
-function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
+function mapScheduleEntry(e: MyScheduleEntryResponse): ScheduleBlock {
   return {
     day: DOW_TO_SCHEDULE_DAY[e.day_of_week],
     start: hhmm(e.start_time),
@@ -205,7 +182,7 @@ function mapScheduleEntry(e: ApiScheduleEntry): ScheduleBlock {
 
 /** GET /schedule/me — 回呼叫者 active enrolments 對應課程的週模式(§3.18)。 */
 export const getSchedule = async (): Promise<ScheduleData> => {
-  const entries = await api<ApiScheduleEntry[]>('/schedule/me');
+  const entries = await api<MyScheduleEntryResponse[]>('/schedule/me');
   return { schedule: entries.map(mapScheduleEntry) };
 };
 
@@ -245,20 +222,11 @@ export const getMine = async (): Promise<MineData> => {
   return { courses };
 };
 
-/** GET /enrolments/{id}/attendance 回應（integration-contract.md §3.12）。status 直接
- *  宣告為窄化 union（非後端原始 string）——與 AttRecord.state 同一組字面值，映射時
- *  可以直接指派、不需要 cast 或查表。 */
-interface ApiAttendanceEntry {
-  session_date: string; // "YYYY-MM-DD"
-  start_time: string;
-  end_time: string;
-  status: 'present' | 'absent' | 'leave';
-  marked_at: string;
-}
-
-/** session_date("YYYY-MM-DD") → AttRecord.date("MM/DD") + AttRecord.year("YYYY")，
+/** AttendanceEntryResponse（§3.12）的 status 是後端封閉 enum AttendanceStatus，與
+ *  AttRecord.state 同一組字面值，映射時直接指派、不需要 cast 或查表。
+ *  session_date("YYYY-MM-DD") → AttRecord.date("MM/DD") + AttRecord.year("YYYY")，
  *  對齊既有 AttRecord 形狀(原 ATT_HISTORY mock 同一種日期格式)。 */
-function mapAttendanceEntry(e: ApiAttendanceEntry): AttRecord {
+function mapAttendanceEntry(e: AttendanceEntryResponse): AttRecord {
   return { date: e.session_date.slice(5).replace('-', '/'), year: e.session_date.slice(0, 4), state: e.status };
 }
 
@@ -268,7 +236,7 @@ function mapAttendanceEntry(e: ApiAttendanceEntry): AttRecord {
  *  非本人呼叫一律 404(刻意遮蔽存在性，與 cancel 的 403 不同)——呼叫端(desktop mine
  *  頁、mobile MyCourseDetail)只會傳自己 active enrolments 的 id，不會踩到這個情況。 */
 export const getEnrolmentAttendance = async (id: string): Promise<AttRecord[]> => {
-  const entries = await api<ApiAttendanceEntry[]>(`/enrolments/${id}/attendance`);
+  const entries = await api<AttendanceEntryResponse[]>(`/enrolments/${id}/attendance`);
   return entries.map(mapAttendanceEntry);
 };
 
@@ -322,20 +290,6 @@ export const getCourses = async (): Promise<CoursesData> => {
   return { catalog };
 };
 
-interface ApiReward {
-  id: string;
-  name: string;
-  description: string | null;
-  points_cost: number;
-  stock: number | null;
-  is_active: boolean;
-  display_order: number;
-}
-
-interface ApiRewardListResponse {
-  rewards: ApiReward[];
-}
-
 /** 點數兌換品項(Task 14；integration-contract.md §3.23)。is_active/display_order
  *  不進 UI 形狀——member 端 GET /rewards 已經只回 is_active 品項、且依 display_order
  *  排序，前端不用再過濾/排序一次(見 mapReward)。 */
@@ -347,7 +301,7 @@ export interface Reward {
   stock: number | null; // null = 不限量；0 = 已兌換完畢
 }
 
-function mapReward(r: ApiReward): Reward {
+function mapReward(r: RewardResponse): Reward {
   return { id: r.id, name: r.name, description: r.description, pointsCost: r.points_cost, stock: r.stock };
 }
 
@@ -363,6 +317,6 @@ export interface PointsData {
  *  在 stores.ts 的 redeemReward()，不在這裡(那是「動作」不是「取資料映射」，
  *  同 checkout 的 placeOrder 慣例留在 stores.ts)。 */
 export const getPoints = async (): Promise<PointsData> => {
-  const [rewardsRes] = await Promise.all([api<ApiRewardListResponse>('/rewards'), refreshPoints()]);
+  const [rewardsRes] = await Promise.all([api<RewardListResponse>('/rewards'), refreshPoints()]);
   return { rewards: rewardsRes.rewards.map(mapReward), expiring: '360 點', expiryDate: '2026/12/31' };
 };
