@@ -22,13 +22,15 @@
 import type { IconName } from '$lib/icon-registry';
 import { SESSION_STATUS } from '$lib/domain/sessions';
 import type { TodayStatus } from '$lib/domain/sessions';
+import type { AttendanceStatus } from '$lib/api/generated';
 
 /* ──────────────── unions ──────────────── */
 // TodayStatus 自本檔升遷至 $lib/domain/sessions(C4：admin/coach/mobile-admin 共用
 // 查表鍵單源收斂)，這裡改 type re-export，呼叫端(coach/api.ts、頁面、components)
 // 的 import 路徑不動。
 export type { TodayStatus };
-export type AttDefault = 'present' | 'leave' | 'absent';
+/** 後端 attendance_status 的別名(不手抄值域，產生型別擴集即編譯期可見)。 */
+export type AttDefault = AttendanceStatus;
 /** 點名可選狀態(桌面 AttSegment/統計 chips 與手機點名頁共用的單一來源)。後端 attendance_status
  *  僅 present/absent/leave 三值(§3.19)，沒有「遲到」。 */
 export const ATT_CHOICES: ReadonlyArray<{ key: AttDefault; label: string; color: string }> = [

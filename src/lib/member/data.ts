@@ -42,7 +42,7 @@ import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
-import type { NotificationResponse, NotificationType } from '$lib/api/generated';
+import type { AttendanceStatus, NotificationResponse, NotificationType } from '$lib/api/generated';
 
 export interface UpcomingClass {
   name: string;
@@ -52,7 +52,8 @@ export interface UpcomingClass {
   status: [Tone, string];
 }
 
-export type AttState = 'present' | 'leave' | 'absent';
+/** 後端 attendance_status 的別名——產生型別擴集時 ATT_STATE 查表會在編譯期缺鍵。 */
+export type AttState = AttendanceStatus;
 
 export interface ScheduleBlock {
   day: number; // 1=Mon … 7=Sun
