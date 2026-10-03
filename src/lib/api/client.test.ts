@@ -178,6 +178,8 @@ describe('api()', () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
     const refreshCalls = fetchMock.mock.calls.filter(([url]) => url === `${BASE}/auth/refresh`);
     expect(refreshCalls).toHaveLength(1);
+    expect(getAccess()).toBe('new-access');
+    expect(getRefresh()).toBe('new-refresh');
   });
 
   it('refresh failure clears tokens (no localStorage residue) and api() throws ApiError(401)', async () => {
@@ -474,6 +476,7 @@ describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
     const ok = await refreshTokens();
 
     expect(ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(getRefresh()).toBe('refresh-fresh');
     expect(getAccess()).toBe('expired-access');
     expect(expired).not.toHaveBeenCalled();
@@ -491,6 +494,7 @@ describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
     const ok = await refreshTokens();
 
     expect(ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(getAccess()).toBeNull();
     expect(getRefresh()).toBeNull();
     expect(expired).toHaveBeenCalledTimes(1);
