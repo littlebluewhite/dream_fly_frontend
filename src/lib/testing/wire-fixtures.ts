@@ -4,13 +4,20 @@
  * 的欄位。後端 DTO 加欄位時，check 會在這裡（而不是散落各測試檔的 mock 字面值）紅，
  * 只需補預設值。只供測試使用（$lib/testing 不得進 production bundle，見 import-scan.test）。 */
 import type {
+	ActivityItem,
 	AdminLeaveRequestResponse,
 	AdminOrderSummary,
+	AdminReportResponse,
+	CouponResponse,
 	InquiryResponse,
 	LeaveRequestResponse,
 	OrderResponse,
 	OrderSummary,
-	PointsMeResponse
+	PointsMeResponse,
+	ProductResponse,
+	SettingsResponse,
+	TodaySessionResponse,
+	VenueResponse
 } from '$lib/api/generated';
 
 export const orderSummary = (over: Partial<OrderSummary> = {}): OrderSummary => ({
@@ -103,5 +110,102 @@ export const inquiryResponse = (over: Partial<InquiryResponse> = {}): InquiryRes
 	metadata: null,
 	created_at: '',
 	updated_at: '',
+	...over
+});
+
+export const venueResponse = (over: Partial<VenueResponse> = {}): VenueResponse => ({
+	id: 'venue-1',
+	category_id: null,
+	name: 'A 訓練館',
+	slug: 'a-hall',
+	description: null,
+	features: [],
+	image_url: null,
+	is_active: true,
+	created_at: '',
+	...over
+});
+
+export const productResponse = (over: Partial<ProductResponse> = {}): ProductResponse => ({
+	id: 'product-1',
+	name: '單次體驗券',
+	slug: 'trial-ticket',
+	product_type: 'ticket',
+	description: null,
+	price_cents: 50000,
+	original_price_cents: null,
+	features: [],
+	is_highlighted: false,
+	badge: null,
+	stock: null,
+	quota: null,
+	sold: 0,
+	valid_days: null,
+	session_count: null,
+	is_active: true,
+	created_at: '',
+	updated_at: '',
+	...over
+});
+
+export const couponResponse = (over: Partial<CouponResponse> = {}): CouponResponse => ({
+	id: 'coupon-1',
+	code: 'WELCOME',
+	discount_cents: 10000,
+	is_active: true,
+	expires_at: null,
+	created_at: '',
+	...over
+});
+
+/** 新裝機形狀：settings 表沒有任何列（見 admin/api.ts getSettings 註解）。 */
+export const settingsResponse = (over: Partial<SettingsResponse> = {}): SettingsResponse => ({
+	settings: {},
+	...over
+});
+
+/** 空庫形狀：計數全 0、比率 null、各 section 空陣列（契約允許空陣列，頁面須不炸）。 */
+export const adminReportResponse = (over: Partial<AdminReportResponse> = {}): AdminReportResponse => ({
+	revenue: { this_month_cents: 0, last_month_cents: 0, trend: [] },
+	kpis: {
+		new_members: { this_month: 0, last_month: 0 },
+		new_enrolments: { this_month: 0, last_month: 0 },
+		paid_orders_count: { this_month: 0, last_month: 0 },
+		attendance_rate: { this_month: null, last_month: null }
+	},
+	revenue_breakdown: [],
+	income_sources_12m: [],
+	category_split: [],
+	payment_split: [],
+	attendance_distribution: [],
+	age_distribution: [],
+	tier_distribution: [],
+	retention: [],
+	funnel: { trial_inquiries: 0, new_enrolments: 0 },
+	weekday_load: [],
+	venue_usage: [],
+	members: { total: 0, new_this_month: 0, active: 0 },
+	courses: [],
+	coaches: [],
+	...over
+});
+
+export const activityItem = (over: Partial<ActivityItem> = {}): ActivityItem => ({
+	kind: 'user',
+	label: '新會員 王小明 加入',
+	occurred_at: '2026-06-08T14:22:00Z',
+	...over
+});
+
+export const todaySession = (over: Partial<TodaySessionResponse> = {}): TodaySessionResponse => ({
+	id: 'session-1',
+	course_id: 'course-1',
+	course_name: '體操基礎班',
+	coach_name: null,
+	start_time: '10:00:00',
+	end_time: '11:00:00',
+	enrolled_count: 0,
+	venue: null,
+	status: 'upcoming',
 	...over
 });
