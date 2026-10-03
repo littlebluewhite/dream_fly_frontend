@@ -138,6 +138,35 @@ describe('購物車頁 — 已持有方案不計入總額', () => {
 		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
 	});
 
+	it('頁面已開啟後 auth 才水合成登入 → 補暖訂閱，已持有方案不計入總額', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /subscriptions/me': [
+					{
+						id: 'sub-1',
+						product_id: PASS.id,
+						product_name: PASS.name,
+						status: 'active',
+						started_at: '2026-06-01T00:00:00Z',
+						expires_at: null,
+						total_sessions: null,
+						remaining_sessions: null,
+						price_cents: 180000
+					}
+				]
+			})
+		);
+		cart.addItem(courseToCartItem(COURSE));
+		cart.addItem(passToCartItem(PASS));
+		const { getByText, container } = render(Page);
+		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 5,000');
+
+		await authStore.login('member@test.com', 'password123');
+
+		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
+		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
+	});
+
 	it('未持有時總計照舊算全部（無「已持有」標記）', () => {
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));

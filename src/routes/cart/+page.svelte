@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { cart } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
@@ -11,14 +10,13 @@
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；登入時 best-effort 暖訂閱。
+  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；登入時（含 auth 晚於頁面才水合）
+  // best-effort 暖訂閱。
   $: chargeable = chargeableLines($cart, $subscriptions);
   $: billable = new Set<CartItem>(chargeable);
   $: total = subtotalOf(chargeable);
 
-  onMount(() => {
-    if ($isLoggedIn) void refreshSubscriptions().catch(() => {});
-  });
+  $: if ($isLoggedIn) void refreshSubscriptions().catch(() => {});
 
   function removeItem(item: CartItem) {
     cart.remove(item.id);
