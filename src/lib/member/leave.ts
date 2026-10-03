@@ -3,7 +3,7 @@ import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
-import type { LeaveRequestResponse } from '$lib/api/generated';
+import type { CourseSessionResponse, LeaveRequestResponse } from '$lib/api/generated';
 
 /* ---- Leave requests（請假/補課） — Task 11（feat/backend-integration round 3）----
  * 全新 UI 流（repo 原無請假 UI，比照 Round 1 打卡 UI 先例：新寫網路層，不是替換
@@ -134,17 +134,9 @@ export interface CourseSession {
   end_time: string;
 }
 
-interface ApiCourseSession {
-  id: string;
-  course_id: string;
-  session_date: string;
-  start_time: string;
-  end_time: string;
-}
-
 /** 需登入,不帶 from/to——沿用後端預設範圍(今天起 28 天),足夠列出「未來場次」供
  *  請假/補課挑選,brief 未要求可調整範圍。 */
 export async function getCourseSessions(courseId: string): Promise<CourseSession[]> {
-  const list = await api<ApiCourseSession[]>(`/courses/${courseId}/sessions`);
+  const list = await api<CourseSessionResponse[]>(`/courses/${courseId}/sessions`);
   return list.map((s) => ({ id: s.id, session_date: s.session_date, start_time: s.start_time, end_time: s.end_time }));
 }
