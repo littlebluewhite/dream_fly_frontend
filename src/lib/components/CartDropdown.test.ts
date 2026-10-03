@@ -1,3 +1,4 @@
+import { get } from 'svelte/store';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import CartDropdown from './CartDropdown.svelte';
@@ -23,8 +24,8 @@ import { goto } from '$app/navigation';
 // the logged-in/out UI state, so mock it with a tiny local store — auth
 // mechanics themselves are covered in src/lib/stores/authStore.test.ts.
 vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA();
+	const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
+	return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
 });
 
 const COURSE: CatalogCourse = {
@@ -134,6 +135,29 @@ describe('CartDropdown — 已持有方案不計入總額', () => {
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));
 		const { getByText, container } = render(CartDropdown, { isOpen: true, onClose: () => {} });
+
+		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
+		expect(container.querySelector('.total-price')?.textContent).toBe('NT$ 3,200');
+	});
+
+	it('A 直接換登 B(不經登出)→ 以 B 的訂閱重新暖機，B 已持有的方案不計入總額', async () => {
+		const owned = {
+			id: 'sub-b', product_id: PASS.id, product_name: PASS.name, status: 'active',
+			started_at: '2026-06-01T00:00:00Z', expires_at: null, total_sessions: null,
+			remaining_sessions: null, price_cents: 180000
+		};
+		// A 沒有訂閱、B 持有 PASS——依當下登入者回應。
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /subscriptions/me': () => (get(authStore).member?.id === 'b@test.com' ? [owned] : []) })
+		);
+		await authStore.login('a@test.com', 'password123');
+		cart.addItem(courseToCartItem(COURSE));
+		cart.addItem(passToCartItem(PASS));
+		const { getByText, container } = render(CartDropdown, { isOpen: true, onClose: () => {} });
+		await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledTimes(1));
+		expect(container.querySelector('.total-price')?.textContent).toBe('NT$ 5,000');
+
+		await authStore.login('b@test.com', 'password123');
 
 		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
 		expect(container.querySelector('.total-price')?.textContent).toBe('NT$ 3,200');

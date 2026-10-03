@@ -44,14 +44,16 @@ export const FIXTURE_MEMBER: MockMember = {
 
 /** 家族 A(方法驅動)：login/register 直接把登入態寫入 store，logout 重置，hydrate
  *  no-op。roleFor 供角色感知的 login(mobile-admin/layout 依 email 判斷 admin/coach)；
- *  未帶入時 login 一律回 ['member']。 */
-export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[] }) {
+ *  未帶入時 login 一律回 ['member']。memberFor 供需要區分身分的測試(A→B 換登)；
+ *  未帶入時 member 一律 null。 */
+export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[]; memberFor?: (email: string) => MockMember | null }) {
 	const roleFor = opts?.roleFor ?? (() => ['member']);
+	const memberFor = opts?.memberFor ?? (() => null);
 	const state = writable<MockAuthState>({ loggedIn: false, member: null, roles: [] });
 	const authStore = {
 		subscribe: state.subscribe,
 		login: vi.fn(async (email: string, _password: string) => {
-			state.set({ loggedIn: true, member: null, roles: roleFor(email) });
+			state.set({ loggedIn: true, member: memberFor(email), roles: roleFor(email) });
 		}),
 		register: vi.fn(async () => {
 			state.set({ loggedIn: true, member: null, roles: ['member'] });
