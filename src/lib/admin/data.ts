@@ -17,6 +17,7 @@
  * PayStatus/AttMark(連同它們唯一的消費者 PAY_STATUS/ATT_MARK 與
  * MemberDialog 的死 member 分支)隨 Task 1(R13 小 bug 包)一併退役。 */
 import type { Tone } from '$lib/api/wire';
+import type { UserResponse } from '$lib/api/generated';
 import type { TodayStatus } from '$lib/domain/sessions';
 import type { MemberAccountStatus } from '$lib/domain/members';
 import type { VenueStatus } from '$lib/domain/venues';
@@ -87,15 +88,12 @@ export interface ClassRow extends ClassBase {
  * 緊急聯絡人等健身房專屬資料，因此輸出型別是 Member 的一個小子集（MemberAccount），
  * 而非硬塞成完整 Member。 */
 
-/** `GET /users`（admin）單筆使用者的 wire 形狀（僅本次映射用到的欄位）。 */
-export interface ApiUserAccount {
-	id: string;
-	name: string;
-	phone: string | null;
-	created_at: string;
-	is_active: boolean;
-	points_balance: number;
-}
+/** `GET /users`（admin）單筆使用者的 wire 形狀——產生型別 UserResponse 收窄到本映射
+ *  用到的欄位（測試夾具只需給這幾欄）。 */
+export type ApiUserAccount = Pick<
+	UserResponse,
+	'id' | 'name' | 'phone' | 'created_at' | 'is_active' | 'points_balance'
+>;
 
 export interface MemberAccount {
 	id: string;

@@ -15,15 +15,26 @@ import { MEMBER_COLORS, mapMemberAccount } from './data';
 // C4 批4(facade 純轉手退役):Ticket/TicketType/ClassStatus/Coach/Venue/
 // OrderStatus/Activity 七個型別改直取對應 $lib/domain 各 entity 檔 / $lib/api/wire
 // (原經 ./data 純轉手,零附加型別事實);ClassRow/Order/MemberAccount/
-// ApiUserAccount/TodayClass 是 admin/data.ts 本檔真內容(.map 衍生形狀 / GET 映射
+// TodayClass 是 admin/data.ts 本檔真內容(.map 衍生形狀 / GET 映射
 // 形狀),續留原處。
-import type { ClassRow, Order, MemberAccount, ApiUserAccount, TodayClass } from './data';
+import type { ClassRow, Order, MemberAccount, TodayClass } from './data';
 import type { Ticket, TicketType } from '$lib/domain/tickets';
 import type { ClassStatus } from '$lib/domain/classes';
 import type { Coach } from '$lib/domain/coaches';
 import type { Venue } from '$lib/domain/venues';
 import type { OrderStatus } from '$lib/api/wire';
-import type { AdminOrderListResponse, AdminOrderSummary, OrderResponse } from '$lib/api/generated';
+import type {
+	ActivityItem,
+	ActivityResponse,
+	AdminOrderListResponse,
+	AdminOrderSummary,
+	CouponListResponse,
+	CouponResponse,
+	OrderResponse,
+	SettingsResponse,
+	UserListResponse,
+	UserResponse
+} from '$lib/api/generated';
 import { paidAtLabel } from './components/order-status';
 import type { Activity } from '$lib/domain/activity';
 import type { IconName } from '$lib/icon-registry';
@@ -273,19 +284,14 @@ export const getTodaySessions = async (): Promise<TodaySessionsData> => {
 /* ═════════════════════════ 最新動態（GET /reports/admin/activity，見 integration-
  * contract.md §3.24，Task F11：admin 儀表板最新動態接真） ═════════════════════════ */
 
-interface ApiAdminActivityItem {
-	kind: 'user' | 'order' | 'enrolment' | 'inquiry';
-	label: string;
-	occurred_at: string;
-}
-interface ApiAdminActivityResponse {
-	items: ApiAdminActivityItem[];
-}
+/** 前端已知的動態來源。後端 ActivityItem.kind 刻意保留 String(報表 kind 不收 enum)，
+ *  這組值域是前端配圖示的假設，不是產生型別。 */
+type ActivityKind = 'user' | 'order' | 'enrolment' | 'inquiry';
 
 /** kind → icon/tone/bg 對照(前端配置——後端只給 kind，不含圖示資訊，見契約裁決「kind
  *  供前端配對應圖示，不做其他語意保證」)。沿用既有 Icon 註冊集與 Activity 既有
  *  tone(CSS 變數字串，非 Badge Tone)/bg 慣例。 */
-const ACTIVITY_KIND_ICON: Record<ApiAdminActivityItem['kind'], { icon: IconName; tone: string; bg: string }> = {
+const ACTIVITY_KIND_ICON: Record<ActivityKind, { icon: IconName; tone: string; bg: string }> = {
 	user: { icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
 	order: { icon: 'credit-card', tone: 'var(--df-success)', bg: 'var(--df-success-bg)' },
 	enrolment: { icon: 'book-open', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)' },
@@ -296,8 +302,8 @@ const ACTIVITY_KIND_ICON: Record<ApiAdminActivityItem['kind'], { icon: IconName;
  *  原樣穿透為 text；occurred_at(ISO8601)轉為顯示用 "YYYY-MM-DD HH:MM"(同 mapCoach.
  *  lastLogin 的 isoDateTime 慣例，這裡沒有既有的相對時間("N 分鐘前")格式化工具，不
  *  另外發明一套)。 */
-function mapActivityItem(item: ApiAdminActivityItem): Activity {
-	const { icon, tone, bg } = ACTIVITY_KIND_ICON[item.kind];
+function mapActivityItem(item: ActivityItem): Activity {
+	const { icon, tone, bg } = ACTIVITY_KIND_ICON[item.kind as ActivityKind];
 	return { icon, tone, bg, text: item.label, time: isoDateTime(item.occurred_at) };
 }
 
@@ -308,7 +314,7 @@ export interface RecentActivityData {
 /** GET /reports/admin/activity——UNION 四來源(新會員/新付款訂單/新報名/新洽詢)最近
  *  20 筆倒序，`{ items: [...] }` 陣列包裝(裁決 6，本端點不是單一物件回應)。 */
 export const getRecentActivity = (): Promise<RecentActivityData> =>
-	api<ApiAdminActivityResponse>('/reports/admin/activity').then((r) => ({
+	api<ActivityResponse>('/reports/admin/activity').then((r) => ({
 		activity: r.items.map(mapActivityItem)
 	}));
 
@@ -494,8 +500,6 @@ export const updateCoach = (id: string, body: CoachWriteBody): Promise<ApiCoach>
  * (見 data.ts 的 MemberAccount/mapMemberAccount)。學員管理頁(routes/admin/members/
  * +page.svelte)與首頁概覽卡(routes/admin/+page.svelte)皆已接上這支 getter(Task 5)。 */
 
-type ApiUserListResponse = ApiPage<'users', ApiUserAccount>;
-
 export interface MembersData {
 	members: MemberAccount[];
 	/** GET /users 分頁 meta 穿透（Task 17）——PaginationBar 據此換頁。 */
@@ -504,7 +508,7 @@ export interface MembersData {
 	perPage: number;
 }
 export const getMembers = (page = 1): Promise<MembersData> =>
-	api<ApiUserListResponse>(`/users?page=${page}`).then((r) => ({
+	api<UserListResponse>(`/users?page=${page}`).then((r) => ({
 		members: r.users.map(mapMemberAccount),
 		...pageMeta(r)
 	}));
@@ -528,7 +532,7 @@ export interface CreateMemberBody {
 	birth_date?: string;
 }
 export const createMember = (body: CreateMemberBody): Promise<MemberAccount> =>
-	api<ApiUserAccount>('/users', { method: 'POST', body: JSON.stringify(body) }).then(mapMemberAccount);
+	api<UserResponse>('/users', { method: 'POST', body: JSON.stringify(body) }).then(mapMemberAccount);
 
 export interface UpdateMemberBody {
 	name?: string;
@@ -536,7 +540,7 @@ export interface UpdateMemberBody {
 	is_active?: boolean;
 }
 export const updateMember = (id: string, body: UpdateMemberBody): Promise<MemberAccount> =>
-	api<ApiUserAccount>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then(mapMemberAccount);
+	api<UserResponse>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }).then(mapMemberAccount);
 
 /* ═════════════════════════ 優惠碼（GET/POST/PATCH/DELETE /coupons，admin-only；
  * Task 8 piece 3 建立+列表，Task F6 補上編輯/停用/刪除） ═════════════════════════
@@ -546,17 +550,6 @@ export const updateMember = (id: string, body: UpdateMemberBody): Promise<Member
  * CouponCreateDialog 編輯模式最下方的危險區，需先經確認對話框（見
  * routes/admin/coupons/+page.svelte）才會真的送出；列表列的「編輯」「停用/啟用」
  * 則是一鍵直達的主要路徑，不需要確認。 */
-
-export interface ApiCoupon {
-	id: string;
-	code: string;
-	discount_cents: number;
-	is_active: boolean;
-	expires_at: string | null;
-	created_at: string;
-}
-
-type ApiCouponListResponse = ApiPage<'coupons', ApiCoupon>;
 
 /** discount 經 ntd() 換成 NT$；expiresAt 取日期前 10 碼（同其餘日期欄位慣例），
  *  null（永久有效）顯示 '—'。 */
@@ -568,7 +561,7 @@ export interface Coupon {
 	expiresAt: string;
 }
 
-function mapCoupon(c: ApiCoupon): Coupon {
+function mapCoupon(c: CouponResponse): Coupon {
 	return {
 		id: c.id,
 		code: c.code,
@@ -586,7 +579,7 @@ export interface CouponsData {
 	perPage: number;
 }
 export const getCoupons = (page = 1): Promise<CouponsData> =>
-	api<ApiCouponListResponse>(`/coupons?page=${page}`).then((r) => ({
+	api<CouponListResponse>(`/coupons?page=${page}`).then((r) => ({
 		coupons: r.coupons.map(mapCoupon),
 		...pageMeta(r)
 	}));
@@ -597,8 +590,8 @@ export interface CreateCouponBody {
 	expires_at?: string;
 }
 
-export const createCoupon = (body: CreateCouponBody): Promise<ApiCoupon> =>
-	api<ApiCoupon>('/coupons', { method: 'POST', body: JSON.stringify(body) });
+export const createCoupon = (body: CreateCouponBody): Promise<CouponResponse> =>
+	api<CouponResponse>('/coupons', { method: 'POST', body: JSON.stringify(body) });
 
 export interface UpdateCouponBody {
 	discount_cents?: number;
@@ -611,8 +604,8 @@ export interface UpdateCouponBody {
  *  編輯模式 + coupon-request.ts 的 buildUpdateCouponBody，經 coupons/+page.svelte）一律全量送出這三欄，
  *  不利用「省略」語意——表單本來就持有完整的目前值，沒有「部分欄位」的中介狀態需要
  *  表達（同 MemberEditDialog/CoachEditDialog 的全量 resend 慣例）。 */
-export const updateCoupon = (id: string, body: UpdateCouponBody): Promise<ApiCoupon> =>
-	api<ApiCoupon>(`/coupons/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const updateCoupon = (id: string, body: UpdateCouponBody): Promise<CouponResponse> =>
+	api<CouponResponse>(`/coupons/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 /** DELETE /coupons/{id} → 204 No Content（同 member/waitlist.ts cancelWaitlist 的
  *  DELETE 慣例，api() 對 204 回傳 undefined，見 client.ts）。硬刪除，語意見本節開頭
@@ -655,13 +648,6 @@ interface ApiNotificationFlags {
 }
 interface ApiSecuritySettings {
 	twoFA?: boolean;
-}
-interface ApiSettingsResponse {
-	settings: {
-		studio_profile?: ApiStudioProfile;
-		notification_flags?: ApiNotificationFlags;
-		security?: ApiSecuritySettings;
-	};
 }
 
 export interface StudioProfile {
@@ -722,17 +708,19 @@ export interface SettingsData {
 	notificationFlags: NotificationFlags;
 	security: SecuritySettings;
 }
-function mapSettings(r: ApiSettingsResponse): SettingsData {
+/** SettingsResponse 的 value 是 JsonValue(後端不逐欄驗證)；三個慣例 key 的形狀是
+ *  前端依契約 §3.25 所做的斷言，故在此處 cast。 */
+function mapSettings(r: SettingsResponse): SettingsData {
 	const s = r.settings ?? {};
 	return {
-		studioProfile: mapStudioProfile(s.studio_profile),
-		notificationFlags: mapNotificationFlags(s.notification_flags),
-		security: mapSecuritySettings(s.security)
+		studioProfile: mapStudioProfile(s.studio_profile as ApiStudioProfile | undefined),
+		notificationFlags: mapNotificationFlags(s.notification_flags as ApiNotificationFlags | undefined),
+		security: mapSecuritySettings(s.security as ApiSecuritySettings | undefined)
 	};
 }
 
 export const getSettings = (): Promise<SettingsData> =>
-	api<ApiSettingsResponse>('/settings').then(mapSettings);
+	api<SettingsResponse>('/settings').then(mapSettings);
 
 /** PUT /settings body —— 三組皆選填（省略＝該 key 不 upsert，維持後端原值，契約
  *  §3.25 裁決 1；空物件整包送出視為 no-op，裁決 2）。呼叫端（routes/admin/settings/
@@ -751,7 +739,7 @@ export interface SettingsWriteBody {
 	security?: Partial<SecuritySettings>;
 }
 export const putSettings = (body: SettingsWriteBody): Promise<SettingsData> =>
-	api<ApiSettingsResponse>('/settings', {
+	api<SettingsResponse>('/settings', {
 		method: 'PUT',
 		body: JSON.stringify({ settings: body })
 	}).then(mapSettings);
