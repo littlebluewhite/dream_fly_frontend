@@ -1,17 +1,19 @@
 # 登入狀態單一 owner 與跨分頁同步、點名選項單源、結帳 relay 收合、mobile 表單新增/編輯分開、閘門單一寫入動詞 write()、store 測試只留接線
 
-> Status: Accepted(§1–§6)。源自 2026-10-03 架構深化工程 Round 17(前端部分)。base `15789d4`;
+> Status: Accepted(§1–§10)。源自 2026-10-03 架構深化工程 Round 17(前端部分)。base `15789d4`;
 > FE-1 `539e7ef`(點數原因標籤)、FE-2 `eba9ab1`(跟隨分頁 refresh)、FE-3 `25be1da`+`19112e2`(登入狀態
 > + 跨分頁同步)、FE-4 `c1e9dfc`(點名選項)、FE-5 `fe7efec`(結帳收合、購物車總額)、FE-6
 > `b575a3f`+`4abca5b`(mobile 表單)、FE-7 `a21f424`(`write()`)、FE-8 `b1a525b`(退役 `markMutated`/
-> `mutate`)、FE-9 `1c5244a`+`56eb88c`(store 測試)、FE-10(本篇與各 ADR 增補)。**§7–§10 保留給本輪
-> 後續任務(wire 型別採用等),本篇暫不撰寫。**
+> `mutate`)、FE-9 `1c5244a`+`56eb88c`(store 測試)、FE-10(本篇 §1–§6 與各 ADR 增補)。§7–§10 為本輪 wire 型別
+> 採用:W-4 `cb3ff10`(`scripts/wire.mjs`、首次匯入 bindings)、W-5 `58586fd`+`46cec3f`(點數、今日場次)、W-6
+> `f46080e`+`8966b99`+`daed224`(請假、訂單、移除待付款→已付款)、W-7 `e95d141`..`73beb9d`(其餘 surface、ADR-0007
+> 增補)、W-8 `49ac883`..`f59cc2f`(admin 頁 HTTP seam、ADR-0026 增補)、FE-11(本節與 CONTEXT/architecture 同步)。
 
 R17 沿 `docs/adr/0018`/`0019`/`0022`/`0023`/`0024`/`0025`/`0026`「一輪多案、單篇記錄」的體例,不新開架構
 類別。共同目標仍是 locality:「這個分頁登入的是誰」「點名有哪幾種狀態」「結帳送單的序列」「mobile 表單
 怎麼送出」「寫入共享 store 的協定」「store 測試測什麼」各自只住一處。本輪修掉的真 bug:退款點數被標成
 「會員點數調整」、手機點名「遲到」默默變「出席」、token 失效後畫面仍顯示登入(含跨分頁)、跟隨分頁拿舊
-refresh token 換新而 401、購物車總額把已持有方案算進去。本篇依序記錄六項決定、明確**不做**的事、可見的
+refresh token 換新而 401、購物車總額把已持有方案算進去。本篇依序記錄十項決定(§1–§6 為 R17 前端本體,§7–§10 為 wire 型別採用)、明確**不做**的事、可見的
 行為變更、刻意遞延的已知項、被取代的舊 ADR 句子,以及 ADR 點名測試的新舊對照。被既有 ADR 點名的地方,
 各篇已補 2026-10-03 的 dated 增補指回本篇;`CONTEXT.md` 與 `docs/architecture.md` 直接改成現況。
 
@@ -165,9 +167,99 @@ mutator)。語意:
 
 **淨效果**:全套 2568 → 2530 個測試(2 skipped 不變),檔數 237 → 239。
 
-## §7–§10(保留)
+### 7. wire 型別改由後端產生並逐位元鏡像;response `Api*` 手寫型別退場(W-4、W-7)
 
-保留給本輪後續任務(wire 型別採用等),此處不寫。
+**病灶**:前端的 response 型別全是手抄,後端改名、刪欄、加欄時 `svelte-check` 不會紅(`docs/adr/0007` 增補
+記了一例:教練請假 PATCH 回應的 `user_name` 缺了約 12 週,check 全程綠)。
+
+**決定**:
+
+- 後端 Rust DTO 經 ts-rs 產生 TypeScript,committed 在後端 `bindings/`(後端 `docs/adr/0016`)。
+  `scripts/wire.mjs`(只用 node 內建模組)`sync` 把它**逐位元組鏡像**到 `src/lib/api/generated/`(多的檔會刪),
+  `check` 回報 stale/missing/extra 並 exit 1;找不到後端目錄或其下沒有 `bindings/` 時印 skipped、exit 0。
+  `npm run check` 先跑 `wire:check` 再跑 `svelte-kit sync && svelte-check`(`package.json`)。`generated/` 不得手改、
+  不得 reformat;後端有改 DTO 時在後端重新產生,再回前端 `npm run wire:sync`。後端目錄由 `DREAMFLY_BACKEND_DIR`
+  指定。
+- 手寫 response `Api*` 型別刪除:`ApiPage` 刪(各 `*ListResponse` 取代),`ApiTodaySession`、`ApiLeaveRequest`、
+  `ApiLedgerEntry`/`ApiPointsMe`、admin/member/coach/public 各 `api.ts` 內的 `ApiOrder*`、`ApiCoupon*` 等一併換成
+  產生型別。窄化投影改寫成產生型別的 `Pick<…>`:`ApiUser`(`AuthUserResponse` 的 4 欄)、`ApiMe`、
+  `ApiUserAccount`(`UserResponse` 的 6 欄),後端改名或刪欄時在前端變紅。
+  **保留**手寫的 `ApiStudioProfile`/`ApiNotificationFlags`/`ApiSecuritySettings`:它們描述的是後端刻意留 `JsonValue`
+  的 settings 值上、前端依契約做的形狀斷言,在映射處 cast 進來。
+- **Ruling W7a**:只准 `import type` 自 `$lib/api/generated`(`export type { … } from './generated'` 亦可),直接
+  import 或經 `wire.ts` 轉出皆可,**沒有「單一入口」規則**;`wire.ts` 不得有自 `./generated` 的 runtime import。
+- **Ruling W7b**:request body 與 UI 目標(view)型別仍手寫——bindings 只含 response(後端 `docs/adr/0016`)。
+- 以窮舉守住值域:`Record<GeneratedEnum, …>` 查表(`ORDER_STATUS: Record<OrderStatus, …>`、
+  `NOTIF_TYPE_MAP: Record<NotificationType, …>`、`TODAY_STATUS: Record<SessionStatus, …>`),
+  `describeLedgerReason` 的 `default` 以 `reason satisfies never` 在編譯期卡新增的 `PointReason`
+  (執行期仍 fallback 到「會員點數調整」,不讓整頁帳本因新值崩);fixtures 與 mock 用 `satisfies` 讓缺欄位編譯就紅。
+- 測試用 fixture 住 `src/lib/testing/wire-fixtures.ts`:每個 builder 回傳完整的產生型別、帶預設值、收 `Partial<T>`
+  覆寫(W-6 起 `orderSummary`/`adminOrderSummary`/`orderResponse`/`leaveRequest`/`adminLeaveRequest`/`pointsMe`,
+  W-8 增 venue/product/coupon/settings/adminReport/activityItem/todaySession/coach/user/course)。後端新增欄位時
+  只加一個預設值。
+- 邊界上的值域收窄:`preferences` 在後端是 `JsonValue | null`、沒有形狀驗證,`prefsObject()` 只認 JSON 物件,
+  其餘視為未設定。
+- `docs/adr/0007` 的放置規則(「≥2 surface 才進 `wire.ts`」)被取代,已在該篇 2026-10-03 增補(W-7)寫明,
+  此處不重寫。
+
+### 8. 點數「本月累積」與今日場次狀態改讀後端(W-5)
+
+**病灶**:(a) 會員點數頁的「本月累積」是前端把帳本**第一頁**的正向 delta 加總,以 UTC 日期切月:第 2 頁以後
+的入帳不算,台灣月初也會切錯,且把 `refund_restore`/`admin_adjust` 的正值也算進去。(b) 今日場次的狀態由
+前端用瀏覽器牆上時鐘推導(`deriveSessionStatus`、`wallClockTime`),另有沒人產生的 `'soon'`/`prep`。
+
+**決定**:
+
+- `GET /points/me` 多回 `earned_this_month`(後端:工作室月份、只算 `reason = checkout_earn`)。前端新增
+  `pointsEarnedThisMonth` store,由 `refreshPoints` 的 `apply` 寫入,**隨 session 閘門的身分改變邊重置**
+  (沿用既有 `reset`,沒有新路徑);點數頁直接顯示 `+{$pointsEarnedThisMonth}`,刪第一頁加總與 UTC 切法。
+- 今日場次改讀後端 `status`:`TODAY_STATUS: Record<SessionStatus, TodayStatus>`
+  (`upcoming`→`wait`、`ongoing`→`live`、`done`→`done`)。刪 `deriveSessionStatus`、`wallClockTime`、
+  `TodayStatus`/`SESSION_STATUS`/`CLASS_STATUS` 的 `'soon'`、admin 的 `TodayState`(5 值 union,含 prep);
+  `toTodaySession(s)` 不再收 `now`,`mapTodaySession`/`mapTodayClass`/`mapAttendanceClass` 一併去掉 `now` 管線。
+  狀態仍是頁面載入當下的值,與以前一樣不輪詢。
+
+**可見變更**見下方清單第 10、11 條。
+
+### 9. 訂單付款時間來自後端;前端不再有待付款 → 已付款(W-6、Ruling W6b)
+
+**病灶**:admin 訂單的「收款時間」是前端造的:`pending` 以外一律取建立日 `isoDate(created_at)`,
+`applyStatusChange` 則用 `o.date`——不是真的付款時間。同時,後端 BE-3 已拒絕待付款 → 已付款(400),執行期也沒有
+路徑產生 pending 訂單(`create_order` 寫死 `'paid'`),前端卻仍提供這條轉移與手機「標記已付款」。
+
+**決定**:
+
+- `AdminOrderSummary.paid_at` 為真值來源。`admin/components/order-status.ts` 新增 `paidAtLabel(status, paidAt)`:
+  `paid_at` 為 null 時,pending 顯示「—（待付款）」,其餘顯示「—」;否則 `isoDate(paid_at)`(與訂單日期同格式)。
+  `mapAdminOrder` 與 `applyStatusChange(rows, id, status, paidAt)` 都用它;`PATCH /orders/{id}/status` 的
+  回應(`OrderResponse`)帶 `paid_at`,`changeOrderStatus` 的 deps 型別是
+  `Pick<OrderResponse, 'status' | 'paid_at'>`,順帶刪掉 `as OrderStatus` 轉型。後端 `update_status_tx` 不動
+  `paid_at`,所以退款/取消的訂單保留原付款時間。
+- **移除待付款 → 已付款**:`LEGAL_NEXT.pending = ['cancelled']`,刪 mobile-admin `markOrderPaid` 與
+  `OrderSheet` 的「標記已付款」按鈕(連同 `saving`、`STATUS_ERROR_TEXT` 等孤兒)。此後沒有任何 ops mutator 走
+  `opsGate.write()`(寫入動詞維持「寫後無條件重抓」);`write()` 路徑由 mobile-admin 的 `markMessageRead` 與
+  `hydration-gate.test.ts` 的協定測試驗證。
+- **可見變更:手機後台訂單頁唯讀;待付款訂單只能在桌面取消。**手機 `OrderSheet` 的 pending 頁尾是「發送催繳」(本機
+  toast,無後端呼叫)與「關閉」,其他狀態只有「關閉」。
+- `docs/adr/0022` 已加一行增補指回本篇;`docs/adr/0018`/`0020`/`0021`/`0023` 提到 `markOrderPaid` 的歷史敘述見
+  「被取代的 ADR 句子」。
+
+### 10. admin 頁面測試走 HTTP seam(W-8、Ruling W8a)
+
+**病灶**:十個 `routes/admin/**/page.test.ts` 整支 mock `$lib/admin/api`,等於跳過真 mapper;回應型別改由後端
+產生後,型別漂移與 mapper bug 在頁面測試裡看不到,fixture 還出現 wire 沒有的欄位(訂單頁假列的
+`method: '信用卡'`)。
+
+**決定**(細節見 `docs/adr/0026` 的 W-8 增補,此處只列骨架):
+
+- 新增 `src/lib/testing/admin-routes.ts`:`ADMIN_ROUTES = { ...OPS_ROUTES, … }`,補 venues、products、coupons、
+  settings、reports/admin、reports/admin/activity、sessions/today 的預設回應(全由 `wire-fixtures.ts` builders
+  組出),另附 `apiCalls`/`apiBody` 兩支呼叫檢視 helper;重用既有 `fakeRouter`,沒有第二個 router。
+- 十個 admin 頁測試改 `vi.mock('$lib/api/client')` + `fakeRouter(overrides, ADMIN_ROUTES)`,斷言 HTTP 路徑、方法與
+  JSON body;案例數逐檔不變(147 → 147)。
+- **Ruling W8a**:`import-scan.test.ts` 新增契約「零整支 `vi.mock('$lib/admin/api')`」。「整支」指 automock 或
+  零參數 factory;帶 `importOriginal` 的部分替換不在此列。
+- **淨效果**:W-4 基線 2530 → W-8 結束 2528 個測試(2 skipped 不變);W-8 本身 2527 → 2528(+1,新契約)。
 
 ## 明確不做的事(供未來止步)
 
@@ -195,6 +287,17 @@ mutator)。語意:
 8. **mobile-admin 表單送出時才驗證**,錯誤顯示在欄位上(不再只是按鈕灰掉);建立失敗表單留著重試(FE-6)。
 9. **教練新增:綁定失敗後 email/姓名/密碼鎖住**,toast 改「請直接再按一次「建立教練」重試綁定。」,並指名第一次
    建立的帳號(FE-6)。
+
+10. **會員點數頁「本月累積」改讀後端 `earned_this_month`**:工作室月份、只算 `checkout_earn`、涵蓋所有頁。以前是第一頁
+    帳本的正向 delta 加總(UTC 切月),所以現在會多算第 2 頁以後的本月入帳,不再算 `refund_restore`/`admin_adjust`
+    的正值,台灣月初也正確(W-5)。
+11. **今日場次狀態跟後端時鐘走**,不再用瀏覽器本地牆上時鐘;不同時區或時鐘偏差的檢視者看到的是工作室的狀態(W-5)。
+    「即將開始」(`soon`)隨查表刪除,但沒有任何畫面實際產生它,所以沒有畫面失去狀態。
+12. **admin 與 mobile-admin 訂單「收款時間」顯示後端真正的 `paid_at`**;尚無付款時間時 pending 顯示「—（待付款）」、其餘
+    「—」(W-6)。
+13. **桌面訂單狀態下拉:待付款只剩「已取消」**(W-6)。
+14. **手機後台訂單頁唯讀**:移除「標記已付款」;待付款訂單只能在桌面取消(W-6,Ruling W6b;後端 BE-3 本就拒絕這條轉移)。
+15. **活動紀錄的未知 `kind` 有 fallback**,不再因新值而壞掉(W-7,`728bdda`)。
 
 其餘改動 wire 等價。
 
@@ -224,6 +327,17 @@ mutator)。語意:
 - **`setPref`/教練 `CoachNotFound` 重試/序列化測試保留**(模組專屬行為,非閘門協定),若審查要刪是各自獨立的區塊(FE-9)。
 - **`mobile-admin/stores.test.ts` fresh-import 測試標題殘留「、」**已於 `56eb88c` 修正;`tsc --noUnusedLocals` 在
   4 個未動檔案的既有 unused-local 警告未碰(FE-9)。
+
+- **wire 型別採用(W-4～W-8)**:
+  - **未知 `SessionStatus` 在執行期會 throw**:`TODAY_STATUS[s.status]` 取不到時 `toTodaySession` 後續失敗。
+    編譯期 `Record<SessionStatus, …>` 會在 bindings 同步後變紅,但後端先上線、前端未同步時執行期會壞(W-5)。
+    (對照:`describeLedgerReason` 刻意保留執行期 fallback。)
+  - **`mobile-admin/stores.test.ts` 仍以 `importOriginal` 局部 mock `$lib/admin/api`**(換掉六支寫入函式):
+    W8a 契約只擋整支 mock,這支屬 mobile-admin store 測試,不在 W-8 範圍(W-8)。
+  - **member/mobile/public 頁面測試仍 mock 各自的 api 模組**(`docs/adr/0026` 的遞延,W-8 只對 admin 重開並結案)。
+  - **`ADMIN_ROUTES` 部分預設回應目前沒有測試命中**(各頁都覆寫自己的主路由);保留是依任務要求,屬預備(W-8)。
+  - **「發送催繳」仍在手機 `OrderSheet` 的 pending 頁尾**:純本機 toast、無後端呼叫;若「唯讀」也要拿掉它是一行刪除(W-6)。
+  - **`wire:check` 在沒有 `DREAMFLY_BACKEND_DIR` 或後端無 `bindings/` 時 skipped、exit 0**:CI 若沒設就不擋漂移(W-4)。
 
 ## 被取代的 ADR 句子(舊 → 新)
 
@@ -259,6 +373,9 @@ mutator)。語意:
 | `0025` :113-116、:127-131 | 各模組匯出 `reset…ForTests = gate.reset`(`resetNotificationsForTests` 等),測試 `beforeEach` 呼叫;`*Hydrated.set(true)` 改 `reset…ForTests()` | 只剩 `resetOpsForTests`;其餘用 `resetSessionStores()`(§6) |
 | `0025` :426、`0023` :346 | 判準守恆釘的 `opsHydrated.set(false)`、`opsHydrated` 皆不動 | 改 `resetOpsForTests()`;`opsHydrated` 不存在 |
 | `0025` :300-333、:443 | `submitOrder` 為 mobile adapter 委派目標;`placeOrder — 委派 submitOrder` describe | `submitOrder` 已刪(§3);序列覆蓋改走 `confirmPay` |
+| `0007`(R13/R16 增補)「≥2 surface 才進 `wire.ts`」、`ApiUser` 窄化投影「不會漂移」 | 手寫 response 型別住 `wire.ts`,窄化投影不漂移 | 回應形狀只有 `$lib/api/generated` 一個來源;窄化投影必須是產生型別的 `Pick<…>`(§7;該篇 W-7 增補) |
+| `0018`/`0020`/`0021`/`0022`/`0023` 中 `markOrderPaid` 的敘述 | `markOrderPaid` 是 mobile-admin 的待付款 → 已付款 mutator(走 `opsGate.write`) | 已刪;手機訂單頁唯讀,`LEGAL_NEXT.pending = ['cancelled']`(§9);歷史敘述原文不改 |
+| `0026` 的「明確不做」/「已知遞延」列 | admin 頁測試整支 mock `$lib/admin/api` | 走 HTTP seam + `ADMIN_ROUTES`(§10;`0026` W-8 增補) |
 | `0016` :159-164 第 3 層「各 adapter 薄採用釘」 | 每 mutator 的 F1 跨登入釘、在飛登出棄寫釘、F2 完整性釘 | 每個 mutator 一條接線釘,只斷言可觀察結果(哪個政策、結果對不對);跨登入/在飛登出/序列化屬協定層,只在 `hydration-gate.test.ts`/`session-gate.test.ts` 驗一次(§6) |
 
 ## ADR 點名的測試:改寫,不刪(舊 → 新)
@@ -280,6 +397,11 @@ mutator)。語意:
 once-per-identity/A→B/logout-reset/queued-write-skip(22 → 18)、兩個通知頁的「首次成功載入會把守衛設為 true」。
 
 ## 關聯 ADR
+
+- **`docs/adr/0007`**:response 型別改由後端產生、放置規則被取代(W-7 增補,已有;§7)。
+- **`docs/adr/0022`**:`markOrderPaid` 移除(W-6 修正 1 增補,已有;§9)。
+- **`docs/adr/0026`**:admin 頁測試 HTTP seam 遞延重開並結案(W-8 增補,已有;§10)。
+- 後端 **`docs/adr/0016`**:wire 型別產生(ts-rs、`bindings/`)。
 
 - **`docs/adr/0003`**:`createCheckout` 收合 relay(FE-5 增補,已有)。
 - **`docs/adr/0004`**:購物車總額改走 `chargeableLines`(FE-5 增補,已有)。

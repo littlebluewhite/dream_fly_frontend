@@ -267,11 +267,17 @@ directly rather than through the `member/stores` barrel. There is no import-dire
 mobile → member imports (`docs/adr/0014` §1, `docs/adr/0025`).
 
 Backend wire shapes shared across ≥2 surfaces — order-status badges (`orderStatusBadge`, with a fallback
-for unknown statuses), list-page envelopes, member/coach paired DTOs, the admin/coach `TodaySessionResponse` (generated, re-exported),
+for unknown statuses), the admin/coach `TodaySessionResponse` (generated, re-exported),
 the `OrderStatus`/`LeaveStatus` unions (generated, re-exported; leave and order DTOs are imported straight from
 `$lib/api/generated`), display atoms like `ageRange`/`initialOf` — live in the
 single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy
-(`docs/adr/0007`). Wire also owns two pieces of order knowledge as zero-import pure helpers:
+(`docs/adr/0007`). Response shapes themselves have one source:
+`src/lib/api/generated/`, a byte-exact mirror of the backend's ts-rs `bindings/` kept in sync by
+`scripts/wire.mjs` (`npm run wire:sync`; `npm run check` runs `wire:check` first). Hand-written code
+only `import type`s from it, directly or via `wire.ts` (no single-entry rule); request bodies and UI view
+types stay hand-written, and the only `Api*` types left are `Pick<…>` projections (`ApiUser`, `ApiMe`,
+`ApiUserAccount`) and the settings-shape assertions (`ApiStudioProfile` etc.) (`docs/adr/0007`
+addendum, `docs/adr/0027` §7). Wire also owns two pieces of order knowledge as zero-import pure helpers:
 `orderIdentity`, the dual-identity protocol picking the display `order_number` vs the real uuid for
 `PATCH /orders/{id}/status` (used by admin's `mapAdminOrder` and member's `mapOrder`), and `taxFromGross`,
 the 5% tax-inclusive display derivation `round(amount - amount/1.05)` whose unit follows the caller (used
@@ -287,7 +293,10 @@ mobile-admin). It recognises `CoachNotFoundError` with `instanceof`, so a whole-
 `$lib/coach/api` would break it: the eight `routes/coach/**/page.test.ts` files test through the HTTP
 seam — `vi.mock('$lib/api/client')` + `fakeRouter` with `src/lib/testing/coach-routes.ts`'s
 `COACH_ROUTES` — and an `import-scan.test.ts` contract pins zero whole-module `vi.mock('$lib/coach/api')`
-(`docs/adr/0014` addenda, `docs/adr/0026`). Per-entity *action* error tables stay at call sites —
+(`docs/adr/0014` addenda, `docs/adr/0026`). The ten `routes/admin/**/page.test.ts` files do the same with
+`src/lib/testing/admin-routes.ts`'s `ADMIN_ROUTES` (`{ ...OPS_ROUTES, … }`, plus the `apiCalls`/`apiBody`
+inspection helpers), and a sibling contract pins zero whole-module `vi.mock('$lib/admin/api')`
+(`importOriginal` partial mocks are exempt; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). Per-entity *action* error tables stay at call sites —
 `docs/adr/0014` draws that boundary. mobile-admin's coach attendance page's `ATTENDANCE_ERROR_TEXT` is
 one: it maps 403/404/422 to the same wording desktop's inline attendance-error table uses, so a save
 failure shows the specific reason (`docs/adr/0011` addendum).
