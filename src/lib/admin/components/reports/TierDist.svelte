@@ -7,7 +7,7 @@
    * normalizeBars(counts, 100) — all-zero renders zero-height bars, never NaN. */
   import { Card } from '$lib/components/ui';
   import type { AdminTierDistRow } from '$lib/admin/api';
-  import { TIER_LABEL, tierVM, REPORT_SCALES } from '$lib/admin/report-math';
+  import { TIER_LABEL, bucketLabel, tierVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminTierDistRow[] } = $props();
 
@@ -31,8 +31,8 @@
         >
           {d.count}
         </span>
-        <div class="bar" style="height:{heights[i]}px; background:{TIER_LABEL[d.bucket].color};"></div>
-        <span style="font-size:12px; color:var(--df-text-light);">{TIER_LABEL[d.bucket].label}</span>
+        <div class="bar" style="height:{heights[i]}px; background:{bucketLabel(TIER_LABEL, d.bucket).color};"></div>
+        <span style="font-size:12px; color:var(--df-text-light);">{bucketLabel(TIER_LABEL, d.bucket).label}</span>
       </div>
     {/each}
   </div>

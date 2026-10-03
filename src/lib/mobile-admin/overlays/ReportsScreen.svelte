@@ -50,8 +50,8 @@
     paymentVM,
     fmtHours,
     TIER_LABEL,
-    REVENUE_SOURCE_LABEL,
     revenueSourceLabel,
+    bucketLabel,
     paymentMethodLabel,
     WEEKDAY_LABEL,
     AGE_BUCKET_LABEL,
@@ -189,9 +189,9 @@
               style="display:flex; align-items:center; gap:11px; padding:12px 16px; width:100%;
                 border-bottom:{i < data.revenueBreakdown.length - 1 ? '1px solid var(--df-border)' : 'none'};"
             >
-              <span style="width:9px; height:9px; border-radius:999px; background:{REVENUE_SOURCE_LABEL[r.source].color}; flex:none;"></span>
+              <span style="width:9px; height:9px; border-radius:999px; background:{revenueSourceLabel(r.source).color}; flex:none;"></span>
               <div style="flex:1; min-width:0;">
-                <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{REVENUE_SOURCE_LABEL[r.source].label}</div>
+                <div style="font-size:13.5px; font-weight:600; color:var(--df-text-dark);">{revenueSourceLabel(r.source).label}</div>
                 <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">訂單 {r.ordersCount} 筆 · 數量 {r.units}</div>
               </div>
               <div style="text-align:right; flex:none; font-size:13.5px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-mono);">
@@ -229,10 +229,10 @@
             {#each data.categorySplit as c (c.source)}
               <div>
                 <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
-                  <span style="color:var(--df-text-dark); font-weight:600;">{REVENUE_SOURCE_LABEL[c.source].label}</span>
+                  <span style="color:var(--df-text-dark); font-weight:600;">{revenueSourceLabel(c.source).label}</span>
                   <span style="font-weight:700; color:var(--df-text-dark);">{fmtPct(c.ratio)}</span>
                 </div>
-                <MiniBar value={(c.ratio ?? 0) * 100} tone={REVENUE_SOURCE_LABEL[c.source].color} height={7} />
+                <MiniBar value={(c.ratio ?? 0) * 100} tone={revenueSourceLabel(c.source).color} height={7} />
               </div>
             {/each}
           </div>
@@ -328,8 +328,8 @@
             {#each data.attendanceDistribution as d, i (d.bucket)}
               <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
                 <span style="font-size:13px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-heading);">{d.count}</span>
-                <div style="width:100%; max-width:42px; height:{attHeights[i]}px; border-radius:6px 6px 2px 2px; background:{ATTENDANCE_BUCKET_LABEL[d.bucket].color};"></div>
-                <span style="font-size:10.5px; color:var(--df-text-light); text-align:center;">{ATTENDANCE_BUCKET_LABEL[d.bucket].label}</span>
+                <div style="width:100%; max-width:42px; height:{attHeights[i]}px; border-radius:6px 6px 2px 2px; background:{bucketLabel(ATTENDANCE_BUCKET_LABEL, d.bucket).color};"></div>
+                <span style="font-size:10.5px; color:var(--df-text-light); text-align:center;">{bucketLabel(ATTENDANCE_BUCKET_LABEL, d.bucket).label}</span>
               </div>
             {/each}
           </div>
@@ -367,10 +367,10 @@
             {#each data.ageDistribution as a, i (a.bucket)}
               <div>
                 <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
-                  <span style="color:var(--df-text-dark); font-weight:600;">{AGE_BUCKET_LABEL[a.bucket].label}</span>
+                  <span style="color:var(--df-text-dark); font-weight:600;">{bucketLabel(AGE_BUCKET_LABEL, a.bucket).label}</span>
                   <span style="font-weight:700; color:var(--df-text-dark);">{fmtPct(ageShares[i])}</span>
                 </div>
-                <MiniBar value={ageShares[i] * 100} tone={AGE_BUCKET_LABEL[a.bucket].color} height={7} />
+                <MiniBar value={ageShares[i] * 100} tone={bucketLabel(AGE_BUCKET_LABEL, a.bucket).color} height={7} />
               </div>
             {/each}
           </div>
@@ -434,7 +434,7 @@
               <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end;">
                 <span style="font-size:10px; font-weight:700; color:var(--df-primary);">{d.presentCount}</span>
                 <div style="width:100%; max-width:26px; height:{weekdayHeights[i]}px; border-radius:5px 5px 2px 2px; background:{weekdayMax > 0 && d.presentCount === weekdayMax ? 'var(--df-accent)' : 'var(--df-primary)'};"></div>
-                <span style="font-size:11px; color:var(--df-text-light);">{WEEKDAY_LABEL[d.weekday]}</span>
+                <span style="font-size:11px; color:var(--df-text-light);">{WEEKDAY_LABEL[d.weekday] ?? d.weekday}</span>
               </div>
             {/each}
           </div>
@@ -446,8 +446,8 @@
             {#each data.tierDistribution as d, i (d.bucket)}
               <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;">
                 <span style="font-size:13px; font-weight:800; color:var(--df-text-dark); font-family:var(--df-font-heading);">{d.count}</span>
-                <div style="width:100%; max-width:40px; height:{tierHeights[i]}px; border-radius:6px 6px 2px 2px; background:{TIER_LABEL[d.bucket].color};"></div>
-                <span style="font-size:11px; color:var(--df-text-light);">{TIER_LABEL[d.bucket].label}</span>
+                <div style="width:100%; max-width:40px; height:{tierHeights[i]}px; border-radius:6px 6px 2px 2px; background:{bucketLabel(TIER_LABEL, d.bucket).color};"></div>
+                <span style="font-size:11px; color:var(--df-text-light);">{bucketLabel(TIER_LABEL, d.bucket).label}</span>
               </div>
             {/each}
           </div>

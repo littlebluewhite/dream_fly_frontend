@@ -38,7 +38,7 @@
             ? 'var(--df-primary-dark)'
             : 'var(--df-primary)'};"
         ></div>
-        <span style="font-size:11.5px; color:var(--df-text-light);">{WEEKDAY_LABEL[d.weekday]}</span>
+        <span style="font-size:11.5px; color:var(--df-text-light);">{WEEKDAY_LABEL[d.weekday] ?? d.weekday}</span>
       </div>
     {/each}
   </div>

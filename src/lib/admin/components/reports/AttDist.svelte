@@ -8,7 +8,7 @@
    * archived count/maxC*110 was NaN on an all-zero (empty-library) month. */
   import { Card } from '$lib/components/ui';
   import type { AdminAttendanceDistRow } from '$lib/admin/api';
-  import { ATTENDANCE_BUCKET_LABEL, attDistVM, REPORT_SCALES } from '$lib/admin/report-math';
+  import { ATTENDANCE_BUCKET_LABEL, bucketLabel, attDistVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminAttendanceDistRow[] } = $props();
 
@@ -32,9 +32,9 @@
         >
           {d.count}
         </span>
-        <div class="bar" style="height:{heights[i]}px; background:{ATTENDANCE_BUCKET_LABEL[d.bucket].color};"></div>
+        <div class="bar" style="height:{heights[i]}px; background:{bucketLabel(ATTENDANCE_BUCKET_LABEL, d.bucket).color};"></div>
         <span style="font-size:11.5px; color:var(--df-text-light); text-align:center;">
-          {ATTENDANCE_BUCKET_LABEL[d.bucket].label}
+          {bucketLabel(ATTENDANCE_BUCKET_LABEL, d.bucket).label}
         </span>
       </div>
     {/each}

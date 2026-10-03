@@ -269,6 +269,27 @@ describe('報表分析 (+page) — 空庫', () => {
 	});
 });
 
+describe('報表分析 (+page) — 未知 wire 值', () => {
+	it('後端回未知的 source/bucket/method → 標籤退回原字串，不渲染 undefined、不崩潰', async () => {
+		route({
+			'GET /reports/admin': adminReportResponse({
+				...PAYLOAD,
+				revenue_breakdown: [{ source: 'gift_card', gross_cents: 100000, orders_count: 1, units: 1 }],
+				category_split: [{ source: 'gift_card', gross_cents: 100000, ratio: 1 }],
+				payment_split: [{ method: 'bank_transfer', count: 1 }],
+				attendance_distribution: [{ bucket: 'att_new', count: 1 }],
+				age_distribution: [{ bucket: 'age_new', count: 1 }],
+				tier_distribution: [{ bucket: 'platinum', count: 1 }]
+			})
+		});
+		const { findByText, container } = render(ReportsPage);
+		await findByText('報表分析');
+		const txt = container.textContent ?? '';
+		for (const raw of ['gift_card', 'bank_transfer', 'att_new', 'age_new', 'platinum']) expect(txt).toContain(raw);
+		expect(txt).not.toContain('undefined');
+	});
+});
+
 describe('報表分析 — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
 		route({ 'GET /reports/admin': new Error('network') });

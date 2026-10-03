@@ -12,14 +12,14 @@
   import { Card } from '$lib/components/ui';
   import type { AdminCategorySplitRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { REVENUE_SOURCE_LABEL } from '$lib/admin/report-math';
+  import { revenueSourceLabel } from '$lib/admin/report-math';
   import { donutStops } from './donut';
 
   let { rows }: { rows: AdminCategorySplitRow[] } = $props();
 
   const stops = $derived(
     donutStops(
-      rows.map((r) => ({ pct: (r.ratio ?? 0) * 100, color: REVENUE_SOURCE_LABEL[r.source].color }))
+      rows.map((r) => ({ pct: (r.ratio ?? 0) * 100, color: revenueSourceLabel(r.source).color }))
     )
   );
   const activeCount = $derived(rows.filter((r) => r.grossCents > 0).length);
@@ -53,11 +53,11 @@
     {#each rows as c (c.source)}
       <div style="display:flex; align-items:center; gap:9px;">
         <span
-          style="width:10px; height:10px; border-radius:5px; background:{REVENUE_SOURCE_LABEL[c.source]
+          style="width:10px; height:10px; border-radius:5px; background:{revenueSourceLabel(c.source)
             .color}; flex:none;"
         ></span>
         <span style="flex:1; font-size:13px; color:var(--df-text-dark);">
-          {REVENUE_SOURCE_LABEL[c.source].label}
+          {revenueSourceLabel(c.source).label}
         </span>
         <span style="font-size:13px; font-weight:700; color:var(--df-text-dark);">{fmtPct(c.ratio)}</span>
       </div>
