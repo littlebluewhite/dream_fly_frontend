@@ -19,8 +19,23 @@ import { fmtRatio } from '$lib/format';
 import { listCoaches } from '$lib/public/api';
 import type { ApiCoach } from '$lib/public/api';
 import { initialOf, BRAND_PRIMARY_HEX, isoDateTime, isoDate, hhmm } from '$lib/api/wire';
-import type { ApiPage, ApiCertificate, ApiReportCard, TodaySessionResponse } from '$lib/api/wire';
-import type { AdminLeaveRequestResponse, LeaveRequestListResponse, LeaveRequestResponse } from '$lib/api/generated';
+import type { TodaySessionResponse } from '$lib/api/wire';
+import type {
+	AdminLeaveRequestResponse,
+	CertificateResponse,
+	CoachReportResponse,
+	CoachScheduleResponse,
+	ConversationResponse,
+	ConversationSummaryResponse,
+	LeaveRequestListResponse,
+	LeaveRequestResponse,
+	MarkReadResponse,
+	MessageListResponse,
+	MessageResponse,
+	MyStudentResponse,
+	ReportCardResponse,
+	RosterEntryResponse
+} from '$lib/api/generated';
 import { toTodaySession } from '$lib/domain/sessions';
 import { todayLabel } from './schedule-dates';
 import type {
@@ -138,14 +153,6 @@ async function myTodayClasses(): Promise<TodayClass[]> {
 
 /* ═════════════════════════ 報表彙總（GET /reports/coach，見 integration-contract.md §3.24） ═════════════════════════ */
 
-interface ApiCoachReports {
-	today_sessions: number;
-	pending_attendance: number;
-	unread_messages: number;
-	student_count: number;
-	attendance_rate_30d: number | null;
-}
-
 /** 首頁 KPI 卡數字(待點名/出席率/待回覆)原為頁面硬編字串,一併移入接縫。 */
 export interface CoachDashboardData {
 	coach: Coach;
@@ -169,7 +176,7 @@ export const getDashboard = async (): Promise<CoachDashboardData> => {
 	const { account, coach } = await requireCoach();
 	const [todayClasses, reports, conversations] = await Promise.all([
 		myTodayClasses(),
-		api<ApiCoachReports>('/reports/coach'),
+		api<CoachReportResponse>('/reports/coach'),
 		// conversations 為 best-effort：訊息中心暫時失敗只降級為空陣列，不讓非核心的
 		// 最新訊息面板擋住整頁 KPI/今日課程(同 $lib/store-warm 的 warmStores
 		// best-effort 語意——主資料 fail-hard、順手資料失敗只記錄)。
@@ -201,20 +208,13 @@ export const getToday = async (): Promise<TodayData> => {
 
 /* ═════════════════════════ 點名（GET /sessions/{id}/roster + PUT .../attendance，見 integration-contract.md §3.19） ═════════════════════════ */
 
-interface ApiRosterEntry {
-	enrolment_id: string;
-	user_id: string;
-	user_name: string;
-	attendance_status: 'present' | 'absent' | 'leave' | null;
-}
-
 /** RosterEntryResponse → 既有 AttRow 形狀。mid 原為「GY2024001」格式的會員編號(無對應
  *  欄位)，改用 enrolment_id(同時也是 saveAttendance 送出時要回傳的鍵值)；n 為依姓名
  *  排序後(後端回應本就依姓名排序)的顯示序號，純前端呈現;color 無代表色欄位,固定預設值
  *  (P2，同 mapScheduleEntry 慣例)。attendance_status 為 null(尚未點名)時，本地草稿預設
  *  'present'(同既有「全部標記出席」/dirtyCount 以出席為基準狀態的慣例，未儲存前不代表
  *  已送出任何資料)。 */
-function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
+function mapRosterRow(r: RosterEntryResponse, i: number): AttRow {
 	return {
 		n: String(i + 1).padStart(2, '0'),
 		name: r.user_name,
@@ -231,7 +231,7 @@ function mapRosterRow(r: ApiRosterEntry, i: number): AttRow {
  *  '—')；coach 為呼叫者自己(這是教練本人的場次，見 getAttendance)，不是 t.coach。 */
 function mapAttendanceClass(
 	s: TodaySessionResponse,
-	roster: ApiRosterEntry[],
+	roster: RosterEntryResponse[],
 	coachName: string
 ): AttClassFull {
 	const t = toTodaySession(s);
@@ -266,7 +266,7 @@ export const getAttendance = async (): Promise<AttendanceData> => {
 	const { account } = await requireCoach();
 	const sessions = await api<TodaySessionResponse[]>('/sessions/today');
 	const results = await Promise.allSettled(
-		sessions.map((s) => api<ApiRosterEntry[]>(`/sessions/${s.id}/roster`))
+		sessions.map((s) => api<RosterEntryResponse[]>(`/sessions/${s.id}/roster`))
 	);
 	const classes: AttClassFull[] = [];
 	const failedClasses: string[] = [];
@@ -296,7 +296,7 @@ export const saveAttendance = async (
 		enrolment_id,
 		status: mark
 	}));
-	const roster = await api<ApiRosterEntry[]>(`/sessions/${sessionId}/attendance`, {
+	const roster = await api<RosterEntryResponse[]>(`/sessions/${sessionId}/attendance`, {
 		method: 'PUT',
 		body: JSON.stringify({ records })
 	});
@@ -305,15 +305,7 @@ export const saveAttendance = async (
 
 /* ═════════════════════════ 排課管理（GET /coaches/{id}/schedule） ═════════════════════════ */
 
-interface ApiCoachSchedule {
-	id: string;
-	day_of_week: number; // 0-6, 0=Sunday
-	start_time: string; // "HH:MM:SS"
-	end_time: string;
-	is_available: boolean;
-}
-
-/** Date.getDay() 順序（0=Sun），同 schedule-dates.ts 的 KEYS。 */
+/** day_of_week 0=Sun..6=Sat，即 Date.getDay() 順序，同 schedule-dates.ts 的 KEYS。 */
 const DOW_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 export interface CoachScheduleData { courses: SchedCourse[] }
@@ -325,7 +317,7 @@ export interface CoachScheduleData { courses: SchedCourse[] }
  *  （未開放的時段不是真的可授課，不該顯示成一個假課程區塊）。 */
 export const getSchedule = async (): Promise<CoachScheduleData> => {
 	const { coach } = await requireCoach();
-	const slots = await api<ApiCoachSchedule[]>(`/coaches/${coach.id}/schedule`, { auth: false });
+	const slots = await api<CoachScheduleResponse[]>(`/coaches/${coach.id}/schedule`, { auth: false });
 	return {
 		courses: slots
 			.filter((s) => s.is_available)
@@ -339,25 +331,6 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 
 /* ═════════════════════════ 訊息中心（GET /conversations/me + GET/POST .../messages + PATCH .../read，見 integration-contract.md §3.21） ═════════════════════════ */
 
-interface ApiConversationSummary {
-	id: string;
-	peer_id: string;
-	peer_name: string;
-	last_message_body: string | null;
-	last_message_at: string | null;
-	unread_count: number;
-}
-
-interface ApiMessage {
-	id: string;
-	sender_id: string;
-	body: string;
-	created_at: string;
-	read_at: string | null;
-}
-
-type ApiMessageListResponse = ApiPage<'messages', ApiMessage>;
-
 /** ISO8601 → "YYYY-MM-DD HH:MM"，同 mapCoach 的 lastLogin 轉換慣例。 */
 const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
@@ -368,7 +341,7 @@ const toDisplayTime = (iso: string): string => isoDateTime(iso);
  *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有
  *  「撰寫新對話」的建立文案 '尚無訊息'；badge 直接用 unread_count(brief 明定)。清單
  *  順序完全依後端排序(last_message_at DESC NULLS LAST, created_at DESC)，前端不重排。 */
-function mapConversation(r: ApiConversationSummary): Conversation {
+function mapConversation(r: ConversationSummaryResponse): Conversation {
 	return {
 		id: r.id,
 		name: r.peer_name,
@@ -386,14 +359,14 @@ export interface ConversationsData {
 
 /** GET /conversations/me（純陣列，不分頁，見§3.21）。 */
 export const getConversations = async (): Promise<ConversationsData> => {
-	const list = await api<ApiConversationSummary[]>('/conversations/me');
+	const list = await api<ConversationSummaryResponse[]>('/conversations/me');
 	return { conversations: list.map(mapConversation) };
 };
 
 /** MessageResponse → 既有 ThreadMsg 形狀。who 由 sender_id 與呼叫者自己的 user id 比對
  *  得出；attach/failed 兩個 mock 概念皆不設(v1 不支援檔案附件，見§3.21「v1 不支援檔案
  *  附件」——MessageBubble 對兩者皆未提供時自然落到純文字泡泡分支)。 */
-function mapMessage(m: ApiMessage, selfId: string): ThreadMsg {
+function mapMessage(m: MessageResponse, selfId: string): ThreadMsg {
 	return { who: m.sender_id === selfId ? 'me' : 'them', text: m.body, time: toDisplayTime(m.created_at) };
 }
 
@@ -411,29 +384,22 @@ export interface ThreadData {
  *  用登入者自己的 user id——直接讀 authStore，不另打 GET /users/me(C6)。 */
 export const getThread = async (conversationId: string): Promise<ThreadData> => {
 	const selfId = get(authStore).member?.id ?? '';
-	const res = await api<ApiMessageListResponse>(`/conversations/${conversationId}/messages?per_page=100`);
+	const res = await api<MessageListResponse>(`/conversations/${conversationId}/messages?per_page=100`);
 	return { messages: res.messages.map((m) => mapMessage(m, selfId)).reverse(), total: res.total };
 };
 
 /** POST /conversations/{id}/messages（body 1–2000 字，見§3.21）。回應的 sender_id 契約
  *  保證為呼叫者自己，直接標記 who='me'，不需要再另外取得/比對 self id。 */
 export const sendMessage = (conversationId: string, body: string): Promise<ThreadMsg> =>
-	api<ApiMessage>(`/conversations/${conversationId}/messages`, {
+	api<MessageResponse>(`/conversations/${conversationId}/messages`, {
 		method: 'POST',
 		body: JSON.stringify({ body })
 	}).then((m) => ({ who: 'me' as const, text: m.body, time: toDisplayTime(m.created_at) }));
 
 /** PATCH /conversations/{id}/read（無 body，見§3.21）——將該對話中對方寄出、尚未讀取
  *  的訊息全數標記已讀；回應為本次標記已讀的則數。 */
-export const markRead = (conversationId: string): Promise<{ updated: number }> =>
-	api<{ updated: number }>(`/conversations/${conversationId}/read`, { method: 'PATCH' });
-
-/** ConversationResponse 只取用得到的欄位（member_id/coach_id/created_at 無顯示用途，
- *  同 api.ts 窄化 local interface 慣例）。 */
-interface ApiConversation {
-	id: string;
-	last_message_at: string | null;
-}
+export const markRead = (conversationId: string): Promise<MarkReadResponse> =>
+	api<MarkReadResponse>(`/conversations/${conversationId}/read`, { method: 'PATCH' });
 
 /** POST /conversations（get-or-create，見§3.21）——撰寫新對話：user_id 帶對方(學員)的
  *  user id。同一對使用者無論呼叫幾次都回同一筆對話（無序對唯一），重複選同一位學員
@@ -443,7 +409,7 @@ interface ApiConversation {
  *  id 走合併(保留既有列)不會用到本映射值，僅全新對話會插入。錯誤(422「僅支援教練與
  *  會員間的對話」等)原樣拋出，呼叫端以 ApiError.message 顯示繁中訊息。 */
 export const createConversation = async (userId: string, peerName: string): Promise<Conversation> => {
-	const c = await api<ApiConversation>('/conversations', {
+	const c = await api<ConversationResponse>('/conversations', {
 		method: 'POST',
 		body: JSON.stringify({ user_id: userId })
 	});
@@ -459,20 +425,6 @@ export const createConversation = async (userId: string, peerName: string): Prom
 
 /* ═════════════════════════ 我的學員（GET /coaches/me/students，見 integration-contract.md §3.19） ═════════════════════════ */
 
-interface ApiMyStudentCourse {
-	course_id: string;
-	course_name: string;
-	/** 該學員在該課程的 active enrolment id（後端 97668d2 起，§3.19）——寫評語
-	 *  POST /report-cards 的必要識別。 */
-	enrolment_id: string;
-}
-interface ApiMyStudent {
-	user_id: string;
-	name: string;
-	phone: string | null;
-	courses: ApiMyStudentCourse[];
-}
-
 /** MyStudentResponse → 既有 Student 形狀。user_id 穿透(訊息中心「撰寫新對話」的
  *  POST /conversations 需要對方 user id，picker 直接用 getStudents() 名冊)；courses
  *  結構化穿透(寫評語 dialog 需要 enrolment_id，多堂課時供教練選擇，Task 13)；cls 由
@@ -481,7 +433,7 @@ interface ApiMyStudent {
  *  color 無代表色欄位,固定預設值(P2)。程度/技能評量/出勤率無對應欄位(此端點不含
  *  技能評量/出勤統計——§3.19 的 attended/total 是 member 視角的單一課程統計，見
  *  GET /enrolments/me，非教練視角的單一學員數字)，R16 Task 2a 起從 Student 拿掉。 */
-function mapStudent(s: ApiMyStudent): Student {
+function mapStudent(s: MyStudentResponse): Student {
 	return {
 		user_id: s.user_id,
 		name: s.name,
@@ -498,7 +450,7 @@ export interface StudentsData { students: Student[] }
  *  本身就回空陣列而非錯誤(同 GET /sessions/today 的慣例，見 §3.19)，不需要前端另外
  *  判斷教練檔案是否存在。 */
 export const getStudents = async (): Promise<StudentsData> => {
-	const students = await api<ApiMyStudent[]>('/coaches/me/students');
+	const students = await api<MyStudentResponse[]>('/coaches/me/students');
 	return { students: students.map(mapStudent) };
 };
 
@@ -594,8 +546,8 @@ export interface CreateCertificateBody {
  *  是否帶 course_id 無關）；v1 純 metadata，無 PDF/檔案上傳。回應直接透傳——students
  *  頁的發證書 dialog 只需要知道成功與否，不需要顯示欄位（同 admin/api.ts 的
  *  createCoupon 慣例：呼叫端自行處理 toast/錯誤訊息，本函式不做映射）。 */
-export const createCertificate = (body: CreateCertificateBody): Promise<ApiCertificate> =>
-	api<ApiCertificate>('/certificates', { method: 'POST', body: JSON.stringify(body) });
+export const createCertificate = (body: CreateCertificateBody): Promise<CertificateResponse> =>
+	api<CertificateResponse>('/certificates', { method: 'POST', body: JSON.stringify(body) });
 
 /* ═════════════════════════ 寫評語（POST /report-cards，見 integration-contract.md §3.22） ═════════════════════════ */
 
@@ -610,5 +562,5 @@ export interface CreateReportCardBody {
  *  期別僅能建立一次（UNIQUE(enrolment_id, term_label)），重複回 409「此期別已建立過
  *  成績單」；rating 選填 1–5（0/6 回 422）。回應直接透傳（同 createCertificate 慣例：
  *  呼叫端自行處理 toast/錯誤訊息，本函式不做映射）。 */
-export const createReportCard = (body: CreateReportCardBody): Promise<ApiReportCard> =>
-	api<ApiReportCard>('/report-cards', { method: 'POST', body: JSON.stringify(body) });
+export const createReportCard = (body: CreateReportCardBody): Promise<ReportCardResponse> =>
+	api<ReportCardResponse>('/report-cards', { method: 'POST', body: JSON.stringify(body) });

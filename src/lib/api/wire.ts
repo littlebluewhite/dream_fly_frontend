@@ -87,34 +87,6 @@ export const pageMeta = (r: { total: number; page: number; per_page: number }) =
  *  消費端直接 `import type` 自 $lib/api/generated。 */
 export type { LeaveStatus } from './generated';
 
-/** GET /report-cards/me（member）與 POST /report-cards（coach）共用的成績單 wire
- *  形狀（integration-contract.md §3.22）。自現行 member/api.ts 與 coach/api.ts
- *  逐字複製——兩處欄位完全相同。 */
-export interface ApiReportCard {
-  id: string;
-  course_id: string;
-  course_name: string;
-  term_label: string;
-  comment: string | null;
-  rating: number | null;
-  created_by_name: string;
-  created_at: string;
-}
-
-/** GET /certificates/me（member）與 POST /certificates（coach）共用的證書 wire
- *  形狀（integration-contract.md §3.22）。自現行 member/api.ts 與 coach/api.ts
- *  逐字複製——兩處欄位完全相同。 */
-export interface ApiCertificate {
-  id: string;
-  course_id: string | null;
-  course_name: string | null;
-  title: string;
-  level: string | null;
-  issued_on: string; // "YYYY-MM-DD"
-  note: string | null;
-  created_at: string;
-}
-
 /** GET /sessions/today 回應（admin/coach 兩分支共用同一形狀，integration-contract.md
  *  §3.18）——W-5 起由後端 DTO 產生（src/lib/api/generated/），這裡只轉出。 */
 export type { TodaySessionResponse, SessionStatus } from './generated';
