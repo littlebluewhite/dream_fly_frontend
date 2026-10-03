@@ -34,23 +34,26 @@ refresh token 換新而 401、購物車總額把已持有方案算進去。本�
   可送)/ 不可用(網路錯誤、其他非 2xx 如 408/429/5xx、200 但 body 讀不出來)。`/auth/refresh` 與登入共用後端每 IP
   每分鐘 10 次的限流桶,429 不是對 token 的判決,當成拒絕會把整個瀏覽器的分頁一起登出(最終檢視 I-1)。只有「拒絕」走 compare-and-clear——storage 裡的 refresh
   token 仍是這次送出的那顆,**或 storage 已空**(別的分頁登出了)才清,並呼叫 `onSessionExpired` 訊號。
-  「不可用」回 false、不清、不發訊號。
+  「不可用」回 false、不清、不發訊號。「成功」同樣 compare-and-set:storage 裡仍是送出的那顆才寫入輪替結果;
+  否則(飛行中有新登入或登出)丟棄結果、回 false——較新的 token 勝出。
 - **`authStore` 收訊號**:`onSessionExpired(() => set(LOGGED_OUT))`。守門導向、session 閘門重置、結帳導向
   都沿用既有的身分改變那條邊,沒有新路徑。`hydrate()` 的 `/users/me` 失敗不再無條件清 token(真的 401
   已經走 `api()` → refresh 那條路)。
 - **跨分頁**:`authStore` 在瀏覽器端聽 `storage` 事件(`dreamfly_auth`、`dreamfly_refresh`、`key: null`),
   **只看「目前 storage」決定**:沒有 refresh token → `forgetAccess()` + `LOGGED_OUT`;快取身分是另一位已登入
-  者 → `forgetAccess()` + `hydrate()`,`hydrate()` 結束後若本分頁身分仍不是 storage 快取的那位(refresh 成功但
-  `/users/me` 失敗、或 refresh 暫時不可用),再 `forgetAccess()` + `LOGGED_OUT`——不得用舊身分頂著新帳號的 token
+  者 → `forgetAccess()` + `hydrate()`,`hydrate()` 結束後若本分頁身分仍不是**事件當下** storage 快取的那位(refresh
+  成功但 `/users/me` 失敗、或 refresh 暫時不可用),再 `forgetAccess()` + `LOGGED_OUT`。比對的是事件當下的身分快照、
+  不重讀快取:別的分頁遲到的 `syncUser` 可能已把共用快取改寫回舊身分——不得用舊身分頂著新帳號的 token
   打 API(最終檢視 M-3);其餘(含 refresh token 被別的分頁輪替)不動。listener 永不寫共用的
   refresh key。(Controller 裁決 9:若「refresh key 變了」就重新水合,每個等待鎖的分頁都會各輪替一次、互相
   觸發,永不停止。)
 - **`sessionIdentity()` 搬進 `stores/authStore.ts`**;`$lib/testing/auth-mock` 兩個家族轉手真實作。
 
 **測試**:`client.test.ts`(跟隨分頁 POST 剛好一次且用輪替後的 token、兩分頁競態的假後端偵測重用、在飛期間
-被換掉不清、暫時性錯誤不清、401 清且發一次訊號)、`authStore.test.ts`(過期 → `LOGGED_OUT` + 閘門 reset 恰
-一次;五種 `StorageEvent`:別分頁登出、換成 B、只輪替、`key: null`、登出後立刻同一人重登;`/users/me` 503
-不動 token)。
+被換掉不清、暫時性錯誤不清——含 408/429 不可用不清、不發訊號、401 清且發一次訊號、在飛期間換上新登入時成功的
+舊輪替結果被丟棄)、`authStore.test.ts`(過期 → `LOGGED_OUT` + 閘門 reset 恰一次;`StorageEvent`:別分頁登出、
+換成 B、換成 B 但 `/users/me` 失敗 → `LOGGED_OUT`、換成 B 而水合期間遲到的 A 快取寫入落地且水合失敗 →
+`LOGGED_OUT`(絕不停在 A)、只輪替、`key: null`、登出後立刻同一人重登;`/users/me` 503 與 refresh 429 不動 token)。
 
 ### 2. 點名選項單一來源 `ATT_CHOICES`;點數原因標籤補齊(FE-4、FE-1)
 
