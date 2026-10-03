@@ -42,6 +42,7 @@ import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
+import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 
 export interface UpcomingClass {
   name: string;
@@ -162,16 +163,7 @@ export const NOTIF_TONE_FG: Record<string, string> = {
  * 進場包共用；member 與 mobile 自 R12 起共用這一個通知 module)。原本另一個消費者
  * member/api.ts 的 getNotifications() 已於 R12 退役(零 production 呼叫端)。
  * 後端沒有「教練訊息」型別 → 'coach' 分類目前恆為空,是已知落差,非本次範圍。 */
-export interface ApiNotification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  is_read: boolean;
-  metadata: unknown;
-  created_at: string;
-}
-const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: IconName; tone: Tone }> = {
+const NOTIF_TYPE_MAP: Record<NotificationType, { cat: NotifCat; icon: IconName; tone: Tone }> = {
   booking_confirmed: { cat: 'class', icon: 'calendar-check', tone: 'success' },
   booking_cancelled: { cat: 'class', icon: 'calendar-off', tone: 'warning' },
   order_placed: { cat: 'order', icon: 'credit-card', tone: 'success' },
@@ -185,7 +177,7 @@ const NOTIF_TYPE_MAP: Record<string, { cat: NotifCat; icon: IconName; tone: Tone
 // 不是 as IconName 斷言。
 const DEFAULT_NOTIF_META = { cat: 'system' as NotifCat, icon: 'bell' as const, tone: 'neutral' as Tone };
 
-export function mapNotification(n: ApiNotification): Notification {
+export function mapNotification(n: NotificationResponse): Notification {
   const meta = NOTIF_TYPE_MAP[n.type] ?? DEFAULT_NOTIF_META;
   return {
     id: n.id,

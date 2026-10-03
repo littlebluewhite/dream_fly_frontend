@@ -2,7 +2,8 @@ import { writable, derived, get, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
-import { mapNotification, type ApiNotification, type Notification } from './data';
+import { mapNotification, type Notification } from './data';
+import type { NotificationResponse } from '$lib/api/generated';
 
 /* ---- Notifications ----
  * 誠實開機(R14 候選 F3):開機值 = reset 值 = `[]`。角標不另加旗標——空清單 → 未讀數 0
@@ -36,7 +37,7 @@ export const unreadCount: Readable<number> = derived(notifications, ($n) =>
  *  快照丟棄後原地重抓(見 $lib/hydration-gate 的 fetchGenStable)。 */
 const gate = createSessionGate<Notification[]>({
   fetch: async () => {
-    const list = await api<ApiNotification[]>('/notifications');
+    const list = await api<NotificationResponse[]>('/notifications');
     return list.map(mapNotification);
   },
   apply: (list) => notifications.set(list),

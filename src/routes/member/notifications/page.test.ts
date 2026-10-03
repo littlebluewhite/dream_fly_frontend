@@ -8,7 +8,8 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { notifications, hydrateNotifications, toasts } from '$lib/member/stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
-import type { ApiNotification, Notification } from '$lib/member/data';
+import type { Notification } from '$lib/member/data';
+import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import Page from './+page.svelte';
 
 // C3:頁面改吃 notificationsPageEntry(session 閘門吐出的進場包),fetch 已收進
@@ -21,15 +22,16 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 /** 後端形狀 fixture(GET /notifications 的原始回應)。type→cat/icon/tone 與
- *  created_at→time 的映射由 mapNotification 負責,渲染結果即映射的活證明。 */
-const WIRE: ApiNotification[] = [
+ *  created_at→time 的映射由 mapNotification 負責,渲染結果即映射的活證明。
+ *  n3 的 type 以 cast 模擬部署落差(NotificationType 已封閉,後端先送出新值)。 */
+const WIRE: NotificationResponse[] = [
   { id: 'n1', type: 'booking_confirmed', title: '明日課程提醒', message: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館。', is_read: false, metadata: null, created_at: '2026-06-10T19:00:00Z' },
   { id: 'n2', type: 'order_placed', title: '報名付款成功', message: '訂單 DF-24061 已完成付款。', is_read: false, metadata: null, created_at: '2026-06-09T12:30:00Z' },
-  { id: 'n3', type: '後端新增的未知型別', title: '端午連假停課公告', message: '6/14–6/16 全館停課。', is_read: true, metadata: null, created_at: '2026-06-08T03:05:00Z' }
+  { id: 'n3', type: '後端新增的未知型別' as NotificationType, title: '端午連假停課公告', message: '6/14–6/16 全館停課。', is_read: true, metadata: null, created_at: '2026-06-08T03:05:00Z' }
 ];
 
 /** GET /notifications 的回應由各測試自行指定;未指定即拋錯(漏設會紅,不靜默放行)。 */
-let feed: () => Promise<ApiNotification[]>;
+let feed: () => Promise<NotificationResponse[]>;
 const FEED_UNSET = () => Promise.reject(new Error('測試未指定 GET /notifications 回應'));
 /** 本頁只有兩種 api 呼叫:GET /notifications(路徑相等)與 /notifications/{id}/read。 */
 const feedCalls = () => vi.mocked(api).mock.calls.filter(([path]) => path === '/notifications').length;
@@ -185,8 +187,8 @@ describe('member/notifications 頁', () => {
 
   it('unmount 後解析的 in-flight fetch 不應覆寫 shared notifications store', async () => {
     // Arrange: deferred promise so we can control when promise A resolves.
-    let resolveA!: (value: ApiNotification[]) => void;
-    feed = () => new Promise<ApiNotification[]>((r) => { resolveA = r; });
+    let resolveA!: (value: NotificationResponse[]) => void;
+    feed = () => new Promise<NotificationResponse[]>((r) => { resolveA = r; });
 
     // Mount: load() fires on mount; promise A is pending (phase=loading).
     const { unmount } = render(Page);
@@ -219,8 +221,8 @@ describe('member/notifications 頁', () => {
       access_token: 'at-n', refresh_token: 'rt-n',
       user: { id: 'u-n1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false, avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member'] }
     };
-    let resolveA!: (value: ApiNotification[]) => void;
-    const pending = new Promise<ApiNotification[]>((r) => { resolveA = r; });
+    let resolveA!: (value: NotificationResponse[]) => void;
+    const pending = new Promise<NotificationResponse[]>((r) => { resolveA = r; });
     vi.mocked(api).mockImplementation(fakeRouter({
       'POST /auth/login': AUTH_RES,
       'POST /auth/logout': undefined,

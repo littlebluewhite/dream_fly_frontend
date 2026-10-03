@@ -12,7 +12,8 @@ import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 // notifications store 現在是 member 的 Notification(tone: Tone 窄型別)——sentinel fixture
 // 寫入 store 需要窄型別,不能用 domain 的寬鬆型別(tone: string)註記(合一後單向可指派:
 // member → domain,反過來不行,見 task-5-report.md)。
-import type { ApiNotification, Notification as NotifItem } from '$lib/member/data';
+import type { Notification as NotifItem } from '$lib/member/data';
+import type { NotificationResponse } from '$lib/api/generated';
 import Page from './+page.svelte';
 
 // Task 5(架構深化 R12):mobile 專屬的 $lib/mobile/notifications.ts 已併入
@@ -27,10 +28,10 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-/** GET /notifications 的後端形狀(ApiNotification),只填 mapNotification 會讀到的欄位。
+/** GET /notifications 的後端形狀(NotificationResponse),只填 mapNotification 會讀到的欄位。
  *  title/message 預設可覆寫——多數測試需要渲染出 NOTIFS_SEED 的真實文案(如「明日課程
  *  提醒」)才斷得到畫面,不能一律硬編佔位字串。 */
-function apiNotif(id: string, read: boolean, title = '系統公告', message = '內容') {
+function apiNotif(id: string, read: boolean, title = '系統公告', message = '內容'): NotificationResponse {
 	return {
 		id, type: 'system', title, message,
 		is_read: read, metadata: null, created_at: '2026-01-01T00:00:00Z'
@@ -43,7 +44,7 @@ function apiNotif(id: string, read: boolean, title = '系統公告', message = '
 const seedToWire = (n: (typeof NOTIFS_SEED)[number]) => apiNotif(n.id, n.read, n.title, n.body);
 
 /** GET /notifications 的回應由各測試自行指定;未指定即拋錯(漏設會紅,不靜默放行)。 */
-let feed: () => Promise<ApiNotification[]>;
+let feed: () => Promise<NotificationResponse[]>;
 const FEED_UNSET = () => Promise.reject(new Error('測試未指定 GET /notifications 回應'));
 /** 本頁只有兩種 api 呼叫:GET /notifications(路徑相等)與 /notifications/{id}/read。 */
 const feedCalls = () => vi.mocked(api).mock.calls.filter(([path]) => path === '/notifications').length;
@@ -123,8 +124,8 @@ describe('mobile/notifications 頁', () => {
 
 	it('unmount 後解析的 in-flight fetch 不應覆寫 shared notifications store', async () => {
 		// Arrange: deferred promise so we can control when promise A resolves.
-		let resolveA!: (value: ApiNotification[]) => void;
-		feed = () => new Promise<ApiNotification[]>((r) => { resolveA = r; });
+		let resolveA!: (value: NotificationResponse[]) => void;
+		feed = () => new Promise<NotificationResponse[]>((r) => { resolveA = r; });
 
 		// Mount: load() fires on mount; promise A is pending (phase=loading).
 		const { unmount } = render(Page);
@@ -157,8 +158,8 @@ describe('mobile/notifications 頁', () => {
 			access_token: 'at-p', refresh_token: 'rt-p',
 			user: { id: 'u-p1', email: 'a@dreamfly.test', name: '甲', phone: null, phone_verified: false, avatar_url: null, is_active: true, created_at: '2026-01-01T00:00:00Z', roles: ['member'] }
 		};
-		let resolveA!: (value: ApiNotification[]) => void;
-		const pending = new Promise<ApiNotification[]>((r) => { resolveA = r; });
+		let resolveA!: (value: NotificationResponse[]) => void;
+		const pending = new Promise<NotificationResponse[]>((r) => { resolveA = r; });
 		vi.mocked(api).mockImplementation(fakeRouter({
 			'POST /auth/login': AUTH_RES,
 			'POST /auth/logout': undefined,

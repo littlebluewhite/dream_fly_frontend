@@ -10,12 +10,13 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { createLoadGate } from '$lib/load-gate';
 import { notifications, notificationsPageEntry, markRead, markAllRead, hydrateNotifications } from './notifications';
 import { mapNotification } from './data';
+import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
 
-/** GET /notifications 的後端形狀（ApiNotification），只填 mapNotification 會讀到的欄位。
+/** GET /notifications 的後端形狀（NotificationResponse），只填 mapNotification 會讀到的欄位。
  *  id 預設 'n1'(既有呼叫端沿用);settle 測試(移植自 mobile)需要區分多筆,顯式傳入。 */
-function apiNotif(read: boolean, id = 'n1') {
+function apiNotif(read: boolean, id = 'n1'): NotificationResponse {
   return {
     id, type: 'system', title: '系統公告', message: '內容',
     is_read: read, metadata: null, created_at: '2026-01-01T00:00:00Z'
@@ -54,7 +55,8 @@ describe('誠實開機(R14 F3)', () => {
 // (直接測 mapNotification,不透過已退役的 wrapper),不留覆蓋空窗。
 describe('mapNotification(自 member/api.test.ts 移入,原 getNotifications() 退役後改在此覆蓋)', () => {
   it('type→cat/icon/tone 對照表涵蓋所有後端型別，含未知值 fallback', () => {
-    const make = (id: string, type: string) => ({ id, type, title: 't-' + id, message: 'm-' + id, is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' });
+    // type 收 string 再 cast：n7 模擬部署落差(NotificationType 已封閉,後端先送出新值)。
+    const make = (id: string, type: string): NotificationResponse => ({ id, type: type as NotificationType, title: 't-' + id, message: 'm-' + id, is_read: false, metadata: null, created_at: '2026-07-04T06:30:00Z' });
     const list = [
       make('n1', 'booking_confirmed'),
       make('n2', 'booking_cancelled'),
