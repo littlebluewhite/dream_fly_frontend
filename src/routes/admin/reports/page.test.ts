@@ -1,55 +1,72 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import ReportsPage from './+page.svelte';
-import type { ReportsData } from '$lib/admin/api';
-import { getReports } from '$lib/admin/api';
+import type { AdminReportResponse } from '$lib/api/generated';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { ADMIN_ROUTES } from '$lib/testing/admin-routes';
+import { adminReportResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/admin/api', () => ({ getReports: vi.fn() }));
+/* W-8：改 mock $lib/api/client 的 api()，getReports 走真 mapper(GET /reports/admin)，
+ * fixture 改為 wire 形狀(AdminReportResponse，金額為 cents)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 /* 報表分析 (reports.jsx ReportsView, re-scoped Task 15, re-expanded Round 4 P4-F2):
  * a PageHead with 匯出報表, a 6-card KPI band (環比 delta 前端算,null → 「—」),
  * the 13 restored chart panels fed by GET /reports/admin 的彙總 sections, and the
  * two honest courses/coaches tables. Data arrives through the getReports() seam
  * (async), so every assertion first awaits the ready phase. */
-const REPORT_SECTIONS: Omit<ReportsData, 'revenue' | 'members' | 'courses' | 'coaches'> = {
-	kpis: {
-		newMembers: { thisMonth: 8, lastMonth: 5 },
-		newEnrolments: { thisMonth: 14, lastMonth: 10 },
-		paidOrdersCount: { thisMonth: 30, lastMonth: 60 },
-		attendanceRate: { thisMonth: 0.92, lastMonth: 0.8 }
+const PAYLOAD: AdminReportResponse = adminReportResponse({
+	revenue: {
+		this_month_cents: 45820000,
+		last_month_cents: 40000000,
+		trend: [
+			{ month: '2025-08', revenue_cents: 30000000 },
+			{ month: '2025-09', revenue_cents: 32000000 },
+			{ month: '2025-10', revenue_cents: 45820000 }
+		]
 	},
-	revenueBreakdown: [
-		{ source: 'course', grossCents: 31200000, ordersCount: 142, units: 150 },
-		{ source: 'ticket', grossCents: 9840000, ordersCount: 60, units: 234 },
-		{ source: 'membership', grossCents: 500000, ordersCount: 5, units: 5 },
-		{ source: 'course_package', grossCents: 250000, ordersCount: 2, units: 2 },
-		{ source: 'merchandise', grossCents: 4780000, ordersCount: 86, units: 90 },
-		{ source: 'venue_rental', grossCents: 120000, ordersCount: 3, units: 3 }
+	kpis: {
+		new_members: { this_month: 8, last_month: 5 },
+		new_enrolments: { this_month: 14, last_month: 10 },
+		paid_orders_count: { this_month: 30, last_month: 60 },
+		attendance_rate: { this_month: 0.92, last_month: 0.8 }
+	},
+	revenue_breakdown: [
+		{ source: 'course', gross_cents: 31200000, orders_count: 142, units: 150 },
+		{ source: 'ticket', gross_cents: 9840000, orders_count: 60, units: 234 },
+		{ source: 'membership', gross_cents: 500000, orders_count: 5, units: 5 },
+		{ source: 'course_package', gross_cents: 250000, orders_count: 2, units: 2 },
+		{ source: 'merchandise', gross_cents: 4780000, orders_count: 86, units: 90 },
+		{ source: 'venue_rental', gross_cents: 120000, orders_count: 3, units: 3 }
 	],
-	incomeSources12m: [
-		{ month: '2025-09', source: 'course', grossCents: 100000, ordersCount: 1, units: 1 },
-		{ month: '2025-10', source: 'course', grossCents: 200000, ordersCount: 2, units: 2 },
-		{ month: '2025-09', source: 'ticket', grossCents: 100000, ordersCount: 1, units: 1 },
-		{ month: '2025-10', source: 'ticket', grossCents: 0, ordersCount: 0, units: 0 }
+	income_sources_12m: [
+		{ month: '2025-09', source: 'course', gross_cents: 100000, orders_count: 1, units: 1 },
+		{ month: '2025-10', source: 'course', gross_cents: 200000, orders_count: 2, units: 2 },
+		{ month: '2025-09', source: 'ticket', gross_cents: 100000, orders_count: 1, units: 1 },
+		{ month: '2025-10', source: 'ticket', gross_cents: 0, orders_count: 0, units: 0 }
 	],
-	categorySplit: [
-		{ source: 'course', grossCents: 31200000, ratio: 0.6 },
-		{ source: 'ticket', grossCents: 9840000, ratio: 0.2 },
-		{ source: 'membership', grossCents: 500000, ratio: 0.1 },
-		{ source: 'course_package', grossCents: 250000, ratio: 0.05 },
-		{ source: 'merchandise', grossCents: 4780000, ratio: 0.05 }
+	category_split: [
+		{ source: 'course', gross_cents: 31200000, ratio: 0.6 },
+		{ source: 'ticket', gross_cents: 9840000, ratio: 0.2 },
+		{ source: 'membership', gross_cents: 500000, ratio: 0.1 },
+		{ source: 'course_package', gross_cents: 250000, ratio: 0.05 },
+		{ source: 'merchandise', gross_cents: 4780000, ratio: 0.05 }
 	],
-	paymentSplit: [
+	payment_split: [
 		{ method: 'credit_card', count: 46 },
 		{ method: 'line_pay', count: 24 }
 	],
-	attendanceDistribution: [
+	attendance_distribution: [
 		{ bucket: 'gte_95', count: 11 },
 		{ bucket: '85_94', count: 10 },
 		{ bucket: '75_84', count: 5 },
 		{ bucket: 'lt_75', count: 6 }
 	],
-	ageDistribution: [
+	age_distribution: [
 		{ bucket: '0-6', count: 22 },
 		{ bucket: '7-12', count: 34 },
 		{ bucket: '13-17', count: 28 },
@@ -57,71 +74,40 @@ const REPORT_SECTIONS: Omit<ReportsData, 'revenue' | 'members' | 'courses' | 'co
 		{ bucket: '26-40', count: 0 },
 		{ bucket: '41+', count: 0 }
 	],
-	tierDistribution: [
+	tier_distribution: [
 		{ bucket: 'regular', count: 10 },
 		{ bucket: 'bronze', count: 16 },
 		{ bucket: 'silver', count: 13 },
 		{ bucket: 'gold', count: 9 }
 	],
 	retention: [
-		{ month: '2025-05', newCount: 14, returningCount: 38, rate: null },
-		{ month: '2025-06', newCount: 18, returningCount: 41, rate: 0.8 },
-		{ month: '2025-07', newCount: 22, returningCount: 44, rate: 0.82 },
-		{ month: '2025-08', newCount: 16, returningCount: 47, rate: 0.85 },
-		{ month: '2025-09', newCount: 20, returningCount: 49, rate: 0.87 },
-		{ month: '2025-10', newCount: 24, returningCount: 52, rate: 0.884 }
+		{ month: '2025-05', new_count: 14, returning_count: 38, rate: null },
+		{ month: '2025-06', new_count: 18, returning_count: 41, rate: 0.8 },
+		{ month: '2025-07', new_count: 22, returning_count: 44, rate: 0.82 },
+		{ month: '2025-08', new_count: 16, returning_count: 47, rate: 0.85 },
+		{ month: '2025-09', new_count: 20, returning_count: 49, rate: 0.87 },
+		{ month: '2025-10', new_count: 24, returning_count: 52, rate: 0.884 }
 	],
-	funnel: { trialInquiries: 318, newEnrolments: 142 },
-	weekdayLoad: [9, 8, 11, 9, 12, 10, 14].map((presentCount, weekday) => ({ weekday, presentCount })),
-	venueUsage: [
+	funnel: { trial_inquiries: 318, new_enrolments: 142 },
+	weekday_load: [9, 8, 11, 9, 12, 10, 14].map((present_count, weekday) => ({ weekday, present_count })),
+	venue_usage: [
 		{ venue: 'A 訓練館', minutes: 150 },
 		{ venue: 'B 教室', minutes: 60 }
-	]
-};
-
-// 空庫形狀(契約空庫段落:固定桶零填/開放集合空陣列;此處 fixture 用空陣列亦須不炸)
-const EMPTY_REPORT_SECTIONS: typeof REPORT_SECTIONS = {
-	kpis: {
-		newMembers: { thisMonth: 0, lastMonth: 0 },
-		newEnrolments: { thisMonth: 0, lastMonth: 0 },
-		paidOrdersCount: { thisMonth: 0, lastMonth: 0 },
-		attendanceRate: { thisMonth: null, lastMonth: null }
-	},
-	revenueBreakdown: [],
-	incomeSources12m: [],
-	categorySplit: [],
-	paymentSplit: [],
-	attendanceDistribution: [],
-	ageDistribution: [],
-	tierDistribution: [],
-	retention: [],
-	funnel: { trialInquiries: 0, newEnrolments: 0 },
-	weekdayLoad: [],
-	venueUsage: []
-};
-
-const PAYLOAD: ReportsData = {
-	revenue: {
-		thisMonth: 458200,
-		lastMonth: 400000,
-		trend: [
-			{ m: '2025-08', h: 300000 },
-			{ m: '2025-09', h: 320000 },
-			{ m: '2025-10', h: 458200 }
-		]
-	},
-	...REPORT_SECTIONS,
-	members: { total: 120, newThisMonth: 8, active: 96 },
-	courses: [
-		{ id: 'c1', name: '競技體操 選手班', enrolled: 12, maxStudents: 12, fillRate: 1, waitlistCount: 4 },
-		{ id: 'c2', name: '兒童基礎 B 班', enrolled: 7, maxStudents: 10, fillRate: 0.7, waitlistCount: 0 }
 	],
-	coaches: [{ id: 'co1', name: '林雅婷', courseCount: 3, studentCount: 28, revenueCents12m: 85000000, attendanceRate: 0.92 }]
-};
+	members: { total: 120, new_this_month: 8, active: 96 },
+	courses: [
+		{ course_id: 'c1', name: '競技體操 選手班', enrolled: 12, max_students: 12, fill_rate: 1, waitlist_count: 4 },
+		{ course_id: 'c2', name: '兒童基礎 B 班', enrolled: 7, max_students: 10, fill_rate: 0.7, waitlist_count: 0 }
+	],
+	coaches: [{ coach_id: 'co1', name: '林雅婷', course_count: 3, student_count: 28, revenue_cents_12m: 85000000, attendance_rate: 0.92 }]
+});
+
+const route = (overrides: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin': PAYLOAD, ...overrides }, ADMIN_ROUTES));
 
 beforeEach(() => {
-	vi.mocked(getReports).mockReset();
-	vi.mocked(getReports).mockResolvedValue(PAYLOAD);
+	vi.mocked(api).mockReset();
+	route();
 });
 
 describe('報表分析 (+page) — KPI band(6 卡)', () => {
@@ -154,10 +140,12 @@ describe('報表分析 (+page) — KPI band(6 卡)', () => {
 	});
 
 	it('attendanceRate 兩月皆 null → 出席率卡 value 與 delta 都顯示「—」;retention 空 → 留存率「—」', async () => {
-		vi.mocked(getReports).mockResolvedValue({
-			...PAYLOAD,
-			kpis: { ...PAYLOAD.kpis, attendanceRate: { thisMonth: null, lastMonth: null } },
-			retention: []
+		route({
+			'GET /reports/admin': {
+				...PAYLOAD,
+				kpis: { ...PAYLOAD.kpis, attendance_rate: { this_month: null, last_month: null } },
+				retention: []
+			}
 		});
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
@@ -218,7 +206,7 @@ describe('報表分析 (+page) — 13 面板', () => {
 		const { container, findByText } = render(ReportsPage);
 		await findByText('報表分析');
 		const txt = container.textContent ?? '';
-		for (const t of PAYLOAD.revenue.trend) expect(txt).toContain(t.m);
+		for (const t of PAYLOAD.revenue.trend) expect(txt).toContain(t.month);
 		expect(txt).toContain('總計 NT$1,078,200'); // 300,000+320,000+458,200
 	});
 });
@@ -246,9 +234,11 @@ describe('報表分析 (+page) — 表格', () => {
 	});
 
 	it('fillRate 為 null 時課程表格顯示「—」而非 0%', async () => {
-		vi.mocked(getReports).mockResolvedValue({
-			...PAYLOAD,
-			courses: [{ id: 'c3', name: '空堂', enrolled: 0, maxStudents: 0, fillRate: null, waitlistCount: 0 }]
+		route({
+			'GET /reports/admin': {
+				...PAYLOAD,
+				courses: [{ course_id: 'c3', name: '空堂', enrolled: 0, max_students: 0, fill_rate: null, waitlist_count: 0 }]
+			}
 		});
 		const { findByText, container } = render(ReportsPage);
 		await findByText('報表分析');
@@ -258,20 +248,15 @@ describe('報表分析 (+page) — 表格', () => {
 
 describe('報表分析 (+page) — 空庫', () => {
 	it('全 section 空/零時整頁仍渲染:KPI NT$0、面板空清單提示、無 NaN、不崩潰', async () => {
-		const zeroTrend = Array.from({ length: 12 }, (_, i) => ({ m: `2025-${String(i + 1).padStart(2, '0')}`, h: 0 }));
-		vi.mocked(getReports).mockResolvedValue({
-			revenue: { thisMonth: 0, lastMonth: 0, trend: zeroTrend },
-			...EMPTY_REPORT_SECTIONS,
-			members: { total: 0, newThisMonth: 0, active: 0 },
-			courses: [],
-			coaches: []
-		});
+		const zeroTrend = Array.from({ length: 12 }, (_, i) => ({ month: `2025-${String(i + 1).padStart(2, '0')}`, revenue_cents: 0 }));
+		// 空庫形狀(契約空庫段落:固定桶零填/開放集合空陣列;builder 預設用空陣列亦須不炸)
+		route({ 'GET /reports/admin': adminReportResponse({ revenue: { this_month_cents: 0, last_month_cents: 0, trend: zeroTrend } }) });
 		const { findByText, container } = render(ReportsPage);
 		await findByText('報表分析');
 		const txt = container.textContent ?? '';
 		expect(txt).toContain('NT$0'); // KPI 本月營收
 		expect(txt).toContain('總計 NT$0'); // RevenueTrend:12 筆全 0,max 保底不產生 NaN
-		for (const t of zeroTrend) expect(txt).toContain(t.m);
+		for (const t of zeroTrend) expect(txt).toContain(t.month);
 		// 開放集合面板的空清單提示
 		expect(txt).toContain('尚無課程報名資料'); // TopCourses
 		expect(txt).toContain('尚無收入資料'); // IncomeSources
@@ -286,15 +271,13 @@ describe('報表分析 (+page) — 空庫', () => {
 
 describe('報表分析 — 三態', () => {
 	it('error:顯示「載入失敗」', async () => {
-		vi.mocked(getReports).mockReset();
-		vi.mocked(getReports).mockRejectedValue(new Error('network'));
+		route({ 'GET /reports/admin': new Error('network') });
 		const { findByText } = render(ReportsPage);
 		await findByText('載入失敗');
 	});
 
 	it('loading:顯示骨架(6 張 KPI 骨架卡)', () => {
-		vi.mocked(getReports).mockReset();
-		vi.mocked(getReports).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(ReportsPage);
 		expect(getByTestId('reports-skeleton')).toBeTruthy();
 	});
