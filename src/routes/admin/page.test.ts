@@ -1,15 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import AdminHome from './+page.svelte';
-import type { ReportsData, TodaySessionsData, RecentActivityData } from '$lib/admin/api';
-import { getReports, getMembers, getTodaySessions, getRecentActivity } from '$lib/admin/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { ADMIN_ROUTES } from '$lib/testing/admin-routes';
+import { activityItem, adminReportResponse, todaySession, userResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/admin/api', () => ({
-	getReports: vi.fn(),
-	getMembers: vi.fn(),
-	getTodaySessions: vi.fn(),
-	getRecentActivity: vi.fn()
-}));
+/* W-8：改 mock $lib/api/client 的 api()，四支 getter 走真 mapper(GET /reports/admin、
+ * GET /users?page=1、GET /sessions/today、GET /reports/admin/activity)。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 /* 營運總覽 dashboard (admin.jsx AdminHome), re-scoped in Task 15 to real data: a KPI
  * StatCard row fed by GET /reports/admin, then the 今日課表 + 最新動態 panels and a
@@ -19,54 +21,36 @@ vi.mock('$lib/admin/api', () => ({
  * Task F11: 今日課表/最新動態面板改吃 getTodaySessions()/getRecentActivity()(GET
  * /sessions/today admin 分支 + GET /reports/admin/activity)真資料，隨同一個
  * Promise.all 併入。 */
-const REPORTS: ReportsData = {
-	revenue: { thisMonth: 458200, lastMonth: 400000, trend: [] },
-	// Round 4 P4-F1：ReportsData 新增 12 組金流/人流彙總，此頁(dashboard KPI 帶)不消費
-	// 這些欄位——測試 fixture 補齊型別必要欄位即可，皆給誠實的全 0/空陣列/null。
-	kpis: {
-		newMembers: { thisMonth: 0, lastMonth: 0 },
-		newEnrolments: { thisMonth: 0, lastMonth: 0 },
-		paidOrdersCount: { thisMonth: 0, lastMonth: 0 },
-		attendanceRate: { thisMonth: null, lastMonth: null }
-	},
-	revenueBreakdown: [],
-	incomeSources12m: [],
-	categorySplit: [],
-	paymentSplit: [],
-	attendanceDistribution: [],
-	ageDistribution: [],
-	tierDistribution: [],
-	retention: [],
-	funnel: { trialInquiries: 0, newEnrolments: 0 },
-	weekdayLoad: [],
-	venueUsage: [],
-	members: { total: 120, newThisMonth: 8, active: 96 },
-	courses: [],
-	coaches: []
-};
+// 此頁(dashboard KPI 帶)只消費 revenue/members——其餘 section 用 builder 的空庫預設。
+const REPORTS = adminReportResponse({
+	revenue: { this_month_cents: 45820000, last_month_cents: 40000000, trend: [] },
+	members: { total: 120, new_this_month: 8, active: 96 }
+});
 const MEMBERS = [
-	{ id: 'u1', name: '王小明', initial: '王', phone: '0912345678', joined: '2026-01-15', status: 'active' as const, points: 1250 }
+	userResponse({ id: 'u1', name: '王小明', phone: '0912345678', created_at: '2026-01-15T00:00:00Z', points_balance: 1250 })
 ];
-const TODAY_SESSIONS: TodaySessionsData = {
-	sessions: [
-		{ time: '17:30', name: '兒童基礎 B 班', coach: '陳冠宇', room: 'B 教室', count: 8, state: 'live', tone: 'success', label: '進行中' }
-	]
-};
-const RECENT_ACTIVITY: RecentActivityData = {
-	activity: [
-		{ icon: 'user-plus', tone: 'var(--df-primary)', bg: 'var(--df-primary-bg)', text: '新會員註冊:謝佩珊', time: '2026-07-10 09:12' }
-	]
-};
+const TODAY_SESSIONS = [
+	todaySession({ course_name: '兒童基礎 B 班', coach_name: '陳冠宇', venue: 'B 教室', start_time: '17:30:00', enrolled_count: 8, status: 'ongoing' })
+];
+const RECENT_ACTIVITY = { items: [activityItem({ kind: 'user', label: '新會員註冊:謝佩珊', occurred_at: '2026-07-10T09:12:00Z' })] };
+
+const route = (overrides: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(
+		fakeRouter(
+			{
+				'GET /reports/admin': REPORTS,
+				'GET /users?page=1': { users: MEMBERS, total: MEMBERS.length, page: 1, per_page: 20 },
+				'GET /sessions/today': TODAY_SESSIONS,
+				'GET /reports/admin/activity': RECENT_ACTIVITY,
+				...overrides
+			},
+			ADMIN_ROUTES
+		)
+	);
 
 beforeEach(() => {
-	vi.mocked(getReports).mockReset();
-	vi.mocked(getReports).mockResolvedValue(REPORTS);
-	vi.mocked(getMembers).mockReset();
-	vi.mocked(getMembers).mockResolvedValue({ members: MEMBERS, total: MEMBERS.length, page: 1, perPage: 20 });
-	vi.mocked(getTodaySessions).mockReset();
-	vi.mocked(getTodaySessions).mockResolvedValue(TODAY_SESSIONS);
-	vi.mocked(getRecentActivity).mockReset();
-	vi.mocked(getRecentActivity).mockResolvedValue(RECENT_ACTIVITY);
+	vi.mocked(api).mockReset();
+	route();
 });
 
 describe('admin dashboard (+page)', () => {
@@ -115,15 +99,13 @@ describe('admin dashboard (+page)', () => {
 
 describe('admin dashboard — 三態', () => {
 	it('error: 顯示「載入失敗」', async () => {
-		vi.mocked(getReports).mockReset();
-		vi.mocked(getReports).mockRejectedValue(new Error('network'));
+		route({ 'GET /reports/admin': new Error('network') });
 		const { findByText } = render(AdminHome);
 		await findByText('載入失敗');
 	});
 
 	it('loading: 顯示骨架', () => {
-		vi.mocked(getReports).mockReset();
-		vi.mocked(getReports).mockReturnValue(new Promise(() => {}));
+		vi.mocked(api).mockReturnValue(new Promise(() => {}));
 		const { getByTestId } = render(AdminHome);
 		expect(getByTestId('admin-home-skeleton')).toBeTruthy();
 	});

@@ -145,4 +145,17 @@ describe('匯入掃描器（Import Scan）', () => {
 			.map((f) => f.replace(ROOT + '/', ''));
 		expect(offenders, `改走 HTTP seam，不要 mock $lib/coach/api：${offenders.join(', ')}`).toEqual([]);
 	});
+
+	it('測試 seam 契約：零 vi.mock 整支 $lib/admin/api(W-8)', () => {
+		// admin 頁測試走 HTTP seam(mock $lib/api/client + fakeRouter(…, ADMIN_ROUTES))。
+		// 「整支」＝ automock 或零參數 factory(整個模組被換掉、真 mapper 不跑)；帶
+		// importOriginal 的部分替換(如 mobile-admin/stores.test.ts 只換寫入函式)不在此列。
+		const testFiles = walk(r('src')).filter((f) => f.endsWith('.test.ts'));
+		expect(testFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
+		const wholeMock = /vi\.mock\(\s*['"`]\$lib\/admin\/api['"`]\s*(\)|,\s*(async\s*)?\(\s*\))/;
+		const offenders = testFiles
+			.filter((f) => wholeMock.test(readFileSync(f, 'utf8')))
+			.map((f) => f.replace(ROOT + '/', ''));
+		expect(offenders, `改走 HTTP seam，不要整支 mock $lib/admin/api：${offenders.join(', ')}`).toEqual([]);
+	});
 });
