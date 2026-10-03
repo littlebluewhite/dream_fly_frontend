@@ -1,11 +1,14 @@
 /* Dream Fly — 後端 wire 知識單一來源。
  *
- * 背景：後端 wire 知識（訂單狀態 union＋標籤表、清單信封形狀、成對 DTO、品牌色/
- * 縮寫/日期切片等）目前人手同步散落多個 surface：domain/orders.ts 自註「kept in
- * sync with admin/data.ts」、ORDER_STATUS 標籤表逐字複製 2 份、清單信封 interface
- * 手寫 11 份、`ApiReportCard`/`ApiCertificate` 在 member 與 coach 成對重抄。本檔
- * 建立單一來源；後續任務（乙線）會把 8 個檔案改為 import 這裡——本檔落地後即
- * 凍結為唯讀契約，既有重複點的改線不在本檔異動範圍內。
+ * 背景（2026-07 建檔時）：後端 wire 知識（訂單狀態 union＋標籤表、清單信封形狀、
+ * 成對 DTO、品牌色/縮寫/日期切片等）當時人手同步散落多個 surface：domain/orders.ts
+ * 自註「kept in sync with admin/data.ts」、ORDER_STATUS 標籤表逐字複製 2 份、清單信封
+ * interface 手寫 11 份、成績單/證書 DTO 在 member 與 coach 成對重抄。本檔建立單一
+ * 來源，8 個檔案改為 import 這裡。
+ *
+ * 2026-10（W-5～W-7）：後端回應形狀改由 Rust DTO 產生（$lib/api/generated），手寫的
+ * 信封 ApiPage 與成對 DTO 已刪；本檔只留共用顯示知識與產生型別的 type-only 轉出
+ * （見 ADR 0007 增補）。
  *
  * 2026-07 依同判準增收：訂單雙身分協定與 5% 內含稅顯示反推（orderIdentity /
  * taxFromGross，見下方訂單知識區）。「凍結」指當年批次的任務邊界、非永久禁令——

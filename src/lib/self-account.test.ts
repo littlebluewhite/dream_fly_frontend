@@ -256,6 +256,23 @@ describe('交錯競態(移植自 pref-sync.test.ts)', () => {
 	});
 });
 
+describe('preferences 非 JSON 物件(後端為 JsonValue、不驗形狀)', () => {
+	it.each([['字串', 'x'], ['陣列', [true]]])('%s → 視同未設定:prefs 走預設,PATCH 只送 4 個已知鍵', async (_label, raw) => {
+		route({
+			'GET /users/me': me({ preferences: raw }),
+			'PATCH /users/me': (init: RequestInit) => me({ ...JSON.parse(String(init.body)) })
+		});
+		await hydrateSelfAccount();
+		expect(get(prefs)).toEqual(DEFAULT_PREFS);
+
+		await saveSelfAccount({ prefs: { promo: true } });
+
+		expect(patchBodies()).toEqual([
+			{ preferences: { class_reminder: true, coach_msg: true, promo: true, dark: false } }
+		]);
+	});
+});
+
 describe('saveSelfAccount', () => {
 	beforeEach(async () => {
 		route({ 'GET /users/me': me({ birth_date: '2013-05-18', preferences: { legacy_key: 'x' } }) });
