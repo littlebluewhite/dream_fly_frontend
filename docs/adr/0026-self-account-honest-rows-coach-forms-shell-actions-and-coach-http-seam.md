@@ -266,3 +266,21 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
   `attendance_status` 只有 present/absent/leave,送出時被默默併成「出席」,手機版 `onSave` 還忽略
   `hadLate`。`AttDefault` 收成三值,`coach/api.ts` 的 late→present 與 controller 的
   `draftHadLate`/`SaveOutcome.hadLate` 一併刪除,桌面成功 toast 不再追加折疊說明。
+
+## 增補(2026-10-03,架構深化 R17,W-8):admin 的 HTTP seam 遞延重開並結案
+
+- **重開理由**:「明確不做」與「已知、刻意遞延」都把 admin 列進「頁面測試仍 mock 各自的 api 模組」。
+  W-6/W-7 之後 admin 回應型別全由後端產生,整支 mock `$lib/admin/api` 等於跳過真 mapper,型別漂移與
+  mapper bug 在頁面測試裡看不到;訂單頁的假列(`method: '信用卡'` 這類 wire 沒有的欄位)就是例子。
+  這條遞延對 admin 重開。
+- **做法**:比照第 8 節教練頁與 mobile-admin ops 頁。新增 `src/lib/testing/admin-routes.ts`,
+  `ADMIN_ROUTES = { ...OPS_ROUTES, … }` 補上 venues、products、coupons、settings、reports/admin、
+  reports/admin/activity、sessions/today 的預設回應,另附 `apiCalls`/`apiBody` 兩支呼叫檢視 helper。
+  fixture 一律由 `wire-fixtures.ts` 的 builders 組出(本輪新增 venue/product/coupon/settings/
+  adminReport/activityItem/todaySession/coach/user/course 十支)。十個 `routes/admin/**/page.test.ts`
+  改 `vi.mock('$lib/api/client')` + `fakeRouter(…, ADMIN_ROUTES)`,斷言 HTTP 路徑與 body;
+  案例數逐檔不變(合計 147 → 147)。
+- **結案**:`import-scan.test.ts` 新增契約「零 `vi.mock` 整支 `$lib/admin/api`」——automock 或零參數
+  factory 都算整支。帶 `importOriginal` 的部分替換不在此列:`mobile-admin/stores.test.ts` 仍只換掉
+  六支寫入函式,屬 mobile-admin store 測試,不在本次範圍。
+- **member/mobile/public** 的遞延不變。
