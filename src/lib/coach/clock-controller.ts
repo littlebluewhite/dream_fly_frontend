@@ -20,7 +20,7 @@ export interface ClockViewState {
 }
 
 /** deps 回傳型別用 Promise<unknown>：controller 不讀回傳值，coach/clock.ts 的真函式
- *  （Promise<ClockRecord>）協變可直接指派。 */
+ *  （Promise<ClockRecordResponse>）協變可直接指派。 */
 export interface ClockControllerDeps {
 	clockIn: (coachId: string) => Promise<unknown>;
 	clockOut: (coachId: string) => Promise<unknown>;

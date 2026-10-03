@@ -14,7 +14,7 @@ beforeEach(() => {
 });
 
 describe('clockIn — POST /coaches/{id}/clock-in', () => {
-	it('成功打卡回傳 ClockRecord；帶 note 時 body 含 note', async () => {
+	it('成功打卡回傳 ClockRecordResponse；帶 note 時 body 含 note', async () => {
 		const record = { id: 'r1', clock_in: '2026-07-04T08:00:00Z', clock_out: null, note: '準時到班', created_at: '2026-07-04T08:00:00Z' };
 		vi.mocked(api).mockResolvedValue(record);
 
@@ -46,7 +46,7 @@ describe('clockIn — POST /coaches/{id}/clock-in', () => {
 });
 
 describe('clockOut — POST /coaches/{id}/clock-out', () => {
-	it('成功下班打卡回傳 ClockRecord，不帶 body', async () => {
+	it('成功下班打卡回傳 ClockRecordResponse，不帶 body', async () => {
 		const record = { id: 'r1', clock_in: '2026-07-04T08:00:00Z', clock_out: '2026-07-04T17:00:00Z', note: null, created_at: '2026-07-04T08:00:00Z' };
 		vi.mocked(api).mockResolvedValue(record);
 

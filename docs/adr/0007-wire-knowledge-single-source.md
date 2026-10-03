@@ -197,6 +197,11 @@ W-5/W-6 已刪的 `ApiTodaySession`/`ApiLeaveRequest`。`wire.ts` 仍收「≥2 
   cast 進來,不回頭改寫產生型別。
 - **UI 目標型別**:照本篇原判準,留在各 surface。
 
+另有一處不是宣告型別:非 2xx 的錯誤 body `{ "error": string }` 沒有產生型別,`api/client.ts` 的
+`parseErrorMessage` 從 `unknown` 做執行期收窄。不讀回應的呼叫(204 DELETE、標已讀 PATCH、忘記/重設密碼)
+不帶型別參數。盤點方式:以 `api<T>` 與 `fetch` 為準逐一核對 T,不只靠 `Api*` 命名——W-7 第一輪就漏了
+不以 `Api` 開頭的 `ClockRecord` 與 checkout 的本地 `CouponValidateResponse`。
+
 後端產生的封閉 enum 拿來做查表時寫成 `Record<GeneratedEnum, …>`(例如 `ORDER_STATUS`、`NOTIF_TYPE_MAP`),
 後端新增值就在前端編譯紅;部署落差時的未知值 fallback 照舊保留。
 

@@ -13,6 +13,7 @@
 import type { CartItem, ChargeableLine } from '$lib/cart-item';
 import { api, ApiError } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
+import type { CouponValidateResponse } from '$lib/api/generated';
 
 /* ─── chargeableLines ─────────────────────────────────────────── */
 
@@ -36,11 +37,6 @@ export function chargeableLines(cart: CartItem[], subs: { id: string }[]): Charg
 
 /* ─── applyCouponCode — 「套用優惠碼」按鈕的結果機（C2/R11：桌面 CheckoutDialog 與
  * 行動版 CartSheet 原本各手焊一份 byte-identical 的 applyCode，收斂到這裡）── */
-
-interface CouponValidateResponse {
-  code: string;
-  discount_cents: number;
-}
 
 /** 套用結果：`coupon` 是命中的優惠碼（未命中為 null），`codeErr` 是要顯示的錯誤文案
  *  （命中為空字串）——呼叫端把兩欄直接寫回自己的表單狀態，不必再自己分類。 */

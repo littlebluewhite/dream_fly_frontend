@@ -6,23 +6,16 @@
  * 後端回 409(「already clocked in」)；clock-out 若沒有進行中的打卡，後端回 404
  * (「no active clock-in record found」)。呼叫端自行 catch ApiError 判斷 status。 */
 import { api } from '$lib/api/client';
+import type { ClockRecordResponse } from '$lib/api/generated';
 
-export interface ClockRecord {
-	id: string;
-	clock_in: string;
-	clock_out: string | null;
-	note: string | null;
-	created_at: string;
-}
-
-export const clockIn = (coachId: string, note?: string): Promise<ClockRecord> =>
-	api<ClockRecord>(`/coaches/${coachId}/clock-in`, {
+export const clockIn = (coachId: string, note?: string): Promise<ClockRecordResponse> =>
+	api<ClockRecordResponse>(`/coaches/${coachId}/clock-in`, {
 		method: 'POST',
 		body: JSON.stringify(note ? { note } : {})
 	});
 
-export const clockOut = (coachId: string): Promise<ClockRecord> =>
-	api<ClockRecord>(`/coaches/${coachId}/clock-out`, { method: 'POST' });
+export const clockOut = (coachId: string): Promise<ClockRecordResponse> =>
+	api<ClockRecordResponse>(`/coaches/${coachId}/clock-out`, { method: 'POST' });
 
 /** 進頁面時的「目前是否上班中」開機狀態查詢：GET /coaches/{id}/clock-records 依
  *  clock_in DESC 排序(純陣列)，取最新一筆，clock_out 仍為 null 即為上班中。
@@ -30,7 +23,7 @@ export const clockOut = (coachId: string): Promise<ClockRecord> =>
  *  後端 409/404 校正，不會造成錯誤寫入)，呼叫端不需要 catch。 */
 export async function isClockedIn(coachId: string): Promise<boolean> {
 	try {
-		const records = await api<ClockRecord[]>(`/coaches/${coachId}/clock-records?page=1&per_page=1`);
+		const records = await api<ClockRecordResponse[]>(`/coaches/${coachId}/clock-records?page=1&per_page=1`);
 		return records.length > 0 && records[0].clock_out === null;
 	} catch {
 		return false;

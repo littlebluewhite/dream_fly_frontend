@@ -12,6 +12,7 @@
  * performRefreshExclusive below). */
 
 import { getAccess, setTokens, getRefresh, clearTokens } from './tokens';
+import type { AuthResponse } from './generated';
 
 const DEFAULT_BASE_URL = 'http://localhost:3000/api/v1';
 
@@ -162,7 +163,7 @@ async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
     if (!response.ok) {
       return response.status >= 400 && response.status < 500 ? 'rejected' : 'unavailable';
     }
-    const data = (await response.json()) as { access_token: string; refresh_token: string };
+    const data = (await response.json()) as Pick<AuthResponse, 'access_token' | 'refresh_token'>;
     setTokens(data.access_token, data.refresh_token);
     return 'ok';
   } catch {
