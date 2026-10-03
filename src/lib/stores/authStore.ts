@@ -184,7 +184,14 @@ function createAuthStore() {
       const cached = loadCache();
       if (cached.loggedIn && sessionIdentity(cached) !== sessionIdentity(get({ subscribe }))) {
         forgetAccess();
-        void hydrate();
+        void hydrate().then(() => {
+          // hydrate 沒能換成 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時不可用):
+          // 不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。
+          if (sessionIdentity(loadCache()) !== sessionIdentity(get({ subscribe }))) {
+            forgetAccess();
+            set(LOGGED_OUT);
+          }
+        });
       }
     });
   }

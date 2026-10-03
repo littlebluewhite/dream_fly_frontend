@@ -30,8 +30,9 @@ refresh token 換新而 401、購物車總額把已持有方案算進去。本�
 **決定**(細節已寫在 `docs/adr/0006`/`0017`/`0026` 的 R17 增補與 `CONTEXT.md`「登入狀態」,此處只列骨架):
 
 - **只有一個清除點**:`client.ts` 的 `performRefresh()`。進鎖後一律讀「當下」的 refresh token 去換
-  (`exchangeRefreshToken()`,純傳輸、從不清),結果三分:成功 / 拒絕(4xx,或根本沒有 refresh token 可送)/
-  不可用(網路錯誤、5xx、200 但 body 讀不出來)。只有「拒絕」走 compare-and-clear——storage 裡的 refresh
+  (`exchangeRefreshToken()`,純傳輸、從不清),結果三分:成功 / 拒絕(400/401/403,或根本沒有 refresh token
+  可送)/ 不可用(網路錯誤、其他非 2xx 如 408/429/5xx、200 但 body 讀不出來)。`/auth/refresh` 與登入共用後端每 IP
+  每分鐘 10 次的限流桶,429 不是對 token 的判決,當成拒絕會把整個瀏覽器的分頁一起登出(最終檢視 I-1)。只有「拒絕」走 compare-and-clear——storage 裡的 refresh
   token 仍是這次送出的那顆,**或 storage 已空**(別的分頁登出了)才清,並呼叫 `onSessionExpired` 訊號。
   「不可用」回 false、不清、不發訊號。
 - **`authStore` 收訊號**:`onSessionExpired(() => set(LOGGED_OUT))`。守門導向、session 閘門重置、結帳導向
@@ -39,7 +40,9 @@ refresh token 換新而 401、購物車總額把已持有方案算進去。本�
   已經走 `api()` → refresh 那條路)。
 - **跨分頁**:`authStore` 在瀏覽器端聽 `storage` 事件(`dreamfly_auth`、`dreamfly_refresh`、`key: null`),
   **只看「目前 storage」決定**:沒有 refresh token → `forgetAccess()` + `LOGGED_OUT`;快取身分是另一位已登入
-  者 → `forgetAccess()` + `hydrate()`;其餘(含 refresh token 被別的分頁輪替)不動。listener 永不寫共用的
+  者 → `forgetAccess()` + `hydrate()`,`hydrate()` 結束後若本分頁身分仍不是 storage 快取的那位(refresh 成功但
+  `/users/me` 失敗、或 refresh 暫時不可用),再 `forgetAccess()` + `LOGGED_OUT`——不得用舊身分頂著新帳號的 token
+  打 API(最終檢視 M-3);其餘(含 refresh token 被別的分頁輪替)不動。listener 永不寫共用的
   refresh key。(Controller 裁決 9:若「refresh key 變了」就重新水合,每個等待鎖的分頁都會各輪替一次、互相
   觸發,永不停止。)
 - **`sessionIdentity()` 搬進 `stores/authStore.ts`**;`$lib/testing/auth-mock` 兩個家族轉手真實作。
@@ -280,7 +283,7 @@ mutator)。語意:
 2. **token 失效後畫面真的登出並導回登入頁**,不再等整頁重載(FE-3)。
 3. **別的分頁登出或換帳號,本分頁即時跟上**;別的分頁只是輪替 refresh token 時本分頁不動(FE-3)。
 4. **跟隨分頁不再先 401 一次**:等鎖後用目前的 refresh token 換出自己的 access token(FE-2)。
-5. **網路錯誤或 5xx 不再把使用者登出**:只有後端明確拒絕 refresh 才清 token(FE-3)。
+5. **網路錯誤、408/429 或 5xx 不再把使用者登出**:只有後端明確拒絕 refresh(400/401/403)才清 token(FE-3、最終檢視 I-1)。
 6. **點名沒有「遲到」;手機點名多了「請假」**,手機「出席」由主色改綠,統計格 4 → 3 欄;桌面存檔 toast 不再追加
    「遲到已併為出席」類說明(FE-4)。
 7. **購物車頁與購物車下拉的總額扣除已持有方案**,該行顯示「已持有，不計費」(FE-5)。
@@ -312,12 +315,10 @@ mutator)。語意:
 - **登入狀態(FE-2/FE-3)**:
   - 無 Web Locks 時並發背景 `hydrate` 會重放 refresh token(既有行為)。
   - 舊的 in-flight refresh 成功會覆寫新登入的 token(`setTokens` 無條件),回彈一次。
-  - listener 觸發的 `hydrate` 若併入舊的在飛 refresh 且失敗,分頁卡在舊身分直到下次 401。
   - 換會員時一個分頁可能 `hydrate` 兩次(多一次輪替)。
   - 無鎖 fallback 或中途新登入時 compare-and-clear 回 false → 該請求 401。
-  - `exchangeRefreshToken` 把 408/429 也當 rejected,可收窄到 400/401/403。
   - refresh 2xx 但 body 解析失敗 → `unavailable`,留舊 token(延後失敗)。
-  - `auth-mock.ts` 用 `importActual` 讓六個 mock 測試檔註冊真 listener(無害);缺 `authStore` 層「refresh 失敗但未清 → 狀態不變」的測試;
+  - `auth-mock.ts` 用 `importActual` 讓六個 mock 測試檔註冊真 listener(無害);
     `client.test.ts` in-flight 測試未釘 fetch 次數與 `getAccess()` 狀態。
 - **點數**:`seed-fixtures.ts` 的 desc「管理員點數調整」與 production「會員點數調整」不一致;`admin_adjust` 與 default
   共用文案,未知的新 reason 會顯示「會員點數調整」(窮舉 `never` 檢查可解)(FE-1)。

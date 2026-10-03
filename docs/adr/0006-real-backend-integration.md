@@ -273,7 +273,7 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
   是 refresh 失敗時唯一清 token 的地方;`exchangeRefreshToken()` 只負責傳輸,從不清。「storage 已空」
   那一半是 R17 加的:別的分頁在我們的 POST 進行中登出,本分頁記憶體裡的 access token 也一起丟掉。
 - **只有後端明確拒絕才清 token**(R17):`exchangeRefreshToken()` 回報三種結果——成功、拒絕
-  (`/auth/refresh` 回 4xx)、不可用(網路錯誤、5xx)。只有「拒絕」(或根本沒有 refresh token 可送)才走上面的
+  (`/auth/refresh` 回 400/401/403)、不可用(網路錯誤、408/429/5xx 等其他非 2xx)。只有「拒絕」(或根本沒有 refresh token 可送)才走上面的
   compare-and-clear;「不可用」回 false,不清 token、不發訊號、不改登入狀態。`hydrate()` 的 `/users/me`
   失敗同理:真的 401 已經走 `api()` → refresh 那條路,其他失敗不碰 token。refresh token 是各分頁共用的,
   一次暫時性故障若清掉它,所有分頁會同時登出。
@@ -283,7 +283,8 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
   `dreamfly_auth` 快取都走既有的身分改變那條邊,沒有新路徑。
 - **跨分頁同步**(FE-3):`authStore` 在瀏覽器端聽 `storage` 事件(`dreamfly_auth`、`dreamfly_refresh`
   或 `key: null`),只依「目前 storage」決定:沒有 refresh token → 丟掉本分頁 access token 並登出;
-  `dreamfly_auth` 快取的身分是另一位已登入者 → 丟掉 access token 並重新 `hydrate()`;其他情況(包括
+  `dreamfly_auth` 快取的身分是另一位已登入者 → 丟掉 access token 並重新 `hydrate()`,水合後身分仍不是快取
+  那位(例如 `/users/me` 失敗)就丟掉 access token 並登出;其他情況(包括
   refresh token 只是被別的分頁輪替)不動。listener 永不寫共用的 refresh key。只看目前 storage 而不看
   「refresh key 變了」,是為了避免分頁互相觸發 refresh、永不停止(每個等待中的分頁現在都會各輪替一次)。
   詳見 CONTEXT.md「登入狀態」。

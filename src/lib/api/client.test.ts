@@ -290,7 +290,22 @@ describe('refreshTokens()', () => {
     expect(expired).not.toHaveBeenCalled();
   });
 
-  it('4xx (backend rejected the token): clears the tokens and signals expiry once', async () => {
+  it.each([
+    [408, 'Request Timeout'],
+    [429, 'Too Many Requests']
+  ])('%i (throttled/timed out, not a token verdict): returns false but keeps the tokens and does not signal expiry', async (status, statusText) => {
+    setTokens('access', 'refresh');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'try later' }, status, statusText)));
+
+    const ok = await refreshTokens();
+
+    expect(ok).toBe(false);
+    expect(getAccess()).toBe('access');
+    expect(getRefresh()).toBe('refresh');
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it('401 (backend rejected the token): clears the tokens and signals expiry once', async () => {
     setTokens('access', 'refresh');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'invalid refresh token' }, 401, 'Unauthorized')));
 

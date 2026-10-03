@@ -182,11 +182,13 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   first-paint cache of the member profile (so the UI doesn't flash "logged out" before `hydrate()`
   resolves) — the actual truth is whether the refresh token is still valid against the server. Login state
   follows that truth across tabs and on expiry (`docs/adr/0006` R17 addendum, `docs/adr/0027` §1): the
-  refresh single-flight clears tokens only on an explicit backend rejection and only if the stored
+  refresh single-flight clears tokens only on an explicit backend rejection (400/401/403 — never a 408,
+  429 or 5xx) and only if the stored
   refresh token is still the one it sent (compare-and-clear), then fires `client.ts`'s
   `onSessionExpired` signal, which `authStore` turns into `LOGGED_OUT`; `authStore` also listens for
   `storage` events and decides from the *current* storage only (no refresh token → log out; cached
-  identity is a different logged-in member → drop this tab's access token and re-hydrate; plain
+  identity is a different logged-in member → drop this tab's access token and re-hydrate, logging out
+  if the tab still isn't that member afterwards; plain
   rotation → do nothing, otherwise tabs would trigger each other's refresh forever).
   `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
   user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any

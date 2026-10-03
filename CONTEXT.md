@@ -18,10 +18,10 @@ _Avoid_: 使用者
 這個分頁此刻是不是登入、登入的是誰——`$authStore` 的 `{ loggedIn, member, roles }`,單一 owner 是
 `src/lib/stores/authStore.ts`(身分 key `sessionIdentity()` 也住這裡)。真相是共用的 refresh token
 (`dreamfly_refresh`);`dreamfly_auth` 只是首屏快取。三種事件會改變它,全都只是 `set` 這顆 store,
-守門導向、session 閘門重置與結帳導向都沿用既有的身分改變那條邊:本分頁登入/登出;後端明確拒絕 refresh(4xx)而
-`client.ts` 真的清掉 token(網路錯誤與 5xx 不清、不登出)(`onSessionExpired` 訊號,只在 `performRefresh()` 的唯一清除點發出);別的
+守門導向、session 閘門重置與結帳導向都沿用既有的身分改變那條邊:本分頁登入/登出;後端明確拒絕 refresh(400/401/403)而
+`client.ts` 真的清掉 token(網路錯誤、408/429 與 5xx 不清、不登出)(`onSessionExpired` 訊號,只在 `performRefresh()` 的唯一清除點發出);別的
 分頁改了 storage(`storage` listener,只看**目前 storage**:沒 refresh token → 登出;快取身分是另一位
-已登入者 → 重新水合;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
+已登入者 → 重新水合,水合後仍不是那位就登出;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
 各分頁記憶體,跨分頁變化時用 `forgetAccess()` 丟掉本分頁那顆,不碰共用的 refresh token(見
 `docs/adr/0006` R17 增補)。
 _Avoid_: 登入態(混用時統一用「登入狀態」), 看 `dreamfly_auth` 判斷是否登入(那是快取), 在 listener 裡

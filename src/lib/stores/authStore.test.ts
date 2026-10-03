@@ -328,6 +328,25 @@ describe('authStore.hydrate — /users/me unavailable', () => {
   });
 });
 
+// 最終檢視 I-1 / FE-3 :89:refresh 失敗但 token 沒被清(後端節流/暫時不可用)→ hydrate 直接返回,狀態不動。
+describe('authStore.hydrate — refresh unavailable', () => {
+  it('/auth/refresh 429: keeps tokens and state, never calls /users/me', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER })));
+    await authStore.login('a@test.com', 'pw');
+    const before = get(authStore);
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ error: 'too many requests' }, 429, 'Too Many Requests'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authStore.hydrate();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${BASE}/auth/refresh`);
+    expect(getAccess()).toBe('a1');
+    expect(getRefresh()).toBe('r1');
+    expect(get(authStore)).toBe(before);
+  });
+});
+
 // R13 Task 3(T0):會員資料 module 的 PATCH /users/me 成功後,用回應同步 Topbar 等讀
 // authStore 的名字——identity key(loggedIn + member.id)不變,不得觸發任何 session gate 重置。
 describe('authStore.syncUser', () => {
@@ -474,6 +493,25 @@ describe('authStore — cross-tab storage sync', () => {
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({ refresh_token: 'rB' });
     expect(getAccess()).toBe('aB2');
     expect(reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('another tab logged in as B, refresh OK but /users/me fails → LOGGED_OUT, never A’s identity on B’s token', async () => {
+    await loginAsA();
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('/auth/refresh')
+        ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
+        : jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable')
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(get(authStore)).toEqual(LOGGED_OUT));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getAccess()).toBeNull();
+    expect(getRefresh()).toBe('rB2'); // the shared refresh key is not touched
   });
 
   it('only rotation (same identity, new refresh token) → no action: no refresh, access kept, no reset', async () => {

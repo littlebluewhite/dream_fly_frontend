@@ -126,8 +126,8 @@ export function onSessionExpired(fn: () => void): void {
 }
 
 /** Tokens are cleared only when the session is really over: the backend
- *  explicitly rejected the refresh token (4xx), or there was none to send. A
- *  network error or 5xx leaves everything in place — a blip must not log out
+ *  explicitly rejected the refresh token (400/401/403), or there was none to
+ *  send. A network error, 408/429 or 5xx leaves everything in place — a blip must not log out
  *  every tab. Even on a rejection, compare-and-clear: clear only if the stored
  *  refresh token is still the one this call sent, or storage is already empty
  *  (another tab logged out while the request was in flight). If another tab or
@@ -148,9 +148,15 @@ async function performRefresh(): Promise<boolean> {
   return false;
 }
 
-/** `rejected`: the backend answered 4xx (token invalid/revoked/expired).
- *  `unavailable`: network error, 5xx, or an unreadable success body. */
+/** `rejected`: the backend answered 400/401/403 (token invalid/revoked/expired).
+ *  `unavailable`: network error, any other non-2xx (408, 429 rate limit, 5xx…),
+ *  or an unreadable success body. */
 type RefreshOutcome = 'ok' | 'rejected' | 'unavailable';
+
+/** The only /auth/refresh statuses that are a verdict on the token itself. A 429
+ *  (the strict auth rate-limit bucket) or 408 says nothing about the token, so it
+ *  must not log every tab out. */
+const TOKEN_REJECTED_STATUSES = new Set([400, 401, 403]);
 
 /** POST /auth/refresh; stores the rotated pair on success. Transport only — never clears. */
 async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
@@ -161,7 +167,7 @@ async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
       body: JSON.stringify({ refresh_token: refresh })
     });
     if (!response.ok) {
-      return response.status >= 400 && response.status < 500 ? 'rejected' : 'unavailable';
+      return TOKEN_REJECTED_STATUSES.has(response.status) ? 'rejected' : 'unavailable';
     }
     const data = (await response.json()) as Pick<AuthResponse, 'access_token' | 'refresh_token'>;
     setTokens(data.access_token, data.refresh_token);
