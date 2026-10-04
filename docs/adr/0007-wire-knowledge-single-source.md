@@ -192,8 +192,7 @@ W-5/W-6 已刪的 `ApiTodaySession`/`ApiLeaveRequest`。`wire.ts` 仍收「≥2 
 
 - **request body**(`*Body`、`ContactPayload`、`SettingsWriteBody` 等):產生型別只含 response(後端 ADR 0016
   R4)。
-- **後端刻意留 `String` / `JsonValue` 的欄位上,前端依契約所做的值域斷言**:`ActivityKind`、報表
-  `AdminRevenueSource`/`Admin*Bucket`、settings 三組慣例 key 的形狀(`ApiStudioProfile` 等)。在映射處
+- **後端刻意留 `String` / `JsonValue` 的欄位上,前端依契約所做的值域斷言**:`ActivityKind`、settings 三組慣例 key 的形狀(`ApiStudioProfile` 等)。在映射處
   cast 進來,不回頭改寫產生型別。
 - **UI 目標型別**:照本篇原判準,留在各 surface。
 
