@@ -7,7 +7,7 @@
  * instantly instead of flashing "logged out" while hydrate() confirms it. */
 
 import { writable, derived, get } from 'svelte/store';
-import { api, refreshTokens, onSessionExpired } from '$lib/api/client';
+import { api, refreshTokens, onSessionExpired, onSessionRefreshed, bindSessionIdentity } from '$lib/api/client';
 import { getRefresh, setTokens, clearTokens, forgetAccess, REFRESH_KEY } from '$lib/api/tokens';
 import { isoDate, initialOf } from '$lib/api/wire';
 import type { Member } from '$lib/domain/member-app';
@@ -189,6 +189,18 @@ function createAuthStore() {
     set(LOGGED_OUT);
   });
 
+  // refresh 真的換上新 token 的那一刻(compare-and-set 成功):token 屬於別人(別的分頁換登、本分頁還沒
+  // 收到 storage 事件)就同一拍換畫面身分——不留「token 是 B、畫面是 A」的空檔。同一人只是輪替,不動。
+  onSessionRefreshed((user) => {
+    if (user.id !== sessionIdentity(get({ subscribe }))) {
+      beginSession();
+      applyUser(user);
+    }
+  });
+
+  // api() 發請求時記下的畫面身分(401 只替發出當下的身分重送)。
+  bindSessionIdentity(() => sessionIdentity(get({ subscribe })));
+
   // 跨分頁同步:別的分頁改了登入狀態(storage 事件只送到其他分頁)。只看「目前 storage」決定,
   // 不看事件帶的新舊值——refresh key 只是被別的分頁輪替時不得重新水合,否則分頁互相觸發 refresh
   // 永不停。listener 永不寫共用的 refresh key。
@@ -208,8 +220,9 @@ function createAuthStore() {
         forgetAccess();
         void hydrate().then(() => {
           if (generation !== gen) return; // 這段期間換了 session(例如本分頁登入 C):收尾不屬於它
-          // hydrate 沒能換成事件當下 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時
-          // 不可用):不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。比對事件當下的快照,
+          // hydrate 沒能換成事件當下 storage 裡的身分(refresh 暫時不可用,或 refresh 回的 user 不是快照
+          // 裡那位):不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。refresh 換出別人時
+          // onSessionRefreshed 已同拍換身分、推進世代,走不到這裡;/users/me 失敗也停在那個身分。比對事件當下的快照,
           // 不重讀共用快取:別的分頁遲到的 syncUser 可能已把它改寫回舊身分。
           if (expected !== sessionIdentity(get({ subscribe }))) {
             forgetAccess();

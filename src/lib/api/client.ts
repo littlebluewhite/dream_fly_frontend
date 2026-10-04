@@ -12,7 +12,7 @@
  * performRefreshExclusive below). */
 
 import { getAccess, setTokens, getRefresh, clearTokens } from './tokens';
-import type { AuthResponse } from './generated';
+import type { AuthResponse, AuthUserResponse } from './generated';
 
 const DEFAULT_BASE_URL = 'http://localhost:3000/api/v1';
 
@@ -68,11 +68,14 @@ export async function api<T>(path: string, init: RequestInit & { auth?: boolean 
   const { auth, ...requestInit } = init;
   const useAuth = auth !== false;
 
+  // 只替發出請求的那個畫面身分重送:refresh 前後身分都沒變才重送,否則(換登、或 refresh 換出
+  // 別人的憑證)丟 401——不得用新身分的憑證替舊畫面的寫入重送。
+  const issuedBy = currentIdentity();
   const response = await sendRequest(path, requestInit, useAuth);
 
   if (response.status === 401 && useAuth) {
-    const refreshed = await refreshTokens();
-    if (!refreshed) {
+    const refreshed = currentIdentity() === issuedBy && (await refreshTokens());
+    if (!refreshed || currentIdentity() !== issuedBy) {
       throw new ApiError(401, await parseErrorMessage(response));
     }
     return parseResponse<T>(await sendRequest(path, requestInit, useAuth));
@@ -125,6 +128,22 @@ export function onSessionExpired(fn: () => void): void {
   sessionExpiredListeners.add(fn);
 }
 
+const sessionRefreshedListeners = new Set<(user: AuthUserResponse) => void>();
+
+/** Register a callback for a refresh that really rotated this tab's tokens
+ *  (compare-and-set succeeded), with the user the backend says they belong to.
+ *  Fires nowhere else. */
+export function onSessionRefreshed(fn: (user: AuthUserResponse) => void): void {
+  sessionRefreshedListeners.add(fn);
+}
+
+let currentIdentity: () => string | null = () => null;
+
+/** 由畫面身分的 owner(authStore)註冊讀法;api() 只呼叫、不 import 它(避免循環)。 */
+export function bindSessionIdentity(fn: () => string | null): void {
+  currentIdentity = fn;
+}
+
 /** Tokens are cleared only when the session is really over: the backend
  *  explicitly rejected the refresh token (400/401/403), or there was none to
  *  send. A network error, 408/429 or 5xx leaves everything in place — a blip must not log out
@@ -136,7 +155,8 @@ export function onSessionExpired(fn: () => void): void {
  *  onSessionExpired fires. A success is compare-and-set the same way: the
  *  rotated pair is stored only if the stored refresh token is still the one
  *  sent; otherwise (a newer login, or a logout, landed during the flight) the
- *  result is dropped and false returned — the newer tokens win. */
+ *  result is dropped and false returned — the newer tokens win. Only a stored
+ *  rotation fires onSessionRefreshed, carrying the user the new tokens belong to. */
 async function performRefresh(): Promise<boolean> {
   const sent = getRefresh();
   const outcome: RefreshOutcome = sent ? await exchangeRefreshToken(sent) : 'rejected';
@@ -144,6 +164,7 @@ async function performRefresh(): Promise<boolean> {
   if (typeof outcome === 'object') {
     if (now !== sent) return false;
     setTokens(outcome.access_token, outcome.refresh_token);
+    sessionRefreshedListeners.forEach((fn) => fn(outcome.user));
     return true;
   }
   if (outcome === 'rejected' && (now === sent || now === null)) {
@@ -153,11 +174,12 @@ async function performRefresh(): Promise<boolean> {
   return false;
 }
 
-/** The rotated pair on success. `rejected`: the backend answered 400/401/403
- *  (token invalid/revoked/expired). `unavailable`: network error, any other
- *  non-2xx (408, 429 rate limit, 5xx…), or an unreadable success body. */
+/** The rotated pair (and the user it belongs to) on success. `rejected`: the
+ *  backend answered 400/401/403 (token invalid/revoked/expired). `unavailable`:
+ *  network error, any other non-2xx (408, 429 rate limit, 5xx…), or an
+ *  unreadable success body. */
 type RefreshOutcome = RotatedPair | 'rejected' | 'unavailable';
-type RotatedPair = Pick<AuthResponse, 'access_token' | 'refresh_token'>;
+type RotatedPair = Pick<AuthResponse, 'access_token' | 'refresh_token' | 'user'>;
 
 /** The only /auth/refresh statuses that are a verdict on the token itself. A 429
  *  (the strict auth rate-limit bucket) or 408 says nothing about the token, so it
@@ -176,7 +198,7 @@ async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
       return TOKEN_REJECTED_STATUSES.has(response.status) ? 'rejected' : 'unavailable';
     }
     const data = (await response.json()) as RotatedPair;
-    return { access_token: data.access_token, refresh_token: data.refresh_token };
+    return { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
   } catch {
     return 'unavailable';
   }

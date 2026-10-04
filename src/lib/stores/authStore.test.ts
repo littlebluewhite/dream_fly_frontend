@@ -33,6 +33,11 @@ function jsonResponse(body: unknown, status = 200, statusText = 'OK') {
   };
 }
 
+/** /auth/refresh 的成功回應:後端連同 user 一起回(AuthResponse)。 */
+function rotated(access_token: string, refresh_token: string, user: AuthUserResponse = SAMPLE_USER) {
+  return { access_token, refresh_token, user };
+}
+
 // authStore is a module singleton backed by tokens.ts (module memory +
 // localStorage) and a localStorage profile cache. Reset all three before each
 // test. clearTokens() first so the subsequent logout() call below never has a
@@ -275,7 +280,7 @@ describe('authStore.hydrate', () => {
   it('with a valid refresh token: refreshes, fetches /users/me, and populates state', async () => {
     setTokens('stale-access', 'valid-refresh');
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh' })); // /auth/refresh
+    fetchMock.mockResolvedValueOnce(jsonResponse(rotated('new-access', 'new-refresh'))); // /auth/refresh
     fetchMock.mockResolvedValueOnce(jsonResponse(SAMPLE_USER)); // /users/me
     vi.stubGlobal('fetch', fetchMock);
 
@@ -305,11 +310,12 @@ describe('authStore.hydrate', () => {
 // FE-3 修波:/users/me 非 401 的失敗(5xx/網路)不是 session 過期——不碰 token、不改登入狀態。
 describe('authStore.hydrate — /users/me unavailable', () => {
   it('/users/me 503: keeps tokens and state; no auth-cache write, no token removal', async () => {
-    setTokens('stale-access', 'valid-refresh');
-    const cached = JSON.stringify({ loggedIn: true, member: toMember(SAMPLE_USER), roles: ['member'] });
-    localStorage.setItem('dreamfly_auth', cached);
+    // 從已登入 A 開始(重載時快取已是 A):refresh 回的 user 與畫面同一人,不換身分。
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(rotated('stale-access', 'valid-refresh'))));
+    await authStore.login('a@test.com', 'pw');
+    const cached = localStorage.getItem('dreamfly_auth');
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'new-access', refresh_token: 'new-refresh' })); // /auth/refresh
+    fetchMock.mockResolvedValueOnce(jsonResponse(rotated('new-access', 'new-refresh'))); // /auth/refresh
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable')); // /users/me
     vi.stubGlobal('fetch', fetchMock);
     const before = get(authStore);
@@ -479,7 +485,7 @@ describe('authStore — cross-tab storage sync', () => {
     const reset = trackGateReset();
     const fetchMock = vi.fn(async (url: string, _init: RequestInit) =>
       url.endsWith('/auth/refresh')
-        ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
+        ? jsonResponse(rotated('aB2', 'rB2', USER_B))
         : jsonResponse(USER_B)
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -495,11 +501,11 @@ describe('authStore — cross-tab storage sync', () => {
     expect(reset).toHaveBeenCalledTimes(1);
   });
 
-  it('another tab logged in as B, refresh OK but /users/me fails → LOGGED_OUT, never A’s identity on B’s token', async () => {
+  it('another tab logged in as B, refresh OK but /users/me fails → B (refresh 回的 user 已換身分),never A’s identity on B’s token', async () => {
     await loginAsA();
     const fetchMock = vi.fn(async (url: string) =>
       url.endsWith('/auth/refresh')
-        ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
+        ? jsonResponse(rotated('aB2', 'rB2', USER_B))
         : jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable')
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -507,20 +513,26 @@ describe('authStore — cross-tab storage sync', () => {
     localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
 
     otherTabWrote('dreamfly_auth');
-    await vi.waitFor(() => expect(get(authStore)).toEqual(LOGGED_OUT));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 0));
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(getAccess()).toBeNull();
-    expect(getRefresh()).toBe('rB2'); // the shared refresh key is not touched
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+    expect(getAccess()).toBe('aB2');
+    expect(getRefresh()).toBe('rB2');
   });
 
   it('another tab logged in as B, a stale A cache write lands mid-hydrate and hydrate fails → LOGGED_OUT, never A', async () => {
     await loginAsA();
+    let staleWritten = false;
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('aB2', 'rB2', USER_B));
       // A third tab's late syncUser(A) rewrites the shared cache while this tab's hydrate is in flight.
-      localStorage.setItem('dreamfly_auth', cacheOf(SAMPLE_USER));
-      otherTabWrote('dreamfly_auth');
+      // 只寫一次:它觸發的重新水合也會打 /users/me,每次都寫就會無限迴圈。
+      if (!staleWritten) {
+        staleWritten = true;
+        localStorage.setItem('dreamfly_auth', cacheOf(SAMPLE_USER));
+        otherTabWrote('dreamfly_auth');
+      }
       return jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable');
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -528,7 +540,8 @@ describe('authStore — cross-tab storage sync', () => {
     localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
 
     otherTabWrote('dreamfly_auth');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // 換 B 的水合(refresh + /users/me),加上舊 A 快取觸發的第二次水合(refresh + /users/me)。
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
     await new Promise((r) => setTimeout(r, 0));
 
     expect(get(authStore)).toEqual(LOGGED_OUT);
@@ -542,8 +555,8 @@ describe('authStore — cross-tab storage sync', () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/auth/refresh')) {
         return getRefresh() === 'rB'
-          ? jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' })
-          : jsonResponse({ access_token: 'a2', refresh_token: 'r2' });
+          ? jsonResponse(rotated('aB2', 'rB2', USER_B))
+          : jsonResponse(rotated('a2', 'r2'));
       }
       meCalls += 1;
       return meCalls === 1 ? new Promise((r) => (releaseA = r)) : jsonResponse(USER_B);
@@ -570,7 +583,7 @@ describe('authStore — cross-tab storage sync', () => {
     const USER_C = { ...SAMPLE_USER, id: 'uuid-3', email: 'c@test.com' };
     let releaseB!: (r: unknown) => void;
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('aB2', 'rB2', USER_B));
       if (url.endsWith('/auth/login')) return jsonResponse({ access_token: 'aC', refresh_token: 'rC', user: USER_C });
       return new Promise((r) => (releaseB = r));
     });
@@ -589,10 +602,10 @@ describe('authStore — cross-tab storage sync', () => {
   });
 
   it('reload: another tab rotates the refresh token while /users/me is in flight → fresh profile still applied', async () => {
-    localStorage.setItem('dreamfly_refresh', 'r1');
+    await loginAsA(); // 重載時快取已是 A(r1):refresh 回的 user 同一人,不換身分
     const renamed = { ...SAMPLE_USER, name: 'NEW', roles: ['member', 'admin'] };
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'a2', refresh_token: 'r2' });
+      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('a2', 'r2'));
       localStorage.setItem('dreamfly_refresh', 'r3'); // the other tab's own hydrate rotates (same session)
       otherTabWrote('dreamfly_refresh');
       return jsonResponse(renamed);
@@ -605,13 +618,13 @@ describe('authStore — cross-tab storage sync', () => {
   });
 
   it('same tab: /users/me 401 → api() refresh + retry (rotation) → fresh profile still applied', async () => {
-    localStorage.setItem('dreamfly_refresh', 'r1');
+    await loginAsA(); // 重載時快取已是 A(r1):refresh 回的 user 同一人,不換身分
     let me = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/auth/refresh'))
         return getRefresh() === 'r1'
-          ? jsonResponse({ access_token: 'a2', refresh_token: 'r2' })
-          : jsonResponse({ access_token: 'a3', refresh_token: 'r3' });
+          ? jsonResponse(rotated('a2', 'r2'))
+          : jsonResponse(rotated('a3', 'r3'));
       me += 1;
       return me === 1 ? jsonResponse({ error: 'expired' }, 401, 'Unauthorized') : jsonResponse(SAMPLE_USER);
     });
@@ -625,7 +638,7 @@ describe('authStore — cross-tab storage sync', () => {
   it('3 tabs: B switch, a sibling tab rotates B while this tab’s /users/me is in flight → still ends as B', async () => {
     await loginAsA();
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('aB2', 'rB2', USER_B));
       localStorage.setItem('dreamfly_refresh', 'rB3'); // sibling tab's own B hydrate rotates rB2→rB3
       return jsonResponse(USER_B);
     });
@@ -688,6 +701,58 @@ describe('authStore — cross-tab storage sync', () => {
     expect(get(authStore).member?.id).toBe(SAMPLE_USER.id);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(reset).not.toHaveBeenCalled();
+  });
+
+  // R18 W1:refresh 換出 B 的憑證時,畫面同一拍換成 B;A 畫面發的請求不得頂著 B 的憑證重送。
+  it('換登空檔:A 畫面發的 PATCH 遇 401 → ApiError(401),從沒帶過 aB2', async () => {
+    await loginAsA();
+    const fetchMock = vi.fn(async (url: string, _init: RequestInit) =>
+      url.endsWith('/auth/refresh')
+        ? jsonResponse(rotated('aB2', 'rB2', USER_B))
+        : jsonResponse({ error: 'token expired' }, 401, 'Unauthorized')
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB'); // 別的分頁換登成 B;storage 事件尚未送達
+
+    const err = (await api('/users/me', { method: 'PATCH', body: JSON.stringify({ name: 'x' }) }).catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    const bearers = fetchMock.mock.calls.map(([, init]) => new Headers(init.headers).get('Authorization'));
+    expect(bearers).not.toContain('Bearer aB2');
+  });
+
+  it('換成 B:refresh 一落地身分就是 B,不等 /users/me', async () => {
+    await loginAsA();
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith('/auth/refresh') ? jsonResponse(rotated('aB2', 'rB2', USER_B)) : new Promise(() => {}) // /users/me 永不回
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(getAccess()).toBe('aB2'));
+
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+  });
+
+  it('storage 已是 rB、沒收到 storage 事件,遇 401 → 最後是 B', async () => {
+    await loginAsA();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/auth/refresh')
+          ? jsonResponse(rotated('aB2', 'rB2', USER_B))
+          : jsonResponse({ error: 'token expired' }, 401, 'Unauthorized')
+      )
+    );
+    localStorage.setItem('dreamfly_refresh', 'rB');
+
+    await api('/users/me').catch(() => {});
+
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+    expect(getAccess()).toBe('aB2');
   });
 
   it('ignores keys it does not own', async () => {

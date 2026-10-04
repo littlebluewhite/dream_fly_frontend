@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { api, ApiError, refreshTokens, onSessionExpired } from './client';
+import { api, ApiError, refreshTokens, onSessionExpired, onSessionRefreshed, bindSessionIdentity } from './client';
 import { getAccess, getRefresh, setTokens, clearTokens } from './tokens';
 
 // Matches VITE_API_BASE_URL in .env / the spec's documented fallback, so
@@ -37,10 +37,18 @@ function passthroughLocks() {
 const expired = vi.fn();
 onSessionExpired(expired);
 
+// 代替 authStore:畫面身分由 identity 表示;refreshed 預設只記錄,個別測試再讓它換身分。
+let identity: string | null = null;
+bindSessionIdentity(() => identity);
+const refreshed = vi.fn();
+onSessionRefreshed(refreshed);
+
 beforeEach(() => {
   clearTokens();
   localStorage.clear();
   expired.mockClear();
+  refreshed.mockReset();
+  identity = null;
 });
 
 afterEach(() => {
@@ -516,5 +524,75 @@ describe('refreshTokens() cross-tab exclusivity (Web Locks)', () => {
     expect(getRefresh()).toBe('refresh-login');
     expect(getAccess()).toBe('login-access');
     expect(expired).not.toHaveBeenCalled();
+  });
+});
+
+// R18 W1:憑證與畫面身分同一拍換主;401 重送只替發出請求的那個身分。
+describe('api() — 401 重送只替發出當下的身分', () => {
+  const USER_B = { id: 'uuid-B', name: 'B', created_at: '2026-01-01T00:00:00Z', roles: ['member'] };
+
+  it('refresh 換出 B 的憑證、請求是 A 發的 → ApiError(401),從不帶 Bearer aB 重送', async () => {
+    identity = 'uuid-A';
+    refreshed.mockImplementation((user: { id: string }) => (identity = user.id)); // authStore 同拍換身分
+    setTokens('aA', 'rB'); // 別的分頁已換登成 B,本分頁還沒收到 storage 事件
+    const fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'token expired' }, 401, 'Unauthorized')); // A 的請求
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'aB', refresh_token: 'rB2', user: USER_B })); // refresh
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'written-as-B' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const err = (await api('/users/me', { method: 'PATCH', body: '{}' }).catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bearers = fetchMock.mock.calls.map(([, init]) => (init.headers as Headers).get?.('Authorization'));
+    expect(bearers).not.toContain('Bearer aB');
+    expect(getAccess()).toBe('aB'); // 憑證仍照常輪替存好——只是不替 A 重送
+  });
+
+  it('401 落地前畫面身分已變 → 不 refresh、不重送,只有 1 次 fetch', async () => {
+    identity = 'uuid-A';
+    setTokens('aA', 'rA');
+    let release!: (r: unknown) => void;
+    const fetchMock = vi.fn().mockImplementationOnce(() => new Promise((r) => (release = r)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = api('/users/me', { method: 'PATCH', body: '{}' }).catch((e) => e);
+    await vi.waitFor(() => expect(release).toBeDefined());
+    identity = 'uuid-B'; // 例如跨分頁換成 B
+    release(jsonResponse({ error: 'token expired' }, 401, 'Unauthorized'));
+    const err = (await pending) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('onSessionRefreshed 只在 compare-and-set 成功時觸發,帶後端回的 user', async () => {
+    setTokens('old-access', 'old-refresh');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ access_token: 'a2', refresh_token: 'r2', user: USER_B })));
+    expect(await refreshTokens()).toBe(true);
+    expect(refreshed).toHaveBeenCalledTimes(1);
+    expect(refreshed).toHaveBeenCalledWith(USER_B);
+
+    refreshed.mockClear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        setTokens('login-access', 'refresh-login'); // 在飛期間換上新登入:輪替結果被丟棄
+        return jsonResponse({ access_token: 'stale', refresh_token: 'stale-r', user: USER_B });
+      })
+    );
+    expect(await refreshTokens()).toBe(false);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'invalid' }, 401, 'Unauthorized')));
+    expect(await refreshTokens()).toBe(false); // 拒絕
+
+    setTokens('a', 'r');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'down' }, 503, 'Service Unavailable')));
+    expect(await refreshTokens()).toBe(false); // 不可用
+
+    expect(refreshed).not.toHaveBeenCalled();
   });
 });
