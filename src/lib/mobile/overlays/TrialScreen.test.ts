@@ -1,26 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import TrialScreen from './TrialScreen.svelte';
-import { submitTrialInquiry } from '$lib/mobile/api';
 import { toasts } from '$lib/mobile/stores';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { apiBody, apiCalls } from '$lib/testing/admin-routes';
+import { inquiryResponse } from '$lib/testing/wire-fixtures';
 
 /* Task F8：TrialScreen 送出改打真 submitTrialInquiry()（$lib/mobile/api，POST
- * /contact, inquiry_type='trial'）。這裡只 mock `$lib/mobile/api` 的
- * submitTrialInquiry(已在 api.test.ts 端測過 TrialInquiryInput → ContactPayload
- * 映射)——驗證元件本身「呼叫時機 + 目前表單狀態映射 + 成功/失敗 UI 三態」，不
- * 重新測一次已測過的 body 形狀映射邏輯。 */
-vi.mock('$lib/mobile/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile/api')>();
-	return { ...actual, submitTrialInquiry: vi.fn() };
+ * /contact, inquiry_type='trial'）。W4d：只假造 HTTP(api())，真 submitTrialInquiry
+ * + sendContactInquiry 跑起來——驗證元件「呼叫時機 + 目前表單狀態映射到 POST /contact
+ * body + 成功/失敗 UI 三態」；body 形狀映射本身另見 api.test.ts。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 vi.mock('$lib/mobile/stores', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/mobile/stores')>();
 	return { ...actual, toasts: { ...actual.toasts, notify: vi.fn() } };
 });
 
+const route = (over: Record<string, unknown> = {}) =>
+	vi.mocked(api).mockImplementation(fakeRouter(over, { 'POST /contact': inquiryResponse() }));
+
 beforeEach(() => {
-	vi.mocked(submitTrialInquiry).mockReset();
+	vi.mocked(api).mockReset();
+	route();
 	vi.mocked(toasts.notify).mockReset();
 });
 
@@ -52,18 +57,17 @@ async function goToContactStep() {
 }
 
 describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task F8)', () => {
-	it('驗證未通過(學員姓名未填)時送出按鈕停用，點擊不呼叫 submitTrialInquiry', async () => {
+	it('驗證未通過(學員姓名未填)時送出按鈕停用，點擊不送出 POST /contact', async () => {
 		await goToContactStep();
 
 		const btn = screen.getByText('送出預約').closest('button')!;
 		expect(btn).toBeDisabled();
 
 		await fireEvent.click(btn);
-		expect(submitTrialInquiry).not.toHaveBeenCalled();
+		expect(apiCalls('POST /contact')).toHaveLength(0);
 	});
 
-	it('成功：以目前表單狀態呼叫 submitTrialInquiry，前進 step 3 並顯示 accent toast', async () => {
-		vi.mocked(submitTrialInquiry).mockResolvedValue({} as never);
+	it('成功：以目前表單狀態送出 POST /contact，前進 step 3 並顯示 accent toast', async () => {
 		await goToContactStep();
 
 		await fireEvent.input(screen.getByPlaceholderText('請輸入姓名'), { target: { value: '王先生' } });
@@ -75,22 +79,28 @@ describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task 
 
 		await fireEvent.click(screen.getByText('送出預約').closest('button')!);
 
-		expect(submitTrialInquiry).toHaveBeenCalledWith({
-			category: '幼兒體操',
-			studentAge: '3–5 歲',
-			preferredDay: TRIAL_FIRST_DAY.full,
-			preferredSlot: '10:00–11:15',
-			parentName: '王先生',
-			parentPhone: '0987-654-321',
-			studentName: '小恩',
-			note: '曾學過舞蹈'
+		await vi.waitFor(() => expect(apiCalls('POST /contact')).toHaveLength(1));
+		expect(apiBody('POST /contact')).toMatchObject({
+			name: '王先生',
+			phone: '0987-654-321',
+			inquiry_type: 'trial',
+			metadata: {
+				category: '幼兒體操',
+				student_age: '3–5 歲',
+				preferred_day: TRIAL_FIRST_DAY.full,
+				preferred_slot: '10:00–11:15',
+				parent_name: '王先生',
+				parent_phone: '0987-654-321',
+				student_name: '小恩',
+				note: '曾學過舞蹈'
+			}
 		});
 		expect(await screen.findByText('試上預約已送出！')).toBeInTheDocument();
 		expect(toasts.notify).toHaveBeenCalledWith('accent', '試上預約已送出', expect.any(String));
 	});
 
 	it('失敗：停留 step 2(不顯示完成畫面)、顯示 error toast(帶 ApiError 訊息)，按鈕解除鎖定可重試', async () => {
-		vi.mocked(submitTrialInquiry).mockRejectedValue(new ApiError(500, '連線逾時'));
+		route({ 'POST /contact': new ApiError(500, '連線逾時') });
 		await goToContactStep();
 
 		await fireEvent.input(screen.getByPlaceholderText('請輸入姓名'), { target: { value: '王先生' } });
@@ -133,7 +143,6 @@ describe('TrialScreen — 送出預約(POST /contact, inquiry_type=trial，Task 
 	});
 
 	it('step 3 預約單號 TR- 前綴跟隨固定「今日」年度後 2 碼(動態年，防回退硬編字面)', async () => {
-		vi.mocked(submitTrialInquiry).mockResolvedValue({} as never);
 		await goToContactStep();
 
 		await fireEvent.input(screen.getByPlaceholderText('請輸入姓名'), { target: { value: '王先生' } });
