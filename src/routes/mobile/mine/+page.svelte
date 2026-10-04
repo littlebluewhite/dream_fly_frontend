@@ -25,7 +25,7 @@
   import { getMine, type MineData } from '$lib/mobile/api';
   import { fmtRatio } from '$lib/format';
 
-  const today = new Date().getDay() === 0 ? 7 : new Date().getDay();
+  const today = (new Date().getDay() + 6) % 7; // 0=週一…6=週日，對齊 mapper 的 day
 
   const openCourse = (course: MyCourse) => overlay.push('courseDetail', { course });
 
@@ -85,14 +85,14 @@
       <div>
         <SectionTitle action="完整日程" onAction={() => overlay.push('schedule')}>本週日程</SectionTitle>
         <div style="display:flex; flex-direction:column; gap:9px;">
-          {#each schedule as s (s.day)}
+          {#each schedule as s, i (i)}
             {@const isToday = s.day === today}
             <div
               style="display:flex; align-items:center; gap:12px; background:#fff; border:1px solid var(--df-border);
                 border-left:4px solid {s.color}; border-radius:12px; padding:11px 14px;"
             >
               <div style="text-align:center; flex:none; width:36px;">
-                <div style="font-size:11px; color:var(--df-text-muted);">週{WEEK[s.day - 1]}</div>
+                <div style="font-size:11px; color:var(--df-text-muted);">週{WEEK[s.day]}</div>
                 <div
                   style="font-size:14px; font-weight:800; color:{isToday
                     ? 'var(--df-primary)'

@@ -3,8 +3,18 @@ import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { getMine } from '$lib/mobile/api';
 import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { MEMBER_ROUTES } from '$lib/testing/member-routes';
+import { myScheduleEntry } from '$lib/testing/wire-fixtures';
 
 vi.mock('$lib/mobile/api', () => ({ getMine: vi.fn() }));
+// #18 的案例要走真 mapper：只假造 HTTP(api())，getMine 改委派真實實作。
+// 其餘案例的整檔遷移留待 Task 8。
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 /* Task 1(C2 死種子退役):mobile/data.ts 的 MY_COURSES/SCHEDULE(值)已退役——改為
  * 檔內 inline fixture。無任何斷言檢查這兩者的具體內容(各 it() 若需要特定內容
@@ -99,5 +109,29 @@ describe('我的課程頁 — 三態', () => {
 		render(Page);
 		expect(await screen.findByText('尚未報名任何課程')).toBeInTheDocument();
 		expect(screen.getByText('本季報名 0 門')).toBeInTheDocument();
+	});
+});
+
+describe('我的課程頁 — 本週日程星期索引對齊 mapper(0=一)(#18)', () => {
+	const useRealMine = async (schedule: ReturnType<typeof myScheduleEntry>[]) => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /schedule/me': schedule }, MEMBER_ROUTES));
+		const actual = await vi.importActual<typeof import('$lib/mobile/api')>('$lib/mobile/api');
+		vi.mocked(getMine).mockImplementation(actual.getMine);
+	};
+
+	it('週一的課要出現,且標示為「週一」', async () => {
+		await useRealMine([myScheduleEntry({ course_name: '週一專屬課', day_of_week: 1 })]);
+		render(Page);
+		expect(await screen.findByText('週一')).toBeInTheDocument();
+	});
+
+	it('同一天兩堂課不會炸(each key 不可用 day 重複)', async () => {
+		await useRealMine([
+			myScheduleEntry({ course_name: '週三早課', day_of_week: 3, start_time: '09:00:00', end_time: '10:00:00' }),
+			myScheduleEntry({ course_name: '週三晚課', day_of_week: 3, start_time: '19:00:00', end_time: '20:00:00' })
+		]);
+		render(Page);
+		expect(await screen.findByText('週三早課')).toBeInTheDocument();
+		expect(screen.getByText('週三晚課')).toBeInTheDocument();
 	});
 });

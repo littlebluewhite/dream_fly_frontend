@@ -32,7 +32,7 @@
     (acc[s.day] = acc[s.day] || []).push(s);
     return acc;
   }, {});
-  $: days = [1, 2, 3, 4, 5, 6, 7].filter((d) => byDay[d]);
+  $: days = [0, 1, 2, 3, 4, 5, 6].filter((d) => byDay[d]);
 </script>
 
 <PushScreen>
@@ -54,7 +54,7 @@
         {#each days as d}
           <div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:9px;">
-              <span style="font-size:14px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">週{WEEK[d - 1]}</span>
+              <span style="font-size:14px; font-weight:800; color:var(--df-ink); font-family:var(--df-font-heading);">週{WEEK[d]}</span>
               <div style="flex:1; height:1px; background:var(--df-border);"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:9px;">

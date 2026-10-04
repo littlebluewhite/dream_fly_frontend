@@ -56,7 +56,7 @@ export interface UpcomingClass {
 export type AttState = AttendanceStatus;
 
 export interface ScheduleBlock {
-  day: number; // 1=Mon … 7=Sun
+  day: number; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
   start: string;
   end: string;
   name: string;
