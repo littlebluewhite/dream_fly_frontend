@@ -1,10 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole } from '@testing-library/svelte';
 import Page from './+page.svelte';
-import { getSchedule } from '$lib/public/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { apiCalls } from '$lib/testing/admin-routes';
 import type { DaySchedule } from '$lib/api/generated';
 
-vi.mock('$lib/public/api', () => ({ getSchedule: vi.fn() }));
+// 只假造 HTTP 層：真的 getSchedule + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
+// 每個測試自己依 year/month 算出路由 key
+const scheduleKey = (year: number, month: number) => `GET /schedule?year=${year}&month=${month}`;
+const thisMonthKey = () => {
+	const d = new Date();
+	return scheduleKey(d.getFullYear(), d.getMonth() + 1);
+};
+const route = (overrides: Record<string, unknown>) => vi.mocked(api).mockImplementation(fakeRouter(overrides));
 
 function todayISO(): string {
 	const d = new Date();
@@ -49,8 +63,8 @@ function daySchedule(): DaySchedule[] {
 }
 
 beforeEach(() => {
-	vi.mocked(getSchedule).mockReset();
-	vi.mocked(getSchedule).mockResolvedValue(daySchedule());
+	vi.mocked(api).mockReset();
+	route({ [thisMonthKey()]: daySchedule() });
 });
 
 describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random() 假資料）', () => {
@@ -59,7 +73,7 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 		const today = new Date();
 		await findByRole(container, 'button', { name: String(today.getDate()) });
 
-		expect(getSchedule).toHaveBeenCalledWith(today.getFullYear(), today.getMonth() + 1);
+		expect(apiCalls(scheduleKey(today.getFullYear(), today.getMonth() + 1))).toHaveLength(1);
 	});
 
 	it('renders real per-slot availability for the selected day, disabling a full slot', async () => {
@@ -81,7 +95,7 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 	});
 
 	it('shows an empty-slots message for a day with no schedule entry', async () => {
-		vi.mocked(getSchedule).mockResolvedValue([]); // no entry for any date this month
+		route({ [thisMonthKey()]: [] }); // no entry for any date this month
 
 		const { container, findByText } = render(Page);
 		const today = new Date();
@@ -92,24 +106,26 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 	});
 
 	it('error 態:顯示「載入失敗」', async () => {
-		vi.mocked(getSchedule).mockReset();
-		vi.mocked(getSchedule).mockRejectedValue(new Error('network'));
+		route({ [thisMonthKey()]: new Error('network') });
 
 		const { findByText } = render(Page);
 		await findByText('載入失敗');
 	});
 
 	it('loading 態:顯示日曆骨架', async () => {
-		vi.mocked(getSchedule).mockReset();
-		vi.mocked(getSchedule).mockReturnValue(new Promise(() => {})); // never resolves
+		route({ [thisMonthKey()]: new Promise(() => {}) }); // never resolves
 
 		const { getByTestId } = render(Page);
 		expect(getByTestId('schedule-skeleton')).toBeTruthy();
 	});
 
 	it('換月清空已選日期與時段,並以新月份 refetch', async () => {
-		const { container, queryByText } = render(Page);
 		const today = new Date();
+		const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+		const nextKey = scheduleKey(next.getFullYear(), next.getMonth() + 1);
+		route({ [thisMonthKey()]: daySchedule(), [nextKey]: [] });
+
+		const { container, queryByText } = render(Page);
 		const dayBtn = await findByRole(container, 'button', { name: String(today.getDate()) });
 		await fireEvent.click(dayBtn);
 
@@ -122,8 +138,7 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 
 		// 等下月格線渲染完(1 日必存在)再斷言,避免撞上骨架態。
 		await findByRole(container, 'button', { name: '1' });
-		const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-		expect(getSchedule).toHaveBeenLastCalledWith(next.getFullYear(), next.getMonth() + 1);
+		expect(apiCalls(nextKey)).toHaveLength(1); // 以新月份 refetch
 		expect(queryByText(/可預約時段/)).toBeNull(); // selectedDate 已清 → 時段區塊消失
 		expect(queryByText(/確認預約/)).toBeNull(); // selectedTimeSlot 已清 → 確認鈕消失
 	});
