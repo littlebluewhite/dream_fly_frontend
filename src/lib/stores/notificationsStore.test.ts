@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { toAnnouncement } from './notificationsStore';
-import type { PostResponse } from '$lib/api/generated';
+import type { PostListResponse, PostResponse } from '$lib/api/generated';
+import { fakeRouter } from '$lib/testing/fake-router';
 
-vi.mock('$lib/public/api', () => ({ listPosts: vi.fn() }));
+// 只假造 HTTP 層：真的 listPosts 會跑（resetModules 後 api 須動態重新 import）
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 function makePost(overrides: Partial<PostResponse> = {}): PostResponse {
 	return {
@@ -50,11 +55,16 @@ describe('notificationsStore — GET /posts 過濾 category===announcement', () 
 	});
 
 	it('populates the store with only announcement posts, mapped via toAnnouncement', async () => {
-		const { listPosts } = await import('$lib/public/api');
-		vi.mocked(listPosts).mockResolvedValue([
+		const { api } = await import('$lib/api/client');
+		const posts = [
 			makePost({ id: 'a1', category: 'announcement' }),
 			makePost({ id: 'a2', category: 'article', title: '不是公告' }) // filtered out
-		]);
+		];
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /posts?per_page=100': { posts, total: posts.length, page: 1, per_page: 100 } satisfies PostListResponse
+			})
+		);
 
 		const { notificationsStore } = await import('./notificationsStore');
 		await vi.waitFor(() => {
@@ -64,8 +74,8 @@ describe('notificationsStore — GET /posts 過濾 category===announcement', () 
 	});
 
 	it('degrades to an empty list (not the old hardcoded fallback) when the fetch fails', async () => {
-		const { listPosts } = await import('$lib/public/api');
-		vi.mocked(listPosts).mockRejectedValue(new Error('network'));
+		const { api } = await import('$lib/api/client');
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /posts?per_page=100': new Error('network') }));
 
 		const { notificationsStore } = await import('./notificationsStore');
 		// give the rejected promise's .catch a tick to settle
