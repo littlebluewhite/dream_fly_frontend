@@ -496,3 +496,10 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 - **:30、:72、:399 與 :426 的 bug #3 pin 與 `opsHydrated.set(false)`**:見 `0024` 增補;`opsHydrated` 已刪。
 - **:300-333、:443 的 `submitOrder`(mobile adapter 委派、`placeOrder — 委派 submitOrder` describe)**:`submitOrder` 已刪,
   序列是 `createCheckout` 的私有 `placeOrder`(`docs/adr/0003` FE-5 增補)。
+
+## 增補(2026-10-05,架構深化 R18)
+
+§5「營運列型別以 `admin/data.ts` 為單一來源」延伸到今日課表:mobile-admin 的 `TodayRow` 與兩支轉抄 mapper
+(`mapTodayClassToRow`/`mapAdminTodayRow`)退役(`925cc38`),admin 分支直接用 `$lib/admin/data` 的 `TodayClass`,
+coach 分支直接用 `$lib/coach/data` 的 `TodayClass`(import 端 alias `CoachTodayClass`,不另留 re-export)。admin 與
+coach 的 `TodayClass` 仍是兩個型別(`docs/adr/0022`/`0023`)。見 `docs/adr/0028` §5。

@@ -327,3 +327,10 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
 - **:283「`gate.reset() + reconcileChain/writeChain 重置」**:和解鏈在 `gate.reset()` 內清,session 的 `reset()`
   只再重置 `writeChain`。
 - 消費者計數不變(六個 `createSessionGate` + 兩個 `createSessionRefresher`)。
+
+## 增補(2026-10-05,架構深化 R18)
+
+本篇原文不改寫。「Known-latent」節(:116-119)的唯一殘窗已於 R9 關閉;R18 W2(`7656e74`)再補上頁面層:
+member/mobile/coach/mobile-admin 四個 layout 以 `{#key $lastSessionKey}` 包住 slot,A→B 不離開該頁時頁面也會
+重掛載,舊頁面的 load-gate 隨 `destroy()` 丟掉遲到回應,新頁面以 B 重抓。`lastSessionKey` 刻意不在登出時通知,
+**閘門不得用它**——閘門仍以 `sessionIdentity()` 為 key、登出即重置。見 `docs/adr/0028` §2。

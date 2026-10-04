@@ -419,3 +419,16 @@ once-per-identity/A→B/logout-reset/queued-write-skip(22 → 18)、兩個通知
 - **`docs/adr/0016`**、**`0017`**、**`0018`**(C7 結案)、**`0020`**、**`0021`**、**`0022`**、**`0023`**、**`0024`**、
   **`0025`**:各補 2026-10-03 增補,指回本篇對應小節。
 - **`docs/adr/0026`**:§6 的住所與 §1 staff 登出的延伸(R17 增補,已有)。
+
+## 增補(2026-10-05,架構深化 R18)
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **§1 的延伸**:refresh 換出別人的憑證時,`onSessionRefreshed(user)` 讓 `authStore` 同一拍換身分(世代 +1);
+  `api()` 的 401 只替發出當下的畫面身分重送,身分在 refresh 前或後變了就丟 `ApiError(401)`。:44-46 的「水合後仍不是
+  事件當下的身分 → 登出」只剩 refresh 不可用時會走到;:58 的「換成 B 但 `/users/me` 失敗 → `LOGGED_OUT`」改為停在 B。
+  見 `docs/adr/0028` §1。
+- **§3 的訂閱暖機**(:89-91):改由根 layout 的行銷外殼以 `$sessionKey` 為 key 暖一次,購物車頁與下拉不再各自觸發;
+  三處的總額推導收成 `chargeableCart(cart)`。見 `docs/adr/0028` §3。
+- **:346「member/mobile/public 頁面測試仍 mock 各自的 api 模組」已結案**:走 HTTP seam,import-scan 契約禁 mock。
+  見 `docs/adr/0028` §4。

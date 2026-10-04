@@ -284,3 +284,13 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
   factory 都算整支。帶 `importOriginal` 的部分替換不在此列:`mobile-admin/stores.test.ts` 仍只換掉
   六支寫入函式,屬 mobile-admin store 測試,不在本次範圍。
 - **member/mobile/public** 的遞延不變。
+
+## 增補(2026-10-05,架構深化 R18):member/mobile/public 的 HTTP seam 遞延重開並結案
+
+- **:177-178「明確不做」與 :216「已知遞延」對 member/mobile/public 結案**:public/member/mobile 的頁面與 api
+  測試改 `vi.mock('$lib/api/client')` + `fakeRouter`;`src/lib/testing/member-routes.ts` 的 `MEMBER_ROUTES` 只留
+  `GET /enrolments/me`、`GET /reports/me`;public 沒有 routes 表(每支 getter 只打一個端點)。`import-scan.test.ts`
+  的 SEAMS 加 `member: ['$lib/member/api', '$lib/mobile/api']` 與 `public: ['$lib/public/api']`,禁 mock 的形式同 W-8。
+  遷移途中抓到 mobile 週課表星期索引錯位(`aaabc12`),mock getter 的測試一直綠。見 `docs/adr/0028` §4。
+- **§6 的界線**:R18 新增的 `lastSessionKey`(`lastLoggedIn(sessionKey)`,登出時不通知)只供 layout 的頁面壽命
+  `{#key}` 用;閘門不得用它。「不做 derived store」的決定與理由不變。見 `docs/adr/0028` §2。

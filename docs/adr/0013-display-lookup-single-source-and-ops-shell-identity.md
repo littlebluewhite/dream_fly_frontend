@@ -521,3 +521,10 @@ VM」。
 - **色差紀錄複核,無需更正**:`NOTIF_TONE_BG.accent` 與 `ANNOUNCE` 第 3 則的 `bg` 仍是 member
   `var(--df-accent-bg)`、mobile `#FFF8DB`;`domain/member-app.ts` 檔頭與本篇「`ANNOUNCE` 刻意發散」
   的描述仍與程式一致。
+
+## 增補(2026-10-05,架構深化 R18):mobile-admin 不再消費 `SESSION_STATUS`
+
+§1 現況表(:33)與 R13 增補 §2 記的 mobile-admin 承接形(`mapTodayClassToRow` 直接索引 `SESSION_STATUS`、
+`TodayRow` 帶 `state`)隨 R18 W5(`925cc38`)退役:mobile-admin 今日課表直接沿用 admin 的 `TodayClass`
+(tone/label 已由桌面 `mapTodaySession` 查好)與 coach 的 `TodayClass`,`TodayRow`、`mapTodayClassToRow`、
+`mapAdminTodayRow` 刪除。`SESSION_STATUS` 的直接消費端剩 admin 與 coach 兩處。見 `docs/adr/0028` §5。
