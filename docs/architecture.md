@@ -73,8 +73,9 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
   lookup: `VENUE_STATUS` (`venues.ts`), `TICKET_TYPE` (`tickets.ts`), `MEMBER_ACCOUNT_STATUS`
   (`members.ts`), `STATUS_TONE` (`classes.ts`), `LEVEL_TONE` (`course-level.ts`) and `SESSION_STATUS`
   (`sessions.ts`, alongside the `TodayStatus` union) (`docs/adr/0013`,
-  `docs/adr/0018`). `SESSION_STATUS` is the one today's-session-status table for `coach`, `admin` and
-  `mobile-admin`; its canonical `live` label is `上課中`.
+  `docs/adr/0018`). `SESSION_STATUS` is the one today's-session-status table for `coach` and `admin`
+  (`mobile-admin`'s today lists reuse admin's and coach's `TodayClass` rows as-is, `docs/adr/0028` §5); its
+  canonical `live` label is `上課中`.
 - **`session-format.ts`** — pure per-session display derivation, imported directly by its six
   member/mobile consumers with no facade hop (`docs/adr/0014`).
 - **`class-detail.ts`** — `classDetailRows`, the 6-row `[icon, label, value]` course detail list behind
@@ -166,8 +167,10 @@ fn-eval support); `auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical
 gate resets through its production path; there are no per-store `reset…ForTests` exports except
 `resetOpsForTests`, the identity-free ops gate's); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
-with defaults and take `Partial<T>` overrides, so a new backend field is one default to add); and fixtures
-such as `coach-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
+with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
+`page-lifetime.ts` (`describePageLifetime(name, Layout, baseRoutes?)` — the shared "page lifetime = login
+identity" scenarios the four identity-dependent layout tests run, `docs/adr/0028` §2); and fixtures
+such as `coach-routes.ts`, `member-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
 `src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
 itself (it's the module being scanned *for*, not a production consumer).
 
@@ -189,8 +192,20 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   `onSessionExpired` signal, which `authStore` turns into `LOGGED_OUT`; `authStore` also listens for
   `storage` events and decides from the *current* storage only (no refresh token → log out; cached
   identity is a different logged-in member → drop this tab's access token and re-hydrate, logging out
-  if the tab still isn't the member storage held when the event fired; plain
-  rotation → do nothing, otherwise tabs would trigger each other's refresh forever).
+  if the tab still isn't the member storage held when the event fired — now only reachable when the refresh
+  was unavailable; plain
+  rotation → do nothing, otherwise tabs would trigger each other's refresh forever). A stored rotation also
+  fires `onSessionRefreshed(user)` with the `user` the `/auth/refresh` response carries; if that user isn't
+  the tab's current identity (another tab switched accounts and this tab's `storage` event hasn't landed),
+  `authStore` switches to them in the same tick (`beginSession(); applyUser(user)`), so the token and the
+  on-screen identity never diverge. `api()` records the on-screen identity when it sends (read through
+  `bindSessionIdentity`, which `authStore` registers so `client.ts` needn't import it) and retries a 401 only
+  if the identity is unchanged both before and after the refresh; otherwise it throws `ApiError(401)` rather
+  than resend the old screen's request on the new identity's token (`docs/adr/0028` §1). Page lifetime
+  follows identity too: the member/mobile/coach/mobile-admin layouts wrap their slot in
+  `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once someone has logged
+  in — so switching accounts remounts the page (and mobile/mobile-admin close their overlays) while logging
+  out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
   `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
   user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any
   other user id and leaves the identity key alone, so no session gate resets.
@@ -224,7 +239,9 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   calls `checkout-order.ts`'s `syncCartToServer` then `POST /orders`; see `docs/adr/0003`'s FE-5 addendum; see also the
   controller section below). The lines it submits are `chargeableLines(cart, subscriptions)`
   (`member/checkout.ts`) — the branded `ChargeableLine[]` filter that skips passes the member already
-  holds (the `/cart` page and `CartDropdown` total through the same filter and mark held lines 「已持有，不計費」), a no-op for mobile's course-only carts; mobile's cart is typed as the shared `CartItem`
+  holds (the `/cart` page, `CartDropdown` and `createCheckout` all take it from `member/checkout-sync.ts`'s
+  `chargeableCart(cart)` → `{ lines, billable, total }`, and the two previews mark held lines 「已持有，不計費」;
+  the root layout warms subscriptions for the marketing shell, keyed on `$sessionKey`, `docs/adr/0028` §3), a no-op for mobile's course-only carts; mobile's cart is typed as the shared `CartItem`
   (`$lib/cart-item`). The backend creates both artifacts atomically in one transaction. A
   `type: 'course'` line becomes a real 報名 (enrolment row); the member's weekly schedule is real too,
   hydrated from `GET /schedule/me` (`member/api.ts`'s `getSchedule()`, derived from the member's active
@@ -300,7 +317,11 @@ seam — `vi.mock('$lib/api/client')` + `fakeRouter` with `src/lib/testing/coach
 `src/lib/testing/admin-routes.ts`'s `ADMIN_ROUTES` (`{ ...OPS_ROUTES, … }`, plus the `apiCalls`/`apiBody`
 inspection helpers), and a sibling contract pins zero mocks of `$lib/admin/api` or `$lib/mobile-admin/api` in any
 form — whole-module, `importOriginal` partial, `vi.doMock`, or a relative path resolving to either (`mobile-admin/stores.test.ts`
-uses the same HTTP seam; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). Per-entity *action* error tables stay at call sites —
+uses the same HTTP seam; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). `public`, `member` and `mobile`
+page and api tests do the same (`src/lib/testing/member-routes.ts`'s `MEMBER_ROUTES` holds only the defaults
+tests rely on, `GET /enrolments/me` and `GET /reports/me`; public has no routes table, each getter hitting one
+endpoint), and the contract's seams include `$lib/member/api`/`$lib/mobile/api` and `$lib/public/api`
+(`docs/adr/0028` §4). Per-entity *action* error tables stay at call sites —
 `docs/adr/0014` draws that boundary. mobile-admin's coach attendance page's `ATTENDANCE_ERROR_TEXT` is
 one: it maps 403/404/422 to the same wording desktop's inline attendance-error table uses, so a save
 failure shows the specific reason (`docs/adr/0011` addendum).
@@ -409,7 +430,9 @@ extending mutation-wins into refresh as an explicit rejection).
 Separately, each surface's layout declares a **warm set** — the shared stores its shell reads before any
 page does — and calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on identity
 (`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), mobile-admin warms
-messages in the coach section only (keyed on the route section, not the account's roles). Individual
+messages in the coach section only (keyed on the route section, not the account's roles), and the root
+layout warms subscriptions for the marketing shell only (the `/cart` page's and `CartDropdown`'s held-pass
+lines, `docs/adr/0028` §3). Individual
 *pages* declare their own warm set the same way, run in `Promise.all` alongside their own main fetch
 (`docs/adr/0025` F-2): `member/mine` (`getMine()` + 候補 waitlist/請假), `member/account` (`getAccount()` +
 points/subscriptions), and `mobile/account` (`getAccount()` + points) each call `warmStores(caller, tasks)`

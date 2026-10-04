@@ -17,15 +17,22 @@ _Avoid_: 使用者
 **登入狀態 (Login State)**:
 這個分頁此刻是不是登入、登入的是誰——`$authStore` 的 `{ loggedIn, member, roles }`,單一 owner 是
 `src/lib/stores/authStore.ts`(身分 key `sessionIdentity()` 也住這裡)。真相是共用的 refresh token
-(`dreamfly_refresh`);`dreamfly_auth` 只是首屏快取。三種事件會改變它,全都只是 `set` 這顆 store,
+(`dreamfly_refresh`);`dreamfly_auth` 只是首屏快取。四種事件會改變它,全都只是 `set` 這顆 store,
 守門導向、session 閘門重置與結帳導向都沿用既有的身分改變那條邊:本分頁登入/登出;後端明確拒絕 refresh(400/401/403)而
 `client.ts` 真的清掉 token(網路錯誤、408/429 與 5xx 不清、不登出)(`onSessionExpired` 訊號,只在 `performRefresh()` 的唯一清除點發出);別的
 分頁改了 storage(`storage` listener,只看**目前 storage**:沒 refresh token → 登出;快取身分是另一位
-已登入者 → 重新水合,水合後仍不是那位就登出;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
+已登入者 → 重新水合,水合後仍不是那位(refresh 暫時不可用)就登出;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
 各分頁記憶體,跨分頁變化時用 `forgetAccess()` 丟掉本分頁那顆,不碰共用的 refresh token(見
-`docs/adr/0006` R17 增補)。
+`docs/adr/0006` R17 增補)。第四種:refresh 換出**別人**的憑證(別的分頁已換登、本分頁還沒收到 `storage` 事件)——
+`client.ts` 在 compare-and-set 成功後發 `onSessionRefreshed(user)`,`authStore` 發現 id 不同就同一拍換成那位,
+token 與畫面身分永不分頭換(refresh 成功但 `/users/me` 失敗也停在新身分)。**401 重送規則**:`api()` 發請求時記下
+當下的畫面身分(`bindSessionIdentity` 由 `authStore` 註冊讀法,避免 import 成環),只有 refresh 前後身分都沒變
+才重送,否則丟 `ApiError(401)`——舊畫面的寫入不得以新身分的憑證送出。**頁面壽命**:`lastSessionKey`
+(`lastLoggedIn(sessionKey)`,登出時不通知、保留上一個身分)是 member/mobile/coach/mobile-admin layout
+`{#key}` 的 key,換人即重掛載頁面、登出不重掛載(交給 guard 導頁);閘門不得用它(見 `docs/adr/0028` §1–§2)。
 _Avoid_: 登入態(混用時統一用「登入狀態」), 看 `dreamfly_auth` 判斷是否登入(那是快取), 在 listener 裡
-因為 refresh key 變了就重新水合
+因為 refresh key 變了就重新水合, 畫面身分與 token 分頭換(token 已是 B、畫面仍是 A;或 401 重試以 B 的憑證替 A 的
+畫面重送), 閘門以 `lastSessionKey` 為 key(它吞掉登出)
 
 **本人帳號資料 (Self Account)**:
 任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
@@ -209,7 +216,8 @@ _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一�
 通知,mobile-admin 只在教練分區暖訊息);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
 用 `Promise.all` 並行出發——`member/mine`(候補清單、我的請假)、`member/account`(點數、訂閱)、
 `mobile/account`(點數)三頁這麼做(見 `docs/adr/0025` F-2、
-`docs/adr/0012` K7)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
+`docs/adr/0012` K7)。行銷外殼也有一份:根 `+layout.svelte` 在非 app surface 以身分為 key 暖訂閱,供購物車頁與
+`CartDropdown` 的「已持有,不計費」(見 `docs/adr/0028` §3)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
 載入的重複、換身分時閘門自己重置。暖機前 store 是誠實的開機值(空清單,角標不顯示),不是種子(見
 `docs/adr/0024`)。
 _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看不出這一層);seed teaser(開機先顯示
@@ -239,11 +247,12 @@ _Avoid_: 契約測試檔內重新手焊 regex 掃描;production 檔 import `$lib
 **可計費行 (ChargeableLine)**:
 可進「結帳」金額計算與請款的購物車項目;唯一產地 `member/checkout.ts` 的 `chargeableLines()`
 (濾除已訂閱方案後打上 brand),`checkoutMath` 與 `createCheckout` 的私有 `placeOrder` 兩終點只收此型別。
-購物車總額(`/cart` 頁、`CartDropdown`)也是 `subtotalOf(chargeableLines(cart, subscriptions))`,已持有
-的方案行標「已持有,不計費」且不計入總計。兩個 surface 的
-`placeOrder` 住在 `member/checkout-sync.ts` 的 `createCheckout(w)` 工廠內,對
-`w.cart` 建 `derived` 算出 lines 之後往下傳一次;`checkout-controller.ts` 的 `deps.placeOrder`
+購物車頁、`CartDropdown` 與 `createCheckout` 共用同一個衍生 `member/checkout-sync.ts` 的 `chargeableCart(cart)` →
+`{ lines, billable, total }`(`lines` = `chargeableLines(cart, subscriptions)`,`total` = `subtotalOf(lines)`),已持有
+的方案行標「已持有,不計費」且不計入總計,預覽合計 ≡ 實際請款(見 `docs/adr/0028` §3)。兩個 surface 的
+`placeOrder` 住在 `member/checkout-sync.ts` 的 `createCheckout(w)` 工廠內,經 `chargeableCart(w.cart)` 算出
+lines 之後往下傳一次;`checkout-controller.ts` 的 `deps.placeOrder`
 簽章因此是 `(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>`,呼叫端不
 各自重讀第二份(見 `docs/adr/0003`、`docs/adr/0025` F-5)。
-_Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車總額直接加總整車(會把已持有方案算進去);production 檔於唯一產地之外自行
+_Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車總額直接加總整車(會把已持有方案算進去);在 `chargeableCart` 之外各自再推導一次 billable/total;production 檔於唯一產地之外自行
 `as` 斷言打 brand(測試 fixture 的檔內 helper cast 屬受核可例外,見 `checkout-math.test.ts` 檔頭)
