@@ -1,6 +1,6 @@
 /* Dream Fly — member/api.ts 單測(Task 17：8 個 getter 換真 API)。
  *
- * 只 mock $lib/api/client 的 api() 與 $lib/public/api 的 listCourses/listCoaches ——
+ * 只 mock $lib/api/client 的 api()(getCourses 走真的 $lib/public/api listCourses/listCoaches) ——
  * 其餘(stores.ts 的 refreshPoints/refreshSubscriptions/hydrateNotifications、
  * data.ts 的 mapNotification)一律用真實實作，這樣才是「後端形狀進、UI 形狀出」
  * 的端對端斷言，而不是把邏輯也一起 mock 掉。 */
@@ -8,13 +8,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints } from './api';
 import { api } from '$lib/api/client';
-import { listCourses, listCoaches } from '$lib/public/api';
 import { points, pointsLedger, subscriptions, notifications, waitlist, leaveRequests } from './stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { orderSummary, pointsMe } from '$lib/testing/wire-fixtures';
+import { coachResponse, courseResponse, orderSummary, pointsMe } from '$lib/testing/wire-fixtures';
 import type { OrderStatus } from '$lib/api/wire';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -22,15 +21,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   return { ...actual, api: vi.fn() };
 });
 
-vi.mock('$lib/public/api', () => ({
-  listCourses: vi.fn(),
-  listCoaches: vi.fn()
-}));
-
 beforeEach(async () => {
   vi.mocked(api).mockReset();
-  vi.mocked(listCourses).mockReset();
-  vi.mocked(listCoaches).mockReset();
   points.set(0);
   pointsLedger.set([]);
   subscriptions.set([]);
@@ -529,20 +521,26 @@ describe('getAccount', () => {
 });
 
 describe('getCourses', () => {
+  const coursesRes = (courses: ReturnType<typeof courseResponse>[]) => ({ courses, total: courses.length, page: 1, per_page: 100 });
+
   it('復用 public seam：listCourses + listCoaches join，映射為 CatalogCourse[]（coach 取真 name，非 title）', async () => {
-    vi.mocked(listCourses).mockResolvedValue([
-      {
-        id: 'course-uuid-1', name: '競技啦啦隊 進階班', slug: 'advanced', level: 'advanced',
-        description: '描述', duration_minutes: 90, price_cents: 480000, max_students: 12,
-        min_age: 10, max_age: 16, features: [], is_active: true, coach_id: 'coach-1',
-        category: '競技啦啦隊', schedule_text: '週二 / 週四 19:00', is_highlighted: true,
-        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
-        enrolled_count: 10, waitlist_count: 0
-      }
-    ]);
-    vi.mocked(listCoaches).mockResolvedValue([
-      { id: 'coach-1', user_id: 'u1', name: '林雅婷', title: '資深競技啦啦隊教練', bio: null, experience: null, specialties: [], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '2026-01-01T00:00:00Z' }
-    ]);
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /courses?per_page=100': coursesRes([
+          courseResponse({
+            id: 'course-uuid-1', name: '競技啦啦隊 進階班', slug: 'advanced', level: 'advanced',
+            description: '描述', duration_minutes: 90, price_cents: 480000, max_students: 12,
+            min_age: 10, max_age: 16, features: [], is_active: true, coach_id: 'coach-1',
+            category: '競技啦啦隊', schedule_text: '週二 / 週四 19:00', is_highlighted: true,
+            created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+            enrolled_count: 10, waitlist_count: 0
+          })
+        ]),
+        'GET /coaches': [
+          coachResponse({ id: 'coach-1', user_id: 'u1', name: '林雅婷', title: '資深競技啦啦隊教練', display_order: 1, created_at: '2026-01-01T00:00:00Z' })
+        ]
+      })
+    );
 
     const d = await getCourses();
 
@@ -558,24 +556,27 @@ describe('getCourses', () => {
   });
 
   it('coach_id 為 null 時 coach 名稱為空字串(不觸發教練 join)', async () => {
-    vi.mocked(listCourses).mockResolvedValue([
-      {
-        id: 'course-uuid-2', name: '親子體操', slug: 'kids', level: 'beginner', description: null,
-        duration_minutes: 60, price_cents: 260000, max_students: 8, min_age: null, max_age: null,
-        features: [], is_active: true, coach_id: null, category: null, schedule_text: null,
-        is_highlighted: false, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
-        enrolled_count: 0, waitlist_count: 0
-      }
-    ]);
-    vi.mocked(listCoaches).mockResolvedValue([]);
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /courses?per_page=100': coursesRes([
+          courseResponse({
+            id: 'course-uuid-2', name: '親子體操', slug: 'kids', level: 'beginner', description: null,
+            duration_minutes: 60, price_cents: 260000, max_students: 8, coach_id: null,
+            created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z'
+          })
+        ]),
+        'GET /coaches': []
+      })
+    );
 
     const d = await getCourses();
     expect(d.catalog[0].coach).toBe('');
   });
 
   it('是 async 接縫(回 Promise)', () => {
-    vi.mocked(listCourses).mockResolvedValue([]);
-    vi.mocked(listCoaches).mockResolvedValue([]);
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /courses?per_page=100': coursesRes([]), 'GET /coaches': [] })
+    );
     expect(getCourses()).toBeInstanceOf(Promise);
   });
 });
