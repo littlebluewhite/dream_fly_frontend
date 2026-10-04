@@ -8,6 +8,7 @@ import type {
 	AdminLeaveRequestResponse,
 	AdminOrderSummary,
 	AdminReportResponse,
+	CertificateResponse,
 	CoachResponse,
 	ConversationSummaryResponse,
 	CouponResponse,
@@ -21,6 +22,7 @@ import type {
 	OrderSummary,
 	PointsMeResponse,
 	ProductResponse,
+	ReportCardResponse,
 	SettingsResponse,
 	TodaySessionResponse,
 	UserResponse,
@@ -316,5 +318,29 @@ export const memberReport = (over: Partial<MemberReportResponse> = {}): MemberRe
 	points_balance: 0,
 	active_enrolments: 0,
 	upcoming_sessions_7d: 0,
+	...over
+});
+
+export const reportCard = (over: Partial<ReportCardResponse> = {}): ReportCardResponse => ({
+	id: 'rc-1',
+	course_id: 'course-1',
+	course_name: '體操基礎班',
+	term_label: '2026 夏季',
+	comment: null,
+	rating: null,
+	created_by_name: '林教練',
+	created_at: '2026-07-01T00:00:00Z',
+	...over
+});
+
+export const certificate = (over: Partial<CertificateResponse> = {}): CertificateResponse => ({
+	id: 'ct-1',
+	course_id: null,
+	course_name: null,
+	title: '結業證書',
+	level: null,
+	issued_on: '2026-06-20',
+	note: null,
+	created_at: '2026-06-20T00:00:00Z',
 	...over
 });

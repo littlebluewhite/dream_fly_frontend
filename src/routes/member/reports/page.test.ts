@@ -1,53 +1,67 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import { getReports } from '$lib/member/api';
-import type { ReportsData } from '$lib/member/api';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { MEMBER_ROUTES } from '$lib/testing/member-routes';
+import { certificate, memberReport, reportCard } from '$lib/testing/wire-fixtures';
 import Page from './+page.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/member/api', () => ({ getReports: vi.fn() }));
+// 只假造 HTTP 層：真的 getReports + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 
-const STATS: ReportsData['stats'] = {
-  attendedTotal: 18,
-  attendanceRate: 0.9,
-  pointsBalance: 1250,
-  activeEnrolments: 2,
-  upcomingSessions7d: 3
-};
+// 畫面形狀 STATS 改為 wire 輸入(attendanceRate 0.9 → '90%')。
+const REPORT = memberReport({
+  attended_total: 18,
+  attendance_rate: 0.9,
+  points_balance: 1250,
+  active_enrolments: 2,
+  upcoming_sessions_7d: 3
+});
 
-const SEED: ReportsData = {
-  reportCards: [
-    {
-      id: 'rc1',
-      courseName: '競技啦啦隊 進階班',
-      termLabel: '2026 夏季',
-      comment: '本季在後手翻的落地控制上進步很多。',
-      rating: 5,
-      issuerName: '林雅婷',
-      createdAt: '2026-07-01T00:00:00Z'
-    }
-  ],
-  certificates: [
-    {
-      id: 'ct1',
-      title: '競技啦啦隊 進階班 結業證書',
-      level: '結業',
-      courseName: '競技啦啦隊 進階班',
-      issuedOn: '2026-06-20',
-      note: null,
-      createdAt: '2026-06-20T00:00:00Z'
-    }
-  ],
-  stats: STATS
-};
+const CARDS = [
+  reportCard({
+    id: 'rc1',
+    course_name: '競技啦啦隊 進階班',
+    term_label: '2026 夏季',
+    comment: '本季在後手翻的落地控制上進步很多。',
+    rating: 5,
+    created_by_name: '林雅婷',
+    created_at: '2026-07-01T00:00:00Z'
+  })
+];
+
+const CERTS = [
+  certificate({
+    id: 'ct1',
+    title: '競技啦啦隊 進階班 結業證書',
+    level: '結業',
+    course_name: '競技啦啦隊 進階班',
+    issued_on: '2026-06-20',
+    note: null,
+    created_at: '2026-06-20T00:00:00Z'
+  })
+];
+
+/** 預設灌滿 SEED(成績單 + 證書 + 統計)，各測試只覆寫自己關心的端點。 */
+const route = (over: Record<string, unknown> = {}) =>
+  vi.mocked(api).mockImplementation(
+    fakeRouter(
+      { 'GET /report-cards/me': CARDS, 'GET /certificates/me': CERTS, 'GET /reports/me': REPORT, ...over },
+      MEMBER_ROUTES
+    )
+  );
 
 beforeEach(() => {
-  vi.mocked(getReports).mockReset();
+  vi.mocked(api).mockReset();
 });
 
 describe('member/reports 頁', () => {
   it('先骨架,async 載入後顯示成績單資料', async () => {
-    vi.mocked(getReports).mockResolvedValue(SEED);
+    route();
     render(Page);
     expect(screen.queryByText('本季在後手翻的落地控制上進步很多。')).toBeNull();
     expect(await screen.findByText('本季在後手翻的落地控制上進步很多。')).toBeInTheDocument();
@@ -57,7 +71,7 @@ describe('member/reports 頁', () => {
   });
 
   it('顯示 GET /reports/me 統計欄位（累計出席/出席率/點數餘額/有效報名/未來 7 天課程）', async () => {
-    vi.mocked(getReports).mockResolvedValue(SEED);
+    route();
     render(Page);
     expect(await screen.findByText('18')).toBeInTheDocument(); // attendedTotal
     expect(screen.getByText('90%')).toBeInTheDocument(); // attendanceRate
@@ -67,34 +81,33 @@ describe('member/reports 頁', () => {
   });
 
   it('attendanceRate 為 null(無出勤資料)時顯示「尚無資料」而非 0%', async () => {
-    vi.mocked(getReports).mockResolvedValue({ ...SEED, stats: { ...STATS, attendanceRate: null } });
+    route({ 'GET /reports/me': { ...REPORT, attendance_rate: null } });
     render(Page);
     expect(await screen.findByText('尚無資料')).toBeInTheDocument();
   });
 
   it('載入失敗顯示 ErrorState', async () => {
-    vi.mocked(getReports).mockRejectedValue(new Error('boom'));
+    route({ 'GET /report-cards/me': new Error('boom') });
     render(Page);
     expect(await screen.findByText('載入失敗')).toBeInTheDocument();
   });
 
   it('loading 分支有可辨識骨架標記', () => {
     // 永遠 pending — 不 flush
-    vi.mocked(getReports).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api).mockImplementation(() => new Promise(() => {}));
     const { container } = render(Page);
     expect(container.querySelector('[data-testid="reports-skeleton"]')).not.toBeNull();
   });
 
   it('rating 為 null 時顯示「尚未評分」而非星等；comment 為 null 時顯示預設文案', async () => {
-    vi.mocked(getReports).mockResolvedValue({
-      reportCards: [
-        {
-          id: 'rc2', courseName: '幼兒體操 啟蒙班', termLabel: '2026 春季',
-          comment: null, rating: null, issuerName: '陳冠宇', createdAt: '2026-03-01T00:00:00Z'
-        }
+    route({
+      'GET /report-cards/me': [
+        reportCard({
+          id: 'rc2', course_name: '幼兒體操 啟蒙班', term_label: '2026 春季',
+          comment: null, rating: null, created_by_name: '陳冠宇', created_at: '2026-03-01T00:00:00Z'
+        })
       ],
-      certificates: [],
-      stats: STATS
+      'GET /certificates/me': []
     });
     render(Page);
     expect(await screen.findByText('尚未評分')).toBeInTheDocument();
@@ -103,22 +116,21 @@ describe('member/reports 頁', () => {
 
   // 迴歸:新會員 reportCards 為空時,成功 resolve 不應落入 catch → error state。
   it('reportCards 為空陣列時成功載入並顯示空狀態(不進 error state)', async () => {
-    vi.mocked(getReports).mockResolvedValue({ reportCards: [], certificates: [], stats: STATS });
+    route({ 'GET /report-cards/me': [], 'GET /certificates/me': [] });
     render(Page);
     expect(await screen.findByText('尚無成績單')).toBeInTheDocument();
     expect(screen.queryByText('載入失敗')).toBeNull();
   });
 
   it('切換至「我的證書」tab 顯示證書卡片;沒有 courseName/level 時對應區塊不顯示', async () => {
-    vi.mocked(getReports).mockResolvedValue({
-      reportCards: [],
-      certificates: [
-        {
+    route({
+      'GET /report-cards/me': [],
+      'GET /certificates/me': [
+        certificate({
           id: 'ct2', title: '2026 台中市體操錦標賽 · 團體第三名', level: null,
-          courseName: null, issuedOn: '2026-05-01', note: '恭喜獲獎', createdAt: '2026-05-01T00:00:00Z'
-        }
-      ],
-      stats: STATS
+          course_name: null, issued_on: '2026-05-01', note: '恭喜獲獎', created_at: '2026-05-01T00:00:00Z'
+        })
+      ]
     });
     render(Page);
     await screen.findByText('尚無成績單'); // reportCards 空狀態,確認已到 ready
@@ -129,7 +141,7 @@ describe('member/reports 頁', () => {
   });
 
   it('certificates 為空時「我的證書」tab 顯示空狀態(不進 error state)', async () => {
-    vi.mocked(getReports).mockResolvedValue({ reportCards: SEED.reportCards, certificates: [], stats: STATS });
+    route({ 'GET /certificates/me': [] });
     render(Page);
     await screen.findByText('競技啦啦隊 進階班');
     await fireEvent.click(screen.getByText('我的證書'));
@@ -138,7 +150,7 @@ describe('member/reports 頁', () => {
   });
 
   it('不再渲染下載/檢視證書按鈕(v1 純 metadata,無 PDF/檔案,見契約 §3.22)', async () => {
-    vi.mocked(getReports).mockResolvedValue(SEED);
+    route();
     render(Page);
     await screen.findByText('競技啦啦隊 進階班');
     await fireEvent.click(screen.getByText('我的證書'));
