@@ -6,16 +6,16 @@ import { overlay, toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import type { LeaveRequest } from '$lib/member/leave';
-import { getEnrolmentAttendance } from '$lib/member/api';
-import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
+import { attendanceEntry } from '$lib/testing/wire-fixtures';
+import { apiCalls } from '$lib/testing/admin-routes';
+import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
  * (真後端的補課預約是針對一張已核准請假申請的動作，見 MakeupSheet)，改為
  * 「我的請假」卡片復用 $lib/member/leave 的 leaveRequests store，範圍收斂到
  * 這門課程(course_id 比對)。
  *
- * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance——mock 桌面
- * member/api.ts 的 getEnrolmentAttendance()。預設值刻意保留一筆 'leave' 紀錄
+ * Task F7：出席紀錄改真 GET /enrolments/{id}/attendance。預設值刻意保留一筆 'leave' 紀錄
  * (對齊已退役的 ATT_HISTORY mock 原本的內容)，讓下面既有測試(尤其「只剩請假/
  * 聯絡教練兩個動作」那則，見其註解)的既有假設不必因資料來源改變而跟著改。
  *
@@ -24,23 +24,22 @@ import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-a
  * deps，fixture 改由 route 供給(GET /leave-requests/me、
  * DELETE /leave-requests/{id})，斷言改成「打了哪個端點、帶什麼 body」。
  * Task 7(架構深化 R15·F-4)：元件改直取 $lib/member/api 的 getEnrolmentAttendance
- * (mobile/api.ts 原本的純轉手 wrapper 已退役)，mock 目標同步改到擁有者模組。 */
+ * (mobile/api.ts 原本的純轉手 wrapper 已退役)。
+ * W4d：出席紀錄也改成只假造 HTTP(api())，真 getter + mapper 跑起來；畫面文字斷言不變。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
-});
-vi.mock('$lib/member/api', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/api')>();
-	return { ...actual, getEnrolmentAttendance: vi.fn() };
 });
 
 const COURSE: MyCourse = {
 	id: 'e1', course_id: 'c1', name: '競技啦啦隊 進階班', level: '進階', icon: 'sparkles', color: '#0066CC', schedule: '', att: 90, attended: 9, total: 10
 };
 
-const DEFAULT_ATTENDANCE: AttRecord[] = [
-	{ date: '06/06', year: '2026', state: 'present' },
-	{ date: '05/21', year: '2026', state: 'leave' }
+// wire 輸入：session_date "YYYY-MM-DD" 經 mapper 變成 date "MM/DD" + year。
+const ATT_KEY = 'GET /enrolments/e1/attendance';
+const DEFAULT_ATTENDANCE = [
+	attendanceEntry({ session_date: '2026-06-06', status: 'present' }),
+	attendanceEntry({ session_date: '2026-05-21', status: 'leave' })
 ];
 
 const PENDING: LeaveRequest = {
@@ -61,10 +60,9 @@ function deleteCalls(): string[] {
 }
 
 beforeEach(() => {
-	routes = { 'GET /leave-requests/me': [] };
+	routes = { 'GET /leave-requests/me': [], [ATT_KEY]: DEFAULT_ATTENDANCE };
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation((path, init) => fakeRouter(routes)(path, init));
-	vi.mocked(getEnrolmentAttendance).mockReset().mockResolvedValue(DEFAULT_ATTENDANCE);
 	overlay.closeAll();
 });
 
@@ -179,21 +177,23 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 	it('onMount 呼叫 getEnrolmentAttendance(course.id)', async () => {
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
-		expect(getEnrolmentAttendance).toHaveBeenCalledWith('e1');
+		expect(apiCalls(ATT_KEY)).toHaveLength(1);
 	});
 
 	it('沒有出勤紀錄時顯示「尚無出勤紀錄」空狀態', async () => {
-		vi.mocked(getEnrolmentAttendance).mockResolvedValue([]);
+		route({ [ATT_KEY]: [] });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('尚無出勤紀錄')).toBeInTheDocument();
 	});
 
 	it('依 present/absent/leave 三態渲染出席徽章(late 態已隨後端 enum 收斂移除)', async () => {
-		vi.mocked(getEnrolmentAttendance).mockResolvedValue([
-			{ date: '06/06', year: '2026', state: 'present' },
-			{ date: '05/21', year: '2026', state: 'leave' },
-			{ date: '05/14', year: '2026', state: 'absent' }
-		]);
+		route({
+			[ATT_KEY]: [
+				attendanceEntry({ session_date: '2026-06-06', status: 'present' }),
+				attendanceEntry({ session_date: '2026-05-21', status: 'leave' }),
+				attendanceEntry({ session_date: '2026-05-14', status: 'absent' })
+			]
+		});
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		expect(await screen.findByText('出席')).toBeInTheDocument();
@@ -205,13 +205,13 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {
-		vi.mocked(getEnrolmentAttendance).mockRejectedValue(new Error('boom'));
+		route({ [ATT_KEY]: new Error('boom') });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 		expect(await screen.findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('每筆紀錄顯示自己的 year，不是硬編某一年(pin：2025 年場次顯示 2025，不是 2026)', async () => {
-		vi.mocked(getEnrolmentAttendance).mockResolvedValue([{ date: '12/30', year: '2025', state: 'present' }]);
+		route({ [ATT_KEY]: [attendanceEntry({ session_date: '2025-12-30', status: 'present' })] });
 		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
 
 		expect(await screen.findByText('2025 / 12/30')).toBeInTheDocument();
