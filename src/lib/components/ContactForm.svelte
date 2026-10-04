@@ -6,7 +6,7 @@
 
   // 卡 C（R10 架構深化）：驗證/送出/重置編排收斂進 $lib/public/contact-form 的
   // createContactForm；本檔只留 markup 綁定與 outcome→toast 佈線。仍在此 import
-  // sendContactInquiry 後才注入，元件端 vi.mock('$lib/public/api') 照樣攔截得到。
+  // sendContactInquiry 後才注入，元件測試以 fakeRouter 假造 api()（HTTP seam）即可攔截。
   const form = createContactForm({
     send: sendContactInquiry,
     schedule: (fn, ms) => {

@@ -30,8 +30,8 @@
  *
  * 元件仍持有：5 個科目選項 subjects 陣列（純顯示資料，非驗證對象）、outcome→
  * toast 的佈線（成功/失敗 toast 文案與時機，ADR 0011 呼叫端映射慣例）；且仍
- * import sendContactInquiry 後才注入本模組——元件端 vi.mock('$lib/public/api')
- * 因此照樣攔截得到，是佈線正確的證明。 */
+ * import sendContactInquiry 後才注入本模組——元件測試以 fakeRouter 假造 api()
+ * （HTTP seam）即可攔截，是佈線正確的證明。 */
 import { get, writable, type Readable, type Writable } from 'svelte/store';
 import { ApiError } from '../api/client';
 import type { ContactPayload } from './api';
