@@ -2,14 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { listCourses, listCoaches } from '$lib/public/api';
-import type { CourseResponse, CoachResponse } from '$lib/api/generated';
+import type { CourseListResponse } from '$lib/api/generated';
 import { cart, joinWaitlist } from '$lib/member/stores';
 import { toasts } from '$lib/stores/marketingToasts';
 import { authStore } from '$lib/stores/authStore';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { coachResponse, courseResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/public/api', () => ({ listCourses: vi.fn(), listCoaches: vi.fn() }));
+// 只假造 HTTP 層：真的 listCourses / listCoaches + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import { goto } from '$app/navigation';
@@ -30,7 +35,7 @@ vi.mock('$lib/stores/authStore', async () => {
 	return makeAuthMockA();
 });
 
-const COURSE: CourseResponse = {
+const COURSE = courseResponse({
 	id: 'course-uuid-1',
 	name: '幼兒體操 啟蒙班',
 	slug: 'kids-gym-intro',
@@ -41,44 +46,45 @@ const COURSE: CourseResponse = {
 	max_students: 10,
 	min_age: 3,
 	max_age: 6,
-	features: [],
-	is_active: true,
 	coach_id: 'coach-uuid-1',
 	category: '幼兒體操',
 	schedule_text: '週六 10:00',
 	is_highlighted: true,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z',
-	enrolled_count: 8,
-	waitlist_count: 0
-};
+	enrolled_count: 8
+});
 
-const COACH: CoachResponse = {
+const COACH = coachResponse({
 	id: 'coach-uuid-1',
 	user_id: 'user-uuid-1',
 	// name(教練真實姓名)與 title(職稱)不同字 —— 課程卡的授課教練應顯示 name，
 	// 若回歸到 title 則 name 消失、title 現形，下方兩條斷言會同時失敗。
 	name: '黃詩涵',
 	title: '資深體操教練',
-	bio: null,
-	experience: null,
-	specialties: [],
-	certifications: [],
-	is_active: true,
 	display_order: 1,
 	slug: 'huang',
-	photo_url: null,
 	created_at: '2026-01-01T00:00:00Z'
-};
+});
 
 // spots = max_students(8) - enrolled_count(8) = 0 → 額滿，加入購物車走候補分支。
-const FULL_COURSE: CourseResponse = { ...COURSE, id: 'course-uuid-full', max_students: 8, enrolled_count: 8 };
+const FULL_COURSE = courseResponse({ ...COURSE, id: 'course-uuid-full', max_students: 8, enrolled_count: 8 });
+
+// 課程列表為分頁外層；courses 可給 Error / 永不 resolve 的 promise 以模擬錯誤與載入態
+const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<never>) =>
+	vi.mocked(api).mockImplementation(
+		fakeRouter({
+			'GET /courses?per_page=100':
+				courses instanceof Error || courses instanceof Promise
+					? courses
+					: ({ courses, total: courses.length, page: 1, per_page: 100 } satisfies CourseListResponse),
+			'GET /coaches': [COACH]
+		})
+	);
 
 beforeEach(() => {
-	vi.mocked(listCourses).mockReset();
-	vi.mocked(listCoaches).mockReset();
-	vi.mocked(listCourses).mockResolvedValue([COURSE]);
-	vi.mocked(listCoaches).mockResolvedValue([COACH]);
+	vi.mocked(api).mockReset();
+	route([COURSE]);
 	vi.mocked(joinWaitlist).mockReset();
 	vi.mocked(goto).mockClear();
 	localStorage.clear();
@@ -113,26 +119,21 @@ describe('課程介紹 (marketing) — 接真 API', () => {
 	});
 
 	it('error 態:顯示「載入失敗」', async () => {
-		vi.mocked(listCourses).mockReset();
-		vi.mocked(listCourses).mockRejectedValue(new Error('network'));
+		route(new Error('network'));
 
 		const { findByText } = render(Page);
 		await findByText('載入失敗');
 	});
 
 	it('loading 態:顯示課程骨架', async () => {
-		vi.mocked(listCourses).mockReset();
-		vi.mocked(listCourses).mockReturnValue(new Promise(() => {})); // never resolves
+		route(new Promise(() => {})); // never resolves
 
 		const { getByTestId } = render(Page);
 		expect(getByTestId('courses-skeleton')).toBeTruthy();
 	});
 
 	it('renders one card per fetched course', async () => {
-		vi.mocked(listCourses).mockResolvedValue([
-			COURSE,
-			{ ...COURSE, id: 'course-uuid-2', name: '競技啦啦隊 進階班', coach_id: null }
-		]);
+		route([COURSE, courseResponse({ ...COURSE, id: 'course-uuid-2', name: '競技啦啦隊 進階班', coach_id: null })]);
 
 		const { container, findAllByText } = render(Page);
 		await findAllByText(/幼兒體操 啟蒙班|競技啦啦隊 進階班/);
@@ -150,7 +151,7 @@ describe('課程介紹 (marketing) — 接真 API', () => {
 describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 	it('已登入時點擊加入購物車 → 呼叫真實 joinWaitlist()，成功後才顯示已加入候補 toast', async () => {
 		authStore.login('member@test.com', 'password123');
-		vi.mocked(listCourses).mockResolvedValue([FULL_COURSE]);
+		route([FULL_COURSE]);
 		vi.mocked(joinWaitlist).mockResolvedValue({
 			id: 'wl-1',
 			course_id: FULL_COURSE.id,
@@ -170,7 +171,7 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 
 	it('已登入但後端回 409（已候補）→ 顯示已候補的友善提示，不是通用錯誤訊息', async () => {
 		authStore.login('member@test.com', 'password123');
-		vi.mocked(listCourses).mockResolvedValue([FULL_COURSE]);
+		route([FULL_COURSE]);
 		vi.mocked(joinWaitlist).mockRejectedValue(new ApiError(409, 'already on waitlist'));
 
 		const { container } = render(Page);
@@ -182,7 +183,7 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 	});
 
 	it('未登入時點擊加入購物車 → 顯示請先登入會員 toast 並導向 /member/login，不呼叫 joinWaitlist', async () => {
-		vi.mocked(listCourses).mockResolvedValue([FULL_COURSE]);
+		route([FULL_COURSE]);
 
 		const { container } = render(Page);
 		const btn = await findByRole(container, 'button', { name: '加入購物車' });
