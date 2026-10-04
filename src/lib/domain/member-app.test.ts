@@ -90,3 +90,16 @@ describe('row counts', () => {
 	it('COACH_REPLIES has 4 rows', () => expect(COACH_REPLIES).toHaveLength(4));
 	it('NOTIF_CATS has 5 rows', () => expect(NOTIF_CATS).toHaveLength(5));
 });
+
+/* ── 4. 唯一性:儀表板以 index 當 key 的迴歸原本靠頁面測試「注入重複資料」,走 HTTP seam 後
+ *    這兩組種子不可能重複,改在 domain 釘死 ── */
+describe('seed uniqueness', () => {
+	it('SKILLS 技巧名稱不重複', () => {
+		const names = SKILLS.map(([name]) => name);
+		expect(new Set(names).size).toBe(names.length);
+	});
+	it('STATS 統計卡標籤不重複', () => {
+		const labels = STATS.map((s) => s.label);
+		expect(new Set(labels).size).toBe(labels.length);
+	});
+});

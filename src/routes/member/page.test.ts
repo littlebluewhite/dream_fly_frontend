@@ -1,64 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import { getDashboard } from '$lib/member/api';
-import { UPCOMING, ANNOUNCE } from '$lib/member/data';
-import { STATS, SKILLS } from '$lib/domain/member-app';
+import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { FIXTURE_MEMBER, type TestAuthStore } from '$lib/testing/auth-mock';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { MEMBER_ROUTES } from '$lib/testing/member-routes';
 import Page from './+page.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/member/api', () => ({ getDashboard: vi.fn() }));
+// 只假造 HTTP 層：真的 getDashboard + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 // R13 Task 3:問候改讀 authStore 的真名字(mock 會員 ME 退役)——家族 B 直接灌登入態。
 vi.mock('$lib/stores/authStore', async () => (await import('$lib/testing/auth-mock')).makeAuthMockB());
 
-const SEED = {
-  stats: STATS, skills: SKILLS, upcoming: UPCOMING, announce: ANNOUNCE,
-  nextClass: '競技啦啦隊 進階班 · 明日 19:00 · A 訓練館'
-};
 beforeEach(() => {
-  vi.mocked(getDashboard).mockReset();
+  vi.mocked(api).mockReset();
+  vi.mocked(api).mockImplementation(fakeRouter({}, MEMBER_ROUTES));
   (authStore as TestAuthStore).__set({ loggedIn: true, member: FIXTURE_MEMBER, roles: ['member'] });
 });
 
 describe('member 儀表板', () => {
   it('先骨架,async 載入後顯示資料', async () => {
-    vi.mocked(getDashboard).mockResolvedValue(SEED);
     render(Page);
     expect(screen.queryByText('報名課程數')).toBeNull();
     expect(await screen.findByText('報名課程數')).toBeInTheDocument();
   });
   it('問候顯示 authStore 的會員名字(改名經 syncUser 同步,不再是 mock ME)', async () => {
-    vi.mocked(getDashboard).mockResolvedValue(SEED);
     render(Page);
     expect(await screen.findByText(`${FIXTURE_MEMBER.name} 👋`)).toBeInTheDocument();
   });
   it('載入失敗顯示 ErrorState(未來換 fetch 會 reject 的路徑)', async () => {
-    vi.mocked(getDashboard).mockRejectedValue(new Error('boom'));
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/me': new Error('boom') }, MEMBER_ROUTES));
     render(Page);
     expect(await screen.findByText('載入失敗')).toBeInTheDocument();
-  });
-
-  // 迴歸:技巧清單若用顯示文字當 keyed-each 的 key,後端回傳同名項目時
-  // Svelte 會擲 each_key_duplicate、整個 ready 分支 render 失敗。改用 index key 後不再崩潰。
-  it('技巧名稱重複時仍正常渲染(keyed each 不可用顯示文字當 key)', async () => {
-    vi.mocked(getDashboard).mockResolvedValue({
-      ...SEED,
-      skills: [['後手翻', 80], ['後手翻', 60]] as [string, number][]
-    });
-    render(Page);
-    // 「場館公告」在 markup 中位於技巧清單之後;技巧若崩潰,此標題不會出現。
-    expect(await screen.findByText('場館公告')).toBeInTheDocument();
-  });
-
-  // 迴歸:同理,統計卡清單也不可用顯示文字(label)當 key。兩張同 label 的卡
-  // 會讓以 label 為 key 的 keyed each 擲 each_key_duplicate。
-  it('統計卡標籤重複時仍正常渲染(keyed each 不可用顯示文字當 key)', async () => {
-    vi.mocked(getDashboard).mockResolvedValue({
-      ...SEED,
-      stats: [STATS[0], STATS[0]]
-    });
-    render(Page);
-    expect(await screen.findByText('場館公告')).toBeInTheDocument();
   });
 });

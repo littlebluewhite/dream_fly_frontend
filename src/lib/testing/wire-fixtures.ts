@@ -14,6 +14,8 @@ import type {
 	CourseResponse,
 	InquiryResponse,
 	LeaveRequestResponse,
+	MemberReportResponse,
+	MyEnrolmentResponse,
 	MyScheduleEntryResponse,
 	OrderResponse,
 	OrderSummary,
@@ -291,5 +293,28 @@ export const myScheduleEntry = (over: Partial<MyScheduleEntryResponse> = {}): My
 	start_time: '19:00:00',
 	end_time: '20:30:00',
 	venue: null,
+	...over
+});
+
+export const myEnrolment = (over: Partial<MyEnrolmentResponse> = {}): MyEnrolmentResponse => ({
+	id: 'enrolment-1',
+	course_id: 'course-1',
+	course_name: '體操基礎班',
+	course_level: 'intermediate',
+	schedule_text: null,
+	status: 'active',
+	enrolled_at: '2026-01-15T00:00:00Z',
+	attended: 0,
+	total: 0,
+	...over
+});
+
+/** 空庫形狀：出席率 null(無點名資料)、其餘計數 0。 */
+export const memberReport = (over: Partial<MemberReportResponse> = {}): MemberReportResponse => ({
+	attended_total: 0,
+	attendance_rate: null,
+	points_balance: 0,
+	active_enrolments: 0,
+	upcoming_sessions_7d: 0,
 	...over
 });
