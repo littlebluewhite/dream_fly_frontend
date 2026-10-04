@@ -4,11 +4,11 @@ import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, toasts, waitlist } from '$lib/member/stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
-import { getCourses } from '$lib/member/api';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { MEMBER_ROUTES } from '$lib/testing/member-routes';
+import { coachResponse, courseResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/member/api', () => ({ getCourses: vi.fn() }));
 // 只替換 api()，ApiError 用回真實類別（addToCart 的 joinWaitlistErrorMessage 靠
 // instanceof 判斷 409）。candidate 按鈕現在打真實 POST /waitlist，每個測試按情境
 // 個別設定回應；預設（未覆寫）回一個合法的 WaitlistResponse，讓不關心候補 API
@@ -18,23 +18,34 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-// Task 17: getCourses() now returns the public-seam CatalogCourse (uuid id, no
-// icon field) — a local fixture replaces the old member-domain CATALOG mock.
-const CATALOG = [
-	{ id: 'course-1', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '', spots: 2 },
-	{ id: 'course-2', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', days: '週一 / 週三 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '', spots: 2 },
-	{ id: 'course-3', name: '競技啦啦隊 進階班', level: '進階', cat: '競技啦啦隊', age: '10–16 歲', days: '週二 / 週四 19:00', price: 4800, hot: true, coach: '林雅婷', desc: '', spots: 1 },
-	{ id: 'course-4', name: '成人體操 基礎班', level: '基礎', cat: '成人體操', age: '16 歲以上', days: '週五 20:00', price: 3600, hot: false, coach: '王思齊', desc: '', spots: 3 },
-	{ id: 'course-5', name: '跑酷入門班', level: '入門', cat: '跑酷', age: '12 歲以上', days: '週日 15:00', price: 3400, hot: false, coach: '王思齊', desc: '', spots: 0 },
-	{ id: 'course-6', name: '親子體操 同樂班', level: '啟蒙', cat: '幼兒體操', age: '2–4 歲', days: '週日 10:00', price: 2600, hot: false, coach: '黃詩涵', desc: '', spots: 3 }
+// 原 CatalogCourse 畫面形狀 fixture 改為 wire 輸入(讓真的 getCourses + toCatalogCourse 跑):
+// spots = max_students(10) - enrolled_count。
+const COACHES = [
+	coachResponse({ id: 'coach-1', name: '黃詩涵' }),
+	coachResponse({ id: 'coach-2', name: '陳冠宇' }),
+	coachResponse({ id: 'coach-3', name: '林雅婷' }),
+	coachResponse({ id: 'coach-4', name: '王思齊' })
 ];
 
-const FULL = CATALOG.find((c) => c.spots === 0)!; // course-5 跑酷入門班 (spots: 0)
-const OPEN = CATALOG.find((c) => c.spots > 0)!; // course-1 幼兒體操 啟蒙班 (spots > 0)
+const wireCourse = (id: string, name: string, level: 'foundation' | 'beginner' | 'intermediate' | 'advanced', category: string, min_age: number | null, max_age: number | null, schedule_text: string, price_ntd: number, is_highlighted: boolean, coach_id: string, spots: number) =>
+	courseResponse({ id, name, level, category, min_age, max_age, schedule_text, price_cents: price_ntd * 100, is_highlighted, coach_id, max_students: 10, enrolled_count: 10 - spots });
+
+const COURSES = [
+	wireCourse('course-1', '幼兒體操 啟蒙班', 'foundation', '幼兒體操', 3, 5, '週六 10:00', 2800, false, 'coach-1', 2),
+	wireCourse('course-2', '兒童基礎 B 班', 'intermediate', '兒童基礎', 7, 9, '週一 / 週三 17:30', 3200, true, 'coach-2', 2),
+	wireCourse('course-3', '競技啦啦隊 進階班', 'advanced', '競技啦啦隊', 10, 16, '週二 / 週四 19:00', 4800, true, 'coach-3', 1),
+	wireCourse('course-4', '成人體操 基礎班', 'intermediate', '成人體操', 16, null, '週五 20:00', 3600, false, 'coach-4', 3),
+	wireCourse('course-5', '跑酷入門班', 'beginner', '跑酷', 12, null, '週日 15:00', 3400, false, 'coach-4', 0),
+	wireCourse('course-6', '親子體操 同樂班', 'foundation', '幼兒體操', 2, 4, '週日 10:00', 2600, false, 'coach-1', 3)
+];
+const spotsOf = (c: (typeof COURSES)[number]) => c.max_students - c.enrolled_count;
+
+const FULL = COURSES.find((c) => spotsOf(c) === 0)!; // course-5 跑酷入門班 (spots: 0)
+const OPEN = COURSES.find((c) => spotsOf(c) > 0)!; // course-1 幼兒體操 啟蒙班 (spots > 0)
 
 // The catalog must contain exactly one full course for the 候補-button lookup
 // below to be unambiguous; assert that here so the fixture can't drift silently.
-const fullCount = CATALOG.filter((c) => c.spots === 0).length;
+const fullCount = COURSES.filter((c) => spotsOf(c) === 0).length;
 
 /** Waitlist defaults for the shared fakeRouter (same convention as
  *  checkout-api.test.ts's fakeRouter): defaults GET /waitlist/me to an empty
@@ -45,16 +56,21 @@ const WAITLIST_DEFAULTS: Record<string, unknown> = {
 	'GET /waitlist/me': [],
 	'POST /waitlist': (init: RequestInit) => {
 		const body = JSON.parse((init.body as string) ?? '{}') as { course_id?: string };
-		const course = CATALOG.find((c) => c.id === body.course_id);
+		const course = COURSES.find((c) => c.id === body.course_id);
 		return { id: 'wl-' + body.course_id, course_id: body.course_id, course_name: course?.name ?? '課程', status: 'waiting', created_at: '2026-07-04T00:00:00Z' };
 	}
 };
 
+const COURSES_DEFAULTS: Record<string, unknown> = {
+	...MEMBER_ROUTES,
+	'GET /courses?per_page=100': { courses: COURSES, total: COURSES.length, page: 1, per_page: 100 },
+	'GET /coaches': COACHES,
+	...WAITLIST_DEFAULTS
+};
+
 beforeEach(async () => {
-	vi.mocked(getCourses).mockReset();
-	vi.mocked(getCourses).mockResolvedValue({ catalog: CATALOG });
 	vi.mocked(api).mockReset();
-	vi.mocked(api).mockImplementation(fakeRouter({}, WAITLIST_DEFAULTS));
+	vi.mocked(api).mockImplementation(fakeRouter({}, COURSES_DEFAULTS));
 	waitlist.set([]);
 	await resetSessionStores();
 });
@@ -91,7 +107,7 @@ describe('課程介紹 — addToCart branches on the store AddResult (waitlist g
 		// been reset by afterEach — otherwise singleton waitlist state leaks
 		// across tests.
 		expect(get(waitlist)).toEqual([]);
-		expect(OPEN.spots).toBeGreaterThan(0);
+		expect(spotsOf(OPEN)).toBeGreaterThan(0);
 
 		const { container } = render(Page);
 		// Open courses render an 加入 button; wait for ready then click the first one.
@@ -122,7 +138,7 @@ describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補
 				'GET /waitlist/me': [
 					{ id: 'wl-1', course_id: FULL.id, course_name: FULL.name, status: 'waiting', created_at: '2026-07-01T00:00:00Z' }
 				]
-			}, WAITLIST_DEFAULTS)
+			}, COURSES_DEFAULTS)
 		);
 
 		const { container } = render(Page);
@@ -135,7 +151,7 @@ describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補
 
 	it('重複候補（後端 409 "already on waitlist"）→ 顯示「加入候補失敗」與專屬繁中文案，不顯示「已加入候補」', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }, WAITLIST_DEFAULTS)
+			fakeRouter({ 'POST /waitlist': new ApiError(409, 'already on waitlist') }, COURSES_DEFAULTS)
 		);
 
 		const { container } = render(Page);
@@ -151,16 +167,14 @@ describe('課程介紹 — 候補狀態（GET /waitlist/me 水合 + 重複候補
 
 describe('課程介紹 — 三態', () => {
 	it('error 態:顯示「載入失敗」', async () => {
-		vi.mocked(getCourses).mockReset();
-		vi.mocked(getCourses).mockRejectedValue(new Error('network'));
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /courses?per_page=100': new Error('network') }, COURSES_DEFAULTS));
 
 		const { findByText } = render(Page);
 		await findByText('載入失敗');
 	});
 
 	it('loading 態:顯示課程骨架', async () => {
-		vi.mocked(getCourses).mockReset();
-		vi.mocked(getCourses).mockReturnValue(new Promise(() => {})); // never resolves
+		vi.mocked(api).mockImplementation(() => new Promise(() => {})); // never resolves
 
 		const { getByTestId } = render(Page);
 		expect(getByTestId('courses-skeleton')).toBeTruthy();
