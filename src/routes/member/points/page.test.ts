@@ -1,16 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { getPoints, type Reward } from '$lib/member/api';
-import { POINTS_LEDGER } from '$lib/testing/seed-fixtures';
-import { points, pointsLedger, refreshPoints, toasts } from '$lib/member/stores';
-import type { PointsMeResponse } from '$lib/api/generated';
+import { points, pointsLedger, toasts } from '$lib/member/stores';
+import type { PointsMeResponse, RewardListResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { pointsMe } from '$lib/testing/wire-fixtures';
-
-vi.mock('$lib/member/api', () => ({ getPoints: vi.fn() }));
+import { apiCalls } from '$lib/testing/admin-routes';
+import { MEMBER_ROUTES } from '$lib/testing/member-routes';
+import { pointsMe, rewardResponse } from '$lib/testing/wire-fixtures';
 
 // Task 14：兌換動作(redeemReward)/hydrate(refreshPoints)在 $lib/member/stores 用
 // 真實實作，只替換 $lib/api/client 的 api()（同 LeaveDialog.test.ts 慣例）——這樣
@@ -24,60 +22,65 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 // 三個品項各代表一種按鈕狀態(搭配 beforeEach 的 points.set(1000))：
 // AFFORDABLE(100 點,不限量) → 可兌換；SOLDOUT(50 點但 stock 0) → 即使付得起也
 // 售罄優先；EXPENSIVE(5000 點) → 點數不足。
-const REWARD_AFFORDABLE: Reward = { id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', pointsCost: 100, stock: null };
-const REWARD_SOLDOUT: Reward = { id: 'rw-2', name: '限量托特包', description: '夢飛限定托特包，數量有限。', pointsCost: 50, stock: 0 };
-const REWARD_EXPENSIVE: Reward = { id: 'rw-3', name: '單堂體驗課兌換券', description: null, pointsCost: 5000, stock: 5 };
+const REWARD_AFFORDABLE = rewardResponse({ id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', points_cost: 100, stock: null });
+const REWARD_SOLDOUT = rewardResponse({ id: 'rw-2', name: '限量托特包', description: '夢飛限定托特包，數量有限。', points_cost: 50, stock: 0 });
+const REWARD_EXPENSIVE = rewardResponse({ id: 'rw-3', name: '單堂體驗課兌換券', description: null, points_cost: 5000, stock: 5 });
 
-const SEED = { rewards: [REWARD_AFFORDABLE, REWARD_SOLDOUT, REWARD_EXPENSIVE], expiring: '360 點', expiryDate: '2026/12/31' };
+const REWARDS = { rewards: [REWARD_AFFORDABLE, REWARD_SOLDOUT, REWARD_EXPENSIVE] } satisfies RewardListResponse;
+
+/** 餘額 1000 由 GET /points/me 路由提供(getPoints 內的 refreshPoints 會水合 store)。 */
+const route = (over: Record<string, unknown> = {}) =>
+  vi.mocked(api).mockImplementation(
+    fakeRouter(over, { ...MEMBER_ROUTES, 'GET /rewards': REWARDS, 'GET /points/me': pointsMe({ balance: 1000 }) })
+  );
 
 beforeEach(() => {
-  vi.mocked(getPoints).mockReset();
   vi.mocked(api).mockReset();
-  points.set(1000);
-  pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
+  points.set(0);
+  pointsLedger.set([]);
 });
 
 describe('member/points 頁', () => {
   it('先骨架,async 載入後顯示資料', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
     expect(screen.queryByText('點數兌換')).toBeNull();
     expect(await screen.findByText('點數兌換')).toBeInTheDocument();
   });
 
   it('載入失敗顯示 ErrorState', async () => {
-    vi.mocked(getPoints).mockRejectedValue(new Error('boom'));
+    route({ 'GET /rewards': new Error('boom') });
     render(Page);
     expect(await screen.findByText('載入失敗')).toBeInTheDocument();
   });
 
   it('loading 分支有可辨識骨架標記(data-testid="points-skeleton")', () => {
-    vi.mocked(getPoints).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api).mockImplementation(() => new Promise(() => {}));
     const { container } = render(Page);
     expect(container.querySelector('[data-testid="points-skeleton"]')).not.toBeNull();
   });
 
   it('ready 後顯示硬編到期資料(由 getPoints 接縫提供)', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
     expect(await screen.findByText('360 點')).toBeInTheDocument();
     expect(screen.getByText('2026/12/31')).toBeInTheDocument();
   });
 
   it('本月累積顯示後端 earned_this_month，不從明細加總(明細和 ≠ earned_this_month)', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
     // 明細是當月 +120 與 -50(加總正值 = 120、淨額 = 70)，後端 earned_this_month = 450
     // (含不在第一頁的當月入帳)——頁面只能顯示 450。
-    vi.mocked(api).mockResolvedValue({
-      balance: 1000,
-      earned_this_month: 450,
-      ledger: [
-        { id: 'l1', delta: 120, balance_after: 1000, reason: 'checkout_earn', order_id: 'o1', created_at: new Date().toISOString() },
-        { id: 'l2', delta: -50, balance_after: 880, reason: 'checkout_redeem', order_id: 'o2', created_at: new Date().toISOString() }
-      ],
-      total: 7, page: 1, per_page: 2
-    } satisfies PointsMeResponse);
-    await refreshPoints();
+    route({
+      'GET /points/me': {
+        balance: 1000,
+        earned_this_month: 450,
+        ledger: [
+          { id: 'l1', delta: 120, balance_after: 1000, reason: 'checkout_earn', order_id: 'o1', created_at: new Date().toISOString() },
+          { id: 'l2', delta: -50, balance_after: 880, reason: 'checkout_redeem', order_id: 'o2', created_at: new Date().toISOString() }
+        ],
+        total: 7, page: 1, per_page: 2
+      } satisfies PointsMeResponse
+    });
     render(Page);
 
     const label = await screen.findByText('本月累積');
@@ -87,7 +90,7 @@ describe('member/points 頁', () => {
 
 describe('member/points 頁 — 兌換品項卡片渲染（Task 14：GET /rewards 真形狀）', () => {
   it('顯示 name/description/pointsCost；stock=null(不限量)可正常兌換', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
 
     await screen.findByText('報名費折抵 NT$100');
@@ -97,7 +100,7 @@ describe('member/points 頁 — 兌換品項卡片渲染（Task 14：GET /reward
   });
 
   it('stock=0 顯示「已兌換完畢」且按鈕停用，即使點數足夠負擔該品項', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
 
     await screen.findByText('限量托特包');
@@ -107,13 +110,13 @@ describe('member/points 頁 — 兌換品項卡片渲染（Task 14：GET /reward
   });
 
   it('description 為 null 時不拋出、渲染為空白', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
     expect(await screen.findByText('單堂體驗課兌換券')).toBeInTheDocument();
   });
 
   it('點數不足時顯示「點數不足」且按鈕停用（不是 stock 問題）', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
 
     await screen.findByText('單堂體驗課兌換券');
@@ -124,7 +127,7 @@ describe('member/points 頁 — 兌換品項卡片渲染（Task 14：GET /reward
 
 describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/redeem）', () => {
   it('點擊兌換開啟確認對話框，內容含品項名稱與點數', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
 
@@ -136,16 +139,18 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
   });
 
   it('確認兌換 → POST /rewards/{id}/redeem(無 body) → 成功後 hydrate points/pointsLedger、顯示 toast、關閉對話框', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
-    vi.mocked(api).mockImplementation(
-      fakeRouter({
-        'POST /rewards/rw-1/redeem': { redemption_id: 'red-1', points_spent: 100, balance_after: 900 },
-        'GET /points/me': pointsMe({
-          balance: 900,
-          ledger: [{ id: 'l1', delta: -100, balance_after: 900, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }]
-        })
-      })
-    );
+    // 第 1 次 GET /points/me 是進頁水合(餘額 1000)，第 2 次才是兌換後的 refreshPoints(餘額 900)。
+    let pointsFetches = 0;
+    route({
+      'POST /rewards/rw-1/redeem': { redemption_id: 'red-1', points_spent: 100, balance_after: 900 },
+      'GET /points/me': () =>
+        ++pointsFetches === 1
+          ? pointsMe({ balance: 1000 })
+          : pointsMe({
+              balance: 900,
+              ledger: [{ id: 'l1', delta: -100, balance_after: 900, reason: 'redeem', order_id: null, created_at: '2026-07-06T00:00:00Z' }]
+            })
+    });
     const notifySpy = vi.spyOn(toasts, 'notify');
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
@@ -165,8 +170,7 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
   });
 
   it('409「點數不足」顯示對應繁中錯誤 toast，對話框保留（可重試/手動取消）', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /rewards/rw-1/redeem': new ApiError(409, '點數不足') }));
+    route({ 'POST /rewards/rw-1/redeem': new ApiError(409, '點數不足') });
     const notifySpy = vi.spyOn(toasts, 'notify');
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
@@ -182,8 +186,7 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
   });
 
   it('409「已兌換完畢」顯示對應繁中錯誤 toast', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
-    vi.mocked(api).mockImplementation(fakeRouter({ 'POST /rewards/rw-1/redeem': new ApiError(409, '已兌換完畢') }));
+    route({ 'POST /rewards/rw-1/redeem': new ApiError(409, '已兌換完畢') });
     const notifySpy = vi.spyOn(toasts, 'notify');
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
@@ -198,7 +201,7 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
   });
 
   it('點擊「取消」關閉對話框、不呼叫 API', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
+    route();
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
 
@@ -207,19 +210,13 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
     await fireEvent.click(screen.getByRole('button', { name: '取消' }));
 
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(api).not.toHaveBeenCalled();
+    expect(apiCalls('POST /rewards/rw-1/redeem')).toHaveLength(0); // 進頁的 GET 不算，只確認沒送出兌換
   });
 
   it('in-flight guard：兌換中重複點擊確認鈕，只送出一次 POST 請求', async () => {
-    vi.mocked(getPoints).mockResolvedValue(SEED);
     let resolveRedeem!: (v: unknown) => void;
     const pending = new Promise((resolve) => { resolveRedeem = resolve; });
-    vi.mocked(api).mockImplementation(async (path: string, init: RequestInit = {}) => {
-      const method = (init.method ?? 'GET').toString().toUpperCase();
-      if (method === 'POST' && path === '/rewards/rw-1/redeem') return pending;
-      if (path === '/points/me') return pointsMe({ balance: 900 });
-      throw new Error('unexpected api call: ' + method + ' ' + path);
-    });
+    route({ 'POST /rewards/rw-1/redeem': () => pending });
     render(Page);
     await screen.findByText('報名費折抵 NT$100');
 
@@ -234,9 +231,6 @@ describe('member/points 頁 — 兌換流程（Task 14：POST /rewards/{id}/rede
     resolveRedeem({ redemption_id: 'red-1', points_spent: 100, balance_after: 900 });
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-    const postCalls = vi.mocked(api).mock.calls.filter(
-      ([p, i]) => p === '/rewards/rw-1/redeem' && (i as RequestInit | undefined)?.method === 'POST'
-    );
-    expect(postCalls).toHaveLength(1);
+    expect(apiCalls('POST /rewards/rw-1/redeem')).toHaveLength(1);
   });
 });

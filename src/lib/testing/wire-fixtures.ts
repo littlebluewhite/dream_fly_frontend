@@ -24,6 +24,7 @@ import type {
 	PointsMeResponse,
 	ProductResponse,
 	ReportCardResponse,
+	RewardResponse,
 	SettingsResponse,
 	TodaySessionResponse,
 	UserResponse,
@@ -352,5 +353,18 @@ export const attendanceEntry = (over: Partial<AttendanceEntryResponse> = {}): At
 	end_time: '20:30:00',
 	status: 'present',
 	marked_at: '2026-06-06T21:00:00Z',
+	...over
+});
+
+export const rewardResponse = (over: Partial<RewardResponse> = {}): RewardResponse => ({
+	id: 'reward-1',
+	name: '報名費折抵',
+	description: null,
+	points_cost: 100,
+	stock: null,
+	is_active: true,
+	display_order: 0,
+	created_at: '',
+	updated_at: '',
 	...over
 });
