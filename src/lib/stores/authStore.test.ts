@@ -565,6 +565,29 @@ describe('authStore — cross-tab storage sync', () => {
     expect(getRefresh()).toBe('rB2');
   });
 
+  it('B switch whose /users/me fails after this tab logged in as C → C session kept, not logged out', async () => {
+    await loginAsA();
+    const USER_C = { ...SAMPLE_USER, id: 'uuid-3', email: 'c@test.com' };
+    let releaseB!: (r: unknown) => void;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse({ access_token: 'aB2', refresh_token: 'rB2' });
+      if (url.endsWith('/auth/login')) return jsonResponse({ access_token: 'aC', refresh_token: 'rC', user: USER_C });
+      return new Promise((r) => (releaseB = r));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(releaseB).toBeDefined());
+    await authStore.login('c@test.com', 'pw');
+    releaseB(jsonResponse({ error: 'unavailable' }, 503, 'Service Unavailable'));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(get(authStore).member?.id).toBe(USER_C.id);
+    expect(getAccess()).toBe('aC');
+  });
+
   it('reload: another tab rotates the refresh token while /users/me is in flight → fresh profile still applied', async () => {
     localStorage.setItem('dreamfly_refresh', 'r1');
     const renamed = { ...SAMPLE_USER, name: 'NEW', roles: ['member', 'admin'] };

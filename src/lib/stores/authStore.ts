@@ -198,9 +198,10 @@ function createAuthStore() {
       const cached = loadCache();
       const expected = sessionIdentity(cached);
       if (cached.loggedIn && expected !== sessionIdentity(get({ subscribe }))) {
-        generation += 1;
+        const gen = (generation += 1);
         forgetAccess();
         void hydrate().then(() => {
+          if (generation !== gen) return; // 這段期間換了 session(例如本分頁登入 C):收尾不屬於它
           // hydrate 沒能換成事件當下 storage 裡的身分(refresh 成功但 /users/me 失敗,或 refresh 暫時
           // 不可用):不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。比對事件當下的快照,
           // 不重讀共用快取:別的分頁遲到的 syncUser 可能已把它改寫回舊身分。
