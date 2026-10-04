@@ -8,6 +8,7 @@ import type {
 	AdminLeaveRequestResponse,
 	AdminOrderSummary,
 	AdminReportResponse,
+	AttendanceEntryResponse,
 	CertificateResponse,
 	CoachResponse,
 	ConversationSummaryResponse,
@@ -342,5 +343,14 @@ export const certificate = (over: Partial<CertificateResponse> = {}): Certificat
 	issued_on: '2026-06-20',
 	note: null,
 	created_at: '2026-06-20T00:00:00Z',
+	...over
+});
+
+export const attendanceEntry = (over: Partial<AttendanceEntryResponse> = {}): AttendanceEntryResponse => ({
+	session_date: '2026-06-06',
+	start_time: '19:00:00',
+	end_time: '20:30:00',
+	status: 'present',
+	marked_at: '2026-06-06T21:00:00Z',
 	...over
 });
