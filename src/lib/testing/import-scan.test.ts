@@ -135,27 +135,33 @@ describe('匯入掃描器（Import Scan）', () => {
 		expect(offenders, `production 不得引用 *ForTests：${offenders.join(', ')}`).toEqual([]);
 	});
 
-	it('測試 seam 契約：零 vi.mock／vi.doMock 整支 coach／admin seam 模組(R16 Task 8、W-8)', () => {
+	it('測試 seam 契約：零 vi.mock／vi.doMock 整支 coach／admin／member／public seam 模組(R16 Task 8、W-8、R18 W4d)', () => {
 		// 教練頁測試走 HTTP seam(mock $lib/api/client + loginAs + fakeRouter(…, COACH_ROUTES))，
-		// admin 頁與 mobile-admin 測試同理(ADMIN_ROUTES)。整支換掉 coach/api 會讓 CoachNotFoundError
+		// admin 頁與 mobile-admin 測試同理(ADMIN_ROUTES)；R18 W4d 起 member／mobile／public 頁面
+		// 測試也一律走 HTTP seam(member 組含 $lib/mobile/api，public 組為 $lib/public/api)。整支換掉 coach/api 會讓 CoachNotFoundError
 		// 變 undefined、逼 production 退回 name 比對。任何形式換掉 seam 模組都算：automock、零參數
 		// factory、帶 importOriginal 的部分替換、vi.doMock、vi.mock(import('…')) 模組 promise 形，
 		// 以及解析後落在 seam 模組的相對路徑——兩條契約共用同一支 mockedSpecifiers 偵測。
 		const SEAMS = [
 			{ name: 'coach', paths: ['$lib/coach/api'] },
-			{ name: 'admin', paths: ['$lib/admin/api', '$lib/mobile-admin/api'] }
+			{ name: 'admin', paths: ['$lib/admin/api', '$lib/mobile-admin/api'] },
+			{ name: 'member', paths: ['$lib/member/api', '$lib/mobile/api'] },
+			{ name: 'public', paths: ['$lib/public/api'] }
 		].map(({ name, paths }) => ({
 			name,
 			reaches: paths.map((p) => makeReachPredicate(p, r('src/' + p.slice(1))))
 		}));
 		const mocksSeam = (reaches: ((file: string, spec: string) => boolean)[], file: string, src: string): boolean =>
 			mockedSpecifiers(src).some((spec) => reaches.some((reach) => reach(file, spec)));
-		const [coach, admin] = SEAMS.map((s) => s.reaches);
+		const [coach, admin, member, publicApi] = SEAMS.map((s) => s.reaches);
 
 		// 自證：各形式全數命中，近似形不誤中。
 		const inMobileAdmin = r('src/lib/mobile-admin/Fake.test.ts');
 		const inAdmin = r('src/lib/admin/Fake.test.ts');
 		const inCoach = r('src/lib/coach/Fake.test.ts');
+		const inMember = r('src/lib/member/Fake.test.ts');
+		const inMobile = r('src/lib/mobile/Fake.test.ts');
+		const inPublic = r('src/lib/public/Fake.test.ts');
 		const POSITIVE: [typeof admin, string, string][] = [
 			[admin, inMobileAdmin, "vi.mock('$lib/admin/api');"],
 			[admin, inMobileAdmin, "vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn() }));"],
@@ -171,7 +177,19 @@ describe('匯入掃描器（Import Scan）', () => {
 			[coach, inCoach, "vi.mock('$lib/coach/api', () => ({ getCoach: vi.fn() }));"],
 			[coach, inCoach, "vi.doMock('$lib/coach/api', () => ({}));"],
 			[coach, inCoach, "vi.mock('./api.ts');"],
-			[coach, inCoach, "vi.mock(import('$lib/coach/api'));"]
+			[coach, inCoach, "vi.mock(import('$lib/coach/api'));"],
+			[member, inMember, "vi.mock('$lib/member/api');"],
+			[member, inMember, "vi.mock('$lib/member/api', () => ({ getMine: vi.fn() }));"],
+			[member, inMember, "vi.mock('$lib/member/api', async (importOriginal) => ({ ...(await importOriginal()), getMine: vi.fn() }));"],
+			[member, inMember, "vi.doMock('$lib/member/api', () => ({}));"],
+			[member, inMember, "vi.mock('./api.ts');"],
+			[member, inMobile, "vi.mock('$lib/mobile/api', () => ({ getHome: vi.fn() }));"],
+			[member, inMobile, "vi.mock('./api');"],
+			[member, inMobile, "vi.doMock('./api', () => ({}));"],
+			[publicApi, inPublic, "vi.mock('$lib/public/api');"],
+			[publicApi, inPublic, "vi.mock('$lib/public/api', async (importOriginal) => ({ ...(await importOriginal()), listCourses: vi.fn() }));"],
+			[publicApi, inPublic, "vi.doMock('$lib/public/api', () => ({}));"],
+			[publicApi, inPublic, "vi.mock('./api');"]
 		];
 		const NEGATIVE: [typeof admin, string, string][] = [
 			[admin, inMobileAdmin, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
@@ -182,7 +200,16 @@ describe('匯入掃描器（Import Scan）', () => {
 			[coach, inCoach, "vi.mock('$lib/coach/api-utils');"],
 			[coach, inCoach, "vi.mock('$lib/api/client');"],
 			[coach, inCoach, "// vi.mock('$lib/coach/api');"],
-			[coach, r('src/lib/mobile/Fake.test.ts'), "vi.mock('./api');"]
+			[coach, r('src/lib/mobile/Fake.test.ts'), "vi.mock('./api');"],
+			[member, inMember, "vi.mock('$lib/member/stores');"],
+			[member, inMember, "vi.mock('$lib/member/points', () => ({}));"],
+			[member, inMobile, "vi.mock('$lib/mobile/stores', async (importOriginal) => ({ ...(await importOriginal()) }));"],
+			[member, inMobile, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
+			[member, inMember, "// vi.mock('$lib/member/api');"],
+			[member, inMobileAdmin, "vi.mock('./api');"],
+			[publicApi, inPublic, "vi.mock('$lib/public/adapters');"],
+			[publicApi, inMobileAdmin, "vi.mock('./api');"],
+			[publicApi, inMember, "vi.mock('./api');"]
 		];
 		for (const [reaches, f, src] of POSITIVE) expect(mocksSeam(reaches, f, src), `應命中：${src}`).toBe(true);
 		for (const [reaches, f, src] of NEGATIVE) expect(mocksSeam(reaches, f, src), `不應命中：${src}`).toBe(false);
