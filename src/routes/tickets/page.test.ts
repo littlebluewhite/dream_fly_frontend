@@ -3,40 +3,46 @@ import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/s
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import { cart, subscriptions } from '$lib/member/stores';
-import { listProducts } from '$lib/public/api';
-import type { ProductResponse } from '$lib/api/generated';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { productResponse } from '$lib/testing/wire-fixtures';
+import type { ProductListResponse } from '$lib/api/generated';
 
 // The /tickets marketing page sells PASSES (方案/購票). cart v3: the page now
 // fetches products via the public seam (mock ticketTypes' string-price/number-id
 // shape doesn't line up with the backend Ticket type) and 加入購物車 routes a
 // pass into the unified member cart keyed by the product's uuid.
 
-vi.mock('$lib/public/api', () => ({ listProducts: vi.fn() }));
+// 只假造 HTTP 層：真的 listProducts + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-const PRODUCT: ProductResponse = {
+const PRODUCT = productResponse({
 	id: 'product-uuid-1',
 	name: '單堂體驗課',
 	slug: 'trial',
-	product_type: 'ticket',
 	description: '首次體驗任一課程，感受專業體操訓練',
 	price_cents: 50000,
-	original_price_cents: null,
 	features: ['60-90分鐘完整課程', '專業教練一對一指導'],
-	is_highlighted: false,
-	badge: null,
-	stock: null,
-	quota: null,
-	sold: 0,
-	valid_days: null,
 	session_count: 1,
-	is_active: true,
 	created_at: '2026-01-01T00:00:00Z',
 	updated_at: '2026-01-01T00:00:00Z'
-};
+});
+
+const route = (products: ReturnType<typeof productResponse>[]) =>
+	vi.mocked(api).mockImplementation(
+		fakeRouter({
+			'GET /products?per_page=100': { products, total: products.length, page: 1, per_page: 100 } satisfies ProductListResponse
+		})
+	);
+const routeRaw = (value: unknown) =>
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /products?per_page=100': value }));
 
 beforeEach(() => {
-	vi.mocked(listProducts).mockReset();
-	vi.mocked(listProducts).mockResolvedValue([PRODUCT]);
+	vi.mocked(api).mockReset();
+	route([PRODUCT]);
 	localStorage.clear();
 	cart.clear();
 	subscriptions.set([]);
@@ -53,16 +59,14 @@ describe('購票資訊 — 接真 API', () => {
 	});
 
 	it('error 態:顯示「載入失敗」', async () => {
-		vi.mocked(listProducts).mockReset();
-		vi.mocked(listProducts).mockRejectedValue(new Error('network'));
+		routeRaw(new Error('network'));
 
 		const { findByText } = render(Page);
 		await findByText('載入失敗');
 	});
 
 	it('loading 態:顯示骨架', () => {
-		vi.mocked(listProducts).mockReset();
-		vi.mocked(listProducts).mockReturnValue(new Promise(() => {})); // never resolves
+		routeRaw(new Promise(() => {})); // never resolves
 
 		const { getByTestId } = render(Page);
 		expect(getByTestId('tickets-skeleton')).toBeTruthy();
@@ -71,8 +75,8 @@ describe('購票資訊 — 接真 API', () => {
 
 describe('購票資訊 — merchandising display (badge / highlight / original price)', () => {
 	it('renders the badge chip, highlighted card styling, and strikethrough original price when the product carries them', async () => {
-		vi.mocked(listProducts).mockResolvedValue([
-			{
+		route([
+			productResponse({
 				...PRODUCT,
 				id: 'product-uuid-2',
 				name: '競技啦啦隊月費',
@@ -80,7 +84,7 @@ describe('購票資訊 — merchandising display (badge / highlight / original p
 				original_price_cents: 500000,
 				badge: '最熱門',
 				is_highlighted: true
-			}
+			})
 		]);
 
 		const { container, findByText } = render(Page);
@@ -94,9 +98,7 @@ describe('購票資訊 — merchandising display (badge / highlight / original p
 	});
 
 	it('falls back to the 優惠中 badge when there is an original price but no explicit badge', async () => {
-		vi.mocked(listProducts).mockResolvedValue([
-			{ ...PRODUCT, original_price_cents: 400000, badge: null }
-		]);
+		route([productResponse({ ...PRODUCT, original_price_cents: 400000, badge: null })]);
 
 		const { findByText } = render(Page);
 
