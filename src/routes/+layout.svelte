@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { browser } from '$app/environment';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import ToastPublic from '$lib/components/toast/ToastPublic.svelte';
   import { toasts } from '$lib/stores/marketingToasts';
-  import { authStore } from '$lib/stores/authStore';
+  import { authStore, sessionKey } from '$lib/stores/authStore';
+  import { warmStores } from '$lib/store-warm';
+  import { refreshSubscriptions } from '$lib/member/stores';
   import '$lib/styles/global.css';
 
   // Confirm/refresh the session once on app mount: if a refresh token exists,
@@ -26,6 +29,11 @@
     $page.url.pathname.startsWith('/staff') ||
     $page.url.pathname.startsWith('/mobile-admin') ||
     $page.url.pathname.startsWith('/mobile');
+
+  /* 行銷外殼的訂閱暖機:購物車頁與下拉的「已持有不計費」都吃 subscriptions,在此以登入身分為 key
+   * 暖一次(auth 晚於頁面才水合、A 直接換登 B 都會重暖;app 介面自帶 layout,不在此暖)。
+   * 結帳結算仍由各介面自己做(ADR-0003 / ADR-0025 F-5)。 */
+  $: if (browser && !isAppSurface && $sessionKey !== null) void warmStores('root +layout', [['訂閱', refreshSubscriptions]]);
 </script>
 
 {#if isAppSurface}

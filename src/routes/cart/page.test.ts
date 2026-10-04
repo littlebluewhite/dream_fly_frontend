@@ -1,4 +1,3 @@
-import { get } from 'svelte/store';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import Page from './+page.svelte';
@@ -7,7 +6,6 @@ import { courseToCartItem, passToCartItem } from '$lib/cart-item';
 import { authStore } from '$lib/stores/authStore';
 import { api } from '$lib/api/client';
 import { subscriptions } from '$lib/member/subscriptions';
-import { fakeRouter } from '$lib/testing/fake-router';
 import { checkoutTarget } from '$lib/checkout-gate';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
@@ -112,83 +110,28 @@ describe('購物車頁 — 結帳 gate', () => {
 });
 
 describe('購物車頁 — 已持有方案不計入總額', () => {
-	it('登入後暖到已持有的方案 → 該行標「已持有，不計費」、總計只算可計費行', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /subscriptions/me': [
-					{
-						id: 'sub-1',
-						product_id: PASS.id,
-						product_name: PASS.name,
-						status: 'active',
-						started_at: '2026-06-01T00:00:00Z',
-						expires_at: null,
-						total_sessions: null,
-						remaining_sessions: null,
-						price_cents: 180000
-					}
-				]
-			})
-		);
-		await authStore.login('member@test.com', 'password123');
+	it('訂閱已持有該方案 → 該行標「已持有，不計費」、總計只算可計費行', () => {
+		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 1800 }]);
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));
 		const { getByText, container } = render(Page);
 
-		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
+		expect(getByText('已持有，不計費')).toBeInTheDocument();
 		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
 	});
 
-	it('頁面已開啟後 auth 才水合成登入 → 補暖訂閱，已持有方案不計入總額', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /subscriptions/me': [
-					{
-						id: 'sub-1',
-						product_id: PASS.id,
-						product_name: PASS.name,
-						status: 'active',
-						started_at: '2026-06-01T00:00:00Z',
-						expires_at: null,
-						total_sessions: null,
-						remaining_sessions: null,
-						price_cents: 180000
-					}
-				]
-			})
-		);
+	it('訂閱在畫面開著時才到 → 已持有方案隨即不計入總額', () => {
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));
 		const { getByText, container } = render(Page);
 		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 5,000');
 
-		await authStore.login('member@test.com', 'password123');
+		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 1800 }]);
 
-		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
-		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
-	});
-
-	it('A 直接換登 B(不經登出)→ 以 B 的訂閱重新暖機，B 已持有的方案不計入總額', async () => {
-		const owned = {
-			id: 'sub-b', product_id: PASS.id, product_name: PASS.name, status: 'active',
-			started_at: '2026-06-01T00:00:00Z', expires_at: null, total_sessions: null,
-			remaining_sessions: null, price_cents: 180000
-		};
-		// A 沒有訂閱、B 持有 PASS——依當下登入者回應。
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ 'GET /subscriptions/me': () => (get(authStore).member?.id === 'b@test.com' ? [owned] : []) })
-		);
-		await authStore.login('a@test.com', 'password123');
-		cart.addItem(courseToCartItem(COURSE));
-		cart.addItem(passToCartItem(PASS));
-		const { getByText, container } = render(Page);
-		await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledTimes(1));
-		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 5,000');
-
-		await authStore.login('b@test.com', 'password123');
-
-		await waitFor(() => expect(getByText('已持有，不計費')).toBeInTheDocument());
-		expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
+		return waitFor(() => {
+			expect(getByText('已持有，不計費')).toBeInTheDocument();
+			expect(container.querySelector('.total-amount')?.textContent).toBe('NT$ 3,200');
+		});
 	});
 
 	it('未持有時總計照舊算全部（無「已持有」標記）', () => {

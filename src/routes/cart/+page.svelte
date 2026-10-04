@@ -1,18 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { cart } from '$lib/cart';
-  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
+  import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import { chargeableCart, refreshSubscriptions } from '$lib/member/stores';
+  import { chargeableCart } from '$lib/member/stores';
   import { toasts } from '$lib/stores/marketingToasts';
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
-  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；以登入身分為 key best-effort 暖訂閱
-  // （auth 晚於頁面才水合、A 直接換登 B 都會重暖——換身分時訂閱已被 session 重置清空）。
+  // 已持有的方案不計費（與結帳同一個 chargeableCart 產地）；訂閱由根 layout 暖機。
   const { billable, total } = chargeableCart(cart);
-
-  $: if ($sessionKey !== null) void refreshSubscriptions().catch(() => {});
 
   function removeItem(item: CartItem) {
     cart.remove(item.id);

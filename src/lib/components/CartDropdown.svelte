@@ -1,18 +1,16 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { cart } from '$lib/cart';
-  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
+  import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import { chargeableCart, refreshSubscriptions } from '$lib/member/stores';
+  import { chargeableCart } from '$lib/member/stores';
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;
   export let onClose: () => void;
 
-  // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；開啟且登入時以登入身分為 key
-  // best-effort 暖訂閱（開著時 A 直接換登 B 也會重暖——換身分時訂閱已被 session 重置清空）。
-  $: if (isOpen && $sessionKey !== null) void refreshSubscriptions().catch(() => {});
+  // 已持有的方案不計費（與結帳同一個 chargeableCart 產地）；訂閱由根 layout 暖機。
   const { billable, total } = chargeableCart(cart);
 
   function removeItem(itemId: string) {
