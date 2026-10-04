@@ -319,19 +319,22 @@ mutator)。語意:
 
 ## 已知、刻意遞延
 
-- **購物車頁訂閱暖身只在 `onMount` 且已登入時跑**:auth 晚水合則先顯示未過濾總額;`CartDropdown` 是 reactive 不受影響。
+- ~~**購物車頁訂閱暖身只在 `onMount` 且已登入時跑**:auth 晚水合則先顯示未過濾總額;`CartDropdown` 是 reactive 不受影響。~~
+  已修:`2aad98a` 起購物車頁暖訂閱隨登入狀態反應,`280d5ad` 起購物車頁與下拉都以登入身分為 key 暖機
+  (R18 再收進根 layout,見 `docs/adr/0028` §3)。
   購物車頁的「項目總數」仍計全部行(FE-5)。
 - **`ChargeableLine` brand 的 `it.skip` 編譯期反例隨 `submitOrder` 刪除**;`checkout-math.test.ts` 仍有反例(FE-5)。
 - **`ClassForm` 的教練錯誤走 `Select` helper**,樣式可能不像錯誤(FE-6)。
 - **`CoachForm` 重試只鎖三欄**;`bind-failed` 以外的狀態不鎖(FE-6)。
 - **登入狀態(FE-2/FE-3)**:
   - 無 Web Locks 時並發背景 `hydrate` 會重放 refresh token(既有行為)。
-  - 舊的 in-flight refresh 成功會覆寫新登入的 token(`setTokens` 無條件),回彈一次。
+  - ~~舊的 in-flight refresh 成功會覆寫新登入的 token(`setTokens` 無條件),回彈一次。~~ 已修:`a1c71d2` 起
+    成功也做 compare-and-set(§1 已寫成現況)。
   - 換會員時一個分頁可能 `hydrate` 兩次(多一次輪替)。
   - 無鎖 fallback 或中途新登入時 compare-and-clear 回 false → 該請求 401。
   - refresh 2xx 但 body 解析失敗 → `unavailable`,留舊 token(延後失敗)。
   - `auth-mock.ts` 用 `importActual` 讓六個 mock 測試檔註冊真 listener(無害);
-    `client.test.ts` in-flight 測試未釘 fetch 次數與 `getAccess()` 狀態。
+    ~~`client.test.ts` in-flight 測試未釘 fetch 次數與 `getAccess()` 狀態。~~ 已修:`cc7ae82` 補釘。
 - **點數**:`seed-fixtures.ts` 的 desc「管理員點數調整」與 production「會員點數調整」不一致;`admin_adjust` 與 default
   共用文案,未知的新 reason 會顯示「會員點數調整」(窮舉 `never` 檢查可解)(FE-1)。
 - **`track`/`bump` 各只有 `write` 一個呼叫者**,保留具名步驟因為記帳順序讀起來更清楚(FE-8)。
