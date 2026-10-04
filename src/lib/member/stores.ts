@@ -41,7 +41,7 @@ export { points, pointsLedger, pointsEarnedThisMonth, refreshPoints, redeemRewar
 
 export { subscriptions, refreshSubscriptions } from './subscriptions';
 
-export { createCheckout } from './checkout-sync';
+export { createCheckout, chargeableCart } from './checkout-sync';
 export type { PaymentMethod } from '$lib/checkout-order';
 
 export { notifications, unreadCount, notificationsPageEntry, hydrateNotifications, markRead, markAllRead } from './notifications';

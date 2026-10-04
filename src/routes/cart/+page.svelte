@@ -3,18 +3,14 @@
   import { cart } from '$lib/cart';
   import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import { subtotalOf } from '$lib/checkout-math';
-  import { chargeableLines } from '$lib/member/checkout';
-  import { subscriptions, refreshSubscriptions } from '$lib/member/stores';
+  import { chargeableCart, refreshSubscriptions } from '$lib/member/stores';
   import { toasts } from '$lib/stores/marketingToasts';
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；以登入身分為 key best-effort 暖訂閱
   // （auth 晚於頁面才水合、A 直接換登 B 都會重暖——換身分時訂閱已被 session 重置清空）。
-  $: chargeable = chargeableLines($cart, $subscriptions);
-  $: billable = new Set<CartItem>(chargeable);
-  $: total = subtotalOf(chargeable);
+  const { billable, total } = chargeableCart(cart);
 
   $: if ($sessionKey !== null) void refreshSubscriptions().catch(() => {});
 
@@ -94,7 +90,7 @@
 
                     <div class="item-actions">
                       <div class="item-price-section">
-                        {#if billable.has(item)}
+                        {#if $billable.has(item)}
                           <p class="unit-price">單價：NT$ {item.price.toLocaleString()}</p>
                           <p class="subtotal">
                             小計：NT$ {(item.price * item.qty).toLocaleString()}
@@ -125,11 +121,11 @@
                 </div>
                 <div class="summary-row">
                   <span>商品總計</span>
-                  <span>NT$ {total.toLocaleString()}</span>
+                  <span>NT$ {$total.toLocaleString()}</span>
                 </div>
                 <div class="summary-row highlight">
                   <span class="total-label">總計</span>
-                  <span class="total-amount">NT$ {total.toLocaleString()}</span>
+                  <span class="total-amount">NT$ {$total.toLocaleString()}</span>
                 </div>
               </div>
 

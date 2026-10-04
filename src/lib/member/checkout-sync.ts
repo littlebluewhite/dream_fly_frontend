@@ -3,6 +3,7 @@ import { api } from '$lib/api/client';
 import { syncCartToServer } from '$lib/checkout-order';
 import type { OrderResponse } from '$lib/api/generated';
 import { ntd } from '$lib/public/adapters';
+import { subtotalOf } from '$lib/checkout-math';
 import {
 	createCheckoutController,
 	type CheckoutController,
@@ -33,6 +34,17 @@ export interface CheckoutSyncDeps {
 }
 
 /**
+ * 可計費購物車：已持有的方案不計費（chargeableLines 單一產地），lines／billable／total 只在此推導一次，
+ * 購物車頁、下拉與 createCheckout 共用——預覽合計 ≡ 實際請款。
+ */
+export function chargeableCart(cart: Readable<CartItem[]>) {
+	const lines = derived([cart, subscriptions], ([c, s]) => chargeableLines(c, s));
+	const billable = derived(lines, ($lines) => new Set<CartItem>($lines));
+	const total = derived(lines, ($lines) => subtotalOf($lines));
+	return { lines, billable, total };
+}
+
+/**
  * 組出一個 surface 專用的 CheckoutController：`lines` 衍生自注入的 cart 與 member
  * 訂閱（chargeableLines 過濾）；送單走私有 placeOrder，afterOrder/clearCart
  * 對應注入的 refreshAfterOrder/cart.clear；`applyCouponCode`／`points` 單源自
@@ -40,7 +52,7 @@ export interface CheckoutSyncDeps {
  * 失敗吞掉，沿用現值——與原本兩個 surface 各自手焊的佈線同語意）。
  */
 export function createCheckout(w: CheckoutSyncDeps): CheckoutController {
-	const lines = derived([w.cart, subscriptions], ([c, s]) => chargeableLines(c, s));
+	const { lines } = chargeableCart(w.cart);
 
 	/** 同步購物車 → POST /orders（mock payment：成功即代表付款完成，見
 	 *  integration-contract.md §1.8）→ 刷新 → 清購物車。idempotencyKey 由 controller

@@ -11,7 +11,7 @@ import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createCart } from '$lib/cart';
 import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
-import { createCheckout } from './checkout-sync';
+import { createCheckout, chargeableCart } from './checkout-sync';
 import { subscriptions, refreshSubscriptions } from './subscriptions';
 import { points, refreshPoints } from './points';
 import { fakeRouter } from '$lib/testing/fake-router';
@@ -247,5 +247,47 @@ describe('createCheckout — setOpen 的 refreshOnOpen（開啟即水合）', ()
 		const checkout = createCheckout({ cart, refreshAfterOrder: [], refreshOnOpen: [failing] });
 
 		expect(() => checkout.setOpen(true)).not.toThrow();
+	});
+});
+
+describe('chargeableCart — 可計費購物車只推導一次', () => {
+	const COURSE = { id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' } as const;
+	const PASS = { id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' } as const;
+
+	it('未持有 → lines/billable/total 含全部', () => {
+		const cart = createCart();
+		cart.addItem(COURSE);
+		cart.addItem(PASS);
+		const { lines, billable, total } = chargeableCart(cart);
+		expect(get(lines)).toHaveLength(2);
+		expect(get(billable).size).toBe(2);
+		expect(get(total)).toBe(7800);
+	});
+
+	it('已持有的方案不算進 lines、billable、total', () => {
+		subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+		const cart = createCart();
+		cart.addItem(COURSE);
+		cart.addItem(PASS);
+		const { lines, billable, total } = chargeableCart(cart);
+		expect(get(lines).map((l) => l.id)).toEqual(['course-uuid-9']);
+		expect([...get(billable)].map((l) => l.id)).toEqual(['course-uuid-9']);
+		expect(get(total)).toBe(4800);
+	});
+
+	it('subscriptions 一變，結果跟著變', () => {
+		const cart = createCart();
+		cart.addItem(COURSE);
+		cart.addItem(PASS);
+		const { lines, billable, total } = chargeableCart(cart);
+		expect(get(total)).toBe(7800);
+
+		subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+		expect(get(lines)).toHaveLength(1);
+		expect(get(billable).size).toBe(1);
+		expect(get(total)).toBe(4800);
+
+		subscriptions.set([]);
+		expect(get(total)).toBe(7800);
 	});
 });

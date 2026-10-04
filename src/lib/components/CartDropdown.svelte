@@ -3,9 +3,7 @@
   import { cart } from '$lib/cart';
   import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
-  import { subtotalOf } from '$lib/checkout-math';
-  import { chargeableLines } from '$lib/member/checkout';
-  import { subscriptions, refreshSubscriptions } from '$lib/member/stores';
+  import { chargeableCart, refreshSubscriptions } from '$lib/member/stores';
   import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
@@ -15,9 +13,7 @@
   // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；開啟且登入時以登入身分為 key
   // best-effort 暖訂閱（開著時 A 直接換登 B 也會重暖——換身分時訂閱已被 session 重置清空）。
   $: if (isOpen && $sessionKey !== null) void refreshSubscriptions().catch(() => {});
-  $: chargeable = chargeableLines($cart, $subscriptions);
-  $: billable = new Set<CartItem>(chargeable);
-  $: total = subtotalOf(chargeable);
+  const { billable, total } = chargeableCart(cart);
 
   function removeItem(itemId: string) {
     cart.remove(itemId);
@@ -65,7 +61,7 @@
                     <span class="level-tag">{item.level}</span>
                   {/if}
                 </p>
-                {#if billable.has(item)}
+                {#if $billable.has(item)}
                   <p class="item-price">NT$ {item.price.toLocaleString()}</p>
                 {:else}
                   <p class="item-price">已持有，不計費</p>
@@ -88,7 +84,7 @@
         <div class="cart-footer">
           <div class="total">
             <span>總計：</span>
-            <span class="total-price">NT$ {total.toLocaleString()}</span>
+            <span class="total-price">NT$ {$total.toLocaleString()}</span>
           </div>
 
           <div class="action-buttons">
