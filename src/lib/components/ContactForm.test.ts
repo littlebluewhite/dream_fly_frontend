@@ -2,12 +2,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import ContactForm from './ContactForm.svelte';
-import { sendContactInquiry } from '$lib/public/api';
-import { ApiError } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { apiBody, apiCalls } from '$lib/testing/admin-routes';
 import { toasts } from '$lib/stores/marketingToasts';
 import { inquiryResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/public/api', () => ({ sendContactInquiry: vi.fn() }));
+// 只假造 HTTP 層：真的 sendContactInquiry 會跑，POST /contact 的 body 由 apiBody 取出斷言
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
+const route = (value: unknown) => vi.mocked(api).mockImplementation(fakeRouter({ 'POST /contact': value }));
 
 function fillValidForm(getByLabelText: (text: string) => HTMLElement) {
 	fireEvent.input(getByLabelText('姓名 *'), { target: { value: '王小明' } });
@@ -20,14 +27,14 @@ function resetToasts() {
 }
 
 beforeEach(() => {
-	vi.mocked(sendContactInquiry).mockReset();
+	vi.mocked(api).mockReset();
 	resetToasts();
 });
 afterEach(resetToasts);
 
 describe('ContactForm — 送出 POST /contact', () => {
 	it('submits the validated fields via sendContactInquiry and shows the success message + toast', async () => {
-		vi.mocked(sendContactInquiry).mockResolvedValue(inquiryResponse());
+		route(inquiryResponse());
 
 		const { getByLabelText, findByText } = render(ContactForm);
 		fillValidForm(getByLabelText);
@@ -35,7 +42,7 @@ describe('ContactForm — 送出 POST /contact', () => {
 		await fireEvent.click(getByLabelText('訊息內容 *').closest('form')!.querySelector('button[type="submit"]')!);
 
 		await findByText('訊息已送出！我們會盡快與您聯繫。');
-		expect(sendContactInquiry).toHaveBeenCalledWith({
+		expect(apiBody('POST /contact')).toEqual({
 			name: '王小明',
 			email: 'a@b.com',
 			subject: '一般諮詢',
@@ -45,18 +52,18 @@ describe('ContactForm — 送出 POST /contact', () => {
 	});
 
 	it('omits phone from the payload when left blank', async () => {
-		vi.mocked(sendContactInquiry).mockResolvedValue(inquiryResponse());
+		route(inquiryResponse());
 		const { getByLabelText } = render(ContactForm);
 		fillValidForm(getByLabelText);
 
 		await fireEvent.click(getByLabelText('訊息內容 *').closest('form')!.querySelector('button[type="submit"]')!);
 
-		const payload = vi.mocked(sendContactInquiry).mock.calls[0][0];
+		const payload = apiBody('POST /contact');
 		expect(payload).not.toHaveProperty('phone');
 	});
 
 	it('shows the ApiError message and an error toast when the request fails', async () => {
-		vi.mocked(sendContactInquiry).mockRejectedValue(new ApiError(422, '欄位格式錯誤'));
+		route(new ApiError(422, '欄位格式錯誤'));
 
 		const { getByLabelText, findByText } = render(ContactForm);
 		fillValidForm(getByLabelText);
@@ -74,6 +81,6 @@ describe('ContactForm — 送出 POST /contact', () => {
 
 		await fireEvent.click(getByLabelText('訊息內容 *').closest('form')!.querySelector('button[type="submit"]')!);
 
-		expect(sendContactInquiry).not.toHaveBeenCalled();
+		expect(apiCalls('POST /contact')).toHaveLength(0);
 	});
 });
