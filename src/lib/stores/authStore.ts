@@ -86,8 +86,14 @@ function createAuthStore() {
   // hydrate() 進場記下,/users/me 落地時世代變了就是別的 session 的回應,不套用。
   let generation = 0;
 
-  function applySession(res: AuthResponse): void {
+  /** 新 session 狀態開始的唯一入口:世代 +1 並回傳新值(需要比對的呼叫端自己留存)。 */
+  function beginSession(): number {
     generation += 1;
+    return generation;
+  }
+
+  function applySession(res: AuthResponse): void {
+    beginSession();
     setTokens(res.access_token, res.refresh_token);
     applyUser(res.user);
   }
@@ -133,7 +139,7 @@ function createAuthStore() {
     // while the slow revoke is in flight, and its continuation would then wipe
     // the fresh session. Snapshot the token first — clearTokens() drops it.
     const refresh = getRefresh();
-    generation += 1;
+    beginSession();
     clearTokens();
     set(LOGGED_OUT);
     if (refresh) {
@@ -179,7 +185,7 @@ function createAuthStore() {
 
   // refresh 失敗、client 真的清掉 token 的那一刻(唯一來源見 client.ts performRefresh)。
   onSessionExpired(() => {
-    generation += 1;
+    beginSession();
     set(LOGGED_OUT);
   });
 
@@ -190,7 +196,7 @@ function createAuthStore() {
     window.addEventListener('storage', (event) => {
       if (event.key !== null && event.key !== AUTH_STORAGE_KEY && event.key !== REFRESH_KEY) return;
       if (!getRefresh()) {
-        generation += 1;
+        beginSession();
         forgetAccess();
         set(LOGGED_OUT);
         return;
@@ -198,7 +204,7 @@ function createAuthStore() {
       const cached = loadCache();
       const expected = sessionIdentity(cached);
       if (cached.loggedIn && expected !== sessionIdentity(get({ subscribe }))) {
-        const gen = (generation += 1);
+        const gen = beginSession();
         forgetAccess();
         void hydrate().then(() => {
           if (generation !== gen) return; // 這段期間換了 session(例如本分頁登入 C):收尾不屬於它
