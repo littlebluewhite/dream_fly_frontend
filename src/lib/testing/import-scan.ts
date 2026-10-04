@@ -168,6 +168,19 @@ export const importSpecifiers = (src: string): string[] => {
 		.map((m) => m[1].replace(/\\[\n\u2028\u2029]/g, ''));
 };
 
+/** 抽出原始碼傳給 vi.mock／vi.doMock 的 specifier（含 vi.mock(import('…')) 模組 promise 形）。
+ *  與 importSpecifiers 同樣先字串感知剝註解、丟棄落在字串跨度內的比對；specifier 去掉 .ts／.js
+ *  副檔名與結尾 /index，使 './api.ts' 之類能與目錄形目標對齊。 */
+export const mockedSpecifiers = (src: string): string[] => {
+	const { code, stringSpans } = stripCommentsPreserveStrings(src);
+	return [...code.matchAll(/\bvi\.(?:mock|doMock)\(\s*(?:import\(\s*)?(['"`])([^'"`]+)\1/g)]
+		.filter((m) => {
+			const at = m.index ?? 0;
+			return !stringSpans.some(([s, e]) => at >= s && at < e);
+		})
+		.map((m) => m[2].replace(/\.(ts|js)$/, '').replace(/\/index$/, ''));
+};
+
 /** 產生「某 import specifier 是否 reach 到 alias／目標目錄」的判定式。alias 與 targetDir
  *  是資料組態（非行為旗標）：alias 形以前綴精確比對，相對形解析回絕對路徑後檢查是否落在
  *  targetDir 之下。 */

@@ -8,8 +8,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { walk, importSpecifiers, makeReachPredicate } from './import-scan';
+import { resolve } from 'node:path';
+import { walk, importSpecifiers, mockedSpecifiers, makeReachPredicate } from './import-scan';
 
 const ROOT = process.cwd();
 const r = (p: string) => resolve(ROOT, p);
@@ -135,59 +135,66 @@ describe('匯入掃描器（Import Scan）', () => {
 		expect(offenders, `production 不得引用 *ForTests：${offenders.join(', ')}`).toEqual([]);
 	});
 
-	it('測試 seam 契約：零 vi.mock 整支 $lib/coach/api(R16 Task 8)', () => {
-		// 教練頁測試走 HTTP seam(mock $lib/api/client + loginAs + fakeRouter(…, COACH_ROUTES))。
-		// 整支換掉 coach/api 會讓 CoachNotFoundError 變 undefined、逼 production 退回 name 比對。
-		const testFiles = walk(r('src')).filter((f) => f.endsWith('.test.ts'));
-		expect(testFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
-		const offenders = testFiles
-			.filter((f) => /vi\.mock\(\s*['"`]\$lib\/coach\/api['"`]/.test(readFileSync(f, 'utf8')))
-			.map((f) => f.replace(ROOT + '/', ''));
-		expect(offenders, `改走 HTTP seam，不要 mock $lib/coach/api：${offenders.join(', ')}`).toEqual([]);
-	});
-
-	it('測試 seam 契約：零 vi.mock／vi.doMock admin seam 模組(W-8)', () => {
-		// admin 頁與 mobile-admin 測試走 HTTP seam(mock $lib/api/client + fakeRouter(…, ADMIN_ROUTES))。
-		// 任何形式換掉 $lib/admin/api 或 $lib/mobile-admin/api 都算：automock、零參數 factory、
-		// 帶 importOriginal 的部分替換、vi.doMock、vi.mock(import('…')) 模組 promise 形，以及解析後落在這兩支的相對路徑。
-		const SEAMS = [r('src/lib/admin/api'), r('src/lib/mobile-admin/api')];
-		const mocksSeam = (file: string, src: string): boolean =>
-			[...src.matchAll(/vi\.(?:mock|doMock)\(\s*(?:import\(\s*)?(['"`])([^'"`]+)\1/g)].some(([, , spec]) => {
-				const abs = spec.startsWith('$lib/') ? r('src/lib/' + spec.slice(5)) : spec.startsWith('.') ? resolve(dirname(file), spec) : spec;
-				return SEAMS.includes(abs.replace(/\.(ts|js)$/, '').replace(/\/index$/, ''));
-			});
+	it('測試 seam 契約：零 vi.mock／vi.doMock 整支 coach／admin seam 模組(R16 Task 8、W-8)', () => {
+		// 教練頁測試走 HTTP seam(mock $lib/api/client + loginAs + fakeRouter(…, COACH_ROUTES))，
+		// admin 頁與 mobile-admin 測試同理(ADMIN_ROUTES)。整支換掉 coach/api 會讓 CoachNotFoundError
+		// 變 undefined、逼 production 退回 name 比對。任何形式換掉 seam 模組都算：automock、零參數
+		// factory、帶 importOriginal 的部分替換、vi.doMock、vi.mock(import('…')) 模組 promise 形，
+		// 以及解析後落在 seam 模組的相對路徑——兩條契約共用同一支 mockedSpecifiers 偵測。
+		const SEAMS = [
+			{ name: 'coach', paths: ['$lib/coach/api'] },
+			{ name: 'admin', paths: ['$lib/admin/api', '$lib/mobile-admin/api'] }
+		].map(({ name, paths }) => ({
+			name,
+			reaches: paths.map((p) => makeReachPredicate(p, r('src/' + p.slice(1))))
+		}));
+		const mocksSeam = (reaches: ((file: string, spec: string) => boolean)[], file: string, src: string): boolean =>
+			mockedSpecifiers(src).some((spec) => reaches.some((reach) => reach(file, spec)));
+		const [coach, admin] = SEAMS.map((s) => s.reaches);
 
 		// 自證：各形式全數命中，近似形不誤中。
 		const inMobileAdmin = r('src/lib/mobile-admin/Fake.test.ts');
 		const inAdmin = r('src/lib/admin/Fake.test.ts');
-		const POSITIVE: [string, string][] = [
-			[inMobileAdmin, "vi.mock('$lib/admin/api');"],
-			[inMobileAdmin, "vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn() }));"],
-			[inMobileAdmin, "vi.mock('$lib/admin/api', async (importOriginal) => ({ ...(await importOriginal()), createMember: vi.fn() }));"],
-			[inMobileAdmin, "vi.doMock('$lib/admin/api', () => ({}));"],
-			[inMobileAdmin, "vi.mock('./api', async (importOriginal) => ({ ...(await importOriginal()) }));"],
-			[inAdmin, "vi.mock('./api.ts');"],
-			[inMobileAdmin, "vi.mock('../admin/api');"],
-			[inMobileAdmin, "vi.mock(\n\t'$lib/mobile-admin/api'\n);"],
-			[inMobileAdmin, "vi.mock(import('$lib/admin/api'), async (importOriginal) => ({ ...(await importOriginal()) }));"],
-			[inAdmin, "vi.doMock(import('./api'));"]
+		const inCoach = r('src/lib/coach/Fake.test.ts');
+		const POSITIVE: [typeof admin, string, string][] = [
+			[admin, inMobileAdmin, "vi.mock('$lib/admin/api');"],
+			[admin, inMobileAdmin, "vi.mock('$lib/admin/api', () => ({ getMembers: vi.fn() }));"],
+			[admin, inMobileAdmin, "vi.mock('$lib/admin/api', async (importOriginal) => ({ ...(await importOriginal()), createMember: vi.fn() }));"],
+			[admin, inMobileAdmin, "vi.doMock('$lib/admin/api', () => ({}));"],
+			[admin, inMobileAdmin, "vi.mock('./api', async (importOriginal) => ({ ...(await importOriginal()) }));"],
+			[admin, inAdmin, "vi.mock('./api.ts');"],
+			[admin, inMobileAdmin, "vi.mock('../admin/api');"],
+			[admin, inMobileAdmin, "vi.mock(\n\t'$lib/mobile-admin/api'\n);"],
+			[admin, inMobileAdmin, "vi.mock(import('$lib/admin/api'), async (importOriginal) => ({ ...(await importOriginal()) }));"],
+			[admin, inAdmin, "vi.doMock(import('./api'));"],
+			[coach, inCoach, "vi.mock('$lib/coach/api');"],
+			[coach, inCoach, "vi.mock('$lib/coach/api', () => ({ getCoach: vi.fn() }));"],
+			[coach, inCoach, "vi.doMock('$lib/coach/api', () => ({}));"],
+			[coach, inCoach, "vi.mock('./api.ts');"],
+			[coach, inCoach, "vi.mock(import('$lib/coach/api'));"]
 		];
-		const NEGATIVE: [string, string][] = [
-			[inMobileAdmin, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
-			[inMobileAdmin, "vi.mock('$lib/admin/api-utils');"],
-			[inMobileAdmin, "vi.mock('$lib/member/api', () => ({}));"],
-			[r('src/lib/mobile/Fake.test.ts'), "vi.mock('./api');"],
-			[inMobileAdmin, "vi.mock('./api-helpers');"]
+		const NEGATIVE: [typeof admin, string, string][] = [
+			[admin, inMobileAdmin, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
+			[admin, inMobileAdmin, "vi.mock('$lib/admin/api-utils');"],
+			[admin, inMobileAdmin, "vi.mock('$lib/member/api', () => ({}));"],
+			[admin, r('src/lib/mobile/Fake.test.ts'), "vi.mock('./api');"],
+			[admin, inMobileAdmin, "vi.mock('./api-helpers');"],
+			[coach, inCoach, "vi.mock('$lib/coach/api-utils');"],
+			[coach, inCoach, "vi.mock('$lib/api/client');"],
+			[coach, inCoach, "// vi.mock('$lib/coach/api');"],
+			[coach, r('src/lib/mobile/Fake.test.ts'), "vi.mock('./api');"]
 		];
-		for (const [f, src] of POSITIVE) expect(mocksSeam(f, src), `應命中：${src}`).toBe(true);
-		for (const [f, src] of NEGATIVE) expect(mocksSeam(f, src), `不應命中：${src}`).toBe(false);
+		for (const [reaches, f, src] of POSITIVE) expect(mocksSeam(reaches, f, src), `應命中：${src}`).toBe(true);
+		for (const [reaches, f, src] of NEGATIVE) expect(mocksSeam(reaches, f, src), `不應命中：${src}`).toBe(false);
 
 		const testFiles = walk(r('src')).filter((f) => f.endsWith('.test.ts'));
 		expect(testFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
-		const offenders = testFiles
-			.filter((f) => f !== r('src/lib/testing/import-scan.test.ts')) // 本檔自證字面值不算
-			.filter((f) => mocksSeam(f, readFileSync(f, 'utf8')))
-			.map((f) => f.replace(ROOT + '/', ''));
-		expect(offenders, `改走 HTTP seam，不要 mock admin seam 模組：${offenders.join(', ')}`).toEqual([]);
+		for (const { name, reaches } of SEAMS) {
+			const offenders = testFiles
+				.filter((f) => f !== r('src/lib/testing/import-scan.test.ts')) // 本檔自證字面值不算
+				.filter((f) => mocksSeam(reaches, f, readFileSync(f, 'utf8')))
+				.map((f) => f.replace(ROOT + '/', ''));
+			expect(offenders, `改走 HTTP seam，不要 mock ${name} seam 模組：${offenders.join(', ')}`).toEqual([]);
+		}
 	});
 });
