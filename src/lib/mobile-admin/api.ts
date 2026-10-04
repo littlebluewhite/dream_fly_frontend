@@ -28,9 +28,7 @@ import {
 } from '$lib/admin/api';
 import type { TodayClass, ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
 import { getDashboard as coachGetDashboard, getConversations as coachGetConversations } from '$lib/coach/api';
-import type { Coach as CoachProfile, Conversation } from '$lib/coach/data';
-import { SESSION_STATUS } from '$lib/domain/sessions';
-import type { TodayStatus } from '$lib/domain/sessions';
+import type { Coach as CoachProfile, Conversation, TodayClass as CoachTodayClass } from '$lib/coach/data';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
 // $lib/domain 各 entity 檔(原經 ./data 純轉手,零附加型別事實)——ActivityRow 改名,
 // 用 import-site alias `Activity as ActivityRow` 保留本檔既有用名(:258)。
@@ -42,7 +40,6 @@ import { fmtNT } from '$lib/format';
 import {
 	PROFILES,
 	type Profile,
-	type TodayRow,
 	type MessageRow
 } from './data';
 
@@ -70,23 +67,9 @@ export const getMore = async (): Promise<MoreData> => {
 	return { profiles: PROFILES, coaches, venues, tickets };
 };
 
-/** coach TodayClass.status(TodayStatus 窄型別)→ 行動版今日課表卡的 tone/label。單源
- *  改查 $lib/domain/sessions 的 SESSION_STATUS（admin/coach/mobile-admin 三處原本各自
- *  手抄一份查表，已隨 C4 收斂；標籤沿用原本這裡就已經是 canonical 的字面——
- *  done→已結束、live→上課中、wait→尚未開始）。t.status 現直接是
- *  TodayStatus 窄型別（C5：coach/api.ts 的 mapTodayClass 回傳形狀本就是窄型別，先前
- *  這裡的寬鍵 Record<string,…> ?? fallback 是不必要的轉型——查表恆有對應，直接索引
- *  即可，查無鍵是編譯期錯誤而非執行期 fallback）。既有的 taken(是否已點名)欄位無
- *  對應真實訊號可推導——TodaySessionResponse 不含「本場次是否已完成點名」旗標，一律
- *  不設(undefined)，讓畫面固定顯示「點名」動作按鈕，不假裝知道点名是否已完成。 */
-function mapTodayClassToRow(t: { start: string; name: string; room: string; count: number; status: TodayStatus }): TodayRow {
-	const [tone, label] = SESSION_STATUS[t.status];
-	return { time: t.start, name: t.name, room: t.room, count: t.count, state: t.status, tone, label };
-}
-
 export interface MCoachHomeData {
 	coach: CoachProfile;
-	coachToday: TodayRow[];
+	coachToday: CoachTodayClass[];
 	/** 待點名班級數（GET /reports/coach 的 pending_attendance，見 §3.24）。 */
 	pendingClasses: string;
 	/** 待回覆訊息數（同上，unread_messages）。 */
@@ -104,23 +87,15 @@ export const getCoachHome = async (): Promise<MCoachHomeData> => {
 	const d = await coachGetDashboard();
 	return {
 		coach: d.coach,
-		coachToday: d.todayClasses.map(mapTodayClassToRow),
+		coachToday: d.todayClasses,
 		pendingClasses: d.pendingClasses,
 		pendingReplies: d.pendingReplies
 	};
 };
 
-/** 桌面 TodayClass(見 admin/api.ts getTodaySessions()，GET /sessions/today admin
- *  分支)→ 行動版 TodayRow。coach/room 的 null→「—」代換已在桌面 mapTodaySession()
- *  做過，這裡原樣沿用；tone/label 桌面也已查表算好(給 Badge 用途一致)，不重新推導；
- *  state(C5)一併帶過去——首頁「進行中課堂」橫幅據此判斷，不再比對 label 字面。 */
-function mapAdminTodayRow(t: TodayClass): TodayRow {
-	return { time: t.time, name: t.name, coach: t.coach, room: t.room, count: t.count, state: t.state, tone: t.tone, label: t.label };
-}
-
 export interface MAdminHomeData {
 	profiles: Record<'admin' | 'coach', Profile>;
-	today: TodayRow[];
+	today: TodayClass[];
 	activity: ActivityRow[];
 	/** 在學學員（真：GET /reports/admin 的 members.active）。 */
 	enrolledValue: string;
@@ -136,8 +111,8 @@ export interface MAdminHomeData {
  *  Task F11：today(今日課表)/activity(最新動態)改讀 GET /sessions/today(admin 分支，
  *  getTodaySessions())與 GET /reports/admin/activity(getRecentActivity())，同桌面
  *  admin/+page.svelte 接真的同一組端點；三支呼叫互不相依，平行拉取。activity 形狀
- *  與桌面 Activity 完全相同(零映射，直接沿用)；today 經 mapAdminTodayRow() 轉成行動版
- *  TodayRow 形狀。profiles 維持 mock，理由同 getMore()。 */
+ *  與桌面 Activity 完全相同(零映射，直接沿用)；today 同樣直接沿用桌面 TodayClass(R18：
+ *  TodayRow 與轉抄 mapper 已退役)。profiles 維持 mock，理由同 getMore()。 */
 export const getAdminHome = async (): Promise<MAdminHomeData> => {
 	const [reports, todaySessions, recentActivity] = await Promise.all([
 		adminGetReports(),
@@ -146,7 +121,7 @@ export const getAdminHome = async (): Promise<MAdminHomeData> => {
 	]);
 	return {
 		profiles: PROFILES,
-		today: todaySessions.sessions.map(mapAdminTodayRow),
+		today: todaySessions.sessions,
 		activity: recentActivity.activity,
 		enrolledValue: String(reports.members.active),
 		revenueMonthValue: fmtNT(reports.revenue.thisMonth)

@@ -49,7 +49,6 @@ import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
 import { TICKET_TYPE as TICKET_TYPE_BASE } from '$lib/domain/tickets';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
-import type { TodayStatus } from '$lib/domain/sessions';
 
 /* ---- Staff profiles (role switch) ---- */
 export interface Profile {
@@ -71,27 +70,11 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 // Order as OrderRow } from '$lib/admin/data'`(ADR-0019 C4：alias 留在 import
 // 端，不另設 re-export)。
 
-/* ---- Today schedule (admin = all studio) ---- */
-export interface TodayRow {
-	time: string;
-	name: string;
-	coach?: string;
-	room: string;
-	count: number;
-	/** 場次狀態(C5)——admin 首頁「進行中課堂」橫幅據此判斷，不再比對 label 字面。
-	 *  admin/coach 兩分支同為 $lib/domain/sessions 的 TodayStatus(W-5)。 */
-	state: TodayStatus;
-	tone: string;
-	label: string;
-	taken?: boolean;
-}
-// Task P4-F3：TODAY mock 退役(F11 已把 mobile-admin getAdminHome() 的今日課表改讀真
-// GET /sessions/today admin 分支——見 $lib/mobile-admin/api getAdminHome()，唯一消費者
-// 早已改吃 payload，此常數自 F11 起無 production 引用)。C4：COACH_TODAY 示範陣列同步
-// 退役——getCoachHome() 自 Task 19 起改讀真 getDashboard() 的今日課表，grep 實證零
-// production 消費者(page.test.ts 用自帶 inline fixture)。TodayRow 型別維持不動——
-// api.ts 的 mapTodayClassToRow()/mapAdminTodayRow() 仍以它為回傳型別(:136-139,233-235)，
-// coach/page.test.ts 亦以它標註 inline fixture。
+/* ---- Today schedule ---- */
+// R18：行動版今日課表不再自有列型別——admin 分支直接沿用 $lib/admin/data 的
+// TodayClass、coach 分支直接沿用 $lib/coach/data 的 TodayClass(ADR-0022/0023：
+// 兩者 row 型別各自獨立，不合併)。TodayRow 與 mapTodayClassToRow()/mapAdminTodayRow()
+// 兩支轉抄 mapper 已退役；TODAY/COACH_TODAY 示範陣列早於 P4-F3/C4 退役。
 
 // R10(雙生收斂，ADR 0014 §2)：Attendance roster 種子 RosterEntry(型別)/ROSTER(值)
 // 已退役——課堂點名頁(routes/mobile-admin/coach/attendance)改接

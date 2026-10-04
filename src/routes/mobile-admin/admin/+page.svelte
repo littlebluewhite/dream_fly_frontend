@@ -29,8 +29,6 @@
   import { apiErrorMessage } from '$lib/api/error-text';
   import type { IconName } from '$lib/icon-registry';
 
-  type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
-
   let data: MAdminHomeData | null = null;
   const gate = createLoadGate({
     fetch: getAdminHome,
@@ -143,7 +141,7 @@
                 <div style="font-size:14px; font-weight:600; color:var(--df-text-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{t.name}</div>
                 <div style="font-size:11.5px; color:var(--df-text-light); margin-top:1px;">{t.coach} · {t.room} · {t.count} 人</div>
               </div>
-              <Badge tone={(t.tone || 'neutral') as Tone} dot>{t.label}</Badge>
+              <Badge tone={t.tone} dot>{t.label}</Badge>
             </div>
           {/each}
         </Panel>

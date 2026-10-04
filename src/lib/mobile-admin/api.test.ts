@@ -146,7 +146,7 @@ describe('getCoachHome', () => {
 		const d = await getCoachHome();
 
 		expect(d.coach.name).toBe(ME.name);
-		expect(d.coachToday).toEqual([{ time: '00:00', name: '測試班', room: 'A', count: 5, state: 'live', tone: 'success', label: '上課中' }]);
+		expect(d.coachToday).toEqual([{ id: 's1', start: '00:00', end: '23:59', name: '測試班', room: 'A', count: 5, status: 'live' }]);
 		expect(d.pendingClasses).toBe('2 班');
 		expect(d.pendingReplies).toBe('3 則');
 	});

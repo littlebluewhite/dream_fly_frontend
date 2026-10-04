@@ -13,7 +13,6 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
   import Panel from '$lib/mobile-admin/components/Panel.svelte';
@@ -96,20 +95,16 @@
         <Panel title="今日課表" sub={'你負責的 ' + classCount + ' 堂課'} action="點名" onAction={() => setTab('attendance')}>
           {#each coachToday as t, i (i)}
             <div style="display:flex; align-items:center; gap:13px; padding:13px 16px; border-bottom:{i < coachToday.length - 1 ? '1px solid var(--df-border)' : 'none'};">
-              <div style="font-family:var(--df-font-mono); font-size:16px; font-weight:700; color:var(--df-ink); width:48px; flex:none;">{t.time}</div>
+              <div style="font-family:var(--df-font-mono); font-size:16px; font-weight:700; color:var(--df-ink); width:48px; flex:none;">{t.start}</div>
               <div style="flex:1; min-width:0;">
                 <div style="font-size:14.5px; font-weight:700; color:var(--df-text-dark);">{t.name}</div>
                 <div style="font-size:12px; color:var(--df-text-light); margin-top:1px;">{t.room} · {t.count} 位學員</div>
               </div>
-              {#if t.taken}
-                <Badge tone="success" dot>已點名</Badge>
-              {:else}
-                <button
-                  on:click={() => setTab('attendance')}
-                  class="df-tapscale"
-                  style="height:34px; padding:0 14px; border-radius:9px; border:none; background:var(--df-primary); color:#fff; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;"
-                ><Icon name="calendar-check" size={14} color="#fff" />點名</button>
-              {/if}
+              <button
+                on:click={() => setTab('attendance')}
+                class="df-tapscale"
+                style="height:34px; padding:0 14px; border-radius:9px; border:none; background:var(--df-primary); color:#fff; font-size:13px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;"
+              ><Icon name="calendar-check" size={14} color="#fff" />點名</button>
             </div>
           {/each}
         </Panel>
