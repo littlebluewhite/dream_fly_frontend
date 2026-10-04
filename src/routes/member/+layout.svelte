@@ -10,7 +10,7 @@
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { checkoutOpen, toasts, hydrateNotifications } from '$lib/member/stores';
-  import { authStore, isLoggedIn, sessionIdentity } from '$lib/stores/authStore';
+  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
   import { warmStores } from '$lib/store-warm';
   import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
   import { memberGuardTarget } from './guard';
@@ -48,8 +48,7 @@
   // 以身分為 key 反應式呼叫:已登入(守門此時不導走)時 key 為 member.id,否則 null;key 不變
   // 就不重跑。每個身分只打一次 GET——閘門守衛擋重訪、在飛合併擋掉同頁通知頁 load 的重複、
   // 換身分時閘門自己重置。
-  $: warmKey = sessionIdentity($authStore);
-  $: if (browser && warmKey !== null) void warmStores('member +layout', [['通知', hydrateNotifications]]);
+  $: if (browser && $sessionKey !== null) void warmStores('member +layout', [['通知', hydrateNotifications]]);
 
   const TITLES: Record<string, string> = {
     '/member': '會員中心',

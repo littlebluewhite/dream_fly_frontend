@@ -17,7 +17,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { authStore, sessionIdentity } from '$lib/stores/authStore';
+  import { authStore, sessionKey } from '$lib/stores/authStore';
   import { overlay, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
   import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';
@@ -42,7 +42,7 @@
     currentRole === 'coach' &&
     $authStore.loggedIn &&
     mobileAdminGuardTarget($page.url.pathname, $authStore.loggedIn, $authStore.roles) === null
-      ? sessionIdentity($authStore)
+      ? $sessionKey
       : null;
   $: if (browser && warmKey !== null) void warmStores('mobile-admin +layout', [['訊息', hydrateMessages]]);
 

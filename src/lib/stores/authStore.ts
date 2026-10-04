@@ -226,3 +226,6 @@ function createAuthStore() {
 export const authStore = createAuthStore();
 
 export const isLoggedIn = derived(authStore, ($a) => $a.loggedIn);
+
+// 身分 key(原始值;derived 只在身分變化時才通知,同身分的 syncUser 改名不會觸發)。
+export const sessionKey = derived(authStore, sessionIdentity);

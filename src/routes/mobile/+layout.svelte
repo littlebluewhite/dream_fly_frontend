@@ -15,7 +15,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { authStore, isLoggedIn, sessionIdentity } from '$lib/stores/authStore';
+  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
   import { overlay, toasts } from '$lib/mobile/stores';
   import { hydrateNotifications } from '$lib/member/notifications';
   import { warmStores } from '$lib/store-warm';
@@ -32,8 +32,7 @@
 
   // 暖機清單(R14 候選 F3):通知(TabBar 的未讀角標),與 member +layout 同一份宣告、同一顆閘門。
   // 已登入(守門此時不導走)時 key 為 member.id,否則 null;每個身分只打一次 GET。
-  $: warmKey = sessionIdentity($authStore);
-  $: if (browser && warmKey !== null) void warmStores('mobile +layout', [['通知', hydrateNotifications]]);
+  $: if (browser && $sessionKey !== null) void warmStores('mobile +layout', [['通知', hydrateNotifications]]);
 
   afterNavigate(() => overlay.closeAll());
 </script>

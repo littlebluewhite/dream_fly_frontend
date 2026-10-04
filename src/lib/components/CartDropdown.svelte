@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { cart } from '$lib/cart';
-  import { authStore, isLoggedIn, sessionIdentity } from '$lib/stores/authStore';
+  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
   import { subtotalOf } from '$lib/checkout-math';
   import { chargeableLines } from '$lib/member/checkout';
@@ -14,11 +14,7 @@
 
   // 已持有的方案不計費（與結帳同一個 chargeableLines 產地）；開啟且登入時以登入身分為 key
   // best-effort 暖訂閱（開著時 A 直接換登 B 也會重暖——換身分時訂閱已被 session 重置清空）。
-  $: identity = sessionIdentity($authStore); // 原始值:同身分的 store 更新(如 syncUser 改名)不重跑下一行
-  $: warmSubscriptions(isOpen, identity);
-  function warmSubscriptions(open: boolean, identity: string | null) {
-    if (open && identity !== null) void refreshSubscriptions().catch(() => {});
-  }
+  $: if (isOpen && $sessionKey !== null) void refreshSubscriptions().catch(() => {});
   $: chargeable = chargeableLines($cart, $subscriptions);
   $: billable = new Set<CartItem>(chargeable);
   $: total = subtotalOf(chargeable);

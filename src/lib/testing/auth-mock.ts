@@ -62,7 +62,7 @@ export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[]; me
 		hydrate: vi.fn(async () => {}),
 		syncUser: vi.fn()
 	};
-	return { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionIdentity };
+	return { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionKey: derived(state, sessionIdentity), sessionIdentity };
 }
 
 /** 家族 B(__set 後門)：測試直接灌任意 auth state，不經過 login/register 流程——用於
@@ -77,6 +77,6 @@ export function makeAuthMockB(opts?: { withIsLoggedIn?: boolean }) {
 		syncUser: vi.fn()
 	};
 	return opts?.withIsLoggedIn
-		? { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionIdentity }
-		: { authStore, sessionIdentity };
+		? { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionKey: derived(state, sessionIdentity), sessionIdentity }
+		: { authStore, sessionKey: derived(state, sessionIdentity), sessionIdentity };
 }
