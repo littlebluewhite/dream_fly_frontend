@@ -14,6 +14,7 @@ import type {
 	CourseResponse,
 	InquiryResponse,
 	LeaveRequestResponse,
+	MyScheduleEntryResponse,
 	OrderResponse,
 	OrderSummary,
 	PointsMeResponse,
@@ -279,5 +280,16 @@ export const conversationSummary = (over: Partial<ConversationSummaryResponse> =
 	last_message_body: null,
 	last_message_at: null,
 	unread_count: 0,
+	...over
+});
+
+export const myScheduleEntry = (over: Partial<MyScheduleEntryResponse> = {}): MyScheduleEntryResponse => ({
+	course_id: 'course-1',
+	course_name: '體操基礎班',
+	coach_name: null,
+	day_of_week: 2,
+	start_time: '19:00:00',
+	end_time: '20:30:00',
+	venue: null,
 	...over
 });
