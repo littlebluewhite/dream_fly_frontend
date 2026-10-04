@@ -15,7 +15,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
+  import { isLoggedIn, sessionKey, lastSessionKey } from '$lib/stores/authStore';
   import { overlay, toasts } from '$lib/mobile/stores';
   import { hydrateNotifications } from '$lib/member/notifications';
   import { warmStores } from '$lib/store-warm';
@@ -34,6 +34,10 @@
   // 已登入(守門此時不導走)時 key 為 member.id,否則 null;每個身分只打一次 GET。
   $: if (browser && $sessionKey !== null) void warmStores('mobile +layout', [['通知', hydrateNotifications]]);
 
+  // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
+  // 5 個 overlay 在 slot 外面也會讀個人資料,換人時一併關掉。
+  $: if (browser && $lastSessionKey !== null) overlay.closeAll();
+
   afterNavigate(() => overlay.closeAll());
 </script>
 
@@ -41,7 +45,7 @@
   <div class="m-phone">
     <div class="m-island"></div>
     <div class="m-screen">
-      <slot />
+      {#key $lastSessionKey}<slot />{/key}
       {#if $overlay.stack.length === 0}
         <TabBar />
       {/if}

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/svelte';
-import { readable } from 'svelte/store';
+import { readable, get } from 'svelte/store';
+import { tick } from 'svelte';
 import { goto } from '$app/navigation';
 
 /* mirrors src/routes/mobile/layout.test.ts's login-guard describe block —
@@ -22,7 +23,11 @@ vi.mock('$app/environment', () => ({ browser: true }));
 
 vi.mock('$lib/stores/authStore', async () => {
 	const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA({ roleFor: (email) => (email.includes('coach') ? ['coach'] : ['admin']) });
+	const { FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
+	return makeAuthMockA({
+		roleFor: (email) => (email.includes('coach') ? ['coach'] : ['admin']),
+		memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email })
+	});
 });
 
 // R14(候選 F3)暖機清單:教練分區以身分為 key 暖訊息——只替換 api(),數 GET /conversations/me。
@@ -35,7 +40,9 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
+import { overlay } from '$lib/mobile-admin/stores';
 import Layout from './+layout.svelte';
+import { describePageLifetime } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
 	mockUrl = new URL('http://localhost/mobile-admin/admin');
@@ -119,3 +126,16 @@ describe('mobile-admin +layout — 暖機清單(R14 F3)', () => {
 		expect(convGets()).toBe(0);
 	});
 });
+
+describe('mobile-admin +layout — 換人時關掉 overlay', () => {
+	it('A→B:overlay 在 slot 外面也會讀個人資料,換人時 closeAll', async () => {
+		await authStore.login('a', 'pw');
+		render(Layout);
+		overlay.push('settings');
+		await authStore.login('b', 'pw');
+		await tick();
+		expect(get(overlay).stack).toHaveLength(0);
+	});
+});
+
+describePageLifetime('mobile-admin +layout', Layout, { 'GET /conversations/me': [] });

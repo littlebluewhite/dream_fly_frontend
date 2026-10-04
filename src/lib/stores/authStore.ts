@@ -6,7 +6,7 @@
  * CACHE for first paint only — it lets a reload show the last-known session
  * instantly instead of flashing "logged out" while hydrate() confirms it. */
 
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import { api, refreshTokens, onSessionExpired, onSessionRefreshed, bindSessionIdentity } from '$lib/api/client';
 import { getRefresh, setTokens, clearTokens, forgetAccess, REFRESH_KEY } from '$lib/api/tokens';
 import { isoDate, initialOf } from '$lib/api/wire';
@@ -242,3 +242,11 @@ export const isLoggedIn = derived(authStore, ($a) => $a.loggedIn);
 
 // 身分 key(原始值;derived 只在身分變化時才通知,同身分的 syncUser 改名不會觸發)。
 export const sessionKey = derived(authStore, sessionIdentity);
+
+/** 「最近一次登入的身分」:key 變 null(登出)時不通知,保留上一個身分。
+ *  頁面壽命用:A→B、null→A 重掛載;A→null 不重掛載(登出是先 logout() 再 goto(),
+ *  若登出就重掛載,頁面會在導頁前以沒有 token 的狀態再讀一次),交給 guard 導頁。 */
+export function lastLoggedIn(key: Readable<string | null>): Readable<string | null> {
+  return derived(key, ($k, set) => { if ($k !== null) set($k); }, null as string | null);
+}
+export const lastSessionKey = lastLoggedIn(sessionKey); // 頁面壽命用;閘門不得用(ADR-0026 §6)

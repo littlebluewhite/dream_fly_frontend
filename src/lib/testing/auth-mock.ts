@@ -22,7 +22,7 @@ export type MockMember = {
 export type MockAuthState = { loggedIn: boolean; member: MockMember | null; roles: string[] };
 
 /** 身分 key 是純函式,兩家族都轉手真實作(單一來源;session-gate 與 layout 從 authStore import 它)。 */
-const { sessionIdentity } = await vi.importActual<typeof import('$lib/stores/authStore')>('$lib/stores/authStore');
+const { sessionIdentity, lastLoggedIn } = await vi.importActual<typeof import('$lib/stores/authStore')>('$lib/stores/authStore');
 
 /** 家族 B 消費檔對已 mock 的 authStore 取用 __set 後門用的斷言型別
  *  （`(authStore as TestAuthStore).__set(...)`)——與真 authStore 型別交集，讓斷言在
@@ -62,7 +62,8 @@ export function makeAuthMockA(opts?: { roleFor?: (email: string) => string[]; me
 		hydrate: vi.fn(async () => {}),
 		syncUser: vi.fn()
 	};
-	return { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionKey: derived(state, sessionIdentity), sessionIdentity };
+	const sessionKey = derived(state, sessionIdentity);
+	return { authStore, isLoggedIn: derived(state, ($s) => $s.loggedIn), sessionKey, lastSessionKey: lastLoggedIn(sessionKey), sessionIdentity };
 }
 
 /** 家族 B(__set 後門)：測試直接灌任意 auth state，不經過 login/register 流程——用於

@@ -17,7 +17,7 @@
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { resolve } from '$lib/coach/nav';
   import { search, toasts } from '$lib/coach/stores';
-  import { authStore } from '$lib/stores/authStore';
+  import { authStore, lastSessionKey } from '$lib/stores/authStore';
   import { staffGuardTarget } from '$lib/staff/roles';
   import '$lib/coach/coach.css';
 
@@ -28,6 +28,8 @@
     const guardTarget = staffGuardTarget('coach', $authStore.loggedIn, $authStore.roles);
     if (guardTarget) goto(guardTarget);
   }
+
+  // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
 
   let content: HTMLElement;
   $: [crumb, title] = resolve($page.url.pathname);
@@ -44,7 +46,7 @@
   <div class="main">
     <Topbar {crumb} {title} />
     <div class="content df-view df-scroll" class:msg={isMessages} bind:this={content}>
-      <slot />
+      {#key $lastSessionKey}<slot />{/key}
     </div>
   </div>
   <ToastStack {toasts} />

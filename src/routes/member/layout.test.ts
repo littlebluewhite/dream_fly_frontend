@@ -25,7 +25,8 @@ vi.mock('$app/environment', () => ({ browser: true }));
 // mechanics themselves are covered in src/lib/stores/authStore.test.ts.
 vi.mock('$lib/stores/authStore', async () => {
   const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA();
+  const { FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
+  return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
 });
 
 // R14(候選 F3)暖機清單:layout 以身分為 key 暖通知——只替換 api(),數 GET /notifications。
@@ -35,6 +36,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import Layout from './+layout.svelte';
+import { describePageLifetime } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
   localStorage.clear();
@@ -113,3 +115,5 @@ describe('member +layout — 暖機清單(R14 F3)', () => {
     expect(notifGets()).toBe(0);
   });
 });
+
+describePageLifetime('member +layout', Layout, { 'GET /notifications': [] });

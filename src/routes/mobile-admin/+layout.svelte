@@ -17,7 +17,7 @@
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
-  import { authStore, sessionKey } from '$lib/stores/authStore';
+  import { authStore, sessionKey, lastSessionKey } from '$lib/stores/authStore';
   import { overlay, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
   import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';
@@ -46,6 +46,10 @@
       : null;
   $: if (browser && warmKey !== null) void warmStores('mobile-admin +layout', [['訊息', hydrateMessages]]);
 
+  // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
+  // overlay 在 slot 外面也會讀個人資料,換人時一併關掉。
+  $: if (browser && $lastSessionKey !== null) overlay.closeAll();
+
   afterNavigate(() => overlay.closeAll());
 </script>
 
@@ -53,7 +57,7 @@
   <div class="m-phone">
     <div class="m-island"></div>
     <div class="m-screen">
-      <slot />
+      {#key $lastSessionKey}<slot />{/key}
       {#if $overlay.stack.length === 0 && currentRole}
         <TabBar role={currentRole} />
       {/if}

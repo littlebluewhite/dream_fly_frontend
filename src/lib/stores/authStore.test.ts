@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { get } from 'svelte/store';
-import { authStore, isLoggedIn, toMember, sessionIdentity, type ApiUser } from './authStore';
+import { get, writable } from 'svelte/store';
+import { authStore, isLoggedIn, toMember, sessionIdentity, lastLoggedIn, type ApiUser } from './authStore';
 import type { AuthUserResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
@@ -777,5 +777,24 @@ describe('sessionIdentity(身分 key 單一來源)', () => {
   });
   it('未登入即使殘留 member 也是 null', () => {
     expect(sessionIdentity({ loggedIn: false, member: { id: 'u1' } as never })).toBeNull();
+  });
+});
+
+describe('lastLoggedIn(頁面壽命用的最近登入身分)', () => {
+  const run = (keys: (string | null)[]) => {
+    const key = writable<string | null>(null);
+    const seen: (string | null)[] = [];
+    lastLoggedIn(key).subscribe((v) => seen.push(v));
+    for (const k of keys) key.set(k);
+    return seen;
+  };
+  it('A→B 通知 B;null→A 通知 A', () => {
+    expect(run(['a', 'b'])).toEqual([null, 'a', 'b']);
+  });
+  it('登出(→null)不通知,保留上一個身分;登出後再登入同一人也不重複通知', () => {
+    expect(run(['a', null, 'a'])).toEqual([null, 'a']);
+  });
+  it('同身分再設一次不通知', () => {
+    expect(run(['a', 'a'])).toEqual([null, 'a']);
   });
 });

@@ -10,7 +10,7 @@
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
   import { checkoutOpen, toasts, hydrateNotifications } from '$lib/member/stores';
-  import { isLoggedIn, sessionKey } from '$lib/stores/authStore';
+  import { isLoggedIn, sessionKey, lastSessionKey } from '$lib/stores/authStore';
   import { warmStores } from '$lib/store-warm';
   import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
   import { memberGuardTarget } from './guard';
@@ -50,6 +50,9 @@
   // 換身分時閘門自己重置。
   $: if (browser && $sessionKey !== null) void warmStores('member +layout', [['通知', hydrateNotifications]]);
 
+  // 頁面壽命 = 最近登入的身分:下方 slot 以 {#key $lastSessionKey} 包住,換人(A→B、null→A)即重掛載、
+  // 以新身分重抓;登出(→null)不重掛載,交給 guard 導頁(ADR-0026 §6:閘門本身不得用 lastSessionKey)。
+
   const TITLES: Record<string, string> = {
     '/member': '會員中心',
     '/member/courses': '課程介紹',
@@ -67,7 +70,7 @@
   <Sidebar />
   <div class="main">
     <Topbar {title} />
-    <div class="content df-scroll"><slot /></div>
+    <div class="content df-scroll">{#key $lastSessionKey}<slot />{/key}</div>
   </div>
   <CheckoutDialog />
   <ToastStack {toasts} />
