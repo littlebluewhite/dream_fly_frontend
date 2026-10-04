@@ -31,6 +31,16 @@ import type {
 	AdminReportCoachRow
 } from '$lib/admin/api';
 import type { TopCourseRow } from '$lib/admin/report-math';
+import {
+	AGE_BUCKET_LABEL,
+	ATTENDANCE_BUCKET_LABEL,
+	REVENUE_SOURCE_LABEL,
+	TIER_LABEL,
+	WEEKDAY_LABEL
+} from '$lib/admin/report-math';
+
+/* fixture 用:模擬 mapper 已解析好的 label/color(fallback 由 reports-api.test.ts 釘住)。 */
+const L = (table: Record<string, { label: string; color: string }>, key: string) => table[key];
 
 /* Round 4 P4-F2 — 13 個還原面板 + ReportKpi 卡的渲染測試。每個面板兩態:
  *   ① 真形狀資料(契約 §3.24 的 FE 型別 fixture)→ 標籤/數值/格式化正確畫出;
@@ -75,12 +85,12 @@ describe('ReportKpi (KPI card)', () => {
 /* ───────────────────────── RevenueBreakdown ───────────────────────── */
 
 const BREAKDOWN: AdminRevenueBreakdownRow[] = [
-	{ source: 'course', grossCents: 31200000, ordersCount: 142, units: 150 },
-	{ source: 'ticket', grossCents: 9840000, ordersCount: 60, units: 234 },
-	{ source: 'membership', grossCents: 500000, ordersCount: 5, units: 5 },
-	{ source: 'course_package', grossCents: 250000, ordersCount: 2, units: 2 },
-	{ source: 'merchandise', grossCents: 4780000, ordersCount: 86, units: 90 },
-	{ source: 'venue_rental', grossCents: 120000, ordersCount: 3, units: 3 }
+	{ source: 'course', ...L(REVENUE_SOURCE_LABEL, 'course'), grossCents: 31200000, ordersCount: 142, units: 150 },
+	{ source: 'ticket', ...L(REVENUE_SOURCE_LABEL, 'ticket'), grossCents: 9840000, ordersCount: 60, units: 234 },
+	{ source: 'membership', ...L(REVENUE_SOURCE_LABEL, 'membership'), grossCents: 500000, ordersCount: 5, units: 5 },
+	{ source: 'course_package', ...L(REVENUE_SOURCE_LABEL, 'course_package'), grossCents: 250000, ordersCount: 2, units: 2 },
+	{ source: 'merchandise', ...L(REVENUE_SOURCE_LABEL, 'merchandise'), grossCents: 4780000, ordersCount: 86, units: 90 },
+	{ source: 'venue_rental', ...L(REVENUE_SOURCE_LABEL, 'venue_rental'), grossCents: 120000, ordersCount: 3, units: 3 }
 ];
 const BREAKDOWN_ZERO: AdminRevenueBreakdownRow[] = BREAKDOWN.map((r) => ({
 	...r,
@@ -110,11 +120,11 @@ describe('RevenueBreakdown (drill list)', () => {
 /* ───────────────────────── CategoryDonut ───────────────────────── */
 
 const CATEGORY: AdminCategorySplitRow[] = [
-	{ source: 'course', grossCents: 31200000, ratio: 0.6 },
-	{ source: 'ticket', grossCents: 9840000, ratio: 0.2 },
-	{ source: 'membership', grossCents: 500000, ratio: 0.1 },
-	{ source: 'course_package', grossCents: 250000, ratio: 0.05 },
-	{ source: 'merchandise', grossCents: 4780000, ratio: 0.05 }
+	{ source: 'course', ...L(REVENUE_SOURCE_LABEL, 'course'), grossCents: 31200000, ratio: 0.6 },
+	{ source: 'ticket', ...L(REVENUE_SOURCE_LABEL, 'ticket'), grossCents: 9840000, ratio: 0.2 },
+	{ source: 'membership', ...L(REVENUE_SOURCE_LABEL, 'membership'), grossCents: 500000, ratio: 0.1 },
+	{ source: 'course_package', ...L(REVENUE_SOURCE_LABEL, 'course_package'), grossCents: 250000, ratio: 0.05 },
+	{ source: 'merchandise', ...L(REVENUE_SOURCE_LABEL, 'merchandise'), grossCents: 4780000, ratio: 0.05 }
 ];
 const CATEGORY_ZERO: AdminCategorySplitRow[] = CATEGORY.map((r) => ({
 	...r,
@@ -174,10 +184,10 @@ describe('TopCourses (ranked bar list)', () => {
 /* ───────────────────────── IncomeSources ───────────────────────── */
 
 const INCOME: AdminIncomeSourceRow[] = [
-	{ month: '2025-09', source: 'course', grossCents: 100000, ordersCount: 1, units: 1 },
-	{ month: '2025-10', source: 'course', grossCents: 200000, ordersCount: 2, units: 2 },
-	{ month: '2025-09', source: 'ticket', grossCents: 100000, ordersCount: 1, units: 1 },
-	{ month: '2025-10', source: 'ticket', grossCents: 0, ordersCount: 0, units: 0 }
+	{ month: '2025-09', source: 'course', ...L(REVENUE_SOURCE_LABEL, 'course'), grossCents: 100000, ordersCount: 1, units: 1 },
+	{ month: '2025-10', source: 'course', ...L(REVENUE_SOURCE_LABEL, 'course'), grossCents: 200000, ordersCount: 2, units: 2 },
+	{ month: '2025-09', source: 'ticket', ...L(REVENUE_SOURCE_LABEL, 'ticket'), grossCents: 100000, ordersCount: 1, units: 1 },
+	{ month: '2025-10', source: 'ticket', ...L(REVENUE_SOURCE_LABEL, 'ticket'), grossCents: 0, ordersCount: 0, units: 0 }
 ];
 
 describe('IncomeSources (share bar list)', () => {
@@ -259,10 +269,10 @@ describe('VenueUsage (hours bar list)', () => {
 /* ───────────────────────── AttDist ───────────────────────── */
 
 const ATT: AdminAttendanceDistRow[] = [
-	{ bucket: 'gte_95', count: 11 },
-	{ bucket: '85_94', count: 10 },
-	{ bucket: '75_84', count: 5 },
-	{ bucket: 'lt_75', count: 6 }
+	{ bucket: 'gte_95', ...L(ATTENDANCE_BUCKET_LABEL, 'gte_95'), count: 11 },
+	{ bucket: '85_94', ...L(ATTENDANCE_BUCKET_LABEL, '85_94'), count: 10 },
+	{ bucket: '75_84', ...L(ATTENDANCE_BUCKET_LABEL, '75_84'), count: 5 },
+	{ bucket: 'lt_75', ...L(ATTENDANCE_BUCKET_LABEL, 'lt_75'), count: 6 }
 ];
 
 describe('AttDist (vertical-bar family)', () => {
@@ -324,12 +334,12 @@ describe('RetentionTrend (stacked-bar family)', () => {
 /* ───────────────────────── AgeDist ───────────────────────── */
 
 const AGES: AdminAgeDistRow[] = [
-	{ bucket: '0-6', count: 22 },
-	{ bucket: '7-12', count: 34 },
-	{ bucket: '13-17', count: 28 },
-	{ bucket: '18-25', count: 16 },
-	{ bucket: '26-40', count: 0 },
-	{ bucket: '41+', count: 0 }
+	{ bucket: '0-6', ...L(AGE_BUCKET_LABEL, '0-6'), count: 22 },
+	{ bucket: '7-12', ...L(AGE_BUCKET_LABEL, '7-12'), count: 34 },
+	{ bucket: '13-17', ...L(AGE_BUCKET_LABEL, '13-17'), count: 28 },
+	{ bucket: '18-25', ...L(AGE_BUCKET_LABEL, '18-25'), count: 16 },
+	{ bucket: '26-40', ...L(AGE_BUCKET_LABEL, '26-40'), count: 0 },
+	{ bucket: '41+', ...L(AGE_BUCKET_LABEL, '41+'), count: 0 }
 ];
 
 describe('AgeDist (share bar list)', () => {
@@ -352,10 +362,10 @@ describe('AgeDist (share bar list)', () => {
 /* ───────────────────────── TierDist ───────────────────────── */
 
 const TIERS: AdminTierDistRow[] = [
-	{ bucket: 'regular', count: 10 },
-	{ bucket: 'bronze', count: 16 },
-	{ bucket: 'silver', count: 13 },
-	{ bucket: 'gold', count: 9 }
+	{ bucket: 'regular', ...L(TIER_LABEL, 'regular'), count: 10 },
+	{ bucket: 'bronze', ...L(TIER_LABEL, 'bronze'), count: 16 },
+	{ bucket: 'silver', ...L(TIER_LABEL, 'silver'), count: 13 },
+	{ bucket: 'gold', ...L(TIER_LABEL, 'gold'), count: 9 }
 ];
 
 describe('TierDist (vertical-bar family)', () => {
@@ -443,6 +453,7 @@ describe('ConversionFunnel (honest 2 段)', () => {
 
 const WEEK: AdminWeekdayLoadRow[] = [9, 8, 11, 9, 12, 10, 14].map((presentCount, weekday) => ({
 	weekday,
+	label: WEEKDAY_LABEL[weekday],
 	presentCount
 }));
 

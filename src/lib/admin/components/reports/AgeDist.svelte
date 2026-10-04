@@ -10,7 +10,7 @@
   import { Card } from '$lib/components/ui';
   import type { AdminAgeDistRow } from '$lib/admin/api';
   import { fmtPct } from '$lib/admin/format';
-  import { AGE_BUCKET_LABEL, bucketLabel, pctShares } from '$lib/admin/report-math';
+  import { pctShares } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminAgeDistRow[] } = $props();
 
@@ -32,10 +32,10 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
             <span
-              style="width:9px; height:9px; border-radius:5px; background:{bucketLabel(AGE_BUCKET_LABEL, a.bucket).color};"
+              style="width:9px; height:9px; border-radius:5px; background:{a.color};"
             ></span>
             <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">
-              {bucketLabel(AGE_BUCKET_LABEL, a.bucket).label}
+              {a.label}
             </span>
           </span>
           <span style="font-size:13px; font-weight:700; color:var(--df-text-dark);">
@@ -44,9 +44,7 @@
         </div>
         <div class="track">
           <div
-            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{bucketLabel(AGE_BUCKET_LABEL,
-              a.bucket
-            ).color};"
+            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{a.color};"
           ></div>
         </div>
       </div>

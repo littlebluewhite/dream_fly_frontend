@@ -21,7 +21,6 @@ import {
 	fmtHours,
 	TIER_LABEL,
 	REVENUE_SOURCE_LABEL,
-	revenueSourceLabel,
 	PAYMENT_METHOD_LABEL,
 	paymentMethodLabel,
 	WEEKDAY_LABEL,
@@ -148,14 +147,16 @@ describe('topCoursesFrom — 熱門課程 Top 5', () => {
 describe('groupIncomeSources — 收入來源時間序列重塑', () => {
 	it('依 source 分組、月序由舊到新排列', () => {
 		const rows = [
-			{ month: '2025-02', source: 'course', grossCents: 200 },
-			{ month: '2025-01', source: 'course', grossCents: 100 },
-			{ month: '2025-01', source: 'ticket', grossCents: 50 },
-			{ month: '2025-02', source: 'ticket', grossCents: 60 }
+			{ month: '2025-02', source: 'course', label: 'course', color: '#000', grossCents: 200 },
+			{ month: '2025-01', source: 'course', label: 'course', color: '#000', grossCents: 100 },
+			{ month: '2025-01', source: 'ticket', label: 'ticket', color: '#000', grossCents: 50 },
+			{ month: '2025-02', source: 'ticket', label: 'ticket', color: '#000', grossCents: 60 }
 		];
 		expect(groupIncomeSources(rows)).toEqual([
 			{
 				source: 'course',
+				label: 'course',
+				color: '#000',
 				points: [
 					{ month: '2025-01', grossCents: 100 },
 					{ month: '2025-02', grossCents: 200 }
@@ -163,6 +164,8 @@ describe('groupIncomeSources — 收入來源時間序列重塑', () => {
 			},
 			{
 				source: 'ticket',
+				label: 'ticket',
+				color: '#000',
 				points: [
 					{ month: '2025-01', grossCents: 50 },
 					{ month: '2025-02', grossCents: 60 }
@@ -173,9 +176,9 @@ describe('groupIncomeSources — 收入來源時間序列重塑', () => {
 
 	it('缺的 (source, month) 組合零填，不缺點', () => {
 		const rows = [
-			{ month: '2025-01', source: 'course', grossCents: 100 },
-			{ month: '2025-02', source: 'course', grossCents: 200 },
-			{ month: '2025-01', source: 'ticket', grossCents: 50 }
+			{ month: '2025-01', source: 'course', label: 'course', color: '#000', grossCents: 100 },
+			{ month: '2025-02', source: 'course', label: 'course', color: '#000', grossCents: 200 },
+			{ month: '2025-01', source: 'ticket', label: 'ticket', color: '#000', grossCents: 50 }
 			// ticket 缺 2025-02
 		];
 		const grouped = groupIncomeSources(rows);
@@ -230,20 +233,20 @@ describe('breakdownTotalCents — 本月營收來源拆解合計', () => {
 describe('incomeSourcesVM — 收入來源分析', () => {
 	it('每 source 12 月加總 + 0–1 占比(charts fixture 驗算:course 75% / ticket 25%)', () => {
 		const vm = incomeSourcesVM([
-			{ month: '2025-09', source: 'course', grossCents: 100000 },
-			{ month: '2025-10', source: 'course', grossCents: 200000 },
-			{ month: '2025-09', source: 'ticket', grossCents: 100000 },
-			{ month: '2025-10', source: 'ticket', grossCents: 0 }
+			{ month: '2025-09', source: 'course', label: 'course', color: '#000', grossCents: 100000 },
+			{ month: '2025-10', source: 'course', label: 'course', color: '#000', grossCents: 200000 },
+			{ month: '2025-09', source: 'ticket', label: 'ticket', color: '#000', grossCents: 100000 },
+			{ month: '2025-10', source: 'ticket', label: 'ticket', color: '#000', grossCents: 0 }
 		]);
 		expect(vm.totals).toEqual([
-			{ source: 'course', totalCents: 300000 },
-			{ source: 'ticket', totalCents: 100000 }
+			{ source: 'course', label: 'course', color: '#000', totalCents: 300000 },
+			{ source: 'ticket', label: 'ticket', color: '#000', totalCents: 100000 }
 		]);
 		expect(vm.shares).toEqual([0.75, 0.25]);
 	});
 
 	it('全 0 毛額:占比全 0,不除以 0', () => {
-		const vm = incomeSourcesVM([{ month: '2025-09', source: 'course', grossCents: 0 }]);
+		const vm = incomeSourcesVM([{ month: '2025-09', source: 'course', label: 'course', color: '#000', grossCents: 0 }]);
 		expect(vm.shares).toEqual([0]);
 	});
 
@@ -444,20 +447,6 @@ describe('REVENUE_SOURCE_LABEL — 收入來源桶對照(P4-F2)', () => {
 		for (const { color } of Object.values(REVENUE_SOURCE_LABEL)) {
 			expect(color).toMatch(/^#|^var\(--df-/);
 		}
-	});
-});
-
-/* Important #2(c)(d)(終審)：IncomeSources.svelte/ReportsScreen.svelte 原本把
- * groupIncomeSources() 攤平出的純字串 source 直接 `as keyof typeof
- * REVENUE_SOURCE_LABEL` 窄化 cast，再直接索引查表——查無 key(契約若擴集)會炸頁。
- * revenueSourceLabel() 是容忍未知 key 的查表版本，同 paymentMethodLabel 慣例。 */
-describe('revenueSourceLabel — 容忍未知 source 的查表', () => {
-	it('已知 key 回傳對應的 REVENUE_SOURCE_LABEL 項目', () => {
-		expect(revenueSourceLabel('course')).toEqual(REVENUE_SOURCE_LABEL.course);
-	});
-
-	it('查無對應 key 時原字串穿透＋中性灰，不丟例外', () => {
-		expect(revenueSourceLabel('gift_card')).toEqual({ label: 'gift_card', color: 'var(--df-text-muted)' });
 	});
 });
 

@@ -228,11 +228,6 @@ export const updateOrderStatus = (id: string, status: OrderStatus): Promise<Orde
  * locality 整理，interface 不變），這裡改逐名 re-export，供既有消費端零改動。 */
 export { getReports } from './reports-api';
 export type {
-	AdminRevenueSource,
-	AdminCategorySource,
-	AdminAttendanceBucket,
-	AdminAgeBucket,
-	AdminTierBucket,
 	AdminReportCourseRow,
 	AdminReportCoachRow,
 	AdminReportKpis,

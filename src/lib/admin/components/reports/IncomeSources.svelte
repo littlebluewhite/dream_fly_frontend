@@ -13,7 +13,7 @@
   import { ntd } from '$lib/public/adapters';
   import { fmtNT } from '$lib/format';
   import { fmtPct } from '$lib/admin/format';
-  import { incomeSourcesVM, revenueSourceLabel } from '$lib/admin/report-math';
+  import { incomeSourcesVM } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminIncomeSourceRow[] } = $props();
 
@@ -35,11 +35,10 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <span style="display:flex; align-items:center; gap:8px;">
             <span
-              style="width:9px; height:9px; border-radius:5px; background:{revenueSourceLabel(s.source)
-                .color};"
+              style="width:9px; height:9px; border-radius:5px; background:{s.color};"
             ></span>
             <span style="font-size:13px; font-weight:600; color:var(--df-text-dark);">
-              {revenueSourceLabel(s.source).label}
+              {s.label}
             </span>
           </span>
           <span
@@ -50,9 +49,7 @@
         </div>
         <div class="track">
           <div
-            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{revenueSourceLabel(
-              s.source
-            ).color};"
+            style="height:100%; width:{shares[i] * 100}%; border-radius:4px; background:{s.color};"
           ></div>
         </div>
         <div style="font-size:11px; color:var(--df-text-light); margin-top:4px;">

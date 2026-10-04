@@ -10,7 +10,7 @@
    * render zero-height bars (and no highlight), never NaN. */
   import { Card } from '$lib/components/ui';
   import type { AdminWeekdayLoadRow } from '$lib/admin/api';
-  import { WEEKDAY_LABEL, weekdayVM, REPORT_SCALES } from '$lib/admin/report-math';
+  import { weekdayVM, REPORT_SCALES } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminWeekdayLoadRow[] } = $props();
 
@@ -38,7 +38,7 @@
             ? 'var(--df-primary-dark)'
             : 'var(--df-primary)'};"
         ></div>
-        <span style="font-size:11.5px; color:var(--df-text-light);">{WEEKDAY_LABEL[d.weekday] ?? d.weekday}</span>
+        <span style="font-size:11.5px; color:var(--df-text-light);">{d.label}</span>
       </div>
     {/each}
   </div>

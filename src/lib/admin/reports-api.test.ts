@@ -110,32 +110,32 @@ describe('getReports — GET /reports/admin（admin，§3.24，Round 4 P4-F1：1
 				attendanceRate: { thisMonth: 0.92, lastMonth: null }
 			},
 			revenueBreakdown: [
-				{ source: 'course', grossCents: 3000000, ordersCount: 20, units: 25 },
-				{ source: 'venue_rental', grossCents: 50000, ordersCount: 3, units: 3 }
+				{ source: 'course', label: '課程報名', color: 'var(--df-primary)', grossCents: 3000000, ordersCount: 20, units: 25 },
+				{ source: 'venue_rental', label: '場地租借', color: '#EC4899', grossCents: 50000, ordersCount: 3, units: 3 }
 			],
 			incomeSources12m: [
-				{ month: '2025-08', source: 'course', grossCents: 2500000, ordersCount: 18, units: 22 },
-				{ month: '2025-09', source: 'course', grossCents: 3000000, ordersCount: 20, units: 25 }
+				{ month: '2025-08', source: 'course', label: '課程報名', color: 'var(--df-primary)', grossCents: 2500000, ordersCount: 18, units: 22 },
+				{ month: '2025-09', source: 'course', label: '課程報名', color: 'var(--df-primary)', grossCents: 3000000, ordersCount: 20, units: 25 }
 			],
 			categorySplit: [
-				{ source: 'course', grossCents: 3000000, ratio: 0.85 },
-				{ source: 'ticket', grossCents: 500000, ratio: null }
+				{ source: 'course', label: '課程報名', color: 'var(--df-primary)', grossCents: 3000000, ratio: 0.85 },
+				{ source: 'ticket', label: '單次票券', color: '#8B5CF6', grossCents: 500000, ratio: null }
 			],
 			paymentSplit: [
 				{ method: 'credit_card', count: 30 },
 				{ method: 'unknown', count: 2 }
 			],
 			attendanceDistribution: [
-				{ bucket: 'gte_95', count: 11 },
-				{ bucket: 'lt_75', count: 6 }
+				{ bucket: 'gte_95', label: '95–100%', color: 'var(--df-success)', count: 11 },
+				{ bucket: 'lt_75', label: '低於 75%', color: 'var(--df-warning)', count: 6 }
 			],
 			ageDistribution: [
-				{ bucket: '7-12', count: 34 },
-				{ bucket: '41+', count: 2 }
+				{ bucket: '7-12', label: '7–12 歲', color: 'var(--df-primary)', count: 34 },
+				{ bucket: '41+', label: '41 歲以上', color: '#EC4899', count: 2 }
 			],
 			tierDistribution: [
-				{ bucket: 'gold', count: 9 },
-				{ bucket: 'regular', count: 10 }
+				{ bucket: 'gold', label: '金', color: '#F59E0B', count: 9 },
+				{ bucket: 'regular', label: '一般', color: '#64748B', count: 10 }
 			],
 			retention: [
 				{ month: '2025-08', newCount: 14, returningCount: 38, rate: 0.71 },
@@ -143,8 +143,8 @@ describe('getReports — GET /reports/admin（admin，§3.24，Round 4 P4-F1：1
 			],
 			funnel: { trialInquiries: 318, newEnrolments: 142 },
 			weekdayLoad: [
-				{ weekday: 0, presentCount: 20 },
-				{ weekday: 6, presentCount: 45 }
+				{ weekday: 0, label: '日', presentCount: 20 },
+				{ weekday: 6, label: '六', presentCount: 45 }
 			],
 			venueUsage: [{ venue: 'A 訓練館', minutes: 8880 }],
 			members: { total: 120, newThisMonth: 8, active: 96 },
@@ -281,5 +281,42 @@ describe('getReports — GET /reports/admin（admin，§3.24，Round 4 P4-F1：1
 		expect(d.revenueBreakdown.every((r) => r.grossCents === 0)).toBe(true);
 		expect(d.categorySplit.every((c) => c.ratio === null)).toBe(true);
 		expect(d.retention.every((r) => r.rate === null)).toBe(true);
+	});
+
+	it('後端回未知 source/bucket/weekday → mapper 一次解析：label 退回原字串、color 為 var(--df-text-muted)，不丟例外', async () => {
+		const empty = {
+			revenue: { this_month_cents: 0, last_month_cents: 0, trend: [] },
+			kpis: {
+				new_members: { this_month: 0, last_month: 0 },
+				new_enrolments: { this_month: 0, last_month: 0 },
+				paid_orders_count: { this_month: 0, last_month: 0 },
+				attendance_rate: { this_month: null, last_month: null }
+			},
+			revenue_breakdown: [{ source: 'gift_card', gross_cents: 1, orders_count: 1, units: 1 }],
+			income_sources_12m: [{ month: '2025-09', source: 'gift_card', gross_cents: 1, orders_count: 1, units: 1 }],
+			category_split: [{ source: 'gift_card', gross_cents: 1, ratio: 1 }],
+			payment_split: [],
+			attendance_distribution: [{ bucket: 'att_new', count: 1 }],
+			age_distribution: [{ bucket: 'age_new', count: 1 }],
+			tier_distribution: [{ bucket: 'platinum', count: 1 }],
+			retention: [],
+			funnel: { trial_inquiries: 0, new_enrolments: 0 },
+			weekday_load: [{ weekday: 9, present_count: 1 }],
+			venue_usage: [],
+			members: { total: 0, new_this_month: 0, active: 0 },
+			courses: [],
+			coaches: []
+		};
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /reports/admin': empty }));
+
+		const d = await getReports();
+		const muted = 'var(--df-text-muted)';
+		expect(d.revenueBreakdown[0]).toMatchObject({ source: 'gift_card', label: 'gift_card', color: muted });
+		expect(d.incomeSources12m[0]).toMatchObject({ label: 'gift_card', color: muted });
+		expect(d.categorySplit[0]).toMatchObject({ label: 'gift_card', color: muted });
+		expect(d.attendanceDistribution[0]).toMatchObject({ label: 'att_new', color: muted });
+		expect(d.ageDistribution[0]).toMatchObject({ label: 'age_new', color: muted });
+		expect(d.tierDistribution[0]).toMatchObject({ label: 'platinum', color: muted });
+		expect(d.weekdayLoad[0].label).toBe('9');
 	});
 });

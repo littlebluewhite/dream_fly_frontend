@@ -5,6 +5,13 @@
 import { api } from '$lib/api/client';
 import { ntd } from '$lib/public/adapters';
 import type { TrendBar } from './data';
+import {
+	AGE_BUCKET_LABEL,
+	ATTENDANCE_BUCKET_LABEL,
+	REVENUE_SOURCE_LABEL,
+	TIER_LABEL,
+	WEEKDAY_LABEL
+} from './report-math';
 import type {
 	AdminCoachReportRow,
 	AdminCourseReportRow,
@@ -19,18 +26,10 @@ import type {
 /* ═════════════════════════ 報表分析（GET /reports/admin，admin-only，見 integration-contract.md §3.24） ═════════════════════════ */
 
 /** revenue_breakdown/income_sources_12m 固定 6 桶 canonical 序；category_split 少
- *  venue_rental(場租非 order line)只剩 5 桶(契約 §3.24 裁決)。這組字串 wire→FE 原樣
- *  穿透、不重新命名。後端產生型別刻意把 source/bucket 留 String(報表桶不收 enum)，
- *  這裡的 union 是前端依契約固定桶所做的斷言，在映射處 cast 進來。 */
-export type AdminRevenueSource = 'course' | 'ticket' | 'membership' | 'course_package' | 'merchandise' | 'venue_rental';
-export type AdminCategorySource = Exclude<AdminRevenueSource, 'venue_rental'>;
-
-/** attendance_distribution/age_distribution/tier_distribution 的固定桶 key——同樣
- *  wire→FE 原樣穿透；中文標籤/色查表在 report-math.ts(頁面消費時才查，這裡只負責
- *  型別正確)。 */
-export type AdminAttendanceBucket = 'gte_95' | '85_94' | '75_84' | 'lt_75';
-export type AdminAgeBucket = '0-6' | '7-12' | '13-17' | '18-25' | '26-40' | '41+';
-export type AdminTierBucket = 'regular' | 'bronze' | 'silver' | 'gold';
+ *  venue_rental(場租非 order line)只剩 5 桶(契約 §3.24 裁決)。後端產生型別刻意把
+ *  source/bucket 留 String(報表桶不收 enum)，所以列上的 source/bucket 維持 string(只當
+ *  key 用)；中文標籤/色由下方 mapper 查 report-math.ts 的對照表**一次**解析成 label/color
+ *  (查無 → 原字串 + 中性灰)，渲染端直接讀 row.label/row.color。 */
 
 /** courses[]/coaches[] 的 UI 形狀——`fillRate`/`attendanceRate` 維持契約的 0–1 比例
  *  (null 為防禦性情境：courses 見裁決 4／coaches 見裁決「無資料 → null」)，由頁面
@@ -65,14 +64,18 @@ export interface AdminReportKpis {
 }
 
 export interface AdminRevenueBreakdownRow {
-	source: AdminRevenueSource;
+	source: string;
+	label: string;
+	color: string;
 	grossCents: number;
 	ordersCount: number;
 	units: number;
 }
 export interface AdminIncomeSourceRow {
 	month: string;
-	source: AdminRevenueSource;
+	source: string;
+	label: string;
+	color: string;
 	grossCents: number;
 	ordersCount: number;
 	units: number;
@@ -80,7 +83,9 @@ export interface AdminIncomeSourceRow {
 /** ratio 為 0–1、分母(五桶合計)為 0 → null，由頁面 fmtPct() 格式化；不含
  *  venue_rental(場租非 order line)。 */
 export interface AdminCategorySplitRow {
-	source: AdminCategorySource;
+	source: string;
+	label: string;
+	color: string;
 	grossCents: number;
 	ratio: number | null;
 }
@@ -91,15 +96,21 @@ export interface AdminPaymentSplitRow {
 	count: number;
 }
 export interface AdminAttendanceDistRow {
-	bucket: AdminAttendanceBucket;
+	bucket: string;
+	label: string;
+	color: string;
 	count: number;
 }
 export interface AdminAgeDistRow {
-	bucket: AdminAgeBucket;
+	bucket: string;
+	label: string;
+	color: string;
 	count: number;
 }
 export interface AdminTierDistRow {
-	bucket: AdminTierBucket;
+	bucket: string;
+	label: string;
+	color: string;
 	count: number;
 }
 /** rate 為「|上月活躍∩本月活躍| / |上月活躍|」，上月為空集合 → null。 */
@@ -115,6 +126,7 @@ export interface AdminFunnel {
 }
 export interface AdminWeekdayLoadRow {
 	weekday: number; // 0=週日..6=週六
+	label: string;
 	presentCount: number;
 }
 export interface AdminVenueUsageRow {
@@ -183,8 +195,15 @@ function mapAdminKpis(k: KpisSection): AdminReportKpis {
 	};
 }
 
+/** 桶 key → {label,color} 的唯一 fallback 點：查無(後端擴集)→ 原字串 + 中性灰，不炸頁。 */
+const resolveBucket = (
+	table: Readonly<Record<string, { label: string; color: string }>>,
+	key: string
+): { label: string; color: string } => table[key] ?? { label: key, color: 'var(--df-text-muted)' };
+
 const mapRevenueBreakdownRow = (r: IncomeSourceEntry): AdminRevenueBreakdownRow => ({
-	source: r.source as AdminRevenueSource,
+	source: r.source,
+	...resolveBucket(REVENUE_SOURCE_LABEL, r.source),
 	grossCents: r.gross_cents,
 	ordersCount: r.orders_count,
 	units: r.units
@@ -192,14 +211,16 @@ const mapRevenueBreakdownRow = (r: IncomeSourceEntry): AdminRevenueBreakdownRow 
 
 const mapIncomeSourceRow = (r: IncomeSourceMonthEntry): AdminIncomeSourceRow => ({
 	month: r.month,
-	source: r.source as AdminRevenueSource,
+	source: r.source,
+	...resolveBucket(REVENUE_SOURCE_LABEL, r.source),
 	grossCents: r.gross_cents,
 	ordersCount: r.orders_count,
 	units: r.units
 });
 
 const mapCategorySplitRow = (r: CategorySplitEntry): AdminCategorySplitRow => ({
-	source: r.source as AdminCategorySource,
+	source: r.source,
+	...resolveBucket(REVENUE_SOURCE_LABEL, r.source),
 	grossCents: r.gross_cents,
 	ratio: r.ratio
 });
@@ -232,12 +253,28 @@ export const getReports = (): Promise<ReportsData> =>
 		incomeSources12m: r.income_sources_12m.map(mapIncomeSourceRow),
 		categorySplit: r.category_split.map(mapCategorySplitRow),
 		paymentSplit: r.payment_split.map((p) => ({ method: p.method, count: p.count })),
-		attendanceDistribution: r.attendance_distribution.map((a) => ({ bucket: a.bucket as AdminAttendanceBucket, count: a.count })),
-		ageDistribution: r.age_distribution.map((a) => ({ bucket: a.bucket as AdminAgeBucket, count: a.count })),
-		tierDistribution: r.tier_distribution.map((t) => ({ bucket: t.bucket as AdminTierBucket, count: t.count })),
+		attendanceDistribution: r.attendance_distribution.map((a) => ({
+			bucket: a.bucket,
+			...resolveBucket(ATTENDANCE_BUCKET_LABEL, a.bucket),
+			count: a.count
+		})),
+		ageDistribution: r.age_distribution.map((a) => ({
+			bucket: a.bucket,
+			...resolveBucket(AGE_BUCKET_LABEL, a.bucket),
+			count: a.count
+		})),
+		tierDistribution: r.tier_distribution.map((t) => ({
+			bucket: t.bucket,
+			...resolveBucket(TIER_LABEL, t.bucket),
+			count: t.count
+		})),
 		retention: r.retention.map(mapRetentionRow),
 		funnel: { trialInquiries: r.funnel.trial_inquiries, newEnrolments: r.funnel.new_enrolments },
-		weekdayLoad: r.weekday_load.map((w) => ({ weekday: w.weekday, presentCount: w.present_count })),
+		weekdayLoad: r.weekday_load.map((w) => ({
+			weekday: w.weekday,
+			label: WEEKDAY_LABEL[w.weekday] ?? String(w.weekday),
+			presentCount: w.present_count
+		})),
 		venueUsage: r.venue_usage.map((v) => ({ venue: v.venue, minutes: v.minutes })),
 		members: { total: r.members.total, newThisMonth: r.members.new_this_month, active: r.members.active },
 		courses: r.courses.map(mapAdminReportCourse),

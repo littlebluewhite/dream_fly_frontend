@@ -13,7 +13,7 @@
   import type { AdminRevenueBreakdownRow } from '$lib/admin/api';
   import { ntd } from '$lib/public/adapters';
   import { fmtNT } from '$lib/format';
-  import { revenueSourceLabel, breakdownTotalCents } from '$lib/admin/report-math';
+  import { breakdownTotalCents } from '$lib/admin/report-math';
 
   let { rows }: { rows: AdminRevenueBreakdownRow[] } = $props();
 
@@ -43,12 +43,11 @@
       <div class="row" class:bordered={i < rows.length - 1}>
         <div style="flex:1; display:flex; align-items:center; gap:10px; min-width:0;">
           <span
-            style="width:8px; height:8px; border-radius:4px; background:{revenueSourceLabel(r.source)
-              .color}; flex:none;"
+            style="width:8px; height:8px; border-radius:4px; background:{r.color}; flex:none;"
           ></span>
           <div style="min-width:0;">
             <div style="font-size:14px; font-weight:600; color:var(--df-text-dark);">
-              {revenueSourceLabel(r.source).label}
+              {r.label}
             </div>
             <div style="font-size:12px; color:var(--df-text-light); margin-top:1px;">
               訂單 {r.ordersCount} 筆 · 數量 {r.units}

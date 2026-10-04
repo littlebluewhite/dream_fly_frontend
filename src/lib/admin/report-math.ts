@@ -59,6 +59,8 @@ export function topCoursesFrom(courses: { name: string; enrolled: number }[]): T
 /** 單一收入來源的 12 月時間序列(月序已對齊、缺月零填)。 */
 export interface IncomeSourceSeries {
 	source: string;
+	label: string;
+	color: string;
 	points: { month: string; grossCents: number }[];
 }
 
@@ -67,13 +69,15 @@ export interface IncomeSourceSeries {
  *  (防禦性——即使輸入未依契約保證的 72 列零填也不會缺點)。source 順序＝輸入列中
  *  首次出現的順序(呼叫端傳入契約保證的 canonical 序列即得 canonical 輸出序)。 */
 export function groupIncomeSources(
-	rows: { month: string; source: string; grossCents: number }[]
+	rows: { month: string; source: string; label: string; color: string; grossCents: number }[]
 ): IncomeSourceSeries[] {
 	const months = [...new Set(rows.map((r) => r.month))].sort();
 	const sources = [...new Set(rows.map((r) => r.source))];
 	return sources.map((source) => {
-		const bySource = new Map(rows.filter((r) => r.source === source).map((r) => [r.month, r.grossCents]));
-		return { source, points: months.map((month) => ({ month, grossCents: bySource.get(month) ?? 0 })) };
+		const sourceRows = rows.filter((r) => r.source === source);
+		const bySource = new Map(sourceRows.map((r) => [r.month, r.grossCents]));
+		const { label, color } = sourceRows[0];
+		return { source, label, color, points: months.map((month) => ({ month, grossCents: bySource.get(month) ?? 0 })) };
 	});
 }
 
@@ -118,12 +122,16 @@ export function breakdownTotalCents(rows: { grossCents: number }[]): number {
 
 /** 收入來源分析:groupIncomeSources() 每 source 的 12 月毛額加總 + pctShares() 占比
  *  (0–1,fmtPct-ready;全 0 → 全 0,不除以 0)。source 序=canonical 輸入序。 */
-export function incomeSourcesVM(rows: { month: string; source: string; grossCents: number }[]): {
-	totals: { source: string; totalCents: number }[];
+export function incomeSourcesVM(
+	rows: { month: string; source: string; label: string; color: string; grossCents: number }[]
+): {
+	totals: { source: string; label: string; color: string; totalCents: number }[];
 	shares: number[];
 } {
 	const totals = groupIncomeSources(rows).map((s) => ({
 		source: s.source,
+		label: s.label,
+		color: s.color,
 		totalCents: s.points.reduce((sum, p) => sum + p.grossCents, 0)
 	}));
 	return { totals, shares: pctShares(totals.map((t) => t.totalCents)) };
@@ -213,7 +221,7 @@ export function fmtHours(minutes: number): string {
 /* ═════════════════════════ wire 桶 key → 中文標籤(+色) 對照常數 ═════════════════════════ */
 
 /** users.points_balance 分級桶 key → 中文標籤 + 代表色(契約 §3.24 tier_distribution，
- *  4 桶固定序 regular/bronze/silver/gold；呼叫端經 bucketLabel() 容忍未知桶)。色票沿用既有
+ *  4 桶固定序 regular/bronze/silver/gold；由 reports-api.ts 的 mapper 解析、容忍未知桶)。色票沿用既有
  *  domain/reports.ts TIER_DIST 的既定配色，維持視覺一致。 */
 export const TIER_LABEL: Record<'regular' | 'bronze' | 'silver' | 'gold', { label: string; color: string }> = {
 	regular: { label: '一般', color: '#64748B' },
@@ -223,7 +231,7 @@ export const TIER_LABEL: Record<'regular' | 'bronze' | 'silver' | 'gold', { labe
 };
 
 /** revenue_breakdown / income_sources_12m / category_split 的 source 桶 key →
- *  中文標籤 + 代表色(契約 §3.24 canonical 6 值,呼叫端經 revenueSourceLabel() 容忍未知值;
+ *  中文標籤 + 代表色(契約 §3.24 canonical 6 值,由 reports-api.ts 的 mapper 解析、容忍未知值;
  *  category_split 只會出現前 5 桶——venue_rental 非 order line)。標籤對齊既有
  *  product_type 三值的中文(單次票券/月票方案/課程套裝,見 TicketEditDialog),
  *  色票沿用歸檔 REVENUE_BREAKDOWN/INCOME_SOURCES 的既定配色。P4-F2 新增。 */
@@ -238,25 +246,6 @@ export const REVENUE_SOURCE_LABEL: Record<
 	merchandise: { label: '裝備週邊', color: 'var(--df-warning)' },
 	venue_rental: { label: '場地租借', color: '#EC4899' }
 };
-
-/** 容忍未知 source 的查表(income_sources_12m 的 source 是 groupIncomeSources() 攤平出
- *  的純字串，非型別窄化過的 canonical 6 值)：查無 key → 中性灰 + 原字串穿透，不丟
- *  例外(同 paymentMethodLabel／$lib/api/wire.ts orderStatusBadge 的容忍查表慣例)。
- *  契約現為封閉 6 值，但若擴集，呼叫端(IncomeSources.svelte/ReportsScreen.svelte)靠
- *  這支查表降級，不會在 REVENUE_SOURCE_LABEL[source] 直接索引時因 undefined 炸頁。 */
-export const revenueSourceLabel = (source: string): { label: string; color: string } =>
-	bucketLabel(REVENUE_SOURCE_LABEL, source);
-
-/** 容忍未知 key 的 {label,color} 桶表查表(TIER/AGE/ATTENDANCE/REVENUE_SOURCE 共用)：查無
- *  → 中性灰 + 原字串穿透，後端擴集時面板顯示原 key 而不是 undefined 或炸頁。 */
-export const bucketLabel = (
-	table: Readonly<Record<string, { label: string; color: string }>>,
-	key: string
-): { label: string; color: string } =>
-	(table as Record<string, { label: string; color: string } | undefined>)[key] ?? {
-		label: key,
-		color: 'var(--df-text-muted)'
-	};
 
 /** payment_split.method(應用層自由字串；契約僅列舉本輪已知值，NULL 已由後端轉
  *  "unknown")→ 中文標籤查表。 */
