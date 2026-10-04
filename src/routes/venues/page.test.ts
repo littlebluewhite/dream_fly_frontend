@@ -1,26 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Page from './+page.svelte';
-import { listVenues } from '$lib/public/api';
-import type { VenueResponse } from '$lib/api/generated';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { venueResponse } from '$lib/testing/wire-fixtures';
 
-vi.mock('$lib/public/api', () => ({ listVenues: vi.fn() }));
+// 只假造 HTTP 層：真的 listVenues + mapper 會跑
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
 
-const VENUE: VenueResponse = {
+const VENUE = venueResponse({
 	id: 'venue-uuid-1',
 	category_id: 'cat-uuid-1',
 	name: '大跳床',
 	slug: 'trampoline-large',
 	description: '專業彈跳訓練，提升空中控制能力',
 	features: ['防護網環繞', '專人指導'],
-	image_url: null,
-	is_active: true,
 	created_at: '2026-01-01T00:00:00Z'
-};
+});
+
+const route = (value: unknown) => vi.mocked(api).mockImplementation(fakeRouter({ 'GET /venues': value }));
 
 beforeEach(() => {
-	vi.mocked(listVenues).mockReset();
-	vi.mocked(listVenues).mockResolvedValue([VENUE]);
+	vi.mocked(api).mockReset();
+	route([VENUE]);
 });
 
 describe('場館介紹 (marketing) — 僅列表接真 API', () => {
@@ -32,16 +37,14 @@ describe('場館介紹 (marketing) — 僅列表接真 API', () => {
 	});
 
 	it('error 態:顯示「載入失敗」', async () => {
-		vi.mocked(listVenues).mockReset();
-		vi.mocked(listVenues).mockRejectedValue(new Error('network'));
+		route(new Error('network'));
 
 		const { findByText } = render(Page);
 		await findByText('載入失敗');
 	});
 
 	it('loading 態:顯示場館骨架', async () => {
-		vi.mocked(listVenues).mockReset();
-		vi.mocked(listVenues).mockReturnValue(new Promise(() => {})); // never resolves
+		route(new Promise(() => {})); // never resolves
 
 		const { getByTestId } = render(Page);
 		expect(getByTestId('venues-skeleton')).toBeTruthy();
