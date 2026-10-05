@@ -13,7 +13,7 @@ A 的資料、mobile 週課表週一的課消失且其餘錯一天(同天兩堂�
 可見的行為變更、刻意遞延的已知項,以及被取代的舊 ADR 句子。被既有 ADR 點名的地方,各篇已補 2026-10-05 的
 dated 增補指回本篇;`CONTEXT.md` 與 `docs/architecture.md` 直接改成現況。
 
-測試總數收尾為 241 檔、2577 passed | 2 skipped。
+測試總數收尾為 241 檔、2578 passed | 2 skipped。
 
 ## 背景與決定
 
@@ -40,7 +40,8 @@ access token,再用它重送 A 畫面發出的請求——A 的寫入默默落�
 
 **附帶效果**:跨分頁 listener 的「水合後仍不是事件當下的身分 → 登出」收尾,在「refresh 成功但 `/users/me` 失敗」
 這條路上不再觸發——refresh 一落地身分就已經是 B(`onSessionRefreshed` 推進世代,`hydrate()` 的收尾因世代不符
-直接返回)。這條收尾現在只剩「refresh 暫時不可用」會走到。
+直接返回)。這條收尾現在只剩「refresh 暫時不可用」會走到:listener 只在 `hydrateSession()` 回報 refresh 失敗時
+才比對快照登出——refresh 成功即伺服器已確認身分,別的分頁遲到寫回的舊身分快照不得把它登出(codex 審查)。
 
 **測試**:`client.test.ts`(refresh 換出 B、請求是 A 發的 → `ApiError(401)`,從不帶 B 的 Bearer 重送;401 落地前
 身分已變 → 不 refresh、只有 1 次 fetch;`onSessionRefreshed` 只在 CAS 成功時觸發並帶後端回的 `user`)、

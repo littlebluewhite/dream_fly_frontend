@@ -154,25 +154,31 @@ function createAuthStore() {
   }
 
   async function hydrate(): Promise<void> {
+    await hydrateSession();
+  }
+
+  /** 回傳 refresh 是否成功:成功即伺服器已確認 token 的主人(onSessionRefreshed 已同拍換身分)。 */
+  async function hydrateSession(): Promise<boolean> {
     const gen = generation;
     if (!getRefresh()) {
       set(LOGGED_OUT);
-      return;
+      return false;
     }
     const refreshed = await refreshTokens();
     // 失敗時若 token 真的被清掉(後端明確拒絕),onSessionExpired 已設 LOGGED_OUT;沒清掉代表
     // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給下方的 storage listener)。
-    if (!refreshed) return;
+    if (!refreshed) return false;
     try {
       const user = await api<UserResponse>('/users/me');
       // 進場後 session 世代變了(登入/登出/過期/別的分頁換身分):這份是舊 session 的身分,不套用——
       // 新 session 的水合(或 storage listener 的收尾)才是真相。refresh token 只是輪替不算換 session。
-      if (generation !== gen) return;
+      if (generation !== gen) return true;
       applyUser(user);
     } catch {
       // 真的 401 已由 api() → refreshTokens() 處理;其他失敗(5xx/網路)不是 session 過期,
       // 不碰 token、不改登入狀態——清共用 refresh token 會讓所有分頁一起登出。
     }
+    return true;
   }
 
   /** 以 GET/PATCH /users/me 的回應同步目前 session 的 member(R13 Task 3:改名後
@@ -218,12 +224,13 @@ function createAuthStore() {
       if (cached.loggedIn && expected !== sessionIdentity(get({ subscribe }))) {
         const gen = beginSession();
         forgetAccess();
-        void hydrate().then(() => {
+        void hydrateSession().then((refreshed) => {
           if (generation !== gen) return; // 這段期間換了 session(例如本分頁登入 C):收尾不屬於它
-          // hydrate 沒能換成事件當下 storage 裡的身分(refresh 暫時不可用,或 refresh 回的 user 不是快照
-          // 裡那位):不得用舊身分頂著(可能已是新帳號的)token 打 API——退回登出。refresh 換出別人時
-          // onSessionRefreshed 已同拍換身分、推進世代,走不到這裡;/users/me 失敗也停在那個身分。比對事件當下的快照,
-          // 不重讀共用快取:別的分頁遲到的 syncUser 可能已把它改寫回舊身分。
+          // refresh 成功:伺服器已確認 token 的主人,畫面身分已同拍跟上——即使事件當下的快照是別的分頁
+          // 遲到的 syncUser 寫回的舊身分,也以伺服器為準,不登出。
+          if (refreshed) return;
+          // refresh 暫時不可用,身分又不是事件當下 storage 裡那位:不得用舊身分頂著(可能已是新帳號的)
+          // token 打 API——退回登出。比對事件當下的快照,不重讀共用快取。
           if (expected !== sessionIdentity(get({ subscribe }))) {
             forgetAccess();
             set(LOGGED_OUT);

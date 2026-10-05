@@ -521,11 +521,17 @@ describe('authStore — cross-tab storage sync', () => {
     expect(getRefresh()).toBe('rB2');
   });
 
-  it('another tab logged in as B, a stale A cache write lands mid-hydrate and hydrate fails → LOGGED_OUT, never A', async () => {
+  it('another tab logged in as B, a stale A cache write lands mid-hydrate and its refresh is unavailable → LOGGED_OUT, never A', async () => {
     await loginAsA();
     let staleWritten = false;
+    let refreshes = 0;
     const fetchMock = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('aB2', 'rB2', USER_B));
+      if (url.endsWith('/auth/refresh')) {
+        // 第二次水合的 refresh 暫時不可用:伺服器沒能確認身分,只能退回登出。
+        return ++refreshes === 1
+          ? jsonResponse(rotated('aB2', 'rB2', USER_B))
+          : jsonResponse({ error: 'too many requests' }, 429, 'Too Many Requests');
+      }
       // A third tab's late syncUser(A) rewrites the shared cache while this tab's hydrate is in flight.
       // 只寫一次:它觸發的重新水合也會打 /users/me,每次都寫就會無限迴圈。
       if (!staleWritten) {
@@ -540,12 +546,37 @@ describe('authStore — cross-tab storage sync', () => {
     localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
 
     otherTabWrote('dreamfly_auth');
-    // 換 B 的水合(refresh + /users/me),加上舊 A 快取觸發的第二次水合(refresh + /users/me)。
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    // 換 B 的水合(refresh + /users/me),加上舊 A 快取觸發的第二次水合(只有 refresh,429 就停)。
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await new Promise((r) => setTimeout(r, 0));
 
     expect(get(authStore)).toEqual(LOGGED_OUT);
     expect(getAccess()).toBeNull();
+  });
+
+  it('換成 B、/users/me 進行中遲到的舊 A 快取寫入 → 伺服器都確認是 B,停在 B,不登出', async () => {
+    await loginAsA();
+    let staleWritten = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return jsonResponse(rotated('aB2', 'rB2', USER_B));
+      // 只寫一次:它觸發的重新水合也會打 /users/me,每次都寫就會無限迴圈。
+      if (!staleWritten) {
+        staleWritten = true;
+        localStorage.setItem('dreamfly_auth', cacheOf(SAMPLE_USER));
+        otherTabWrote('dreamfly_auth');
+      }
+      return jsonResponse(USER_B);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('dreamfly_refresh', 'rB');
+    localStorage.setItem('dreamfly_auth', cacheOf(USER_B));
+
+    otherTabWrote('dreamfly_auth');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(get(authStore).member?.id).toBe(USER_B.id);
+    expect(getAccess()).not.toBeNull();
   });
 
   it('an earlier hydrate’s /users/me (sent under A) resolving after the B switch does not apply A', async () => {
