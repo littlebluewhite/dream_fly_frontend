@@ -15,7 +15,7 @@ R17 沿 `docs/adr/0018`/`0019`/`0022`/`0023`/`0024`/`0025`/`0026`「一輪多案
 「會員點數調整」、手機點名「遲到」默默變「出席」、token 失效後畫面仍顯示登入(含跨分頁)、跟隨分頁拿舊
 refresh token 換新而 401、購物車總額把已持有方案算進去。本篇依序記錄十項決定(§1–§6 為 R17 前端本體,§7–§10 為 wire 型別採用)、明確**不做**的事、可見的
 行為變更、刻意遞延的已知項、被取代的舊 ADR 句子,以及 ADR 點名測試的新舊對照。被既有 ADR 點名的地方,
-各篇已補 2026-10-03 的 dated 增補指回本篇;`CONTEXT.md` 與 `docs/architecture.md` 直接改成現況。
+各篇已補 2026-10-03 的 dated 增補指回本篇;`GLOSSARY.md` 與 `docs/architecture.md` 直接改成現況。
 
 ## 背景與決定
 
@@ -27,7 +27,7 @@ refresh token 換新而 401、購物車總額把已持有方案算進去。本�
 寫的「並導回登入頁」其實沒發生)。(c) 別的分頁登出或換帳號,本分頁毫無感知。(d) `sessionIdentity()` 住在
 `session-gate.ts`,但身分的 owner 是 `authStore`。
 
-**決定**(細節已寫在 `docs/adr/0006`/`0017`/`0026` 的 R17 增補與 `CONTEXT.md`「登入狀態」,此處只列骨架):
+**決定**(細節已寫在 `docs/adr/0006`/`0017`/`0026` 的 R17 增補與 `GLOSSARY.md`「登入狀態」,此處只列骨架):
 
 - **只有一個清除點**:`client.ts` 的 `performRefresh()`。進鎖後一律讀「當下」的 refresh token 去換
   (`exchangeRefreshToken()`,純傳輸、從不清),結果三分:成功 / 拒絕(400/401/403,或根本沒有 refresh token
@@ -282,7 +282,7 @@ mutator)。語意:
 (Controller 裁決 10;未來檢視勿重提。)
 
 - **早核准請假讓場次算「已點名」**:`docs/adr/0008` 決定 6 已接受。
-- **報表區段宣告 3 次**:`CONTEXT.md`「報表組裝」記為刻意。
+- **報表區段宣告 3 次**:`GLOSSARY.md`「報表組裝」記為刻意。
 - **`hydrated` 唯讀探針留在 `HydrationGate` 介面**:各 store 不再匯出 `*Hydrated`;介面上的 `hydrated` 保留當唯讀
   探針,production 僅 `self-account.ts` 的 `setPref` 讀它一處(記錄寫入前是否已水合),其餘是測試。不為此再加介面。
 - **`sessionIdentity` 不做 derived store**(`docs/adr/0026` §6 原決定不變)。
@@ -350,7 +350,7 @@ mutator)。語意:
 
 ## 被取代的 ADR 句子(舊 → 新)
 
-被取代的是**歷史敘述**,各篇原文不改寫;以下列表加上各篇的 R17 增補為準。`CONTEXT.md`、
+被取代的是**歷史敘述**,各篇原文不改寫;以下列表加上各篇的 R17 增補為準。`GLOSSARY.md`、
 `docs/architecture.md` 已直接改成現況,不在表內。
 
 | ADR(位置) | 舊句子 | 現況 |

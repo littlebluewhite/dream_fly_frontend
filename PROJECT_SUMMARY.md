@@ -5,7 +5,7 @@
 > (sibling repo `dream_fly_backend`, 2026-07) wired real auth/cart/checkout across
 > admin/coach/member and both mobile surfaces — the "Phase 10/11: Backend Integration /
 > Advanced Features (Future)" items further down have since largely shipped. For the
-> current state, see the root `CLAUDE.md`, `docs/architecture.md`, and `docs/adr/`.
+> current state, see the root `AGENTS.md`, `docs/architecture.md`, and `docs/adr/`.
 
 ## Project Overview
 

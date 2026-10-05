@@ -67,7 +67,7 @@ surface 共用程式碼集中在 `lib/components/`、`lib/domain/`、`lib/stores
 member/admin/coach 既有的真實 API 函式，只在各自小範圍的 P2 殘餘（見 `docs/adr/0006`）才落回 mock。每個
 surface 的 `api.ts` 是唯一的接縫層，呼叫端（頁面）不需要知道背後是真 API 還是 mock。完整架構、domain 詞彙
 與決策紀錄分見
-[`docs/architecture.md`](docs/architecture.md)、[`CONTEXT.md`](CONTEXT.md)、[`docs/adr/`](docs/adr/)。
+[`docs/architecture.md`](docs/architecture.md)、[`GLOSSARY.md`](GLOSSARY.md)、[`docs/adr/`](docs/adr/)。
 
 ## 驗證關卡
 

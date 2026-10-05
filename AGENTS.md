@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -69,7 +69,7 @@ and 訂閱 (pass subscription) are independent (ADR 0001).
 
 ## Domain docs (read before working in an area)
 
-- **`CONTEXT.md`** — the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
+- **`GLOSSARY.md`** — the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
   frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Use these exact terms in code,
   tests, and issue titles; each entry's *Avoid* line marks the wrong synonyms.
 - **`docs/adr/`** — architecture decisions. Read any ADR that touches your area; if your change

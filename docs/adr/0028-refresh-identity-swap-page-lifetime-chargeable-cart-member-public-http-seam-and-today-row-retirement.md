@@ -11,7 +11,7 @@ locality:「token 屬於誰、畫面就是誰」「頁面活多久」「購物�
 的列型別」各自只住一處。本輪修掉的真 bug:換登空檔裡 A 畫面的寫入被 401 重試以 B 的憑證送出、換人後頁面沿用
 A 的資料、mobile 週課表週一的課消失且其餘錯一天(同天兩堂課整頁炸掉)。本篇依序記錄五項決定、明確**不做**的事、
 可見的行為變更、刻意遞延的已知項,以及被取代的舊 ADR 句子。被既有 ADR 點名的地方,各篇已補 2026-10-05 的
-dated 增補指回本篇;`CONTEXT.md` 與 `docs/architecture.md` 直接改成現況。
+dated 增補指回本篇;`GLOSSARY.md` 與 `docs/architecture.md` 直接改成現況。
 
 測試總數收尾為 241 檔、2578 passed | 2 skipped。
 
@@ -150,7 +150,7 @@ A 畫面的 PATCH 遇 401 → `ApiError(401)`;storage 已是 B 的 refresh token
 
 ## 被取代的 ADR 句子(舊 → 新)
 
-被取代的是**歷史敘述**,各篇原文不改寫;以下列表加上各篇的 R18 增補為準。`CONTEXT.md`、
+被取代的是**歷史敘述**,各篇原文不改寫;以下列表加上各篇的 R18 增補為準。`GLOSSARY.md`、
 `docs/architecture.md` 已直接改成現況,不在表內。
 
 | ADR(位置) | 舊句子 | 現況 |

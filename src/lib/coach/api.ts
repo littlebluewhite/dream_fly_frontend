@@ -335,7 +335,7 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
 /** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
- *  member（§3.21 角色規則），且 CONTEXT.md 明定「會員」帳號即學員本人、不分家長/學員
+ *  member（§3.21 角色規則），且 GLOSSARY.md 明定「會員」帳號即學員本人、不分家長/學員
  *  （Avoid: 家長），故不帶對話種類欄位(R16 Task 2a 起拿掉 kind)；color 無代表色欄位，同其餘 mapXxx 慣例
  *  固定預設值(P2)。time 由 last_message_at 轉換
  *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有

@@ -287,7 +287,7 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
   那位(例如 `/users/me` 失敗)就丟掉 access token 並登出;其他情況(包括
   refresh token 只是被別的分頁輪替)不動。listener 永不寫共用的 refresh key。只看目前 storage 而不看
   「refresh key 變了」,是為了避免分頁互相觸發 refresh、永不停止(每個等待中的分頁現在都會各輪替一次)。
-  詳見 CONTEXT.md「登入狀態」。
+  詳見 GLOSSARY.md「登入狀態」。
 - **「後果」第一條縮小範圍**:別的分頁登出、換帳號或 token 失效,現在本分頁會即時跟上。仍可能短暫看到
   舊資料的,只剩**同一位登入者**的欄位(例如在別的分頁改名,這一頁要到下次 `/users/me` 或重整才更新)。
 

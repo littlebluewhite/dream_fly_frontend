@@ -158,7 +158,7 @@ venues/tickets/members/classes/course-level 五個 entity 檔之列,成為第六
 文字標籤」與「狀態推導邏輯(`deriveSessionStatus`)」兩件事,色彩呈現是各 surface 自己的畫面
 決定,不是「今日場次狀態」這個領域概念本身的一部分,並非遺漏或不徹底。
 
-`docs/adr/0013` 增補、`docs/architecture.md`、`CONTEXT.md` 同步更新查表清單。
+`docs/adr/0013` 增補、`docs/architecture.md`、`GLOSSARY.md` 同步更新查表清單。
 
 ### 5. C5 — `admin/api.ts` 拆殼:Reports 群整段遷 `reports-api.ts`
 
@@ -228,7 +228,7 @@ venues 特有缺口。真正、範圍更窄的缺口是 coupons 頁另有兩個�
 同構」提問無關,列入記錄、不主張補。mobile-admin 側同樣需要修正:mobile-admin **不存在**
 CouponsScreen(優惠碼管理是桌面專屬功能);`TicketsScreen`/`VenuesScreen` 的寫入側維持示範
 (兩檔檔頭註解明文「寫入側維持 demo」,僅一行 `toasts.notify(...)`,不建 request body),非本節
-討論的「CRUD 提交」,不構成任何同型重複候選(既有 P2 缺口,`CLAUDE.md` 已記錄,非本輪新發現);
+討論的「CRUD 提交」,不構成任何同型重複候選(既有 P2 缺口,`AGENTS.md` 已記錄,非本輪新發現);
 mobile-admin 唯一真實 CRUD overlay 是 `CoachesScreen`(見 C3),屬 coaches 的「兩步 outcome
 switch」家族,不屬本節討論的 `wasNew` 骨架家族。
 

@@ -542,7 +542,7 @@ describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
 });
 
 /* Task 12：訊息中心（GET /conversations/me + GET .../messages + POST .../messages +
- * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——CONTEXT.md 明定
+ * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——GLOSSARY.md 明定
  * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故不帶對話種類欄位(R16 Task 2a)。 */
 const ME2 = {
 	id: 'u9', email: 'chen@dreamfly.com.tw', name: '陳雅婷',
