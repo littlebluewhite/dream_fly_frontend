@@ -30,7 +30,7 @@ npm run dev   # 啟動開發伺服器：http://localhost:5173
 後端把 Rust DTO 產生的 TypeScript 型別 commit 在 `dream_fly_backend/bindings/`。前端用 `npm run wire:sync` 鏡像到
 `src/lib/api/generated/`（逐位元相同，勿手改、勿 reformat）；`npm run check` 會先跑 `npm run wire:check`，過期／缺檔／多餘檔案
 就失敗。後端有改 DTO 時：在後端 `WIRE_BINDINGS=write cargo test --test wire_types` 重新產生，再回前端 `npm run wire:sync`。
-隔壁沒有後端 checkout 或沒有 `bindings/` 時印 skipped 並 exit 0；可用 `DREAMFLY_BACKEND_DIR` 指向別處。
+後端預設找 main checkout 隔壁的 `dream_fly_backend`（worktree 內也一樣）；找不到 `bindings/` 就失敗，可用 `DREAMFLY_BACKEND_DIR` 指向別處。
 
 ## 指令表
 

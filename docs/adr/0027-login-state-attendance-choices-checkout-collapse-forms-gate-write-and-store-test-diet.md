@@ -432,3 +432,9 @@ once-per-identity/A→B/logout-reset/queued-write-skip(22 → 18)、兩個通知
   三處的總額推導收成 `chargeableCart(cart)`。見 `docs/adr/0028` §3。
 - **:346「member/mobile/public 頁面測試仍 mock 各自的 api 模組」已結案**:走 HTTP seam,import-scan 契約禁 mock。
   見 `docs/adr/0028` §4。
+
+## 增補(2026-10-06,wire:check 不再靜默跳過)
+
+- **:349「`wire:check` 在沒有 `DREAMFLY_BACKEND_DIR` 或後端無 `bindings/` 時 skipped、exit 0」已結案**:預設路徑改由
+  main checkout(git common dir)解析隔壁的 `dream_fly_backend`,worktree 內也能找到;找不到 `bindings/` 時 exit 1。
+  相對的 `DREAMFLY_BACKEND_DIR` 仍以目前 checkout 為基準。

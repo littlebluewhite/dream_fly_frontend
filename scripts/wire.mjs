@@ -12,7 +12,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const mainCheckout = dirname(
 	execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
 );
-const backendDir = resolve(mainCheckout, process.env.DREAMFLY_BACKEND_DIR || '../dream_fly_backend');
+const backendDir = process.env.DREAMFLY_BACKEND_DIR
+	? resolve(root, process.env.DREAMFLY_BACKEND_DIR)
+	: resolve(mainCheckout, '../dream_fly_backend');
 const source = join(backendDir, 'bindings');
 const target = join(root, 'src/lib/api/generated');
 
