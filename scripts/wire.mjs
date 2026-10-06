@@ -1,13 +1,18 @@
 // Mirrors the backend's committed ts-rs bindings into src/lib/api/generated/.
 //   node scripts/wire.mjs sync   copy bindings/ here, deleting files the backend no longer has
 //   node scripts/wire.mjs check  byte-compare; list stale/missing/extra files and exit 1 on drift
-// Backend dir: $DREAMFLY_BACKEND_DIR, default ../dream_fly_backend. No checkout / no bindings/ => skipped, exit 0.
+// Backend dir: $DREAMFLY_BACKEND_DIR, default ../dream_fly_backend beside the main checkout. No bindings/ => exit 1.
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const backendDir = resolve(root, process.env.DREAMFLY_BACKEND_DIR || '../dream_fly_backend');
+// Worktrees live under .claude/worktrees/, so the sibling is resolved from the main checkout (git's common dir).
+const mainCheckout = dirname(
+	execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: root, encoding: 'utf8' }).trim()
+);
+const backendDir = resolve(mainCheckout, process.env.DREAMFLY_BACKEND_DIR || '../dream_fly_backend');
 const source = join(backendDir, 'bindings');
 const target = join(root, 'src/lib/api/generated');
 
@@ -54,8 +59,8 @@ if (mode !== 'sync' && mode !== 'check') {
 	process.exit(2);
 }
 if (!existsSync(source)) {
-	console.log(`wire: skipped (no bindings/ at ${source})`);
-	process.exit(0);
+	console.error(`wire: no bindings/ at ${source}; set DREAMFLY_BACKEND_DIR to the backend checkout`);
+	process.exit(1);
 }
 const srcFiles = listFiles(source);
 const dstFiles = listFiles(target);

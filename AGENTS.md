@@ -46,12 +46,13 @@ npm run dev                # http://localhost:5173
 
 Scripts are in `package.json`. What it doesn't tell you:
 
-- `npm install` is **required on every fresh checkout/worktree**: `package-lock.json` is gitignored, so a
+- `npm install` is **required on every fresh checkout**: `package-lock.json` is gitignored, so a
   clone has no deps until installed. A missing `@lucide/svelte` at build time means this step was skipped.
+  In a worktree run `sh scripts/worktree-setup.sh` instead (a symlinked `node_modules` breaks vitest).
 - `src/lib/api/generated/` is a byte-exact mirror of the backend's committed ts-rs `bindings/` (the wire types).
   Never edit it by hand: regenerate in the backend (`WIRE_BINDINGS=write cargo test --test wire_types`), then
-  `npm run wire:sync`. `npm run check` first runs `wire:check` and fails on stale/missing/extra files; it is skipped
-  (exit 0) when the sibling backend has no `bindings/`. Override the location with `DREAMFLY_BACKEND_DIR`.
+  `npm run wire:sync`. `npm run check` first runs `wire:check` and fails on stale/missing/extra files; it resolves
+  the sibling backend from the main checkout and fails when it has no `bindings/`. Override with `DREAMFLY_BACKEND_DIR`.
 - `npm run check` (svelte-check) is the only lint: the repo has no ESLint or Prettier, so match the
   surrounding style by hand.
 - Vitest runs in jsdom with setup in `src/vitest-setup.ts`.
