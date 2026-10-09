@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
-import { render } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import {
 	createLoadGate,
 	createPagedLoadGate,
@@ -185,9 +185,10 @@ describe('createLoadGate', () => {
 	it('onDestroy 自動掛載:元件 unmount 後,in-flight 回應 resolve 也不再呼叫 onData', async () => {
 		const d = createDeferred<{ v: number }>();
 		const onData = vi.fn();
-		const fetch = () => d.promise;
+		const fetch = vi.fn(() => d.promise);
 
 		const { unmount } = render(LoadGateHarness, { options: { fetch, onData } });
+		await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1)); // 首載確實發出,in-flight 才有意義
 		unmount();
 		d.resolve({ v: 1 });
 		await d.promise; // 讓 gate 內部 await 之後的續行程式跑完
