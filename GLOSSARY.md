@@ -137,7 +137,8 @@ _Avoid_: 統計(過於籠統)
 **載入閘門 (Load Gate)**:
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
 `createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。只管 phase、run 世代、掛載首載、卸載與
-`onError`(元件內建構即於掛載時自動首載,頁面不寫 `onMount(() => gate.load())`;元件外建構不自動 load);
+`onError`(元件初始化期建構即於掛載時自動首載,頁面不寫 `onMount(() => gate.load())`;元件外或較晚
+才建構的不自動 load、也不自動 destroy);
 `LoadGateOptions<T>` 是判別聯集——plain 頁面給 `{ fetch, onData?, onError? }`,接共享
 store 的頁面給 `{ source: LoadSource, onError? }`(`source` 與 `fetch` 互斥)。`LoadSource` 是水合
 閘門交出的 port(`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`),`isCurrent` 是 load-gate 給
@@ -234,7 +235,9 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 `$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
 以後端 enum 為鍵的查表另提供一支「任何字串都能查」的函式(`domain/tickets.ts` 的 `ticketTypeBadge`、
 `$lib/api/wire` 的 `orderStatusBadge`),未知值後備(中性 tone + 原字串)收在查表所在檔,消費端不自己補
-`?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。
+`?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。`ATT_STATE`(鍵為生成型別
+`AttendanceStatus`)尚未照此辦理——已知、刻意遞延,未知值仍會在 `MyCourseDetail.svelte` 與
+`routes/member/mine/+page.svelte` 炸頁。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
@@ -267,4 +270,5 @@ _Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車�
 `ScheduleBlock.day` 用它)。單一來源 `src/lib/domain/weekday.ts`:`DAY_KEYS`/`WEEKDAY_ZH` 以 `day_of_week`
 為 index,`WEEK` 以 `WeekColumn` 為 index,兩者之間只經 `toWeekColumn(dow)` 換算;`ScheduleBlock.day` 的型別
 就是 `WeekColumn`,沒換算的數字塞不進去(見 `docs/adr/0028` 增補、`docs/adr/0013` 增補)。
-_Avoid_: 手寫 `(getDay()+6)%7`、各檔自帶星期陣列、用註解約定 day 的編號
+_Avoid_: 手寫 `(getDay()+6)%7`、各檔自帶星期陣列(唯一有文件的例外:`admin/report-math.ts` 的
+`WEEKDAY_LABEL`,報表純函式層零外部依賴,見 `docs/adr/0009`、`docs/adr/0028` 增補)、用註解約定 day 的編號

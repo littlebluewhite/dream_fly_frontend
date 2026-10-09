@@ -49,7 +49,7 @@ member 8 頁、coach 8 頁、mobile 5 頁 + 4 overlay、mobile-admin 10 頁、ad
 ### 四個變體
 
 - **(a) 平頁**：`createLoadGate({ fetch, onData, onError? })`，建構即自動首載（R19 起 gate 自己在
-  元件內掛 `onMount` 發起 `load()`，頁面不再手寫，見文末 R19 增補），
+  元件初始化期掛 `onMount` 發起 `load()`，頁面不再手寫，見文末 R19 增補），
   模板讀 `$gate === 'loading' | 'error' | 'ready'`。多數 route 頁與全部 mobile overlay 屬此類。
 - **(b) 守衛頁**（歷史型態——`skip` 已於 2026-07-13 退役，兩個守衛頁已遷移至 `hydrate`
   選項，見文末增補段）：多帶一個 `skip: () => get(xHydrated)`，用於資料已經活在共享 store 的頁面
@@ -232,10 +232,10 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
 再手寫一次首載。gate 早就自己掛了卸載(`onDestroy(destroy)`),首載是同一份生命週期知識,卻沒收進來。
 
 - **決定**:`load-gate.ts` 新增模組私有的 `autoLoadOnMount(load)`——`try { onMount(() => { void load(); }); }
-  catch {}`——兩個 factory 都緊接 `autoDestroyOnUnmount` 之後呼叫。元件內建構:掛載時自動發起首載;
-  元件外建構(模組測試等)沒有生命週期可掛,`onMount` 丟錯被吞掉,**不自動 load**,呼叫端自行 `load()`/
-  `destroy()`——與上文「`onDestroy` 自動掛載,元件外建構不丟錯」一條同一個模式。`onMount` 不在伺服端
-  執行,SSR 不會因此發請求;上文「建構本身無副作用」仍成立(建構只登記 callback,不發請求)。
+  catch {}`——兩個 factory 都緊接 `autoDestroyOnUnmount` 之後呼叫。元件初始化期(script 頂層同步)建構:
+  掛載時自動發起首載;元件外建構(模組測試等)沒有生命週期可掛,`onMount` 丟錯被吞掉,**不自動 load**,
+  呼叫端自行 `load()`/`destroy()`——與上文「`onDestroy` 自動掛載,元件外建構不丟錯」一條同一個模式。
+  `onMount` 不在伺服端執行,SSR 不會因此發請求;上文「建構本身無副作用」仍成立(建構只登記 callback,不發請求)。
 - **不加任何選項**:`LoadGateOptions`/`PagedLoadGateOptions` 不變,也沒有 `manual`/`lazy` 之類的逃生口。
   全倉唯一的條件式首載是 `MyCourseDetail` 的 `if (c) attGate.load()`,而 `courseDetail` overlay 的唯一
   開啟點 `routes/mobile/mine` 的 `openCourse` 一律帶入 course,該條件在正式環境走不到。
@@ -272,8 +272,11 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
      與改前相同。
   6. 公開介面(選項、`silentRefresh` 語意、`refresh()` 一律真抓)全部未動,凍結條款管的範圍沒有被碰;
      唯一的行為差異是「首載由 gate 自己登記」,不需要任何呼叫端另外配合。
-- **後果(刻意,非 bug)**:在元件內建構的 gate 一定會在掛載時載入,沒有 opt-out。日後若出現「建構了
-  卻不想立刻載入」的呼叫端(惰性或條件式首載),再補選項,屆時依本節的方式重新評估清單。
+- **後果(刻意,非 bug)**:在元件初始化期(script 頂層同步)建構的 gate 一定會在掛載時載入,沒有
+  opt-out。較晚才建構的 gate(事件處理器、`await` 之後、reactive 區塊)已經不在初始化期,`onMount`/
+  `onDestroy` 一樣丟錯被吞掉:既不會自動首載、也不會隨卸載自動 `destroy()`,呼叫端須自行呼叫。56 站
+  全是頂層同步建構,沒有這種站。日後若出現「建構了卻不想立刻載入」的呼叫端(惰性或條件式首載),再補
+  選項,屆時依本節的方式重新評估清單。
 - **因本節而過時的原文**:「介面語意重點」`onDestroy` 一條(現在 factory 還多登記一個 `onMount`)、
   「四個變體」(c) 的「頁面層只負責呼叫 `gate.load()`」(現在連呼叫都不用)——兩處以本節為準。
 - **測試**:`load-gate.harness.svelte` 不再手動 `load()`,並新增可選的 `paged` prop;`load-gate.test.ts`

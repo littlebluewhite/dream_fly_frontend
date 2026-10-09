@@ -8,7 +8,7 @@
  *
  * Legacy store factory 風格(仿 stores/toasts.ts 的 createToasts):closure、
  * 無 `this`,回傳物件的 `subscribe` 直接轉發 svelte/store 的 writable,頁面以
- * `$gate` 讀取狀態。元件內建構即掛上首載(onMount 才 fetch,SSR 不執行),元件外建構
+ * `$gate` 讀取狀態。元件初始化期建構即掛上首載(onMount 才 fetch,SSR 不執行),元件外建構
  * (模組測試等)不自動 load;不在模組層讀 localStorage、無建構副作用(SSR 安全,模組
  * 可被伺服端 import)。
  *
@@ -68,8 +68,10 @@ function autoDestroyOnUnmount(destroy: () => void): void {
 	}
 }
 
-/** 掛載一次性生命週期:元件內自動在掛載時發起首載;元件外(模組測試等)沒有生命週期可掛,
- *  靜默略過,呼叫端需自行呼叫 load()。onMount 只在瀏覽器執行,SSR 不會 fetch。 */
+/** 掛載一次性生命週期:元件初始化期(script 頂層同步)建構時,自動在掛載時發起首載;元件外
+ *  (模組測試等)沒有生命週期可掛,靜默略過,呼叫端需自行呼叫 load()。較晚才建構(事件處理器、
+ *  await 之後、reactive 區塊)同樣已不在初始化期,onMount 丟錯被吞掉,不會自動首載、也不會
+ *  自動 destroy。onMount 只在瀏覽器執行,SSR 不會 fetch。 */
 function autoLoadOnMount(load: () => Promise<void>): void {
 	try {
 		onMount(() => {

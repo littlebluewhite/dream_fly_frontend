@@ -533,13 +533,16 @@ VM」。
 
 本篇原文不改寫,以下各點以本節為準。
 
-- **以後端 enum 當鍵的查表,要提供一個「任何字串都能查」的函式,未知值後備收在 domain 檔裡。**
+- **以後端 enum 當鍵的查表,要提供一個「任何字串都能查」的函式,未知值後備收在查表所在檔。**
   查表本體仍是明確 `Record<K, V>`(鍵集窮舉,見上文「宣告形與不 `readonly` 理由」),但消費端手上是後端
   wire 字串;後端多一個值時,直接索引會 destructure 到 `undefined` 而炸整頁。後備不由各消費端自己補
-  `?? …`,也不用 `as` 把 wire 字串強轉成鍵型別,而是由 domain 檔提供查表函式:`domain/tickets.ts` 的
+  `?? …`,也不用 `as` 把 wire 字串強轉成鍵型別,而是由查表所在檔提供查表函式:`domain/tickets.ts` 的
   `ticketTypeBadge(t: string)` 與 `api/wire.ts` 的 `orderStatusBadge(s: string)` 同形,查無回
   `['neutral', 原字串]`。方案類型的消費端(`TicketsScreen`、admin `StatusBadge` 的 `ticket` 分支)只
-  呼叫 `ticketTypeBadge`。
+  呼叫 `ticketTypeBadge`。`ATT_STATE`(`member/data.ts` 以生成型別 `AttendanceStatus` 為鍵,
+  `mobile/data.ts` 是同一組三值對照)**還沒照這條走**——已知、刻意遞延(本輪計畫「前端不做」):
+  後端 `attendance_status` 多一個值時,`MyCourseDetail.svelte` 與 `routes/member/mine/+page.svelte`
+  對它直接索引再 destructure,仍會炸頁。
 - **方案類型的鍵集由生成的後端型別推導**:`TicketType` 改為 `Exclude<ProductType, 'merchandise'>`
   (原為手抄的三值 union),`TICKET_TYPE` 維持明確 `Record<TicketType, …>`(不用 `satisfies`)。後端
   `ProductType` 多一個值、bindings 同步後,`TICKET_TYPE` 少鍵即編譯錯誤。`admin/api.ts` 的

@@ -328,9 +328,10 @@ one: it maps 403/404/422 to the same wording desktop's inline attendance-error t
 failure shows the specific reason (`docs/adr/0011` addendum).
 
 Pages build a `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts`
-(`docs/adr/0008`) — a gate constructed inside a component starts its first load on mount by itself, so
-pages don't write `onMount(() => gate.load())` (outside a component, e.g. in a module test, it doesn't
-auto-load) — and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
+(`docs/adr/0008`) — a gate constructed during component init (top level of the script, synchronously)
+starts its first load on mount by itself, so pages don't write `onMount(() => gate.load())` (built outside
+a component, or later in an event handler / after an `await`, it neither auto-loads nor auto-destroys) —
+and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. That branching is usually collapsed into
 a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` / `slot="error"` with
 `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never `load()`), consumed at 55
