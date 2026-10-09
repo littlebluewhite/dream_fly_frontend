@@ -231,8 +231,9 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 取用——mobile-admin/member/mobile 屬此;facade 若只是同源且結構恆等的轉手(admin 這類 `Tone` 與 wire
 相容、無可收窄者;facade 端改過名的 alias 亦同)不設這一層,消費端**直取**
 `$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
-以後端 enum 為鍵的查表另提供一支「任何字串都能查」的函式(`ticketTypeBadge`、`orderStatusBadge`),未知值後備
-(中性 tone + 原字串)收在 domain 檔,消費端不自己補 `?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補〔R19〕)。
+以後端 enum 為鍵的查表另提供一支「任何字串都能查」的函式(`domain/tickets.ts` 的 `ticketTypeBadge`、
+`$lib/api/wire` 的 `orderStatusBadge`),未知值後備(中性 tone + 原字串)收在查表所在檔,消費端不自己補
+`?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
@@ -258,3 +259,11 @@ lines 之後往下傳一次;`checkout-controller.ts` 的 `deps.placeOrder`
 各自重讀第二份(見 `docs/adr/0003`、`docs/adr/0025` F-5)。
 _Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車總額直接加總整車(會把已持有方案算進去);在 `chargeableCart` 之外各自再推導一次 billable/total;production 檔於唯一產地之外自行
 `as` 斷言打 brand(測試 fixture 的檔內 helper cast 屬受核可例外,見 `checkout-math.test.ts` 檔頭)
+
+**星期 (Weekday)**:
+兩套星期索引並存,混用就差一天(`aaabc12` 曾讓週課表錯了 3 個月)。後端 `day_of_week` 是 0=日 … 6=六
+(與 JS `Date.getDay()` 同序);週課表欄位 `WeekColumn` 是 0=一 … 6=日(週一起頭的 UI 版面,
+`ScheduleBlock.day` 用它)。單一來源 `src/lib/domain/weekday.ts`:`DAY_KEYS`/`WEEKDAY_ZH` 以 `day_of_week`
+為 index,`WEEK` 以 `WeekColumn` 為 index,兩者之間只經 `toWeekColumn(dow)` 換算;`ScheduleBlock.day` 的型別
+就是 `WeekColumn`,沒換算的數字塞不進去(見 `docs/adr/0028` 增補、`docs/adr/0013` 增補)。
+_Avoid_: 手寫 `(getDay()+6)%7`、各檔自帶星期陣列、用註解約定 day 的編號

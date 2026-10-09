@@ -173,3 +173,24 @@ A 畫面的 PATCH 遇 401 → `ApiError(401)`;storage 已是 B 的 refresh token
 - **`docs/adr/0027`**:§1 的延伸、:346 遞延結案(增補)。
 - **`docs/adr/0003`**、**`0025`** F-5:結帳結算仍由各 surface 自己做(§3,不動)。
 - **`docs/adr/0022`**、**`0023`**:admin/coach `TodayClass` 各自獨立(§5,不動)。
+
+## 增補(2026-10-09,架構深化 R19):§4 的星期慣例從註解改成型別,並有了 module
+
+本篇原文不改寫,以下各點以本節為準。
+
+§4 的病灶(`aaabc12`)是「後端 `day_of_week` 0=日 … 6=六、週課表欄位 0=一 … 6=日」只寫在註解裡:
+`ScheduleBlock.day` 的型別註解寫 `0=Mon … 6=Sun`,型別卻是 `number`,mobile 兩處照 1..7 用,編譯器看不出。
+上文「週課表修正」那一條的 `(getDay() + 6) % 7` 與各檔自帶的星期陣列,也是散在各處的同一份知識。R19 收斂為:
+
+- **單一 module `src/lib/domain/weekday.ts`**:`DAY_KEYS`/`WEEKDAY_ZH`(index = 後端 `day_of_week` =
+  `Date.getDay()`)、`WEEK`(index = 週課表欄位)、`WeekColumn` 型別(`0 | 1 | … | 6`)與唯一的換算
+  `toWeekColumn(dow)`(型別化對照表 `[6, 0, 1, 2, 3, 4, 5]`,不用 `(getDay() + 6) % 7`)。
+- **慣例從註解改成型別**:`ScheduleBlock.day`(`domain/member-app.ts`、`member/data.ts` 兩處宣告)的型別由
+  `number` 改為 `WeekColumn`;`member/api.ts` 的 mapper 與 `mobile/mine` 的 `today` 都經 `toWeekColumn`,
+  沒換算的數字塞進 `day` 會在編譯期被擋下。註解保留作說明,但不再是唯一的約束。
+- **兩套索引的對照有測試**:`weekday.test.ts` 的性質測試釘死 `WEEK[toWeekColumn(dow)] === WEEKDAY_ZH[dow]`,
+  表格誤改一格就紅。
+- **其他消費端**:教練 `schedule-dates.ts`/`coach/api.ts`(`DAY_KEYS`、`WEEKDAY_ZH`、`toWeekColumn`)與
+  `mobile/overlays/trial-dates.ts`(`WEEKDAY_ZH`)改取同一個 module,不再各自帶陣列;`WEEK` 搬家見
+  `docs/adr/0013` R19 增補。`admin/report-math.ts` 的 `WEEKDAY_LABEL` 與 `WEEKDAY_ZH` 值相同,
+  但屬報表呈現素材、與逐面板 VM 算式同居(`docs/adr/0013` R10 增補),本輪不動。

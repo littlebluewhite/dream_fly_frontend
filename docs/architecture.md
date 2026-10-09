@@ -62,8 +62,9 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
   `activity.ts`, plus the entity type files `classes.ts` / `members.ts` / `orders.ts` (`ClassBase`/
   `OrderBase` interfaces — there are no base seed arrays; mobile-admin's ops collections boot empty, see
   the API seam section).
-- **`member-app.ts`** — the member↔mobile desktop/mobile twin seed: 8 constants (`STATS`, `SKILLS`,
-  `UPCOMING`, `WEEK`, `TIME_ROWS`, `CONTACT_THREAD`, `COACH_REPLIES`, `NOTIF_CATS`) plus type-only exports
+- **`member-app.ts`** — the member↔mobile desktop/mobile twin seed: 7 constants (`STATS`, `SKILLS`,
+  `UPCOMING`, `TIME_ROWS`, `CONTACT_THREAD`, `COACH_REPLIES`, `NOTIF_CATS`; the Monday-first `WEEK` label
+  array lives in `weekday.ts`, `docs/adr/0013`) plus type-only exports
   (`EnrolledCourse`/`ScheduleBlock`/`Order`, `LedgerEntry`/`LedgerType`) that back type annotations in
   `mobile/api.ts`, `member/points.ts` and the facades' own local interfaces. `ANNOUNCE` stays forked in
   each facade because one announcement's background colour differs between the two. The notification and

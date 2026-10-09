@@ -529,7 +529,7 @@ VM」。
 (tone/label 已由桌面 `mapTodaySession` 查好)與 coach 的 `TodayClass`,`TodayRow`、`mapTodayClassToRow`、
 `mapAdminTodayRow` 刪除。`SESSION_STATUS` 的直接消費端剩 admin 與 coach 兩處。見 `docs/adr/0028` §5。
 
-## 增補（2026-10-09，架構深化 R19）
+## 增補(2026-10-09,架構深化 R19)
 
 本篇原文不改寫,以下各點以本節為準。
 
@@ -549,3 +549,11 @@ VM」。
   `TICKET_TYPE` 因此沒有消費端,連同 `toBe` 同參照守衛一併退役。依上文「`TIME_ROWS` 死出口」前例,
   零消費者的出口不留。`TICKET_TYPE` 現在的直接消費端是 `ticketTypeBadge` 本身與 admin
   `TicketEditDialog`(Select 選項標籤)。
+- **`WEEK` 搬進 `domain/weekday.ts`**(§1 現況表 `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 列與上文 R13
+  增補的同一列):`WEEK`(`['一', … , '日']`,週一起頭)的 index 是週課表欄位 `WeekColumn`,和 `DAY_KEYS`/
+  `WEEKDAY_ZH`/`toWeekColumn` 屬同一組星期換算,併入 `weekday.ts` 讓兩套星期索引只住一處。`member-app.ts`
+  不再匯出 `WEEK`(`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 不動,該檔常數 8 → 7)。消費端 `member/schedule`
+  頁、`ScheduleScreen`、mobile mine 頁改取 `$lib/domain/weekday`;教練 `ScheduleMonth` 的月曆表頭原本自帶
+  一份 `HEAD` 陣列,改用 `WEEK`。`WEEK` 只是標籤陣列,沒有 tone,不算顯示查表。`member-app.test.ts` 的
+  `WEEK` 字面快照與列數 canary 隨之搬到 `weekday.test.ts`,並新增性質測試:每個 `day_of_week` 都滿足
+  `WEEK[toWeekColumn(dow)] === WEEKDAY_ZH[dow]`。星期慣例本身見 `docs/adr/0028` 增補與 `GLOSSARY.md`「星期」。
