@@ -3,6 +3,7 @@ import { render, fireEvent } from '@testing-library/svelte';
 import OrderDialog from './OrderDialog.svelte';
 import type { Order } from '$lib/admin/data';
 import { fmtNT } from '$lib/format';
+import type { OrderStatus } from '$lib/api/wire';
 
 /* OrderDialog — order detail modal (admin.jsx OrderDialog). A centered amount +
  * status badge over a 2-col field grid (id/member/item/discount/method/
@@ -133,6 +134,16 @@ describe('OrderDialog', () => {
 		it('a refunded order (terminal) shows no 變更狀態 control either', () => {
 			const { queryByLabelText } = render(OrderDialog, { order: refunded });
 			expect(queryByLabelText('變更狀態為')).toBeNull();
+		});
+
+		it('an unknown status (backend added a value) renders the dialog with its raw badge and no 變更狀態 control', () => {
+			const unknown: Order = { ...paid, status: 'disputed' as OrderStatus };
+			const { container, getByText, queryByLabelText, queryByText } = render(OrderDialog, { order: unknown });
+			expect(getByText(unknown.id)).toBeInTheDocument();
+			const badges = [...container.querySelectorAll('.badge')].map((b) => b.textContent?.trim());
+			expect(badges).toContain('disputed');
+			expect(queryByLabelText('變更狀態為')).toBeNull();
+			expect(queryByText('套用')).toBeNull();
 		});
 
 		/* 卡 7 reset 回歸對：OrderDialog 的 nextStatus 是 derive 形（legalNext[0]），本來

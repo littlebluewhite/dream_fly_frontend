@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/svelte';
 import StatusBadge from './StatusBadge.svelte';
 import type { TicketType } from '$lib/domain/tickets';
+import type { OrderStatus } from '$lib/api/wire';
 
 /* StatusBadge maps a (kind, value) pair onto the shared Badge, resolving tone +
  * label from the frozen status maps (單源 $lib/domain 各 entity 檔) and applying
@@ -18,6 +19,17 @@ describe('StatusBadge', () => {
 	it('order/refunded → 已退款 with a dot', () => {
 		const { container, getByText } = render(StatusBadge, { kind: 'order', value: 'refunded' });
 		expect(getByText('已退款')).toBeInTheDocument();
+		expect(dot(container)).not.toBeNull();
+	});
+
+	/* 後端多一個訂單狀態值時，ORDER_STATUS 查無對應 key——降級為 neutral tone + 原字串
+	 * 標籤(同 ticket 分支慣例)，不會 destructure 到 undefined 而讓整頁 crash。 */
+	it('order/未知狀態(後端擴集) → 顯示原字串，不會炸掉', () => {
+		const { container, getByText } = render(StatusBadge, {
+			kind: 'order',
+			value: 'disputed' as OrderStatus
+		});
+		expect(getByText('disputed')).toBeInTheDocument();
 		expect(dot(container)).not.toBeNull();
 	});
 

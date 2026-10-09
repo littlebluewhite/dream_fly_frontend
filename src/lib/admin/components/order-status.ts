@@ -37,7 +37,7 @@ const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
-	return LEGAL_NEXT[current];
+	return LEGAL_NEXT[current] ?? [];
 }
 
 /**

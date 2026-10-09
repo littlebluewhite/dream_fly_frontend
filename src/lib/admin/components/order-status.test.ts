@@ -77,6 +77,10 @@ describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', (
 		expect(legalNextStatuses('cancelled')).toEqual([]);
 		expect(legalNextStatuses('refunded')).toEqual([]);
 	});
+
+	it('未知狀態(後端擴集) → [] 而非 undefined，呼叫端 .map 不會炸', () => {
+		expect(legalNextStatuses('disputed' as OrderStatus)).toEqual([]);
+	});
 });
 
 describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地working copy', () => {

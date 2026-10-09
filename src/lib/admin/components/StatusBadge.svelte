@@ -20,7 +20,7 @@
 	import { TICKET_TYPE, type TicketType } from '$lib/domain/tickets';
 	import { LEVEL_TONE, type Level } from '$lib/domain/course-level';
 	import { STATUS_TONE, type ClassStatus } from '$lib/domain/classes';
-	import { ORDER_STATUS, type Tone, type OrderStatus } from '$lib/api/wire';
+	import { orderStatusBadge, type Tone, type OrderStatus } from '$lib/api/wire';
 
 	type Kind =
 		| 'memberAccount'
@@ -53,7 +53,7 @@
 				dot = true;
 				break;
 			case 'order':
-				[tone, label] = ORDER_STATUS[value as OrderStatus];
+				[tone, label] = orderStatusBadge(value);
 				dot = true;
 				break;
 			case 'venue':
