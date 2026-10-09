@@ -24,17 +24,16 @@
 import { describe, it, expect } from 'vitest';
 import { MEMBER_ACCOUNT_STATUS } from './members';
 import { VENUE_STATUS } from './venues';
-import { TICKET_TYPE } from './tickets';
+import { TICKET_TYPE, ticketTypeBadge } from './tickets';
 import { STATUS_TONE } from './classes';
 import { SESSION_STATUS } from './sessions';
 import * as MobileAdminData from '$lib/mobile-admin/data';
 
 /* ── 1. wiring check：facade 與 domain 同參照(toBe，非值比對) ── */
 describe('mobile-admin facade re-asserts domain status lookups by reference (single source)', () => {
-	it('every shared table is the SAME object as domain (toBe, not a copy) ×4', () => {
+	it('every shared table is the SAME object as domain (toBe, not a copy) ×3', () => {
 		expect(MobileAdminData.MEMBER_ACCOUNT_STATUS).toBe(MEMBER_ACCOUNT_STATUS);
 		expect(MobileAdminData.VENUE_STATUS).toBe(VENUE_STATUS);
-		expect(MobileAdminData.TICKET_TYPE).toBe(TICKET_TYPE);
 		expect(MobileAdminData.STATUS_TONE).toBe(STATUS_TONE);
 	});
 });
@@ -85,6 +84,19 @@ describe('literal table invariants (independent of the facades)', () => {
 
 	it('canonical 守衛：SESSION_STATUS.live 標籤是「上課中」，不是 admin 舊值「進行中」', () => {
 		expect(SESSION_STATUS.live[1]).toBe('上課中');
+	});
+});
+
+/* ── 2b. 容錯查表：未知值給中性 tone + 原字串，不回 undefined ── */
+describe('ticketTypeBadge — 方案類型查表自帶未知值後備', () => {
+	it('三個已知值回 TICKET_TYPE 的 [tone, label]', () => {
+		expect(ticketTypeBadge('ticket')).toEqual(['accent', '單次票券']);
+		expect(ticketTypeBadge('membership')).toEqual(['primary', '月票方案']);
+		expect(ticketTypeBadge('course_package')).toEqual(['success', '課程套裝']);
+	});
+
+	it('未知值 → [neutral, 原字串]，不是 undefined', () => {
+		expect(ticketTypeBadge('gift_card')).toEqual(['neutral', 'gift_card']);
 	});
 });
 

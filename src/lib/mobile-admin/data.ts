@@ -46,7 +46,6 @@ export type { Student } from '$lib/coach/data';
 import { STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';
 import { MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
-import { TICKET_TYPE as TICKET_TYPE_BASE } from '$lib/domain/tickets';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 
@@ -151,5 +150,5 @@ export const VENUE_STATUS: Record<string, Tone> = VENUE_STATUS_BASE;
 
 /* ===== 票券管理 data ===== */
 // `Ticket` 型別已 C4 批3 退役(消費端改直取 `$lib/domain/tickets`)；`TICKETS` 值早於
-// 本批已退役(C4)。
-export const TICKET_TYPE: Record<string, Tone> = TICKET_TYPE_BASE;
+// 本批已退役(C4)；`TICKET_TYPE` 查表也已退役(消費端改用 `$lib/domain/tickets` 的
+// `ticketTypeBadge`，自帶未知值後備)。

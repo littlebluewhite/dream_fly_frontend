@@ -17,7 +17,7 @@
 	// entity 檔 / $lib/api/wire(原經 $lib/admin/data 純轉手,零附加型別事實)。
 	import { MEMBER_ACCOUNT_STATUS, type MemberAccountStatus } from '$lib/domain/members';
 	import { VENUE_STATUS, type VenueStatus } from '$lib/domain/venues';
-	import { TICKET_TYPE, type TicketType } from '$lib/domain/tickets';
+	import { ticketTypeBadge, type TicketType } from '$lib/domain/tickets';
 	import { LEVEL_TONE, type Level } from '$lib/domain/course-level';
 	import { STATUS_TONE, type ClassStatus } from '$lib/domain/classes';
 	import { orderStatusBadge, type Tone, type OrderStatus } from '$lib/api/wire';
@@ -64,7 +64,7 @@
 				// 容錯查表(同 $lib/api/wire.ts orderStatusBadge 慣例)：product_type 契約若
 				// 擴出第 4 值(見 admin/api.ts mapProduct 的 as TicketType 註解)，查無 →
 				// 中性 tone + 原字串標籤，不會 destructure 到 undefined 而炸掉整頁。
-				[tone, label] = TICKET_TYPE[value as TicketType] ?? ['neutral', value];
+				[tone, label] = ticketTypeBadge(value);
 				break;
 			case 'classLevel':
 				tone = LEVEL_TONE[value as Level];

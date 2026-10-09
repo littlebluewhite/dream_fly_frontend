@@ -3,7 +3,8 @@ import { render } from '@testing-library/svelte';
 import TicketsScreen from './TicketsScreen.svelte';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { ProductResponse } from '$lib/api/generated';
+import type { ProductResponse, ProductType } from '$lib/api/generated';
+import { productResponse } from '$lib/testing/wire-fixtures';
 import { fmtNT } from '$lib/format';
 
 /* 票券管理 push screen — C4：接真 GET /products(復用桌面 admin/api.ts 的 getTickets()，
@@ -87,6 +88,21 @@ describe('TicketsScreen — ready(接真 payload)', () => {
 		expect(txt).toContain('已售 10 / 50 張'); // Alpha quota 50
 		expect(txt).toContain('20%'); // 10/50
 		expect(txt).toContain('已售 4 / 不限 張'); // Beta quota null → 不限
+	});
+
+	/* 後端 product_type 多一個值時(mapProduct 的 as TicketType 編譯期擋不下)，方案類型
+	 * 查表自帶後備：未知值 → 中性 badge + 原字串，其餘卡片照常渲染，不會 TypeError。 */
+	it('未知 product_type(契約擴集) → 該卡顯示原字串 badge，其他卡片照常渲染', async () => {
+		const gift = productResponse({ id: 'uuid-gift', name: 'Delta 測試禮券', product_type: 'gift_card' as ProductType, price_cents: 20000, sold: 2 });
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /products?page=1': { ...PAYLOAD, products: [...PRODUCTS, gift] } })
+		);
+		const { container, findByText } = render(TicketsScreen, { props: { onBack: () => {} } });
+		await findByText('Delta 測試禮券');
+		const badges = [...container.querySelectorAll('.badge')].map((b) => b.textContent?.trim());
+		expect(badges).toContain('gift_card');
+		expect(badges).toContain('月票方案');
+		expect(badges.filter((b) => b === '單次票券')).toHaveLength(2);
 	});
 
 	it('F4:quota 0 → soldPct 零值防呆,顯示 0%、版面無 NaN/Infinity(重用桌面 admin tickets-util)', async () => {

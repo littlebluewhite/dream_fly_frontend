@@ -24,12 +24,9 @@
   import { fmtNT } from '$lib/format';
   import { soldPct } from '$lib/admin/tickets-util'; // F4：quota 0/null → 0，防 NaN/Infinity（重用桌面 admin 既有 helper）
   import { getTickets } from '$lib/admin/api';
-  import { TICKET_TYPE } from '$lib/mobile-admin/data';
-  import type { Ticket } from '$lib/domain/tickets';
+  import { ticketTypeBadge, type Ticket } from '$lib/domain/tickets';
 
   export let onBack: () => void;
-
-  type BadgeTone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   let tickets: Ticket[] = [];
   const gate = createLoadGate({
@@ -78,8 +75,7 @@
           <div style="font-size:12.5px; opacity:0.82; margin-top:4px;">共售出 {totalSold} 張票券</div>
         </div>
         {#each tickets as t (t.id)}
-          {@const tone = TICKET_TYPE[t.type][0] as BadgeTone}
-          {@const label = TICKET_TYPE[t.type][1]}
+          {@const [tone, label] = ticketTypeBadge(t.type)}
           {@const quota = t.quota}
           {@const pct = soldPct(t.sold, quota)}
           <div
