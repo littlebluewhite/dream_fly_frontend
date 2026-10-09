@@ -11,10 +11,11 @@
 	 * 死分支一併退役——MemberDialog 唯一呼叫端 MembersTable 只傳 account/
 	 * memberAccount，`member`/`pay` 從未被任何真實呼叫端用過。 */
 	import { Badge } from '$lib/components/ui';
-	// C4 批4(facade 純轉手退役):MEMBER_ACCOUNT_STATUS/VENUE_STATUS/TICKET_TYPE/
-	// LEVEL_TONE/STATUS_TONE 五張查表與 Tone/MemberAccountStatus/OrderStatus/
+	// C4 批4(facade 純轉手退役):MEMBER_ACCOUNT_STATUS/VENUE_STATUS/
+	// LEVEL_TONE/STATUS_TONE 四張查表與 Tone/MemberAccountStatus/OrderStatus/
 	// VenueStatus/TicketType/Level/ClassStatus 七個型別,改直取對應 $lib/domain 各
-	// entity 檔 / $lib/api/wire(原經 $lib/admin/data 純轉手,零附加型別事實)。
+	// entity 檔 / $lib/api/wire(原經 $lib/admin/data 純轉手,零附加型別事實);
+	// 方案類型走 ticketTypeBadge 查表函式。
 	import { MEMBER_ACCOUNT_STATUS, type MemberAccountStatus } from '$lib/domain/members';
 	import { VENUE_STATUS, type VenueStatus } from '$lib/domain/venues';
 	import { ticketTypeBadge, type TicketType } from '$lib/domain/tickets';
@@ -61,9 +62,7 @@
 				dot = true;
 				break;
 			case 'ticket':
-				// 容錯查表(同 $lib/api/wire.ts orderStatusBadge 慣例)：product_type 契約若
-				// 擴出第 4 值(見 admin/api.ts mapProduct 的 as TicketType 註解)，查無 →
-				// 中性 tone + 原字串標籤，不會 destructure 到 undefined 而炸掉整頁。
+				// 方案類型走容錯查表函式(未知值後備收在 domain/tickets.ts)。
 				[tone, label] = ticketTypeBadge(value);
 				break;
 			case 'classLevel':

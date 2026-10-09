@@ -90,11 +90,13 @@ export const updateVenue = (id: string, body: VenueWriteBody): Promise<VenueResp
 
 /* ═════════════════════════ 票券（GET /products，公開端點，復用 Task 14 public seam） ═════════════════════════ */
 
-/** 後端 product_type 三值（ticket|membership|course_package，merchandise 已被
- *  getTickets() 濾除，不會流到這裡）現與前端 TicketType 一一對應（Task F1 收斂）——
- *  不再折疊成 pass/trial/event 這組無後端來源的虛構分組。讀寫共用同一份真值：
- *  createProduct/updateProduct 的 body 把 Ticket.type 原樣送回 product_type，不需要
- *  中介對照表。 */
+/** getTickets() 濾除 merchandise 後的商品形狀：product_type 收窄為 TicketType（由生成的
+ *  ProductType 推導，見 domain/tickets.ts），mapProduct 不必 as 強轉。後端多一個
+ *  product_type 值、bindings 同步後，TICKET_TYPE 查表少鍵即編譯錯誤。與前端 TicketType
+ *  一一對應（Task F1 收斂）——不再折疊成 pass/trial/event 這組無後端來源的虛構分組。
+ *  讀寫共用同一份真值：createProduct/updateProduct 的 body 把 Ticket.type 原樣送回
+ *  product_type，不需要中介對照表。 */
+type TicketProduct = ProductResponse & { product_type: TicketType };
 
 /** sold/quota 現直接來自 ProductResponse（見 integration-contract.md §3.7）：
  *  `sold` 是已付款訂單的 quantity 加總；`quota` 是 `stock` 的直接映射，`null` = 不限
@@ -102,11 +104,11 @@ export const updateVenue = (id: string, body: VenueWriteBody): Promise<VenueResp
  *  已被 getTickets() 濾除）。null 顯示層由 routes/admin/tickets/+page.svelte 渲染
  *  「不限」，不用 0 頂替（0 在既有 UI 語意上會誤讀成「已無配額」）。圖示固定用通用
  *  icon(後端無圖示欄位)；color 依序輪替既有色票(後端無代表色欄位，純視覺裝飾)。 */
-function mapProduct(p: ProductResponse, i: number): Ticket {
+function mapProduct(p: TicketProduct, i: number): Ticket {
 	return {
 		id: p.id,
 		name: p.name,
-		type: p.product_type as TicketType,
+		type: p.product_type,
 		price: ntd(p.price_cents),
 		sold: p.sold,
 		quota: p.quota,
@@ -133,7 +135,9 @@ export interface TicketsData {
 }
 export const getTickets = (page = 1): Promise<TicketsData> =>
 	listProductsPaged(page).then((r) => ({
-		tickets: r.products.filter((p) => p.product_type !== 'merchandise').map(mapProduct),
+		tickets: r.products
+			.filter((p): p is TicketProduct => p.product_type !== 'merchandise')
+			.map(mapProduct),
 		...pageMeta(r)
 	}));
 

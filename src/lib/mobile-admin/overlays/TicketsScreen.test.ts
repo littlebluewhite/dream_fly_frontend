@@ -90,7 +90,7 @@ describe('TicketsScreen — ready(接真 payload)', () => {
 		expect(txt).toContain('已售 4 / 不限 張'); // Beta quota null → 不限
 	});
 
-	/* 後端 product_type 多一個值時(mapProduct 的 as TicketType 編譯期擋不下)，方案類型
+	/* 後端 product_type 多一個值而 bindings 尚未同步時(型別擋不下執行期資料)，方案類型
 	 * 查表自帶後備：未知值 → 中性 badge + 原字串，其餘卡片照常渲染，不會 TypeError。 */
 	it('未知 product_type(契約擴集) → 該卡顯示原字串 badge，其他卡片照常渲染', async () => {
 		const gift = productResponse({ id: 'uuid-gift', name: 'Delta 測試禮券', product_type: 'gift_card' as ProductType, price_cents: 20000, sold: 2 });

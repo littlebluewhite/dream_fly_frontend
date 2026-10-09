@@ -3,13 +3,14 @@
 
 import type { IconName } from '$lib/icon-registry';
 import type { Tone } from '$lib/api/wire';
+import type { ProductType } from '$lib/api/generated';
 
 export interface Ticket {
 	id: string;
 	name: string;
 	// ProductResponse.product_type 的直接映射（Task F1 收斂）——merchandise 已被
 	// getTickets() 濾除，不會出現在這裡；不再是舊版無後端來源的 pass/trial/event 分組。
-	type: 'ticket' | 'membership' | 'course_package';
+	type: TicketType;
 	price: number;
 	sold: number;
 	quota: number | null; // null = 不限（見 ProductResponse.quota，src/lib/admin/api.ts getTickets()）
@@ -27,8 +28,9 @@ export const TICKETS: Ticket[] = [
 	{ id: 'T-FAMILY', name: '親子體驗組', type: 'ticket', price: 1000, sold: 73, quota: 150, color: '#EC4899', icon: 'users', desc: '親子雙人單堂體驗' }
 ];
 
-/** 票券類型 union（admin/mobile-admin 共用查表鍵）。 */
-export type TicketType = 'ticket' | 'membership' | 'course_package';
+/** 方案類型 union（admin/mobile-admin 共用查表鍵）：由生成的 ProductType 去掉 merchandise 推導，
+ *  後端多一個值、bindings 同步後，下方 TICKET_TYPE 少鍵即編譯錯誤。 */
+export type TicketType = Exclude<ProductType, 'merchandise'>;
 
 /** 票券類型 → [Tone, 中文標籤]。 */
 export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {

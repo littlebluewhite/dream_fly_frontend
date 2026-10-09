@@ -77,10 +77,9 @@ describe('StatusBadge', () => {
 		expect(isSolid(container)).toBe(false);
 	});
 
-	/* Important #2(a)(終審)：product_type 契約若擴出第 4 值(admin/api.ts mapProduct
-	 * 的 `p.product_type as TicketType` 目前無法在編譯期擋下)，TICKET_TYPE 查表查無
-	 * 對應 key——降級為 neutral tone + 原字串標籤，不會 destructure 到 undefined 而
-	 * 讓整頁 crash。 */
+	/* Important #2(a)(終審)：後端 product_type 擴出第 4 值而前端 bindings 尚未同步時
+	 * (型別擋不下執行期資料)，ticketTypeBadge 查表查無對應 key——降級為 neutral
+	 * tone + 原字串標籤，不會 destructure 到 undefined 而讓整頁 crash。 */
 	it('ticket/未知值(契約若擴集) → 降級為 neutral tone + 原字串標籤，不會炸掉', () => {
 		const { container, getByText } = render(StatusBadge, {
 			kind: 'ticket',
