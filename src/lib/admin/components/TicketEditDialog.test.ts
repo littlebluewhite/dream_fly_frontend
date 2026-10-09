@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import TicketEditDialog from './TicketEditDialog.svelte';
-import { TICKETS, type Ticket } from '$lib/domain/tickets';
+import { TICKETS, TICKET_TYPE, type Ticket } from '$lib/domain/tickets';
 
 /* TicketEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog). Holds a local copy of the ticket; 儲存 fires onSave(updated)
@@ -90,6 +90,14 @@ describe('TicketEditDialog', () => {
 		const optionLabels = [...typeSelect.options].map((o) => o.textContent);
 		expect(optionLabels).toEqual(['單次票券', '月票方案', '課程套裝']);
 		expect(queryByText('體驗票')).toBeNull();
+	});
+
+	/* 下拉選項必須涵蓋 TICKET_TYPE 的每一個方案類型：後端 ProductType 多一個值、TICKET_TYPE 補鍵後，
+	 * 下拉不能悄悄漏掉它（admin/data.ts 的 TICKET_TYPES 曾是手抄三值陣列，漏了也不會編譯錯）。 */
+	it('offers every TICKET_TYPE key as an option — a new product type cannot silently go missing', () => {
+		const { getByLabelText } = render(TicketEditDialog, { open: true, ticket: base });
+		const typeSelect = getByLabelText('票券類型') as HTMLSelectElement;
+		expect([...typeSelect.options].map((o) => o.value)).toEqual(Object.keys(TICKET_TYPE));
 	});
 
 	/* 空白 配額 = 不限（null，見 ProductResponse.quota null=無限）。ProductResponse.quota

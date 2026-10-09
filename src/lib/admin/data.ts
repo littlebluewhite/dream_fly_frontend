@@ -21,7 +21,7 @@ import type { UserResponse } from '$lib/api/generated';
 import type { TodayStatus } from '$lib/domain/sessions';
 import type { MemberAccountStatus } from '$lib/domain/members';
 import type { VenueStatus } from '$lib/domain/venues';
-import type { TicketType } from '$lib/domain/tickets';
+import { TICKET_TYPE, type TicketType } from '$lib/domain/tickets';
 
 /* ───────────────────────── single-source domain seed ─────────────────────────
  * The seed (coaches/classes/members/orders + venues/tickets/activity) lives in
@@ -134,8 +134,10 @@ export interface Order extends OrderBase {
 
 /* ───────────────────────── form constants ───────────────────────── */
 export const CATS: string[] = ['競技體操', '競技啦啦隊', '兒童基礎', '幼兒體操', '成人體操', '跑酷'];
-/** Ticket type union as a 新增/編輯票券 Select source (keys of TICKET_TYPE). */
-export const TICKET_TYPES: TicketType[] = ['ticket', 'membership', 'course_package'];
+/** Ticket type union as a 新增/編輯票券 Select source: the keys of TICKET_TYPE, in its declaration
+ *  order — derived, not hand-copied, so a key added to TICKET_TYPE can't go missing from the Select.
+ *  The cast is exact: TICKET_TYPE is a `Record<TicketType, …>` literal, so its own keys are TicketType. */
+export const TICKET_TYPES = Object.keys(TICKET_TYPE) as TicketType[];
 /** Venue status union as a 新增/編輯場地 Select source (keys of VENUE_STATUS). */
 export const VENUE_STATUSES: VenueStatus[] = ['available', 'maintenance'];
 export const MEMBER_COLORS: string[] = ['#0066CC', '#0EA5E9', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444'];
