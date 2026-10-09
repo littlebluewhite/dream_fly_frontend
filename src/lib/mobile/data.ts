@@ -54,7 +54,7 @@ export interface Course extends CatalogCourse {
 export const LEVEL_TONE: Record<string, string> = LEVEL_TONE_BASE;
 
 // TIME_ROWS 不在此列——mobile 側零消費者，死出口不留（ADR 0010 精神）。WEEK 已隨 C4
-// 批1(見上方)退役,消費端改直取 $lib/domain/member-app。
+// 批1(見上方)退役,消費端改直取 $lib/domain/member-app;R19 起 WEEK 搬進 $lib/domain/weekday。
 
 /* ---- Announcements (home) — kept local: member's 3rd item has a different `bg`. ---- */
 export interface Announce {

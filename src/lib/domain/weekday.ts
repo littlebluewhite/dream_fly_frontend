@@ -16,6 +16,9 @@ export const DAY_KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as con
 /** 中文單字星期，index = 後端 day_of_week = Date.getDay()（0=日）。 */
 export const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const;
 
+/** 中文單字星期，index = 週課表欄位 WeekColumn（0=一 … 6=日），週一起頭的表頭／欄位標籤用。 */
+export const WEEK = ['一', '二', '三', '四', '五', '六', '日'] as const;
+
 /** day_of_week（0=日）→ 週課表欄位（0=一）的型別化對照表。 */
 const DOW_TO_WEEK_COLUMN: readonly WeekColumn[] = [6, 0, 1, 2, 3, 4, 5];
 

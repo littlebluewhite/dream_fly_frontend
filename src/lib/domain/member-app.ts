@@ -132,8 +132,7 @@ export interface ScheduleBlock {
 	tone: string;
 }
 
-/* ---- 每週課表格線(WEEK 星期列、TIME_ROWS 時段列;兩側逐位元組相等) ---- */
-export const WEEK: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+/* ---- 每週課表格線(TIME_ROWS 時段列;兩側逐位元組相等;星期列 WEEK 在 $lib/domain/weekday) ---- */
 export const TIME_ROWS: string[] = ['10:00', '11:00', '12:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 
 /* ---- 訂單歷史 ---- status 的 tone 兩側型別不同，處理同 SCHEDULE。 */

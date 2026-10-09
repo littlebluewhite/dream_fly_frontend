@@ -8,16 +8,15 @@
   import type { SchedCourse } from '$lib/coach/data';
   import { dayKey } from '$lib/coach/schedule-dates';
   import type { MonthCell } from '$lib/coach/schedule-dates';
+  import { WEEK } from '$lib/domain/weekday';
 
   export let weeks: MonthCell[];
   export let courses: SchedCourse[];
-
-  const HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 </script>
 
 <!-- weekday header -->
 <div style="display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--df-border)">
-  {#each HEAD as z (z)}
+  {#each WEEK as z (z)}
     <div
       style="padding:10px 8px;text-align:center;font-size:13px;font-weight:700;color:var(--df-text-light);border-right:1px solid var(--df-border)"
     >

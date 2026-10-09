@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DAY_KEYS, WEEKDAY_ZH, toWeekColumn } from './weekday';
+import { DAY_KEYS, WEEKDAY_ZH, WEEK, toWeekColumn } from './weekday';
 
 /* 星期換算單一模組——後端 day_of_week 0=Sunday（= Date.getDay()），週課表欄位 0=Monday。 */
 describe('weekday — DAY_KEYS / WEEKDAY_ZH 依 day_of_week 排列', () => {
@@ -29,5 +29,19 @@ describe('toWeekColumn — day_of_week（0=日）→ 週課表欄位（0=一）'
 		[6, 5] // 六 → 欄 5
 	])('day_of_week %i → 欄位 %i', (dow, col) => {
 		expect(toWeekColumn(dow)).toBe(col);
+	});
+});
+
+describe('WEEK — 週一起頭的中文單字星期（週課表欄位順序）', () => {
+	it('WEEK 涵蓋週一到週日共 7 欄', () => {
+		expect(WEEK).toEqual(['一', '二', '三', '四', '五', '六', '日']);
+	});
+
+	it('WEEK has 7 rows', () => expect(WEEK).toHaveLength(7));
+
+	it('每個 day_of_week：WEEK[toWeekColumn(dow)] === WEEKDAY_ZH[dow]（兩套索引的對照不會漂）', () => {
+		for (let dow = 0; dow <= 6; dow++) {
+			expect(WEEK[toWeekColumn(dow)]).toBe(WEEKDAY_ZH[dow]);
+		}
 	});
 });

@@ -18,9 +18,10 @@
  * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS(值+
  * interface)與 MY_COURSES/SCHEDULE/ORDERS(值)經確認無 runtime 消費者後整批從
  * domain/member-app.ts 移除——這裡的三層守衛同步縮減為僅涵蓋還活著的常數,
- * 現為 8 個(卡 3 升遷 LEAVE_STATUS 後 11→12;R13 會員資料 module 落地後 ME 退役,12→11;
+ * 現為 7 個(卡 3 升遷 LEAVE_STATUS 後 11→12;R13 會員資料 module 落地後 ME 退役,12→11;
  * R14 候選 F3 誠實開機後 NOTIFS_SEED/POINTS_LEDGER 退役、值搬進 $lib/testing/seed-fixtures,11→9;
- * Task 10 LEAVE_STATUS 併入 leaveRow() 退役,9→8)。
+ * Task 10 LEAVE_STATUS 併入 leaveRow() 退役,9→8;R19 星期 module 落地後 WEEK 移入
+ * $lib/domain/weekday,8→7)。
  * MY_COURSES/SCHEDULE/ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)
  * 仍在,但沒有示範值可供這裡的字面不變量/row-count 測試涵蓋。
  *
@@ -37,7 +38,6 @@ import {
 	SKILLS,
 	UPCOMING,
 	CONTACT_THREAD,
-	WEEK,
 	TIME_ROWS,
 	COACH_REPLIES,
 	NOTIF_CATS
@@ -68,9 +68,6 @@ describe('literal seed invariants (independent of the facades)', () => {
 		expect(CONTACT_THREAD[0].from).toBe('coach');
 		expect(CONTACT_THREAD[1].from).toBe('me');
 	});
-	it('WEEK covers all 7 weekdays 一 through 日', () => {
-		expect(WEEK).toEqual(['一', '二', '三', '四', '五', '六', '日']);
-	});
 	it('COACH_REPLIES leads with 收到！我會留意，謝謝家長。', () => {
 		expect(COACH_REPLIES[0]).toBe('收到！我會留意，謝謝家長。');
 	});
@@ -85,7 +82,6 @@ describe('row counts', () => {
 	it('SKILLS has 4 rows', () => expect(SKILLS).toHaveLength(4));
 	it('UPCOMING has 3 rows', () => expect(UPCOMING).toHaveLength(3));
 	it('CONTACT_THREAD has 2 rows', () => expect(CONTACT_THREAD).toHaveLength(2));
-	it('WEEK has 7 rows', () => expect(WEEK).toHaveLength(7));
 	it('TIME_ROWS has 8 rows', () => expect(TIME_ROWS).toHaveLength(8));
 	it('COACH_REPLIES has 4 rows', () => expect(COACH_REPLIES).toHaveLength(4));
 	it('NOTIF_CATS has 5 rows', () => expect(NOTIF_CATS).toHaveLength(5));

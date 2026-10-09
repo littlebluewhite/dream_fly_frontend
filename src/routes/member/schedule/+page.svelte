@@ -7,7 +7,8 @@
   import { onMount } from 'svelte';
   import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import type { ScheduleBlock } from '$lib/member/data';
-  import { WEEK, TIME_ROWS } from '$lib/domain/member-app';
+  import { TIME_ROWS } from '$lib/domain/member-app';
+  import { WEEK } from '$lib/domain/weekday';
   import { toasts } from '$lib/member/stores';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ScheduleData } from '$lib/member/api';

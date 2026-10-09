@@ -12,7 +12,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { WEEK } from '$lib/domain/member-app';
+  import { WEEK } from '$lib/domain/weekday';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule, type ScheduleData } from '$lib/member/api';
 
