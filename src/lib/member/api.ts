@@ -25,6 +25,7 @@ import { refreshPoints } from './stores';
 import { UPCOMING, ANNOUNCE } from './data';
 import type { UpcomingClass, Announcement, ScheduleBlock, Order } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
+import { toWeekColumn } from '$lib/domain/weekday';
 import type { Stat, Skill, EnrolledCourse, AttRecord } from '$lib/domain/member-app';
 
 export interface DashboardData {
@@ -158,18 +159,13 @@ export const getReports = async (): Promise<ReportsData> => {
 
 export interface ScheduleData { schedule: ScheduleBlock[]; }
 
-/** day_of_week(後端 0=Sun..6=Sat，PostgreSQL EXTRACT(DOW) / JS Date.getDay() 慣例)→ ScheduleBlock.day(既有 UI 週欄位索引 0=Mon..6=Sun，
- *  即 WEEK[0]='一'…WEEK[6]='日'；見 +page.svelte 的 colOf 慣例與 SCHEDULE mock 的既有
- *  day 用法)。 */
-const DOW_TO_SCHEDULE_DAY = [6, 0, 1, 2, 3, 4, 5];
-
 /** MyScheduleEntryResponse（§3.18；與 GET /schedule 場館時段行事曆 §3.6 是不同資源，
  *  §3.18 裁決 1）→ 既有 ScheduleBlock 形狀。coach_name 為 null(尚未指定教練)
  *  /venue 為 null(無場地資料)時一律給空字串；color/tone 無對應後端欄位，一律給預設
  *  主色(P2，後端無品牌色欄位時的預設慣例)。 */
 function mapScheduleEntry(e: MyScheduleEntryResponse): ScheduleBlock {
   return {
-    day: DOW_TO_SCHEDULE_DAY[e.day_of_week],
+    day: toWeekColumn(e.day_of_week),
     start: hhmm(e.start_time),
     end: hhmm(e.end_time),
     name: e.course_name,

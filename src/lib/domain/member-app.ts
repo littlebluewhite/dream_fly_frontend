@@ -29,6 +29,7 @@
  * LedgerEntry/LedgerType 仍供 member/points.ts 型別標註使用而保留。 */
 
 import type { IconName } from '$lib/icon-registry';
+import type { WeekColumn } from './weekday';
 
 /* ---- 會員 ---- */
 export interface Member {
@@ -121,7 +122,7 @@ export interface AttRecord {
  * tone 兩側型別不同:member 用 Tone union、mobile 用寬鬆 string。這裡存寬鬆版，
  * member facade 匯入後斷言回自己的 ScheduleBlock(tone: Tone)。 */
 export interface ScheduleBlock {
-	day: number; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
+	day: WeekColumn; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
 	start: string;
 	end: string;
 	name: string;

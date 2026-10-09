@@ -4,21 +4,11 @@
  * ('Sun'=0). `dayKey` bridges the two; everything else is Monday-leading to
  * match the existing SCHED_DAYS / ScheduleGrid layout. */
 
-const KEYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-/** Monday-leading order, with the zh label used by SCHED_DAYS. */
-const WEEK: Array<{ key: string; zh: string }> = [
-	{ key: 'Mon', zh: '一' },
-	{ key: 'Tue', zh: '二' },
-	{ key: 'Wed', zh: '三' },
-	{ key: 'Thu', zh: '四' },
-	{ key: 'Fri', zh: '五' },
-	{ key: 'Sat', zh: '六' },
-	{ key: 'Sun', zh: '日' }
-];
+import { DAY_KEYS, WEEKDAY_ZH, toWeekColumn } from '$lib/domain/weekday';
 
 /** SCHED_COURSES.day key for a Date (NOT Sunday-zero — Sat→'Sat'). */
 export function dayKey(date: Date): string {
-	return KEYS[date.getDay()];
+	return DAY_KEYS[date.getDay()];
 }
 
 /** Same calendar day (local) — ignores time. */
@@ -34,7 +24,7 @@ function sameDay(a: Date, b: Date): boolean {
 function weekMonday(date: Date): Date {
 	const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 	const dow = d.getDay(); // 0=Sun
-	const diff = dow === 0 ? -6 : 1 - dow; // back to Monday
+	const diff = -toWeekColumn(dow); // back to Monday
 	d.setDate(d.getDate() + diff);
 	return d;
 }
@@ -52,11 +42,11 @@ export interface WeekDayCell {
  * so ScheduleGrid renders identically. */
 export function weekDays(anchor: Date, todayRef: Date = new Date()): WeekDayCell[] {
 	const mon = weekMonday(anchor);
-	return WEEK.map((w, i) => {
+	return Array.from({ length: 7 }, (_, i) => {
 		const d = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
 		return {
-			key: w.key,
-			zh: w.zh,
+			key: DAY_KEYS[d.getDay()],
+			zh: WEEKDAY_ZH[d.getDay()],
 			date: `${d.getMonth() + 1}/${d.getDate()}`,
 			today: sameDay(d, todayRef)
 		};
@@ -98,8 +88,6 @@ export function shiftAnchor(anchor: Date, view: '日' | '週' | '月', dir: -1 |
 	return new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + dir * step);
 }
 
-const ZH_WEEK = ['日', '一', '二', '三', '四', '五', '六'];
-
 /** e.g. 2026年5月 */
 export function fmtMonthTitle(anchor: Date): string {
 	return `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`;
@@ -107,7 +95,7 @@ export function fmtMonthTitle(anchor: Date): string {
 
 /** e.g. 5月30日 星期六 */
 export function fmtDayTitle(anchor: Date): string {
-	return `${anchor.getMonth() + 1}月${anchor.getDate()}日 星期${ZH_WEEK[anchor.getDay()]}`;
+	return `${anchor.getMonth() + 1}月${anchor.getDate()}日 星期${WEEKDAY_ZH[anchor.getDay()]}`;
 }
 
 /** e.g. 2026年5月30日 星期六 — the label coach/api.ts's getDashboard/getToday attach

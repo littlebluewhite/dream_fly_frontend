@@ -43,6 +43,7 @@ import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 import type { AttendanceStatus, NotificationResponse, NotificationType } from '$lib/api/generated';
+import type { WeekColumn } from '$lib/domain/weekday';
 
 export interface UpcomingClass {
   name: string;
@@ -56,7 +57,7 @@ export interface UpcomingClass {
 export type AttState = AttendanceStatus;
 
 export interface ScheduleBlock {
-  day: number; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
+  day: WeekColumn; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
   start: string;
   end: string;
   name: string;

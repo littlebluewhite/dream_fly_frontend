@@ -21,11 +21,12 @@
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { overlay } from '$lib/mobile/stores';
   import { WEEK, type EnrolledCourse as MyCourse } from '$lib/domain/member-app';
+  import { toWeekColumn } from '$lib/domain/weekday';
   import { createLoadGate } from '$lib/load-gate';
   import { getMine, type MineData } from '$lib/mobile/api';
   import { fmtRatio } from '$lib/format';
 
-  const today = (new Date().getDay() + 6) % 7; // 0=週一…6=週日，對齊 mapper 的 day
+  const today = toWeekColumn(new Date().getDay()); // 0=週一…6=週日，對齊 mapper 的 day
 
   const openCourse = (course: MyCourse) => overlay.push('courseDetail', { course });
 

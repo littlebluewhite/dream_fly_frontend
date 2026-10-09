@@ -37,6 +37,7 @@ import type {
 	RosterEntryResponse
 } from '$lib/api/generated';
 import { toTodaySession } from '$lib/domain/sessions';
+import { DAY_KEYS } from '$lib/domain/weekday';
 import { todayLabel } from './schedule-dates';
 import type {
 	Coach,
@@ -305,9 +306,6 @@ export const saveAttendance = async (
 
 /* ═════════════════════════ 排課管理（GET /coaches/{id}/schedule） ═════════════════════════ */
 
-/** day_of_week 0=Sun..6=Sat，即 Date.getDay() 順序，同 schedule-dates.ts 的 KEYS。 */
-const DOW_TO_KEY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-
 export interface CoachScheduleData { courses: SchedCourse[] }
 
 /** CoachScheduleResponse 是教練「可授課時段」，不是特定課程場次 —— 沒有課名/人數/
@@ -322,7 +320,7 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 		courses: slots
 			.filter((s) => s.is_available)
 			.map((s) => ({
-				day: DOW_TO_KEY[s.day_of_week],
+				day: DAY_KEYS[s.day_of_week],
 				start: hhmm(s.start_time),
 				end: hhmm(s.end_time)
 			}))

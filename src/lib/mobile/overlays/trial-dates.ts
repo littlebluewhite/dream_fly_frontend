@@ -8,13 +8,13 @@
  * 格式化為既有 `YYYY/MM/DD (週)` 字串(月/日皆補零至 2 位)。TRIAL_SLOTS 時段無對應
  * 後端端點，仍硬編在 TrialScreen.svelte(見 ADR 0006)。 */
 
+import { WEEKDAY_ZH } from '$lib/domain/weekday';
+
 export interface TrialDay {
   monthDay: string;
   weekday: string;
   full: string;
 }
-
-const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
 /** 六/日/三節奏 offset(天，相對下一個週六)：當週六、隔天週日、+3 天週三、再 +3
  *  天週六、隔天週日。 */
@@ -37,7 +37,7 @@ export function toTrialDay(date: Date): TrialDay {
   const y = date.getFullYear();
   const m = pad2(date.getMonth() + 1);
   const dd = pad2(date.getDate());
-  const w = WEEKDAY_LABELS[date.getDay()];
+  const w = WEEKDAY_ZH[date.getDay()];
   return { monthDay: `${m}/${dd}`, weekday: w, full: `${y}/${m}/${dd} (${w})` };
 }
 
