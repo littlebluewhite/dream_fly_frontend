@@ -15,7 +15,6 @@
    * updateMember 並在寫入成功後 await refreshOps() 整包重抓），toast 在動詞 resolve
    * 後才出現——和更新後的列表同時。header 顯示後端 total(只抓第 1 頁)，超過一頁時
    * 搜尋區提示搜尋範圍。 */
-  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -34,9 +33,6 @@
   import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';
 
   const gate = createLoadGate({ ...opsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   let tab: MemberAccountStatusFilter = 'all';
   let q = '';

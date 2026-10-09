@@ -4,7 +4,6 @@
    * Notifications + NotifSkeleton (client/views2.jsx). The list now lives in the
    * shared `notifications` store (the sidebar/topbar unread badge derives from
    * it), so all mutations go through the store rather than a local copy. */
-  import { onMount } from 'svelte';
   import { Card, FilterChip, Button, Icon, Skeleton, SkelCard, EmptyState, ErrorState, LoadGate } from '$lib/components/ui';
   import { NOTIF_TONE_BG, NOTIF_TONE_FG } from '$lib/member/data';
   import { NOTIF_CATS } from '$lib/domain/member-app';
@@ -18,9 +17,6 @@
   // 回落同一支),寫入是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
   // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)全在水合閘門內部。
   const gate = createLoadGate({ ...notificationsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   $: list = $notifications.filter((n) => cat === 'all' || n.cat === cat);
   $: unread = $notifications.filter((n) => !n.read).length;

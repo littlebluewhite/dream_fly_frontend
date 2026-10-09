@@ -11,7 +11,6 @@
    * pointsLedger（不做本地扣減）。沒有「兌換紀錄」專區——GET /rewards/
    * redemptions/me 未接：本頁的「點數明細」（左側 pointsLedger）本來就會在
    * refreshPoints() 後含入這筆 reason="redeem" 的扣點紀錄，不需要另一張表。 */
-  import { onMount } from 'svelte';
   import { Card, Badge, Button, Dialog, Icon, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { PT_TYPE } from '$lib/member/data';
   import { points, pointsLedger, pointsEarnedThisMonth, toasts, redeemReward, redeemRewardErrorMessage } from '$lib/member/stores';
@@ -25,9 +24,6 @@
   const gate = createLoadGate({
     fetch: getPoints,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function redeem(rw: Reward) {

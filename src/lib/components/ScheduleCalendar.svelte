@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
@@ -47,9 +46,6 @@
     onData: (d) => {
       days = d;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   const STATUS_LABEL: Record<string, string> = {

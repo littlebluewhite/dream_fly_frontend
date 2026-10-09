@@ -21,7 +21,6 @@
    * 鎖住 email/姓名/密碼，同一個 sheet 內重試只補打 createCoach、沿用同一個 user id，不重建帳號
    * （避免 email 409），toast 指名實際建立的帳號——同桌面 coaches 頁的哨兵。同桌面
    * 一樣不做自動回滾（後端沒有複合建立端點，也沒有刪除使用者的端點可呼叫）。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -47,9 +46,6 @@
   // 時 load-gate 的 guard 命中,同步 ready、不重打 getOpsCollections。ScreenHeader(含
   // 「新增教練」按鈕)留在閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
   const gate = createLoadGate({ ...opsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
   // 文字 → apiErrorMessage 直接透傳，同桌面 coaches 頁慣例。

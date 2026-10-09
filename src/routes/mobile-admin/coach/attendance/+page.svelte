@@ -21,7 +21,6 @@
    * R15(候選 點名文案，bug #5 文案對齊)：失敗 toast 標題照舊「儲存失敗」，內文改依
    * 狀態碼分流(同桌面 attendanceErrorMessage，見下方 ATTENDANCE_ERROR_TEXT)。「備註」
    * 改經 ctrl.applyNote 記入 controller(僅存本機、不計入未存變更，同桌面；Sheet 內明示)。 */
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Button from '$lib/components/ui/Button.svelte';
@@ -77,9 +76,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
 

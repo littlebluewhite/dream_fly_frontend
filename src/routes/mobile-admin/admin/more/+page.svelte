@@ -6,7 +6,6 @@
    * 資料改由 getMore()(mock-API 接縫)非同步載入,三態閘門(loading/error/ready);
    * `data` 是本頁本地一次性快照(非共享 store)；coaches/venues/tickets 現讀真桌面
    * admin seam(Task 20)，profiles(身分卡)維持 mock，見 mobile-admin/api.ts 附註。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
@@ -24,9 +23,6 @@
   const gate = createLoadGate({
     fetch: getMore,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: groups = data

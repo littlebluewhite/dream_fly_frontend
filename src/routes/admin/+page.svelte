@@ -17,7 +17,6 @@
    * admin/api.ts 的 getTodaySessions())與 GET /reports/admin/activity(getRecentActivity())，
    * 併入既有 Promise.all 平行拉取；TodayPanel/ActivityPanel 改為 props 注入，
    * TodayPanel 的 sub 文案也隨真實場次數動態產生(不再硬編「全館 5 堂課」)。 */
-  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
   import TodayPanel from '$lib/admin/components/TodayPanel.svelte';
@@ -46,9 +45,6 @@
       todaySessions = ts.sessions;
       activity = act.activity;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function exportReport() {

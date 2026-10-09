@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import CoachCard from '$lib/components/CoachCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
@@ -17,9 +16,6 @@
     onData: (apiCoaches) => {
       coaches = apiCoaches.map(toMarketingCoach);
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

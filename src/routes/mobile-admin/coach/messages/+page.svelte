@@ -11,7 +11,6 @@
    * R14(候選 F5)：openThread 不再樂觀清未讀——本頁只做 push,改由 MessageThread.svelte
    * 開啟對話串後立即呼叫 markMessageRead(id, badgeCleared)——訊息閘門的 write() 等 ack 為 true 才翻已讀,
    * 跟桌面一樣「等後端確認已讀才清角標」(使用者裁決;R17 起 ack 交進 store,不在呼叫端等)。 */
-  import { onMount } from 'svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -25,9 +24,6 @@
   let q = '';
 
   const gate = createLoadGate({ ...messagesPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   // R14(候選 F5)：不再樂觀清未讀——真正的已讀是 MessageThread.svelte 開啟對話串後
   // 立即呼叫 markMessageRead(id, badgeCleared)(write() 等 ack 才翻已讀)，本頁只負責 push。

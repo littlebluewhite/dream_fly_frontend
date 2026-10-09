@@ -33,7 +33,6 @@
    * updateMember/updateCoach）；本頁保留哨兵 pendingUserId 的儲存/生命週期
    * （openNew/closeEdit 清空）與依 outcome.kind 翻譯繁中 toast 文案（兩支 mapper：
    * apiErrorMessage 透傳、coachErrorMessage 查表，見下方——皆留頁面，ADR 0011）。 */
-  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import CoachCard from '$lib/admin/components/CoachCard.svelte';
   import CoachEditDialog from '$lib/admin/components/CoachEditDialog.svelte';
@@ -61,9 +60,6 @@
   const gate = createLoadGate({
     fetch: getCoaches,
     onData: (d) => { coaches = d.coaches; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // Filter by 姓名 / 職稱 / 專長標籤, case-insensitive (source matches name/title/tags).

@@ -13,7 +13,6 @@
    * 一鍵兌換不做桌面版的確認對話框(比照本畫面既有的單點互動慣例)，但補上真正
    * 的 in-flight guard + 錯誤 toast(桌面 /member/points 頁的既有裁決同款：
    * stock===0 顯示「已兌換完畢」，與點數不足分開判斷)。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
@@ -40,9 +39,6 @@
   const gate = createLoadGate({
     fetch: getPoints,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   async function redeem(rw: Reward) {

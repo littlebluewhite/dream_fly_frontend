@@ -9,7 +9,6 @@
    * 對應概念,換成後端真有的「7 日內場次」/「累計出席」。標題「本季報名 N 門」不再
    * 接「 · 季別」,課程卡也拿掉下一堂 chip(R16 Task 2c:後端沒有季別/下一堂)。報名
    * 課程為空陣列時走 MEmpty,不留白。 */
-  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import SectionTitle from '$lib/components/mobile/SectionTitle.svelte';
   import StatTile from '$lib/mobile/components/StatTile.svelte';
@@ -34,9 +33,6 @@
   const gate = createLoadGate({
     fetch: getMine,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: courses = data?.courses ?? [];

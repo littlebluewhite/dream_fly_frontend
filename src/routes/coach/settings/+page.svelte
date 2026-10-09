@@ -5,7 +5,6 @@
    * 進三態閘門(loading/error/ready)。ProfileTab/CredentialsTab/SecurityTab 三個
    * 分頁元件原本各自 module-scope import COACH(元件樹檢查揪出) — 現改為 required
    * prop 下傳,由 check 把關漏傳。 */
-  import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getSettings, type CoachSettingsData } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
@@ -39,9 +38,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

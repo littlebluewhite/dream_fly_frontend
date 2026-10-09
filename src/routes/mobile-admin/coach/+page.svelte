@@ -10,7 +10,6 @@
    * (86)」「技能評量待更新」提醒皆為頁面硬編、且後者指向已整個移除的假技能評量
    * 功能(coach/students 頁改為真的發證書/寫評語，見該頁註解)，一併移除，不留一個
    * 指向已移除功能的假提醒；找不到教練檔案(CoachNotFoundError)時顯示對應錯誤。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
@@ -32,9 +31,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: coachToday = data?.coachToday ?? [];

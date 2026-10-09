@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import CourseCard from '$lib/components/CourseCard.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -24,9 +23,6 @@
         toCatalogCourse(c, c.coach_id ? coachNameById.get(c.coach_id) : undefined)
       );
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // cart v3：加入購物車入口重新啟用（uuid string id + (type,id) 去重，見 Task 15）。

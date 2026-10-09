@@ -15,7 +15,6 @@
    *     為 StudentActionSheet，改渲染這兩個真表單。
    *  3. R16 Task 2a：程度 chip、熟練度 MiniBar 與出席率隨後端沒有的 level/skill/pct/att
    *     欄位一起拿掉；搜尋只比對姓名與班級。 */
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -35,9 +34,6 @@
   const gate = createLoadGate({
     fetch: getStudents,
     onData: (d: MStudentsData) => { students = d.students; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   const openReportCard = (student: Student) => overlay.sheet('studentAction', { student, mode: 'reportCard' });

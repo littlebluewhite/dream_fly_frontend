@@ -13,7 +13,6 @@
    * markAllRead 落庫 PATCH /notifications/{id}/read(失敗不還原;細節見
    * $lib/member/notifications.ts),頁面只依 markAllRead 回傳值('ok'|'partial')
    * 分流 toast 文案。 */
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
@@ -34,9 +33,6 @@
   // 回落同一支),寫入是閘門自己的旗標 + apply。頁面不再自己拿 raw getter
   // 接線,水合協定(guard 短路、post-await 重查、成功後翻旗)全在水合閘門內部。
   const gate = createLoadGate({ ...notificationsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   $: list = $notifications.filter((n) => cat === 'all' || n.cat === cat);
 

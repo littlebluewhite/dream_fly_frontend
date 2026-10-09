@@ -3,7 +3,6 @@
    * Ported from the prototype `function Account` (client/views.jsx). Profile card,
    * member-points card and the order/payment history table; editing opens the
    * ProfileEditDialog. Data + primitives come from the shared foundation. */
-  import { onMount } from 'svelte';
   import { Card, Badge, Button, Avatar, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { fmtNT } from '$lib/format';
   import {
@@ -37,9 +36,6 @@
       return account;
     },
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: profile = $selfAccount;

@@ -9,7 +9,6 @@
    * 資料改由 getHome()(mock-API 接縫)非同步取得:onMount 進三態閘門
    * (loading/error/ready);cart/overlay/unread 等既有 store 互動不動。R16 Task 2c:
    * 原「下一堂課」卡靠後端沒有的 EnrolledCourse.next,真資料下永遠隱藏,整卡拿掉。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -35,9 +34,6 @@
   const gate = createLoadGate({
     fetch: getHome,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // hero 問候讀 authStore 的真名字(R13 Task 3;mock profile store 退役)。

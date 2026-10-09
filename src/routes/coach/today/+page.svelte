@@ -5,7 +5,6 @@
    * Data arrives async via getToday()(mock-API seam): onMount loads todayLabel/
    * todayClasses into a three-state gate (loading/error/ready). CLASS_STATUS 查表
    * 留直接 import;reminders 為頁內硬編 UI 提示文案,留在頁內。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { CLASS_STATUS } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
@@ -28,9 +27,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   /* ── 課堂提醒 reminders (reconstructed per spec) ── */

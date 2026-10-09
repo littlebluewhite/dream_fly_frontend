@@ -14,7 +14,6 @@
    * 方塊改顯示 v.slug 而非 v.id：真實後端 id 是 UUID，塞進這個原本設計給短代號用的方塊
    * 會整個溢出；slug 是後端提供的人類可讀短字串——鏡射桌面 routes/admin/venues/
    * +page.svelte 的同款裁決(#each key 仍用 id)。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -37,9 +36,6 @@
     onData: (d) => {
       venues = d.venues;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

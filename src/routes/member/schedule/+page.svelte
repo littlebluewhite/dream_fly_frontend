@@ -4,7 +4,6 @@
    * from the prototype's Schedule (client/views.jsx). The prev/next week buttons
    * are visual-only; clicking a class block raises an info toast. Data +
    * primitives come from the shared foundation. */
-  import { onMount } from 'svelte';
   import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import type { ScheduleBlock } from '$lib/member/data';
   import { TIME_ROWS } from '$lib/domain/member-app';
@@ -28,9 +27,6 @@
   const gate = createLoadGate({
     fetch: getSchedule,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

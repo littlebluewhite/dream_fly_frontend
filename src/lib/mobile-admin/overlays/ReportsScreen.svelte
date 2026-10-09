@@ -17,7 +17,6 @@
    * 教練/場館/付款方式)空清單顯示提示文字；固定桶面板(出席/年齡/分級/星期/留存/
    * 類別占比)靠 normalizeBars/pctShares 防除以零即可，不需要提示文字——同桌面 13
    * 面板的既有分野(這些桶由後端零填、契約上不會真的是空陣列)。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -67,9 +66,6 @@
   const gate = createLoadGate({
     fetch: getReports,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // 副標動態年月(裁決：直接用 client 本地時間即可，顯示性質，非後端算)。

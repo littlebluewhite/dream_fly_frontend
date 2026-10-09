@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
@@ -14,9 +13,6 @@
     onData: (v) => {
       venues = v;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

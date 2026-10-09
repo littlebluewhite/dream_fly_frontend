@@ -19,7 +19,6 @@
    * matches exactly what a fresh getClasses() would render) and merged into
    * `classes`; on failure the list is left untouched and a 繁中 error toast shows
    * — the dialog stays open so the admin can correct and retry. */
-  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import ClassCard from '$lib/admin/components/ClassCard.svelte';
   import ClassDialog from '$lib/admin/components/ClassDialog.svelte';
@@ -52,9 +51,6 @@
       classes = d.classes;
       coaches = d.coaches;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: list = filterClasses(classes, { cat, query: $search });

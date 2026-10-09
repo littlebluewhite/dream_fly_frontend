@@ -21,7 +21,6 @@
     onData: (d) => { data = d; }
   });
   onMount(() => {
-    gate.load();
     // best-effort：候補狀態只影響「候補」按鈕要不要顯示已候補，失敗就先當作
     // 尚未候補，仍可手動點擊候補（後端 409 會擋掉真的重複）。
     void hydrateWaitlist().catch(() => {});

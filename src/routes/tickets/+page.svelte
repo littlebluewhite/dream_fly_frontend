@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { cart, subscriptions } from '$lib/member/stores';
@@ -18,9 +17,6 @@
     onData: (products) => {
       tickets = products.map(toPass);
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function addTicketToCart(ticket: Ticket) {

@@ -17,7 +17,6 @@
    * 各接一支函式(create/update)，編輯的 id 由 openEdit 的閉包帶入。
    * header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區
    * 提示搜尋範圍。 */
-  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -41,9 +40,6 @@
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   const gate = createLoadGate({ ...opsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   let cat = '全部';
   let q = '';

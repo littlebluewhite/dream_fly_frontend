@@ -5,7 +5,6 @@
    * （loading/error/ready）+ 逐筆核准/婉拒同 coach/students 頁的 getStudents()
    * 接縫慣例。核准/婉拒後從清單移除（同 member/mine 頁「取消候補」後從候補清單
    * 移除的慣例——決定完成的假單不再屬於「待審核」）。 */
-  import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getPendingLeaveRequests, decideLeaveRequest } from '$lib/coach/api';
   import type { CoachLeaveRequest } from '$lib/coach/api';
@@ -29,9 +28,6 @@
       requests = d.requests;
       total = d.total;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   async function decide(r: CoachLeaveRequest, status: 'approved' | 'rejected') {

@@ -15,7 +15,6 @@
    * 收斂進 $lib/admin/settings-form 的 createSettingsForm，直接 import 取用（與桌面 +page.svelte 共用同一份機制，0014 §2 雙生核可
    * 類）；403 文案（SETTINGS_ERROR_TEXT）/成功 toast/gate.silentRefresh() 仍逐字
    * 留在本檔。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -41,9 +40,6 @@
   const gate = createLoadGate({
     fetch: getSettings,
     onData: (d) => form.applyData(d)
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // PUT /settings:403 無權限 → 繁中文案查表(apiErrorText)，其餘通用訊息。

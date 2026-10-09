@@ -21,7 +21,6 @@
    * Task F4：id chip 改顯示 v.slug，不是 v.id——真實後端 id 是 UUID，塞進這個原本
    * 設計給短代號用的方塊會整個溢出；slug 是後端提供的人類可讀短字串，同
    * VenueEditDialog 的「場地代號」欄位改顯示 slug 是同一個決定(報告已註明)。 */
-  import { onMount } from 'svelte';
   import { Button, Card, Icon, Tag, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
@@ -53,9 +52,6 @@
   const gate = createLoadGate({
     fetch: getVenues,
     onData: (d) => { venues = d.venues; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function openEdit(v: Venue) {

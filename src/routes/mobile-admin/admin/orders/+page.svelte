@@ -13,7 +13,6 @@
    * 只抓第 1 頁,數字只反映已載入的這一頁。
    *
    * R12:header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區提示搜尋範圍。 */
-  import { onMount } from 'svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
@@ -32,9 +31,6 @@
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   const gate = createLoadGate({ ...opsPageEntry });
-  onMount(() => {
-    gate.load();
-  });
 
   let tab: OrderStatusFilter = 'all';
   let q = '';

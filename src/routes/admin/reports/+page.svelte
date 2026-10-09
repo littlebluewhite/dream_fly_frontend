@@ -11,7 +11,6 @@
    *
    * Data arrives async via getReports() — ONE call feeds the KPI band and every
    * panel — into a three-state gate (loading/error/ready). */
-  import { onMount } from 'svelte';
   import { Button, Icon, Card, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import { toasts } from '$lib/admin/stores';
@@ -42,9 +41,6 @@
   const gate = createLoadGate({
     fetch: getReports,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

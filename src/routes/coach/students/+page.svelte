@@ -8,7 +8,6 @@
    * ready); `students` is the local working copy the filters read from.
    * R16 Task 2a：程度篩選、平均出席率/待加強 KPI 隨後端沒有的 level/skill/att 欄位
    * 拿掉(待加強原本把每位學員都算成出席率 0%)；列表 key 改用 user_id(同名學員不撞)。 */
-  import { onMount } from 'svelte';
   import type { Student } from '$lib/coach/data';
   import { createLoadGate } from '$lib/load-gate';
   import { getStudents } from '$lib/coach/api';
@@ -26,9 +25,6 @@
   const gate = createLoadGate({
     fetch: getStudents,
     onData: (d) => { students = d.students; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   /* 發證書 dialog（Task 13；POST /certificates，見 integration-contract.md §3.22）。 */

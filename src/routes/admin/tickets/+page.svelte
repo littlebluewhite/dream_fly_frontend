@@ -18,7 +18,6 @@
    * gate.silentRefresh() 靜默重新整包刷新列表（同 members/coupons 頁的既有慣例，
    * 比手動映射插入更簡單可靠）；失敗則列表不變，顯示繁中錯誤 toast，對話框維持
    * 開啟以便修正重試。 */
-  import { onMount } from 'svelte';
   import { Button, Card, Icon, ProgressBar, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
@@ -59,9 +58,6 @@
   const gate = createPagedLoadGate({
     fetch: (page) => getTickets(page),
     onData: (d) => { tickets = d.tickets; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: totalSold = tickets.reduce((s, t) => s + t.sold, 0);

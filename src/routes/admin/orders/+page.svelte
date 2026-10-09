@@ -16,7 +16,6 @@
    * 409（pointsShortfall）是退款/取消補償撞點數不足時才會發生；其餘（含 403）
    * 走 failed，用 apiErrorText 查表。成功後 applyStatusChange() 折回 server 回的
    * 新狀態與 paid_at，KPI/表格保持與已持久化的真值一致。 */
-  import { onMount } from 'svelte';
   import { Button, Icon, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatCard from '$lib/admin/components/StatCard.svelte';
@@ -43,9 +42,6 @@
   const gate = createPagedLoadGate({
     fetch: (page) => getOrders(page),
     onData: (d) => { orders = d.orders.map((o) => ({ ...o })); }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   async function changeStatus(o: Order, next: OrderStatus) {

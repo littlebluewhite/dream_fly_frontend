@@ -6,7 +6,6 @@
    *
    * 資料改由 getCourses()(mock-API 接縫)非同步取得:onMount 進三態閘門
    * (loading/error/ready);cart/overlay 互動不動。 */
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -29,9 +28,6 @@
   const gate = createLoadGate({
     fetch: getCourses,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   let cat = 'all';

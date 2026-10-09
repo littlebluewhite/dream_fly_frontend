@@ -7,7 +7,6 @@
    * 兩處不會再各自顯示不同的訂單資料。onMount 進三態閘門(loading/error/ready)，
    * 同其餘 route 頁的既有慣例。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的
    * 純轉手 getAccount()/MobileAccountData 已退役,本頁直取桌面 seam。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -27,9 +26,6 @@
   const gate = createLoadGate({
     fetch: getAccount,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: orders = data?.orders ?? [];

@@ -11,7 +11,6 @@
    * getOpsCollections() 附註)。寫入側維持 demo——「新增方案」「編輯」仍只發 toast，
    * 未接 POST/PATCH /products(desktop admin 端已接，見 admin/api.ts；mobile-admin
    * 這裡是 P2，見 AGENTS.md 的存量盤點)。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
@@ -34,9 +33,6 @@
     onData: (d) => {
       tickets = d.tickets;
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: totalRevenue = tickets.reduce((s, t) => s + t.price * t.sold, 0);

@@ -15,7 +15,6 @@
    * EmptyState，不當機。R16 Task 1b：姓名/聯絡電話即時用本人帳號資料的
    * selfAccountEditError 檢查，不合法時顯示原因並停用「儲存變更」；saveSettings 只送
    * 改過的欄位。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -43,9 +42,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: cInfo = data?.coach;

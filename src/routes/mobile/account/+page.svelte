@@ -18,7 +18,6 @@
    * getAccount() 只回訂單資料——個人資料水合與點數暖機改由本頁自己宣告，與主 GET
    * 並行發出；行動版帳戶頁只暖點數，不暖訂閱(不打 GET /subscriptions/me，本頁不
    * 顯示訂閱資訊)。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -47,9 +46,6 @@
       return account;
     },
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   $: items = [

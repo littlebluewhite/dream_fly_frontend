@@ -5,7 +5,6 @@
    * 學習表現」呈現一份學期成績單（REPORTS record，keyed by course id）；後端只提供
    * term_label/comment/rating(1–5|null) 三個欄位、且同一課程可能橫跨多期別各有一筆
    * 成績單，故改為列表呈現每一筆成績單（新到舊，同後端排序），不再有「課程picker」。 */
-  import { onMount } from 'svelte';
   import { Tabs, Card, Badge, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
   import { isoDate } from '$lib/api/wire';
@@ -18,9 +17,6 @@
   const gate = createLoadGate({
     fetch: getReports,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   const STARS = [1, 2, 3, 4, 5];

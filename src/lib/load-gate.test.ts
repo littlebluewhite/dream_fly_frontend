@@ -47,10 +47,19 @@ function page(overrides: Partial<RowsPage> = {}): RowsPage {
 }
 
 describe('createLoadGate', () => {
-	it('建構後 phase 初值是 loading,不自動 load', () => {
-		const gate = createLoadGate({ fetch: async () => ({}) });
+	it('建構後 phase 初值是 loading;元件外建構(無掛載生命週期)不自動 load', () => {
+		const fetch = vi.fn().mockResolvedValue({});
+		const gate = createLoadGate({ fetch });
 		expect(get(gate)).toBe('loading');
+		expect(fetch).not.toHaveBeenCalled();
 		gate.destroy();
+	});
+
+	it('掛載即自動首載:元件掛載後 fetch 被呼叫 1 次並進入 ready', async () => {
+		const fetch = vi.fn().mockResolvedValue({ v: 1 });
+		const { findByText } = render(LoadGateHarness, { options: { fetch } });
+		await findByText('ready');
+		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 
 	it('load() 成功流程依序 onData → phase=ready', async () => {
@@ -164,11 +173,13 @@ describe('createLoadGate', () => {
 		gate.destroy();
 	});
 
-	it('元件外建構不丟錯(onDestroy 掛載失敗被吞掉)', () => {
+	it('元件外建構不丟錯(onDestroy 與 onMount 掛載失敗被吞掉),也不 fetch', () => {
+		const fetch = vi.fn().mockResolvedValue({});
 		expect(() => {
-			const gate = createLoadGate({ fetch: async () => ({}) });
+			const gate = createLoadGate({ fetch });
 			gate.destroy();
 		}).not.toThrow();
+		expect(fetch).not.toHaveBeenCalled();
 	});
 
 	it('onDestroy 自動掛載:元件 unmount 後,in-flight 回應 resolve 也不再呼叫 onData', async () => {
@@ -762,6 +773,20 @@ describe('createPagedLoadGate', () => {
 	it('perPage 可自訂初值', () => {
 		const gate = createPagedLoadGate({ fetch: async () => page(), perPage: 20 });
 		expect(get(gate).perPage).toBe(20);
+		gate.destroy();
+	});
+
+	it('掛載即自動首載:元件掛載後 fetch 被呼叫 1 次並進入 ready', async () => {
+		const fetch = vi.fn().mockResolvedValue(page());
+		const { findByText } = render(LoadGateHarness, { options: { fetch }, paged: true });
+		await findByText('ready');
+		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it('元件外建構不自動 load、不 fetch', () => {
+		const fetch = vi.fn().mockResolvedValue(page());
+		const gate = createPagedLoadGate({ fetch });
+		expect(fetch).not.toHaveBeenCalled();
 		gate.destroy();
 	});
 

@@ -82,7 +82,6 @@
   });
   onMount(() => {
     refreshLeaveRequests().catch((err) => console.error('courseDetail: 我的請假 hydrate 失敗', err));
-    if (c) attGate.load();
   });
   $: courseLeaves = c ? $leaveRequests.filter((lr) => lr.course_id === c.course_id) : [];
 

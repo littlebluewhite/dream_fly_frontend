@@ -26,7 +26,6 @@
    * hand-merging the single mapped response, same choice coupons/+page.svelte
    * makes) — a refresh failure is best-effort and does not overwrite the
    * success toast that already fired. */
-  import { onMount } from 'svelte';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import MembersTable from '$lib/admin/components/MembersTable.svelte';
   import MemberFilterPanel from '$lib/admin/components/MemberFilterPanel.svelte';
@@ -51,9 +50,6 @@
   const gate = createPagedLoadGate({
     fetch: (page) => getMembers(page),
     onData: (d) => { members = d.members; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   let createOpen = false;

@@ -17,7 +17,6 @@
    * （cancel-leave.ts）是既有雙生模組（mobile MyCourseDetail 共用）維持不動；候補域
    * 無跨 surface 共用需求（mobile 無取消候補 UI），cancelWaitlistEntry 直接收進本
    * controller，不另建雙生模組。 */
-  import { onMount } from 'svelte';
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
@@ -68,9 +67,6 @@
       data = d;
       ctrl.init(d.courses[0]?.id ?? null);
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   async function doCancelWaitlist(w: WaitlistEntry) {

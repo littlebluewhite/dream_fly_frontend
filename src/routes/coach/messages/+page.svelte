@@ -32,7 +32,6 @@
    *   與會員間的對話」等)以 ApiError.message 繁中 toast 提示，對話框保持開啟供改選。
    * - 過濾清單(tab×搜尋)、選取回退 guard、confirmCompose 的插入/reset 四欄指令邏輯
    *   留在純模組 $lib/coach/conversations-filter.ts(Round 3 K3)不動。 */
-  import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
@@ -80,9 +79,6 @@
       // 已讀。全權交給下方 pickSelection reactive 區塊處理（它吃的是已套用 tab/search
       // 的 list，天然不會選到被濾掉的列）。
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   /** ctrl.selectThread() 的頁面統一入口：threadReady→toast(getThread 失敗)、

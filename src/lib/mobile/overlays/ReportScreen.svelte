@@ -11,7 +11,6 @@
    * 沒有「只看某一門課成績單」的篩選概念。Task 7(架構深化 R15·F-4)：
    * mobile/api.ts 原本的純轉手 getReports()/ReportsData 已退役,本頁直取桌面
    * seam。 */
-  import { onMount } from 'svelte';
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import Card from '$lib/components/ui/Card.svelte';
@@ -29,9 +28,6 @@
   const gate = createLoadGate({
     fetch: getReports,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   const STARS = [1, 2, 3, 4, 5];

@@ -8,7 +8,6 @@
    * today's schedule / conversations / KPI 數字 into a three-state gate
    * (loading/error/ready)。KPI 卡「待點名/學員出席率/待回覆訊息」原為頁面硬編字串,
    * 一併移入 getDashboard() payload(換後端只改 api.ts 這一層)。 */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
@@ -37,9 +36,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   /* ── 上班/下班打卡 —— 開機狀態查詢(hydrate)/409-404 校正/mutation-wins 守衛的

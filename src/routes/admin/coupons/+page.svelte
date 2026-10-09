@@ -13,7 +13,6 @@
    * gate.silentRefresh() 重新整包刷新列表；失敗顯示繁中錯誤 toast——建立/編輯對話框
    * 維持開啟以便修正重試（同 tickets/venues 頁慣例），刪除確認對話框則無論成敗都
    * 關閉（沒有「欄位」可修正重試，失敗只能之後從列表重新觸發一次）。 */
-  import { onMount } from 'svelte';
   import { Button, Card, Icon, Dialog, LoadGate, Skeleton, SkelCard, PaginationBar } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import StatusBadge from '$lib/admin/components/StatusBadge.svelte';
@@ -37,9 +36,6 @@
   const gate = createPagedLoadGate({
     fetch: (page) => getCoupons(page),
     onData: (d) => { coupons = d.coupons; }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function openEdit(c: Coupon) {

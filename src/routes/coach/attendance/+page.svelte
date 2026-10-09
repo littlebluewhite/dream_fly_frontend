@@ -25,7 +25,6 @@
    * 不計入未存變更,Dialog 內明示。本頁退化為薄 adapter:解構
    * controller 的單一快照 store、事件轉呼 controller 方法、把 save 的 SaveOutcome 翻成
    * toast 文案,並保留 noteFor/noteText 編輯暫存、failedClasses 提示與五條顯示衍生。 */
-  import { onMount } from 'svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getAttendance, saveAttendance } from '$lib/coach/api';
   import { coachLoadErrorCopy, GENERIC_LOAD_ERROR } from '$lib/coach/load-error-copy';
@@ -93,9 +92,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   // ── 動作(轉呼 controller 方法;snapshot/undo 副作用已在 controller 內) ────────

@@ -8,8 +8,9 @@
  *
  * Legacy store factory 風格(仿 stores/toasts.ts 的 createToasts):closure、
  * 無 `this`,回傳物件的 `subscribe` 直接轉發 svelte/store 的 writable,頁面以
- * `$gate` 讀取狀態。不自動 load、不在模組層讀 localStorage、無建構副作用
- * (SSR 安全,模組可被伺服端 import)。
+ * `$gate` 讀取狀態。元件內建構即掛上首載(onMount 才 fetch,SSR 不執行),元件外建構
+ * (模組測試等)不自動 load;不在模組層讀 localStorage、無建構副作用(SSR 安全,模組
+ * 可被伺服端 import)。
  *
  * 兩個 factory:
  *   - createLoadGate:單純三態載入,phase 是唯一狀態。
@@ -20,12 +21,12 @@
  * 回應到達時序號對不上(或已 destroy)一律丟棄,不寫 phase、不呼叫
  * onData/onError。
  */
-import { onDestroy } from 'svelte';
+import { onDestroy, onMount } from 'svelte';
 import { writable } from 'svelte/store';
 
 export type LoadPhase = 'loading' | 'error' | 'ready';
 
-/** 資料來源(port,R15 候選 F-1):load-gate 只管 phase、run 世代、卸載與 onError;「怎麼抓、
+/** 資料來源(port,R15 候選 F-1):load-gate 只管 phase、run 世代、掛載首載、卸載與 onError;「怎麼抓、
  *  抓回來寫不寫、何時翻旗」全歸 source。共享 store 的頁面由水合閘門的 pageEntry() 交出
  *  (水合協定的決策點全住 $lib/hydration-gate),plain 頁面由下方 plainSource 包成同一個介面。
  *
@@ -64,6 +65,18 @@ function autoDestroyOnUnmount(destroy: () => void): void {
 		onDestroy(destroy);
 	} catch {
 		/* 元件外建構(模組測試等)無生命週期可掛,呼叫端自行 destroy */
+	}
+}
+
+/** 掛載一次性生命週期:元件內自動在掛載時發起首載;元件外(模組測試等)沒有生命週期可掛,
+ *  靜默略過,呼叫端需自行呼叫 load()。onMount 只在瀏覽器執行,SSR 不會 fetch。 */
+function autoLoadOnMount(load: () => Promise<void>): void {
+	try {
+		onMount(() => {
+			void load();
+		});
+	} catch {
+		/* 元件外建構(模組測試等)無生命週期可掛,呼叫端自行 load() */
 	}
 }
 
@@ -146,6 +159,7 @@ export function createLoadGate<T>(options: LoadGateOptions<T>): LoadGate {
 	}
 
 	autoDestroyOnUnmount(destroy);
+	autoLoadOnMount(load);
 
 	return { subscribe, load, refresh, silentRefresh, destroy };
 }
@@ -253,6 +267,7 @@ export function createPagedLoadGate<T extends PagedResponse>(
 	}
 
 	autoDestroyOnUnmount(destroy);
+	autoLoadOnMount(load);
 
 	return { subscribe, load, changePage, refresh, silentRefresh, destroy };
 }

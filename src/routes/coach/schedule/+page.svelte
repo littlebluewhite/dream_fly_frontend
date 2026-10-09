@@ -7,7 +7,6 @@
    * three-state gate (loading/error/ready). R16 Task 2a：courses 是教練「可授課時段」
    * (只有 day/start/end)，分類/場館篩選、分類圖例與「點擊空白時段可新增課程」提示
    * 隨假欄位與不存在的功能一起拿掉。 */
-  import { onMount } from 'svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
@@ -35,9 +34,6 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
-  });
-  onMount(() => {
-    gate.load();
   });
 
   type View = '日' | '週' | '月';

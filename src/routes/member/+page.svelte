@@ -3,7 +3,6 @@
    * prototype; the bare consts now load through the async api.ts seam
    * (getDashboard) behind the $lib/load-gate three-state gate, so the
    * loading + error UI is ready for when fetch replaces the mock. */
-  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Card, Badge, Button, ProgressBar, Icon, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import { createLoadGate } from '$lib/load-gate';
@@ -14,9 +13,6 @@
   const gate = createLoadGate({
     fetch: getDashboard,
     onData: (d) => { data = d; }
-  });
-  onMount(() => {
-    gate.load();
   });
 </script>
 

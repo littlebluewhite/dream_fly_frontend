@@ -20,7 +20,6 @@
    * 收斂進 $lib/admin/settings-form 的 createSettingsForm（與 mobile-admin
    * AdminSettingsScreen 共用同一份機制，0014 §2 雙生核可類）；403 文案/成功
    * toast/gate.silentRefresh() 仍逐字留在本檔。 */
-  import { onMount } from 'svelte';
   import { Card, Input, Select, Switch, Button, Badge, Icon, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import PageHead from '$lib/admin/components/PageHead.svelte';
   import SettingsRow from '$lib/admin/components/SettingsRow.svelte';
@@ -43,9 +42,6 @@
   const gate = createLoadGate({
     fetch: getSettings,
     onData: (d) => form.applyData(d)
-  });
-  onMount(() => {
-    gate.load();
   });
 
   function settingsErrorMessage(e: unknown): string {
