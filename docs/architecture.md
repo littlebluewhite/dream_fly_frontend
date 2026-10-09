@@ -327,8 +327,10 @@ endpoint), and the contract's seams include `$lib/member/api`/`$lib/mobile/api` 
 one: it maps 403/404/422 to the same wording desktop's inline attendance-error table uses, so a save
 failure shows the specific reason (`docs/adr/0011` addendum).
 
-Pages call `gate.load()` on a `createLoadGate`/`createPagedLoadGate` gate from the single source
-`src/lib/load-gate.ts` (`docs/adr/0008`) and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
+Pages build a `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts`
+(`docs/adr/0008`) — a gate constructed inside a component starts its first load on mount by itself, so
+pages don't write `onMount(() => gate.load())` (outside a component, e.g. in a module test, it doesn't
+auto-load) — and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
 `Skeleton`/`SkelCard` while loading and `ErrorState` on failure. That branching is usually collapsed into
 a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` / `slot="error"` with
 `let:retry`, default slot for ready; retry always calls `gate.refresh()`, never `load()`), consumed at 55
@@ -347,10 +349,11 @@ the same for all of them (`docs/adr/0025` F-1): `load-gate.ts` exposes a `LoadSo
 (`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`), `LoadGateOptions<T>` is a discriminated union of
 `{ fetch, onData?, onError? }` (plain pages) or `{ source, onError? }` (pages reading a shared store), and
 a hydration gate's `pageEntry()` returns `{ source }` — a page writes
-`createLoadGate({ ...gate.pageEntry() })`. load-gate owns only phase, its own run-generation, unmount,
-and `onError`; every fetch/apply/flag decision (guard short-circuit, post-await mutation-wins re-check,
-the flag-flip, the fourth and fifth decision points below) lives inside `hydration-gate.ts`'s internal
-`loadRun`/`refreshRun`, reached only through the source's `load`/`refresh` closures. `isCurrent` is the
+`createLoadGate({ ...gate.pageEntry() })`. load-gate owns only phase, its own run-generation, the
+mount-time first load, unmount, and `onError`; every fetch/apply/flag decision (guard short-circuit,
+post-await mutation-wins re-check, the flag-flip, the fourth and fifth decision points below) lives
+inside `hydration-gate.ts`'s internal `loadRun`/`refreshRun`, reached only through the source's
+`load`/`refresh` closures. `isCurrent` is the
 one thing load-gate hands the source: "unmounted or superseded by a newer run" — the source can only
 read it, never touch phase or generation itself. `fetchGenStable` is a module-private function inside
 `hydration-gate.ts`, called only by its own `refreshRun` (`docs/adr/0016`, `docs/adr/0025`). The

@@ -136,8 +136,9 @@ _Avoid_: 統計(過於籠統)
 
 **載入閘門 (Load Gate)**:
 頁面資料載入的三態(loading/error/ready)機制;單一來源 `src/lib/load-gate.ts` 的
-`createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。只管 phase、run 世代、卸載與
-`onError`;`LoadGateOptions<T>` 是判別聯集——plain 頁面給 `{ fetch, onData?, onError? }`,接共享
+`createLoadGate`/`createPagedLoadGate`(見 `docs/adr/0008`)。只管 phase、run 世代、掛載首載、卸載與
+`onError`(元件內建構即於掛載時自動首載,頁面不寫 `onMount(() => gate.load())`;元件外建構不自動 load);
+`LoadGateOptions<T>` 是判別聯集——plain 頁面給 `{ fetch, onData?, onError? }`,接共享
 store 的頁面給 `{ source: LoadSource, onError? }`(`source` 與 `fetch` 互斥)。`LoadSource` 是水合
 閘門交出的 port(`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`),`isCurrent` 是 load-gate 給
 source 的棄追判準(未卸載且仍是最新一輪 run);guard 短路、post-await 重查「mutation 勝出」、mutator

@@ -48,7 +48,8 @@ member 8 頁、coach 8 頁、mobile 5 頁 + 4 overlay、mobile-admin 10 頁、ad
 
 ### 四個變體
 
-- **(a) 平頁**：`createLoadGate({ fetch, onData, onError? })`，`onMount(() => gate.load())`，
+- **(a) 平頁**：`createLoadGate({ fetch, onData, onError? })`，建構即自動首載（R19 起 gate 自己在
+  元件內掛 `onMount` 發起 `load()`，頁面不再手寫，見文末 R19 增補），
   模板讀 `$gate === 'loading' | 'error' | 'ready'`。多數 route 頁與全部 mobile overlay 屬此類。
 - **(b) 守衛頁**（歷史型態——`skip` 已於 2026-07-13 退役，兩個守衛頁已遷移至 `hydrate`
   選項，見文末增補段）：多帶一個 `skip: () => get(xHydrated)`，用於資料已經活在共享 store 的頁面
@@ -222,3 +223,58 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
 - **名稱**:上文提到的 `refreshMessages` 已退役(訊息頁改經 `messagesPageEntry`,重試走
   load-gate 的 `refresh`);`refreshNotifications()` 更名為 `hydrateNotifications()`,仍是通知閘門的
   `gate.hydrate`。`hydrateOps`/`refreshOps` 保留,供 mobile-admin 首頁與寫後重抓使用。
+
+## 增補(2026-10-09,架構深化 R19):載入閘門建構即自動首載,56 處 `onMount` 樣板退役
+
+本篇原文不改寫(只有「四個變體」(a) 一行改成現況),以下各點以本節為準。
+
+病灶:「變體 (a)」的 `onMount(() => { gate.load(); })` 在 56 個呼叫端逐字重複——gate 每頁建構一次、
+再手寫一次首載。gate 早就自己掛了卸載(`onDestroy(destroy)`),首載是同一份生命週期知識,卻沒收進來。
+
+- **決定**:`load-gate.ts` 新增模組私有的 `autoLoadOnMount(load)`——`try { onMount(() => { void load(); }); }
+  catch {}`——兩個 factory 都緊接 `autoDestroyOnUnmount` 之後呼叫。元件內建構:掛載時自動發起首載;
+  元件外建構(模組測試等)沒有生命週期可掛,`onMount` 丟錯被吞掉,**不自動 load**,呼叫端自行 `load()`/
+  `destroy()`——與上文「`onDestroy` 自動掛載,元件外建構不丟錯」一條同一個模式。`onMount` 不在伺服端
+  執行,SSR 不會因此發請求;上文「建構本身無副作用」仍成立(建構只登記 callback,不發請求)。
+- **不加任何選項**:`LoadGateOptions`/`PagedLoadGateOptions` 不變,也沒有 `manual`/`lazy` 之類的逃生口。
+  全倉唯一的條件式首載是 `MyCourseDetail` 的 `if (c) attGate.load()`,而 `courseDetail` overlay 的唯一
+  開啟點 `routes/mobile/mine` 的 `openCourse` 一律帶入 course,該條件在正式環境走不到。
+- **依上文「後果」一節的凍結條款,附完整呼叫端清單重新評估**。56 個檔案、各自恰好一個 gate
+  (`createLoadGate` 51、`createPagedLoadGate` 5;其中 7 個接共享 store 的 `{ ...xPageEntry }`、44 個
+  plain `{ fetch, onData }`):
+  - 公開 4 頁:`routes/{coaches,courses,tickets,venues}`;`lib/components/ScheduleCalendar`。
+  - member 8 頁:`routes/member/` 的根、`account`、`courses`、`mine`、`notifications`、`points`、`reports`、
+    `schedule`。
+  - coach 8 頁:`routes/coach/` 的根、`attendance`、`leave-requests`、`messages`、`schedule`、`settings`、
+    `students`、`today`。
+  - admin 10 頁:`routes/admin/` 的根、`coaches`、`reports`、`settings`、`venues`(平頁),
+    `classes`、`coupons`、`members`、`orders`、`tickets`(分頁,`createPagedLoadGate`)。
+  - mobile 5 頁 + 5 overlay:`routes/mobile/` 的根、`account`、`courses`、`mine`、`notifications`;
+    `lib/mobile/overlays/` 的 `MyCourseDetail`、`OrdersScreen`、`PointsScreen`、`ReportScreen`、
+    `ScheduleScreen`。
+  - mobile-admin 10 頁 + 5 overlay:`routes/mobile-admin/admin/` 的根、`classes`、`members`、`more`、
+    `orders`;`routes/mobile-admin/coach/` 的根、`attendance`、`csettings`、`messages`、`students`;
+    `lib/mobile-admin/overlays/` 的 `AdminSettingsScreen`、`CoachesScreen`、`ReportsScreen`、
+    `TicketsScreen`、`VenuesScreen`。
+
+  逐站核對的結論:
+  1. **gate 都在 script 頂層(元件初始化期)建構**,沒有條件式建構、也沒有 `await` 之後才建構的站,
+     所以每一站都恰好登記一次 `onMount` 首載;沒有哪一頁刻意「建了 gate 卻不在掛載時載入」,不會被誤傷。
+  2. **53 站只有 `onMount(() => { gate.load(); })` 一塊**:整塊連同只服務它的 `import { onMount }` 刪除。
+  3. **`routes/member/courses`(`hydrateWaitlist()`)與 `routes/mobile-admin/admin`(`hydrateOps()`)的
+     `onMount` 還有別的工作**:只刪 `gate.load();` 一行。gate 在 script 頂端先建構,它的 `onMount` 先登記、
+     先執行,與別的工作的執行順序跟改前相同。
+  4. **`MyCourseDetail`**:刪 `if (c) attGate.load()`(理由見上)。改前同一個 `onMount` 內先
+     `refreshLeaveRequests()` 後 `attGate.load()`,改後 gate 的 `onMount` 先登記、先出首載;兩者一個寫
+     出席紀錄、一個寫 `leaveRequests` store,互相獨立,對調順序無影響。
+  5. **接共享 store 的 7 站(變體 (b)/(c))**:首載仍走 `load()`,所以 guard 短路(已水合 → 直接 `ready`、
+     不 fetch)與 post-await 重查原樣成立。**分頁 5 站(變體 (d))**:首載等於 `load()` 無參數,即第 1 頁,
+     與改前相同。
+  6. 公開介面(選項、`silentRefresh` 語意、`refresh()` 一律真抓)全部未動,凍結條款管的範圍沒有被碰;
+     唯一的行為差異是「首載由 gate 自己登記」,不需要任何呼叫端另外配合。
+- **後果(刻意,非 bug)**:在元件內建構的 gate 一定會在掛載時載入,沒有 opt-out。日後若出現「建構了
+  卻不想立刻載入」的呼叫端(惰性或條件式首載),再補選項,屆時依本節的方式重新評估清單。
+- **因本節而過時的原文**:「介面語意重點」`onDestroy` 一條(現在 factory 還多登記一個 `onMount`)、
+  「四個變體」(c) 的「頁面層只負責呼叫 `gate.load()`」(現在連呼叫都不用)——兩處以本節為準。
+- **測試**:`load-gate.harness.svelte` 不再手動 `load()`,並新增可選的 `paged` prop;`load-gate.test.ts`
+  新增 plain 與 paged 兩種 gate 掛載後 fetch 恰好 1 次並進入 `ready`,以及元件外建構不 fetch 的斷言。

@@ -74,7 +74,7 @@
   // member/api.ts 的 getEnrolmentAttendance()(零映射)。Task 7(架構深化 R15·
   // F-4)：mobile/api.ts 原本的純轉手 wrapper 已退役，本檔直取桌面 seam。c.id 是
   // 這筆報名(enrolment)的 uuid(見 EnrolledCourse.id 的既有註解)。overlay push 一律
-  // 帶入非 null 的 course(見 OverlayHost.svelte)，僅在有值時才載入。
+  // 帶入非 null 的 course(見 OverlayHost.svelte)，所以閘門隨掛載直接載入、不另做空值守衛。
   let attendance: AttRecord[] | null = null;
   const attGate = createLoadGate({
     fetch: () => getEnrolmentAttendance(c.id),
