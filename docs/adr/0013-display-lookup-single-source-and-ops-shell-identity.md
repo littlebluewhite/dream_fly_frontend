@@ -560,3 +560,22 @@ VM」。
   一份 `HEAD` 陣列,改用 `WEEK`。`WEEK` 只是標籤陣列,沒有 tone,不算顯示查表。`member-app.test.ts` 的
   `WEEK` 字面快照與列數 canary 隨之搬到 `weekday.test.ts`,並新增性質測試:每個 `day_of_week` 都滿足
   `WEEK[toWeekColumn(dow)] === WEEKDAY_ZH[dow]`。星期慣例本身見 `docs/adr/0028` 增補與 `GLOSSARY.md`「星期」。
+
+## 增補(2026-10-10,R19 後續):`ATT_STATE` 收斂進 `domain/attendance.ts`;admin `TICKET_TYPES` 改推導
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **`ATT_STATE` 照 R19 增補的規則走了**:member/mobile 兩側同字面的三值 `ATT_STATE` 收斂到新的 entity 檔
+  `domain/attendance.ts`,鍵為生成型別 `AttendanceStatus`(明確 `Record`,後端多一個值、bindings 同步後少鍵即
+  編譯錯誤),同檔提供 `attStateBadge(s: string)`(`Object.hasOwn`,查無回 `['neutral', 原字串]`)。消費端
+  `MyCourseDetail.svelte` 與 `routes/member/mine/+page.svelte` 改呼叫 `attStateBadge`,後端多一個出勤狀態時不再
+  炸頁。`member/data.ts` 的 `ATT_STATE`/`AttState` 別名、`mobile/data.ts` 的 `ATT_STATE` 與只服務它的本地 `Tone`
+  tuple 型別一併刪除。R19 增補第一點「`ATT_STATE` 還沒照這條走」作廢。
+- **上文「不搬清單」的 `ATT_STATE` 一條過時**:它說 member 側鍵型別 `AttState` 是本地手寫 union、收斂「連前置
+  條件都不具備」。實際上 member 側早已改以生成型別 `AttendanceStatus` 為鍵,查表本身就有一個可共用的具名鍵型別;
+  domain `AttRecord.state` 仍是同字面的 inline union,但消費端經 `attStateBadge(string)` 查表,用不到它當鍵型別,
+  所以不必先拉成具名型別。
+- **admin `TICKET_TYPES` 改由 `TICKET_TYPE` 推導**:原為手抄三值陣列,後端 `ProductType` 多一個值、`TICKET_TYPE`
+  補鍵後,新增/編輯方案的類型下拉會悄悄漏掉新值而不編譯錯。改為 `Object.keys(TICKET_TYPE)`(選項順序 =
+  `TICKET_TYPE` 宣告順序),`TicketEditDialog.test.ts` 新增「下拉選項 = `TICKET_TYPE` 的鍵」守衛。R19 增補
+  「`TICKET_TYPE` 現在的直接消費端」因此多一個 `admin/data.ts`。

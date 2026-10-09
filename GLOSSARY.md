@@ -234,10 +234,8 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 相容、無可收窄者;facade 端改過名的 alias 亦同)不設這一層,消費端**直取**
 `$lib/domain` 各 entity 檔或 `$lib/api/wire`(見 `docs/adr/0013` 與其增補、`docs/adr/0019`)。
 以後端 enum 為鍵的查表另提供一支「任何字串都能查」的函式(`domain/tickets.ts` 的 `ticketTypeBadge`、
-`$lib/api/wire` 的 `orderStatusBadge`),未知值後備(中性 tone + 原字串)收在查表所在檔,消費端不自己補
-`?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。`ATT_STATE`(鍵為生成型別
-`AttendanceStatus`)尚未照此辦理——已知、刻意遞延,未知值仍會在 `MyCourseDetail.svelte` 與
-`routes/member/mine/+page.svelte` 炸頁。
+`domain/attendance.ts` 的 `attStateBadge`、`$lib/api/wire` 的 `orderStatusBadge`),未知值後備(中性 tone +
+原字串)收在查表所在檔,消費端不自己補 `?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、

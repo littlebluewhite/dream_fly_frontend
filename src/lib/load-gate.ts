@@ -58,8 +58,9 @@ export interface LoadGate {
 	destroy(): void;
 }
 
-/** 掛載一次性生命週期:元件內自動隨卸載呼叫 destroy;元件外(模組測試等)沒有
- *  生命週期可掛,靜默略過,呼叫端需自行呼叫 destroy()。 */
+/** 掛載一次性生命週期:元件初始化期(script 頂層同步)建構時,自動隨卸載呼叫 destroy;元件外
+ *  (模組測試等)沒有生命週期可掛,靜默略過,呼叫端需自行呼叫 destroy()。較晚才建構(事件處理器、
+ *  await 之後、reactive 區塊)同樣已不在初始化期,onDestroy 丟錯被吞掉,也要自行 destroy()。 */
 function autoDestroyOnUnmount(destroy: () => void): void {
 	try {
 		onDestroy(destroy);

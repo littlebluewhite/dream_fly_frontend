@@ -279,5 +279,7 @@ loading/error/ready 三態是不同層次的關切（load-gate 管「資料讀�
   選項,屆時依本節的方式重新評估清單。
 - **因本節而過時的原文**:「介面語意重點」`onDestroy` 一條(現在 factory 還多登記一個 `onMount`)、
   「四個變體」(c) 的「頁面層只負責呼叫 `gate.load()`」(現在連呼叫都不用)——兩處以本節為準。
+  同一條 `onDestroy` 的「在元件內建構時自動掛上」也要讀成「在元件初始化期(script 頂層同步)建構時」:
+  元件內但較晚才建構的 gate 不會自動 `destroy()`(見上一點「後果」)。
 - **測試**:`load-gate.harness.svelte` 不再手動 `load()`,並新增可選的 `paged` prop;`load-gate.test.ts`
   新增 plain 與 paged 兩種 gate 掛載後 fetch 恰好 1 次並進入 `ready`,以及元件外建構不 fetch 的斷言。
