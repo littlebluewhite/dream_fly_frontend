@@ -549,8 +549,8 @@ VM」。
   `TICKET_TYPE` 因此沒有消費端,連同 `toBe` 同參照守衛一併退役。依上文「`TIME_ROWS` 死出口」前例,
   零消費者的出口不留。`TICKET_TYPE` 現在的直接消費端是 `ticketTypeBadge` 本身與 admin
   `TicketEditDialog`(Select 選項標籤)。
-- **`WEEK` 搬進 `domain/weekday.ts`**(§1 現況表 `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 列與上文 R13
-  增補的同一列):`WEEK`(`['一', … , '日']`,週一起頭)的 index 是週課表欄位 `WeekColumn`,和 `DAY_KEYS`/
+- **`WEEK` 搬進 `domain/weekday.ts`**(§1 現況表 `WEEK`/`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 列與上文 R9 C4
+  增補表中的同一列):`WEEK`(`['一', … , '日']`,週一起頭)的 index 是週課表欄位 `WeekColumn`,和 `DAY_KEYS`/
   `WEEKDAY_ZH`/`toWeekColumn` 屬同一組星期換算,併入 `weekday.ts` 讓兩套星期索引只住一處。`member-app.ts`
   不再匯出 `WEEK`(`TIME_ROWS`/`COACH_REPLIES`/`NOTIF_CATS` 不動,該檔常數 8 → 7)。消費端 `member/schedule`
   頁、`ScheduleScreen`、mobile mine 頁改取 `$lib/domain/weekday`;教練 `ScheduleMonth` 的月曆表頭原本自帶
