@@ -528,3 +528,24 @@ VM」。
 `TodayRow` 帶 `state`)隨 R18 W5(`925cc38`)退役:mobile-admin 今日課表直接沿用 admin 的 `TodayClass`
 (tone/label 已由桌面 `mapTodaySession` 查好)與 coach 的 `TodayClass`,`TodayRow`、`mapTodayClassToRow`、
 `mapAdminTodayRow` 刪除。`SESSION_STATUS` 的直接消費端剩 admin 與 coach 兩處。見 `docs/adr/0028` §5。
+
+## 增補（2026-10-09，架構深化 R19）
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **以後端 enum 當鍵的查表,要提供一個「任何字串都能查」的函式,未知值後備收在 domain 檔裡。**
+  查表本體仍是明確 `Record<K, V>`(鍵集窮舉,見上文「宣告形與不 `readonly` 理由」),但消費端手上是後端
+  wire 字串;後端多一個值時,直接索引會 destructure 到 `undefined` 而炸整頁。後備不由各消費端自己補
+  `?? …`,也不用 `as` 把 wire 字串強轉成鍵型別,而是由 domain 檔提供查表函式:`domain/tickets.ts` 的
+  `ticketTypeBadge(t: string)` 與 `api/wire.ts` 的 `orderStatusBadge(s: string)` 同形,查無回
+  `['neutral', 原字串]`。方案類型的消費端(`TicketsScreen`、admin `StatusBadge` 的 `ticket` 分支)只
+  呼叫 `ticketTypeBadge`。
+- **方案類型的鍵集由生成的後端型別推導**:`TicketType` 改為 `Exclude<ProductType, 'merchandise'>`
+  (原為手抄的三值 union),`TICKET_TYPE` 維持明確 `Record<TicketType, …>`(不用 `satisfies`)。後端
+  `ProductType` 多一個值、bindings 同步後,`TICKET_TYPE` 少鍵即編譯錯誤。`admin/api.ts` 的
+  `getTickets()` 以明確型別守衛 filter(`p is TicketProduct`),`mapProduct` 的 `as TicketType` 強轉刪除。
+- **mobile-admin 的 `TICKET_TYPE` re-assert 刪除**(§1 現況表與 R9 C4 補登表記的「mobile-admin
+  (re-assert)」):唯一消費端 `TicketsScreen` 改呼叫 `ticketTypeBadge`,`mobile-admin/data.ts` 的
+  `TICKET_TYPE` 因此沒有消費端,連同 `toBe` 同參照守衛一併退役。依上文「`TIME_ROWS` 死出口」前例,
+  零消費者的出口不留。`TICKET_TYPE` 現在的直接消費端是 `ticketTypeBadge` 本身與 admin
+  `TicketEditDialog`(Select 選項標籤)。
