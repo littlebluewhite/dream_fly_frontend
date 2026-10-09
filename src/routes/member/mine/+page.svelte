@@ -21,7 +21,8 @@
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
-  import { ATT_STATE, LEVEL_TONE } from '$lib/member/data';
+  import { LEVEL_TONE } from '$lib/member/data';
+  import { attStateBadge } from '$lib/domain/attendance';
   import { leaveRow } from '$lib/domain/leave-requests';
   import {
     toasts,
@@ -197,7 +198,7 @@
             {:else}
               <div style="display:flex;flex-wrap:wrap;gap:8px">
                 {#each attendance as h, i (i)}
-                  {@const [tone, label] = ATT_STATE[h.state]}
+                  {@const [tone, label] = attStateBadge(h.state)}
                   <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
                     <Badge {tone} dot>{label}</Badge>
                     <span style="font-size:11px;color:var(--df-text-muted);font-family:var(--df-font-mono)">{h.date}</span>

@@ -42,7 +42,8 @@
   import { getEnrolmentAttendance } from '$lib/member/api';
   import { leaveRow } from '$lib/domain/leave-requests';
   import { createLoadGate } from '$lib/load-gate';
-  import { ATT_STATE, LEVEL_TONE } from '$lib/mobile/data';
+  import { LEVEL_TONE } from '$lib/mobile/data';
+  import { attStateBadge } from '$lib/domain/attendance';
   import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
   import type { IconName } from '$lib/icon-registry';
 
@@ -276,14 +277,14 @@
             {:else if attendance}
               <div style="display:flex; flex-direction:column;">
                 {#each attendance as a, i (i)}
-                  {@const [tone, label] = ATT_STATE[a.state]}
+                  {@const [tone, label] = attStateBadge(a.state)}
                   <div
                     style="display:flex; align-items:center; gap:12px; padding:10px 0;
                       border-top:{i ? '1px solid var(--df-border)' : 'none'};"
                   >
                     <Icon name="calendar" size={16} color="var(--df-text-muted)" />
                     <span style="flex:1; font-size:13.5px; color:var(--df-text-dark); font-family:var(--df-font-mono);">{a.year} / {a.date}</span>
-                    <Badge tone={tone as Tone} dot>{label}</Badge>
+                    <Badge {tone} dot>{label}</Badge>
                   </div>
                 {/each}
               </div>

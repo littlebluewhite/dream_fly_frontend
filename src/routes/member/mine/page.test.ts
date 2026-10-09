@@ -7,6 +7,7 @@ import Page from './+page.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { MEMBER_ROUTES } from '$lib/testing/member-routes';
 import { attendanceEntry, myEnrolment } from '$lib/testing/wire-fixtures';
+import type { AttendanceStatus } from '$lib/api/generated';
 
 // 只替換 api()，ApiError 用回真實類別。真的 getMine / getEnrolmentAttendance + mapper 會跑——
 // 候補/請假清單的映射與 hydrate 失敗不擋主資料等水合語意由 member/api.test.ts、
@@ -141,6 +142,21 @@ describe('member/mine 頁 — 出席明細(Task F7：GET /enrolments/{id}/attend
     expect(await screen.findByText('出席紀錄')).toBeInTheDocument();
     expect(api).toHaveBeenCalledWith(`/enrolments/${ENROLMENTS[0].id}/attendance`);
     expect(screen.getByText('06/06')).toBeInTheDocument();
+  });
+
+  it('後端多一個出勤狀態(未知值)時照樣渲染：徽章顯示原字串，其他紀錄不受影響', async () => {
+    route({
+      'GET /waitlist/me': [], 'GET /leave-requests/me': [],
+      'GET /enrolments/k1/attendance': [
+        attendanceEntry({ session_date: '2026-06-06', status: 'present' }),
+        attendanceEntry({ session_date: '2026-05-21', status: 'excused' as AttendanceStatus })
+      ]
+    });
+
+    render(Page);
+
+    expect(await screen.findByText('excused')).toBeInTheDocument();
+    expect(screen.getByText('出席')).toBeInTheDocument();
   });
 
   it('切換選取的課程時，以該課程 id 重新呼叫 getEnrolmentAttendance', async () => {

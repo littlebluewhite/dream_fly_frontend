@@ -42,7 +42,7 @@ import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
 import { isoDateTime } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
-import type { AttendanceStatus, NotificationResponse, NotificationType } from '$lib/api/generated';
+import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import type { WeekColumn } from '$lib/domain/weekday';
 
 export interface UpcomingClass {
@@ -52,9 +52,6 @@ export interface UpcomingClass {
   coach: string;
   status: [Tone, string];
 }
-
-/** 後端 attendance_status 的別名——產生型別擴集時 ATT_STATE 查表會在編譯期缺鍵。 */
-export type AttState = AttendanceStatus;
 
 export interface ScheduleBlock {
   day: WeekColumn; // 0=Mon … 6=Sun（同 WEEK 索引，對齊 member/api mapper）
@@ -113,16 +110,6 @@ export const SUBS_SEED: Subscription[] = [];
 /* Upcoming classes (member's booked sessions) — status is Tone-typed here;
  * domain stores the loose shape, so assert back to this file's stricter type. */
 export const UPCOMING: UpcomingClass[] = UPCOMING_BASE as UpcomingClass[];
-
-/* Attendance history for the active course */
-export const ATT_STATE: Record<AttState, [Tone, string]> = {
-  present: ['success', '出席'],
-  leave: ['info', '請假'],
-  absent: ['error', '缺席']
-  // 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
-  // present/absent/leave 三值，逐堂出勤明細改走真 GET /enrolments/{id}/attendance
-  // 後不會再吐出 'late'。
-};
 
 // 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
 // 已單源收斂 5 級對照）；保留本檔既有 Record<string, Tone> 寬鍵（CourseDetailDialog.svelte

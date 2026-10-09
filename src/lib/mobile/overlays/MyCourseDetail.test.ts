@@ -9,6 +9,7 @@ import type { LeaveRequest } from '$lib/member/leave';
 import { attendanceEntry } from '$lib/testing/wire-fixtures';
 import { apiCalls } from '$lib/testing/admin-routes';
 import type { EnrolledCourse as MyCourse } from '$lib/domain/member-app';
+import type { AttendanceStatus } from '$lib/api/generated';
 
 /* Task 19：MyCourseDetail 動作列拿掉舊 mock 版「預約補課」課程層級快捷按鈕
  * (真後端的補課預約是針對一張已核准請假申請的動作，見 MakeupSheet)，改為
@@ -202,6 +203,19 @@ describe('MyCourseDetail — 出席紀錄(Task F7：真後端 GET /enrolments/{i
 		// 聯絡教練兩個動作」測試的既有慣例)——用計數斷言避免撞到兩個相符元素。
 		expect(screen.getAllByText('請假')).toHaveLength(2);
 		expect(screen.queryByText('遲到')).toBeNull();
+	});
+
+	it('後端多一個出勤狀態(未知值)時照樣渲染：徽章顯示原字串，其他紀錄不受影響', async () => {
+		route({
+			[ATT_KEY]: [
+				attendanceEntry({ session_date: '2026-06-06', status: 'present' }),
+				attendanceEntry({ session_date: '2026-05-21', status: 'excused' as AttendanceStatus })
+			]
+		});
+		render(MyCourseDetail, { props: { onBack: () => {}, course: COURSE } });
+
+		expect(await screen.findByText('excused')).toBeInTheDocument();
+		expect(screen.getByText('出席')).toBeInTheDocument();
 	});
 
 	it('載入失敗顯示 ErrorState', async () => {

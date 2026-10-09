@@ -18,9 +18,6 @@
  * tone/label 查表併入動作規則、when/makeupWhen 格式化，單源收斂進
  * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。 */
 
-/** Tone tuple — [semantic tone key, Traditional-Chinese label]. */
-export type Tone = [string, string];
-
 // C4 批1(facade 純轉手退役):ME/type Member、AttRecord、EnrolledCourse as
 // MyCourse、CONTACT_THREAD、ChatMessage as ThreadMsg、NOTIFS_SEED、Notification
 // as NotifItem、WEEK、COACH_REPLIES、NOTIF_CATS(下方「Notification center」段落)
@@ -30,11 +27,6 @@ export type Tone = [string, string];
 import type { CatalogCourse } from '$lib/public/adapters';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
-
-/* ---- Attendance history (active course) ----
- * 'late'(遲到)鍵已移除（Task F7）：後端 attendance_status enum(§3.12)只有
- * present/absent/leave 三值。 */
-export const ATT_STATE: Record<string, Tone> = { present: ['success', '出席'], leave: ['info', '請假'], absent: ['error', '缺席'] };
 
 /* ---- Course catalog (課程介紹) ----
  * Task 19：getCourses()/getHome() 改接真後端(見 api.ts，復用 member/api.ts 的
