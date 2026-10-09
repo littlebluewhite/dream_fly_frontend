@@ -81,6 +81,12 @@ describe('legalNextStatuses — 契約 §3.10 狀態機的合法下一狀態', (
 	it('未知狀態(後端擴集) → [] 而非 undefined，呼叫端 .map 不會炸', () => {
 		expect(legalNextStatuses('disputed' as OrderStatus)).toEqual([]);
 	});
+
+	it('Object.prototype 上的鍵（constructor 等）也回 []，不回繼承來的函式', () => {
+		for (const k of ['constructor', 'toString', '__proto__']) {
+			expect(legalNextStatuses(k as OrderStatus)).toEqual([]);
+		}
+	});
 });
 
 describe('applyStatusChange — PATCH /orders/{id}/status 成功後套進本地working copy', () => {

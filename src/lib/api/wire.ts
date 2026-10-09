@@ -52,10 +52,10 @@ export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
   refunded: ['neutral', '已退款']
 };
 
-/** 容忍未知字串的查表：查無 → ['neutral', 原字串]。
+/** 容忍未知字串的查表：查無（只認自有鍵，constructor 等原型鍵也算查無）→ ['neutral', 原字串]。
  *  顯式放寬 cast 是必要的：strict 下以任意 string 索引 Record<OrderStatus,…> 會使 check 紅。 */
 export const orderStatusBadge = (s: string): [Tone, string] =>
-  (ORDER_STATUS as Record<string, [Tone, string] | undefined>)[s] ?? ['neutral', s];
+  Object.hasOwn(ORDER_STATUS, s) ? (ORDER_STATUS as Record<string, [Tone, string]>)[s] : ['neutral', s];
 
 /* ── 訂單雙身分協定 + 內含稅顯示反推（2026-07 增收）─────────────────────────
  * admin/member/mobile-admin 三處先前各自散記的兩件訂單 wire 知識，收成單點。 */

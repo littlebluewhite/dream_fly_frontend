@@ -98,6 +98,12 @@ describe('ticketTypeBadge — 方案類型查表自帶未知值後備', () => {
 	it('未知值 → [neutral, 原字串]，不是 undefined', () => {
 		expect(ticketTypeBadge('gift_card')).toEqual(['neutral', 'gift_card']);
 	});
+
+	it('Object.prototype 上的鍵（constructor 等）也走後備，不回繼承來的成員', () => {
+		for (const k of ['constructor', 'toString', '__proto__']) {
+			expect(ticketTypeBadge(k)).toEqual(['neutral', k]);
+		}
+	});
 });
 
 /* ── 3. key-count canaries(防漏鍵/多鍵) ── */

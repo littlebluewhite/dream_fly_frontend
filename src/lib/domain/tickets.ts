@@ -39,7 +39,7 @@ export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {
 	course_package: ['success', '課程套裝']
 };
 
-/** 容忍未知字串的方案類型查表：查無 → ['neutral', 原字串]。寫法同 api/wire.ts 的 orderStatusBadge，
+/** 容忍未知字串的方案類型查表：查無（只認自有鍵）→ ['neutral', 原字串]。寫法同 api/wire.ts 的 orderStatusBadge，
  *  後端 product_type 多一個值時不會 destructure 到 undefined 而炸頁。 */
 export const ticketTypeBadge = (t: string): [Tone, string] =>
-	(TICKET_TYPE as Record<string, [Tone, string] | undefined>)[t] ?? ['neutral', t];
+	Object.hasOwn(TICKET_TYPE, t) ? (TICKET_TYPE as Record<string, [Tone, string]>)[t] : ['neutral', t];

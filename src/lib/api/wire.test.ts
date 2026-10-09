@@ -20,6 +20,12 @@ describe('orderStatusBadge', () => {
   it('falls back to [neutral, original string] for an unknown status (downstream tests depend on this)', () => {
     expect(orderStatusBadge('some-unknown-status')).toEqual(['neutral', 'some-unknown-status']);
   });
+
+  it('falls back for Object.prototype keys instead of returning the inherited member', () => {
+    for (const k of ['constructor', 'toString', '__proto__']) {
+      expect(orderStatusBadge(k)).toEqual(['neutral', k]);
+    }
+  });
 });
 
 describe('pageMeta', () => {
