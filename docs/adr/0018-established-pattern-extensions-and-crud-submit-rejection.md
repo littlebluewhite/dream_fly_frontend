@@ -496,3 +496,11 @@ R11/R12/R13 增補記的「`markMessageRead` 的 fire-and-forget 是既有裁決
 §7 要「先確認兩者 mutate 語意是否同構」的前提因此有了答案:協定同構、政策不同,政策以參數表達;不需要把
 兩個 mutator 家族合併成一個模組,也不再有「各自歸隊」的必要。:242-248、:339、:368-369、:410、:456、:481 的
 `markMutated()`/`session-gate` 的 `mutate()` 敘述一併以 `write()` 為準。
+
+## 增補(2026-10-11,架構深化 R20)
+
+**§1 留頁條款中「對話清單 `convos` 與其 `getConversations` gate」「badge 清零與傳送後 `convos` 預覽／時間更新作用在頁面狀態」已被推翻。**
+列表、已讀、送出、新對話現在由 `src/lib/coach/conversations.ts` 持有,呼叫端把 `selectThread()` 的 `badgeCleared`、
+`send()`、`confirmCompose()` 的 promise 交給它的 mutator(`docs/adr/0029` §1)。`messages-controller` 仍只是對話串狀態機,
+不認識列表;tab × 搜尋過濾與選取回退(`conversations-filter.ts`)照留頁面側。
+

@@ -360,3 +360,15 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
   已讀,身分改變由閘門 `stale` 取代手寫核對(`MessageThread` 的核對已刪)。
 - **:328 的 `reset…ForTests()` 與「`gate.hydrated.set(true)` 只剩型別釘」**:各 store 的 `reset…ForTests` 已刪
   (只剩 `resetOpsForTests`),測試用 `resetSessionStores()`。
+
+## 增補(2026-10-11,架構深化 R20)
+
+以下被 `docs/adr/0029` §1 取代,本篇原文不改寫:
+
+- **「明確不做」F5(:228-229)與已知遞延「桌面 `convos`」「mock 角標」中的 `coach/nav.ts` `badge: 3`**:桌面對話列表現為
+  `src/lib/coach/conversations.ts` 的單一 owner,側欄訊息中心角標讀它的 `unreadConversationCount`;F5 當時「桌面外殼沒有
+  讀未讀數的地方」是循環論證(讀者是 mock 正因為沒有 store)。其餘外殼角標(`NOTIFS` 等)仍是 mock。
+- **§4 暖機清單**:coach 桌面 layout 也有一份暖機清單(教練對話)。
+- **:204-208 的 `markMessageRead(id, badgeCleared)`**:mobile-admin 的 `messages` store 已退役,已讀走
+  `markConversationRead(id, badgeCleared)`,ack-gated 語意不變。
+

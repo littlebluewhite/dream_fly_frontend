@@ -170,6 +170,9 @@ surface（member/staff）共用同一套 API：
 > 補正（`coach/api.ts` 併真 `getConversations()`，best-effort 失敗降級空陣列不擋主資料；R5 C2）。
 > 上表「場館／票券」條目的讀取側同輪接真，詳該列現況欄。
 >
+> **2026-10-11（R20 架構深化）退役註記**：上句 `getDashboard()` 併 `getConversations()` 自本日起不成立——對話列表由
+> `coach/conversations.ts` 持有，`getDashboard()` 不再抓對話（`docs/adr/0029` §1）。
+>
 > **2026-09-26（R12 架構深化）增補**（詳 `docs/adr/0022`）：上表兩列的現況欄有校正。
 >
 > **「`mobile-admin` 列表僅第 1 頁」**：仍只抓第 1 頁，但已不再把第 1 頁筆數當成總數顯示。

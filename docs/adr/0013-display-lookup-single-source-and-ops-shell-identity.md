@@ -177,6 +177,9 @@ module-context 的 `NOTIFS`,下述)。
 > 成立——`getDashboard()` 已併入真 `getConversations()`(best-effort,失敗降級空陣列),
 > `CONVERSATIONS` seed 依慣例於 `coach/data.ts` 原位退役;`Conversation` 型別與 `SlaTone` 仍為
 > 活型別(真映射的型別消費者)。歷史裁決原文不改寫。
+>
+> **2026-10-11(R20)退役註記**:上段「`getDashboard()` 已併入真 `getConversations()`(best-effort)」自本日起不成立——
+> 對話列表改由 `coach/conversations.ts` 持有,`getDashboard()` 不再抓對話(`docs/adr/0029` §1)。
 
 **§2 補充(批次 1 codex 審查記帳)**:`CoachAvatar.svelte` 的 `initial` prop 有一個預設值
 `COACH.initial`(`export let initial: string = COACH.initial;`),原本是給「不需要承接特定教練資料」
