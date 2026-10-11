@@ -7,7 +7,7 @@ import { api } from '$lib/api/client';
 import { listCoaches, listVenues } from '$lib/public/api';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
-import { ageRange, initialOf, isoDateTime, orderIdentity, pageMeta, taxFromGross, isoDate, paidAtLabel } from '$lib/api/wire';
+import { ageRange, initialOf, isoDateTime, lookupOr, orderIdentity, pageMeta, taxFromGross, isoDate, paidAtLabel } from '$lib/api/wire';
 import type { TodaySessionResponse } from '$lib/api/wire';
 import { SESSION_STATUS, toTodaySession } from '$lib/domain/sessions';
 import { MEMBER_COLORS, mapMemberAccount } from './data';
@@ -310,9 +310,7 @@ const DEFAULT_ACTIVITY_META: { icon: IconName; tone: string; bg: string } = {
  *  lastLogin 的 isoDateTime 慣例，這裡沒有既有的相對時間("N 分鐘前")格式化工具，不
  *  另外發明一套)。 */
 function mapActivityItem(item: ActivityItem): Activity {
-	const { icon, tone, bg } =
-		(ACTIVITY_KIND_ICON as Record<string, (typeof ACTIVITY_KIND_ICON)[ActivityKind] | undefined>)[item.kind] ??
-		DEFAULT_ACTIVITY_META;
+	const { icon, tone, bg } = lookupOr(ACTIVITY_KIND_ICON, item.kind, DEFAULT_ACTIVITY_META);
 	return { icon, tone, bg, text: item.label, time: isoDateTime(item.occurred_at) };
 }
 

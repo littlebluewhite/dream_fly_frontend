@@ -6,7 +6,7 @@
  * TodaySessionResponse.status，工作室牆鐘時間），前端只做 wire 值 → UI 鍵的對應，不再
  * 自行比較時間。 */
 import type { SessionStatus, Tone, TodaySessionResponse } from '$lib/api/wire';
-import { hhmm } from '$lib/api/wire';
+import { hhmm, lookupOr } from '$lib/api/wire';
 
 /** 今日場次狀態 union（admin/coach/mobile-admin 共用查表鍵，自 coach/data.ts 升遷）。 */
 export type TodayStatus = 'wait' | 'live' | 'done';
@@ -54,6 +54,6 @@ export function toTodaySession(s: TodaySessionResponse): TodaySession {
 		coach: s.coach_name ?? '—',
 		room: s.venue ?? '—',
 		count: s.enrolled_count,
-		state: TODAY_STATUS[s.status] ?? 'wait'
+		state: lookupOr<TodayStatus>(TODAY_STATUS, s.status, 'wait')
 	};
 }

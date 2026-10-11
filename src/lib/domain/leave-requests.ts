@@ -13,7 +13,7 @@
  * formatSessionDateTime 產生的「已預約補課： (undefined)」）——呼叫端據此判斷是否
  * 渲染這一行。 */
 
-import type { Tone, LeaveStatus } from '$lib/api/wire';
+import { lookupOr, type Tone, type LeaveStatus } from '$lib/api/wire';
 import { formatSessionDateTime } from './session-format';
 
 /** 一筆請假紀錄可觸發的動作：'cancel'（可取消，pending）、'bookMakeup'（可預約補課，
@@ -64,7 +64,7 @@ export interface LeaveRow {
 }
 
 export function leaveRow(lr: LeaveRowSource): LeaveRow {
-	const [tone, label] = STATUS_BADGE[lr.status] ?? ['neutral', lr.status];
+	const [tone, label] = lookupOr<[Tone, string]>(STATUS_BADGE, lr.status, ['neutral', lr.status]);
 	return {
 		tone,
 		label,

@@ -39,7 +39,7 @@ import { type LedgerType } from '$lib/domain/member-app';
 // value here and assert it back to this file's own stricter local interface
 // (declared at its original spot below) where the const is (re-)declared.
 import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
-import { isoDateTime } from '$lib/api/wire';
+import { isoDateTime, lookupOr } from '$lib/api/wire';
 import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 import type { NotificationResponse, NotificationType } from '$lib/api/generated';
@@ -167,7 +167,7 @@ const NOTIF_TYPE_MAP: Record<NotificationType, { cat: NotifCat; icon: IconName; 
 const DEFAULT_NOTIF_META = { cat: 'system' as NotifCat, icon: 'bell' as const, tone: 'neutral' as Tone };
 
 export function mapNotification(n: NotificationResponse): Notification {
-  const meta = NOTIF_TYPE_MAP[n.type] ?? DEFAULT_NOTIF_META;
+  const meta = lookupOr(NOTIF_TYPE_MAP, n.type, DEFAULT_NOTIF_META);
   return {
     id: n.id,
     cat: meta.cat,
