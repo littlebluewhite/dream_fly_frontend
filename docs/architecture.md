@@ -114,8 +114,8 @@ a facade; consumers import the canonical source directly, with import-site alias
 differs (`Activity as ActivityRow`). What the four `data.ts` files hold is what makes them facades: local
 interfaces and local mock arrays, real mappers (`admin`'s `mapMemberAccount`), the `docs/adr/0013`
 Form 2/3 narrowing re-asserts that genuinely re-assert a stricter local type over the same reference
-(`member`'s and `mobile`'s `LEVEL_TONE`, `member`'s one `as`-assertion narrowing `UPCOMING`,
-`mobile-admin`'s five status tables), and one ADR-named boundary seam: `mobile-admin/data.ts` re-exports
+(`member`'s one `as`-assertion narrowing `UPCOMING`,
+`mobile-admin`'s two status tables, `MEMBER_ACCOUNT_STATUS` and `VENUE_STATUS`), and one ADR-named boundary seam: `mobile-admin/data.ts` re-exports
 the `Student` type from `$lib/coach/data` — its canonical home — for mobile-admin's coach-side consumers
 (`docs/adr/0014`, `docs/adr/0019`, `docs/adr/0026`). `coach` has no persona mapping into this shared
 ops-pair/member-app seed, so it stays outside the four-facade group, but it does consume `lib/domain/`
@@ -169,7 +169,7 @@ fn-eval support); `auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical
 `vi.mock('$lib/stores/authStore')` factories, both passing through the real `sessionIdentity`);
 `session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
 gate resets through its production path; there are no per-store `reset…ForTests` exports except
-`resetOpsForTests`, the identity-free ops gate's); `wire-fixtures.ts` (builders such as
+`resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
 with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
 `page-lifetime.ts` (`describePageLifetime(name, Layout, baseRoutes?)` — the shared "page lifetime = login
@@ -520,7 +520,7 @@ place, independent of any single page's own load-gate?
   never learns of the list. Readers: the desktop messages page (`createLoadGate({ ...conversationsPageEntry
   })` plus a background `refreshConversationsIfHydrated()` on re-entry), the desktop dashboard (top three,
   derived; `getDashboard()` no longer fetches conversations), the desktop Sidebar badge, and mobile-admin's
-  list, thread, TabBar and coach home. The coach layout and the mobile-admin layout warm it; layout warm,
+  list, thread and TabBar (coach home does not read it). The coach layout and the mobile-admin layout warm it; layout warm,
   page load and the dashboard's `hydrateConversations()` merge into one in-flight GET, so a first visit is one
   request. The overlay screens on this store render their own three states: `CoachesScreen`
   uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...opsPageEntry })`, ready synchronously when

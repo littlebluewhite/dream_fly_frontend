@@ -202,7 +202,7 @@ export interface AttClassFull extends AttClass {
 
 /* ──────────────── messages (訊息中心) ──────────────── */
 // Task 1(C2 死種子退役):CONVERSATIONS(訊息中心 6 筆示範資料)已退役——首頁最新訊息
-// 面板改由 getDashboard() 併入的真 getConversations() 接縫供資料,這份 mock 已無
+// 面板改由教練對話列表(coach/conversations)衍生,這份 mock 已無
 // runtime 消費者。Conversation interface 仍供 mapConversation 與頁面的型別標註使用,
 // 保留。
 

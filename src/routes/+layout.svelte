@@ -37,7 +37,8 @@
   $: if (browser && !isAppSurface && $sessionKey !== null) void warmStores('root +layout', [['訂閱', refreshSubscriptions]]);
 
   /* 行銷公告暖機：公開端點與身分無關，故不看 $sessionKey、另起一行——每個頁面生命週期只暖一次
-   * （閘門守衛擋重訪；失敗時維持未水合，下次路由變動再試）。 */
+   * （閘門守衛擋重訪；失敗時維持未水合；此行只依賴 isAppSurface，行銷頁之間換頁不會重跑，
+   * 要等進過 app 介面再回來或重新載入才會重試）。 */
   $: if (browser && !isAppSurface) void warmStores('root +layout', [['公告', hydrateAnnouncements]]);
 </script>
 

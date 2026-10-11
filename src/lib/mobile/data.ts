@@ -13,7 +13,7 @@
  * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。C4 批1(facade
  * 純轉手退役)接續移除本檔對 domain/member-app 的純轉手值/型別轉出，消費端改直取
  * 單源。現存常數皆為 (a) 畫面仍在讀的本地 mock(ANNOUNCE — 對應桌面版同樣是
- * mock，見 P2 註解)、查表，或查表。
+ * mock，見 P2 註解)。
  * Task 10(架構深化 R15·請假列 view-model)：LEAVE_STATUS 這份收窄 facade 退役，
  * tone/label 查表併入動作規則、when/makeupWhen 格式化，單源收斂進
  * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。 */

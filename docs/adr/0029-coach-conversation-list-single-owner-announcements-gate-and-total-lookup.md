@@ -49,7 +49,7 @@ R20 沿 `docs/adr/0018`/`0024`/`0028`「一輪多案、單篇記錄」的體例�
   `createFailed`／`alreadyCreating`)在 `send` 內拋出,列表不動。toast 與頁面的 tab／搜尋／選取留頁面。
 - **讀者**:桌面訊息中心(`createLoadGate({ ...conversationsPageEntry })`,取代頁面自持的 `convos`)、桌面工作台
   (前 3 筆由列表衍生,`getDashboard` 不再抓對話)、桌面側欄角標(`unreadConversationCount`,為 0 不顯示;`nav.ts`
-  的 `badge: 3` 與 `CoachNav.badge` 欄位刪除)、mobile-admin 訊息頁／對話串／TabBar／教練首頁。
+  的 `badge: 3` 與 `CoachNav.badge` 欄位刪除)、mobile-admin 訊息頁／對話串／TabBar(教練首頁不讀列表,其 `pendingReplies` 來自 `/reports/coach`;它只是少了重複的 GET)。
 - **暖機**:coach layout 與 mobile-admin layout 都以身分為 key 暖 `hydrateConversations`(`docs/adr/0024` §4 的暖機清單)。
 - **新鮮度維持現狀**:桌面訊息中心與工作台再次進頁時,畫面先顯示已有的列表,背景再真抓一次
   (`refreshConversationsIfHydrated`,失敗靜默、舊列表照舊);**第一次進頁只抓 1 次**——layout 暖機、頁面 load 與
@@ -86,7 +86,7 @@ read-state 的同名匯出區分。符合 `docs/adr/0024` §4 暖機清單的方
 
 1. **mobile-admin 回覆後,訊息列表的預覽與時間跟著更新**(此前停在舊值)。
 2. **桌面側欄「訊息中心」角標是真的未讀對話數**,為 0 不顯示;不再永遠顯示 3。
-3. **每次載入少一支 `GET /conversations/me`**:桌面工作台與 mobile-admin 教練首頁不再由 `getDashboard()` 夾帶。
+3. **`GET /conversations/me` 次數**:mobile-admin 教練首頁 2→1(不再由 `getDashboard()` 夾帶);桌面工作台次數不變(GET 由 `getDashboard` 移入列表);其餘桌面教練頁每個帳號多 1 支(側欄角標,由 coach layout 暖機)。
 4. 桌面再次進頁（訊息中心、工作台）先顯示已有的列表再背景重抓,第一次進頁仍只抓 1 次——與先前一致。
 5. 行銷公告只在行銷外殼打 `GET /posts`,app 介面零次;失敗可在下次暖機重試(§2)。
 6. 其餘改動 wire 等價。
