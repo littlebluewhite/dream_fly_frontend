@@ -13,8 +13,8 @@
  *    member 分支一併退役於 Task 1(R13 小 bug 包)。
  * 3. key-count canary：防漏鍵/多鍵。
  *
- * LEVEL_TONE 的 facade toBe/字面不變量留在 course-level.test.ts(單獨擴充，含
- * member/mobile 兩發留給 W2b)。
+ * LEVEL_TONE 的字面不變量留在 course-level.test.ts；R20 起它與 STATUS_TONE 的
+ * facade 再匯出已退役(消費端改呼叫 courseLevelTone／classStatusTone)。
  *
  * SESSION_STATUS(C4)只補層 2/3——admin/coach/mobile-admin 三處都是「查表結果
  * 內部組裝成各自形狀」的消費方式(mapTodaySession()/mapTodayClassToRow() 組出
@@ -31,10 +31,9 @@ import * as MobileAdminData from '$lib/mobile-admin/data';
 
 /* ── 1. wiring check：facade 與 domain 同參照(toBe，非值比對) ── */
 describe('mobile-admin facade re-asserts domain status lookups by reference (single source)', () => {
-	it('every shared table is the SAME object as domain (toBe, not a copy) ×3', () => {
+	it('every shared table is the SAME object as domain (toBe, not a copy) ×2', () => {
 		expect(MobileAdminData.MEMBER_ACCOUNT_STATUS).toBe(MEMBER_ACCOUNT_STATUS);
 		expect(MobileAdminData.VENUE_STATUS).toBe(VENUE_STATUS);
-		expect(MobileAdminData.STATUS_TONE).toBe(STATUS_TONE);
 	});
 });
 

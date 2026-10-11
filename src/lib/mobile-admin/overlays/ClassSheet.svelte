@@ -9,15 +9,13 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { toasts } from '$lib/mobile-admin/stores';
-  import { STATUS_TONE } from '$lib/mobile-admin/data';
+  import { classStatusTone } from '$lib/domain/classes';
   import type { ClassRow } from '$lib/admin/data';
   import { classFill, classDetailRows } from '$lib/domain/class-detail';
 
   export let onClose: () => void;
   export let k: ClassRow | null = null;
   export let onEdit: (k: ClassRow) => void;
-
-  type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   function edit() {
     if (!k) return;
@@ -38,7 +36,7 @@
       <div>
         <div style="display:flex; align-items:center; gap:7px; margin-bottom:7px;">
           <LevelBadge level={k.level} />
-          <Badge tone={(STATUS_TONE[k.status] || 'neutral') as Tone} solid={k.status === '額滿'}>{k.status}</Badge>
+          <Badge tone={classStatusTone(k.status)} solid={k.status === '額滿'}>{k.status}</Badge>
         </div>
         <h2 style="margin:0; font-family:var(--df-font-heading); font-size:22px; font-weight:800; color:var(--df-ink);">{k.name}</h2>
       </div>

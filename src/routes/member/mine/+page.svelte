@@ -21,7 +21,7 @@
   import LeaveDialog from '$lib/member/components/LeaveDialog.svelte';
   import MakeupDialog from '$lib/member/components/MakeupDialog.svelte';
   import ContactDialog from '$lib/member/components/ContactDialog.svelte';
-  import { LEVEL_TONE } from '$lib/member/data';
+  import { courseLevelTone } from '$lib/domain/course-level';
   import { attStateBadge } from '$lib/domain/attendance';
   import { leaveRow } from '$lib/domain/leave-requests';
   import {
@@ -167,7 +167,7 @@
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:8px">
               <h3 style="margin:0;font-size:19px;font-weight:800;color:var(--df-ink);font-family:var(--df-font-heading)">{cur.name}</h3>
-              <Badge tone={LEVEL_TONE[cur.level]}>{cur.level}</Badge>
+              <Badge tone={courseLevelTone(cur.level)}>{cur.level}</Badge>
             </div>
             <div style="font-size:13px;color:var(--df-text-light);margin-top:4px">{cur.schedule}</div>
           </div>

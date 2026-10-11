@@ -5,7 +5,7 @@
    * CourseDetail (client/views.jsx). */
   import Dialog from '$lib/components/ui/Dialog.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
-  import { LEVEL_TONE } from '$lib/member/data';
+  import { courseLevelTone } from '$lib/domain/course-level';
   import type { CatalogCourse } from '$lib/public/adapters';
 
   export let course: CatalogCourse | null = null;
@@ -39,7 +39,7 @@
 >
   {#if course}
     <div style="display:flex; gap:8px; margin:2px 0 14px">
-      <Badge tone={LEVEL_TONE[course.level]}>{course.level}</Badge>
+      <Badge tone={courseLevelTone(course.level)}>{course.level}</Badge>
       <Badge tone="neutral">{course.age}</Badge>
       {#if course.hot}<Badge tone="accent" solid>熱門</Badge>{/if}
       {#if full}<Badge tone="warning">候補中</Badge>{/if}

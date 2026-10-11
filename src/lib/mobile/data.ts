@@ -13,7 +13,7 @@
  * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。C4 批1(facade
  * 純轉手退役)接續移除本檔對 domain/member-app 的純轉手值/型別轉出，消費端改直取
  * 單源。現存常數皆為 (a) 畫面仍在讀的本地 mock(ANNOUNCE — 對應桌面版同樣是
- * mock，見 P2 註解)、查表，或對 domain 值純註記收窄的 LEVEL_TONE。
+ * mock，見 P2 註解)、查表，或查表。
  * Task 10(架構深化 R15·請假列 view-model)：LEAVE_STATUS 這份收窄 facade 退役，
  * tone/label 查表併入動作規則、when/makeupWhen 格式化，單源收斂進
  * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。 */
@@ -25,7 +25,6 @@
 // 消費端改直取 $lib/domain/member-app 同名同型符號(改名一律 import-site alias)。
 // ANNOUNCE 因兩側有一則公告的 bg 色不同,留在本檔案原地(見下方),未搬進 domain。
 import type { CatalogCourse } from '$lib/public/adapters';
-import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 
 /* ---- Course catalog (課程介紹) ----
@@ -40,10 +39,6 @@ export interface Course extends CatalogCourse {
 // 後端，這份 mock 已無 runtime 消費者；曾經的「僅供既有測試當 fixture 用」用途
 // 也已改為各測試檔內的 inline Course fixture。Course interface(見上)仍供
 // api.ts/元件的型別標註使用，保留。
-// 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
-// 已單源收斂 5 級對照）；保留本檔既有 Record<string, string> 寬鍵（LevelBadge.svelte
-// 等消費端吃鬆散 string）。
-export const LEVEL_TONE: Record<string, string> = LEVEL_TONE_BASE;
 
 // TIME_ROWS 不在此列——mobile 側零消費者，死出口不留（ADR 0010 精神）。WEEK 已隨 C4
 // 批1(見上方)退役,消費端改直取 $lib/domain/member-app;R19 起 WEEK 搬進 $lib/domain/weekday。

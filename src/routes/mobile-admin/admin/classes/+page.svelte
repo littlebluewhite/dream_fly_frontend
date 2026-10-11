@@ -28,7 +28,7 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { overlay, classes, coaches, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
-  import { STATUS_TONE } from '$lib/mobile-admin/data';
+  import { classStatusTone } from '$lib/domain/classes';
   import { createLoadGate } from '$lib/load-gate';
   import { CATS, type ClassRow } from '$lib/admin/data';
   import { filterClasses } from '$lib/admin/components/classes-filter';
@@ -37,7 +37,6 @@
   import type { IconName } from '$lib/icon-registry';
   import { classFill } from '$lib/domain/class-detail';
 
-  type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   const gate = createLoadGate({ ...opsPageEntry });
 
@@ -137,7 +136,7 @@
             >
               <div style="display:flex; align-items:center; gap:7px; margin-bottom:8px;">
                 <LevelBadge level={k.level} />
-                <Badge tone={(STATUS_TONE[k.status] || 'neutral') as Tone} solid={k.status === '額滿'}>{k.status}</Badge>
+                <Badge tone={classStatusTone(k.status)} solid={k.status === '額滿'}>{k.status}</Badge>
               </div>
               <div style="font-size:16.5px; font-weight:700; color:var(--df-ink); font-family:var(--df-font-heading);">{k.name}</div>
               <div style="display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:9px;">

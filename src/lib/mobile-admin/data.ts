@@ -41,12 +41,10 @@ export type { Student } from '$lib/coach/data';
 
 // R15(候選 F-3，誠實開機)：CLASSES/MEMBERS/ORDERS 三個 .map 衍生 builder 已退役——
 // members/classes/orders store 改為誠實開機(`[]`)，值改由真 GET /courses、/users、
-// /orders 水合(見 mobile-admin/stores.ts opsGate)。下方 Tone 查表(STATUS_TONE 等)
+// /orders 水合(見 mobile-admin/stores.ts opsGate)。下方 Tone 查表(MEMBER_ACCOUNT_STATUS 等)
 // 與已退役的班級/學員/訂單種子陣列無關，不受影響。
-import { STATUS_TONE as STATUS_TONE_BASE } from '$lib/domain/classes';
 import { MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';
-import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 
 /* ---- Staff profiles (role switch) ---- */
@@ -130,10 +128,6 @@ export const COACH_NOTIFS: AdminNotif[] = [
 // MEMBER_STATUS 改名 MEMBER_ACCOUNT_STATUS（消同名異義——本檔已無 3 態版 MEMBER_STATUS
 // 需要區分），改純註記 re-assert 自 $lib/domain/members，本檔只保留 tuple Tone 可見型別。
 export const MEMBER_ACCOUNT_STATUS: Record<MemberAccountStatus, Tone> = MEMBER_ACCOUNT_STATUS_BASE;
-// 批次 1 W2a：LEVEL_TONE/STATUS_TONE 改純註記 re-assert 自 $lib/domain，保留本檔既有
-// Record<string, …> 可見型別（LevelBadge.svelte 等消費端吃鬆散 string，需要寬鍵）。
-export const LEVEL_TONE: Record<string, string> = LEVEL_TONE_BASE;
-export const STATUS_TONE: Record<string, string> = STATUS_TONE_BASE;
 
 // Task P4-F3：報表分析 mock 全面退役——KPI 卡(REPORT_KPIS/Kpi)、營收趨勢
 // (REVENUE_TREND)、本月營收來源拆解(REVENUE_TOTAL/REVENUE_BREAKDOWN)原本這裡的三組

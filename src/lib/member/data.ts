@@ -40,7 +40,6 @@ import { type LedgerType } from '$lib/domain/member-app';
 // (declared at its original spot below) where the const is (re-)declared.
 import { UPCOMING as UPCOMING_BASE } from '$lib/domain/member-app';
 import { isoDateTime, lookupOr } from '$lib/api/wire';
-import { LEVEL_TONE as LEVEL_TONE_BASE } from '$lib/domain/course-level';
 import type { IconName } from '$lib/icon-registry';
 import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import type { WeekColumn } from '$lib/domain/weekday';
@@ -110,11 +109,6 @@ export const SUBS_SEED: Subscription[] = [];
 /* Upcoming classes (member's booked sessions) — status is Tone-typed here;
  * domain stores the loose shape, so assert back to this file's stricter type. */
 export const UPCOMING: UpcomingClass[] = UPCOMING_BASE as UpcomingClass[];
-
-// 批次 2 W2b：LEVEL_TONE 改純註記 re-assert 自 $lib/domain/course-level（批次 1 W2a
-// 已單源收斂 5 級對照）；保留本檔既有 Record<string, Tone> 寬鍵（CourseDetailDialog.svelte
-// 等消費端索引值是 string）。
-export const LEVEL_TONE: Record<string, Tone> = LEVEL_TONE_BASE;
 
 // SCHEDULE（值）不在此列——Task 1（C2 死種子退役）確認課表頁走真實 getSchedule()
 // 後，這份 mock 已無 runtime 消費者，隨 domain/member-app.ts 本體的 SCHEDULE 一併

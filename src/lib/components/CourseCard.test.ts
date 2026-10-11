@@ -36,6 +36,12 @@ describe('CourseCard — 5 級課程分級 badge tone', () => {
 		expect(getByText('選手').className).toContain('accent');
 	});
 
+	it('unknown level (前後端版本不一致) falls back to neutral, not primary', () => {
+		const { getByText } = render(CourseCard, { course: makeCourse({ level: 'master' }) });
+		expect(getByText('master').className).toContain('neutral');
+		expect(getByText('master').className).not.toContain('primary');
+	});
+
 	it('still renders the existing 3 levels (入門/基礎/進階) labels unchanged', () => {
 		for (const level of ['入門', '基礎', '進階']) {
 			const { getByText } = render(CourseCard, { course: makeCourse({ level }) });

@@ -19,8 +19,8 @@
 	import { MEMBER_ACCOUNT_STATUS, type MemberAccountStatus } from '$lib/domain/members';
 	import { VENUE_STATUS, type VenueStatus } from '$lib/domain/venues';
 	import { ticketTypeBadge, type TicketType } from '$lib/domain/tickets';
-	import { LEVEL_TONE, type Level } from '$lib/domain/course-level';
-	import { STATUS_TONE, type ClassStatus } from '$lib/domain/classes';
+	import { courseLevelTone, type Level } from '$lib/domain/course-level';
+	import { classStatusTone, type ClassStatus } from '$lib/domain/classes';
 	import { orderStatusBadge, type Tone, type OrderStatus } from '$lib/api/wire';
 
 	type Kind =
@@ -66,11 +66,11 @@
 				[tone, label] = ticketTypeBadge(value);
 				break;
 			case 'classLevel':
-				tone = LEVEL_TONE[value as Level];
+				tone = courseLevelTone(value);
 				label = value;
 				break;
 			case 'classStatus':
-				tone = STATUS_TONE[value as ClassStatus];
+				tone = classStatusTone(value);
 				label = value;
 				solid = value === '額滿';
 				break;

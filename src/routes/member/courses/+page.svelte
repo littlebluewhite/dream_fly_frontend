@@ -5,7 +5,7 @@
   import { onMount } from 'svelte';
   import { Tabs, FilterChip, Card, Badge, Button, Icon, EmptyState, Skeleton, SkelCard, ErrorState, LoadGate } from '$lib/components/ui';
   import CourseDetailDialog from '$lib/member/components/CourseDetailDialog.svelte';
-  import { LEVEL_TONE } from '$lib/member/data';
+  import { courseLevelTone } from '$lib/domain/course-level';
   import type { CatalogCourse } from '$lib/public/adapters';
   import { createLoadGate } from '$lib/load-gate';
   import { getCourses, type CoursesData } from '$lib/member/api';
@@ -121,7 +121,7 @@
           </button>
           <div style="padding:18px; flex:1; display:flex; flex-direction:column">
             <div style="display:flex; gap:6px; margin-bottom:10px">
-              <Badge tone={LEVEL_TONE[c.level]}>{c.level}</Badge>
+              <Badge tone={courseLevelTone(c.level)}>{c.level}</Badge>
               <Badge tone="neutral">{c.age}</Badge>
             </div>
             <h3 style="margin:0 0 8px">

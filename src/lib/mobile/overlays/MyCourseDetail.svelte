@@ -42,18 +42,17 @@
   import { getEnrolmentAttendance } from '$lib/member/api';
   import { leaveRow } from '$lib/domain/leave-requests';
   import { createLoadGate } from '$lib/load-gate';
-  import { LEVEL_TONE } from '$lib/mobile/data';
+  import { courseLevelTone } from '$lib/domain/course-level';
   import { attStateBadge } from '$lib/domain/attendance';
   import type { EnrolledCourse as MyCourse, AttRecord } from '$lib/domain/member-app';
   import type { IconName } from '$lib/icon-registry';
 
-  type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
   export let onBack: () => void;
   export let course: MyCourse | null = null;
 
   $: c = course as MyCourse;
-  $: levelTone = (c ? LEVEL_TONE[c.level] || 'primary' : 'primary') as Tone;
+  $: levelTone = c ? courseLevelTone(c.level) : 'neutral';
 
   /* 出席環 — mine.jsx AttRing (6)。size 92、stroke 9。 */
   const ringSize = 92;
