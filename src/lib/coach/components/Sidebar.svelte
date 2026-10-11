@@ -3,7 +3,8 @@
    * 7 flat nav items (active = primary bg + white), and an interactive gold
    * profile card that toggles a ProfileMenu popover (3 navigating rows + a
    * logout). Active state via nav.ts isActive() so 儀表板 isn't stuck
-   * active on deeper routes. */
+   * active on deeper routes. 訊息中心's badge = 未讀對話數 (unreadConversationCount from the
+   * 教練對話列表, hidden at 0); the list is warmed by the coach +layout. */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
@@ -12,6 +13,7 @@
   import { authStore } from '$lib/stores/authStore';
   import { initialOf } from '$lib/api/wire';
   import { toasts } from '$lib/coach/stores';
+  import { unreadConversationCount } from '$lib/coach/conversations';
   import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
   import type { IconName } from '$lib/icon-registry';
 
@@ -66,6 +68,7 @@
     <nav style="display:flex;flex-direction:column;gap:4px;overflow-y:auto">
       {#each NAV as n (n.id)}
         {@const active = isActive(coachPath(n.id), path)}
+        {@const badge = n.id === 'messages' ? $unreadConversationCount : 0}
         <button
           class="df-navbtn"
           on:click={() => goto(coachPath(n.id))}
@@ -77,13 +80,13 @@
         >
           <Icon name={n.icon} size={18} color={active ? '#fff' : '#94A3B8'} />
           <span style="flex:1">{n.label}</span>
-          {#if n.badge}
+          {#if badge > 0}
             <span
               style="background:{active
                 ? 'rgba(255,255,255,0.25)'
                 : '#dc2626'};color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px"
             >
-              {n.badge}
+              {badge}
             </span>
           {/if}
         </button>

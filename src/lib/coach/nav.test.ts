@@ -43,12 +43,10 @@ describe('resolve', () => {
 });
 
 describe('NAV', () => {
-	it('has 8 items (Task 11 adds 請假審核) with a badge only on 訊息中心', () => {
+	// R20:訊息中心角標改讀教練對話列表的未讀對話數(Sidebar),nav 不再硬編 badge: 3。
+	it('has 8 items (Task 11 adds 請假審核) and no hard-coded badge', () => {
 		expect(NAV).toHaveLength(8);
-		const badged = NAV.filter((n) => n.badge != null);
-		expect(badged).toHaveLength(1);
-		expect(badged[0].id).toBe('messages');
-		expect(badged[0].badge).toBe(3);
+		expect(NAV.filter((n) => 'badge' in n)).toEqual([]);
 	});
 	it('has a 請假審核 item positioned between 出勤記錄 and 訊息中心', () => {
 		const ids = NAV.map((n) => n.id);

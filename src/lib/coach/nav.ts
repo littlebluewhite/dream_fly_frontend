@@ -12,11 +12,11 @@ export interface CoachNav {
 	id: string;
 	label: string;
 	icon: IconName;
-	badge?: number;
 }
 
-/* 8 flat nav items (shell.jsx:7-15 + Task 11's 請假審核). Badge only on 訊息中心
- * (faithful). 請假審核 sits next to 出勤記錄 — both are attendance-adjacent
+/* 8 flat nav items (shell.jsx:7-15 + Task 11's 請假審核). 訊息中心's badge is not
+ * modelled here: Sidebar reads the real unread-conversation count from
+ * $lib/coach/conversations (R20). 請假審核 sits next to 出勤記錄 — both are attendance-adjacent
  * concerns (a leave request writes an attendance record on approval, §3.20). */
 export const NAV: CoachNav[] = [
 	{ id: 'dashboard', label: '儀表板', icon: 'layout-dashboard' },
@@ -25,7 +25,7 @@ export const NAV: CoachNav[] = [
 	{ id: 'schedule', label: '排課管理', icon: 'calendar-days' },
 	{ id: 'attendance', label: '出勤記錄', icon: 'clipboard-check' },
 	{ id: 'leave-requests', label: '請假審核', icon: 'calendar-off' },
-	{ id: 'messages', label: '訊息中心', icon: 'message-circle', badge: 3 },
+	{ id: 'messages', label: '訊息中心', icon: 'message-circle' },
 	{ id: 'settings', label: '個人設定', icon: 'settings' }
 ];
 

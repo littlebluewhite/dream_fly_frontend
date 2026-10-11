@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { readable, get } from 'svelte/store';
 import { goto } from '$app/navigation';
 import Sidebar from './Sidebar.svelte';
 import { authStore } from '$lib/stores/authStore';
 import { FIXTURE_MEMBER, type TestAuthStore } from '$lib/testing/auth-mock';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { conversationSummary } from '$lib/testing/wire-fixtures';
+import { hydrateConversations } from '$lib/coach/conversations';
 
 // Sidebar 讀 $page.url.pathname 判斷 nav active 狀態、點擊呼叫 goto()。
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -21,6 +26,12 @@ vi.mock('$app/stores', () => ({
 vi.mock('$lib/stores/authStore', async () => {
   const { makeAuthMockB } = await import('$lib/testing/auth-mock');
   return makeAuthMockB();
+});
+
+// 角標讀教練對話列表(閘門隨 beforeEach 的登出重置):只替換 api(),經 hydrateConversations 灌入列表。
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
 });
 
 beforeEach(() => {
@@ -65,5 +76,45 @@ describe('coach Sidebar — 身分槽位改讀 authStore', () => {
     expect(authStore.logout).toHaveBeenCalled();
     expect(get(authStore).loggedIn).toBe(false);
     expect(goto).toHaveBeenCalledWith('/staff/login');
+  });
+});
+
+describe('coach Sidebar — 訊息中心角標讀未讀對話數(R20)', () => {
+  const messagesBtn = () => screen.getByText('訊息中心').closest('button')!;
+
+  it('有未讀:顯示「badge > 0 的對話數」而非未讀則數加總', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({
+        'GET /conversations/me': [
+          conversationSummary({ id: 'c1', unread_count: 5 }),
+          conversationSummary({ id: 'c2', unread_count: 1 }),
+          conversationSummary({ id: 'c3', unread_count: 0 })
+        ]
+      })
+    );
+    (authStore as TestAuthStore).__set({ loggedIn: true, member: FIXTURE_MEMBER, roles: ['coach'] });
+    render(Sidebar);
+    await hydrateConversations();
+    await tick();
+
+    expect(messagesBtn()).toHaveTextContent('訊息中心');
+    expect(messagesBtn().textContent!.replace(/\s+/g, '')).toBe('訊息中心2');
+  });
+
+  it('未讀為 0:不顯示角標', async () => {
+    vi.mocked(api).mockImplementation(
+      fakeRouter({ 'GET /conversations/me': [conversationSummary({ id: 'c1', unread_count: 0 })] })
+    );
+    (authStore as TestAuthStore).__set({ loggedIn: true, member: FIXTURE_MEMBER, roles: ['coach'] });
+    render(Sidebar);
+    await hydrateConversations();
+    await tick();
+
+    expect(messagesBtn().textContent!.replace(/\s+/g, '')).toBe('訊息中心');
+  });
+
+  it('其他導覽項沒有角標', () => {
+    render(Sidebar);
+    expect(screen.getByText('儀表板').closest('button')!.textContent!.trim()).toBe('儀表板');
   });
 });
