@@ -52,7 +52,7 @@ R20 沿 `docs/adr/0018`/`0024`/`0028`「一輪多案、單篇記錄」的體例�
   的 `badge: 3` 與 `CoachNav.badge` 欄位刪除)、mobile-admin 訊息頁／對話串／TabBar(教練首頁不讀列表,其 `pendingReplies` 來自 `/reports/coach`;它只是少了重複的 GET)。
 - **暖機**:coach layout 與 mobile-admin layout 都以身分為 key 暖 `hydrateConversations`(`docs/adr/0024` §4 的暖機清單)。
 - **新鮮度維持現狀**:桌面訊息中心與工作台再次進頁時,畫面先顯示已有的列表,背景再真抓一次
-  (`refreshConversationsIfHydrated`,失敗靜默、舊列表照舊);**第一次進頁只抓 1 次**——layout 暖機、頁面 load 與
+  (`refreshConversationsIfHydrated`,失敗靜默、舊列表照舊;多支在飛時以最後出發的為準,先出發的較晚落地不蓋回);**第一次進頁只抓 1 次**——layout 暖機、頁面 load 與
   工作台 `onMount` 的 `hydrateConversations` 共用同一顆閘門與同一支在飛 GET(`docs/adr/0020` 的在飛合併),已水合即
   短路。`routes/coach/layout.test.ts` 釘住:教練 1 次、重新 render 仍 1 次、與頁面同時 hydrate 仍 1 次、登出 0 次、
   A 換 B 共 2 次。手機版維持每個帳號抓一次。

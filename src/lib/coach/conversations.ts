@@ -42,11 +42,18 @@ export const hydrateConversations = gate.hydrate;
  *  `createLoadGate({ ...conversationsPageEntry })` 使用。 */
 export const conversationsPageEntry = gate.pageEntry();
 
+/** 背景重抓的出發序號:後出發的一支取代先出發的(見下)。 */
+let refreshSeq = 0;
+
 /** 已水合才背景重抓:頁面再次進場時,load 被守衛短路、畫面先顯示已有的列表,這支再真抓一次
- *  (gate.refresh:世代穩定重抓,在飛期間的 mutation 不會被舊快照蓋掉)。未水合時什麼都不做——
- *  第一次進頁由 load/暖機抓那 1 次,這裡不多抓。重抓失敗原樣拋出,呼叫端決定要不要吞。 */
+ *  (進場包的 refresh,與 gate.refresh 同一支世代穩定重抓,在飛期間的 mutation 不會被舊快照蓋掉)。
+ *  棄追判準是「仍是最後一次出發」:後出發的一支取代先出發的——例如離開工作台時那支還在飛、再次
+ *  進頁又出發一支,先出發的較晚落地也不蓋回較新的快照。未水合時什麼都不做——第一次進頁由
+ *  load/暖機抓那 1 次,這裡不多抓。重抓失敗原樣拋出,呼叫端決定要不要吞。 */
 export async function refreshConversationsIfHydrated(): Promise<void> {
-	if (get(gate.hydrated)) await gate.refresh();
+	if (!get(gate.hydrated)) return;
+	const mine = ++refreshSeq;
+	await conversationsPageEntry.source.refresh(() => mine === refreshSeq);
 }
 
 /** 已讀:ack 是 selectThread() 的 badgeCleared(PATCH /conversations/{id}/read 是否成功)。

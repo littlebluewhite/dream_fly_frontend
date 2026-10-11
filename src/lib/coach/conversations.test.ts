@@ -151,6 +151,23 @@ describe('refreshConversationsIfHydrated(已水合才背景重抓)', () => {
 		await refreshing;
 		expect(ids()).toEqual(['c4', 'c1', 'c2', 'c3']);
 	});
+
+	it('兩次重抓交錯(先出發的較晚落地)→ 以後出發的快照為準,舊回應不蓋回', async () => {
+		await hydrateConversations();
+		const older = deferred<unknown>();
+		const newer = deferred<unknown>();
+		const pending = [older, newer];
+		route({ 'GET /conversations/me': () => pending.shift()!.promise });
+
+		const first = refreshConversationsIfHydrated(); // 例:離開工作台時這支還在飛
+		const second = refreshConversationsIfHydrated(); // 再次進頁
+		newer.resolve([conversationSummary({ id: 'c4', peer_name: '張同學', unread_count: 1 }), ...LIST]);
+		await second;
+		older.resolve(LIST);
+		await first;
+		expect(ids()).toEqual(['c4', 'c1', 'c2', 'c3']);
+		expect(get(unreadConversationCount)).toBe(3);
+	});
 });
 
 describe('markConversationRead(id, ack)', () => {
