@@ -440,7 +440,9 @@ page does — and calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` ke
 (`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), mobile-admin warms
 messages in the coach section only (keyed on the route section, not the account's roles), and the root
 layout warms subscriptions for the marketing shell only (the `/cart` page's and `CartDropdown`'s held-pass
-lines, `docs/adr/0028` §3). Individual
+lines, `docs/adr/0028` §3) plus, on a separate line that ignores `$sessionKey`, the marketing announcements
+(`hydrateAnnouncements` behind a plain hydration gate; the Header bell's `unreadAnnouncements`; the store no
+longer fetches at import, and a failed fetch leaves the gate un-hydrated so the next warm retries). Individual
 *pages* declare their own warm set the same way, run in `Promise.all` alongside their own main fetch
 (`docs/adr/0025` F-2): `member/mine` (`getMine()` + 候補 waitlist/請假), `member/account` (`getAccount()` +
 points/subscriptions), and `mobile/account` (`getAccount()` + points) each call `warmStores(caller, tasks)`

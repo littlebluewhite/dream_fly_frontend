@@ -219,7 +219,8 @@ _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一�
 用 `Promise.all` 並行出發——`member/mine`(候補清單、我的請假)、`member/account`(點數、訂閱)、
 `mobile/account`(點數)三頁這麼做(見 `docs/adr/0025` F-2、
 `docs/adr/0012` K7)。行銷外殼也有一份:根 `+layout.svelte` 在非 app surface 以身分為 key 暖訂閱,供購物車頁與
-`CartDropdown` 的「已持有,不計費」(見 `docs/adr/0028` §3)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
+`CartDropdown` 的「已持有,不計費」(見 `docs/adr/0028` §3);另起一行暖行銷公告(`hydrateAnnouncements`,
+公開端點與身分無關,不看 `$sessionKey`,Header 鈴鐺角標 `unreadAnnouncements` 吃它,失敗時閘門維持未水合、下次可重試)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
 載入的重複、換身分時閘門自己重置。暖機前 store 是誠實的開機值(空清單,角標不顯示),不是種子(見
 `docs/adr/0024`)。
 _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看不出這一層);seed teaser(開機先顯示
