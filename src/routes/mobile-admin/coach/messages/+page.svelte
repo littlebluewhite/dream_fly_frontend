@@ -2,14 +2,15 @@
   /* 教練 · 訊息。port coach.jsx CoachMessagesScreen (213-242)。
    * 點訊息 → overlay.push('messageThread',{m})；onBell → openCoachNotif()。
    *
-   * 資料經 messagesPageEntry(訊息閘門的頁面進場包,R14 F1)非同步水合共享 messages store,三態
-   * 閘門(loading/error/ready);閘門的 guard 防止第二次進頁的 fetch 覆寫
-   * markMessageRead 的已讀狀態,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。
+   * 資料經 conversationsPageEntry($lib/coach/conversations 的頁面進場包,R20 候選 02)非同步水合
+   * 共享的 conversations store,三態閘門(loading/error/ready);閘門的 guard 防止第二次進頁的 fetch 覆寫
+   * 已讀/送出的結果,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。手機版每個帳號抓一次
+   * (layout 暖機),不做再進頁的背景重抓。
    * unmount 後解析的 in-flight fetch 由 createLoadGate($lib/load-gate)內建的
    * generation/destroy 機制擋下,不再需要頁面自帶的 alive 旗標。
    *
    * R14(候選 F5)：openThread 不再樂觀清未讀——本頁只做 push,改由 MessageThread.svelte
-   * 開啟對話串後立即呼叫 markMessageRead(id, badgeCleared)——訊息閘門的 write() 等 ack 為 true 才翻已讀,
+   * 開啟對話串後立即呼叫 markConversationRead(id, badgeCleared)——閘門的 write() 等 ack 為 true 才歸零未讀,
    * 跟桌面一樣「等後端確認已讀才清角標」(使用者裁決;R17 起 ack 交進 store,不在呼叫端等)。 */
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -17,19 +18,20 @@
   import SearchField from '$lib/mobile-admin/components/SearchField.svelte';
   import MEmpty from '$lib/components/mobile/MEmpty.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, openCoachNotif, coachUnreadCount, messages, messagesPageEntry } from '$lib/mobile-admin/stores';
+  import { overlay, openCoachNotif, coachUnreadCount } from '$lib/mobile-admin/stores';
+  import { conversations, conversationsPageEntry } from '$lib/coach/conversations';
   import { createLoadGate } from '$lib/load-gate';
-  import type { MessageRow } from '$lib/mobile-admin/data';
+  import type { Conversation } from '$lib/coach/data';
 
   let q = '';
 
-  const gate = createLoadGate({ ...messagesPageEntry });
+  const gate = createLoadGate({ ...conversationsPageEntry });
 
   // R14(候選 F5)：不再樂觀清未讀——真正的已讀是 MessageThread.svelte 開啟對話串後
-  // 立即呼叫 markMessageRead(id, badgeCleared)(write() 等 ack 才翻已讀)，本頁只負責 push。
-  const openThread = (m: MessageRow) => { overlay.push('messageThread', { m }); };
+  // 立即呼叫 markConversationRead(id, badgeCleared)(write() 等 ack 才歸零未讀)，本頁只負責 push。
+  const openThread = (m: Conversation) => { overlay.push('messageThread', { m }); };
 
-  $: list = q ? $messages.filter((m) => (m.from + m.preview).toLowerCase().includes(q.toLowerCase())) : $messages;
+  $: list = q ? $conversations.filter((m) => (m.name + m.preview).toLowerCase().includes(q.toLowerCase())) : $conversations;
 </script>
 
 <LoadGate {gate}>
@@ -65,17 +67,17 @@
           <button
             on:click={() => openThread(m)}
             class="df-tapscale"
-            style="display:flex; gap:12px; padding:13px 16px; width:100%; border:none; border-bottom:1px solid var(--df-border); background:{m.unread ? 'var(--df-primary-bg)' : '#fff'}; cursor:pointer; text-align:left;"
+            style="display:flex; gap:12px; padding:13px 16px; width:100%; border:none; border-bottom:1px solid var(--df-border); background:{(m.badge ?? 0) > 0 ? 'var(--df-primary-bg)' : '#fff'}; cursor:pointer; text-align:left;"
           >
             <Avatar name={m.initial} size="md" color={m.color} />
             <div style="flex:1; min-width:0;">
               <div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
-                <span style="font-size:14px; font-weight:700; color:var(--df-text-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{m.from}</span>
+                <span style="font-size:14px; font-weight:700; color:var(--df-text-dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{m.name}</span>
                 <span style="font-size:11px; color:var(--df-text-muted); flex:none;">{m.time}</span>
               </div>
               <div style="font-size:12.5px; color:var(--df-text-light); margin-top:3px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{m.preview}</div>
             </div>
-            {#if m.unread}
+            {#if (m.badge ?? 0) > 0}
               <span style="width:9px; height:9px; border-radius:999px; background:var(--df-primary); flex:none; margin-top:6px;"></span>
             {/if}
           </button>

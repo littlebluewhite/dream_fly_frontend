@@ -10,9 +10,11 @@
    * 已讀角標改成「等後端 markRead ack 才清」(使用者裁決 F5,跟桌面一樣)：onMount 呼叫
    * ctrl.selectThread(m.id)取回 threadReady/badgeCleared 兩條互不等待的 promise——
    * threadReady 決定畫面顯示/失敗 ErrorState,badgeCleared 原樣交給
-   * markMessageRead(m.id, badgeCleared)(stores.ts:走訊息閘門的 write(),ack 為 true 才翻已讀,
-   * ack 落地前換了身分則由閘門作廢——R17 起本檔不再手寫身分核對)；badgeCleared 為 false
-   * (markRead 失敗)角標維持未讀。送出改走 ctrl.send；sending 防連點與失敗 toast 留在本檔(adapter)。 */
+   * markConversationRead(m.id, badgeCleared)($lib/coach/conversations:走對話列表閘門的 write(),
+   * ack 為 true 才歸零未讀,ack 落地前換了身分則由閘門作廢——本檔不手寫身分核對)；badgeCleared 為 false
+   * (markRead 失敗)角標維持未讀。送出走 ctrl.send,其 promise 在 await 之前交給 recordSent(id, …),
+   * 成功才把列表該筆的預覽與時間寫回(R20 候選 02:回覆後列表跟著更新)；sending 防連點與失敗 toast
+   * 留在本檔(adapter)。 */
   import { onMount } from 'svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
@@ -20,14 +22,14 @@
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';
   import { ErrorState, Skeleton } from '$lib/components/ui';
-  import { toasts, markMessageRead } from '$lib/mobile-admin/stores';
+  import { toasts } from '$lib/mobile-admin/stores';
+  import { markConversationRead, recordSent } from '$lib/coach/conversations';
   import { getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { createMessagesController } from '$lib/coach/messages-controller';
-  import type { ThreadMsg } from '$lib/coach/data';
-  import type { MessageRow } from '$lib/mobile-admin/data';
+  import type { ThreadMsg, Conversation } from '$lib/coach/data';
 
   export let onBack: () => void;
-  export let m: MessageRow | null = null;
+  export let m: Conversation | null = null;
 
   const ctrl = createMessagesController({ getThread, sendMessage, markRead, getStudents, createConversation });
 
@@ -47,16 +49,17 @@
     threadReady.then((outcome) => {
       phase = outcome.kind === 'threadLoadFailed' ? 'error' : 'ready';
     });
-    markMessageRead(target.id, badgeCleared);
+    markConversationRead(target.id, badgeCleared);
   }
   onMount(load);
 
   async function send() {
     if (!m || !reply.trim() || sending) return;
     const text = reply.trim();
+    const id = m.id; // 送出當下捕捉:await 期間 m 可能已換(訊息確實送到這一個對話)
     sending = true;
     try {
-      const outcome = await ctrl.send(text);
+      const outcome = await recordSent(id, ctrl.send(text));
       if (outcome.kind === 'messageSent') {
         reply = '';
       } else {
@@ -73,8 +76,8 @@
 </script>
 
 <PushScreen>
-  <ScreenHeader title={m ? m.from : '訊息'} sub="訊息紀錄" {onBack}>
-    <HeaderIcon slot="right" icon="phone" label="撥打" onClick={() => m && toasts.notify('info', '聯絡對方', '撥打電話給 ' + m.from + '。')} />
+  <ScreenHeader title={m ? m.name : '訊息'} sub="訊息紀錄" {onBack}>
+    <HeaderIcon slot="right" icon="phone" label="撥打" onClick={() => m && toasts.notify('info', '聯絡對方', '撥打電話給 ' + m.name + '。')} />
   </ScreenHeader>
 
   {#if phase === 'ready'}

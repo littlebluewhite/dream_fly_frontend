@@ -3,28 +3,50 @@ import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import AdminTabBar from './TabBar.svelte';
 import { ADMIN_TABS, COACH_TABS, adminPath } from '$lib/mobile-admin/nav';
-import { messages, coachMsgUnread } from '$lib/mobile-admin/stores';
-import { MESSAGES } from '$lib/testing/seed-fixtures';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { conversationSummary } from '$lib/testing/wire-fixtures';
+import { unreadConversationCount, hydrateConversations, markConversationRead } from '$lib/coach/conversations';
+
+/* 教練分頁的訊息角標讀 $lib/coach/conversations 的 unreadConversationCount(有未讀的對話數);
+ * 列表唯讀,夾具一律經 GET /conversations/me 水合(只替換 api())。 */
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
+});
+
+/** 三筆對話,其中兩筆有未讀。 */
+const LIST = [
+	conversationSummary({ id: 'c1', unread_count: 2 }),
+	conversationSummary({ id: 'c2', unread_count: 0 }),
+	conversationSummary({ id: 'c3', unread_count: 1 })
+];
+const hydrate = async () => {
+	vi.mocked(api).mockImplementation(fakeRouter({}, { 'GET /conversations/me': LIST }));
+	await hydrateConversations();
+};
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile-admin/admin') })
 }));
 
-afterEach(() => {
+afterEach(async () => {
 	vi.restoreAllMocks();
+	await resetSessionStores();
 });
 
 describe('m-admin TabBar adapter — smoke tests', () => {
-	// R14(候選 F3)誠實開機:訊息 store 開機為 `[]` → coachMsgUnread 0 → 教練分頁沒有角標。
-	// 重新載入模組才照得到開機那一刻(本檔其他 it 會 set 訊息),不依賴執行順序。
-	it('開機沒有角標(role=coach,訊息 store 開機為空)', async () => {
+	// R14(候選 F3)誠實開機:對話列表開機為 `[]` → unreadConversationCount 0 → 教練分頁沒有角標。
+	// 重新載入模組才照得到開機那一刻(本檔其他 it 會水合列表),不依賴執行順序。
+	it('開機沒有角標(role=coach,對話列表開機為空)', async () => {
 		vi.resetModules();
-		const fresh = await import('$lib/mobile-admin/stores');
+		const fresh = await import('$lib/coach/conversations');
 		const { default: FreshTabBar } = await import('./TabBar.svelte');
 		// 元件與 render 須出自同一份 svelte runtime(重置後的新模組圖),掛載也由它自己清。
 		const tl = await import('@testing-library/svelte');
 		onTestFinished(tl.cleanup);
-		expect(get(fresh.coachMsgUnread)).toBe(0);
+		expect(get(fresh.unreadConversationCount)).toBe(0);
 
 		tl.render(FreshTabBar, { role: 'coach' });
 
@@ -92,11 +114,11 @@ describe('m-admin TabBar adapter — smoke tests', () => {
 		}
 	});
 
-	it('role=coach: messages badge shows coachMsgUnread count when > 0', () => {
-		// 夾具 MESSAGES 有 3 則未讀(開機是空的,先灌進 store)——verify adapter wires the badge.
-		messages.set(MESSAGES.map((m) => ({ ...m })));
-		const currentUnread = get(coachMsgUnread);
-		expect(currentUnread).toBeGreaterThan(0); // precondition: seed has unread messages
+	it('role=coach: messages badge shows unreadConversationCount when > 0', async () => {
+		// 夾具有 2 筆未讀對話(開機是空的,先水合)——verify adapter wires the badge.
+		await hydrate();
+		const currentUnread = get(unreadConversationCount);
+		expect(currentUnread).toBe(2); // precondition: fixture has unread conversations
 
 		render(AdminTabBar, { role: 'coach' });
 
@@ -116,10 +138,10 @@ describe('m-admin TabBar adapter — smoke tests', () => {
 		}
 	});
 
-	it('role=admin: no messages badge regardless of coachMsgUnread (admin badges={} by design)', () => {
+	it('role=admin: no messages badge regardless of unreadConversationCount (admin badges={} by design)', async () => {
 		// Even if messages exist, admin role injects badges={} — no badge should appear.
-		messages.set(MESSAGES.map((m) => ({ ...m })));
-		const currentUnread = get(coachMsgUnread);
+		await hydrate();
+		const currentUnread = get(unreadConversationCount);
 		expect(currentUnread).toBeGreaterThan(0); // precondition: there ARE unread messages
 
 		render(AdminTabBar, { role: 'admin' });
@@ -130,10 +152,11 @@ describe('m-admin TabBar adapter — smoke tests', () => {
 		}
 	});
 
-	it('role=coach: messages badge absent when coachMsgUnread = 0', () => {
-		// Mark all messages read so derived coachMsgUnread emits 0.
-		messages.update(($m) => $m.map((m) => ({ ...m, unread: false })));
-		expect(get(coachMsgUnread)).toBe(0); // verify precondition
+	it('role=coach: messages badge absent when unreadConversationCount = 0', async () => {
+		// Mark all conversations read so derived unreadConversationCount emits 0.
+		await hydrate();
+		for (const c of LIST) await markConversationRead(c.id, Promise.resolve(true));
+		expect(get(unreadConversationCount)).toBe(0); // verify precondition
 
 		render(AdminTabBar, { role: 'coach' });
 

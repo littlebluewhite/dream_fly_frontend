@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import MessageThread from './MessageThread.svelte';
-import { markMessageRead } from '$lib/mobile-admin/stores';
+import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import type { MessageRow } from '$lib/mobile-admin/data';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { loginAs } from '$lib/testing/coach-session';
+import { COACH_USER } from '$lib/testing/coach-routes';
+import { conversationSummary } from '$lib/testing/wire-fixtures';
+import { conversations, hydrateConversations } from '$lib/coach/conversations';
+import type { Conversation } from '$lib/coach/data';
 
 /* Task 20：前身是本地 echo 假聊天室(送出只是把文字塞進本地陣列，"家長" 泡泡永遠
  * 是同一句 m.preview)——改讀真 GET /conversations/{id}/messages、真打 POST
@@ -14,25 +19,24 @@ import type { MessageRow } from '$lib/mobile-admin/data';
  * markRead ack 才清」——下方新增 3 支釘住這個時序(ack 之前/之後、reject 時維持
  * 未讀)，以及 1 支載入失敗→重試成功。
  *
- * R17：ack(badgeCleared)原樣交給 markMessageRead(id, ack)，由訊息閘門的 write() 等 ack、
- * 核對擁有者(換身分即作廢)——本檔原本手寫的身分核對與其「身分切換 guard」測試退役，
- * 換身分作廢改釘在 stores.test.ts(「ack 前換身分 → 維持未讀」)。這裡只釘接線：交出去的
- * ack 在後端 ack 後為 true、失敗為 false。
+ * R17：ack(badgeCleared)原樣交給已讀 mutator，由閘門的 write() 等 ack、核對擁有者(換身分
+ * 即作廢)——換身分作廢釘在 coach/conversations.test.ts。
+ *
+ * R20(候選 02)：本頁改讀 $lib/coach/conversations(教練對話列表)，不再 partial mock 舊
+ * stores 模組——已讀與送出都從 HTTP 縫進去，斷言落在 `conversations` store 上：ack 之後才
+ * 歸零未讀(失敗維持未讀)，回覆成功後列表的預覽與時間跟著更新。
  *
  * R15 Task 3a(候選 轉手退役)：getThread/sendMessage/markRead(畫面直取
  * $lib/coach/api)改走真實呼叫，同其餘 fakeRouter 化的測試檔慣例。 */
-
-vi.mock('$lib/mobile-admin/stores', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/mobile-admin/stores')>();
-	return { ...actual, markMessageRead: vi.fn() };
-});
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
 
-const M: MessageRow = { id: 'conv-1', from: '王媽媽', initial: '王', color: '#000', preview: '哈囉', time: '09:10', unread: false };
+const M: Conversation = { id: 'conv-1', name: '王媽媽', initial: '王', color: '#000', preview: '哈囉', time: '09:10', badge: 2 };
+const LIST = [conversationSummary({ id: 'conv-1', peer_name: '王媽媽', last_message_body: '哈囉', last_message_at: '2026-07-04T09:10:00Z', unread_count: 2 })];
+const row = () => get(conversations).find((c) => c.id === 'conv-1')!;
 
 const THREAD_PATH = 'GET /conversations/conv-1/messages?per_page=100';
 const READ_PATH = 'PATCH /conversations/conv-1/read';
@@ -42,9 +46,16 @@ const msg = (sender_id: string, body: string, created_at = '2026-07-04T09:00:00Z
 	id: `m-${body}`, sender_id, body, created_at, read_at: null
 });
 
-beforeEach(() => {
+/** 列表先水合(開機是 []),頁面才有東西可以更新;thread/read/send 的路由由各 it 補。 */
+async function hydrateList(routes: Record<string, unknown>) {
+	vi.mocked(api).mockImplementation(fakeRouter(routes, { 'GET /conversations/me': LIST }));
+	await hydrateConversations();
+}
+
+beforeEach(async () => {
 	vi.mocked(api).mockReset();
-	vi.mocked(markMessageRead).mockReset();
+	await resetSessionStores();
+	await loginAs(COACH_USER);
 });
 
 describe('MessageThread — 真對話串', () => {
@@ -84,7 +95,8 @@ describe('MessageThread — 真對話串', () => {
 			})
 		);
 		expect(await screen.findByText('收到，謝謝')).toBeInTheDocument();
-		expect(screen.getByPlaceholderText('輸入回覆…')).toHaveValue('');
+		// 輸入框在列表寫回之後才清(recordSent resolve 才有 outcome)
+		await vi.waitFor(() => expect(screen.getByPlaceholderText('輸入回覆…')).toHaveValue(''));
 	});
 
 	it('載入失敗顯示 ErrorState，重試後成功', async () => {
@@ -118,31 +130,61 @@ describe('MessageThread — 真對話串', () => {
 		await vi.waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/conv-1/read', { method: 'PATCH' }));
 	});
 
-	it('ack 交給 markMessageRead:後端 ack 之後才 resolve 為 true(清除與否由閘門等它)', async () => {
-		let resolveAck!: (v: { updated: number }) => void;
-		const ack = new Promise<{ updated: number }>((res) => (resolveAck = res));
-		vi.mocked(api).mockImplementation(fakeRouter({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: () => ack }));
+	it('回覆成功後,列表該筆的預覽與時間跟著更新', async () => {
+		await hydrateList({
+			[THREAD_PATH]: { messages: [], total: 0 },
+			[READ_PATH]: { updated: 0 },
+			[SEND_PATH]: msg('me', '收到，謝謝', '2026-07-04T10:00:00Z')
+		});
+		const before = row();
 		render(MessageThread, { props: { onBack: () => {}, m: M } });
 		await screen.findByPlaceholderText('輸入回覆…');
 
-		expect(markMessageRead).toHaveBeenCalledWith('conv-1', expect.any(Promise));
-		const cleared = vi.mocked(markMessageRead).mock.calls[0][1];
-		let settled = false;
-		cleared.then(() => (settled = true));
-		await new Promise((r) => setTimeout(r, 0));
-		expect(settled).toBe(false); // ack 之前不落定
+		await fireEvent.input(screen.getByPlaceholderText('輸入回覆…'), { target: { value: '收到，謝謝' } });
+		await fireEvent.click(screen.getByLabelText('送出'));
 
-		resolveAck({ updated: 1 });
-		await expect(cleared).resolves.toBe(true);
+		await vi.waitFor(() => expect(row().preview).toBe('收到，謝謝'));
+		expect(row().time).not.toBe(before.time);
 	});
 
-	it('reject 時交出去的 ack 為 false(維持未讀)', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: new Error('network') })
-		);
+	it('回覆失敗:列表預覽與時間維持原樣', async () => {
+		await hydrateList({
+			[THREAD_PATH]: { messages: [], total: 0 },
+			[READ_PATH]: { updated: 0 },
+			[SEND_PATH]: new Error('network')
+		});
+		const { preview, time } = row();
 		render(MessageThread, { props: { onBack: () => {}, m: M } });
 		await screen.findByPlaceholderText('輸入回覆…');
 
-		await expect(vi.mocked(markMessageRead).mock.calls[0][1]).resolves.toBe(false);
+		await fireEvent.input(screen.getByPlaceholderText('輸入回覆…'), { target: { value: '收到，謝謝' } });
+		await fireEvent.click(screen.getByLabelText('送出'));
+
+		await vi.waitFor(() => expect(api).toHaveBeenCalledWith('/conversations/conv-1/messages', expect.objectContaining({ method: 'POST' })));
+		await new Promise((r) => setTimeout(r, 0));
+		expect(row()).toMatchObject({ preview, time });
+	});
+
+	it('已讀:後端 ack 之前列表仍是未讀,ack 之後未讀歸零', async () => {
+		let resolveAck!: (v: { updated: number }) => void;
+		const ack = new Promise<{ updated: number }>((res) => (resolveAck = res));
+		await hydrateList({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: () => ack });
+		render(MessageThread, { props: { onBack: () => {}, m: M } });
+		await screen.findByPlaceholderText('輸入回覆…');
+
+		await new Promise((r) => setTimeout(r, 0));
+		expect(row().badge).toBe(2); // ack 之前不清
+
+		resolveAck({ updated: 1 });
+		await vi.waitFor(() => expect(row().badge).toBe(0));
+	});
+
+	it('markRead 失敗:列表維持未讀', async () => {
+		await hydrateList({ [THREAD_PATH]: { messages: [], total: 0 }, [READ_PATH]: new Error('network') });
+		render(MessageThread, { props: { onBack: () => {}, m: M } });
+		await screen.findByPlaceholderText('輸入回覆…');
+
+		await new Promise((r) => setTimeout(r, 0));
+		expect(row().badge).toBe(2);
 	});
 });

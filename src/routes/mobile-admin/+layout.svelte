@@ -18,7 +18,8 @@
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import { authStore, sessionKey, lastSessionKey } from '$lib/stores/authStore';
-  import { overlay, toasts, hydrateMessages } from '$lib/mobile-admin/stores';
+  import { overlay, toasts } from '$lib/mobile-admin/stores';
+  import { hydrateConversations } from '$lib/coach/conversations';
   import { warmStores } from '$lib/store-warm';
   import { roleFromPath } from '$lib/mobile-admin/nav';
   import { mobileAdminGuardTarget } from './guard';
@@ -44,7 +45,7 @@
     mobileAdminGuardTarget($page.url.pathname, $authStore.loggedIn, $authStore.roles) === null
       ? $sessionKey
       : null;
-  $: if (browser && warmKey !== null) void warmStores('mobile-admin +layout', [['訊息', hydrateMessages]]);
+  $: if (browser && warmKey !== null) void warmStores('mobile-admin +layout', [['訊息', hydrateConversations]]);
 
   // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
   // overlay 在 slot 外面也會讀個人資料,換人時一併關掉。
