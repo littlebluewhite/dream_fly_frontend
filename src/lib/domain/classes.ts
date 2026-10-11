@@ -6,7 +6,7 @@
  * ClassRow 繼承。 */
 
 import type { Level } from './course-level';
-import type { Tone } from '$lib/api/wire';
+import { lookupOr, type Tone } from '$lib/api/wire';
 
 export interface ClassBase {
 	id: string;
@@ -34,3 +34,6 @@ export const STATUS_TONE: Record<ClassStatus, Tone> = {
 	候補: 'warning',
 	額滿: 'neutral'
 };
+
+/** 招生狀態 → Tone。未知狀態回 'neutral'（與額滿同色，既有 mobile-admin 消費端的後備）。 */
+export const classStatusTone = (s: string): Tone => lookupOr<Tone>(STATUS_TONE, s, 'neutral');

@@ -355,7 +355,7 @@ export function mapCourse(c: CourseResponse, coachNameById: Map<string, string>)
 	return {
 		id: c.id,
 		name: c.name,
-		level: COURSE_LEVEL_LABEL[c.level] ?? '基礎',
+		level: lookupOr(COURSE_LEVEL_LABEL, c.level, '基礎'),
 		cat: c.category ?? '',
 		coach: c.coach_id ? (coachNameById.get(c.coach_id) ?? '') : '',
 		day,

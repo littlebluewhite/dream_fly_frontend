@@ -9,7 +9,7 @@
  * elite 永遠對不出對應的繁中標籤。收斂為這裡單一共用常數，三 surface 一致
  * import，不再各自分歧；建課/篩選/badge 全走這 5 級。 */
 
-import type { Tone } from '$lib/api/wire';
+import { lookupOr, type Tone } from '$lib/api/wire';
 import type { CourseLevel } from '$lib/api/generated';
 
 /** 前端顯示用的 5 級繁中標籤（單一 source of truth，供 admin/coach/member 共用）。 */
@@ -19,7 +19,7 @@ export type Level = '啟蒙' | '入門' | '基礎' | '進階' | '選手';
 export const LEVELS: Level[] = ['啟蒙', '入門', '基礎', '進階', '選手'];
 
 /** 後端 course_level enum → 繁中標籤。未知值由呼叫端自行決定 fallback（例如
- *  admin 的 mapCourse() 用 `?? '基礎'`），這裡不預設 fallback，維持純對照表。
+ *  admin 的 mapCourse() 用 lookupOr(…, '基礎')），這裡不預設 fallback，維持純對照表。
  *  對外型別維持 string 鍵（讀者傳 wire 字串）；字面以 `satisfies` 對產生的 CourseLevel
  *  窮舉——後端新增等級時 bindings 同步後這裡是編譯錯誤。 */
 export const COURSE_LEVEL_LABEL: Record<string, Level> = {
@@ -41,3 +41,11 @@ export const LEVEL_TONE: Record<Level, Tone> = {
 	進階: 'warning',
 	選手: 'accent'
 };
+
+/** 後端 course_level 字串 → 繁中標籤。未知值（前後端版本不一致時）回原字串，只認自有鍵。
+ *  需要型別化後備的呼叫端（admin 的 mapCourse() 要 Level）直接 `lookupOr(COURSE_LEVEL_LABEL,
+ *  raw, '基礎')`，不走本函式。 */
+export const courseLevelLabel = (raw: string): string => lookupOr<string>(COURSE_LEVEL_LABEL, raw, raw);
+
+/** 等級標籤 → Badge tone。未知標籤回 'neutral'（不再各消費端自選 primary 後備）。 */
+export const courseLevelTone = (label: string): Tone => lookupOr<Tone>(LEVEL_TONE, label, 'neutral');

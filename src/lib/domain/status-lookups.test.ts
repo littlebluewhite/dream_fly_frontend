@@ -25,7 +25,7 @@ import { describe, it, expect } from 'vitest';
 import { MEMBER_ACCOUNT_STATUS } from './members';
 import { VENUE_STATUS } from './venues';
 import { TICKET_TYPE, ticketTypeBadge } from './tickets';
-import { STATUS_TONE } from './classes';
+import { STATUS_TONE, classStatusTone } from './classes';
 import { SESSION_STATUS } from './sessions';
 import * as MobileAdminData from '$lib/mobile-admin/data';
 
@@ -97,6 +97,18 @@ describe('ticketTypeBadge — 方案類型查表自帶未知值後備', () => {
 
 	it('未知值 → [neutral, 原字串]，不是 undefined', () => {
 		expect(ticketTypeBadge('gift_card')).toEqual(['neutral', 'gift_card']);
+	});
+});
+
+describe('classStatusTone — 招生狀態查表自帶未知值後備', () => {
+	it('三個已知狀態回 STATUS_TONE 的 tone', () => {
+		expect(classStatusTone('招生中')).toBe('success');
+		expect(classStatusTone('候補')).toBe('warning');
+		expect(classStatusTone('額滿')).toBe('neutral');
+	});
+
+	it('未知狀態 → neutral，不是 undefined', () => {
+		expect(classStatusTone('停招')).toBe('neutral');
 	});
 });
 

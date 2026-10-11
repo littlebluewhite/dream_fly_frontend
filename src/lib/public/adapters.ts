@@ -8,7 +8,7 @@
 
 import type { CourseResponse, CoachResponse, ProductResponse } from '$lib/api/generated';
 import type { Coach } from '$lib/data/coaches';
-import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { courseLevelLabel } from '$lib/domain/course-level';
 import { ageRange } from '$lib/api/wire';
 
 /** 全前端唯一 cents→NT$ 轉換點。 */
@@ -55,7 +55,7 @@ export function toCatalogCourse(c: CourseResponse, coachName?: string): CatalogC
 	return {
 		id: c.id,
 		name: c.name,
-		level: COURSE_LEVEL_LABEL[c.level] ?? c.level,
+		level: courseLevelLabel(c.level),
 		cat: c.category ?? '',
 		age: ageRange(c.min_age, c.max_age),
 		days: c.schedule_text ?? '',

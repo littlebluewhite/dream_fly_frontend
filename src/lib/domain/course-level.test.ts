@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { LEVELS, COURSE_LEVEL_LABEL, LEVEL_TONE, type Level } from './course-level';
+import { LEVELS, COURSE_LEVEL_LABEL, LEVEL_TONE, courseLevelLabel, courseLevelTone, type Level } from './course-level';
 import { LEVEL_TONE as MOBILE_ADMIN_LEVEL_TONE } from '$lib/mobile-admin/data';
 import { F_LEVELS } from '$lib/mobile-admin/form-options';
 import { LEVEL_TONE as MEMBER_LEVEL_TONE } from '$lib/member/data';
@@ -37,6 +37,20 @@ describe('course-level — 共用 5 級對照常數', () => {
 			進階: 'warning',
 			選手: 'accent'
 		});
+	});
+});
+
+describe('courseLevelLabel / courseLevelTone — 查表自帶未知值後備', () => {
+	it('courseLevelLabel：已知 enum → 繁中標籤；未知值回原字串', () => {
+		expect(courseLevelLabel('beginner')).toBe('入門');
+		expect(courseLevelLabel('elite')).toBe('選手');
+		expect(courseLevelLabel('master')).toBe('master');
+	});
+
+	it('courseLevelTone：已知標籤 → 色階；未知標籤回 neutral', () => {
+		expect(courseLevelTone('基礎')).toBe('primary');
+		expect(courseLevelTone('選手')).toBe('accent');
+		expect(courseLevelTone('大師')).toBe('neutral');
 	});
 });
 

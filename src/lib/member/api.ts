@@ -7,7 +7,7 @@ import { api } from '$lib/api/client';
 import { fmtRatio } from '$lib/format';
 import { listCourses, listCoaches } from '$lib/public/api';
 import { toCatalogCourse, ntd, orderItemsSummary, type CatalogCourse } from '$lib/public/adapters';
-import { COURSE_LEVEL_LABEL } from '$lib/domain/course-level';
+import { courseLevelLabel } from '$lib/domain/course-level';
 import { orderStatusBadge, BRAND_PRIMARY_HEX, orderIdentity, isoDate, hhmm } from '$lib/api/wire';
 import type {
   AttendanceEntryResponse,
@@ -207,7 +207,7 @@ export const getMine = async (): Promise<MineData> => {
     id: e.id,
     course_id: e.course_id, // Task 11：請假入口需要課程 id 呼叫 GET /courses/{id}/sessions
     name: e.course_name,
-    level: COURSE_LEVEL_LABEL[e.course_level] ?? e.course_level,
+    level: courseLevelLabel(e.course_level),
     icon: 'sparkles',
     color: BRAND_PRIMARY_HEX,
     schedule: e.schedule_text ?? '',
