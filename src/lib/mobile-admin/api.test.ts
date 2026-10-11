@@ -136,8 +136,7 @@ describe('getCoachHome', () => {
 		'GET /users/me': ME,
 		'GET /coaches': [MY_COACH],
 		'GET /sessions/today': [SESSION],
-		'GET /reports/coach': { today_sessions: 1, pending_attendance: 2, unread_messages: 3, student_count: 5, attendance_rate_30d: 0.9 },
-		'GET /conversations/me': []
+		'GET /reports/coach': { today_sessions: 1, pending_attendance: 2, unread_messages: 3, student_count: 5, attendance_rate_30d: 0.9 }
 	});
 
 	it('resolves the real coach identity + today schedule + KPI counts from getDashboard()', async () => {
@@ -149,6 +148,14 @@ describe('getCoachHome', () => {
 		expect(d.coachToday).toEqual([{ id: 's1', start: '00:00', end: '23:59', name: '測試班', room: 'A', count: 5, status: 'live' }]);
 		expect(d.pendingClasses).toBe('2 班');
 		expect(d.pendingReplies).toBe('3 則');
+	});
+
+	it('不打 GET /conversations/me(getDashboard 不再抓對話,教練首頁沒有重複的 GET)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter(routes()));
+
+		await getCoachHome();
+
+		expect(vi.mocked(api).mock.calls.map(([path]) => path)).not.toContain('/conversations/me');
 	});
 
 	it('propagates CoachNotFoundError so the page can show 此帳號未綁定教練檔案', async () => {

@@ -267,7 +267,7 @@
 
     <!-- ══════════════ Col 3: 資訊面板 ══════════════ -->
     <div style="background:#fff;border-left:1px solid var(--df-border);display:flex;flex-direction:column;min-height:0;overflow-y:auto">
-      <!-- 學員資訊：cur 在沒有任何對話(convos 為空)時為 undefined，須另外判斷，
+      <!-- 學員資訊：cur 在沒有任何對話(列表為空)時為 undefined，須另外判斷，
            否則沒有符合任何 col2 的 {#if list.length === 0} 保護 -->
       {#if cur}
       <InfoSection title="學員資訊">

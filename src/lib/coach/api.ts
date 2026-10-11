@@ -159,9 +159,6 @@ export interface CoachDashboardData {
 	coach: Coach;
 	todayLabel: string;
 	todayClasses: TodayClass[];
-	/** best-effort：由 getDashboard() 併入真 getConversations()；訊息中心暫時失敗時
-	 *  降級為空陣列(頁面顯示「尚無訊息」)，不連累 KPI/今日課程等主資料。 */
-	conversations: Conversation[];
 	pendingClasses: string;
 	attendanceRate: string;
 	pendingReplies: string;
@@ -171,28 +168,15 @@ export interface CoachDashboardData {
  *  待點名/學員出席率/待回覆訊息 3 個原 P2 佔位欄位改讀 pending_attendance/
  *  attendance_rate_30d/unread_messages(§3.24)；today_sessions/student_count 這支端點
  *  也有回，但目前頁面沒有對應顯示欄位(today 課程數已由 todayClasses.length 呈現)，
- *  不強塞新卡片。conversations 由 getConversations() best-effort 併入(降級語意見
- *  下方行內註解)。 */
+ *  不強塞新卡片。最新訊息不在這支 payload 裡——工作台由 $lib/coach/conversations 的
+ *  對話列表衍生(R20 候選 02),getDashboard 不再抓 GET /conversations/me。 */
 export const getDashboard = async (): Promise<CoachDashboardData> => {
 	const { account, coach } = await requireCoach();
-	const [todayClasses, reports, conversations] = await Promise.all([
-		myTodayClasses(),
-		api<CoachReportResponse>('/reports/coach'),
-		// conversations 為 best-effort：訊息中心暫時失敗只降級為空陣列，不讓非核心的
-		// 最新訊息面板擋住整頁 KPI/今日課程(同 $lib/store-warm 的 warmStores
-		// best-effort 語意——主資料 fail-hard、順手資料失敗只記錄)。
-		getConversations()
-			.then((c) => c.conversations)
-			.catch((e): Conversation[] => {
-				console.error('getDashboard: 訊息中心載入失敗', e);
-				return [];
-			})
-	]);
+	const [todayClasses, reports] = await Promise.all([myTodayClasses(), api<CoachReportResponse>('/reports/coach')]);
 	return {
 		coach: mapCoach(account, coach),
 		todayLabel: todayLabel(),
 		todayClasses,
-		conversations,
 		pendingClasses: `${reports.pending_attendance} 班`,
 		// attendance_rate_30d 為 null(無出勤資料，裁決 3)時顯示「尚無資料」，不是 0%
 		// (0% 會誤導成「有資料、出席率為零」)。

@@ -134,6 +134,21 @@ describe('/coach (+page) — 儀表板首頁', () => {
 		if (CONVERSATIONS.length > 3) expect(txt).not.toContain(CONVERSATIONS[3].last_message_body);
 	});
 
+	it('最新訊息來自共享對話列表:第一次進頁只抓 1 次 GET /conversations/me;再次進頁先顯示已有的列表並背景重抓(失敗靜默)', async () => {
+		const listGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/conversations/me').length;
+		const first = render(CoachHomePage);
+		await first.findByText(TODAY_LABEL);
+		await first.findByText('張大文');
+		expect(listGets()).toBe(1);
+		first.unmount();
+
+		route({ 'GET /conversations/me': new Error('network') }); // 背景重抓失敗
+		const second = render(CoachHomePage);
+		await second.findByText(TODAY_LABEL);
+		expect(await second.findByText('張大文')).toBeInTheDocument(); // 已有的列表照舊
+		await vi.waitFor(() => expect(listGets()).toBe(2));
+	});
+
 	it('沒有對話時,最新訊息面板顯示「尚無訊息」空狀態', async () => {
 		route({ 'GET /conversations/me': [] });
 		const { container, findByText } = render(CoachHomePage);

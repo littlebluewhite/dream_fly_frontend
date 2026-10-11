@@ -73,11 +73,9 @@ export interface MCoachHomeData {
 }
 /** 教練 · 工作台首頁 — 復用桌面 getDashboard()(Task 19：GET /users/me + /coaches
  *  組出教練檔案、GET /sessions/today 今日課表、GET /reports/coach 待點名/待回覆
- *  KPI)，一次拿到 hero 用的真實教練身分 + 今日課表 + 兩個真實 KPI 數字。conversations
- *  (訊息預覽)自 C2 起改為 getDashboard() 內部 best-effort 真抓(GET /conversations/me)，
- *  本頁(教練首頁 hero)不消費它、直接丟棄——等同每次多付一次隨即丟棄的
- *  GET /conversations/me；權衡後接受(不為省這一次請求而讓 getCoachHome 另闢一條不含
- *  對話的抓取路徑)。找不到教練檔案時拋出 CoachNotFoundError，呼叫端(coach/+page.svelte)
+ *  KPI)，一次拿到 hero 用的真實教練身分 + 今日課表 + 兩個真實 KPI 數字。getDashboard 不再
+ *  抓對話(R20 候選 02:最新訊息由 $lib/coach/conversations 的列表衍生),所以本頁不再多付
+ *  一次隨即丟棄的 GET /conversations/me。找不到教練檔案時拋出 CoachNotFoundError，呼叫端(coach/+page.svelte)
  *  依 e.name 判斷改顯示「此帳號未綁定教練檔案」。 */
 export const getCoachHome = async (): Promise<MCoachHomeData> => {
 	const d = await coachGetDashboard();

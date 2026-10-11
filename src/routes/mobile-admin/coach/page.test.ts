@@ -38,8 +38,7 @@ const homeRoutes = (sessions: TodaySessionResponse[], reports = REPORTS) => ({
 	'GET /users/me': ME,
 	'GET /coaches': [MY_COACH],
 	'GET /sessions/today': sessions,
-	'GET /reports/coach': reports,
-	'GET /conversations/me': []
+	'GET /reports/coach': reports
 });
 
 // 每個測試先登出再登入(同 coach/api.test.ts 慣例):identity key = loggedIn ?

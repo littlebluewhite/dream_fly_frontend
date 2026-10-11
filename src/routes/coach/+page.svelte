@@ -5,9 +5,16 @@
    * Gaps reconstructed from the per-view spec in the build prompt.
    *
    * Data arrives async via getDashboard()(mock-API seam): onMount loads coach /
-   * today's schedule / conversations / KPI 數字 into a three-state gate
+   * today's schedule / KPI 數字 into a three-state gate
    * (loading/error/ready)。KPI 卡「待點名/學員出席率/待回覆訊息」原為頁面硬編字串,
-   * 一併移入 getDashboard() payload(換後端只改 api.ts 這一層)。 */
+   * 一併移入 getDashboard() payload(換後端只改 api.ts 這一層)。
+   *
+   * 「最新訊息」不在 getDashboard() payload 裡(R20 候選 02):取 $lib/coach/conversations 教練
+   * 對話列表的前 3 筆。列表由本頁 onMount 暖機——未水合就 hydrateConversations()(只抓 1 次,與
+   * 其他讀者共用同一支在飛 GET);已水合(再次進頁)先顯示已有的列表,再背景重抓一次。對話列表是
+   * 順手資料:抓取失敗不連累 KPI／今日課程,面板維持「尚無訊息」(暖機失敗記 console.error,背景
+   * 重抓失敗靜默)。 */
+  import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { createLoadGate } from '$lib/load-gate';
   import { getDashboard, type CoachDashboardData } from '$lib/coach/api';
@@ -15,6 +22,7 @@
   import { clockIn, clockOut, isClockedIn } from '$lib/coach/clock';
   import { createClockController } from '$lib/coach/clock-controller';
   import { toasts } from '$lib/coach/stores';
+  import { conversations, hydrateConversations, refreshConversationsIfHydrated } from '$lib/coach/conversations';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import KpiCard from '$lib/coach/components/KpiCard.svelte';
   import PanelCard from '$lib/coach/components/PanelCard.svelte';
@@ -36,6 +44,13 @@
     onError: (e) => {
       ({ errorTitle, errorBody } = coachLoadErrorCopy(e));
     }
+  });
+
+  /* 對話列表暖機:已水合 → 背景重抓(失敗靜默,舊列表照舊);未水合 → refresh 什麼都不做,由
+   * hydrateConversations 抓那 1 次(已水合時它同步短路,不多抓)。 */
+  onMount(() => {
+    refreshConversationsIfHydrated().catch(() => {});
+    hydrateConversations().catch((e) => console.error('coach 工作台: 訊息中心載入失敗', e));
   });
 
   /* ── 上班/下班打卡 —— 開機狀態查詢(hydrate)/409-404 校正/mutation-wins 守衛的
@@ -79,7 +94,6 @@
   }
 
   $: todayClasses = data?.todayClasses ?? [];
-  $: conversations = data?.conversations ?? [];
 
   /* ── next class: the `live` one, else first non-`done` ─────────────── */
   $: nextClass =
@@ -148,7 +162,7 @@
   const checkTiles = ['場地確認', '器材檢查', '學員名單'];
 
   /* ── message rows: first 3 conversations ────────────────────────────── */
-  $: messages = conversations.slice(0, 3);
+  $: messages = $conversations.slice(0, 3);
 </script>
 
 <LoadGate {gate} errorTitle={errorTitle} errorBody={errorBody}>
