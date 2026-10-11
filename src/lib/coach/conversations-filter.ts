@@ -1,11 +1,11 @@
 /* Dream Fly — 教練端 · 訊息中心 conversations 過濾與選取 derivation（Round 3 K3）。
  *
- * Pure, framework-free port of coach/messages/+page.svelte 三塊耦合的反應式邏輯：
+ * Pure, framework-free port of coach/messages/+page.svelte 兩塊耦合的反應式邏輯：
  * ①filterConversations —— tab × 搜尋的清單過濾鏈（原 `$: list`，含 query 正規化，
  * 原獨立的 `$: q = $search.trim().toLowerCase()` 收進本函式）；②pickSelection ——
  * 選取回退 guard（原 `$: if (list.length && !list.some(...)) sel = list[0].id`）；
- * ③applyCreatedConversation —— confirmCompose 的 get-or-create 插入指令物件，把
- * 「插入後重置 tab/search 免 guard 搶選取」的不變量升為可斷言的介面事實。Kept
+ * （原③applyCreatedConversation 的 exists-or-prepend 規則已移到 $lib/coach/conversations
+ * 的 recordCreated，R20 候選 02。）Kept
  * here, unit-testable without rendering, and imported by the messages page. */
 
 import type { Conversation } from '$lib/coach/data';
@@ -44,23 +44,4 @@ export function filterConversations(convos: Conversation[], opts: ConversationsF
 export function pickSelection(list: Conversation[], sel: string | null): string | null {
 	if (list.length && !list.some((c) => c.id === sel)) return list[0].id;
 	return sel;
-}
-
-/**
- * confirmCompose 的 get-or-create 插入指令物件。既有 id → 回原陣列同一引用（不
- * 複製，保留既有列的 badge/preview，不被 create 回應的貧乏映射覆蓋）；全新 id →
- * 插頂（新陣列）。tab/search 一律重置為 '全部'/''（免 guard 搶選取），sel 一律
- * 指向 created.id。不 mutate 輸入。
- */
-export function applyCreatedConversation(
-	convos: Conversation[],
-	created: Conversation
-): { convos: Conversation[]; sel: string; tab: '全部'; search: '' } {
-	const exists = convos.some((c) => c.id === created.id);
-	return {
-		convos: exists ? convos : [created, ...convos],
-		sel: created.id,
-		tab: '全部',
-		search: ''
-	};
 }

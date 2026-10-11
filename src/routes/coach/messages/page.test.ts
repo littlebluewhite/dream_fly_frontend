@@ -195,7 +195,7 @@ describe('/coach/messages — 對話串（getThread）+ 開啟即已讀（markRe
 
 describe('/coach/messages — 傳送（sendMessage）', () => {
 	it('送出後 POST /conversations/{id}/messages { body } 並將回應附加到對話串+更新列表預覽', async () => {
-		const { findByText, findAllByText, getByPlaceholderText } = render(MessagesPage);
+		const { findByText, getAllByText, getByPlaceholderText } = render(MessagesPage);
 		await findByText('教練好！想請問小明最近的狀況');
 
 		const input = getByPlaceholderText('輸入訊息…') as HTMLInputElement;
@@ -203,9 +203,8 @@ describe('/coach/messages — 傳送（sendMessage）', () => {
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => expect(bodyOf('POST /conversations/c1/messages')).toEqual({ body: '好的' }));
-		// 泡泡 + 對話列表 preview 兩處都會顯示送出的文字。
-		const matches = await findAllByText('好的');
-		expect(matches.length).toBeGreaterThanOrEqual(1);
+		// 泡泡 + 對話列表 preview 兩處都會顯示送出的文字(列表預覽由 recordSent 寫回)。
+		await waitFor(() => expect(getAllByText('好的')).toHaveLength(2));
 	});
 
 	it('送出失敗時提示錯誤 toast（outcome→toast 映射；stale-guard 已搬至 messages-controller.test.ts，輸入框還原見下一條）', async () => {
@@ -359,5 +358,28 @@ describe('/coach/messages — 三態', () => {
 		route({ 'GET /conversations/me': () => new Promise(() => {}) });
 		const { getByTestId } = render(MessagesPage);
 		expect(getByTestId('messages-skeleton')).toBeTruthy();
+	});
+});
+
+describe('/coach/messages — 新鮮度(R20 候選 02:共享對話列表)', () => {
+	const listGets = () => vi.mocked(api).mock.calls.filter(([p, init]) => `${(init?.method ?? 'GET').toUpperCase()} ${p}` === 'GET /conversations/me').length;
+
+	it('第一次進頁只抓 1 次 GET /conversations/me', async () => {
+		const { findByText } = render(MessagesPage);
+		await findByText('教練好！想請問小明最近的狀況');
+		expect(listGets()).toBe(1);
+	});
+
+	it('再次進頁:先顯示已有的列表,背景再真抓一次(共 2 次);背景重抓失敗靜默,列表照舊', async () => {
+		const first = render(MessagesPage);
+		await first.findByText('陳爸爸');
+		first.unmount();
+
+		route({ 'GET /conversations/me': new Error('network') }); // 背景重抓會失敗
+		const second = render(MessagesPage);
+		expect(await second.findByText('陳爸爸')).toBeInTheDocument(); // 已有的列表立刻顯示,不經載入失敗
+		await waitFor(() => expect(listGets()).toBe(2));
+		expect(second.queryByText('載入失敗')).not.toBeInTheDocument();
+		expect(second.getByText('陳爸爸')).toBeInTheDocument();
 	});
 });

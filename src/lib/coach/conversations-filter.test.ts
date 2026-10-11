@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Conversation } from '$lib/coach/data';
-import { filterConversations, pickSelection, applyCreatedConversation } from './conversations-filter';
+import { filterConversations, pickSelection } from './conversations-filter';
 
 /* Pure filter/selection derivation for coach/messages（ported from +page.svelte's
  * reactive chain, §see conversations-filter.ts header）. Exercised against a small
@@ -86,43 +86,5 @@ describe('pickSelection', () => {
 	it('清單為空 → guard 不作用，原樣回傳 sel（含 null）', () => {
 		expect(pickSelection([], 'c1')).toBe('c1');
 		expect(pickSelection([], null)).toBeNull();
-	});
-});
-
-describe('applyCreatedConversation', () => {
-	const NEW: Conversation = {
-		id: 'c9', name: '王小明', initial: '王', color: '#0066CC',
-		time: '', badge: 0, preview: '尚無訊息'
-	};
-
-	it('全新 id → 插頂（新陣列）+ 四欄重置（convos/sel/tab/search）', () => {
-		const out = applyCreatedConversation(BASE, NEW);
-		expect(out.convos).not.toBe(BASE);
-		expect(out.convos[0]).toBe(NEW);
-		expect(out.convos).toHaveLength(BASE.length + 1);
-		expect(out.sel).toBe('c9');
-		expect(out.tab).toBe('全部');
-		expect(out.search).toBe('');
-	});
-
-	it('既有 id → convos 回原陣列同一引用（不複製、不插入）+ sel 指向它', () => {
-		const existing: Conversation = { ...NEW, id: 'c2' }; // get-or-create 回應對到既有列 c2
-		const out = applyCreatedConversation(BASE, existing);
-		expect(out.convos).toBe(BASE); // 同一引用，不是新陣列
-		expect(out.convos).toHaveLength(BASE.length); // 未插入
-		expect(out.sel).toBe('c2');
-	});
-
-	it('不 mutate 輸入（全新分支走 spread，原陣列內容/長度不變）', () => {
-		const before = BASE.map((c) => c.id);
-		applyCreatedConversation(BASE, NEW);
-		expect(BASE.map((c) => c.id)).toEqual(before);
-	});
-
-	it('重置不變量在既有 id 分支同樣成立（tab=\'全部\'、search=\'\'，不只在插入分支才重置）', () => {
-		const existing: Conversation = { ...NEW, id: 'c1' };
-		const out = applyCreatedConversation(BASE, existing);
-		expect(out.tab).toBe('全部');
-		expect(out.search).toBe('');
 	});
 });

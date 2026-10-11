@@ -7,11 +7,12 @@
  * （openCompose/pickRecipient/confirmCompose，creating 守衛靜默，同 checkout-controller
  * 的 alreadyPaying 先例）。
  *
- * 不收：對話清單（convos）與其 gate（getConversations 留頁面）、tab×搜尋過濾與選取
+ * 不收：對話列表（唯一 owner 是 $lib/coach/conversations，R20 候選 02）、tab×搜尋過濾與選取
  * 回退（conversations-filter.ts 純函式，留頁面呼叫）、toast 文案（頁面據 outcome 翻譯）。
- * badge 清零與傳送後的 convos 預覽/時間更新都作用在 convos（頁面狀態，非本 controller
- * 收編範圍）——故以 selectThread() 回傳的 badgeCleared promise 或頁面自行以呼叫當下
- * 捕捉的 id 交還頁面套用，而非由 controller 直接改寫 convos。
+ * badge 清零、傳送後的預覽/時間更新、新對話插入列表都作用在對話列表（非本 controller
+ * 狀態）——故本 controller 完全不知道列表：只把 selectThread() 的 badgeCleared、send()、
+ * confirmCompose() 的 promise 交還呼叫端，由呼叫端在 await 之前交給列表 module 的 mutator
+ * （markConversationRead／recordSent／recordCreated）。
  *
  * selectThread 的 stale-guard 仿 attendance-controller 的 save-token guard：遞增序號
  * token，getThread 的 resolve/reject 皆驗 token===seq，不符即丟棄過期回應（不寫
@@ -69,8 +70,8 @@ export type SelectThreadOutcome =
 	| { kind: 'stale' };
 
 /** selectThread() 的回傳形：threadReady 決定 thread 顯示/失敗 toast 的時機，badgeCleared
- *  （markRead(id) 是否成功）決定 convos 中該對話 badge 是否清零（convos 非 controller
- *  狀態，清零動作留頁面套用）——兩者刻意分成兩條 promise、不用 Promise.all 合併，任一方
+ *  （markRead(id) 是否成功）交給 markConversationRead 決定列表中該對話 badge 是否清零
+ *  （列表非 controller 狀態，見 $lib/coach/conversations）——兩者刻意分成兩條 promise、不用 Promise.all 合併，任一方
  *  卡住或永不落定都不影響另一方落定（見檔頭 P2 回歸修復附註）。badgeCleared 不受
  *  stale-guard 限制，逐字複刻頁面現行 markRead handler 不檢查 sel 的行為。 */
 export interface SelectThreadHandles {
@@ -78,17 +79,16 @@ export interface SelectThreadHandles {
 	badgeCleared: Promise<boolean>;
 }
 
-/** sendFailed 攜 text（原輸入內容）供頁面還原輸入框——是否真的還原、convos 預覽是否
- *  更新，皆由頁面比對呼叫當下捕捉的 conversationId 與現在的 sel 決定（同 loadThread
- *  的過期回應防護慣例，見檔頭）。 */
+/** sendFailed 攜 text（原輸入內容）供頁面還原輸入框——是否真的還原，由頁面比對呼叫當下
+ *  捕捉的 conversationId 與現在的 sel 決定（同 loadThread 的過期回應防護慣例，見檔頭）；
+ *  列表預覽由 recordSent 寫回。 */
 export type SendOutcome =
 	| { kind: 'messageSent'; msg: ThreadMsg }
 	| { kind: 'sendFailed'; error: unknown; text: string };
 
 /** alreadyCreating：creating 守衛（含「尚未選取收件人」）靜默不做事，同
  *  checkout-controller 的 alreadyPaying 先例。conversationCreated 攜原始
- *  Conversation——插入/選取邏輯（applyCreatedConversation）留頁面自行呼叫（convos 非
- *  controller 狀態）。 */
+ *  Conversation——插入列表由 recordCreated（$lib/coach/conversations）負責，選取留頁面。 */
 export type ConfirmComposeOutcome =
 	| { kind: 'conversationCreated'; conversation: Conversation }
 	| { kind: 'createFailed'; error: unknown }
@@ -210,8 +210,8 @@ export function createMessagesController(deps: MessagesControllerDeps): Messages
 
 	/** POST /conversations（get-or-create）。composePick 為空或 creating 中皆靜默返回
 	 *  alreadyCreating（逐字複刻頁面現行 `if (!composePick || creating) return;` 合併
-	 *  守衛）。插入/選取指令邏輯（applyCreatedConversation）留頁面自行呼叫成功時
-	 *  返回的 conversation（convos 非 controller 狀態）。失敗時 composeOpen/composePick
+	 *  守衛）。插入列表由呼叫端把本 promise 交給 recordCreated
+	 *  （$lib/coach/conversations），選取留頁面。失敗時 composeOpen/composePick
 	 *  維持不變，供使用者改選。 */
 	async function confirmCompose(): Promise<ConfirmComposeOutcome> {
 		if (!composePick || creating) return { kind: 'alreadyCreating' };

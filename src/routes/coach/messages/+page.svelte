@@ -4,14 +4,18 @@
    * Layout: 3-column card grid (320px | 1fr | 300px). No df-view on root.
    *
    * Task 12：接真對話 API（$lib/coach/api，見 integration-contract.md §3.21）。
-   * - 清單：getConversations()(GET /conversations/me)，onMount 載入，phase 三態閘門，
-   *   convos/gate 留頁面(Round 8 C1 判準：清單非「單一對話串」編排的一部分)。
+   * - 清單：讀 $lib/coach/conversations 的 $conversations(R20 候選 02:教練對話列表唯一 owner,
+   *   頁面不再自持 convos)，進場走 createLoadGate({ ...conversationsPageEntry }) 三態閘門。
+   *   新鮮度:第一次進頁只抓 1 次;再次進頁(已水合)畫面先顯示已有的列表,onMount 再背景重抓一次
+   *   (refreshConversationsIfHydrated)——重抓失敗靜默吞掉(已有的列表照舊顯示;本頁本來就不顯示
+   *   背景重抓的錯誤,載入失敗的 ErrorState 只屬於進場那一次)。
    * - 串的載入(stale-guard)、傳送(樂觀附加)、撰寫新對話三部曲(compose 生命週期、
    *   creating 守衛)已收進 $lib/coach/messages-controller.ts(Round 8 C1，自本頁抽出，
    *   仿 attendance-controller 的單一快照 store + clock-controller 的 outcome 形)——
    *   本頁退化為薄 adapter：解構 controller 快照、事件轉呼 controller 方法、把
-   *   outcome 翻成 toast 文案。badge 清零與傳送後的 convos 預覽/時間更新作用在
-   *   convos(非 controller 狀態)，故由頁面依 outcome 欄位/呼叫當下捕捉的 id 自行套用。
+   *   outcome 翻成 toast 文案。badge 清零、傳送後的預覽/時間更新、新對話插入列表這三種列表
+   *   變更，一律把 controller 的 promise 在 await 之前交給列表 module 的 mutator
+   *   (markConversationRead / recordSent / recordCreated)，由 module 的 write() 寫回並核對身分。
    * - selectAndSync()：頁面對 ctrl.selectThread() 的統一入口，三個呼叫點共用：
    *   pickSelection reactive（同時扛下初始選取——見 gate onData 附註——與 tab×搜尋
    *   造成的選取回退，兩者本質是同一件事：把 sel 修正成「目前過濾條件下」合法的
@@ -26,12 +30,12 @@
    * - sharedFiles UI 區塊移除（v1 不支援檔案附件，契約§3.21 明文）。
    * - 撰寫新對話：picker 名冊來自 getStudents()(GET /coaches/me/students，Task 10
    *   已接真)，確認即 createConversation(user_id, name)(POST /conversations，
-   *   get-or-create，§3.21)——controller 只回傳建立結果，插入/選取的
-   *   applyCreatedConversation() 呼叫留頁面(convos 非 controller 狀態；回傳 id 已在
-   *   清單中就選中既有列不重複插入，全新對話插入頂端並選中)。失敗(422「僅支援教練
+   *   get-or-create，§3.21)——controller 只回傳建立結果，交給 recordCreated() 寫進列表
+   *   (id 已在列表就不重複插入、保留既有列的未讀與預覽，全新對話插入頂端；規則只住 module)。
+   *   成功後頁面自己重設 tab/搜尋並選中該對話(UI 狀態不歸列表管)。失敗(422「僅支援教練
    *   與會員間的對話」等)以 ApiError.message 繁中 toast 提示，對話框保持開啟供改選。
-   * - 過濾清單(tab×搜尋)、選取回退 guard、confirmCompose 的插入/reset 四欄指令邏輯
-   *   留在純模組 $lib/coach/conversations-filter.ts(Round 3 K3)不動。 */
+   * - 過濾清單(tab×搜尋)與選取回退 guard 留在純模組 $lib/coach/conversations-filter.ts
+   *   (Round 3 K3)不動。 */
   import Icon from '$lib/components/ui/Icon.svelte';
   import IconButton from '$lib/components/ui/IconButton.svelte';
   import Dialog from '$lib/components/ui/Dialog.svelte';
@@ -40,10 +44,19 @@
   import MessageBubble from '$lib/coach/components/MessageBubble.svelte';
   import MessageComposer from '$lib/coach/components/MessageComposer.svelte';
   import InfoSection from '$lib/coach/components/InfoSection.svelte';
-  import type { Conversation, Student, ThreadMsg } from '$lib/coach/data';
-  import { filterConversations, pickSelection, applyCreatedConversation } from '$lib/coach/conversations-filter';
+  import { onMount } from 'svelte';
+  import type { Student, ThreadMsg } from '$lib/coach/data';
+  import { filterConversations, pickSelection } from '$lib/coach/conversations-filter';
+  import {
+    conversations,
+    conversationsPageEntry,
+    refreshConversationsIfHydrated,
+    markConversationRead,
+    recordSent,
+    recordCreated
+  } from '$lib/coach/conversations';
   import { createLoadGate } from '$lib/load-gate';
-  import { getConversations, getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
+  import { getThread, sendMessage, markRead, getStudents, createConversation } from '$lib/coach/api';
   import { createMessagesController } from '$lib/coach/messages-controller';
   import { apiErrorMessage } from '$lib/api/error-text';
   import { toasts, search } from '$lib/coach/stores';
@@ -51,8 +64,7 @@
 
   const ctrl = createMessagesController({ getThread, sendMessage, markRead, getStudents, createConversation });
 
-  /* ── convos 清單 state(legacy, no runes)——非 controller 收編範圍 ── */
-  let convos: Conversation[] = [];
+  /* ── 頁面 UI state(legacy, no runes)——對話列表本身在 $conversations,不在此持有 ── */
   let tab = '全部';
   let reply = '';
 
@@ -67,23 +79,24 @@
   let composePick: Student | null = null;
   $: ({ sel, thread, composeOpen, composePhase, recipients, composePick } = $ctrl);
 
-  const gate = createLoadGate({
-    fetch: getConversations,
-    onData: (d) => {
-      convos = [...d.conversations];
-      // 初選刻意不在此手動觸發（codex R4 P2 回歸修復）：若在 getConversations() 飛行
-      // 期間使用者已輸入搜尋字，這裡若直接選未過濾的 d.conversations[0]，會在下方
-      // reactive pickSelection 區塊來得及以目前的 tab/search 修正選取之前，就先對
-      // 「其實已被搜尋字篩掉、使用者根本沒看到」的那筆對話發出 getThread + markRead——
-      // markRead 刻意不做 stale-guard（見 selectAndSync 附註），該對話會被永久標記
-      // 已讀。全權交給下方 pickSelection reactive 區塊處理（它吃的是已套用 tab/search
-      // 的 list，天然不會選到被濾掉的列）。
-    }
+  /* 進場包:第一次進頁抓 1 次;已水合(再次進頁)load 被守衛短路、畫面先顯示已有的列表。
+   * 初選刻意不在載入完成時手動觸發(codex R4 P2 回歸修復):若在載入飛行期間使用者已輸入搜尋字,
+   * 直接選未過濾的第一筆,會在下方 reactive pickSelection 區塊來得及以目前的 tab/search 修正
+   * 選取之前,就先對「其實已被搜尋字篩掉、使用者根本沒看到」的那筆對話發出 getThread + markRead——
+   * markRead 刻意不做 stale-guard(見 selectAndSync 附註),該對話會被永久標記已讀。全權交給
+   * 下方 pickSelection reactive 區塊處理(它吃的是已套用 tab/search 的 list,天然不會選到被濾掉的列)。 */
+  const gate = createLoadGate({ ...conversationsPageEntry });
+
+  /* 再次進頁(已水合)的背景重抓。onMount 順序:load-gate 的首載 onMount 先註冊先跑,首次進頁此刻
+   * 閘門尚未水合 → refreshConversationsIfHydrated 什麼都不做(不多抓第 2 次)。失敗靜默:已有的列表
+   * 照舊顯示,本頁不為背景重抓顯示錯誤。 */
+  onMount(() => {
+    refreshConversationsIfHydrated().catch(() => {});
   });
 
   /** ctrl.selectThread() 的頁面統一入口：threadReady→toast(getThread 失敗)、
-   *  badgeCleared→convos 徽章清零(convos 非 controller 狀態，副作用留頁面套用)——兩條
-   *  各自掛 .then，互不等待(任一方卡住不拖住另一方，見上方檔頭附註)。已選中同一對話
+   *  badgeCleared→交給 markConversationRead(id, …) 由列表 module 在 ack 為 true 時徽章清零——兩條
+   *  各自處理，互不等待(任一方卡住不拖住另一方，見上方檔頭附註)。已選中同一對話
    *  則不重複觸發。四個呼叫點見檔頭附註。 */
   function selectAndSync(id: string): void {
     if (id === $ctrl.sel) return;
@@ -93,11 +106,7 @@
         toasts.notify('error', '載入訊息失敗', '請稍後再試。');
       }
     });
-    badgeCleared.then((cleared) => {
-      if (cleared) {
-        convos = convos.map((c) => (c.id === id ? { ...c, badge: 0 } : c));
-      }
-    });
+    void markConversationRead(id, badgeCleared); // 在 await 之前交出 promise;write() 當下記住身分
   }
 
   const tabs = [
@@ -108,7 +117,7 @@
   // thread header 三顆動作 icon——原模板內聯 each 陣列 hoist 至此並標型別。
   const threadActionIcons: IconName[] = ['phone', 'video', 'more-horizontal'];
 
-  $: list = filterConversations(convos, { tab, query: $search });
+  $: list = filterConversations($conversations, { tab, query: $search });
 
   /* selection guard: if current sel falls out of filtered list, auto-select first;
    * 這也是「初始選取」的唯一入口(sel 初始為 null，同樣落在「不合法 → 回退清單首筆」
@@ -121,7 +130,7 @@
     if (fallback) selectAndSync(fallback);
   }
 
-  $: cur = convos.find((c) => c.id === sel) || convos[0];
+  $: cur = $conversations.find((c) => c.id === sel) || $conversations[0];
 
   function handleSelect(e: CustomEvent<string>) {
     selectAndSync(e.detail);
@@ -130,30 +139,28 @@
   /** conversationId 在送出當下(呼叫瞬間的 $ctrl.sel)被捕捉為區域變數；await 期間
    *  使用者可能已切到另一個對話——thread 附加的過期回應防護已內部化在 controller 的
    *  send()。還原輸入框內容仍需頁面重新比對 $ctrl.sel(reply 非 controller 狀態，避免
-   *  覆蓋使用者已切到的另一個對話的輸入框)；convos 的 preview 更新不受此限制——不論
-   *  目前選取哪個對話，那筆訊息確實已送達 conversationId 對應的對話。 */
+   *  覆蓋使用者已切到的另一個對話的輸入框)；列表的 preview/time 更新由 recordSent 寫回，
+   *  不受此限制——不論目前選取哪個對話，那筆訊息確實已送達 conversationId 對應的對話。 */
   async function handleSend(e: CustomEvent<string>) {
     const text = e.detail;
     const conversationId = $ctrl.sel;
-    const outcome = await ctrl.send(text);
+    if (conversationId === null) return; // 結構上不可達(composer 只在有選取對話時渲染),僅為型別收窄
+    const outcome = await recordSent(conversationId, ctrl.send(text)); // 在 await 之前交出 promise
     if (outcome.kind === 'sendFailed') {
       if ($ctrl.sel === conversationId) reply = outcome.text; // 還原輸入框內容，避免使用者遺失已輸入文字
       toasts.notify('error', '傳送失敗', apiErrorMessage(outcome.error));
-    } else {
-      convos = convos.map((c) => (c.id === conversationId ? { ...c, preview: text, time: outcome.msg.time } : c));
     }
   }
 
-  /** confirmCompose 成功後的插入/選取指令邏輯(applyCreatedConversation，Round 3
-   *  K3)——convos 非 controller 狀態，留頁面自行呼叫並觸發 selectAndSync。 */
+  /** confirmCompose 的 promise 在 await 之前交給 recordCreated:resolve 時新對話已在列表(或
+   *  命中既有列)。成功後頁面自己重設 tab/搜尋(免 pickSelection 搶選取)並選中該對話——
+   *  這些是 UI 狀態,不歸列表 module 管。 */
   async function handleConfirmCompose() {
-    const outcome = await ctrl.confirmCompose();
+    const outcome = await recordCreated(ctrl.confirmCompose());
     if (outcome.kind === 'conversationCreated') {
-      const result = applyCreatedConversation(convos, outcome.conversation);
-      convos = result.convos;
-      tab = result.tab;
-      search.set(result.search);
-      selectAndSync(result.sel);
+      tab = '全部';
+      search.set('');
+      selectAndSync(outcome.conversation.id);
     } else if (outcome.kind === 'createFailed') {
       toasts.notify('error', '建立對話失敗', apiErrorMessage(outcome.error));
     }

@@ -197,6 +197,14 @@ describe('recordSent(id, sending)', () => {
 		expect(get(conversations).filter((c) => c.id !== 'c2')).toEqual(others);
 	});
 
+	it('回傳的 promise resolve 時列表已更新(頁面據此在 .then 內直接選取/讀列表)', async () => {
+		const d = deferred<SendOutcome>();
+		const p = recordSent('c2', d.promise).then(() => row('c2')?.preview); // 在 resolve 回呼內讀,不經額外 await
+		d.resolve(sent('好的,明天見'));
+
+		expect(await p).toBe('好的,明天見');
+	});
+
 	it('msg 沒有 text → preview 保留原值,time 照樣更新', async () => {
 		await recordSent('c2', Promise.resolve(sent(undefined)));
 
@@ -223,6 +231,14 @@ describe('recordCreated(creating)', () => {
 		expect(await recordCreated(Promise.resolve(outcome))).toBe(outcome);
 		expect(ids()).toEqual(['c9', 'c1', 'c2', 'c3']);
 		expect(row('c9')).toEqual(NEW_CONVERSATION);
+	});
+
+	it('回傳的 promise resolve 時新對話已在列表(頁面據此在 .then 內直接選取它)', async () => {
+		const d = deferred<ConfirmComposeOutcome>();
+		const p = recordCreated(d.promise).then(() => ids()); // 在 resolve 回呼內讀,不經額外 await
+		d.resolve(created(NEW_CONVERSATION));
+
+		expect(await p).toEqual(['c9', 'c1', 'c2', 'c3']);
 	});
 
 	it('id 已在列表(get-or-create 命中既有對話)→ 列表不變,既有列的未讀與預覽不被建立回應蓋掉', async () => {
