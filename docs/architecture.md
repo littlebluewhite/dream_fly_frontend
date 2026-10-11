@@ -74,7 +74,10 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
   lookup: `VENUE_STATUS` (`venues.ts`), `TICKET_TYPE` (`tickets.ts`), `MEMBER_ACCOUNT_STATUS`
   (`members.ts`), `STATUS_TONE` (`classes.ts`), `LEVEL_TONE` (`course-level.ts`) and `SESSION_STATUS`
   (`sessions.ts`, alongside the `TodayStatus` union) (`docs/adr/0013`,
-  `docs/adr/0018`). `SESSION_STATUS` is the one today's-session-status table for `coach` and `admin`
+  `docs/adr/0018`). Every table also has a total accessor that never returns `undefined`: all of them go
+  through `lookupOr` (`api/wire.ts`, own keys only), and the level/class-status ones are
+  `courseLevelLabel`/`courseLevelTone` (`course-level.ts`) and `classStatusTone` (`classes.ts`) — consumers
+  call those instead of indexing the table (`docs/adr/0013`, R20 addendum). `SESSION_STATUS` is the one today's-session-status table for `coach` and `admin`
   (`mobile-admin`'s today lists reuse admin's and coach's `TodayClass` rows as-is, `docs/adr/0028` §5); its
   canonical `live` label is `上課中`.
 - **`session-format.ts`** — pure per-session display derivation, imported directly by its six

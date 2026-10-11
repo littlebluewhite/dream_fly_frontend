@@ -579,3 +579,33 @@ VM」。
   補鍵後,新增/編輯方案的類型下拉會悄悄漏掉新值而不編譯錯。改為 `Object.keys(TICKET_TYPE)`(選項順序 =
   `TICKET_TYPE` 宣告順序),`TicketEditDialog.test.ts` 新增「下拉選項 = `TICKET_TYPE` 的鍵」守衛。R19 增補
   「`TICKET_TYPE` 現在的直接消費端」因此多一個 `admin/data.ts`。
+
+## 增補(2026-10-11,架構深化 R20):`lookupOr` 是「總查表」的唯一原語;課程等級與招生狀態查表自帶後備
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **`lookupOr(table, key, fallback)` 是總查表的唯一寫法**(`api/wire.ts`,與 `Tone` 同檔):只認 table 的自有鍵
+  (`Object.hasOwn`),查無回 `fallback`;`fallback` 以 `NoInfer` 排除在值型別 `V` 的推導之外,型別以 table
+  為準。`??` 判查無會把 `constructor`／`toString`／`__proto__` 等 `Object.prototype` 上的繼承成員當成查到的值
+  (例如 icon 變成函式),後端或測試送來這類字串時不會走未知值後備。R19 增補「任何字串都能查」的函式形不變,
+  只是函式本體不再各寫一份 `Object.hasOwn(表, 鍵) ? 表[鍵] : 後備` 加一個放寬型別的 cast。
+- **既有查表統一改用它**:`orderStatusBadge`、`ticketTypeBadge`、`attStateBadge`、`legalNextStatuses` 四支原本各自
+  手寫 hasOwn,改呼叫 `lookupOr`;`TODAY_STATUS`／`SESSION_STATUS`(`domain/sessions.ts`)、`STATUS_BADGE`
+  (`domain/leave-requests.ts`)、`NOTIF_TYPE_MAP`(`member/data.ts`)、`ACTIVITY_KIND_ICON`(`admin/api.ts`
+  `mapActivityItem`)四處原本以 `?? 後備` 判查無,同樣改用它。後備值不變,`mapActivityItem` 原本為放寬索引型別
+  的 cast 一併拿掉。新增查表時不再自己寫 `Object.hasOwn` 或 `??`。
+- **課程等級與招生狀態查表也自帶後備**:`domain/course-level.ts` 新增 `courseLevelLabel(raw)`(後端 enum →
+  繁中標籤,未知值回原字串)與 `courseLevelTone(label)`(未知標籤回 `'neutral'`),`domain/classes.ts` 新增
+  `classStatusTone(s)`(未知狀態回 `'neutral'`)。`COURSE_LEVEL_LABEL`、`LEVEL_TONE`、`STATUS_TONE` 本體仍是明確
+  `Record`,函式是它們的「任何字串都能查」形,與 R19 的 `ticketTypeBadge` 同一條規則。member／public 的等級標籤
+  改呼叫 `courseLevelLabel`;admin `mapCourse()` 需要型別為 `Level` 的後備,所以直接寫
+  `lookupOr(COURSE_LEVEL_LABEL, c.level, '基礎')`,不走 `courseLevelLabel`。
+- **消費端改呼叫函式,facade 再匯出退役**:8 個等級 tone 消費點(`CourseDetailDialog`、member courses／mine 頁、
+  admin `StatusBadge`、兩個 `LevelBadge`、`MyCourseDetail`、`CourseCard`)改呼叫 `courseLevelTone`,3 個招生狀態
+  消費點(admin `StatusBadge`、mobile-admin `ClassSheet`、mobile-admin classes 頁)改呼叫 `classStatusTone`。
+  `member/data.ts`、`mobile/data.ts`、`mobile-admin/data.ts` 的 `LEVEL_TONE` 與 `mobile-admin/data.ts` 的
+  `STATUS_TONE` 因此沒有消費端,依上文「`TIME_ROWS` 死出口」前例連同 `toBe` 同參照守衛一併刪除。`CourseCard`
+  的 `legacyLevelTones`(公開頁舊分類鍵)隨之刪除,等級資料已全經 `courseLevelLabel`。`LEVEL_TONE`／`STATUS_TONE`
+  現在的直接消費端是各自的查表函式(與測試的字面快照)。
+- **唯一的可見變化**:未知等級的 tone 從 `primary`(各消費端自選的後備)變 `neutral`。只在前後端版本不一致
+  (後端先多一個 `course_level` 值)時才會發生,`CourseCard.test.ts` 以未知等級 pin 住。

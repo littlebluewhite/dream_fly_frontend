@@ -236,6 +236,11 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 以後端 enum 為鍵的查表另提供一支「任何字串都能查」的函式(`domain/tickets.ts` 的 `ticketTypeBadge`、
 `domain/attendance.ts` 的 `attStateBadge`、`$lib/api/wire` 的 `orderStatusBadge`),未知值後備(中性 tone +
 原字串)收在查表所在檔,消費端不自己補 `?? …`、不用 `as` 強轉鍵型別(見 `docs/adr/0013` 增補)。
+課程等級與招生狀態同形:`courseLevelLabel`／`courseLevelTone`(`course-level.ts`)、`classStatusTone`
+(`classes.ts`),消費端呼叫函式、不索引 `LEVEL_TONE`／`STATUS_TONE`。「總查表」(任何字串都不會取到
+`undefined`、也不會取到 `Object.prototype` 上的繼承成員)只有一種寫法:`$lib/api/wire` 的 `lookupOr(表, 鍵,
+後備)`,查表函式與一次性的後備查詢都用它,不另寫 `Object.hasOwn(…) ? … : …` 或 `表[鍵] ?? 後備`(見
+`docs/adr/0013` R20 增補)。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
