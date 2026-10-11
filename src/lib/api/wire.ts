@@ -38,6 +38,13 @@ import type { OrderStatus } from './generated';
 
 export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
+/** 總查表原語：只認 table 的自有鍵，查無回 fallback。constructor／toString／__proto__ 等
+ *  Object.prototype 上的鍵拿 `??` 判查無會取到繼承來的成員，所以用 Object.hasOwn。
+ *  `NoInfer`：fallback 不參與 V 的推導，型別以 table 為準。 */
+export function lookupOr<V>(table: Readonly<Record<string, V>>, key: string, fallback: NoInfer<V>): V {
+  return Object.hasOwn(table, key) ? table[key] : fallback;
+}
+
 /** 訂單狀態值域——W-6 起由後端 DTO 產生（src/lib/api/generated/），這裡只轉出。 */
 export type { OrderStatus };
 
@@ -53,9 +60,8 @@ export const ORDER_STATUS: Record<OrderStatus, [Tone, string]> = {
 };
 
 /** 容忍未知字串的查表：查無（只認自有鍵，constructor 等原型鍵也算查無）→ ['neutral', 原字串]。
- *  顯式放寬 cast 是必要的：strict 下以任意 string 索引 Record<OrderStatus,…> 會使 check 紅。 */
-export const orderStatusBadge = (s: string): [Tone, string] =>
-  Object.hasOwn(ORDER_STATUS, s) ? (ORDER_STATUS as Record<string, [Tone, string]>)[s] : ['neutral', s];
+ */
+export const orderStatusBadge = (s: string): [Tone, string] => lookupOr<[Tone, string]>(ORDER_STATUS, s, ['neutral', s]);
 
 /* ── 訂單雙身分協定 + 內含稅顯示反推（2026-07 增收）─────────────────────────
  * admin/member/mobile-admin 三處先前各自散記的兩件訂單 wire 知識，收成單點。 */

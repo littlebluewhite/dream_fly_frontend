@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross, paidAtLabel } from './wire';
+import { lookupOr, orderStatusBadge, pageMeta, initialOf, isoDateTime, isoDate, hhmm, ageRange, orderIdentity, taxFromGross, paidAtLabel } from './wire';
 
 /* Expected [tone, label] pairs are copied verbatim from the current
  * admin/data.ts ORDER_STATUS / member/api.ts ORDER_STATUS (confirmed
@@ -20,10 +20,22 @@ describe('orderStatusBadge', () => {
   it('falls back to [neutral, original string] for an unknown status (downstream tests depend on this)', () => {
     expect(orderStatusBadge('some-unknown-status')).toEqual(['neutral', 'some-unknown-status']);
   });
+});
 
-  it('falls back for Object.prototype keys instead of returning the inherited member', () => {
-    for (const k of ['constructor', 'toString', '__proto__']) {
-      expect(orderStatusBadge(k)).toEqual(['neutral', k]);
+describe('lookupOr', () => {
+  const table = { a: 1, b: 2 };
+
+  it('returns the table value for a known key', () => {
+    expect(lookupOr(table, 'b', 0)).toBe(2);
+  });
+
+  it('returns the fallback for an unknown key', () => {
+    expect(lookupOr(table, 'zzz', 0)).toBe(0);
+  });
+
+  it('returns the fallback for Object.prototype keys instead of the inherited member', () => {
+    for (const k of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      expect(lookupOr(table, k, 0)).toBe(0);
     }
   });
 });

@@ -20,7 +20,7 @@
  * 文案留呼叫端（ADR-0011「per-entity 知識留頁」精神）：本模組只回傳判別聯集，
  * 由桌面 orders 頁把 outcome 翻成繁中 toast。 */
 import type { Order } from '$lib/admin/data';
-import { paidAtLabel, type OrderStatus } from '$lib/api/wire';
+import { lookupOr, paidAtLabel, type OrderStatus } from '$lib/api/wire';
 import type { OrderResponse } from '$lib/api/generated';
 import { ApiError } from '$lib/api/client';
 
@@ -37,7 +37,7 @@ const LEGAL_NEXT: Record<OrderStatus, OrderStatus[]> = {
 };
 
 export function legalNextStatuses(current: OrderStatus): OrderStatus[] {
-	return Object.hasOwn(LEGAL_NEXT, current) ? LEGAL_NEXT[current] : [];
+	return lookupOr<OrderStatus[]>(LEGAL_NEXT, current, []);
 }
 
 /**

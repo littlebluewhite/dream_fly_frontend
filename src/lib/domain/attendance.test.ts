@@ -21,10 +21,4 @@ describe('attStateBadge — 出勤狀態查表自帶未知值後備', () => {
 	it('未知值 → [neutral, 原字串]，不是 undefined', () => {
 		expect(attStateBadge('excused')).toEqual(['neutral', 'excused']);
 	});
-
-	it('Object.prototype 上的鍵（constructor 等）也走後備，不回繼承來的成員', () => {
-		for (const k of ['constructor', 'toString', '__proto__']) {
-			expect(attStateBadge(k)).toEqual(['neutral', k]);
-		}
-	});
 });

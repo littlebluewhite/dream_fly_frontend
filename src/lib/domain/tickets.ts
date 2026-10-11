@@ -2,7 +2,7 @@
  * Data copied verbatim from src/lib/admin/data.ts. */
 
 import type { IconName } from '$lib/icon-registry';
-import type { Tone } from '$lib/api/wire';
+import { lookupOr, type Tone } from '$lib/api/wire';
 import type { ProductType } from '$lib/api/generated';
 
 export interface Ticket {
@@ -42,4 +42,4 @@ export const TICKET_TYPE: Record<TicketType, [Tone, string]> = {
 /** 容忍未知字串的方案類型查表：查無（只認自有鍵）→ ['neutral', 原字串]。寫法同 api/wire.ts 的 orderStatusBadge，
  *  後端 product_type 多一個值時不會 destructure 到 undefined 而炸頁。 */
 export const ticketTypeBadge = (t: string): [Tone, string] =>
-	Object.hasOwn(TICKET_TYPE, t) ? (TICKET_TYPE as Record<string, [Tone, string]>)[t] : ['neutral', t];
+	lookupOr<[Tone, string]>(TICKET_TYPE, t, ['neutral', t]);
