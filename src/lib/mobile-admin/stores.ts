@@ -6,15 +6,14 @@
  * live collections, notifs and toasts are shared stores here. Factories are
  * exported for isolated test instances; the app uses the singletons.
  *
- * Task 20：members/classes/coaches/orders/messages 現由 $lib/mobile-admin/api
- * 的 getOpsCollections()/getMessages() 供給真資料(該檔組合桌面 admin/coach
+ * Task 20：members/classes/coaches/orders 現由 $lib/mobile-admin/api
+ * 的 getOpsCollections() 供給真資料(該檔組合桌面 admin/coach
  * seams 並做薄映射)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
  * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
 
 import { writable, derived, get } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createHydrationGate } from '$lib/hydration-gate';
-import { createSessionGate } from '$lib/session-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
@@ -22,10 +21,10 @@ import { createReadState, unreadCount } from '$lib/stores/read-state';
 // members/classes/orders/coaches 四個 store 誠實開機為 `[]`(見下方 EMPTY_OPS),值
 // 改由真 getOpsCollections() 水合。type Coach 仍直取 $lib/domain/coaches(型別本身
 // 留在原處，只有 COACHES 值搬到 $lib/testing/seed-fixtures 供測試用)。
-import { ADMIN_NOTIFS, COACH_NOTIFS, type MessageRow, type AdminNotif } from './data';
+import { ADMIN_NOTIFS, COACH_NOTIFS, type AdminNotif } from './data';
 import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow, CoachFormValues } from '$lib/admin/data';
 import type { Coach } from '$lib/domain/coaches';
-import { getOpsCollections, getMessages, type OpsCollections, type OpsPages, type PageInfo } from './api';
+import { getOpsCollections, type OpsCollections, type OpsPages, type PageInfo } from './api';
 // R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
 // createCoach/updateCoach 原經 mobile-admin/api.ts 零映射
 // re-export 轉手,已退役——直接向擁有者模組 $lib/admin/api 取用。
@@ -187,52 +186,6 @@ export async function saveCoach(v: CoachFormValues, target: Coach): Promise<Save
 	if (outcome.kind === 'saved') await refetchAfterWrite();
 	return outcome;
 }
-
-/** Live parent-message threads. The coach 訊息 badge + row highlight derive from
- *  this store, so reading a thread updates both — the static seed only ever showed
- *  the original unread count for the whole session. 誠實開機(R14 候選 F3):開機值 =
- *  reset 值 = `[]`,教練分區的 layout 暖機後才顯示真數(不再顯示種子的假 3 則)。 */
-export const messages = writable<MessageRow[]>([]);
-/** Mark a thread read (the coach opened it). Also declares hydration truth on the messages gate
- *  (mutation 即宣告水合真相,防止首次水合覆寫)。R14(候選 F5)：真正的 PATCH /conversations/{id}/read(markRead)住在
- *  $lib/coach/messages-controller 的 selectThread()，MessageThread.svelte 把它的 ack
- *  (badgeCleared)交進來。R17 起本函式走 messagesGate.write():等 ack 為 true 才本地翻已讀
- *  (ack 為 false = markRead 失敗,維持未讀,同桌面);ack 落地前換了身分(閘門已重置)→ stale,
- *  不碰新身分的 store——取代 MessageThread 原本手寫的身分核對。 */
-export async function markMessageRead(id: string, ack: Promise<boolean>): Promise<void> {
-	await messagesGate.write({
-		send: async () => {
-			if (!(await ack)) throw new Error('markRead 未獲後端確認');
-		},
-		commit: () => messages.update((ms) => ms.map((m) => (m.id === id ? { ...m, unread: false } : m)))
-	});
-}
-export const coachMsgUnread = derived(messages, ($m) => $m.filter((x) => x.unread).length);
-
-/** 訊息水合守衛 — 與 orders/classes/members/coaches 的 ops 集合屬不同領域(coach
- *  訊息串列 vs 管理端營運集合),故獨立一套守衛,不併入 opsGate。開機為 `[]`(R14 F3
- *  誠實開機;原同步 seed 退役,值搬進 $lib/testing/seed-fixtures);markMessageRead 走 messagesGate.write()
- *  (mutation 即宣告水合真相)。訊息頁經 messagesPageEntry 建 load-gate,重試走 load-gate
- *  的 refresh(一律真抓、落地同走世代穩定重抓,理由與判準見上方 opsGate 註解)。
- *  R13 Task 7(C6):對話列表是**登入教練本人**的資料,改用 createSessionGate——換帳號/
- *  登出即重置回 boot 態、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(原本的 hydration
- *  gate 跨帳號存活,第二位教練會看到前一位的對話列表)。opsGate 是全機構的營運集合,
- *  不涉個人隱私,維持不動。reset 回 `[]` 滿足 boot-parity(開機值 = reset 值)。
- *  暖機:routes/mobile-admin/+layout.svelte 只在教練分區以身分為 key 呼叫 hydrateMessages
- *  (見 $lib/store-warm)。
- *  fetch 包一層箭頭函式,理由同 opsGate——維持惰性讀取 getMessages 這個 binding 的時機。 */
-const messagesGate = createSessionGate({
-	fetch: () => getMessages(),
-	apply: (d) => {
-		messages.set(d);
-	},
-	reset: () => {
-		messages.set([]);
-	}
-});
-export const hydrateMessages = messagesGate.hydrate;
-/** 訊息頁的進場包(R14 F1);fetch 是帶 epoch 核對的那一支(session 閘門繼承自水合閘門)。 */
-export const messagesPageEntry = messagesGate.pageEntry();
 
 /* ---------- Toasts (above the tab bar, 2800ms — canonical store) ---------- */
 export const toasts = createToasts(2800);

@@ -10,7 +10,7 @@
  *                           頁面進場包 pageEntry()、寫入動詞 write() 與和解鏈繼承自閘門)——
  *                           waitlist / leave / notifications;R13(docs/adr/0023)
  *                           再加本人帳號資料(self-account)、教練身分(coach/api 私有)
- *                           與 mobile-admin 訊息(messagesGate),共六個
+ *                           與教練對話列表(coach/conversations,R20 取代 mobile-admin 訊息 messagesGate),共六個
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
  *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions
  *

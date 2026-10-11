@@ -5,7 +5,8 @@
  * + mutator 翻旗。是 src/lib/mobile-admin/stores.ts 中 hydrateOps／hydrateMessages
  * 兩段逐字重複協定的深模組化——hydrateOps 仍原地直接用本 factory（見該檔
  * opsGate 的 createHydrationGate 呼叫）；hydrateMessages 自 R13（docs/adr/0023）
- * 改建在 session-gate.ts 的 createSessionGate 上（換帳號即重置），仍間接用本 factory。
+ * 改建在 session-gate.ts 的 createSessionGate 上（換帳號即重置），R20 起該訊息列表
+ * 住 coach/conversations.ts（同樣建在 createSessionGate 上），仍間接用本 factory。
  *
  * 核心語意：hydrate() 開頭若已水合就短路、不打 API；fetch 進行中若發生 mutation
  * （write()，或併發的另一方先套用並翻旗），await 結束後的 re-check 會

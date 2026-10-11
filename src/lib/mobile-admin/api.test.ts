@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /* R15 Task 3a(候選 轉手退役)：mobile-admin/api.ts 這些組合器(getMore/getCoachHome/
- * getAdminHome/getOpsCollections/getMessages，3b 留任)本身是「轉呼叫桌面 admin/coach
+ * getAdminHome/getOpsCollections，3b 留任)本身是「轉呼叫桌面 admin/coach
  * seam 真實作」的薄層——舊版在這裡把 $lib/admin/api、$lib/coach/api 整包 mock 掉，只驗證
  * 「呼叫到正確的桌面函式、回傳值有正確映射」，桌面函式本身是否真的打對 API 完全不在
  * 這層測試範圍內(該職責在 admin/api.test.ts、coach/api.test.ts)。改 mock 最底層
@@ -30,7 +30,7 @@ import { initialOf, isoDate, orderIdentity, taxFromGross } from '$lib/api/wire';
 import { ntd, orderItemsSummary } from '$lib/public/adapters';
 import { mapMemberAccount, MEMBER_COLORS } from '$lib/admin/data';
 import { mapCourse } from '$lib/admin/api';
-import { getMore, getCoachHome, getAdminHome, getOpsCollections, getMessages } from './api';
+import { getMore, getCoachHome, getAdminHome, getOpsCollections } from './api';
 import { PROFILES } from './data';
 
 /* Task 3 修正回合 1(Important)：getMore/getOpsCollections 原本只斷言 .length > 0，
@@ -225,25 +225,5 @@ describe('getOpsCollections', () => {
 				orders: { total: ORDERS_FIXTURE.length, perPage: 100 }
 			}
 		});
-	});
-});
-
-describe('getMessages', () => {
-	it('maps real conversations (GET /conversations/me) to the mobile message-list shape', async () => {
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /conversations/me': [
-					{ id: 'c1', peer_id: 'p1', peer_name: '王媽媽', last_message_body: '哈囉', last_message_at: '2026-07-10T09:10:00Z', unread_count: 2 },
-					{ id: 'c2', peer_id: 'p2', peer_name: '陳爸爸', last_message_body: '謝謝', last_message_at: null, unread_count: 0 }
-				]
-			})
-		);
-
-		const rows = await getMessages();
-
-		expect(rows).toEqual([
-			{ id: 'c1', from: '王媽媽', initial: '王', color: '#0066CC', preview: '哈囉', time: '2026-07-10 09:10', unread: true },
-			{ id: 'c2', from: '陳爸爸', initial: '陳', color: '#0066CC', preview: '謝謝', time: '', unread: false }
-		]);
 	});
 });

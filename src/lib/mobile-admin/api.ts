@@ -2,7 +2,7 @@
  * admin/coach seams 的薄層——直接 import `$lib/admin/api.ts`/`$lib/coach/api.ts`，
  * 形狀相同的欄位零映射直接沿用（多數集合型別在 data.ts 已刻意對齊桌面真實型別，
  * 例如 ClassRow/MemberRow/OrderRow/Coach，見該檔各型別附註），只在行動版 UI 真的
- * 需要不同形狀處做薄映射（例如今日課表的 tone/label、訊息列表的 MessageRow）。
+ * 需要不同形狀處做薄映射（例如今日課表的 tone/label）。
  * 凡是桌面 seam 本身仍是 mock（無後端來源）的欄位，這裡原樣沿用同一份 mock/預設值
  * ——不發明桌面沒有的假來源，也不重新實作桌面已經做過的映射邏輯。逐函式來源見
  * task-20-report.md 的盤點表。
@@ -13,8 +13,8 @@
  * facade 退役判準全數刪除，生產消費端改直接 import 擁有者模組（$lib/admin/api、
  * $lib/admin/data、$lib/admin/components/coach-save、$lib/admin/settings-form、
  * $lib/coach/api、$lib/coach/load-error-copy、$lib/coach/data）。本檔只留真正做
- * 「組合(平行拉取多支端點)＋薄映射」的 5 支：getMore/getCoachHome/getAdminHome/
- * getOpsCollections/getMessages。 */
+ * 「組合(平行拉取多支端點)＋薄映射」的 4 支：getMore/getCoachHome/getAdminHome/
+ * getOpsCollections。 */
 import {
 	getVenues as adminGetVenues,
 	getTickets as adminGetTickets,
@@ -27,8 +27,8 @@ import {
 	getRecentActivity as adminGetRecentActivity
 } from '$lib/admin/api';
 import type { TodayClass, ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
-import { getDashboard as coachGetDashboard, getConversations as coachGetConversations } from '$lib/coach/api';
-import type { Coach as CoachProfile, Conversation, TodayClass as CoachTodayClass } from '$lib/coach/data';
+import { getDashboard as coachGetDashboard } from '$lib/coach/api';
+import type { Coach as CoachProfile, TodayClass as CoachTodayClass } from '$lib/coach/data';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
 // $lib/domain 各 entity 檔(原經 ./data 純轉手,零附加型別事實)——ActivityRow 改名,
 // 用 import-site alias `Activity as ActivityRow` 保留本檔既有用名(:258)。
@@ -37,11 +37,7 @@ import type { Venue } from '$lib/domain/venues';
 import type { Ticket } from '$lib/domain/tickets';
 import type { Activity as ActivityRow } from '$lib/domain/activity';
 import { fmtNT } from '$lib/format';
-import {
-	PROFILES,
-	type Profile,
-	type MessageRow
-} from './data';
+import { PROFILES, type Profile } from './data';
 
 export interface MoreData {
 	profiles: Record<'admin' | 'coach', Profile>;
@@ -170,16 +166,4 @@ export const getOpsCollections = async (): Promise<OpsCollections> => {
 			orders: { total: ordersRes.total, perPage: ordersRes.perPage }
 		}
 	};
-};
-
-/** Conversation(教練/admin 對話摘要)→ 既有 MessageRow 形狀。unread 由 badge(未讀則數)
- *  是否 >0 推導。 */
-function mapConversationToRow(c: Conversation): MessageRow {
-	return { id: c.id, from: c.name, initial: c.initial, color: c.color, preview: c.preview, time: c.time, unread: (c.badge ?? 0) > 0 };
-}
-/** 教練 · 訊息列表 — 復用桌面 coach/api.ts 的 getConversations()(Task 12：GET
- *  /conversations/me)，取代舊 mock 固定 12 筆訊息清單。 */
-export const getMessages = async (): Promise<MessageRow[]> => {
-	const { conversations } = await coachGetConversations();
-	return conversations.map(mapConversationToRow);
 };

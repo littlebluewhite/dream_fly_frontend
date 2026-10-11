@@ -81,17 +81,8 @@ export const PROFILES: Record<'admin' | 'coach', Profile> = {
 // （page.test.ts 改用自帶 inline fixture），同本檔既有死種子退役慣例(ADR 0010)。
 
 /* ---- Coach messages / 訊息 ---- */
-export interface MessageRow {
-	id: string;
-	from: string;
-	initial: string;
-	color: string;
-	preview: string;
-	time: string;
-	unread: boolean;
-}
-// MESSAGES(同步種子)於 R14 候選 F3 退役:messages store 誠實開機為 `[]`,值逐字搬進測試
-// 專用的 $lib/testing/seed-fixtures(ADR 0010)。MessageRow 仍是 getMessages() 的映射形狀。
+// MESSAGES(同步種子)於 R14 候選 F3 退役、MessageRow(原 getMessages() 的映射形狀)於 R20 候選 02 退役:
+// mobile-admin 的訊息列表改讀 $lib/coach/conversations 的 Conversation。
 
 /* ---- Activity feed ---- */
 // Task P4-F3：ACTIVITY mock 退役(F11 已把 mobile-admin getAdminHome() 的最新動態改讀
