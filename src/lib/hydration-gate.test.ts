@@ -405,7 +405,7 @@ describe('createHydrationGate', () => {
 		await gate.hydrate();
 		fetch.mockClear();
 
-		await landWrite(gate); // mobile-admin markMessageRead(先寫後改,ack 已落定才宣告)等:無網路尾流
+		await landWrite(gate); // 教練對話列表的 markConversationRead(先寫後改,ack 已落定才宣告)等:無網路尾流
 		const p = gate.refresh();
 
 		expect(fetch).toHaveBeenCalledTimes(1); // 尚未 await 就已出發

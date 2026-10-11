@@ -279,8 +279,8 @@ re-delegates to the real getters built for their desktop counterpart (`mobile` �
 `mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping only where the mobile shape
 diverges, with their own small residual mock spots (same ADR 0006 inventory) inlined the same direct way.
 
-`mobile-admin/api.ts` keeps exactly five combinators — `getMore`/`getCoachHome`/`getAdminHome`/
-`getOpsCollections`/`getMessages` — the ones that fan out to more than one source or reshape a response;
+`mobile-admin/api.ts` keeps exactly four combinators — `getMore`/`getCoachHome`/`getAdminHome`/
+`getOpsCollections` — the ones that fan out to more than one source or reshape a response;
 mobile-admin production code imports everything else from the owning module (`$lib/admin/api`,
 `$lib/admin/data`, `$lib/admin/components/coach-save`, `$lib/admin/settings-form`, `$lib/coach/api`,
 `$lib/coach/load-error-copy`, `$lib/coach/data`) directly, aliasing at the import site on a name clash
@@ -345,9 +345,10 @@ a `Card`). The member 我的課程 page's in-card attendance-history load is not
 `member/mine-controller.ts` (`docs/adr/0008`). `ScheduleCalendar` keeps its bespoke inline template
 outside the wrapper.
 
-Data that already lives in a store (member/mobile's notification centre; mobile-admin's ops collections
-and messages) hydrates once behind the gate's hydrated guard (`notifications` — shared by member and
-mobile — the ops collections, `messages`; stores no longer export `*Hydrated`), with `gate.refresh()` always re-fetching for `ErrorState`'s
+Data that already lives in a store (member/mobile's notification centre; mobile-admin's ops collections;
+the coach conversation list) hydrates once behind the gate's hydrated guard (`notifications` — shared by
+member and mobile — the ops collections, `conversations` — shared by the desktop coach and mobile-admin;
+stores no longer export `*Hydrated`), with `gate.refresh()` always re-fetching for `ErrorState`'s
 retry regardless of the guard — but the guard's mechanism and ownership differ by surface. The wiring is
 the same for all of them (`docs/adr/0025` F-1): `load-gate.ts` exposes a `LoadSource` port
 (`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`), `LoadGateOptions<T>` is a discriminated union of
@@ -393,11 +394,10 @@ account's `setPref` (optimistic PATCH, `onFailure: 'resync'`), which book their 
 `markRead`/`markAllRead` are mobile's mutators too; the pages keep only the toast. The gate's own `generation`/`destroyed` bookkeeping (no page-local
 flag needed) discards a response that resolves after the page unmounts.
 
-Mobile-admin's ops collections and messages are store-owned: the fetch/apply/guard lifecycle lives in
-`stores.ts`'s `opsGate`/`messagesGate`, because a mutator (`markMessageRead`) flips
-the guard true (a mutation *is* the session's source of truth) and none of them is "the page". The pages
-spread the gate's own entry pack — `createLoadGate({ ...opsPageEntry })`/
-`createLoadGate({ ...messagesPageEntry })` — so the store write goes through the source's `load` closure
+Mobile-admin's ops collections are store-owned: the fetch/apply/guard lifecycle lives in
+`stores.ts`'s `opsGate`, because a mutator can flip the guard true (a mutation *is* the session's source
+of truth) and none of them is "the page". The pages spread the gate's own entry pack —
+`createLoadGate({ ...opsPageEntry })` — so the store write goes through the source's `load` closure
 and a response landing after unmount or after a newer run is dropped; the hydrated guard is rechecked
 right before the write, so a mutation racing an in-flight fetch always wins. The four ops collections
 (`members`/`classes`/`orders`/`coaches`) boot honestly (`docs/adr/0025` F-3): a private `EMPTY_OPS`
@@ -425,8 +425,8 @@ That store-owned guard + post-await re-check protocol is a shared factory, `src/
 `write()`/`pageEntry()`/`reset()` — the mutation-generation and settle readers never leave
 the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s ops gate builds on it directly;
 every identity-scoped store builds on it through `src/lib/session-gate.ts` (`docs/adr/0017`, see the
-dedicated section below) — member's waitlist, leave-requests and notifications, mobile-admin's messages,
-the self account and coach identity. `hydrateWaitlist`/`hydrateLeaveRequests`/`hydrateNotifications`
+dedicated section below) — member's waitlist, leave-requests and notifications, the coach conversation
+list, the self account and coach identity. `hydrateWaitlist`/`hydrateLeaveRequests`/`hydrateNotifications`
 *are* `gate.hydrate`, and their
 mutators run through one `gate.write()`. There is no `refreshWaitlist` (YAGNI); `refreshLeaveRequests`
 is `gate.refresh`, used by `MyCourseDetail`'s open-refresh — accepting once-per-session freshness, with
@@ -437,8 +437,10 @@ extending mutation-wins into refresh as an explicit rejection).
 
 Separately, each surface's layout declares a **warm set** — the shared stores its shell reads before any
 page does — and calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on identity
-(`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), mobile-admin warms
-messages in the coach section only (keyed on the route section, not the account's roles), and the root
+(`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), the desktop coach
+layout and mobile-admin (coach section only, keyed on the route section, not the account's roles) warm
+the coach conversation list (the desktop Sidebar's 訊息中心 badge and the mobile TabBar badge both read
+`unreadConversationCount`, `docs/adr/0029`), and the root
 layout warms subscriptions for the marketing shell only (the `/cart` page's and `CartDropdown`'s held-pass
 lines, `docs/adr/0028` §3) plus, on a separate line that ignores `$sessionKey`, the marketing announcements
 (`hydrateAnnouncements` behind a plain hydration gate; the Header bell's `unreadAnnouncements`; the store no
@@ -494,24 +496,33 @@ place, independent of any single page's own load-gate?
   `$lib/member/notifications` directly — there is one gate and one `mapNotification` over the same
   server-side read state, so a read on one surface shows on the other in the same session
   (`docs/adr/0022`).
-- **mobile-admin ops/messages — store-owned, multiple mutators**: `opsGate`/`messagesGate` live in
-  `stores.ts`, not the page; the pages build their load-gate from the gate's entry pack
-  (`opsPageEntry`/`messagesPageEntry`), the same wiring the notifications pages use. The messages gate is
-  a `createSessionGate`, so a second coach logging in doesn't see the first one's conversation list; the
-  ops gate is a plain `createHydrationGate` because ops is organisation-wide data. A mutator
-  (`markMessageRead`) can flip the guard, and it is not "the page", so the
-  fetch/apply/guard lifecycle has to live where the mutators do: the full `createHydrationGate` factory,
-  store-owned. The store-level `refreshOps()` gets the generation-stable refetch for free — the
-  store-owned gate holds the mutation generation itself; "`await write()` → `await refreshOps()`"
-  is a single fetch whose snapshot applies (`docs/adr/0020`'s conservation pin), and the pages' retry
-  reaches the same ledger only indirectly, through `source.refresh(isCurrent)`. The mutator enrols no
-  settle tail in the fifth decision point, and doesn't need to: it is a non-optimistic `write()`, so
-  the store is touched (`commit`) and the generation bumped only after `send` has settled.
-  `markMessageRead(id, ack)` takes the controller's
-  `badgeCleared` promise as the write's `send` — mobile-admin's `MessageThread` calls it immediately
-  and the gate waits for the ack; only `true` flips the local row (a failed `markRead` leaves the
-  thread unread), and an identity change before the ack lands makes the write `stale` so the new
-  identity's store is untouched (`docs/adr/0021`, `docs/adr/0024`, `docs/adr/0027` §5). The overlay screens on this store render their own three states: `CoachesScreen`
+- **mobile-admin ops — store-owned, multiple mutators**: `opsGate` lives in `stores.ts`, not the page; the
+  pages build their load-gate from the gate's entry pack (`opsPageEntry`), the same wiring the notifications
+  pages use. The ops gate is a plain `createHydrationGate` because ops is organisation-wide data. A mutator
+  can flip the guard, and it is not "the page", so the fetch/apply/guard lifecycle has to live where the
+  mutators do: the full `createHydrationGate` factory, store-owned. The store-level `refreshOps()` gets the
+  generation-stable refetch for free — the store-owned gate holds the mutation generation itself;
+  "`await write()` → `await refreshOps()`" is a single fetch whose snapshot applies (`docs/adr/0020`'s
+  conservation pin), and the pages' retry reaches the same ledger only indirectly, through
+  `source.refresh(isCurrent)`. The mutator enrols no settle tail in the fifth decision point, and doesn't
+  need to: it is a non-optimistic `write()`, so the store is touched (`commit`) and the generation bumped
+  only after `send` has settled.
+- **coach conversation list — one session-gate-owned module** (`src/lib/coach/conversations.ts`, R20,
+  `docs/adr/0029`): the signed-in coach's `GET /conversations/me` summaries live in one module on a
+  `createSessionGate`, so a second coach logging in never sees the first one's list. It exports
+  `conversations` (read-only), `unreadConversationCount` (conversations with a badge, not a sum of unread
+  messages), `hydrateConversations`, `conversationsPageEntry`, `refreshConversationsIfHydrated`, and three
+  non-optimistic mutators that take the controller's promise: `markConversationRead(id, badgeCleared)`,
+  `recordSent(id, ctrl.send(text))`, `recordCreated(ctrl.confirmCompose())`. The caller hands the promise
+  over before awaiting, so `write()` captures the identity at call time and a switch before it lands makes
+  the write `stale` (`docs/adr/0021`, `docs/adr/0027` §5); only a successful outcome commits (`badgeCleared`
+  true, `messageSent`, `conversationCreated` — an id already in the list is left as is), and the controller
+  never learns of the list. Readers: the desktop messages page (`createLoadGate({ ...conversationsPageEntry
+  })` plus a background `refreshConversationsIfHydrated()` on re-entry), the desktop dashboard (top three,
+  derived; `getDashboard()` no longer fetches conversations), the desktop Sidebar badge, and mobile-admin's
+  list, thread, TabBar and coach home. The coach layout and the mobile-admin layout warm it; layout warm,
+  page load and the dashboard's `hydrateConversations()` merge into one in-flight GET, so a first visit is one
+  request. The overlay screens on this store render their own three states: `CoachesScreen`
   uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...opsPageEntry })`, ready synchronously when
   the guard hits), so its coach cards never render stale rows during the hydrate window
   (`docs/adr/0016`).
@@ -525,9 +536,9 @@ Why `pageEntry()` hands pages a `{ source: LoadSource }` rather than the store-o
 pair (`docs/adr/0023`, `docs/adr/0016` addendum, `docs/adr/0024`, `docs/adr/0025`): with the raw pair,
 the store gate would write the shared store without knowing the page exists, losing protections that
 only the load-gate wiring gives — stop re-fetching once the page unmounts, never write a superseded run's
-snapshot, and the re-entry re-checks (the load-gate's own "F1/F5"). All five store-owned callers (the
-four `hydrateOps` pages/screens and the messages page) spread `pageEntry()` like the notifications pages
-do. `source.load`'s in-flight GET is shared with `hydrate()`, `source.refresh` is a separate, uncoalesced
+snapshot, and the re-entry re-checks (the load-gate's own "F1/F5"). All the store-owned callers (the
+four `hydrateOps` pages/screens and the desktop and mobile-admin messages pages, through
+`conversationsPageEntry`) spread `pageEntry()` like the notifications pages do. `source.load`'s in-flight GET is shared with `hydrate()`, `source.refresh` is a separate, uncoalesced
 call, and the re-entry bookkeeping stays in load-gate.
 
 ## Session gate: session-identity-aware resets on top of the hydration gate
@@ -543,8 +554,8 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   by member and mobile), the self account (`self-account.ts`, shared by member, mobile and coach), the
   coach identity (private to `coach/api.ts`: just `CoachResponse | null`, resolved once per session from
   `hydrateSelfAccount()` + `GET /coaches`, the flag flipped back on `CoachNotFoundError` so a retry
-  re-resolves) and mobile-admin's messages (`docs/adr/0023`). The coach and mobile-admin ones are
-  staff-side consumers — staff logins write the same `authStore`. It builds a `HydrationGate`
+  re-resolves) and the coach conversation list (`coach/conversations.ts`, `docs/adr/0023` C6, `docs/adr/0029`;
+  shared by the desktop coach and mobile-admin). The coach ones are staff-side consumers — staff logins write the same `authStore`. It builds a `HydrationGate`
   (`createHydrationGate({ fetch, apply, reset })`, whose `reset()` is layered with the write-chain reset
   below, `docs/adr/0025`). The one mutator skeleton is the *base* gate's `write()` (`docs/adr/0027` §5):
   it records the owner (reset epoch) and whether the gate was hydrated before `await`, discards a
@@ -571,8 +582,7 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
 
 Both factories share one private identity core, keyed by `sessionIdentity(auth)` — an exported pure
 function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
-mobile-admin layouts' warm keys and mobile-admin's `MessageThread` call too instead of hand-copying the
-formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
+mobile-admin layouts' warm keys call too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
 immediate callback only records who is logged in, so a restored (or guest) boot fires no reset at all —
 reset value equals boot value, so nothing on screen differs — and declaration order at call sites is not
 a contract. On a real identity change `createSessionGate` calls its underlying `gate.reset()`
@@ -642,7 +652,9 @@ rejected.
   the draft dirty, and both note editors say 「僅存本機，重新整理後會消失」.
 - **`src/lib/coach/conversations-filter.ts`** (K3) is a framework-free port of
   `coach/messages/+page.svelte`'s tab × search filtering, selection-fallback, and compose-insert logic
-  (`filterConversations`/`pickSelection`/`applyCreatedConversation`), consumed only by that page.
+  (`filterConversations`/`pickSelection`) over the list that `src/lib/coach/conversations.ts` owns,
+  consumed only by that page; the compose-insert rule (exists-or-prepend) moved into that module's
+  `recordCreated` (`docs/adr/0029`).
 - **`src/lib/admin/components/coach-save.ts`**'s `saveNewCoach`/`saveCoachEdit` (K4) is a stateless async
   orchestrator for `admin/coaches/+page.svelte`'s two-step account-then-coach create sequence and its
   `pendingUserId` retry sentinel — sentinel *semantics* live in the module, sentinel *storage* stays on
@@ -692,8 +704,10 @@ rejected.
   `creating` guard mirrors `checkout-controller`'s `alreadyPaying`. `composeOpen` lives in the
   controller's snapshot, so the page closes the compose dialog through `closeCompose()` — assigning the
   destructured mirror directly would be overwritten back to `true` by the controller's next `publish()`.
-  Toast text, the conversations list and its gate, and the tab×search filtering (`conversations-filter.ts`,
-  K3) stay on the page; `docs/adr/0018` records the criterion walkthrough. mobile-admin's `MessageThread`
+  Toast text and the tab×search filtering (`conversations-filter.ts`, K3) stay on the page; the conversation
+  list and its mutators moved to `src/lib/coach/conversations.ts`, which the page hands the controller's
+  promises to (`docs/adr/0029`, overturning `docs/adr/0018` §1's keep-on-page note); `docs/adr/0018` records
+  the criterion walkthrough. mobile-admin's `MessageThread`
   is a second caller (see the twin paragraph).
 - **`src/lib/member/mine-controller.ts`**'s `createMineController`, in `messages-controller`'s shape:
   member/mine's *inner* coordination — course selection × the in-card attendance-history load × the
@@ -737,10 +751,11 @@ this class by `docs/adr/0014`. Its members:
   controller as a dep, so the components don't call it; there is no separate `validateCoupon` any more
   (`docs/adr/0027` §3).
 - `coach/messages-controller.ts` — mobile-admin's `MessageThread` builds it with the same five deps,
-  imported directly from `$lib/coach/api` (`docs/adr/0024` F5). The one wiring difference is the badge:
-  `MessageThread` hands `badgeCleared` to the store's `markMessageRead(id, badgeCleared)`, whose
-  `write()` flips the row only when it resolves true, so the unread badge clears after the backend
-  acknowledged the read, as on desktop.
+  imported directly from `$lib/coach/api` (`docs/adr/0024` F5). The one wiring difference is the list
+  writes: `MessageThread` hands `badgeCleared` to `markConversationRead(id, badgeCleared)` and `ctrl.send(text)`
+  to `recordSent(id, …)` in `$lib/coach/conversations`, the same module the desktop page uses, so the unread
+  badge clears after the backend acknowledged the read and the list preview and time follow a sent reply
+  (`docs/adr/0029`).
 - `coach/student-forms.ts` — `createCertificateForm`/`createReportCardForm` (one file, two factories, no
   mode flag) hold the required-field guard, double-submit guard, trimming, optional-field omission and
   local-date default shared by desktop's `CertificateDialog`/`ReportCardDialog` and mobile-admin's

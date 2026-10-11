@@ -17,9 +17,8 @@ Mock data lives only in a handful of **P2-commented** spots where no backend end
 management is out of scope, or the gap is purely cosmetic — treat them as known gaps, not bugs: the
 mobile-admin identity chip, its page-1-only list fetches, its read-only venue screen and demo ticket-edit
 toast (the admin desktop equivalents are wired), the admin settings page's local-only login-device list,
-and the shell badges that have no backend feed (coach Topbar's `NOTIFS` bell, the hardcoded `badge: 3` on
-coach's 訊息中心 nav item, admin Topbar's 「目前有 3 則新通知」 toast, mobile-admin's
-`ADMIN_NOTIFS`/`COACH_NOTIFS`). Fields the backend has no column for are left out, never faked
+and the shell badges that have no backend feed (coach Topbar's `NOTIFS` bell, admin Topbar's
+「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`). Fields the backend has no column for are left out, never faked
 (`docs/adr/0023`, `docs/adr/0026`); `docs/adr/0006` holds the full inventory.
 
 Google OAuth login exists for `member` and `mobile` only: the backend's Google flow grants just the

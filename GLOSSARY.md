@@ -166,7 +166,7 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 **等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點只住
 `hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數與和解鏈、還原內容、
 旗標翻 false、喚醒全部尾流等待者;重置前出發的
-load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/messages)不再匯出測試專用的重置,測試用真的登入 → 登出
+load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/教練對話列表)不再匯出測試專用的重置,測試用真的登入 → 登出
 (`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests = opsGate.reset`,
 production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯出 `*Hydrated`(`hydrated` 只留在閘門介面當唯讀探針)。
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
@@ -195,13 +195,13 @@ _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)�
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一
 來源 `src/lib/session-gate.ts` 兩門——`createSessionGate`(水合閘門 + identity 重置 + epoch 核對 fetch
 + 寫入鏈 `queueWrite()`,寫入動詞 `write()` 與頁面進場包都繼承自水合閘門;供 waitlist/請假/通知/本人帳號資料/
-教練身分/mobile-admin 訊息——通知是 member 與 mobile 共用的同一顆閘門,mobile 經自家
+教練身分/教練對話列表——通知是 member 與 mobile 共用的同一顆閘門,mobile 經自家
 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
-身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),mobile-admin
-訊息換教練帳號即重置,三者見 `docs/adr/0023`)、
+身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),教練對話列表
+換教練帳號即重置,三者見 `docs/adr/0023`、`docs/adr/0029`)、
 `createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由 `authStore.ts`
 (身分的 owner,見「登入狀態」)匯出的純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
-閘門內部與 member/mobile/mobile-admin layout 的暖機 key、mobile-admin `MessageThread` 都呼叫它,
+閘門內部與 member/mobile/mobile-admin layout 的暖機 key 都呼叫它,
 不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序
 不是契約。`queueWrite` 排進同一條寫入鏈:輪到時身分已換就跳過,換帳號即重置這條鏈(見
@@ -211,16 +211,27 @@ restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(re
 _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一來源之外的複本)、`*Hydrated` 旗標跨登入存活、
 開機時為了「對齊開機值」而觸發 reset
 
+**教練對話列表 (Coach Conversation List)**:
+登入教練本人的對話摘要(`GET /conversations/me`)的唯一 owner,`src/lib/coach/conversations.ts`,建在
+`createSessionGate` 上(換教練帳號即重置,在飛舊回應作廢)。持有列表本身、`unreadConversationCount`
+(有未讀的**對話數**,不是未讀則數加總),以及作用在列表上的三個非樂觀 mutator:`markConversationRead(id,
+badgeCleared)`、`recordSent(id, ctrl.send(text))`、`recordCreated(ctrl.confirmCompose())`——呼叫端在 await
+之前把 `messages-controller` 的 promise 交進來,`write()` 當下記住身分,落地前換人即 stale;controller 不認識
+列表。讀者:桌面訊息中心與工作台、桌面側欄角標、mobile-admin 訊息頁／對話串／TabBar／教練首頁(見
+`docs/adr/0029`)。再次進頁先顯示已有的列表、背景再真抓一次;第一次進頁只抓 1 次。
+_Avoid_: 訊息列、`MessageRow`(已退役的 mobile-admin 列投影)、頁面自持的 `convos`;在頁面或 store 手寫
+已讀／送出／新對話的列表更新;`getDashboard()` 這類 getter 順手抓對話
+
 **暖機清單 (Warm Set)**:
 在任何頁面之前就要讀的共享 store 清單,以身分為 key 呼叫 `$lib/store-warm` 的
 `warmStores(caller, tasks)`(best-effort:`Promise.allSettled`,單項失敗只記 log)。有兩層宣告點:
 一個 surface 的外殼(Topbar/Sidebar/TabBar)由該 surface 的 `+layout.svelte` 宣告(member/mobile 暖
-通知,mobile-admin 只在教練分區暖訊息);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
+通知,coach 桌面與 mobile-admin 的教練分區暖教練對話列表);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
 用 `Promise.all` 並行出發——`member/mine`(候補清單、我的請假)、`member/account`(點數、訂閱)、
 `mobile/account`(點數)三頁這麼做(見 `docs/adr/0025` F-2、
 `docs/adr/0012` K7)。行銷外殼也有一份:根 `+layout.svelte` 在非 app surface 以身分為 key 暖訂閱,供購物車頁與
 `CartDropdown` 的「已持有,不計費」(見 `docs/adr/0028` §3);另起一行暖行銷公告(`hydrateAnnouncements`,
-公開端點與身分無關,不看 `$sessionKey`,Header 鈴鐺角標 `unreadAnnouncements` 吃它,失敗時閘門維持未水合、下次可重試)。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
+公開端點與身分無關,不看 `$sessionKey`,Header 鈴鐺角標 `unreadAnnouncements` 吃它,失敗時閘門維持未水合、下次可重試)。教練對話列表(`hydrateConversations`)由 coach layout 與 mobile-admin layout 暖,桌面側欄與手機 TabBar 的訊息角標吃它。每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁
 載入的重複、換身分時閘門自己重置。暖機前 store 是誠實的開機值(空清單,角標不顯示),不是種子(見
 `docs/adr/0024`)。
 _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看不出這一層);seed teaser(開機先顯示
