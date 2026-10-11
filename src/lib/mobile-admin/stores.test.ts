@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { resetSessionStores } from '$lib/testing/session-reset';
 import { createReadState } from '$lib/stores/read-state';
 import {
 	adminUnread,

@@ -32,10 +32,12 @@
   }
 
   // 暖機清單(R20 候選 02):側欄「訊息中心」角標讀教練對話列表的未讀對話數,進任何教練頁都要有。
-  // 以身分為 key 反應式呼叫(同 member/mobile-admin layout):已登入時 key 為 member.id,否則 null;
+  // 以身分為 key 反應式呼叫(同 member/mobile-admin layout):已登入且過了教練角色 guard 時 key 為 member.id,否則 null
+  // (非教練會被導走,不替他抓對話列表;同 mobile-admin 的 warmKey);
   // 每個身分只打一次 GET——閘門守衛擋重訪、在飛合併擋掉訊息頁/工作台 load 的重複(第一次進頁仍是 1 次)、
   // 換身分時閘門自己重置。
-  $: if (browser && $sessionKey !== null) void warmStores('coach +layout', [['訊息', hydrateConversations]]);
+  $: warmKey = staffGuardTarget('coach', $authStore.loggedIn, $authStore.roles) === null ? $sessionKey : null;
+  $: if (browser && warmKey !== null) void warmStores('coach +layout', [['訊息', hydrateConversations]]);
 
   // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
 

@@ -12,7 +12,7 @@ vi.mock('$app/environment', () => ({ browser: true }));
 vi.mock('$lib/stores/authStore', async () => {
 	const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
 	return makeAuthMockA({
-		roleFor: () => ['coach'],
+		roleFor: (email) => (email.startsWith('member') ? ['member'] : ['coach']),
 		memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email })
 	});
 });
@@ -66,6 +66,13 @@ describe('coach +layout — 暖機清單(R20)', () => {
 	});
 
 	it('未登入零次', async () => {
+		render(Layout);
+		await settle();
+		expect(convGets()).toBe(0);
+	});
+
+	it('已登入但無教練角色(被 guard 導走)零次——暖機依角色守門', async () => {
+		await authStore.login('member@test.com', 'pw');
 		render(Layout);
 		await settle();
 		expect(convGets()).toBe(0);
