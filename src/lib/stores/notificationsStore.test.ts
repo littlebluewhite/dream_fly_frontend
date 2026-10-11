@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { toAnnouncement } from './notificationsStore';
+import {
+	toAnnouncement,
+	notificationsStore,
+	unreadAnnouncements,
+	hydrateAnnouncements,
+	resetAnnouncementsForTests
+} from './notificationsStore';
 import type { PostListResponse, PostResponse } from '$lib/api/generated';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { api } from '$lib/api/client';
 
-// 只假造 HTTP 層：真的 listPosts 會跑（resetModules 後 api 須動態重新 import）
+// 只假造 HTTP 層：真的 listPosts 會跑
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
@@ -49,37 +56,53 @@ describe('toAnnouncement — PostResponse → Notification（公開端點無已�
 	});
 });
 
-describe('notificationsStore — GET /posts 過濾 category===announcement', () => {
+describe('notificationsStore — import 時不打 GET /posts（水合由根 layout 暖機觸發）', () => {
+	it('模組載入後 api 零呼叫、store 為空', () => {
+		// 本檔頂端已 import 該模組；api 為全新 vi.fn，載入期間若有抓取會留下呼叫紀錄。
+		expect(vi.mocked(api)).not.toHaveBeenCalled();
+		expect(get(notificationsStore)).toEqual([]);
+	});
+});
+
+describe('hydrateAnnouncements — 經水合閘門抓 GET /posts 並過濾 category===announcement', () => {
+	const ROUTE = 'GET /posts?per_page=100';
+	const page = (posts: PostResponse[]): PostListResponse => ({ posts, total: posts.length, page: 1, per_page: 100 });
+	const postGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/posts?per_page=100').length;
+
 	beforeEach(() => {
-		vi.resetModules();
+		resetAnnouncementsForTests();
+		vi.mocked(api).mockReset();
 	});
 
 	it('populates the store with only announcement posts, mapped via toAnnouncement', async () => {
-		const { api } = await import('$lib/api/client');
 		const posts = [
 			makePost({ id: 'a1', category: 'announcement' }),
 			makePost({ id: 'a2', category: 'article', title: '不是公告' }) // filtered out
 		];
-		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				'GET /posts?per_page=100': { posts, total: posts.length, page: 1, per_page: 100 } satisfies PostListResponse
-			})
-		);
+		vi.mocked(api).mockImplementation(fakeRouter({ [ROUTE]: page(posts) }));
 
-		const { notificationsStore } = await import('./notificationsStore');
-		await vi.waitFor(() => {
-			expect(get(notificationsStore)).toHaveLength(1);
-		});
+		await hydrateAnnouncements();
+
+		expect(get(notificationsStore)).toHaveLength(1);
 		expect(get(notificationsStore)[0]).toMatchObject({ id: 'a1', type: 'announcement' });
+		expect(get(unreadAnnouncements)).toBe(1);
 	});
 
-	it('degrades to an empty list (not the old hardcoded fallback) when the fetch fails', async () => {
-		const { api } = await import('$lib/api/client');
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /posts?per_page=100': new Error('network') }));
-
-		const { notificationsStore } = await import('./notificationsStore');
-		// give the rejected promise's .catch a tick to settle
-		await new Promise((r) => setTimeout(r, 0));
+	it('抓取失敗會 throw、store 維持空；閘門未水合，下次可重試', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ [ROUTE]: new Error('network') }));
+		await expect(hydrateAnnouncements()).rejects.toThrow('network');
 		expect(get(notificationsStore)).toEqual([]);
+
+		vi.mocked(api).mockImplementation(fakeRouter({ [ROUTE]: page([makePost({ id: 'a1' })]) }));
+		await hydrateAnnouncements();
+		expect(get(notificationsStore).map((n) => n.id)).toEqual(['a1']);
+		expect(postGets()).toBe(2);
+	});
+
+	it('已水合不重抓', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ [ROUTE]: page([makePost()]) }));
+		await hydrateAnnouncements();
+		await hydrateAnnouncements();
+		expect(postGets()).toBe(1);
 	});
 });

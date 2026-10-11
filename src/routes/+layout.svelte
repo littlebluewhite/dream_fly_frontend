@@ -9,6 +9,7 @@
   import { authStore, sessionKey } from '$lib/stores/authStore';
   import { warmStores } from '$lib/store-warm';
   import { refreshSubscriptions } from '$lib/member/stores';
+  import { hydrateAnnouncements } from '$lib/stores/notificationsStore';
   import '$lib/styles/global.css';
 
   // Confirm/refresh the session once on app mount: if a refresh token exists,
@@ -34,6 +35,10 @@
    * 暖一次(auth 晚於頁面才水合、A 直接換登 B 都會重暖;app 介面自帶 layout,不在此暖)。
    * 結帳結算仍由各介面自己做(ADR-0003 / ADR-0025 F-5)。 */
   $: if (browser && !isAppSurface && $sessionKey !== null) void warmStores('root +layout', [['訂閱', refreshSubscriptions]]);
+
+  /* 行銷公告暖機：公開端點與身分無關，故不看 $sessionKey、另起一行——每個頁面生命週期只暖一次
+   * （閘門守衛擋重訪；失敗時維持未水合，下次路由變動再試）。 */
+  $: if (browser && !isAppSurface) void warmStores('root +layout', [['公告', hydrateAnnouncements]]);
 </script>
 
 {#if isAppSurface}

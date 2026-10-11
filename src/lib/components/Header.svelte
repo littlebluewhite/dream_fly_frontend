@@ -6,14 +6,14 @@
   import Icon from '$lib/components/ui/Icon.svelte';
   import { cartCount } from '$lib/cart';
   import { isLoggedIn } from '$lib/stores/authStore';
-  import { unreadCount } from '$lib/stores/notificationsStore';
+  import { unreadAnnouncements } from '$lib/stores/notificationsStore';
 
   let mobileMenuOpen = false;
   let cartDropdownOpen = false;
   let notificationsDropdownOpen = false;
 
   $: cartItemCount = $cartCount;
-  $: notificationCount = $unreadCount;
+  $: notificationCount = $unreadAnnouncements;
 
   function toggleMobileMenu() {
     mobileMenuOpen = !mobileMenuOpen;

@@ -27,10 +27,12 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import { subscriptions } from '$lib/member/subscriptions';
+import { resetAnnouncementsForTests } from '$lib/stores/notificationsStore';
 import Layout from './+layout.svelte';
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
 const subGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/subscriptions/me').length;
+const postGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/posts?per_page=100').length;
 const owned = {
   id: 'sub-b', product_id: 'product-uuid-1', product_name: '月票', status: 'active',
   started_at: '2026-06-01T00:00:00Z', expires_at: null, total_sessions: null,
@@ -41,11 +43,13 @@ beforeEach(async () => {
   mockUrl = new URL('http://localhost/');
   authStore.logout();
   await resetSessionStores();
+  resetAnnouncementsForTests();
   subscriptions.set([]);
   vi.mocked(api).mockImplementation(
     fakeRouter({
       'GET /subscriptions/me': () => (get(authStore).member?.id === 'b@test.com' ? [owned] : []),
-      'GET /notifications': []
+      'GET /notifications': [],
+      'GET /posts?per_page=100': { posts: [], total: 0, page: 1, per_page: 100 }
     })
   );
 });
@@ -93,5 +97,20 @@ describe('根 +layout — 訂閱暖機(R18 W3)', () => {
     render(Layout);
     await settle();
     expect(subGets()).toBe(0);
+  });
+});
+
+describe('根 +layout — 行銷公告暖機', () => {
+  it('行銷頁 → 1 次 GET /posts?per_page=100（不看登入身分）', async () => {
+    render(Layout);
+    await settle();
+    expect(postGets()).toBe(1);
+  });
+
+  it('app 介面(/member)→ 0 次', async () => {
+    mockUrl = new URL('http://localhost/member');
+    render(Layout);
+    await settle();
+    expect(postGets()).toBe(0);
   });
 });
