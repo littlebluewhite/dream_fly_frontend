@@ -22,7 +22,9 @@ jobs:
           # Pinned to the dev machine's Node: Intl date strings change with its bundled ICU/CLDR
           # (newer CLDR drops the space in 「2026年7月15日 星期三」), and tests assert them verbatim.
           node-version: 24.2.0
-      # package-lock.json is gitignored, so this resolves fresh each run.
+      # package-lock.json is gitignored, so this resolves fresh each run. Node 24.2.0's bundled
+      # npm 11.3.0 crashes on a lockfile-less install ("reading 'edgesOut'"); use a newer npm 11.
+      - run: npm install -g npm@11
       - run: npm install --no-audit --no-fund
         working-directory: frontend
       - run: npm run check
