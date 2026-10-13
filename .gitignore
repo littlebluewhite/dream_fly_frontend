@@ -38,5 +38,6 @@ coverage/
 *.tmp
 .cache/
 .understand-anything/
-/.claude/
+/.claude/*
+!/.claude/skills/
 .superpowers/

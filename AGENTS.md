@@ -2,8 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`, local
-> and git-ignored) — read it before writing, changing, or reviewing code. This file is **orientation**
+> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`) — read it before writing, changing, or reviewing code. This file is **orientation**
 > (what the project is, how to run it); the skill holds the **rules**.
 
 ## What this is
@@ -52,7 +51,7 @@ Scripts are in `package.json`. What it doesn't tell you:
   Never edit it by hand: regenerate in the backend (`WIRE_BINDINGS=write cargo test --test wire_types`), then
   `npm run wire:sync`. `npm run check` first runs `wire:check` and fails on stale/missing/extra files; it resolves
   the sibling backend from the main checkout and fails when it has no `bindings/`. Override with `DREAMFLY_BACKEND_DIR`.
-- `npm run check` (svelte-check) is the only lint: the repo has no ESLint or Prettier, so match the
+- `npm run check` (svelte-check, with `noUnusedLocals`) is the only lint: the repo has no ESLint or Prettier, so match the
   surrounding style by hand.
 - Vitest runs in jsdom with setup in `src/vitest-setup.ts`.
 
