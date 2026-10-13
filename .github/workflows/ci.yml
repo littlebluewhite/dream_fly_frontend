@@ -19,7 +19,9 @@ jobs:
           path: backend
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Pinned to the dev machine's Node: Intl date strings change with its bundled ICU/CLDR
+          # (newer CLDR drops the space in 「2026年7月15日 星期三」), and tests assert them verbatim.
+          node-version: 24.2.0
       # package-lock.json is gitignored, so this resolves fresh each run.
       - run: npm install --no-audit --no-fund
         working-directory: frontend
