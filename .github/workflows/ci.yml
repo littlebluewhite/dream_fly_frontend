@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: frontend
+      # `npm run check` byte-compares the wire types against the backend's committed bindings/.
+      - uses: actions/checkout@v4
+        with:
+          repository: littlebluewhite/dream_fly_backend
+          path: backend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # package-lock.json is gitignored, so this resolves fresh each run.
+      - run: npm install --no-audit --no-fund
+        working-directory: frontend
+      - run: npm run check
+        working-directory: frontend
+        env:
+          DREAMFLY_BACKEND_DIR: ../backend
+      - run: npm run test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
