@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { page } from '$app/stores';
   import Navigation from './Navigation.svelte';
   import CartDropdown from './CartDropdown.svelte';
   import NotificationsDropdown from './NotificationsDropdown.svelte';

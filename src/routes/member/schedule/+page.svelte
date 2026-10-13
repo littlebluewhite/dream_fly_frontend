@@ -5,7 +5,6 @@
    * are visual-only; clicking a class block raises an info toast. Data +
    * primitives come from the shared foundation. */
   import { Card, IconButton, Icon, Skeleton, SkelCard, ErrorState, EmptyState, LoadGate } from '$lib/components/ui';
-  import type { ScheduleBlock } from '$lib/member/data';
   import { TIME_ROWS } from '$lib/domain/member-app';
   import { WEEK } from '$lib/domain/weekday';
   import { toasts } from '$lib/member/stores';

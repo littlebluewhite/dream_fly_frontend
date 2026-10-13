@@ -5,8 +5,6 @@ import { goto } from '$app/navigation';
 import { authStore, isLoggedIn } from '$lib/stores/authStore';
 import { clearTokens, getAccess, getRefresh } from '$lib/api/tokens';
 
-const BASE = 'http://localhost:3000/api/v1';
-
 function jsonResponse(body: unknown, status = 200, statusText = 'OK') {
   return {
     ok: status >= 200 && status < 300,

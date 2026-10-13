@@ -15,7 +15,6 @@
    * stock===0 顯示「已兌換完畢」，與點數不足分開判斷)。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import Badge from '$lib/components/ui/Badge.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
   import { toasts } from '$lib/mobile/stores';

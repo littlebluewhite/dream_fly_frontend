@@ -4,7 +4,6 @@
   import { isLoggedIn } from '$lib/stores/authStore';
   import { checkoutTarget } from '$lib/checkout-gate';
   import { chargeableCart } from '$lib/member/stores';
-  import type { CartItem } from '$lib/cart-item';
   import Icon from '$lib/components/ui/Icon.svelte';
 
   export let isOpen = false;

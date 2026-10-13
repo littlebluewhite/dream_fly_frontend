@@ -319,7 +319,7 @@
       <!-- 最新訊息 (L86-94 + gap L95-109 reconstructed) -->
       <PanelCard title="最新訊息" viewAll="查看全部" onViewAll={() => goto('/coach/messages')}>
         <div style="display:flex;flex-direction:column;gap:14px">
-          {#each messages as m, i (m.id)}
+          {#each messages as m (m.id)}
             <!-- svelte-ignore a11y_consider_explicit_label -->
             <button
               on:click={() => goto('/coach/messages')}

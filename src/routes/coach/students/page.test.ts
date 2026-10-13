@@ -76,7 +76,7 @@ describe('/coach/students (+page)', () => {
 	});
 
 	it('shows the existing empty state when the search matches zero students', async () => {
-		const { getByText, findByText } = render(StudentsPage);
+		const { findByText } = render(StudentsPage);
 		await findByText(STUDENTS[0].name);
 		search.set('___no-such-student___');
 		expect(await findByText('找不到符合的學員')).toBeInTheDocument();

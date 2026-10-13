@@ -43,8 +43,6 @@ async function fillRequired(term = '2026 夏季', text = '進步很多') {
   await fireEvent.input(screen.getByLabelText('評語', { exact: false }), { target: { value: text } });
 }
 
-const submitButton = () => screen.getByText('建立成績單').closest('button') as HTMLButtonElement;
-
 beforeEach(() => {
   vi.mocked(api).mockReset();
 });
