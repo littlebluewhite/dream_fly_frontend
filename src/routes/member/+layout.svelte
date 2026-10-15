@@ -1,7 +1,28 @@
+<script lang="ts" context="module">
+  import type { AuthState } from '$lib/stores/authStore';
+  import type { WarmSet } from '$lib/store-warm';
+  import { hydrateNotifications } from '$lib/member/stores';
+  import { wantsCheckout } from '$lib/checkout-gate';
+  import { memberGuardTarget } from './guard';
+
+  // Login guard: every /member/* page (this layout) requires login. Skipped
+  // while wantsCheckout() is true — that case is already fully handled by the
+  // checkout-gate receiver below (goto(checkoutTarget(false))), which preserves
+  // the checkout intent through the login round-trip; the guard's own target
+  // would otherwise fire a second, competing goto() that drops it. 身分範圍
+  // (SessionScope) 反應式套用它(非「一次」),session 中途過期也抓得到。
+  const GUARD = (url: URL, auth: AuthState) => (wantsCheckout(url) ? null : memberGuardTarget(url.pathname, auth.loggedIn));
+
+  // 暖機清單(R14 候選 F3):本 surface 的共享角標 store——通知(Topbar/Sidebar 的未讀角標)。
+  // 交給身分範圍以身分為 key 暖:每個身分只打一次 GET(閘門守衛擋重訪、在飛合併擋掉同頁通知頁 load 的重複)。
+  const WARM: WarmSet = [['通知', hydrateNotifications]];
+</script>
+
 <script lang="ts">
   /* Member-centre shell: fixed sidebar + sticky top bar + scrolling content,
    * plus the cross-route checkout dialog and toast stack. The login route opts
-   * out of this layout via +page@.svelte. */
+   * out of this layout via +page@.svelte. 守門、暖機與頁面壽命交給身分範圍
+   * (SessionScope,包住 slot)。 */
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto, replaceState } from '$app/navigation';
@@ -9,23 +30,11 @@
   import Topbar from '$lib/member/components/Topbar.svelte';
   import CheckoutDialog from '$lib/member/components/CheckoutDialog.svelte';
   import ToastStack from '$lib/components/toast/ToastStack.svelte';
-  import { checkoutOpen, toasts, hydrateNotifications } from '$lib/member/stores';
-  import { isLoggedIn, sessionKey, lastSessionKey } from '$lib/stores/authStore';
-  import { warmStores } from '$lib/store-warm';
-  import { wantsCheckout, checkoutTarget } from '$lib/checkout-gate';
-  import { memberGuardTarget } from './guard';
+  import SessionScope from '$lib/components/SessionScope.svelte';
+  import { checkoutOpen, toasts } from '$lib/member/stores';
+  import { isLoggedIn } from '$lib/stores/authStore';
+  import { checkoutTarget } from '$lib/checkout-gate';
   import '$lib/member/member.css';
-
-  // Login guard: every /member/* page (this layout) requires login. Skipped
-  // while wantsCheckout() is true — that case is already fully handled by the
-  // checkout-gate receiver below (goto(checkoutTarget(false))), which preserves
-  // the checkout intent through the login round-trip; the guard's own target
-  // would otherwise fire a second, competing goto() that drops it. Reactive
-  // (not "once"), so a session that expires mid-visit still gets caught.
-  $: if (browser && !wantsCheckout($page.url)) {
-    const guardTarget = memberGuardTarget($page.url.pathname, $isLoggedIn);
-    if (guardTarget) goto(guardTarget);
-  }
 
   // Receiver half of the checkout gate. A landing URL carrying ?checkout=1
   // auto-opens the checkout dialog — but ONLY for a logged-in member; a guest who
@@ -44,15 +53,6 @@
     }
   }
 
-  // 暖機清單(R14 候選 F3):本 surface 的共享角標 store——通知(Topbar/Sidebar 的未讀角標)。
-  // 以身分為 key 反應式呼叫:已登入(守門此時不導走)時 key 為 member.id,否則 null;key 不變
-  // 就不重跑。每個身分只打一次 GET——閘門守衛擋重訪、在飛合併擋掉同頁通知頁 load 的重複、
-  // 換身分時閘門自己重置。
-  $: if (browser && $sessionKey !== null) void warmStores('member +layout', [['通知', hydrateNotifications]]);
-
-  // 頁面壽命 = 最近登入的身分:下方 slot 以 {#key $lastSessionKey} 包住,換人(A→B、null→A)即重掛載、
-  // 以新身分重抓;登出(→null)不重掛載,交給 guard 導頁(ADR-0026 §6:閘門本身不得用 lastSessionKey)。
-
   const TITLES: Record<string, string> = {
     '/member': '會員中心',
     '/member/courses': '課程介紹',
@@ -70,7 +70,7 @@
   <Sidebar />
   <div class="main">
     <Topbar {title} />
-    <div class="content df-scroll">{#key $lastSessionKey}<slot />{/key}</div>
+    <div class="content df-scroll"><SessionScope guard={GUARD} caller="member +layout" warm={WARM}><slot /></SessionScope></div>
   </div>
   <CheckoutDialog />
   <ToastStack {toasts} />

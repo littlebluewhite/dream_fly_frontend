@@ -20,6 +20,15 @@ everywhere regardless of surface.
 | Mobile (member) | `/mobile/*` | nested layout + overlay host |
 | Mobile-admin (staff) | `/mobile-admin/*` (`admin` + `coach`) | nested layout + overlay host |
 
+Four of the nested layouts — member, mobile, coach and mobile-admin — depend on who is logged in. Each hands
+its slot to the **session scope** (身分範圍, `src/lib/components/SessionScope.svelte`) and declares only its
+own inputs as module-level constants: a guard `(url, auth) → redirect target | null`, a warm set, and, where
+it has one, the overlay to close (mobile-admin also passes `warmIn` = "in the coach section"). The scope does
+the guard's `goto`, warms only the identity the guard admits (keyed on `$sessionKey`), wraps the slot in
+`{#key $lastSessionKey}` (page lifetime, below) and closes the overlay on an account switch. What is
+specific to a surface stays in its layout: member's checkout receiver, each `afterNavigate`, and the
+chrome outside the key (CheckoutDialog, TabBar…). The root and admin layouts don't use it (`docs/adr/0028` §2).
+
 (Adding a new surface has a wiring rule — see the `coding-standards` skill → `references/frontend.md`.)
 
 ## `src/lib` is organized by surface, not by file type
@@ -172,8 +181,10 @@ gate resets through its production path; there are no per-store `reset…ForTest
 `resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
 with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
-`page-lifetime.ts` (`describePageLifetime(name, Layout, baseRoutes?)` — the shared "page lifetime = login
-identity" scenarios the four identity-dependent layout tests run, `docs/adr/0028` §2); and fixtures
+`page-lifetime.ts` (`describePageLifetime(name, Component, baseRoutes?, props?)` — the "page lifetime = login
+identity" scenarios, run once against the session scope; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
+one A→B scenario each of the four identity-dependent layout tests runs to prove its slot goes through the
+scope, `docs/adr/0028` §2); and fixtures
 such as `coach-routes.ts`, `member-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
 `src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
 itself (it's the module being scanned *for*, not a production consumer).
@@ -206,10 +217,10 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   `bindSessionIdentity`, which `authStore` registers so `client.ts` needn't import it) and retries a 401 only
   if the identity is unchanged both before and after the refresh; otherwise it throws `ApiError(401)` rather
   than resend the old screen's request on the new identity's token (`docs/adr/0028` §1). Page lifetime
-  follows identity too: the member/mobile/coach/mobile-admin layouts wrap their slot in
-  `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once someone has logged
-  in — so switching accounts remounts the page (and mobile/mobile-admin close their overlays) while logging
-  out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
+  follows identity too: the session scope that the member/mobile/coach/mobile-admin layouts hand their slot
+  to wraps it in `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once
+  someone has logged in — so switching accounts remounts the page (and closes the overlays mobile/mobile-admin
+  pass it) while logging out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
   `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
   user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any
   other user id and leaves the identity key alone, so no session gate resets.
@@ -450,8 +461,9 @@ generation-stable refetch loop, so a cancel landing inside that window discards 
 refetches instead of reverting the row to pending (`docs/adr/0016`, `docs/adr/0020` — which records
 extending mutation-wins into refresh as an explicit rejection).
 
-Separately, each surface's layout declares a **warm set** — the shared stores its shell reads before any
-page does — and calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on identity
+Separately, each surface's layout declares a **warm set** (a module-level `WarmSet` constant) — the shared
+stores its shell reads before any page does — and hands it to the session scope, which calls
+`src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on the identity its guard admits
 (`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), the desktop coach
 layout and mobile-admin (coach section only, keyed on the route section, not the account's roles) warm
 the coach conversation list (the desktop Sidebar's 訊息中心 badge and the mobile TabBar badge both read
@@ -596,8 +608,8 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   the checkout's existing rejection chains).
 
 Both factories share one private identity core, keyed by `sessionIdentity(auth)` — an exported pure
-function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
-mobile-admin layouts' warm keys call too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
+function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the session
+scope's warm key (`$sessionKey`) calls too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
 immediate callback only records who is logged in, so a restored (or guest) boot fires no reset at all —
 reset value equals boot value, so nothing on screen differs — and declaration order at call sites is not
 a contract. On a real identity change `createSessionGate` calls its underlying `gate.reset()`
