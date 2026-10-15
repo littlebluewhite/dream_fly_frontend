@@ -256,4 +256,37 @@ describe('api() — 401 重送只替發出當下的身分', () => {
     expect(err.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  // codex R21 P1:refreshFor() 的最後一次身分檢查在它自己的 promise settle 之前,api() 恢復前還有 microtask
+  // 空檔;本分頁換登成 B 若落在空檔裡,A 的寫入就帶 B 的 token 重送。B 落地的時點不論早晚(掃過每個
+  // microtask 偏移),重送都不得帶 B 的 token。
+  it('401 retry is dropped when the identity changes between the refresh settling and the resend', async () => {
+    for (let ticks = 0; ticks < 20; ticks++) {
+      endSession();
+      localStorage.clear();
+      signedIn('access-A', 'refresh-A');
+      let releaseRefresh: ((r: unknown) => void) | undefined;
+      const fetchMock = vi.fn((url: string, _init: RequestInit) => {
+        if (url === `${BASE}/auth/refresh`) return new Promise((r) => (releaseRefresh = r));
+        return Promise.resolve(
+          fetchMock.mock.calls.length === 1
+            ? jsonResponse({ error: 'token expired' }, 401, 'Unauthorized')
+            : jsonResponse({ id: 'order-1' })
+        );
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const pending = api('/orders', { method: 'POST', body: '{}' }).catch((e) => e);
+      await vi.waitFor(() => expect(releaseRefresh).toBeDefined());
+      releaseRefresh!(jsonResponse({ access_token: 'access-A2', refresh_token: 'refresh-A2', user: USER_A }));
+      for (let i = 0; i < ticks; i++) await Promise.resolve();
+      signedIn('access-B', 'refresh-B', USER_B); // 本分頁換登成 B
+      await pending;
+
+      const bearers = fetchMock.mock.calls
+        .filter(([url]) => url === `${BASE}/orders`)
+        .map(([, init]) => (init.headers as Headers).get('Authorization'));
+      expect(bearers, `B landed after ${ticks} microtasks`).not.toContain('Bearer access-B');
+    }
+  });
 });

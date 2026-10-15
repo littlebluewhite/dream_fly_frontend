@@ -60,11 +60,13 @@ export async function api<T>(path: string, init: RequestInit & { auth?: boolean 
 
   // 只替發出請求的那個畫面身分重送:發出時記下身分,遇 401 交給核心的 refreshFor(issuedBy)——refresh 前後
   // 身分都沒變才重送,否則(換登、或 refresh 換出別人的憑證)丟 401,不得用新身分的憑證替舊畫面的寫入重送。
+  // refreshFor 的 promise settle 到這裡恢復之間還有 microtask 空檔(換登可能落在其中),所以重送前要在
+  // 同一拍再比一次身分,比完立刻同步掛上 Bearer 送出。
   const issuedBy = currentIdentity();
   const response = await sendRequest(path, requestInit, useAuth);
 
   if (response.status === 401 && useAuth) {
-    if (!(await refreshFor(issuedBy))) {
+    if (!(await refreshFor(issuedBy)) || currentIdentity() !== issuedBy) {
       throw new ApiError(401, await parseErrorMessage(response));
     }
     return parseResponse<T>(await sendRequest(path, requestInit, useAuth));

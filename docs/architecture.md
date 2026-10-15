@@ -218,7 +218,9 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   the core switches to them in the same tick (`beginSession(); applyUser(user)`), so the token and the
   on-screen identity never diverge. `api()` records the on-screen identity when it sends (the core's
   `currentIdentity()`) and on a 401 asks the core's `refreshFor(issuedBy)`, which refreshes only for that
-  identity and says yes only if it is unchanged both before and after the refresh; otherwise `api()` throws
+  identity and says yes only if it is unchanged both before and after the refresh; `api()` then re-checks
+  `currentIdentity()` synchronously right before the resend (a login can land in the microtask gap after
+  `refreshFor` settles). Otherwise `api()` throws
   `ApiError(401)` rather than resend the old screen's request on the new identity's token (`docs/adr/0028` §1).
   The core imports neither `client.ts` nor `authStore.ts`, so no callback hook runs between them and there
   is no import cycle. Page lifetime

@@ -142,7 +142,9 @@ export function currentIdentity(): string | null {
 }
 
 /** api() 遇 401 時呼叫:只替發出請求的那個畫面身分 refresh。發出後身分已變 → 不 refresh;refresh 換出了
- *  別人的憑證(身分跟著同拍換掉)→ 也回 false。只有 refresh 成功且前後身分都是 `issuedBy` 才回 true——
+ *  別人的憑證(身分跟著同拍換掉)→ 也回 false。只有 refresh 成功且前後身分都是 `issuedBy` 才回 true。
+ *  true 只代表 settle 那一拍的身分仍是 `issuedBy`:呼叫端 await 恢復前還有 microtask 空檔,換登可能落在
+ *  其中,所以重送前必須自己同步再比一次 `currentIdentity() === issuedBy`(api() 就這樣做)——
  *  不得用新身分的憑證替舊畫面的寫入重送。 */
 export async function refreshFor(issuedBy: string | null): Promise<boolean> {
   if (currentIdentity() !== issuedBy) return false;

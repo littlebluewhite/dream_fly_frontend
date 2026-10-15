@@ -142,7 +142,8 @@ compare-and-set/clear 與 401 重送規則住在 `client.ts`。兩半靠三支 c
   單飛 + Web Lock + 拒絕表 + compare-and-set/clear(從 `client.ts` 原樣搬來);compare-and-set 成功、而 refresh 回的 `user` 是
   別人時同一拍換身分;唯一的清除點直接設 `LOGGED_OUT`;`hydrateSession` 與跨分頁 `storage` listener。
 - **給 `client.ts` 的介面**:`accessToken()`、`currentIdentity()`、`refreshFor(issuedBy)`。「只替發出請求的身分重送」搬進
-  核心:發出後身分已變、或 refresh 換出了別人,`refreshFor` 都回 false,`api()` 丟 `ApiError(401)`。
+  核心:發出後身分已變、或 refresh 換出了別人,`refreshFor` 都回 false,`api()` 丟 `ApiError(401)`。`refreshFor` 回 true
+  到 `api()` 恢復之間仍有 microtask 空檔,所以 `api()` 重送前還要同步再比一次 `currentIdentity() === issuedBy`。
 - **給 `authStore.ts` 的介面**:`loginState`、`startSession(res)`(原 `authStore` 私有的 `applySession`)、`endSession()`
   (回傳被丟掉的 refresh token,給 best-effort revoke)、`hydrateSession(fetchMe)`、`watchOtherTabs(fetchMe)`、`syncUser`。
   `fetchMe = () => api('/users/me')` 是 transport port,既有的 client mock 照樣攔得到。
