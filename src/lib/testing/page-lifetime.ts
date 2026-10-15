@@ -1,7 +1,9 @@
-/* Dream Fly — 「頁面壽命 = 登入身分」的共用情境(R18 W2)。
+/* Dream Fly — 「頁面壽命 = 登入身分」的共用情境(R18 W2;R21 F3 起機制住身分範圍)。
  *
- * 四個身分相依 layout(member / mobile / coach / mobile-admin)都以 {#key $lastSessionKey} 包住 slot,
- * 情境相同:換人 → 以新身分重掛載重抓、A 遲到的回應不得顯示;同身分重設 → 不重抓;登出 → 不重掛載。
+ * 身分範圍(`$lib/components/SessionScope.svelte`)以 {#key $lastSessionKey} 包住 slot,情境:換人 → 以新身分
+ * 重掛載重抓、A 遲到的回應不得顯示;同身分重設 → 不重抓;登出 → 不重掛載。
+ *   - describePageLifetime:整組情境,在 SessionScope.test 對身分範圍跑一次(props 原樣轉給元件)。
+ *   - describeKeyedSlot:四個身分相依 layout 各跑一次的宣告測試——只證明 slot 真的交給了身分範圍(A→B 重掛載)。
  * 呼叫端的測試檔負責 vi.mock(authStore 用 makeAuthMockA,memberFor 以 email 當 member.id;
  * $lib/api/client 的 api 換成 vi.fn)。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -13,43 +15,57 @@ import { resetSessionStores } from '$lib/testing/session-reset';
 import LayoutProbe from '$lib/testing/layout-probe.fixture.svelte';
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
+const probeCalls = () => vi.mocked(api).mock.calls.filter(([p]) => String(p).startsWith('/probe/')).map(([p]) => p);
 
-export function describePageLifetime(name: string, Layout: unknown, baseRoutes: Record<string, unknown> = {}) {
-	const probeCalls = () => vi.mocked(api).mock.calls.filter(([p]) => String(p).startsWith('/probe/')).map(([p]) => p);
+/** 每個情境前登出、重置 session 閘門,api 換成 baseRoutes + 探針路由(A 的回應扣住);回傳「放行 A 的回應」。 */
+function useProbeRoutes(baseRoutes: Record<string, unknown>): (data: string) => void {
+	let resolveA: (v: string) => void = () => {};
+	beforeEach(async () => {
+		authStore.logout();
+		await resetSessionStores();
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				...baseRoutes,
+				'GET /probe/a': () => new Promise<string>((r) => (resolveA = r)),
+				'GET /probe/b': 'data-of-b'
+			})
+		);
+	});
+	return (data) => resolveA(data);
+}
 
+function itRemountsOnSwap(Component: unknown, props: Record<string, unknown>, releaseA: (data: string) => void) {
+	it('A→B 以 B 重抓;A 遲到的回應被丟掉(畫面只剩 B 的資料)', async () => {
+		await authStore.login('a', 'pw');
+		render(LayoutProbe, { props: { Layout: Component, props } });
+		await settle();
+		expect(probeCalls()).toEqual(['/probe/a']);
+
+		await authStore.login('b', 'pw');
+		await settle();
+		expect(probeCalls()).toEqual(['/probe/a', '/probe/b']);
+
+		releaseA('data-of-a');
+		await settle();
+		expect(screen.getAllByTestId('probe')).toHaveLength(1);
+		expect(screen.getByTestId('probe').textContent).toBe('data-of-b');
+	});
+}
+
+export function describePageLifetime(
+	name: string,
+	Component: unknown,
+	baseRoutes: Record<string, unknown> = {},
+	props: Record<string, unknown> = {}
+) {
 	describe(`${name} — 頁面壽命 = 登入身分`, () => {
-		let resolveA: (v: string) => void;
-		beforeEach(async () => {
-			authStore.logout();
-			await resetSessionStores();
-			vi.mocked(api).mockImplementation(
-				fakeRouter({
-					...baseRoutes,
-					'GET /probe/a': () => new Promise<string>((r) => (resolveA = r)),
-					'GET /probe/b': 'data-of-b'
-				})
-			);
-		});
+		const releaseA = useProbeRoutes(baseRoutes);
 
-		it('A→B 以 B 重抓;A 遲到的回應被丟掉(畫面只剩 B 的資料)', async () => {
-			await authStore.login('a', 'pw');
-			render(LayoutProbe, { Layout });
-			await settle();
-			expect(probeCalls()).toEqual(['/probe/a']);
-
-			await authStore.login('b', 'pw');
-			await settle();
-			expect(probeCalls()).toEqual(['/probe/a', '/probe/b']);
-
-			resolveA('data-of-a');
-			await settle();
-			expect(screen.getAllByTestId('probe')).toHaveLength(1);
-			expect(screen.getByTestId('probe').textContent).toBe('data-of-b');
-		});
+		itRemountsOnSwap(Component, props, releaseA);
 
 		it('同一個身分再設一次 → 只讀 1 次', async () => {
 			await authStore.login('b', 'pw');
-			render(LayoutProbe, { Layout });
+			render(LayoutProbe, { props: { Layout: Component, props } });
 			await settle();
 			await authStore.login('b', 'pw');
 			await settle();
@@ -58,12 +74,18 @@ export function describePageLifetime(name: string, Layout: unknown, baseRoutes: 
 
 		it('登出 → 不重掛載(導頁交給 guard,不在導頁前用沒有 token 的狀態再讀一次)', async () => {
 			await authStore.login('b', 'pw');
-			render(LayoutProbe, { Layout });
+			render(LayoutProbe, { props: { Layout: Component, props } });
 			await settle();
 			await authStore.logout();
 			await settle();
 			expect(probeCalls()).toEqual(['/probe/b']);
 			expect(screen.getByTestId('probe').textContent).toBe('data-of-b');
 		});
+	});
+}
+
+export function describeKeyedSlot(name: string, Layout: unknown, baseRoutes: Record<string, unknown> = {}) {
+	describe(`${name} — slot 交給身分範圍(頁面壽命 = 登入身分)`, () => {
+		itRemountsOnSwap(Layout, {}, useProbeRoutes(baseRoutes));
 	});
 }

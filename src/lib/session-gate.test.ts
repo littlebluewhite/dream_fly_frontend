@@ -40,7 +40,7 @@ function settleReconcile() {
 	return new Promise<void>((r) => setTimeout(r, 0));
 }
 
-/** authStore.login() 走真實 applySession(setTokens + 登入態),登出/換帳號邊沿才有得測。 */
+/** authStore.login() 走真實 startSession(setTokens + 登入態),登出/換帳號邊沿才有得測。 */
 const AUTH_RES = {
 	access_token: 'at-f1',
 	refresh_token: 'rt-f1',

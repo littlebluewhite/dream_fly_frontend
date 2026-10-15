@@ -4,7 +4,9 @@
  * localStorage so it can't be read back after a reload or exfiltrated the same
  * way a persisted value could). Refresh token persists to localStorage so a
  * page reload doesn't force a re-login; it rotates on every successful
- * refresh (see client.ts). */
+ * refresh. This is the 登入狀態 core's private storage adapter: only
+ * stores/login-state.ts imports it in production (pinned by the import-scan
+ * contract), so tokens are never written outside the core. */
 
 export const REFRESH_KEY = 'dreamfly_refresh';
 

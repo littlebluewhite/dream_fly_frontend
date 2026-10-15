@@ -15,24 +15,30 @@ _Avoid_: 使用者(指訪客時), 家長
 _Avoid_: 使用者
 
 **登入狀態 (Login State)**:
-這個分頁此刻是不是登入、登入的是誰——`$authStore` 的 `{ loggedIn, member, roles }`,單一 owner 是
-`src/lib/stores/authStore.ts`(身分 key `sessionIdentity()` 也住這裡)。真相是共用的 refresh token
+這個分頁此刻是不是登入、登入的是誰——`$authStore` 的 `{ loggedIn, member, roles }`,單一 owner 是登入狀態核心
+`src/lib/stores/login-state.ts`(token 對、refresh 單飛與跨分頁鎖、拒絕表、compare-and-set/clear、session 世代、
+身分 key `sessionIdentity()`、水合與 `storage` listener 都住這裡);`authStore.ts` 是對外門面,打 `/auth/*` 後把結果交給
+核心(`startSession`/`endSession`/`hydrateSession(fetchMe)`/`watchOtherTabs(fetchMe)`/`syncUser`),`$authStore` 就是核心的
+`loginState`。`api()` 只是向核心要憑證的 transport(`accessToken()`/`currentIdentity()`/`refreshFor(issuedBy)`);核心不
+import client 與 authStore(`/users/me` 由 authStore 以 `fetchMe` 傳入),production 只有核心能 import token 儲存 adapter
+`api/tokens.ts`(import-scan 契約)。真相是共用的 refresh token
 (`dreamfly_refresh`);`dreamfly_auth` 只是首屏快取。四種事件會改變它,全都只是 `set` 這顆 store,
 守門導向、session 閘門重置與結帳導向都沿用既有的身分改變那條邊:本分頁登入/登出;後端明確拒絕 refresh(400/401/403)而
-`client.ts` 真的清掉 token(網路錯誤、408/429 與 5xx 不清、不登出)(`onSessionExpired` 訊號,只在 `performRefresh()` 的唯一清除點發出);別的
+核心真的清掉 token(網路錯誤、408/429 與 5xx 不清、不登出)(只在 `performRefresh()` 的唯一清除點登出);別的
 分頁改了 storage(`storage` listener,只看**目前 storage**:沒 refresh token → 登出;快取身分是另一位
 已登入者 → 重新水合,水合後仍不是那位(refresh 暫時不可用)就登出;refresh token 只被輪替 → 不動,否則分頁會互相觸發 refresh)。access token 只住
 各分頁記憶體,跨分頁變化時用 `forgetAccess()` 丟掉本分頁那顆,不碰共用的 refresh token(見
 `docs/adr/0006` R17 增補)。第四種:refresh 換出**別人**的憑證(別的分頁已換登、本分頁還沒收到 `storage` 事件)——
-`client.ts` 在 compare-and-set 成功後發 `onSessionRefreshed(user)`,`authStore` 發現 id 不同就同一拍換成那位,
+核心在 compare-and-set 成功時發現 refresh 回的 `user` id 不同,就同一拍換成那位,
 token 與畫面身分永不分頭換(refresh 成功但 `/users/me` 失敗也停在新身分)。**401 重送規則**:`api()` 發請求時記下
-當下的畫面身分(`bindSessionIdentity` 由 `authStore` 註冊讀法,避免 import 成環),只有 refresh 前後身分都沒變
+當下的畫面身分(核心的 `currentIdentity()`),遇 401 交給核心的 `refreshFor(issuedBy)`,只有 refresh 前後身分都沒變
 才重送,否則丟 `ApiError(401)`——舊畫面的寫入不得以新身分的憑證送出。**頁面壽命**:`lastSessionKey`
-(`lastLoggedIn(sessionKey)`,登出時不通知、保留上一個身分)是 member/mobile/coach/mobile-admin layout
-`{#key}` 的 key,換人即重掛載頁面、登出不重掛載(交給 guard 導頁);閘門不得用它(見 `docs/adr/0028` §1–§2)。
+(`lastLoggedIn(sessionKey)`,登出時不通知、保留上一個身分)是身分範圍 `{#key}` 的 key(member/mobile/coach/mobile-admin
+layout 把 slot 交給它),換人即重掛載頁面、登出不重掛載(交給 guard 導頁);閘門不得用它(見 `docs/adr/0028` §1–§2)。
 _Avoid_: 登入態(混用時統一用「登入狀態」), 看 `dreamfly_auth` 判斷是否登入(那是快取), 在 listener 裡
 因為 refresh key 變了就重新水合, 畫面身分與 token 分頭換(token 已是 B、畫面仍是 A;或 401 重試以 B 的憑證替 A 的
-畫面重送), 閘門以 `lastSessionKey` 為 key(它吞掉登出)
+畫面重送), 閘門以 `lastSessionKey` 為 key(它吞掉登出), client 與 authStore 之間的 callback hook(`onSessionExpired`/
+`onSessionRefreshed`/`bindSessionIdentity` 已退役), 在核心以外寫 token
 
 **本人帳號資料 (Self Account)**:
 任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
@@ -209,8 +215,8 @@ domain store 對「會員身分變更」(登入/登出、或不經整頁重載�
 `createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄 + 後發優先,供點數/訂閱:與水合閘門共用出發序帳,
 先查 epoch 再問 `overtaken`,被超車的落地一樣靜默丟棄——開啟結帳的舊快照較晚落地,不再蓋回付款後的、
 把已持有的方案又變成計費行;帳本不隨身分重置,換帳前出發的落地先被 epoch 擋掉)。「身分」的 key 由 `authStore.ts`
-(身分的 owner,見「登入狀態」)匯出的純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
-閘門內部與 member/mobile/coach/mobile-admin layout 的暖機 key 都呼叫它,
+(轉出登入狀態核心 `login-state.ts`,見「登入狀態」)匯出的純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
+閘門內部與身分範圍的暖機 key(`$sessionKey`)都呼叫它,
 不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
 restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(reset 值 = 開機值,畫面無差別),宣告順序
 不是契約。`queueWrite` 排進同一條寫入鏈:輪到時身分已換就跳過,換帳號即重置這條鏈(見
@@ -232,10 +238,10 @@ _Avoid_: 訊息列、`MessageRow`(已退役的 mobile-admin 列投影)、頁面�
 已讀／送出／新對話的列表更新;`getDashboard()` 這類 getter 順手抓對話
 
 **暖機清單 (Warm Set)**:
-在任何頁面之前就要讀的共享 store 清單,以身分為 key 呼叫 `$lib/store-warm` 的
+在任何頁面之前就要讀的共享 store 清單(型別 `WarmSet`),以身分為 key 呼叫 `$lib/store-warm` 的
 `warmStores(caller, tasks)`(best-effort:`Promise.allSettled`,單項失敗只記 log)。有兩層宣告點:
-一個 surface 的外殼(Topbar/Sidebar/TabBar)由該 surface 的 `+layout.svelte` 宣告(member/mobile 暖
-通知,coach 桌面與 mobile-admin 的教練分區暖教練對話列表);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
+一個 surface 的外殼(Topbar/Sidebar/TabBar)由該 surface 的 `+layout.svelte` 宣告成 module-level 常數、交給身分範圍暖
+(只替守門放行的身分暖;member/mobile 暖通知,coach 桌面與 mobile-admin 的教練分區暖教練對話列表);**個別頁面也可以宣告自己的暖機清單**,與該頁的主 GET 一起
 用 `Promise.all` 並行出發——`member/mine`(候補清單、我的請假)、`member/account`(點數、訂閱)、
 `mobile/account`(點數)三頁這麼做(見 `docs/adr/0025` F-2、
 `docs/adr/0012` K7)。行銷外殼也有一份:根 `+layout.svelte` 在非 app surface 以身分為 key 暖訂閱,供購物車頁與
@@ -245,6 +251,18 @@ _Avoid_: 訊息列、`MessageRow`(已退役的 mobile-admin 列投影)、頁面�
 `docs/adr/0024`)。
 _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看不出這一層);seed teaser(開機先顯示
 種子裡的假數字)
+
+**身分範圍 (Session Scope)**:
+身分相依 surface 的外殼機制,單一來源 `src/lib/components/SessionScope.svelte`;member/mobile/coach/mobile-admin
+四個 layout 把 slot 交給它,只交出自己的宣告:守門函式 `guard(url, 登入狀態) → 導向目標 | null`、暖機清單
+(兩者寫成 layout 的 module-level 常數)、`caller`、可選的 `warmIn(url)`(預設 true;mobile-admin 傳「是否在教練分區」)
+與 `overlay`。它負責四件事:guard 回傳目標就 `goto`(反應式,session 中途過期也抓得到);暖機准入——
+`warmKey = guard(…) === null && warmIn(url) ? $sessionKey : null`,有值才暖,所以每個身分暖一次、A→B 重暖、
+登出與被導走的身分不暖;頁面壽命——`{#key $lastSessionKey}<slot/>{/key}`;`$lastSessionKey` 非 null 時
+`overlay?.closeAll()`。結帳接收(member)、`afterNavigate` 與 key 外面的外框(CheckoutDialog、TabBar…)留在各 layout。
+root 與 admin layout 不用它(見 `docs/adr/0028` §2)。它不是集中登記的 registry(沒有 module-level 清單,import
+無副作用),也不是身分 hook(不提供訂閱 API,只讀 `sessionKey`/`lastSessionKey`)。
+_Avoid_: 在 layout 手抄守門 → `goto`、暖機 key 或 `{#key $lastSessionKey}`;外殼(shell)統稱這套機制(外殼指 Topbar/Sidebar/TabBar 那層畫面)
 
 **顯示查表 (Display Lookup)**:
 狀態/類型 → tone/label(部分為純 tone,狀態字面本身即顯示標籤)對照表;單一來源集中在 `$lib/domain`

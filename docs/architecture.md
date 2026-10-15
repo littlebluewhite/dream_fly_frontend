@@ -20,6 +20,15 @@ everywhere regardless of surface.
 | Mobile (member) | `/mobile/*` | nested layout + overlay host |
 | Mobile-admin (staff) | `/mobile-admin/*` (`admin` + `coach`) | nested layout + overlay host |
 
+Four of the nested layouts — member, mobile, coach and mobile-admin — depend on who is logged in. Each hands
+its slot to the **session scope** (身分範圍, `src/lib/components/SessionScope.svelte`) and declares only its
+own inputs as module-level constants: a guard `(url, auth) → redirect target | null`, a warm set, and, where
+it has one, the overlay to close (mobile-admin also passes `warmIn` = "in the coach section"). The scope does
+the guard's `goto`, warms only the identity the guard admits (keyed on `$sessionKey`), wraps the slot in
+`{#key $lastSessionKey}` (page lifetime, below) and closes the overlay on an account switch. What is
+specific to a surface stays in its layout: member's checkout receiver, each `afterNavigate`, and the
+chrome outside the key (CheckoutDialog, TabBar…). The root and admin layouts don't use it (`docs/adr/0028` §2).
+
 (Adding a new surface has a wiring rule — see the `coding-standards` skill → `references/frontend.md`.)
 
 ## `src/lib` is organized by surface, not by file type
@@ -172,8 +181,10 @@ gate resets through its production path; there are no per-store `reset…ForTest
 `resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
 with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
-`page-lifetime.ts` (`describePageLifetime(name, Layout, baseRoutes?)` — the shared "page lifetime = login
-identity" scenarios the four identity-dependent layout tests run, `docs/adr/0028` §2); and fixtures
+`page-lifetime.ts` (`describePageLifetime(name, Component, baseRoutes?, props?)` — the "page lifetime = login
+identity" scenarios, run once against the session scope; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
+one A→B scenario each of the four identity-dependent layout tests runs to prove its slot goes through the
+scope, `docs/adr/0028` §2); and fixtures
 such as `coach-routes.ts`, `member-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
 `src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
 itself (it's the module being scanned *for*, not a production consumer).
@@ -183,8 +194,12 @@ itself (it's the module being scanned *for*, not a production consumer).
 Where the pieces live (the *rules* for changing them are in the `coding-standards` skill):
 
 - **auth-at-checkout**: guests browse and fill the cart freely; login is required **only** at 結帳
-  (checkout). Session lives in `lib/stores/authStore.ts`, backed by the real `/auth/*` API: access token
-  in memory only, refresh token in `localStorage` under `dreamfly_refresh` (`lib/api/tokens.ts`), rotated
+  (checkout). Login state (登入狀態) lives in one core, `lib/stores/login-state.ts`; `lib/stores/authStore.ts`
+  is its public face (`$authStore`, `login`/`register`/`loginWithGoogle`/`logout`/`hydrate`/`syncUser`), which
+  calls the real `/auth/*` API through `api()` and hands the results to the core (`startSession`/`endSession`/
+  `hydrateSession(fetchMe)`/`watchOtherTabs(fetchMe)`, with `fetchMe = () => api('/users/me')`). Access token
+  in memory only, refresh token in `localStorage` under `dreamfly_refresh` (`lib/api/tokens.ts`, the core's
+  private storage adapter — an `import-scan.test.ts` contract pins it to the core), rotated
   single-flight on 401 (see `docs/adr/0006`). The `dreamfly_auth` `localStorage` key is only a
   first-paint cache of the member profile (so the UI doesn't flash "logged out" before `hydrate()`
   resolves) — the actual truth is whether the refresh token is still valid against the server. Login state
@@ -192,24 +207,25 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   refresh single-flight clears tokens only on an explicit backend rejection (400/401/403 — never a 408,
   429 or 5xx) and only if the stored
   refresh token is still the one it sent (compare-and-clear; a successful rotation is stored under the
-  same condition, otherwise dropped so a newer login wins), then fires `client.ts`'s
-  `onSessionExpired` signal, which `authStore` turns into `LOGGED_OUT`; `authStore` also listens for
-  `storage` events and decides from the *current* storage only (no refresh token → log out; cached
+  same condition, otherwise dropped so a newer login wins), and at that single clear point the core goes
+  `LOGGED_OUT`; the core also listens for `storage` events (`watchOtherTabs`) and decides from the *current* storage only (no refresh token → log out; cached
   identity is a different logged-in member → drop this tab's access token and re-hydrate, logging out
   if the tab still isn't the member storage held when the event fired — now only reachable when the refresh
   was unavailable; plain
   rotation → do nothing, otherwise tabs would trigger each other's refresh forever). A stored rotation also
-  fires `onSessionRefreshed(user)` with the `user` the `/auth/refresh` response carries; if that user isn't
+  reads the `user` the `/auth/refresh` response carries; if that user isn't
   the tab's current identity (another tab switched accounts and this tab's `storage` event hasn't landed),
-  `authStore` switches to them in the same tick (`beginSession(); applyUser(user)`), so the token and the
-  on-screen identity never diverge. `api()` records the on-screen identity when it sends (read through
-  `bindSessionIdentity`, which `authStore` registers so `client.ts` needn't import it) and retries a 401 only
-  if the identity is unchanged both before and after the refresh; otherwise it throws `ApiError(401)` rather
-  than resend the old screen's request on the new identity's token (`docs/adr/0028` §1). Page lifetime
-  follows identity too: the member/mobile/coach/mobile-admin layouts wrap their slot in
-  `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once someone has logged
-  in — so switching accounts remounts the page (and mobile/mobile-admin close their overlays) while logging
-  out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
+  the core switches to them in the same tick (`beginSession(); applyUser(user)`), so the token and the
+  on-screen identity never diverge. `api()` records the on-screen identity when it sends (the core's
+  `currentIdentity()`) and on a 401 asks the core's `refreshFor(issuedBy)`, which refreshes only for that
+  identity and says yes only if it is unchanged both before and after the refresh; otherwise `api()` throws
+  `ApiError(401)` rather than resend the old screen's request on the new identity's token (`docs/adr/0028` §1).
+  The core imports neither `client.ts` nor `authStore.ts`, so no callback hook runs between them and there
+  is no import cycle. Page lifetime
+  follows identity too: the session scope that the member/mobile/coach/mobile-admin layouts hand their slot
+  to wraps it in `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once
+  someone has logged in — so switching accounts remounts the page (and closes the overlays mobile/mobile-admin
+  pass it) while logging out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
   `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
   user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any
   other user id and leaves the identity key alone, so no session gate resets.
@@ -272,7 +288,10 @@ hydration flicker on a hard reload of a logged-in SSR page. Intentional follow-u
 Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobile`, `mobile-admin` — has
 `src/lib/<surface>/api.ts`: async getters over the real `dream_fly_backend` API (seam design:
 `docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). `public`, `admin`, `coach`, and `member`'s
-getters mostly call `api<T>()` (`lib/api/client.ts`); the handful of P2-commented gaps that have no
+getters mostly call `api<T>()` (`lib/api/client.ts`) — a plain transport that builds the URL with
+`lib/api/base-url.ts`'s `apiUrl()` and asks the 登入狀態 core (`lib/stores/login-state.ts`) for the Bearer
+token, the on-screen identity and the 401 refresh, so a test that mocks `$lib/api/client` still drives the
+real login state; the handful of P2-commented gaps that have no
 backend equivalent (or are purely cosmetic) return the mock/hardcoded value directly inside the same
 `async` getter — full inventory in `docs/adr/0006`. `mobile` and `mobile-admin` both hold an `api.ts` that
 re-delegates to the real getters built for their desktop counterpart (`mobile` → `$lib/member/api.ts`;
@@ -450,8 +469,9 @@ generation-stable refetch loop, so a cancel landing inside that window discards 
 refetches instead of reverting the row to pending (`docs/adr/0016`, `docs/adr/0020` — which records
 extending mutation-wins into refresh as an explicit rejection).
 
-Separately, each surface's layout declares a **warm set** — the shared stores its shell reads before any
-page does — and calls `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on identity
+Separately, each surface's layout declares a **warm set** (a module-level `WarmSet` constant) — the shared
+stores its shell reads before any page does — and hands it to the session scope, which calls
+`src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on the identity its guard admits
 (`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), the desktop coach
 layout and mobile-admin (coach section only, keyed on the route section, not the account's roles) warm
 the coach conversation list (the desktop Sidebar's 訊息中心 badge and the mobile TabBar badge both read
@@ -601,9 +621,9 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   identity change: numbers only climb, and a landing that left before the switch is dropped by the
   epoch check before it reaches the ledger.
 
-Both factories share one private identity core, keyed by `sessionIdentity(auth)` — an exported pure
-function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/
-mobile-admin layouts' warm keys call too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
+Both factories share one private identity core, keyed by `sessionIdentity(auth)` — a pure
+function re-exported from `stores/authStore.ts` (owned by the 登入狀態 core `stores/login-state.ts`; `null` when logged out, else `member.id`, degrading to `''`) that the session
+scope's warm key (`$sessionKey`) calls too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
 immediate callback only records who is logged in, so a restored (or guest) boot fires no reset at all —
 reset value equals boot value, so nothing on screen differs — and declaration order at call sites is not
 a contract. On a real identity change `createSessionGate` calls its underlying `gate.reset()`
