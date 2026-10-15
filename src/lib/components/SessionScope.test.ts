@@ -4,14 +4,14 @@
  * 只在這裡測一次;各 layout 的測試只留自己特有的宣告(守門函式、暖機清單、結帳接收、分區)。 */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/svelte';
-import { readable } from 'svelte/store';
+import { writable, type Writable } from 'svelte/store';
 import { tick } from 'svelte';
 import { goto } from '$app/navigation';
 
 let mockUrl = new URL('http://localhost/s/home');
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/stores', () => ({
-	page: readable({
+	page: writable({
 		get url() {
 			return mockUrl;
 		}
@@ -30,12 +30,23 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
+import { page } from '$app/stores';
 import { authStore, type AuthState } from '$lib/stores/authStore';
 import { describePageLifetime } from '$lib/testing/page-lifetime';
 import SessionScope from './SessionScope.svelte';
 
 /** 未登入導去登入頁(帶來源路徑),已登入放行——同 member/mobile 的守門形狀。 */
 const loginGuard = (url: URL, auth: AuthState) => (auth.loggedIn ? null : `/s/login?from=${url.pathname}`);
+
+/** 換到另一個網址:$page 送出新值(SvelteKit 每次導頁都會)。 */
+function navigate(path: string) {
+	mockUrl = new URL(`http://localhost${path}`);
+	(page as unknown as Writable<{ url: URL }>).set({
+		get url() {
+			return mockUrl;
+		}
+	});
+}
 
 beforeEach(() => {
 	mockUrl = new URL('http://localhost/s/home');
@@ -53,6 +64,22 @@ describe('SessionScope — 守門', () => {
 		await authStore.login('a', 'pw');
 		render(SessionScope, { guard: loginGuard, caller: 'test', warm: [] });
 		expect(goto).not.toHaveBeenCalled();
+	});
+
+	/** 不看網址、只認角色的守門:沒有 coach 角色一律導去同一個目標。 */
+	const coachOnly = (_url: URL, auth: AuthState) => (auth.roles.includes('coach') ? null : '/s/login?blocked=1');
+
+	it.each([
+		{ when: '換到另一個受守門的網址', change: async () => navigate('/s/other') },
+		{ when: '登入狀態變了(換成另一個同樣被擋的身分)', change: () => authStore.login('b', 'pw') }
+	])('目標字串沒變也再 goto:$when(前一次導頁被打斷也導得走)', async ({ change }) => {
+		await authStore.login('a', 'pw');
+		render(SessionScope, { guard: coachOnly, caller: 'test', warm: [] });
+		expect(goto).toHaveBeenCalledTimes(1);
+		await change();
+		await tick();
+		expect(goto).toHaveBeenCalledTimes(2);
+		expect(goto).toHaveBeenLastCalledWith('/s/login?blocked=1');
 	});
 });
 

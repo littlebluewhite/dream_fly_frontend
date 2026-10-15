@@ -21,8 +21,14 @@
   export let warmIn: (url: URL) => boolean = () => true;
   export let overlay: { closeAll(): void } | undefined = undefined;
 
-  $: target = guard($page.url, $authStore);
-  $: if (browser && target) goto(target);
+  // 每次 $page / $authStore 變動都重評估、有目標就 goto,不只在目標字串改變時(導頁被打斷後換到另一個
+  // 同目標的受守門網址也要再導)。target 只出現在 = 左邊,才不會變成這段的相依。
+  let target: string | null = null;
+  $: {
+    const to = guard($page.url, $authStore);
+    target = to;
+    if (browser && to) goto(to);
+  }
 
   $: warmKey = target === null && warmIn($page.url) ? $sessionKey : null;
   $: if (browser && warmKey !== null) void warmStores(caller, warm);
