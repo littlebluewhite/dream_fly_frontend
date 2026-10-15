@@ -1,3 +1,16 @@
+<script lang="ts" context="module">
+  import type { AuthState } from '$lib/stores/authStore';
+  import type { WarmSet } from '$lib/store-warm';
+  import { hydrateNotifications } from '$lib/member/notifications';
+  import { mobileGuardTarget } from './guard';
+
+  const GUARD = (url: URL, auth: AuthState) => mobileGuardTarget(url.pathname, auth.loggedIn);
+
+  // 暖機清單(R14 候選 F3):通知(TabBar 的未讀角標),與 member +layout 同一份宣告、同一顆閘門。
+  // 交給身分範圍以身分為 key 暖,每個身分只打一次 GET。
+  const WARM: WarmSet = [['通知', hydrateNotifications]];
+</script>
+
 <script lang="ts">
   /* 行動版會員 App · 共用外殼。負責 phone frame、tab bar、overlay host、toast、
    * 以及登入守門。
@@ -10,33 +23,16 @@
    * authStore/token 守門(同 member +layout 的 memberGuardTarget 模式)——
    * authStore.hydrate() 已由根 layout(src/routes/+layout.svelte)在 app mount
    * 時呼叫一次(對 refresh token 打 /auth/refresh + GET /users/me)，這裡只需
-   * reactive 讀 $isLoggedIn 決定要不要導去登入頁，不必重複 hydrate。Reactive
-   * (非 onMount 一次性)，session 過期時也能被抓到。 */
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
-  import { goto, afterNavigate } from '$app/navigation';
-  import { isLoggedIn, sessionKey, lastSessionKey } from '$lib/stores/authStore';
+   * 讀登入狀態決定要不要導去登入頁，不必重複 hydrate。守門(反應式，session 過期時也能被抓到)、
+   * 暖機、頁面壽命交給身分範圍(SessionScope，包住 slot);5 個 overlay 在 slot 外面也會讀個人資料，
+   * 交給它換人時一併關掉。 */
+  import { afterNavigate } from '$app/navigation';
   import { overlay, toasts } from '$lib/mobile/stores';
-  import { hydrateNotifications } from '$lib/member/notifications';
-  import { warmStores } from '$lib/store-warm';
-  import { mobileGuardTarget } from './guard';
+  import SessionScope from '$lib/components/SessionScope.svelte';
   import TabBar from '$lib/mobile/components/TabBar.svelte';
   import OverlayHost from '$lib/mobile/OverlayHost.svelte';
   import ToastStack from '$lib/components/toast/ToastStackMobile.svelte';
   import '$lib/styles/mobile-frame.css';
-
-  $: if (browser) {
-    const target = mobileGuardTarget($page.url.pathname, $isLoggedIn);
-    if (target) goto(target);
-  }
-
-  // 暖機清單(R14 候選 F3):通知(TabBar 的未讀角標),與 member +layout 同一份宣告、同一顆閘門。
-  // 已登入(守門此時不導走)時 key 為 member.id,否則 null;每個身分只打一次 GET。
-  $: if (browser && $sessionKey !== null) void warmStores('mobile +layout', [['通知', hydrateNotifications]]);
-
-  // 頁面壽命 = 最近登入的身分:slot 以 {#key $lastSessionKey} 包住,換人即重掛載重抓;登出不重掛載,交給 guard。
-  // 5 個 overlay 在 slot 外面也會讀個人資料,換人時一併關掉。
-  $: if (browser && $lastSessionKey !== null) overlay.closeAll();
 
   afterNavigate(() => overlay.closeAll());
 </script>
@@ -45,7 +41,7 @@
   <div class="m-phone">
     <div class="m-island"></div>
     <div class="m-screen">
-      {#key $lastSessionKey}<slot />{/key}
+      <SessionScope guard={GUARD} caller="mobile +layout" warm={WARM} {overlay}><slot /></SessionScope>
       {#if $overlay.stack.length === 0}
         <TabBar />
       {/if}

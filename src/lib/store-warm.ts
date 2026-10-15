@@ -1,10 +1,14 @@
+/** 暖機清單 (Warm Set):[中文資源名, hydrate 函式] tuple 陣列。layout 的清單交給身分範圍
+ *  (`$lib/components/SessionScope.svelte`),頁面的清單直接交給 warmStores。 */
+export type WarmSet = ReadonlyArray<readonly [label: string, hydrate: () => Promise<void>]>;
+
 /**
  * 共享 store 暖機 helper(R14 候選 F3:自 member/api.ts 的私有 hydrateSessionStores 升格,
  * 改名 warmStores;語意與 log 格式逐字不變)。
  *
  * 兩類呼叫端:
- *   - 各 surface 的 layout 宣告自己的暖機清單(member/mobile:通知;mobile-admin 教練分區:
- *     訊息),以身分為 key 反應式呼叫——每個身分只打一次 GET:閘門守衛擋重訪、在飛合併
+ *   - 各 surface 的 layout 宣告自己的暖機清單(member/mobile:通知;coach 與 mobile-admin 教練分區:
+ *     訊息),交給身分範圍(SessionScope)以身分為 key 呼叫——每個身分只打一次 GET:閘門守衛擋重訪、在飛合併
  *     (R14 F2)擋掉同頁的重複、換身分時閘門自己重置。
  *   - 頁面自己的 gate.fetch(member/mine、member/account、mobile/account)與主 GET 並行
  *     暖機,清單由頁面決定(getMine/getAccount 本身已不再順手水合 store)。
@@ -24,10 +28,7 @@
  * @param caller 呼叫端名稱,作為 log 前綴(如 'member/account')
  * @param tasks [中文資源名, hydrate 函式] tuple 陣列
  */
-export async function warmStores(
-	caller: string,
-	tasks: ReadonlyArray<readonly [label: string, hydrate: () => Promise<void>]>
-): Promise<void> {
+export async function warmStores(caller: string, tasks: WarmSet): Promise<void> {
 	const results = await Promise.allSettled(tasks.map(([, hydrate]) => hydrate()));
 	results.forEach((result, i) => {
 		if (result.status === 'rejected') console.error(`${caller}: ${tasks[i][0]} hydrate 失敗`, result.reason);

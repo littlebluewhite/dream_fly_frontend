@@ -29,14 +29,15 @@ vi.mock('$lib/stores/authStore', async () => {
   return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
 });
 
-// R14(候選 F3)暖機清單:layout 以身分為 key 暖通知——只替換 api(),數 GET /notifications。
+// R14(候選 F3)暖機清單:layout 宣告通知、交給身分範圍暖——只替換 api(),數 GET /notifications。
+// 守門、暖機准入、頁面壽命的機制在 $lib/components/SessionScope.test.ts 測一次;這裡只留本 layout 的宣告。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
 
 import Layout from './+layout.svelte';
-import { describePageLifetime } from '$lib/testing/page-lifetime';
+import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
   localStorage.clear();
@@ -107,13 +108,6 @@ describe('member +layout — 暖機清單(R14 F3)', () => {
     await settle();
     expect(notifGets()).toBe(1);
   });
-
-  it('未登入零次(守門導走)', async () => {
-    mockUrl = new URL('http://localhost/member');
-    render(Layout);
-    await settle();
-    expect(notifGets()).toBe(0);
-  });
 });
 
-describePageLifetime('member +layout', Layout, { 'GET /notifications': [] });
+describeKeyedSlot('member +layout', Layout, { 'GET /notifications': [] });

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readable } from 'svelte/store';
 
-/* coach +layout 的頁面壽命:slot 以 {#key $lastSessionKey} 包住,換人即以新身分重掛載重抓。
- * 教練 layout 的 guard 讀 $authStore.roles,所以登入的身分帶 coach 角色。 */
+/* coach +layout 的宣告:教練角色守門與暖機清單(教練對話列表),slot 交給身分範圍。守門、暖機准入、頁面壽命的
+ * 機制在 $lib/components/SessionScope.test.ts 測一次。教練 layout 的 guard 讀 $authStore.roles,所以登入的身分帶 coach 角色。 */
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/coach') })
@@ -27,13 +27,12 @@ import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { resetSessionStores } from '$lib/testing/session-reset';
-import { hydrateConversations } from '$lib/coach/conversations';
-import { describePageLifetime } from '$lib/testing/page-lifetime';
+import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 import Layout from './+layout.svelte';
 
 afterEach(() => vi.clearAllMocks());
 
-// R20 候選 02:coach layout 以身分為 key 暖教練對話列表(桌面側欄的訊息中心角標讀它)——
+// R20 候選 02:coach layout 宣告教練對話列表、交給身分範圍暖(桌面側欄的訊息中心角標讀它)——
 // 只替換 api(),數 GET /conversations/me。
 describe('coach +layout — 暖機清單(R20)', () => {
 	const convGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/conversations/me').length;
@@ -57,37 +56,12 @@ describe('coach +layout — 暖機清單(R20)', () => {
 		expect(convGets()).toBe(1);
 	});
 
-	it('layout 暖機與頁面同時 hydrate(工作台 onMount)合併成同一支在飛 GET:第一次進頁仍是 1 次', async () => {
-		await authStore.login('coach@test.com', 'pw');
-		render(Layout);
-		await hydrateConversations();
-		await settle();
-		expect(convGets()).toBe(1);
-	});
-
-	it('未登入零次', async () => {
-		render(Layout);
-		await settle();
-		expect(convGets()).toBe(0);
-	});
-
 	it('已登入但無教練角色(被 guard 導走)零次——暖機依角色守門', async () => {
 		await authStore.login('member@test.com', 'pw');
 		render(Layout);
 		await settle();
 		expect(convGets()).toBe(0);
 	});
-
-	it('A 換 B 共 2 次(閘門換身分自己重置)', async () => {
-		await authStore.login('a@test.com', 'pw');
-		render(Layout);
-		await settle();
-		expect(convGets()).toBe(1);
-
-		await authStore.login('b@test.com', 'pw');
-		await settle();
-		expect(convGets()).toBe(2);
-	});
 });
 
-describePageLifetime('coach +layout', Layout, { 'GET /conversations/me': [] });
+describeKeyedSlot('coach +layout', Layout, { 'GET /conversations/me': [] });

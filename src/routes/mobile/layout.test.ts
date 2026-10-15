@@ -21,7 +21,8 @@ vi.mock('$lib/stores/authStore', async () => {
   return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
 });
 
-// R14(候選 F3)暖機清單:layout 以身分為 key 暖通知——只替換 api(),數 GET /notifications。
+// R14(候選 F3)暖機清單:layout 宣告通知、交給身分範圍暖——只替換 api(),數 GET /notifications。
+// 守門、暖機准入、頁面壽命、關 overlay 的機制在 $lib/components/SessionScope.test.ts 測一次;這裡只留本 layout 的宣告。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
@@ -33,7 +34,7 @@ import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import { overlay } from '$lib/mobile/stores';
 import Layout from './+layout.svelte';
-import { describePageLifetime } from '$lib/testing/page-lifetime';
+import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
   mockUrl = new URL('http://localhost/mobile');
@@ -71,12 +72,6 @@ describe('mobile +layout — 暖機清單(R14 F3)', () => {
     await settle();
     expect(notifGets()).toBe(1);
   });
-
-  it('未登入零次(守門導走)', async () => {
-    render(Layout);
-    await settle();
-    expect(notifGets()).toBe(0);
-  });
 });
 
 describe('mobile +layout — 換人時關掉 overlay', () => {
@@ -90,4 +85,4 @@ describe('mobile +layout — 換人時關掉 overlay', () => {
   });
 });
 
-describePageLifetime('mobile +layout', Layout, { 'GET /notifications': [] });
+describeKeyedSlot('mobile +layout', Layout, { 'GET /notifications': [] });
