@@ -139,3 +139,8 @@ export function deltaPct(current: number | null, last: number | null): number | 
 - `mobile-admin` `ReportsScreen` 與 desktop 版共用 `report-math.ts`/`admin/format.ts`，但各自維護
   一份 Svelte 元件（視覺呈現不同）；若未來兩邊需要進一步統一顯示邏輯，需要另外評估抽共用元件的
   成本與 per-surface 結算慣例（`docs/adr/0003`）的取捨，非本輪範圍。
+
+## 增補（2026-10-15，架構深化 R21）
+
+§4 標題與內文的「零外部依賴」自本日起有一個例外：`paymentMethodLabel()` 改用 `$lib/api/wire` 的 `lookupOr`（只認自有鍵，
+`toString` 這類原型鍵也原字串穿透）。`wire.ts` 是零 `$lib` 依賴的純葉，本檔仍可用字面量獨立測試。見 `docs/adr/0030` §1。

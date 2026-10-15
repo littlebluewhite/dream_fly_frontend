@@ -470,3 +470,9 @@ exported const 住 module,toast 與 API 錯誤文案留頁面(`docs/adr/0012` �
   的 PATCH 是 `opsGate.write()` 的 `send`、`applyStatusChange` 是它的 `commit`;`markMessageRead(id, ack)` 走
   `messagesGate.write()`。對外匯出仍是這兩支。
 - **:346 與 :210 的 `opsHydrated`**:該匯出已刪(`0027` §6);測試改用 `resetOpsForTests()`/先 `hydrateOps()`。
+
+## 增補(2026-10-15,架構深化 R21)
+
+「明確不做」候選 07 的第 2 項(:230-231)「store 自持的 `refresh()` 落地就無條件 `apply`,先發後至的舊快照照樣寫入」與 :237
+「目前沒有已知 bug」不再成立:`d6b729b`(2026-10-11,教練對話列表)就是這個 bug,R21 把後發優先收進水合閘門(出發序帳),
+store 自持的 `refresh()` 也後出發者贏。其餘三項保護仍只有頁面進場包才有,候選 07 的否決不變。見 `docs/adr/0030` §2。

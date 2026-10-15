@@ -110,3 +110,9 @@ read-state 的同名匯出區分。符合 `docs/adr/0024` §4 暖機清單的方
 - **`docs/adr/0021`**、**`0027`** §5:`write()` 為唯一寫入動詞,已讀維持 ack-gated。
 - **`docs/adr/0028`** §3:行銷外殼暖機清單(§2 延伸)。
 - **`docs/adr/0013`** R20 增補:總查表原語(§3)。
+
+## 增補(2026-10-15,架構深化 R21)
+
+§1(:57-58)列的 `routes/coach/layout.test.ts` 釘,現況:教練 1 次、重新 render 仍 1 次留在原檔;與頁面同時 hydrate 由
+`coach/conversations.test.ts` 釘住;登出 0 次與 A 換 B 再暖一次,改在 `SessionScope.test` 的暖機准入驗一次(暖機交給身分範圍)。
+見 `docs/adr/0030` §3。

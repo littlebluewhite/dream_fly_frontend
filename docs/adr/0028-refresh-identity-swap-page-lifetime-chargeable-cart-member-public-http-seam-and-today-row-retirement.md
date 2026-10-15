@@ -194,3 +194,15 @@ A 畫面的 PATCH 遇 401 → `ApiError(401)`;storage 已是 B 的 refresh token
   `mobile/overlays/trial-dates.ts`(`WEEKDAY_ZH`)改取同一個 module,不再各自帶陣列;`WEEK` 搬家見
   `docs/adr/0013` R19 增補。`admin/report-math.ts` 的 `WEEKDAY_LABEL` 與 `WEEKDAY_ZH` 值相同,
   但屬報表呈現素材、與逐面板 VM 算式同居(`docs/adr/0013` R10 增補),本輪不動。
+
+## 增補(2026-10-15,架構深化 R21)
+
+本篇原文不改寫,以下各點以本節為準。見 `docs/adr/0030` §3、§4。
+
+- **§1 的 `onSessionRefreshed(user)` 與 `bindSessionIdentity(fn)`**:以相同語意退役。compare-and-set 成功、refresh 回的 `user` 是
+  別人時,登入狀態核心在同一個函式裡 `beginSession` 並換身分;401 重送規則改由核心的 `refreshFor(issuedBy)` 判斷。§1 的
+  「`onSessionRefreshed` 只在 CAS 成功時觸發」測試搬到 `login-state.test.ts`,改斷言身分。
+- **§2(:60-68)**:四個 layout 的 `{#key $lastSessionKey}` 與 overlay `closeAll()` 改由身分範圍 `SessionScope` 做;
+  `describePageLifetime` 只在 `SessionScope.test` 跑一次,四個 layout 各跑一支 `describeKeyedSlot`(A→B)。
+- **已知遞延(:145-147)**:body 沒有 `user` 時,核心讀 `outcome.user.id` 會丟 `TypeError`(不再是帶 `undefined` 進
+  `authStore`);overlay「登出不關」已由 `SessionScope.test` 釘住,「同身分再設一次不關」仍沒有釘。

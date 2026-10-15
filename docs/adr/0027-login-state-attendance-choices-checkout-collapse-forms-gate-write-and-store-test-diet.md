@@ -438,3 +438,10 @@ once-per-identity/A→B/logout-reset/queued-write-skip(22 → 18)、兩個通知
 - **:349「`wire:check` 在沒有 `DREAMFLY_BACKEND_DIR` 或後端無 `bindings/` 時 skipped、exit 0」已結案**:預設路徑改由
   main checkout(git common dir)解析隔壁的 `dream_fly_backend`,worktree 內也能找到;找不到 `bindings/` 時 exit 1。
   相對的 `DREAMFLY_BACKEND_DIR` 仍以目前 checkout 為基準。
+
+## 增補(2026-10-15,架構深化 R21)
+
+§1 的「登入狀態收成一個 module」由 `src/lib/stores/login-state.ts` 完成:§1 寫在 `client.ts`(唯一清除點 `performRefresh()`)與
+`authStore`(`onSessionExpired` 收訊號、`storage` listener、session 世代、`sessionIdentity()`)的部分都改住核心,`onSessionExpired`
+退役,`authStore` 是門面、匯出面不變。§1 列的 `client.test.ts` refresh 測試搬到 `login-state.test.ts`,`expired` spy 改斷言
+`LOGGED_OUT`。見 `docs/adr/0030` §4。

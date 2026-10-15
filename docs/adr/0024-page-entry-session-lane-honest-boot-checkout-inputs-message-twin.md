@@ -372,3 +372,8 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
 - **:204-208 的 `markMessageRead(id, badgeCleared)`**:mobile-admin 的 `messages` store 已退役,已讀走
   `markConversationRead(id, badgeCleared)`,ack-gated 語意不變。
 
+## 增補(2026-10-15,架構深化 R21)
+
+§4「各 surface 的 layout 以身分為 key 反應式呼叫」(:150-157)改由身分範圍 `SessionScope` 做:layout 把暖機清單寫成
+module-level 常數交給它,key 是 `guard(…) === null && warmIn(url) ? $sessionKey : null`(mobile-admin 的教練分區條件改成
+`warmIn`)。清單內容與每個身分只打一次 GET 都不變。見 `docs/adr/0030` §3。

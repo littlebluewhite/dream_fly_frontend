@@ -334,3 +334,13 @@ load-gate)也已關閉:訊息頁改寫成 `createLoadGate({ ...messagesPageEntry
 member/mobile/coach/mobile-admin 四個 layout 以 `{#key $lastSessionKey}` 包住 slot,A→B 不離開該頁時頁面也會
 重掛載,舊頁面的 load-gate 隨 `destroy()` 丟掉遲到回應,新頁面以 B 重抓。`lastSessionKey` 刻意不在登出時通知,
 **閘門不得用它**——閘門仍以 `sessionIdentity()` 為 key、登出即重置。見 `docs/adr/0028` §2。
+
+## 增補(2026-10-15,架構深化 R21)
+
+本篇原文不改寫,以下各點以本節為準。見 `docs/adr/0030` §2–§4。
+
+- **:42-45 refresher「只加」兩件事**:現在是三件,另加後發優先。refresher 與水合閘門共用出發序帳(`createDepartureLedger`),
+  先查 epoch 再問 `overtaken`,被超車的落地同樣靜默丟棄。
+- **R17 增補(:305、:309-310)**:refresh 失敗清 token 時的登出、`storage` listener 與 `sessionIdentity()` 的宣告,現在都在登入
+  狀態核心 `stores/login-state.ts`;`onSessionExpired` 已退役,`authStore` 以原名轉出 `sessionIdentity`。
+- **R18 增補(:334)**:四個 layout 的 `{#key $lastSessionKey}` 改由身分範圍 `SessionScope` 包住 slot,語意不變。

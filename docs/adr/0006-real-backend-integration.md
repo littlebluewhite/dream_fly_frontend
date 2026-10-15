@@ -306,3 +306,9 @@ Round 3（後端 Task 1–8 + 前端 Task 9–20，2026-07-06 起）新增並接
   R17 增補「水合後身分仍不是快取那位(例如 `/users/me` 失敗)就登出」因此只剩 refresh 暫時不可用時會走到;
   refresh 成功但 `/users/me` 失敗時停在新身分。
 - **上一則增補「後果」第一條(:291)再縮小**:「token 是 B、畫面是 A」的空檔已關閉;同一位登入者欄位的短暫舊值不變。
+
+## 增補(2026-10-15,架構深化 R21)
+
+本篇原文不改寫。R17、R18 增補裡 `client.ts` 的 `performRefresh()`/`exchangeRefreshToken()`、`onSessionExpired`/`onSessionRefreshed`
+訊號與 `authStore` 的 `storage` listener,現在都住登入狀態核心 `src/lib/stores/login-state.ts`:唯一清除點直接設登出,compare-and-set
+成功時直接同拍換身分,三支 hook 退役;`api()` 只向核心要憑證、身分與 `refreshFor(issuedBy)`。行為不變,見 `docs/adr/0030` §4。

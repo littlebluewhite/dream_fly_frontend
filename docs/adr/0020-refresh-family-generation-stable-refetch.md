@@ -323,3 +323,8 @@ R12 Task 3(`docs/adr/0022` §1)把 `mobile-admin/stores.ts` 的 `markOrderPaid` 
   不變;「遞增仍只走 `markMutated()`」現為「遞增只走 `write()` 內的 `bump()`」;`markOrderPaid` 的第 3 步是
   `opsGate.write()`。
 - **:215 的 `markMutated(tail?)` 以 `tail.then(done, done)` 為在飛的樂觀 mutation 記帳**:同一個機制,入口是樂觀 `write()`。
+
+## 增補(2026-10-15,架構深化 R21)
+
+否決紀錄「丟棄不補抓」(:97-100)的「丟棄之後必須補抓」只對世代軸的丟棄成立。R21 第六決策點出發序帳的丟棄(被更晚出發的
+落地超車)刻意不補抓:被超車的那一刻,較新的快照已經落地,顯式新鮮度已經滿足。判準句、反例與契約五條不變,見 `docs/adr/0030` §2。

@@ -374,3 +374,9 @@ generation,而 `hydrate()` 無條件翻旗)因 `isCurrent` 由呼叫方交入而
   登出棄寫與序列化屬第 2 層,不再逐 store 重複(FE-9)。
 - **各 store 的 `*Hydrated`(`waitlistHydrated` 等)** 已刪(`opsHydrated`、`messagesHydrated` 亦同);測試改用
   `resetSessionStores()`。
+
+## 增補(2026-10-15,架構深化 R21)
+
+R13 增補(:310)把「被新一輪 run 取代的回應不寫進共享 store(後發優先)」列為只有 load-gate 路徑才有的保護,自本日起不成立:
+水合閘門的第六決策點出發序帳讓 hydrate 與 refresh 族(含 store 自持的 `refresh()`)都後出發者贏。其餘三項仍只有經頁面進場包
+才有,候選 07 的否決不變。見 `docs/adr/0030` §2。
