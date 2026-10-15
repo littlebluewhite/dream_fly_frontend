@@ -94,6 +94,20 @@ describe('課程日程表 (marketing) — 接真 API（取代先前 Math.random(
 		expect(openSlotBtn).not.toBeDisabled();
 	});
 
+	it('時段狀態撞 Object.prototype 鍵(constructor)時顯示原字串，不露出繼承來的函式', async () => {
+		const [day] = daySchedule();
+		route({ [thisMonthKey()]: [{ ...day, slots: [{ ...day.slots[0], status: 'constructor' }] }] });
+
+		const { container } = render(Page);
+		const today = new Date();
+		const dayBtn = await findByRole(container, 'button', { name: String(today.getDate()) });
+		await fireEvent.click(dayBtn);
+
+		const slotBtn = await findByRole(container, 'button', { name: /06:00-08:00/ });
+		expect(slotBtn.textContent).toContain('constructor');
+		expect(slotBtn.textContent).not.toContain('[native code]');
+	});
+
 	it('shows an empty-slots message for a day with no schedule entry', async () => {
 		route({ [thisMonthKey()]: [] }); // no entry for any date this month
 

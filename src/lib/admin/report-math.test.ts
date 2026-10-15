@@ -464,6 +464,10 @@ describe('PAYMENT_METHOD_LABEL / paymentMethodLabel — 付款方式對照', () 
 		expect(paymentMethodLabel('bank_transfer')).toBe('bank_transfer');
 	});
 
+	it('paymentMethodLabel() 對 Object.prototype 鍵(toString)也算查無，原字串穿透而非繼承來的函式', () => {
+		expect(paymentMethodLabel('toString')).toBe('toString');
+	});
+
 	it('paymentMethodLabel() 對已知 key 回傳中文標籤', () => {
 		expect(paymentMethodLabel('credit_card')).toBe('信用卡');
 	});
