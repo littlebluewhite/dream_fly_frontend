@@ -1,24 +1,14 @@
 /* Dream Fly — HTTP client for the Dream Fly backend (Axum, /api/v1).
  *
  * Thin fetch wrapper: prefixes the base URL, attaches the Bearer access token,
- * maps non-2xx {"error": msg} bodies to ApiError, and — on a 401 — refreshes
- * the token pair once and retries the original request. Concurrent 401s share
- * a single in-flight refresh: per docs/api/integration-contract.md §1.2, the
- * backend treats a replayed/reused refresh token as credential theft and
- * revokes the whole token family, so at most one refresh may ever be in
- * flight per tab (module-level promise) — and, since the refresh token itself
- * is shared across tabs via localStorage, at most one across the whole
- * browser too, via the Web Locks API where available (see
- * performRefreshExclusive below). */
+ * maps non-2xx {"error": msg} bodies to ApiError, and — on a 401 — asks the
+ * 登入狀態 core to refresh the token pair once and retries the original request.
+ * Credentials, identity and the refresh itself (single-flight, cross-tab lock,
+ * compare-and-set/clear) all belong to the core (stores/login-state.ts); this
+ * module only asks it, never stores tokens or calls back into authStore. */
 
-import { getAccess, setTokens, getRefresh, clearTokens } from './tokens';
-import type { AuthResponse, AuthUserResponse } from './generated';
-
-const DEFAULT_BASE_URL = 'http://localhost:3000/api/v1';
-
-function getBaseUrl(): string {
-  return import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL;
-}
+import { apiUrl } from './base-url';
+import { accessToken, currentIdentity, refreshFor } from '$lib/stores/login-state';
 
 export class ApiError extends Error {
   constructor(
@@ -58,148 +48,27 @@ async function sendRequest(path: string, init: RequestInit, useAuth: boolean): P
     headers.set('Content-Type', 'application/json');
   }
   if (useAuth) {
-    const token = getAccess();
+    const token = accessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(`${getBaseUrl()}${path}`, { ...init, headers });
+  return fetch(apiUrl(path), { ...init, headers });
 }
 
 export async function api<T>(path: string, init: RequestInit & { auth?: boolean } = {}): Promise<T> {
   const { auth, ...requestInit } = init;
   const useAuth = auth !== false;
 
-  // 只替發出請求的那個畫面身分重送:refresh 前後身分都沒變才重送,否則(換登、或 refresh 換出
-  // 別人的憑證)丟 401——不得用新身分的憑證替舊畫面的寫入重送。
+  // 只替發出請求的那個畫面身分重送:發出時記下身分,遇 401 交給核心的 refreshFor(issuedBy)——refresh 前後
+  // 身分都沒變才重送,否則(換登、或 refresh 換出別人的憑證)丟 401,不得用新身分的憑證替舊畫面的寫入重送。
   const issuedBy = currentIdentity();
   const response = await sendRequest(path, requestInit, useAuth);
 
   if (response.status === 401 && useAuth) {
-    const refreshed = currentIdentity() === issuedBy && (await refreshTokens());
-    if (!refreshed || currentIdentity() !== issuedBy) {
+    if (!(await refreshFor(issuedBy))) {
       throw new ApiError(401, await parseErrorMessage(response));
     }
     return parseResponse<T>(await sendRequest(path, requestInit, useAuth));
   }
 
   return parseResponse<T>(response);
-}
-
-let inFlightRefresh: Promise<boolean> | null = null;
-
-const REFRESH_LOCK_NAME = 'dreamfly-refresh';
-
-/** POST /auth/refresh with the stored refresh token; rotates the pair on success.
- *  Single-flight: concurrent callers *in this tab* share the one in-flight request. */
-export async function refreshTokens(): Promise<boolean> {
-  if (!inFlightRefresh) {
-    inFlightRefresh = performRefreshExclusive().finally(() => {
-      inFlightRefresh = null;
-    });
-  }
-  return inFlightRefresh;
-}
-
-/** Cross-tab exclusive wrapper around performRefresh(). The refresh token is
- *  shared across tabs (localStorage), so two tabs whose access token expires
- *  at the same moment must not both replay it — the backend treats a
- *  replayed refresh token as theft and revokes the whole family (see module
- *  docstring). Where the Web Locks API is available, only one tab across the
- *  whole browser runs a refresh at a time, and performRefresh() reads the
- *  stored refresh token only once inside the lock: a tab that waited while
- *  another tab rotated the pair therefore exchanges the *current* token for
- *  an access token of its own (access tokens live in each tab's memory, so
- *  the other tab's rotation alone leaves this tab without one). Each refresh
- *  token is presented exactly once; the cost is one extra rotation per
- *  waiting tab. Browsers without navigator.locks (and jsdom in tests) fall
- *  back to the direct call. */
-async function performRefreshExclusive(): Promise<boolean> {
-  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
-  if (!locks) {
-    return performRefresh();
-  }
-  return locks.request(REFRESH_LOCK_NAME, performRefresh);
-}
-
-const sessionExpiredListeners = new Set<() => void>();
-
-/** Register a callback for the moment this tab's session really ends: a refresh
- *  failed and performRefresh() cleared the tokens. Fires nowhere else. */
-export function onSessionExpired(fn: () => void): void {
-  sessionExpiredListeners.add(fn);
-}
-
-const sessionRefreshedListeners = new Set<(user: AuthUserResponse) => void>();
-
-/** Register a callback for a refresh that really rotated this tab's tokens
- *  (compare-and-set succeeded), with the user the backend says they belong to.
- *  Fires nowhere else. */
-export function onSessionRefreshed(fn: (user: AuthUserResponse) => void): void {
-  sessionRefreshedListeners.add(fn);
-}
-
-let currentIdentity: () => string | null = () => null;
-
-/** 由畫面身分的 owner(authStore)註冊讀法;api() 只呼叫、不 import 它(避免循環)。 */
-export function bindSessionIdentity(fn: () => string | null): void {
-  currentIdentity = fn;
-}
-
-/** Tokens are cleared only when the session is really over: the backend
- *  explicitly rejected the refresh token (400/401/403), or there was none to
- *  send. A network error, 408/429 or 5xx leaves everything in place — a blip must not log out
- *  every tab. Even on a rejection, compare-and-clear: clear only if the stored
- *  refresh token is still the one this call sent, or storage is already empty
- *  (another tab logged out while the request was in flight). If another tab or
- *  a fresh login replaced it, that newer session stands. This is the single
- *  place tokens are cleared on a failed refresh, and the single place
- *  onSessionExpired fires. A success is compare-and-set the same way: the
- *  rotated pair is stored only if the stored refresh token is still the one
- *  sent; otherwise (a newer login, or a logout, landed during the flight) the
- *  result is dropped and false returned — the newer tokens win. Only a stored
- *  rotation fires onSessionRefreshed, carrying the user the new tokens belong to. */
-async function performRefresh(): Promise<boolean> {
-  const sent = getRefresh();
-  const outcome: RefreshOutcome = sent ? await exchangeRefreshToken(sent) : 'rejected';
-  const now = getRefresh();
-  if (typeof outcome === 'object') {
-    if (now !== sent) return false;
-    setTokens(outcome.access_token, outcome.refresh_token);
-    sessionRefreshedListeners.forEach((fn) => fn(outcome.user));
-    return true;
-  }
-  if (outcome === 'rejected' && (now === sent || now === null)) {
-    clearTokens();
-    sessionExpiredListeners.forEach((fn) => fn());
-  }
-  return false;
-}
-
-/** The rotated pair (and the user it belongs to) on success. `rejected`: the
- *  backend answered 400/401/403 (token invalid/revoked/expired). `unavailable`:
- *  network error, any other non-2xx (408, 429 rate limit, 5xx…), or an
- *  unreadable success body. */
-type RefreshOutcome = RotatedPair | 'rejected' | 'unavailable';
-type RotatedPair = Pick<AuthResponse, 'access_token' | 'refresh_token' | 'user'>;
-
-/** The only /auth/refresh statuses that are a verdict on the token itself. A 429
- *  (the strict auth rate-limit bucket) or 408 says nothing about the token, so it
- *  must not log every tab out. */
-const TOKEN_REJECTED_STATUSES = new Set([400, 401, 403]);
-
-/** POST /auth/refresh. Transport only — never stores or clears tokens. */
-async function exchangeRefreshToken(refresh: string): Promise<RefreshOutcome> {
-  try {
-    const response = await fetch(`${getBaseUrl()}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refresh })
-    });
-    if (!response.ok) {
-      return TOKEN_REJECTED_STATUSES.has(response.status) ? 'rejected' : 'unavailable';
-    }
-    const data = (await response.json()) as RotatedPair;
-    return { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
-  } catch {
-    return 'unavailable';
-  }
 }

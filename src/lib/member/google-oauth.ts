@@ -3,7 +3,7 @@
  * 純邏輯抽出成獨立模組（同 checkout-gate.ts 的作法），讓 URL 組裝跟 state
  * 產生/驗證/清除可以直接單元測試，不需要 render 元件。實際的 token 交換
  * （POST /auth/google + token 儲存 + authStore 更新）刻意不放在這裡——那段複用
- * authStore.ts 既有的 login()/register() 同一條 applySession 路徑
+ * authStore.ts 既有的 login()/register() 同一條 startSession 路徑
  * （見 authStore.loginWithGoogle），這裡只管「導去 Google」跟「回來後 state
  * 對不對」。
  *
