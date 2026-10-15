@@ -252,7 +252,10 @@ _Avoid_: 用 getter 的副作用水合外殼角標或別的 store(呼叫端看�
 (`classes.ts`),消費端呼叫函式、不索引 `LEVEL_TONE`／`STATUS_TONE`。「總查表」(任何字串都不會取到
 `undefined`、也不會取到 `Object.prototype` 上的繼承成員)只有一種寫法:`$lib/api/wire` 的 `lookupOr(表, 鍵,
 後備)`,查表函式與一次性的後備查詢都用它,不另寫 `Object.hasOwn(…) ? … : …` 或 `表[鍵] ?? 後備`(見
-`docs/adr/0013` R20 增補)。
+`docs/adr/0013` R20 增補)。R20 漏網的三處同走它:報表分桶(`admin/reports-api.ts` 的 `resolveBucket`,未知鍵
+→ `{ label: 原鍵, color: 'var(--df-text-muted)' }`)、付款方式標籤(`admin/report-math.ts` 的
+`paymentMethodLabel`,未知回原字串)、課表時段狀態(`ScheduleCalendar` 的 `STATUS_LABEL`,型別
+`Record<SlotStatus, string>`,渲染 `lookupOr(STATUS_LABEL, status, status)`)。
 報表面板的**呈現素材**(三序列色盤、`{label,color}` 桶表、`REPORT_SCALES` 像素值域)不是域語彙,
 單源住 `admin/report-math.ts`、與逐面板 VM 算式同居,兩 surface 直取(見 `docs/adr/0013` 增補)。
 _Avoid_: facade 各自複製一份查表、同名異義的表(同一個鍵在不同表裡代表不同語意卻共用一個名字)、
@@ -286,4 +289,4 @@ _Avoid_: 未過濾清單直餵 checkoutMath/placeOrder(編譯期擋);購物車�
 為 index,`WEEK` 以 `WeekColumn` 為 index,兩者之間只經 `toWeekColumn(dow)` 換算;`ScheduleBlock.day` 的型別
 就是 `WeekColumn`,沒換算的數字塞不進去(見 `docs/adr/0028` 增補、`docs/adr/0013` 增補)。
 _Avoid_: 手寫 `(getDay()+6)%7`、各檔自帶星期陣列(唯一有文件的例外:`admin/report-math.ts` 的
-`WEEKDAY_LABEL`,報表純函式層零外部依賴,見 `docs/adr/0009`、`docs/adr/0028` 增補)、用註解約定 day 的編號
+`WEEKDAY_LABEL`,報表純函式層除 `lookupOr` 外零外部依賴,見 `docs/adr/0009`、`docs/adr/0028` 增補)、用註解約定 day 的編號

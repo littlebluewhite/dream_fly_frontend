@@ -3,6 +3,7 @@
  * contract.md §3.24），純 locality 整理、interface 完全不變；admin/api.ts 保留逐名
  * re-export，既有消費端零改動。 */
 import { api } from '$lib/api/client';
+import { lookupOr } from '$lib/api/wire';
 import { ntd } from '$lib/public/adapters';
 import type { TrendBar } from './data';
 import {
@@ -199,7 +200,7 @@ function mapAdminKpis(k: KpisSection): AdminReportKpis {
 const resolveBucket = (
 	table: Readonly<Record<string, { label: string; color: string }>>,
 	key: string
-): { label: string; color: string } => table[key] ?? { label: key, color: 'var(--df-text-muted)' };
+): { label: string; color: string } => lookupOr(table, key, { label: key, color: 'var(--df-text-muted)' });
 
 const mapRevenueBreakdownRow = (r: IncomeSourceEntry): AdminRevenueBreakdownRow => ({
 	source: r.source,

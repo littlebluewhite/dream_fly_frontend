@@ -1,16 +1,21 @@
 /* Dream Fly — 管理後台報表頁面消費的純數學／查表函式庫(Round 4 P4-F1)。
  *
- * 全部零外部依賴(同 $lib/checkout-math.ts 慣例)：只吃/吐最小必要形狀的純函式，
- * report-math.test.ts 可直接用字面量測邊界，不需要 mock admin/api.ts 的任何型別。
+ * 除 $lib/api/wire 的 lookupOr 外零外部依賴(同 $lib/checkout-math.ts 慣例)：只吃/吐
+ * 最小必要形狀的純函式，report-math.test.ts 可直接用字面量測邊界，不需要 mock
+ * admin/api.ts 的任何型別。
  * 型別因此與 admin/api.ts 的 wire/FE 型別各自獨立宣告(桶 key 等小型封閉字串集合
  * 兩邊都各自寫一份字面量)，非共用同一份——換取本檔可獨立測試、獨立於 api.ts 改版
  * (同 $lib/api/wire.ts「不 import 任何 $lib 模組」的最底層知識檔慣例)。
+ * 唯一例外是 lookupOr(總查表原語，見 docs/adr/0013 R20 增補)：wire.ts 本身是零 $lib
+ * 依賴的純葉，引它不帶進任何 store／接縫，本檔仍可獨立測試。
  *
  * cents/ratio 的顯示格式化(NT$/%字串)不在本檔——那是 ntd()/fmtNT()/fmtPct() 的
  * 職責(public/adapters.ts、admin/format.ts)；本檔只做三件事：「數字→數字」的環比/
  * 占比/正規化運算、「wire 桶 key → 中文標籤(+色)」查表，與 2026-07(架構深化 R7 C5)
  * 增收的「報表 KPI band 6 卡識別四欄(icon/label/tint/color)」單源查表(見檔尾
  * REPORT_KPI_CARDS 註記)。 */
+
+import { lookupOr } from '$lib/api/wire';
 
 /* ═════════════════════════ 環比／占比／正規化(純數字運算) ═════════════════════════ */
 
@@ -259,8 +264,9 @@ export const PAYMENT_METHOD_LABEL: Record<string, string> = {
 };
 
 /** 容忍未知 method 的查表(付款方式為應用層值域、非 DB enum，未來可能新增)：查無
- *  → 原字串穿透，不丟例外(同 $lib/api/wire.ts orderStatusBadge 的容忍查表慣例)。 */
-export const paymentMethodLabel = (method: string): string => PAYMENT_METHOD_LABEL[method] ?? method;
+ *  (只認自有鍵，toString 等原型鍵也算查無)→ 原字串穿透，不丟例外(同
+ *  $lib/api/wire.ts orderStatusBadge 的容忍查表慣例)。 */
+export const paymentMethodLabel = (method: string): string => lookupOr(PAYMENT_METHOD_LABEL, method, method);
 
 /** weekday_load[].weekday(0=週日..6=週六，契約 §3.24，同 §3.18 慣例)→ 中文單字
  *  標籤，陣列索引即 weekday 值。 */
@@ -334,8 +340,8 @@ export const PAYMENT_PALETTE: readonly string[] = [
  *  各自手抄同一份六張卡的識別資料，在此上收共用。value/delta 兩者仍是 per-surface
  *  接線，不收進本表(ADR 0009 §2：KPI 卡 value 因單位混雜維持頁面組字串，delta 由
  *  呼叫端傳 deltaPct() 算出的數字、格式化下沉各元件內部)——本表只管兩邊逐字相同的
- *  識別資料。零 import 憲章維持(icon 為字面量字串，呼叫端既有 `icon: IconName`
- *  prop 型別把關，本檔無需 import IconName)。 */
+ *  識別資料。零 import 憲章維持(唯一例外是檔頭所述的 lookupOr；icon 為字面量字串，
+ *  呼叫端既有 `icon: IconName` prop 型別把關，本檔無需 import IconName)。 */
 export const REPORT_KPI_CARDS = {
 	revenue: { icon: 'dollar-sign', label: '本月營收', tint: '#0066CC14', color: 'var(--df-primary)' },
 	newMembers: { icon: 'user-plus', label: '本月新會員', tint: '#F59E0B14', color: '#F59E0B' },

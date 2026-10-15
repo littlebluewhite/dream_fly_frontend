@@ -5,7 +5,8 @@
   import ErrorState from '$lib/components/ui/ErrorState.svelte';
   import { createLoadGate } from '$lib/load-gate';
   import { getSchedule } from '$lib/public/api';
-  import type { DaySchedule, TimeSlotResponse } from '$lib/api/generated';
+  import { lookupOr } from '$lib/api/wire';
+  import type { DaySchedule, SlotStatus, TimeSlotResponse } from '$lib/api/generated';
   import {
     makeIsoDate,
     sundayGridDays,
@@ -48,7 +49,7 @@
     }
   });
 
-  const STATUS_LABEL: Record<string, string> = {
+  const STATUS_LABEL: Record<SlotStatus, string> = {
     available: '充足',
     limited: '有限',
     full: '額滿',
@@ -164,7 +165,7 @@
                   on:click={() => selectTimeSlot(slot)}
                 >
                   <span class="slot-time">{slotLabel(slot)}</span>
-                  <span class="slot-status">{STATUS_LABEL[slot.status] ?? slot.status}</span>
+                  <span class="slot-status">{lookupOr(STATUS_LABEL, slot.status, slot.status)}</span>
                 </button>
               {/each}
             </div>

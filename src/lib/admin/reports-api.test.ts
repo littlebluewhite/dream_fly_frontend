@@ -319,4 +319,39 @@ describe('getReports — GET /reports/admin（admin，§3.24，Round 4 P4-F1：1
 		expect(d.tierDistribution[0]).toMatchObject({ label: 'platinum', color: muted });
 		expect(d.weekdayLoad[0].label).toBe('9');
 	});
+
+	it("桶名撞 Object.prototype 鍵(constructor/toString)也算查無：label 為原字串、color 為 var(--df-text-muted)，不取繼承成員", async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({
+				'GET /reports/admin': {
+					revenue: { this_month_cents: 0, last_month_cents: 0, trend: [] },
+					kpis: {
+						new_members: { this_month: 0, last_month: 0 },
+						new_enrolments: { this_month: 0, last_month: 0 },
+						paid_orders_count: { this_month: 0, last_month: 0 },
+						attendance_rate: { this_month: null, last_month: null }
+					},
+					revenue_breakdown: [{ source: 'constructor', gross_cents: 1, orders_count: 1, units: 1 }],
+					income_sources_12m: [],
+					category_split: [],
+					payment_split: [],
+					attendance_distribution: [],
+					age_distribution: [],
+					tier_distribution: [{ bucket: 'toString', count: 1 }],
+					retention: [],
+					funnel: { trial_inquiries: 0, new_enrolments: 0 },
+					weekday_load: [],
+					venue_usage: [],
+					members: { total: 0, new_this_month: 0, active: 0 },
+					courses: [],
+					coaches: []
+				}
+			})
+		);
+
+		const d = await getReports();
+		const muted = 'var(--df-text-muted)';
+		expect(d.revenueBreakdown[0]).toMatchObject({ source: 'constructor', label: 'constructor', color: muted });
+		expect(d.tierDistribution[0]).toMatchObject({ bucket: 'toString', label: 'toString', color: muted });
+	});
 });
