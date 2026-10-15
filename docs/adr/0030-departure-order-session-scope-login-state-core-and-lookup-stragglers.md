@@ -65,8 +65,8 @@ R21 沿 `docs/adr/0027`/`0028`/`0029`「一輪多案、單篇記錄」的體例,
   不減,重置之後出發的必然較新,重置前出發的落地已由 `resetEpoch` 作廢);`depart()` 是同步的,靜止時 refresh 同步出發的
   契約(`docs/adr/0021`)不變;等待軸仍然只有尾流。**三軸互相獨立**:世代軸管丟棄、尾流軸管等待、出發序帳只管誰的落地算數。
 - **語意細節**:先出發的先落地照常套用,之後再被後出發的蓋過(不扣住)。後出發的 reject 時,先出發的照常套用,各 caller
-  拿自己的結果。被超車的和解不 `invalidate()`,旗標維持 true。被超車的 resync 仍回報 resynced。`invalidate()` 之後才落地的
-  舊 hydrate 不套用:旗標維持 false,下次 hydrate 重抓;頁面 load-gate 仍進 ready,store 裡已是較新的快照。
+  拿自己的結果。被超車的和解不 `invalidate()`,旗標維持 true。被超車的 resync 仍回報 resynced。`invalidate()` 之後才落地、
+  且早於已落地快照出發的舊 hydrate 不套用:旗標維持 false,下次 hydrate 重抓;頁面 load-gate 仍進 ready,store 裡已是較新的快照。
 - **session refresher**:每個 refresher 一本帳,建在 `core` 旁邊。每次呼叫在 `opts.fetch()` 之前同步取 `epoch` 與 `seq`;
   落地後先查 epoch、再問 `overtaken`,兩種丟棄都是靜默 `return`(理由同 `docs/adr/0017`:`redeemReward`、`afterOrder` 會傳播
   rejection)。帳本不隨身分重置:換帳前出發的落地先被 epoch 擋下,碰不到帳。
@@ -157,7 +157,7 @@ compare-and-set/clear 與 401 重送規則住在 `client.ts`。兩半靠三支 c
 「id 不同就 `beginSession` + 換 user」原本由 `onSessionRefreshed` 回呼 `authStore` 做,現在在核心的同一個函式裡做;
 `bindSessionIdentity` 提供的身分讀法變成核心的 `currentIdentity()`。`docs/adr/0007` R13/R16 增補(「`ApiUser` 倉內只有
 authStore 一個宣告處」)與 `docs/adr/0026` R17 增補(「`sessionIdentity()` 搬到 `authStore.ts`」)說的宣告處現在是核心,
-`authStore` 以原名轉出,import 路徑不變,所以這兩篇不另補增補。
+`authStore` 以原名轉出,import 路徑不變;兩篇各補一則 dated 增補指回本篇。
 
 **測試**:新 `login-state.test.ts` 先紅。從 `client.test.ts` 搬來 16 個 `it`(17 個案例):refresh 族 7 個 `it`(含 408/429 的
 `it.each`,共 8 案例)、Web Locks 8 個(含兩分頁)、「只有 compare-and-set 成功才換身分」1 個。計畫寫的是 15 個(refresh ×6),
@@ -187,7 +187,7 @@ authStore 一個宣告處」)與 `docs/adr/0026` R17 增補(「`sessionIdentity(
 2. **先出發的舊快照較晚落地,不再蓋掉較新的**:請假、ops(mobile-admin)、教練對話列表、本人帳號資料、點數、訂閱。開啟
    結帳後很快付款,已持有的方案不再變回計費行(§2)。
 3. **先出發的先落地時仍先顯示**,之後被較新的蓋過;慢網路下不用乾等(§2)。
-4. **`invalidate()` 之後才落地的舊 hydrate 不套用**,旗標維持 false,下次 hydrate 會再打一次 GET(§2)。
+4. **`invalidate()` 之後才落地、且早於已落地快照出發的舊 hydrate 不套用**,旗標維持 false,下次 hydrate 會再打一次 GET(§2)。
 5. §3、§4 wire 等價:守門、暖機次數、頁面壽命、跨分頁同步與 401 重送都與改前相同。
 
 ## 已知、刻意遞延
@@ -224,6 +224,7 @@ authStore 一個宣告處」)與 `docs/adr/0026` R17 增補(「`sessionIdentity(
 
 - **`docs/adr/0006`**:R17/R18 增補裡 `client.ts` 的 `performRefresh()`、`onSessionExpired`/`onSessionRefreshed` 與 `authStore`
   的 `storage` listener 改住核心(§4,增補)。
+- **`docs/adr/0007`**:R13/R16 增補說的 `ApiUser` 宣告處改在核心,`authStore` 原名轉出(§4,增補)。
 - **`docs/adr/0009`**:§4「零外部依賴」多一個例外 `lookupOr`(§1,增補)。
 - **`docs/adr/0016`**:R13 增補「後發優先只有 load-gate 路徑才有」不再成立(§2,增補)。
 - **`docs/adr/0017`**:refresher「只加兩件事」多了後發優先;R17/R18 增補的 `onSessionExpired` 與四個 layout `{#key}` 改由核心
@@ -232,7 +233,7 @@ authStore 一個宣告處」)與 `docs/adr/0026` R17 增補(「`sessionIdentity(
 - **`docs/adr/0021`**:等待軸仍只有尾流;「等贏家」因此被否決(§2,不動)。
 - **`docs/adr/0023`**:「明確不做」候選 07 的第 2 項保護與「目前沒有已知 bug」(§2,增補)。
 - **`docs/adr/0024`**:§4 暖機清單的呼叫點改在身分範圍;「不做 registry」「不加身分 hook」仍成立(§3,增補)。
-- **`docs/adr/0026`** R17 增補、**`0007`** R13/R16 增補:`sessionIdentity`/`ApiUser` 的宣告處改在核心,`authStore` 原名轉出(§4,不另增補)。
+- **`docs/adr/0026`**:R17 增補說的 `sessionIdentity()` 宣告處(身分的 owner)改在核心,`authStore` 原名轉出(§4,增補)。
 - **`docs/adr/0027`**:§1 由核心完成(§4,增補)。
 - **`docs/adr/0028`**:§1 的 hook 退役、§2 的 `{#key}` 與測試 helper 改住身分範圍、兩條已知遞延的現況(§3、§4,增補)。
 - **`docs/adr/0029`**:§1 點名的 coach layout 測試搬家(§3,增補)。

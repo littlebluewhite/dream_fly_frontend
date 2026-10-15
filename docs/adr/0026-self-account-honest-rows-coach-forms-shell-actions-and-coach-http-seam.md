@@ -294,3 +294,9 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
   遷移途中抓到 mobile 週課表星期索引錯位(`aaabc12`),mock getter 的測試一直綠。見 `docs/adr/0028` §4。
 - **§6 的界線**:R18 新增的 `lastSessionKey`(`lastLoggedIn(sessionKey)`,登出時不通知)只供 layout 的頁面壽命
   `{#key}` 用;閘門不得用它。「不做 derived store」的決定與理由不變。見 `docs/adr/0028` §2。
+
+## 增補(2026-10-15,架構深化 R21)
+
+- **R17 增補「§6 的住所改變」(:260-262)**:`sessionIdentity()` 自本日起宣告在登入狀態核心 `src/lib/stores/login-state.ts`
+  (身分的 owner 改為核心),`stores/authStore.ts` 以原名轉出、函式不變;呼叫端仍從 authStore import,四支 `sessionIdentity`
+  測試仍在 `authStore.test.ts`。「不做 derived store」的決定與理由不變。見 `docs/adr/0030` §4。

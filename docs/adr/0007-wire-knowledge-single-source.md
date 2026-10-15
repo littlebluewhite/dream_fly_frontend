@@ -223,3 +223,10 @@ check 從頭到尾是綠的)。手寫的窄化型別只是**前端自己的斷�
 - 手寫程式碼可直接 `import type` 自 `$lib/api/generated`,也可經 `wire.ts` 的轉出;不強制單一入口。
 - 自 generated 的 import 一律是 type-only(`import type` / `export type { … } from './generated'`)。
 - `wire.ts` 不得有任何自 `./generated` 的 runtime import。
+
+## 增補(2026-10-15,架構深化 R21)
+
+R13 增補 §2(:143-150)與 R16 增補 §2(:169-174)說的「倉內只有 authStore 一個宣告處」:`ApiUser` 自本日起宣告在登入狀態
+核心 `src/lib/stores/login-state.ts`,`stores/authStore.ts` 以原名轉出、型別不變,import 路徑照舊(`self-account.ts` 仍從
+authStore import)。宣告處仍只有一個;R13 的理由(餵回 `syncUser` 的必須是同一份型別)照舊成立,`syncUser` 也一起住核心。
+不進 `wire.ts` 的決定不變。見 `docs/adr/0030` §4。
