@@ -12,7 +12,7 @@
  *                           再加本人帳號資料(self-account)、教練身分(coach/api 私有)
  *                           與教練對話列表(coach/conversations,R20 取代 mobile-admin 訊息 messagesGate),共六個
  *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
- *                           在飛寫回 epoch 作廢;不套 guard)—— points / subscriptions
+ *                           在飛寫回 epoch 作廢 + R21 後發優先;不套 guard)—— points / subscriptions
  *
  * C3(架構深化 R9)新增 pageEntry(),關閉 ADR 0017 明載的 known-latent 殘窗(通知
  * **頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對)。門 (c)
@@ -57,7 +57,7 @@
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { authStore, sessionIdentity } from '$lib/stores/authStore';
-import { createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
+import { createDepartureLedger, createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
@@ -165,10 +165,15 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
  * 門 (b) session refresher —— points / subscriptions。
  *
  * 保留「無條件重抓」語意(getDashboard/getAccount/getPoints/checkout-sync afterOrder/
- * CheckoutDialog/CartSheet 開啟時都依賴每次真抓,不得硬套 guard),只加兩件事:
- * identity 變更清空(reset)+ 在飛換帳「靜默丟棄」。丟棄必須靜默(return,不 throw)——
+ * CheckoutDialog/CartSheet 開啟時都依賴每次真抓,不得硬套 guard),只加三件事:
+ * identity 變更清空(reset)+ 在飛換帳「靜默丟棄」+ 後發優先(見下)。丟棄必須靜默(return,不 throw)——
  * redeemReward await refreshPoints、placeOrder 的 afterOrder 會傳播 rejection,若在飛
  * 換帳改成 throw,等於新增一個「換帳號」失敗模式打進那兩條傳播鏈。
+ *
+ * R21:後發優先,用水合閘門的出發序帳(createDepartureLedger)。開啟結帳(refreshOnOpen)的 GET
+ * 若在付款後(afterOrder)那支落地之後才到,帶的是付款前的舊快照,蓋回去會讓已持有的方案又變成計費行——
+ * 被超車的落地同樣靜默丟棄。先查 epoch 再問 overtaken:overtaken 會推水位,只在套用前一刻問。
+ * 帳本不隨身分重置:號碼只增不減,換帳前出發的落地先被 epoch 擋掉,碰不到帳。
  */
 export function createSessionRefresher<T>(opts: {
 	fetch: () => Promise<T>;
@@ -176,10 +181,13 @@ export function createSessionRefresher<T>(opts: {
 	reset: () => void;
 }): () => Promise<void> {
 	const core = createSessionCore(opts.reset);
+	const ledger = createDepartureLedger();
 	return async () => {
 		const epoch = core.epoch();
+		const seq = ledger.depart();
 		const data = await opts.fetch();
 		if (epoch !== core.epoch()) return; // 在飛換帳:靜默丟棄(不套用、不 throw)
+		if (ledger.overtaken(seq)) return; // 已有更晚出發的落地:靜默丟棄(不套用、不 throw、不重抓)
 		opts.apply(data);
 	};
 }

@@ -3,7 +3,7 @@
  *
  * 泛型 session 協定的**單源**測試:F1 登出重置 / P1′ 在飛作廢 / P1″ A→B 直換 /
  * 寫入中換身分 → stale / 訪客·restored 開機零觸發 / queueWrite 寫入鏈 /
- * refresher 無條件套用 + 靜默丟棄 / pageEntry 進場包。和解鏈家族自 R17(FE-8)搬到
+ * refresher 無條件套用 + 靜默丟棄 + 後發優先 / pageEntry 進場包。和解鏈家族自 R17(FE-8)搬到
  * hydration-gate.test.ts(和解鏈住在基礎閘門,擁有者換人即 reset())。六個 domain store 各自只留薄
  * adapter 釘(證明本 store 已註冊 + endpoint/writeBack 接對),不再逐檔手抄整套協定
  * 鏡射(原 checkout-api/leave-requests-api 兩檔的深層鏡射家族已移入本檔)。
@@ -415,6 +415,29 @@ describe('createSessionRefresher — 無條件重抓 + 身分感知', () => {
 		await expect(p).resolves.toBeUndefined(); // 靜默:resolve、不 throw
 
 		expect(get(store)).toEqual({ n: 0 }); // A 的資料沒套用
+	});
+
+	it('後發優先:開啟結帳的 GET 在付款後那支落地之後才到 → 靜默丟棄、不蓋回(已持有的方案不再變回計費行)', async () => {
+		/* 會員開啟結帳(refreshOnOpen 出發第一支 GET,慢)後很快付款(afterOrder 出發第二支)。付款後
+		 * 那支先落地;開啟時那支帶著付款前的舊快照較晚落地,蓋回去就會把剛買的方案從 store 拿掉。 */
+		const onOpen = createDeferred<Item[]>();
+		const afterPay = createDeferred<Item[]>();
+		let gets = 0;
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /subs': () => (++gets === 1 ? onOpen.promise : afterPay.promise) }));
+		const store = writable<Item[]>([]);
+		const refresh = createSessionRefresher<Item[]>({ fetch: () => api<Item[]>('/subs'), apply: (d) => store.set(d), reset: () => store.set([]) });
+
+		const pOpen = refresh(); // 開啟結帳
+		const pPaid = refresh(); // 付款後
+		afterPay.resolve([{ id: 'sub-monthly' }]);
+		await pPaid;
+		expect(get(store)).toEqual([{ id: 'sub-monthly' }]);
+
+		onOpen.resolve([]); // 付款前的舊快照此刻才落地
+		await expect(pOpen).resolves.toBeUndefined(); // 靜默:不 throw(afterOrder/redeemReward 的傳播鏈不多一種失敗)
+
+		expect(gets).toBe(2); // 被超車不重抓
+		expect(get(store)).toEqual([{ id: 'sub-monthly' }]);
 	});
 
 	it('reset 觸發:identity 變更 → reset 被呼叫', async () => {

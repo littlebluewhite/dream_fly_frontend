@@ -593,7 +593,13 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
 - **`createSessionRefresher<T>({ fetch, apply, reset })`** — points / subscriptions. Unconditional-refetch
   semantics (no guard), plus identity-change reset and *silent* in-flight cross-login discard (`return`,
   not `throw` — throwing would inject a new "switched accounts" failure mode into `redeemReward`'s and
-  the checkout's existing rejection chains).
+  the checkout's existing rejection chains). Since R21 it is also last-departure-wins on the hydration
+  gate's departure ledger (`createDepartureLedger`, the sixth decision point above): each call takes a
+  number before its fetch, and after the epoch check a landing that a later departure has overtaken is
+  dropped just as silently. So the GET that opening the checkout started can no longer land after the
+  post-payment refresh and turn an owned plan back into a billable line. The ledger isn't reset on an
+  identity change: numbers only climb, and a landing that left before the switch is dropped by the
+  epoch check before it reaches the ledger.
 
 Both factories share one private identity core, keyed by `sessionIdentity(auth)` — an exported pure
 function in `stores/authStore.ts` (the identity owner; `null` when logged out, else `member.id`, degrading to `''`) that the member/mobile/

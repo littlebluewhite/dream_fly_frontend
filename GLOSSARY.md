@@ -206,7 +206,9 @@ domain store 對「會員身分變更」(登入/登出、或不經整頁重載�
 `mobile/stores.ts` 轉出取用,見 `docs/adr/0022`;本人帳號資料由 member、mobile 與教練端共用一顆,教練
 身分住 `coach/api.ts` 內部、每個 session 只解析一次(只快取教練檔案,見 `docs/adr/0026`),教練對話列表
 換教練帳號即重置,三者見 `docs/adr/0023`、`docs/adr/0029`)、
-`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄,供點數/訂閱)。「身分」的 key 由 `authStore.ts`
+`createSessionRefresher`(無條件重抓 + 在飛換帳靜默丟棄 + 後發優先,供點數/訂閱:與水合閘門共用出發序帳,
+先查 epoch 再問 `overtaken`,被超車的落地一樣靜默丟棄——開啟結帳的舊快照較晚落地,不再蓋回付款後的、
+把已持有的方案又變成計費行;帳本不隨身分重置,換帳前出發的落地先被 epoch 擋掉)。「身分」的 key 由 `authStore.ts`
 (身分的 owner,見「登入狀態」)匯出的純函式 `sessionIdentity()` 單一持有(未登入為 `null`,登入時為 `member.id`,缺 id 退化為空字串);
 閘門內部與 member/mobile/coach/mobile-admin layout 的暖機 key 都呼叫它,
 不各自手抄公式(見 `docs/adr/0026`)。身分基準在建構當下決定:
