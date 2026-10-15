@@ -356,7 +356,7 @@ the same for all of them (`docs/adr/0025` F-1): `load-gate.ts` exposes a `LoadSo
 a hydration gate's `pageEntry()` returns `{ source }` — a page writes
 `createLoadGate({ ...gate.pageEntry() })`. load-gate owns only phase, its own run-generation, the
 mount-time first load, unmount, and `onError`; every fetch/apply/flag decision (guard short-circuit,
-post-await mutation-wins re-check, the flag-flip, the fourth and fifth decision points below) lives
+post-await mutation-wins re-check, the flag-flip, the fourth to sixth decision points below) lives
 inside `hydration-gate.ts`'s internal `loadRun`/`refreshRun`, reached only through the source's
 `load`/`refresh` closures. `isCurrent` is the
 one thing load-gate hands the source: "unmounted or superseded by a newer run" — the source can only
@@ -393,6 +393,21 @@ generation capture past a caller's "refresh then synchronously optimistic `write
 account's `setPref` (optimistic PATCH, `onFailure: 'resync'`), which book their tails through `write()`;
 `markRead`/`markAllRead` are mobile's mutators too; the pages keep only the toast. The gate's own `generation`/`destroyed` bookkeeping (no page-local
 flag needed) discards a response that resolves after the page unmounts.
+
+A *sixth* decision point (R21) is the **departure ledger**, last departure wins
+(`createDepartureLedger`, exported from `hydration-gate.ts` so the session refresher can share it). Every
+GET that may apply takes a number synchronously when it leaves: the coalesced hydrate GET (joiners share
+its number) and the whole refresh family — store `refresh()`, the page's `source.refresh`, each
+generation-stable refetch round, the reconcile and the `resync` refetch. On landing, a snapshot that a
+later departure has already overtaken returns silently: no wait, no refetch, no throw. So an earlier GET
+landing late never overwrites a newer snapshot, whichever caller started either one, and no consumer keeps
+its own sequence number. An earlier departure that lands first still applies and is then overwritten; a
+later one that rejects leaves the earlier one to apply; an overtaken reconcile doesn't `invalidate()`, and
+an overtaken resync still reports `resynced`. The three axes stay independent — generations discard, tails
+wait, the ledger decides whose landing counts — and `write()`/`invalidate()`/`reset()` never touch it.
+"The superseded one waits for the winner" was rejected: it adds a second wait axis (`docs/adr/0021` allows
+only tails), hangs when the winner's page unmounts, and drops a good older snapshot when the winner
+rejects.
 
 Mobile-admin's ops collections are store-owned: the fetch/apply/guard lifecycle lives in
 `stores.ts`'s `opsGate`, because a mutator can flip the guard true (a mutation *is* the session's source

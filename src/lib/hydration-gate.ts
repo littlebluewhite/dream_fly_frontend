@@ -52,6 +52,11 @@
  * 尾流,非樂觀路徑 await send 之後才寫;丟棄軸(fetchGenStable)與等待軸(尾流帳)各自獨立。write()
  * 是唯一的寫入動詞(推世代、翻旗、尾流入帳都只經由它)。
  *
+ * R21:**第六決策點:出發序帳**(createDepartureLedger)——後出發者贏。hydrate 的合併 GET
+ * 與 refresh 族(store refresh()、頁面 source.refresh、世代重抓輪、和解、resync)出發時同步取號,落地時已有
+ * 更晚出發的落地就靜默返回。先出發的快照較晚落地不再蓋回,不分是哪個 caller 出發的——消費端不必手寫序號。
+ * 三軸互相獨立:世代軸管丟棄、尾流軸管等待、出發序帳只管「誰的落地算數」。
+ *
  * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
  * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
  * fetch rejection 一律原樣拋出、不在此攔截——呼叫端的 load-gate 接手轉 error 態。
@@ -115,6 +120,40 @@ async function fetchGenStable<T>(
 		if (entered === gen()) return data; // 世代穩定:進場之後零 mutation,快照可套用
 		if (!iterate()) return undefined; // 棄追:呼叫端宣告這一輪已無意義
 	}
+}
+
+/**
+ * 第六決策點(R21):**出發序帳**——後出發者贏。水合閘門自用,並匯出供 session refresher
+ * (session-gate.ts 的 createSessionRefresher)共用。
+ *
+ * 每支可能套用資料的 GET 出發時**同步**取號(`depart()`);落地、確定要套用的那一刻問
+ * `overtaken(seq)`:已有更晚出發的落地 → true,呼叫端靜默返回(不等、不重抓、不拋);否則把水位推到
+ * seq、回 false,呼叫端接著套用。同號不算超車(合併 GET 的加入者共用一號)。先出發的先落地照常套用、
+ * 之後再被蓋過;後出發的 reject 不推水位,先出發的照常套用。
+ *
+ * overtaken 會推水位,所以只在「其他判準都放行、接著就要套用」時問——因 epoch/卸載/mutation 勝出而
+ * 作廢的落地不得問。與世代軸(丟棄)、尾流軸(等待)互相獨立:不看世代,也不等任何人。不採「被取代
+ * 者等贏家」:那是第二條等待軸(ADR 0021 只許尾流),贏家的頁面卸載時等的人會卡住,贏家 reject 時
+ * 還會連帶丟掉手上好的舊快照。
+ */
+export interface DepartureLedger {
+	/** 出發取號:同步、單調遞增。 */
+	depart(): number;
+	/** 落地:seq 已被更晚出發的落地超車 → true(不套用);否則推水位、回 false(接著套用)。 */
+	overtaken(seq: number): boolean;
+}
+
+export function createDepartureLedger(): DepartureLedger {
+	let departed = 0;
+	let landed = 0;
+	return {
+		depart: () => ++departed,
+		overtaken(seq) {
+			if (seq < landed) return true;
+			landed = seq;
+			return false;
+		}
+	};
 }
 
 /** promise 結局收成值(不拋):write() 落地後才依結局分流。 */
@@ -186,12 +225,12 @@ export interface HydrationGate {
 	 *  的那支——出發後有 mutation 的舊快照不借給之後進場者。 */
 	hydrate(): Promise<void>;
 	refresh(): Promise<void>;
-	/** 只把旗標翻 false(下次 hydrate 重新真抓);不碰世代帳、尾流帳、在飛合併。 */
+	/** 只把旗標翻 false(下次 hydrate 重新真抓);不碰世代帳、尾流帳、出發序帳、在飛合併。 */
 	invalidate(): void;
 	/** 整顆閘門還原開機態:丟在飛合併 GET → 換尾流帳本(resetEpoch)→ 清尾流帳與和解鏈 → opts.reset()
 	 *  → 翻旗 false → 喚醒全部等待者(帳本清算先於通知,重入 hydrate() 不併到重置前的舊 GET)。
 	 *  重置之前出發的 hydrate/refresh 落地一律不寫;被喚醒的舊
-	 *  refresh 不再出發 GET。世代帳(mutationGen)不動——它只增不減,重置後仍是有效的單調序。 */
+	 *  refresh 不再出發 GET。世代帳(mutationGen)與出發序帳不動——兩者只增不減,重置後仍是有效的單調序。 */
 	reset(): void;
 	/** 唯一的寫入動詞(docs/adr/0027 §5)。進場記 owner(resetEpoch)與 wasHydrated:
 	 *   - 樂觀(有 optimistic):同一同步段 optimistic() → send() → 尾流入帳 → 世代 +1 翻旗,再 await;
@@ -231,8 +270,11 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	// 在飛舊尾流的出帳回呼據此作廢——否則「清帳 → 新尾流入帳 → 舊尾流姍姍來遲地 settle」會把
 	// 新帳減掉(甚至減成負數),F2 想關的窗換一個身分原封不動地重開;重置前出發的 GET 落地也據此不寫。
 	let resetEpoch = 0;
-	// hydrate 合併(R14 F2):在飛的那支 GET 與它出發時的世代。reset() 丟掉它。
-	let inflight: { gen: number; data: Promise<T> } | null = null;
+	// hydrate 合併(R14 F2):在飛的那支 GET、它出發時的世代與出發序號(加入者共用)。reset() 丟掉它。
+	let inflight: { gen: number; seq: number; data: Promise<T> } | null = null;
+	// 第六決策點(R21):出發序帳。hydrate 與 refresh 族共用一本;write()/invalidate()/reset() 不碰——
+	// 序號只增不減,重置之後出發的必然比重置前的新,重置前出發的落地已由 resetEpoch 作廢。
+	const ledger = createDepartureLedger();
 	// 和解鏈(以 resetEpoch 為軸):序列化、失敗翻旗可重試、
 	// 重置前排隊的不在新擁有者身上起跑。reset() 換一條新鏈——舊擁有者卡死的和解不得堵住新擁有者。
 	let reconcileChain: Promise<void> = Promise.resolve();
@@ -247,18 +289,19 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	const mutationWins = (entered: number): boolean => entered !== mutationGen || get(flag);
 	const commit = (): void => flag.set(true);
 
-	function coalescedFetch(): Promise<T> {
+	function coalescedFetch(): { seq: number; data: Promise<T> } {
 		// 只併入同世代出發的那支:出發後有 mutation,那份快照對之後進場者已是舊事實。
 		if (inflight?.gen !== mutationGen) {
-			const entry: { gen: number; data: Promise<T> } = {
+			const entry: { gen: number; seq: number; data: Promise<T> } = {
 				gen: mutationGen,
+				seq: ledger.depart(),
 				data: opts.fetch().finally(() => {
 					if (inflight === entry) inflight = null; // 已被取代/丟掉的不清新的
 				})
 			};
 			inflight = entry;
 		}
-		return inflight.data;
+		return inflight;
 	}
 
 	/** 水合路徑:hydrate()(isCurrent 恆真)與頁面 load-gate 的 load(isCurrent =「未卸載且仍是
@@ -267,10 +310,13 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		if (guarded()) return;
 		const entered = mutationGen;
 		const epoch = resetEpoch;
-		const data = await coalescedFetch();
+		const { seq, data: landing } = coalescedFetch();
+		const data = await landing;
 		if (!isCurrent() || epoch !== resetEpoch) return; // 過期、已卸載或已重置:不寫
 		// 併發的另一方(另一支 hydrate 或頁面 load-gate)先套用並翻旗,也在這裡短路——只 apply 一次。
 		if (mutationWins(entered)) return;
+		// 第六決策點:已有更晚出發的落地(例:invalidate() 翻掉旗標之後才落地的舊 GET)→ 靜默返回。
+		if (ledger.overtaken(seq)) return;
 		opts.apply(data);
 		// 重入防護(F1)(codex B0 r1):apply 通常寫共享 writable,其 subscriber 可能同步重入頁面的
 		// load()、開出新一輪 run。重查 isCurrent,不符即不翻旗(翻旗交給新一輪)——否則舊一輪的翻旗
@@ -286,10 +332,18 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 	async function refreshRun(isCurrent: () => boolean): Promise<void> {
 		const epoch = resetEpoch;
 		const live = (): boolean => isCurrent() && epoch === resetEpoch; // 重置之後這一輪即作廢
-		const data = await fetchGenStable(opts.fetch, () => mutationGen, { iterate: live, pendingSettle });
+		// 第六決策點:每次真正出發都重新取號(含世代重抓輪——補抓那發才是這份快照的出發點)。
+		// 取號同步,靜止時同步出發的硬契約不變。
+		let seq = 0;
+		const departing = (): Promise<T> => {
+			seq = ledger.depart();
+			return opts.fetch();
+		};
+		const data = await fetchGenStable(departing, () => mutationGen, { iterate: live, pendingSettle });
 		// fetchGenStable 回 undefined(棄追)必然是 live 已翻 false——兩個條件都單向不可逆,
-		// 故這一條同時攔下「過期、已卸載或已重置」與棄追,走到下面的 data 必是真快照。
-		if (!live()) return;
+		// 故 !live() 同時攔下「過期、已卸載或已重置」與棄追,走到下面的 data 必是真快照。
+		// 被超車(已有更晚出發的落地)靜默返回:不等、不重抓;和解因此不 invalidate,resync 照報 resynced。
+		if (!live() || ledger.overtaken(seq)) return;
 		opts.apply(data as T);
 		// 重入防護(F5)(codex B0 r1 追補):與 loadRun 對稱——apply 的 subscriber 可能同步重入頁面的
 		// load()(此刻旗標尚未翻,load 不短路);不符即不翻旗。

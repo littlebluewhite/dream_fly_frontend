@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
-import { createHydrationGate, resultOf, type HydrationGate } from './hydration-gate';
+import { createHydrationGate, createDepartureLedger, resultOf, type HydrationGate } from './hydration-gate';
 import { createLoadGate, type LoadPhase } from './load-gate';
 
 /** 手動控時序的 deferred promise——測 in-flight 競態不用 fake timers（抄
@@ -234,10 +234,11 @@ describe('createHydrationGate', () => {
 		expect(get(gate.hydrated)).toBe(false);
 	});
 
-	it('mutation 世代只有 write() 推進:refresh 在飛期間另一支 hydrate/refresh 落地 → 在飛那份照常套用、不補抓', async () => {
+	it('mutation 世代只有 write() 推進:refresh 在飛期間另一支 hydrate/refresh 落地 → 在飛那份不補抓', async () => {
 		/* 世代帳不再經讀取器外流(R15 F-1),改釘它的可觀察面:hydrate/refresh 若推進世代,在飛
 		 * refresh 落地時會誤判「進場之後有 mutation」而丟棄重抓(fetch 會變成 4)。旗標翻回 false
-		 * 不倒退世代,見上方「世代競態(帳本閉合輪)」釘。 */
+		 * 不倒退世代,見上方「世代競態(帳本閉合輪)」釘。在飛那份出發最早、落地最晚,被後出發的
+		 * 超車(第六決策點,見「出發序帳」區塊),所以最後套用的是後出發的 {v:2}。 */
 		const d1 = createDeferred<{ v: number }>();
 		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockResolvedValue({ v: 2 });
 		const apply = vi.fn();
@@ -250,7 +251,7 @@ describe('createHydrationGate', () => {
 		await p;
 
 		expect(fetch).toHaveBeenCalledTimes(3); // 在飛那份世代穩定,不補抓
-		expect(apply).toHaveBeenLastCalledWith({ v: 1 });
+		expect(apply).toHaveBeenLastCalledWith({ v: 2 });
 	});
 
 	/* R11 第五決策點——mutation settle 訊號。第四決策點(世代穩定)只比對進出場世代,對
@@ -648,6 +649,226 @@ describe('pageEntry(plain gate)', () => {
 
 		unsub();
 		page.destroy(); // 元件外建構無生命週期可掛(見 load-gate autoDestroyOnUnmount),呼叫端自行 destroy
+	});
+});
+
+describe('出發序帳(第六決策點,R21):後出發者贏', () => {
+	/* 每支可能套用的 GET 出發時同步取號,落地時只有沒被超車(還沒有更晚出發的落地)才套用;被超車的
+	 * 落地靜默返回——不等、不重抓、不拋。取號者:store 的 refresh()、頁面的 source.refresh、世代
+	 * 重抓輪、和解、resync,以及合併後的 hydrate GET(加入者共用同一號)。與世代軸(丟棄)、尾流軸
+	 * (等待)互相獨立:write()/invalidate()/reset() 不碰這本帳。 */
+
+	it('createDepartureLedger:後出發的先落地 → 先出發的被超車;依出發順序落地 → 都套用;同號(合併的加入者)不算超車', () => {
+		const ledger = createDepartureLedger();
+		const older = ledger.depart();
+		const newer = ledger.depart();
+		expect(ledger.overtaken(newer)).toBe(false);
+		expect(ledger.overtaken(older)).toBe(true);
+
+		const first = ledger.depart();
+		const second = ledger.depart();
+		expect(ledger.overtaken(first)).toBe(false);
+		expect(ledger.overtaken(second)).toBe(false);
+		expect(ledger.overtaken(second)).toBe(false);
+	});
+
+	it('兩支 store refresh() 交錯、先出發的較晚落地 → 不蓋回後出發的快照;被超車的照常 resolve、不重抓', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const older = gate.refresh(); // 例:離開頁面時這支還在飛
+		const newer = gate.refresh(); // 再次進頁
+		d2.resolve({ v: 2 });
+		await newer;
+		d1.resolve({ v: 1 });
+		await older;
+
+		expect(fetch).toHaveBeenCalledTimes(2);
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+	});
+
+	it('store refresh() 先出發、頁面 source.refresh 後出發且先落地 → store 那份不寫,頁面 ready', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+		const page = createLoadGate({ ...gate.pageEntry() });
+
+		const pStore = gate.refresh();
+		const pPage = page.refresh();
+		d2.resolve({ v: 2 });
+		await pPage;
+		d1.resolve({ v: 1 });
+		await pStore;
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+		expect(get(page)).toBe('ready');
+		page.destroy();
+	});
+
+	it('refresh 先出發、hydrate 後出發且先落地 → refresh 的舊快照不蓋回', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const pRefresh = gate.refresh();
+		const pHydrate = gate.hydrate(); // 未水合:hydrate 另出發一支(refresh 族不合併)
+		d2.resolve({ v: 2 });
+		await pHydrate;
+		d1.resolve({ v: 1 });
+		await pRefresh;
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+		expect(get(gate.hydrated)).toBe(true);
+	});
+
+	it('invalidate() 之後,早於已落地快照出發的 hydrate 才落地 → 不套用;旗標維持 false,下次 hydrate 重抓', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockResolvedValueOnce({ v: 2 }).mockResolvedValueOnce({ v: 3 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const pHydrate = gate.hydrate(); // 在飛
+		await gate.refresh(); // 後出發、先落地並翻旗
+		gate.invalidate(); // 旗標翻回 false:mutation 勝出的旗標判準不再擋那支舊 hydrate
+		d1.resolve({ v: 1 });
+		await pHydrate;
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+		expect(get(gate.hydrated)).toBe(false);
+
+		await gate.hydrate();
+		expect(fetch).toHaveBeenCalledTimes(3);
+		expect(apply).toHaveBeenLastCalledWith({ v: 3 });
+		expect(get(gate.hydrated)).toBe(true);
+	});
+
+	it('和解重抓被超車 → 靜默返回:不套用、不 invalidate(旗標維持 true,守衛照常短路)', async () => {
+		const dReconcile = createDeferred<{ v: number }>();
+		const dRefresh = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(dReconcile.promise).mockReturnValueOnce(dRefresh.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		await landWrite(gate); // 未水合的寫入 → 排和解
+		await settleRetry(); // 和解出發
+		expect(fetch).toHaveBeenCalledTimes(1);
+		const pRefresh = gate.refresh(); // 後出發
+		dRefresh.resolve({ v: 2 });
+		await pRefresh;
+		dReconcile.resolve({ v: 1 });
+		await settleRetry();
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+		expect(get(gate.hydrated)).toBe(true); // 被超車不是失敗:不翻回 false
+
+		await gate.hydrate();
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	it('resync 重抓被超車 → 仍回報 resynced、不 undo;套用的是後出發的快照', async () => {
+		const tail = createDeferred<void>();
+		const dResync = createDeferred<{ v: number }>();
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ v: 0 })
+			.mockReturnValueOnce(dResync.promise)
+			.mockResolvedValueOnce({ v: 2 });
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+		await gate.hydrate();
+		apply.mockClear();
+		const undo = vi.fn();
+		const err = new Error('patch');
+
+		const writing = gate.write({ optimistic: () => undo, send: () => tail.promise, onFailure: 'resync' });
+		tail.reject(err);
+		await settleRetry(); // resync 出發
+		expect(fetch).toHaveBeenCalledTimes(2);
+		await gate.refresh(); // 後出發、先落地
+		dResync.resolve({ v: 1 });
+
+		expect(await writing).toEqual({ kind: 'failed', error: err, recovery: 'resynced' });
+		expect(undo).not.toHaveBeenCalled();
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 2 });
+	});
+
+	it('先出發的先落地 → 照常套用,再被後出發的蓋過(不扣住先到的舊快照)', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const older = gate.refresh();
+		const newer = gate.refresh();
+		d1.resolve({ v: 1 });
+		await older;
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+
+		d2.resolve({ v: 2 });
+		await newer;
+		expect(apply.mock.calls).toEqual([[{ v: 1 }], [{ v: 2 }]]);
+	});
+
+	it('後出發的 reject → 先出發的照常套用;各 caller 拿自己的結果', async () => {
+		const d1 = createDeferred<{ v: number }>();
+		const d2 = createDeferred<{ v: number }>();
+		const fetch = vi.fn().mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+
+		const older = gate.refresh();
+		const newer = gate.refresh();
+		d2.reject(new Error('newer-boom'));
+		await expect(newer).rejects.toThrow('newer-boom');
+		d1.resolve({ v: 1 });
+		await expect(older).resolves.toBeUndefined();
+
+		expect(apply).toHaveBeenCalledTimes(1);
+		expect(apply).toHaveBeenCalledWith({ v: 1 });
+	});
+
+	it('世代重抓輪重新取號:補抓那發出發晚於另一支 → 那支先落地之後,補抓那份照常套用', async () => {
+		const dA1 = createDeferred<{ v: number }>();
+		const dB = createDeferred<{ v: number }>();
+		const dA2 = createDeferred<{ v: number }>();
+		const fetch = vi
+			.fn()
+			.mockResolvedValueOnce({ v: 0 })
+			.mockReturnValueOnce(dA1.promise)
+			.mockReturnValueOnce(dB.promise)
+			.mockReturnValueOnce(dA2.promise);
+		const apply = vi.fn();
+		const gate = createHydrationGate({ fetch, apply });
+		await gate.hydrate(); // 已水合:寫入不排和解
+		apply.mockClear();
+
+		const pA = gate.refresh();
+		await landWrite(gate); // A 第一發作廢
+		const pB = gate.refresh(); // B 出發(寫入之後,世代穩定)
+		dA1.resolve({ v: 1 });
+		await settleRetry(); // A 補抓:出發晚於 B
+		expect(fetch).toHaveBeenCalledTimes(4);
+
+		dB.resolve({ v: 2 });
+		await pB;
+		dA2.resolve({ v: 3 });
+		await pA;
+
+		expect(apply.mock.calls).toEqual([[{ v: 2 }], [{ v: 3 }]]);
 	});
 });
 

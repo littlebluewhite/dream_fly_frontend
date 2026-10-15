@@ -147,7 +147,7 @@ source 的棄追判準(未卸載且仍是最新一輪 run);guard 短路、post-a
 store 的頁面一律寫 `createLoadGate({ ...gate.pageEntry() })`。重入防護(F1)/(F5)留在本閘門,經
 `isCurrent` 交給 source 尊重,不下沉給水合閘門(見 `docs/adr/0016` 決定一、`docs/adr/0025` F-1)。
 _Avoid_: 手抄 phase 機制、手焊 skip+onData 水合組合、消費端直讀共享 store 的旗標當 `fetch`/`refresh`
-(寫共享 store 的變成 store 閘門,卸載棄追與後發優先都護不到)
+(寫共享 store 的變成 store 閘門,卸載棄追護不到;後發優先改由水合閘門的出發序帳負責,見該詞條)
 
 **水合閘門 (Hydration Gate)**:
 共享 store 的水合協定(guard 短路、post-await 重查「mutation 勝出」、mutator 翻旗);單一來源
@@ -164,7 +164,13 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 在飛這件事對世代軸不可見——GET 搶跑會拿到 server 舊真值而世代此刻已穩定。故 refresh 族每次出發前先等
 未 settle 的尾流全數落地(reject 也算 settle),靜止時同步出發、零額外成本(見 `docs/adr/0021`)。
 **等待軸與丟棄軸正交**:等待只認尾流、丟棄只認進出場世代比對,兩軸不得互換。第四、第五決策點只住
-`hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。**`reset()`**(選配 `opts.reset`):依序丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數與和解鏈、還原內容、
+`hydration-gate.ts` 內部,load-gate 與消費端只看得到黑箱的 `source.refresh(isCurrent)`。第六決策點是
+**出發序帳**(`createDepartureLedger`,同檔匯出供 session refresher 共用):後出發者贏。hydrate 的合併 GET
+(加入者共用一號)與 refresh 族(`refresh()`/`source.refresh`/世代重抓輪/和解/resync)出發時同步取號,
+落地時已有更晚出發的落地就靜默返回(不等、不重抓、不拋)——先出發的快照較晚落地不再蓋回較新的,不分
+是哪個 caller 出發的。先出發的先落地照常套用、之後再被蓋過;後出發的 reject 時先出發的照常套用;被超車的
+和解不 invalidate,被超車的 resync 仍回報 resynced。**三軸互相獨立**:世代軸管丟棄、尾流軸管等待、出發
+序帳只管誰的落地算數;`write()`/`invalidate()`/`reset()` 不碰這本帳。**`reset()`**(選配 `opts.reset`):依序丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數與和解鏈、還原內容、
 旗標翻 false、喚醒全部尾流等待者;重置前出發的
 load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/教練對話列表)不再匯出測試專用的重置,測試用真的登入 → 登出
 (`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests = opsGate.reset` 與 `resetAnnouncementsForTests = announcementsGate.reset`,
@@ -172,7 +178,8 @@ production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯�
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
 自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「`await write()` →
 `await refresh()`」序列會因此無窮重抓);把等待判準接上世代(同一條正常序列會永久掛住)或把丟棄判準接上
-尾流(0020 關掉的窗當場復發)
+尾流(0020 關掉的窗當場復發);消費端手寫出發序號(`refreshSeq` 一類)替共享 store 排後發優先;讓被超車
+的落地等贏家(第二條等待軸)
 
 **頁面進場包 (Page Entry)**:
 水合閘門交給頁面載入閘門的進場物——`gate.pageEntry()` 回傳 `{ source: LoadSource }`,頁面寫
