@@ -3,34 +3,7 @@ import { get } from 'svelte/store';
 import { loginState, startSession, endSession, refreshFor, currentIdentity } from './login-state';
 import { getAccess, getRefresh } from '$lib/api/tokens';
 import type { AuthUserResponse } from '$lib/api/generated';
-
-// Matches VITE_API_BASE_URL in .env / the spec's documented fallback, so
-// assertions are valid whether or not Vite loaded the .env file for the test run.
-const BASE = 'http://localhost:3000/api/v1';
-
-const LOGGED_OUT = { loggedIn: false, member: null, roles: [] as string[] };
-
-const USER_A: AuthUserResponse = {
-  id: 'uuid-A',
-  email: 'a@test.com',
-  name: 'A',
-  phone: null,
-  phone_verified: false,
-  avatar_url: null,
-  is_active: true,
-  created_at: '2026-01-01T00:00:00Z',
-  roles: ['member']
-};
-const USER_B: AuthUserResponse = { ...USER_A, id: 'uuid-B', email: 'b@test.com', name: 'B' };
-
-function jsonResponse(body: unknown, status = 200, statusText = 'OK') {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText,
-    json: async () => body
-  };
-}
+import { BASE, LOGGED_OUT, USER_A, USER_B, jsonResponse } from '$lib/testing/auth-fixtures';
 
 /** /auth/refresh 的成功回應:後端連同 user 一起回(AuthResponse)。 */
 function rotated(access_token: string, refresh_token: string, user: AuthUserResponse = USER_A) {

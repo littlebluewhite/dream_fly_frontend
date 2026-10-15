@@ -181,7 +181,7 @@ gate resets through its production path; there are no per-store `reset…ForTest
 `resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
 with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
-`page-lifetime.ts` (`describePageLifetime(name, Component, baseRoutes?, props?)` — the "page lifetime = login
+`page-lifetime.ts` (`describePageLifetime(name, Component, props?)` — the "page lifetime = login
 identity" scenarios, run once against the session scope; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
 one A→B scenario each of the four identity-dependent layout tests runs to prove its slot goes through the
 scope, `docs/adr/0028` §2); and fixtures

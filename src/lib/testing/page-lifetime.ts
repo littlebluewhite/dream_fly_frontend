@@ -52,14 +52,9 @@ function itRemountsOnSwap(Component: unknown, props: Record<string, unknown>, re
 	});
 }
 
-export function describePageLifetime(
-	name: string,
-	Component: unknown,
-	baseRoutes: Record<string, unknown> = {},
-	props: Record<string, unknown> = {}
-) {
+export function describePageLifetime(name: string, Component: unknown, props: Record<string, unknown> = {}) {
 	describe(`${name} — 頁面壽命 = 登入身分`, () => {
-		const releaseA = useProbeRoutes(baseRoutes);
+		const releaseA = useProbeRoutes({});
 
 		itRemountsOnSwap(Component, props, releaseA);
 

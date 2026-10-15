@@ -5,12 +5,7 @@ import type { AuthUserResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
 import { getAccess, getRefresh, setTokens, clearTokens } from '$lib/api/tokens';
-
-// Matches VITE_API_BASE_URL in .env / the spec's documented fallback (see
-// src/lib/api/client.test.ts), so assertions are valid either way.
-const BASE = 'http://localhost:3000/api/v1';
-
-const LOGGED_OUT = { loggedIn: false, member: null, roles: [] as string[] };
+import { BASE, LOGGED_OUT, jsonResponse } from '$lib/testing/auth-fixtures';
 
 const SAMPLE_USER: AuthUserResponse = {
   id: 'uuid-1',
@@ -23,15 +18,6 @@ const SAMPLE_USER: AuthUserResponse = {
   created_at: '2026-01-01T00:00:00Z',
   roles: ['member']
 };
-
-function jsonResponse(body: unknown, status = 200, statusText = 'OK') {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText,
-    json: async () => body
-  };
-}
 
 /** /auth/refresh 的成功回應:後端連同 user 一起回(AuthResponse)。 */
 function rotated(access_token: string, refresh_token: string, user: AuthUserResponse = SAMPLE_USER) {

@@ -156,4 +156,4 @@ describe('SessionScope — 換人時關 overlay', () => {
 	});
 });
 
-describePageLifetime('SessionScope', SessionScope, {}, { guard: loginGuard, caller: 'test', warm: [] });
+describePageLifetime('SessionScope', SessionScope, { guard: loginGuard, caller: 'test', warm: [] });

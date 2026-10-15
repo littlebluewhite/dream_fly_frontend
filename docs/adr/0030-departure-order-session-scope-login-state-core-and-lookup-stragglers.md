@@ -118,7 +118,7 @@ R21 沿 `docs/adr/0027`/`0028`/`0029`「一輪多案、單篇記錄」的體例,
 **測試**:新 `SessionScope.test.ts` 14 支(先紅):guard ×2、暖機准入 `it.each` ×4、同身分只暖一次、A→B 重暖、登出不暖、
 overlay ×2(A→B 關、登出不關)、頁面壽命 ×3。測試 helper `testing/page-lifetime.ts`:
 
-- `describePageLifetime(name, Component, baseRoutes?, props?)` 多了 `props` 參數,**只在 `SessionScope.test` 跑一次**。
+- `describePageLifetime(name, Component, props?)` 多了 `props` 參數、拿掉唯一呼叫端只傳 `{}` 的 `baseRoutes`,**只在 `SessionScope.test` 跑一次**。
 - 新的 `describeKeyedSlot(name, Layout, baseRoutes?)` 是**一支** A→B 重掛載情境,四個 layout 測試各跑一次,只證明該 layout
   把 slot 交給了身分範圍,不是把頁面壽命整組再跑四遍(計畫只寫了這個名字,沒寫它的意思,以此為準)。
 - `layout-probe.fixture.svelte` 改收 `props`。render 時要寫 `render(LayoutProbe, { props: { Layout, props } })`:Testing Library
