@@ -12,7 +12,7 @@
    *      sessionStorage，可被重放（這正是現行兩頁與此元件的測試釘住的行為）。
    *   2. 有 ?error= → 直接顯示錯誤，不看 state 比對結果、不呼叫後端。
    *   3. state 通過才用 ?code= 呼叫 authStore.loginWithGoogle()——內部走跟
-   *      login()/register() 完全相同的 applySession（token 儲存 + authStore
+   *      login()/register() 完全相同的 startSession（token 儲存 + authStore
    *      更新）路徑，不重造第二套邏輯。
    *   4. 成功 goto(successPath)；任何一步失敗都停在這頁顯示繁中錯誤 + 回登入頁
    *      （loginPath）連結。

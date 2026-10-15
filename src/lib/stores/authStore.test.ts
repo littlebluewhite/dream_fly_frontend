@@ -38,7 +38,7 @@ function rotated(access_token: string, refresh_token: string, user: AuthUserResp
   return { access_token, refresh_token, user };
 }
 
-// authStore is a module singleton backed by tokens.ts (module memory +
+// authStore is a module singleton backed by the login-state core: tokens.ts (module memory +
 // localStorage) and a localStorage profile cache. Reset all three before each
 // test. clearTokens() first so the subsequent logout() call below never has a
 // refresh token to send (skips the network call entirely — see the "skips the
@@ -125,7 +125,7 @@ describe('authStore.register', () => {
 });
 
 describe('authStore.loginWithGoogle', () => {
-  it('success: POSTs /auth/google without auth, stores tokens, and logs the member in (same applySession path as login/register)', async () => {
+  it('success: POSTs /auth/google without auth, stores tokens, and logs the member in (same startSession path as login/register)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({ access_token: 'access-3', refresh_token: 'refresh-3', user: SAMPLE_USER })
     );
@@ -415,9 +415,9 @@ describe('toMember', () => {
   });
 });
 
-// R17(FE-3):refresh 失敗真的清掉 token 時,client 的 onSessionExpired 訊號讓 authStore 登出——
+// R17(FE-3):refresh 失敗真的清掉 token 時,登入狀態核心在同一個清除點登出——
 // 畫面、dreamfly_auth 快取與 session 閘門都走既有的身分改變那條邊。
-describe('authStore — session expiry (onSessionExpired)', () => {
+describe('authStore — session expiry (refresh rejected)', () => {
   it('refresh 401 → api() throws ApiError(401), state LOGGED_OUT, cache follows, gate reset exactly once', async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'a1', refresh_token: 'r1', user: SAMPLE_USER }));

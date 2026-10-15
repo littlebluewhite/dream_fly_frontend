@@ -135,6 +135,29 @@ describe('匯入掃描器（Import Scan）', () => {
 		expect(offenders, `production 不得引用 *ForTests：${offenders.join(', ')}`).toEqual([]);
 	});
 
+	it('登入狀態契約：production 只有核心 stores/login-state.ts 能 import token 儲存 adapter；核心不 import client 與 authStore(R21)', () => {
+		// token 只由登入狀態核心寫(compare-and-set／唯一清除點都在核心裡)；核心若 import client 或
+		// authStore 就回到 callback hook 與 import 成環的老路。
+		const productionFiles = ['src/lib', 'src/routes']
+			.map(r)
+			.flatMap(walk)
+			.filter((f) => /\.(svelte|ts)$/.test(f) && !f.endsWith('.test.ts') && !f.endsWith('.fixture.svelte') && !f.startsWith(r('src/lib/testing') + '/'));
+		expect(productionFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
+		const reachesTokens = makeReachPredicate('$lib/api/tokens', r('src/lib/api/tokens'));
+		const tokenImporters = productionFiles
+			.filter((f) => importSpecifiers(readFileSync(f, 'utf8')).some((s) => reachesTokens(f, s)))
+			.map((f) => f.replace(ROOT + '/', ''));
+		expect(tokenImporters, `只有登入狀態核心能 import $lib/api/tokens：${tokenImporters.join(', ')}`).toEqual(['src/lib/stores/login-state.ts']);
+
+		const core = r('src/lib/stores/login-state.ts');
+		const reachesCaller = [
+			makeReachPredicate('$lib/api/client', r('src/lib/api/client')),
+			makeReachPredicate('$lib/stores/authStore', r('src/lib/stores/authStore'))
+		];
+		const callerImports = importSpecifiers(readFileSync(core, 'utf8')).filter((s) => reachesCaller.some((reach) => reach(core, s)));
+		expect(callerImports, '登入狀態核心不得 import client 或 authStore').toEqual([]);
+	});
+
 	it('測試 seam 契約：零 vi.mock／vi.doMock 整支 coach／admin／member／public seam 模組(R16 Task 8、W-8、R18 W4d)', () => {
 		// 教練頁測試走 HTTP seam(mock $lib/api/client + loginAs + fakeRouter(…, COACH_ROUTES))，
 		// admin 頁與 mobile-admin 測試同理(ADMIN_ROUTES)；R18 W4d 起 member／mobile／public 頁面
