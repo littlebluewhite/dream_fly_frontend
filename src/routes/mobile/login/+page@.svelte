@@ -5,7 +5,7 @@
    * Task 19：移除示範性的「手機號碼 + 訪客瀏覽」假登入（寫 df_mobile_session
    * 即視為登入，未驗證任何憑證）——改真 email/密碼表單打 POST /auth/login
    * （authStore.login，同 member 登入頁的既有 token 路徑：$lib/stores/
-   * authStore.ts 的 setTokens/refresh 機制不變，這裡只是換一張表單）。沒有
+   * login-state.ts 的 setTokens/refresh 機制不變，這裡只是換一張表單）。沒有
    * 「訪客瀏覽」：mobile 是會員專屬 app，後端沒有訪客身分,不再假裝有。沒有
    * 忘記密碼連結(mobile 無對應路由,不硬連去 /member/forgot-password 混淆兩個
    * surface)。

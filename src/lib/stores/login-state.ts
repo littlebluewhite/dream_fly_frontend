@@ -146,7 +146,7 @@ export function currentIdentity(): string | null {
  *  不得用新身分的憑證替舊畫面的寫入重送。 */
 export async function refreshFor(issuedBy: string | null): Promise<boolean> {
   if (currentIdentity() !== issuedBy) return false;
-  return (await refresh()) && currentIdentity() === issuedBy;
+  return (await refreshSingleFlight()) && currentIdentity() === issuedBy;
 }
 
 /** 回傳 refresh 是否成功:成功即伺服器已確認 token 的主人(compare-and-set 時已同拍換身分)。
@@ -157,7 +157,7 @@ export async function hydrateSession(fetchMe: () => Promise<ApiUser>): Promise<b
     state.set(LOGGED_OUT);
     return false;
   }
-  const refreshed = await refresh();
+  const refreshed = await refreshSingleFlight();
   // 失敗時若 token 真的被清掉(後端明確拒絕),refresh 已設 LOGGED_OUT;沒清掉代表
   // 後端暫時不可用(狀態不動),或別的分頁換上了新 session(交給 watchOtherTabs 的 listener)。
   if (!refreshed) return false;
@@ -223,7 +223,7 @@ const REFRESH_LOCK_NAME = 'dreamfly-refresh';
 
 /** POST /auth/refresh with the stored refresh token; rotates the pair on success.
  *  Single-flight: concurrent callers *in this tab* share the one in-flight request. */
-function refresh(): Promise<boolean> {
+function refreshSingleFlight(): Promise<boolean> {
   if (!inFlightRefresh) {
     inFlightRefresh = performRefreshExclusive().finally(() => {
       inFlightRefresh = null;
