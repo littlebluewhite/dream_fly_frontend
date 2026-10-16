@@ -331,56 +331,130 @@ describe('createSessionGate — session 家族', () => {
 });
 
 describe('createSessionGate — queueWrite 寫入鏈', () => {
-	it('排隊中換帳號 → 輪到時回 skipped、task 不執行', async () => {
+	/** A 已登入、閘門的 fetch 交給呼叫端控制。 */
+	async function gateForA(fetch: () => Promise<Item[]> = async () => [], store = writable<Item[]>([])) {
 		let logins = 0;
 		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
+		const gate = createSessionGate<Item[]>({ fetch, apply: (d) => store.set(d), reset: () => store.set([]) });
 		await authStore.login('a@dreamfly.test', 'pw');
+		return gate;
+	}
+
+	it('排隊中換帳號 → 輪到時回 stale、send 不執行', async () => {
+		const gate = await gateForA();
+		await gate.hydrate();
 
 		const d = createDeferred<string>();
-		const second = vi.fn(async () => 'ran');
-		const p1 = gate.queueWrite(() => d.promise, 'skipped');
-		const p2 = gate.queueWrite(second, 'skipped'); // 排在 p1 後面
+		const second = vi.fn(() => Promise.resolve('ran'));
+		const p1 = gate.queueWrite({ send: () => d.promise });
+		const p2 = gate.queueWrite({ send: second }); // 排在 p1 後面
+		await settleReconcile(); // p1 已送出、在飛
 		await authStore.login('b@dreamfly.test', 'pw');
 		d.resolve('first');
 
-		await expect(p1).resolves.toBe('first');
-		await expect(p2).resolves.toBe('skipped');
+		await expect(p1).resolves.toEqual({ kind: 'stale', settled: { status: 'fulfilled', value: 'first' } });
+		await expect(p2).resolves.toMatchObject({ kind: 'stale', settled: { status: 'rejected' } });
 		expect(second).not.toHaveBeenCalled();
 	});
 
-	it('stale() 看得見執行中途的換帳號', async () => {
-		let logins = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
-		await authStore.login('a@dreamfly.test', 'pw');
+	it('寫前先水合:入列時未水合 → 輪到時先 GET,再送出;水合蓋掉的樂觀寫入再套一次', async () => {
+		const store = writable<Item[]>([]);
+		const dGet = createDeferred<Item[]>();
+		const gate = await gateForA(() => dGet.promise, store);
+		const sent: Item[][] = [];
 
-		const d = createDeferred<void>();
-		const seen: boolean[] = [];
-		const p = gate.queueWrite(async (stale) => {
-			seen.push(stale());
-			await d.promise;
-			seen.push(stale());
-			return 'done';
-		}, 'skipped');
-		await Promise.resolve();
+		const p = gate.queueWrite({
+			optimistic: () => {
+				store.update((xs) => (xs.some((x) => x.id === 'local') ? xs : [...xs, { id: 'local' }]));
+				return () => store.update((xs) => xs.filter((x) => x.id !== 'local'));
+			},
+			send: () => {
+				sent.push(get(store));
+				return Promise.resolve('ok');
+			}
+		});
+		expect(get(store)).toEqual([{ id: 'local' }]); // 入列當下同步套用
+		dGet.resolve([{ id: 'server' }]); // 水合落地蓋掉本地
+
+		await expect(p).resolves.toEqual({ kind: 'written', result: 'ok' });
+		expect(sent).toEqual([[{ id: 'server' }, { id: 'local' }]]);
+		expect(get(store)).toEqual([{ id: 'server' }, { id: 'local' }]);
+	});
+
+	it('send 回 null → written(null),不經 write()(不排和解、不動旗標)', async () => {
+		let gets = 0;
+		const gate = await gateForA(async () => {
+			gets++;
+			return [];
+		});
+
+		await expect(gate.queueWrite({ send: () => null })).resolves.toEqual({ kind: 'written', result: null });
+		gate.invalidate();
+		await settleReconcile();
+		expect(gets).toBe(1); // 只有寫前水合那一支:沒有和解重抓
+		expect(get(gate.hydrated)).toBe(false);
+	});
+
+	it("寫前水合失敗 → 不送出;onFailure 'resync' 先整包重抓(resynced)", async () => {
+		let gets = 0;
+		const store = writable<Item[]>([]);
+		const gate = await gateForA(async () => {
+			if (++gets === 1) throw new Error('offline');
+			return [{ id: 'server' }];
+		}, store);
+		const send = vi.fn(() => Promise.resolve('ok'));
+
+		const o = await gate.queueWrite({ optimistic: () => () => {}, send, onFailure: 'resync' });
+
+		expect(o).toMatchObject({ kind: 'failed', recovery: 'resynced' });
+		expect(send).not.toHaveBeenCalled();
+		expect(gets).toBe(2);
+		expect(get(store)).toEqual([{ id: 'server' }]);
+	});
+
+	it("寫前水合失敗、重抓也失敗 → 呼叫入列時 optimistic 回的 undo(rolledBack)", async () => {
+		const store = writable<Item[]>([]);
+		const gate = await gateForA(async () => {
+			throw new Error('offline');
+		}, store);
+
+		const o = await gate.queueWrite({
+			optimistic: () => {
+				store.set([{ id: 'local' }]);
+				return () => store.set([]);
+			},
+			send: () => Promise.resolve('ok'),
+			onFailure: 'resync'
+		});
+
+		expect(o).toMatchObject({ kind: 'failed', recovery: 'rolledBack' });
+		expect(get(store)).toEqual([]);
+		expect(get(gate.hydrated)).toBe(false); // 不送出、不翻旗
+	});
+
+	it('寫前水合時換帳號 → stale,不重抓、不回滾到新身分', async () => {
+		let gets = 0;
+		const dGet = createDeferred<Item[]>();
+		const gate = await gateForA(() => (++gets === 1 ? dGet.promise : Promise.resolve([])));
+		const undo = vi.fn();
+
+		const p = gate.queueWrite({ optimistic: () => undo, send: () => Promise.resolve('ok'), onFailure: 'resync' });
 		await authStore.login('b@dreamfly.test', 'pw');
-		d.resolve();
+		dGet.resolve([{ id: 'a' }]);
 
-		await expect(p).resolves.toBe('done');
-		expect(seen).toEqual([false, true]);
+		await expect(p).resolves.toMatchObject({ kind: 'stale', settled: { status: 'rejected' } });
+		expect(gets).toBe(1);
+		expect(undo).not.toHaveBeenCalled();
 	});
 
 	it('A 的寫入卡住不影響 B:換帳號即重置寫入鏈', async () => {
-		let logins = 0;
-		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
-		const gate = createSessionGate<Item[]>({ fetch: async () => [], apply: () => {}, reset: () => {} });
-		await authStore.login('a@dreamfly.test', 'pw');
+		const gate = await gateForA();
+		await gate.hydrate();
 
-		void gate.queueWrite(() => new Promise<string>(() => {}), 'skipped'); // A 的 PATCH 掛死
+		void gate.queueWrite({ send: () => new Promise<string>(() => {}) }); // A 的 PATCH 掛死
 		await authStore.login('b@dreamfly.test', 'pw');
 
-		await expect(gate.queueWrite(async () => 'b-saved', 'skipped')).resolves.toBe('b-saved');
+		await expect(gate.queueWrite({ send: () => Promise.resolve('b-saved') })).resolves.toEqual({ kind: 'written', result: 'b-saved' });
 	});
 });
 

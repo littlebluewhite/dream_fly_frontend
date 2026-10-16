@@ -217,6 +217,28 @@ export function resultOf<R>(o: WriteOutcome<R>): R {
 	throw o.settled.reason;
 }
 
+/** write() 失敗後的復原步驟(session 閘門的 queueWrite 在寫前水合失敗時共用):keep 不動;rollback
+ *  呼叫 undo;resync 先 refresh,重抓也失敗才退回 undo。沒有 undo 可呼叫 → 'kept'。resync 期間擁有者
+ *  換人(stale())→ 'stale':refresh 已靜默收束(不寫),不得謊報 resynced,也不得 undo 到新擁有者身上。 */
+export async function recoverWrite(
+	policy: Write<unknown>['onFailure'],
+	undo: (() => void) | void,
+	refresh: () => Promise<void>,
+	stale: () => boolean
+): Promise<WriteRecovery | 'stale'> {
+	if (policy === 'resync') {
+		const resynced = await refresh().then(
+			() => true,
+			() => false // 重抓也失敗:退回 undo
+		);
+		if (stale()) return 'stale';
+		if (resynced) return 'resynced';
+	}
+	if ((policy ?? 'keep') === 'keep' || !undo) return 'kept';
+	undo();
+	return 'rolledBack';
+}
+
 export interface HydrationGate {
 	/** 是否已水合(唯讀投影)。翻 true 走 write()/水合落地,翻 false 走 `invalidate()`/`reset()`。 */
 	hydrated: Readable<boolean>;
@@ -430,23 +452,11 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		}
 
 		const error = settled.reason;
-		const policy = w.onFailure ?? 'keep';
-		if (policy === 'resync') {
-			const resynced = await refreshRun(ALWAYS).then(
-				() => true,
-				() => false // 重抓也失敗:退回 undo
-			);
-			// 重抓期間擁有者換人:refreshRun 靜默收束(不寫),不得謊報 resynced,也不得 undo 到新擁有者身上。
-			if (owner !== resetEpoch) return { kind: 'stale', settled };
-			if (resynced) return { kind: 'failed', error, recovery: 'resynced' };
-		}
-		let recovery: WriteRecovery = 'kept';
-		if (policy !== 'keep' && undo) {
-			undo();
-			recovery = 'rolledBack'; // 沒有 undo(非樂觀或 optimistic 沒回傳)就什麼都沒做:kept
-		}
-		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標)。
-		if (w.optimistic && !wasHydrated) queueReconcile();
+		const recovery = await recoverWrite(w.onFailure, undo, () => refreshRun(ALWAYS), () => owner !== resetEpoch);
+		if (recovery === 'stale') return { kind: 'stale', settled };
+		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標;
+		// resynced 已整包重抓,不必再補)。
+		if (recovery !== 'resynced' && w.optimistic && !wasHydrated) queueReconcile();
 		return { kind: 'failed', error, recovery };
 	}
 

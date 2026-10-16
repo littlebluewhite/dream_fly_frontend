@@ -13,8 +13,8 @@
  * 結構保證:
  *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(修掉 prefs 與
  *    profile 跨登入殘留)。併發的 hydrateSelfAccount() 共用同一支在飛 GET(閘門的 hydrate 合併)。
- *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite;每一筆輪到時:session 變了就跳過 →
- *    await 水合(「寫前先水合」不再是呼叫端的義務)→ gate.write(PATCH, ...)。
+ *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite:寫前水合、換帳號作廢、失敗復原都在閘門裡,
+ *    這裡只交 optimistic/send/commit/onFailure;send 回 null 表示沒有要送的(全部欄位未改動)。
  *  - 後端對 preferences 是整包覆寫,送出時 = 後端原始物件 + 本地 4 鍵,前端不認識的
  *    鍵也保得住。
  *  - PATCH/GET 成功都經 authStore.syncUser 同步名字(identity 不變,不觸發任何 gate)。
@@ -172,84 +172,62 @@ function sendPatch(body: Record<string, unknown>): Promise<ApiMe> {
 	return api<UserResponse>('/users/me', { method: 'PATCH', body: JSON.stringify(body) });
 }
 
-async function patchMe(body: Record<string, unknown>, writeBack: (u: ApiMe) => void): Promise<ApiMe> {
-	return resultOf(await gate.write({ send: () => sendPatch(body), commit: writeBack }));
-}
-
 /** 切換一個偏好:樂觀更新後排進寫入鏈。整包快照在「輪到時」才從 store 取(不是排隊時
- *  凍結),後一筆永遠疊在前一筆(含其 resync/回滾)之後的最新狀態上。輪到時走閘門的
- *  write({ optimistic, send: PATCH, commit: applyMe, onFailure: 'resync' }):PATCH 記成尾流
- *  (同拍的 refresh 族等它 settle,ADR-0021)。失敗先整包 resync 成伺服器真值(resynced),
- *  resync 也失敗才單鍵回滾(rolledBack)。toast 由呼叫端依 outcome 決定。 */
-export function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
+ *  凍結),後一筆永遠疊在前一筆(含其 resync/回滾)之後的最新狀態上。寫前水合、換帳號作廢與
+ *  失敗復原都是 gate.queueWrite 的事:PATCH 記成尾流(同拍的 refresh 族等它 settle,ADR-0021);
+ *  失敗(含寫前水合失敗)先整包 resync 成伺服器真值(resynced),resync 也失敗才單鍵回滾(rolledBack)。
+ *  toast 由呼叫端依 outcome 決定。 */
+export async function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcome> {
 	const before = get(prefsStore)[k];
-	const wasHydrated = get(gate.hydrated);
-	const toggle = () => prefsStore.update((p) => ({ ...p, [k]: v }));
-	const rollback = () => prefsStore.update((p) => ({ ...p, [k]: before }));
-	toggle(); // 開關立即反映;真正送出要等輪到
-	return gate.queueWrite<PrefSetOutcome>(async (stale) => {
-		try {
-			await hydrateSelfAccount();
-		} catch (err) {
-			// 寫前水合失敗:同 write 的 resync 策略——先整包 resync,也失敗才單鍵回滾。
-			console.error('profile: 偏好儲存前水合失敗', err);
-			if (stale()) return { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
-			try {
-				await gate.refresh();
-				return { kind: 'resynced' };
-			} catch (resyncErr) {
-				console.error('profile: resync 失敗,退回單鍵回滾', resyncErr);
-				if (!stale()) rollback();
-				return { kind: 'rolledBack' };
-			}
-		}
-		const o = await gate.write({
-			optimistic: () => {
-				// 切換發生在水合落地之前:水合的 apply 已用後端值蓋掉這次樂觀切換,補回。
-				if (!wasHydrated) toggle();
-				return rollback;
-			},
-			send: () => sendPatch({ preferences: prefsToWire(get(me)?.preferences ?? null, get(prefsStore)) }),
-			// 寫回只同步 me/名字、不動 prefsStore:本筆飛行期間使用者可能又切了別的鍵。
-			commit: applyMe,
-			onFailure: 'resync'
-		});
-		if (o.kind === 'written') return { kind: 'saved' };
-		if (o.kind === 'stale') return o.settled.status === 'fulfilled' ? { kind: 'saved' } : { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
-		console.error('profile: 偏好儲存失敗', o.error);
-		return { kind: o.recovery === 'resynced' ? 'resynced' : 'rolledBack' };
-	}, { kind: 'rolledBack' });
+	const o = await gate.queueWrite({
+		// 冪等:入列時未水合的話,閘門在水合落地後再套一次。
+		optimistic: () => {
+			prefsStore.update((p) => ({ ...p, [k]: v }));
+			return () => prefsStore.update((p) => ({ ...p, [k]: before }));
+		},
+		send: () => sendPatch({ preferences: prefsToWire(get(me)?.preferences ?? null, get(prefsStore)) }),
+		// 寫回只同步 me/名字、不動 prefsStore:本筆飛行期間使用者可能又切了別的鍵。
+		commit: applyMe,
+		onFailure: 'resync'
+	});
+	if (o.kind === 'written') return { kind: 'saved' };
+	if (o.kind === 'stale') return o.settled.status === 'fulfilled' ? { kind: 'saved' } : { kind: 'rolledBack' }; // 已換帳號:新身分的 store 不碰
+	console.error('profile: 偏好儲存失敗', o.error);
+	return { kind: o.recovery === 'resynced' ? 'resynced' : 'rolledBack' };
 }
 
 /** 存個人資料(姓名/電話/生日/偏好)。不做樂觀更新;只送與目前值不同的欄位,全部相同
  *  就不發請求;birth 為 '' 送 null(後端 double-option:顯式清空)。偏好有改時送整包。 */
-export function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveOutcome> {
-	return gate.queueWrite<SelfAccountSaveOutcome>(async () => {
-		try {
-			await hydrateSelfAccount();
-			const cur = get(me)!; // 水合成功且同一 session(queueWrite 已核對)→ 必有值
-			const invalid = selfAccountEditError(edit, toSelfAccount(cur));
-			if (invalid) return { kind: 'failed', error: new Error(invalid) };
+export async function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveOutcome> {
+	let prefsChanged = false;
+	try {
+		resultOf(
+			await gate.queueWrite({
+				send: () => {
+					const cur = get(me)!; // queueWrite 已水合且核對過身分 → 必有值
+					const invalid = selfAccountEditError(edit, toSelfAccount(cur));
+					if (invalid) return Promise.reject(new Error(invalid));
 
-			const body: Record<string, unknown> = {};
-			const name = edit.name?.trim();
-			if (name !== undefined && name !== cur.name) body.name = name;
-			const phone = edit.phone?.trim();
-			if (phone !== undefined && phone !== (cur.phone ?? '')) body.phone = phone;
-			if (edit.birth !== undefined && edit.birth !== (cur.birth_date ?? '')) body.birth_date = edit.birth || null;
-			const curPrefs = get(prefsStore);
-			const nextPrefs = { ...curPrefs, ...edit.prefs };
-			const prefsChanged = PREF_KEYS.some((k) => nextPrefs[k] !== curPrefs[k]);
-			if (prefsChanged) body.preferences = prefsToWire(cur.preferences, nextPrefs);
-			if (Object.keys(body).length === 0) return { kind: 'saved' };
-
-			await patchMe(body, (u) => {
-				applyMe(u);
-				if (prefsChanged) prefsStore.update((p) => ({ ...p, ...edit.prefs }));
-			});
-			return { kind: 'saved' };
-		} catch (error) {
-			return { kind: 'failed', error };
-		}
-	}, { kind: 'failed', error: new Error('session 已變更,未送出') });
+					const body: Record<string, unknown> = {};
+					const name = edit.name?.trim();
+					if (name !== undefined && name !== cur.name) body.name = name;
+					const phone = edit.phone?.trim();
+					if (phone !== undefined && phone !== (cur.phone ?? '')) body.phone = phone;
+					if (edit.birth !== undefined && edit.birth !== (cur.birth_date ?? '')) body.birth_date = edit.birth || null;
+					const curPrefs = get(prefsStore);
+					const nextPrefs = { ...curPrefs, ...edit.prefs };
+					prefsChanged = PREF_KEYS.some((k) => nextPrefs[k] !== curPrefs[k]);
+					if (prefsChanged) body.preferences = prefsToWire(cur.preferences, nextPrefs);
+					return Object.keys(body).length === 0 ? null : sendPatch(body);
+				},
+				commit: (u) => {
+					applyMe(u);
+					if (prefsChanged) prefsStore.update((p) => ({ ...p, ...edit.prefs }));
+				}
+			})
+		);
+		return { kind: 'saved' };
+	} catch (error) {
+		return { kind: 'failed', error };
+	}
 }

@@ -36,9 +36,13 @@
  * CheckoutDialog 的防重複扣款不抽成純模組」的當時裁決（Round 5；render 測試原封全綠 =
  * 搬動零 churn 的證明）。 */
 import { derived, get, writable, type Readable, type Writable } from 'svelte/store';
-import type { PaymentMethod } from '$lib/checkout-order';
 import type { ChargeableLine } from '$lib/cart-item';
 import { checkoutMath } from '$lib/checkout-math';
+
+/** 付款方式（integration-contract.md §1.8/§3.10）值域——純應用層值域，非 DB enum。
+ *  不帶時後端預設 credit_card；帶入值域外字串回 422。目前仍是模擬金流（見 §1.8），
+ *  這裡只是把使用者的選擇如實送出，不影響下單流程本身。 */
+export type PaymentMethod = 'credit_card' | 'line_pay' | 'atm' | 'jkopay' | 'cash';
 
 /** 成交快照 = placeOrder 確認物件的六欄投影（金額/點數以 API 回應為準，非本地試算）。
  *  deps 回傳型別也用這個窄形：真 placeOrder 與單元 mock 都直接回這個窄形，不必湊 wire 物件。 */
@@ -87,7 +91,7 @@ export interface CheckoutControllerDeps {
 	/** lines 由 confirmPay 只讀一次（get(deps.lines)）、同一份既用來判斷
 	 *  hasChargeable 也往下傳——不再各自重讀一次可能已經漂移的購物車快照。 */
 	placeOrder: (lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>;
-	/** 「套用」按鈕的結果機（member/checkout 的 applyCouponCode）：空輸入回 null（不動
+	/** 「套用」按鈕的結果機（member/checkout-sync 的私有 applyCouponCode）：空輸入回 null（不動
 	 *  狀態），否則回要寫入的 coupon 與錯誤文案。 */
 	applyCouponCode: (code: string) => Promise<{ coupon: AppliedCoupon | null; codeErr: string } | null>;
 	lines: Readable<ChargeableLine[]>; // 可計費項目（chargeableLines 的輸出）
