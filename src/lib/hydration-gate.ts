@@ -3,8 +3,7 @@
  *
  * 收斂「共享 store 的水合協定」：guard 短路 + post-await re-check（mutation 勝出）
  * + mutator 翻旗。最初是 src/lib/mobile-admin/stores.ts 中 hydrateOps 與訊息水合
- * 兩段逐字重複協定的深模組化——hydrateOps 仍原地直接用本 factory（見該檔
- * opsGate 的 createHydrationGate 呼叫）；訊息那段自 R13（docs/adr/0023）改建在
+ * 兩段逐字重複協定的深模組化——該檔的 ops 集合（三個水合單位）仍直接用本 factory；訊息那段自 R13（docs/adr/0023）改建在
  * session-gate.ts 的 createSessionGate 上（換帳號即重置），R20 起已是教練對話列表
  * （coach/conversations.ts，同樣建在 createSessionGate 上，桌面與 mobile-admin 共用），
  * 仍間接用本 factory。
@@ -34,7 +33,7 @@
  * 決定一）。phase、run 世代的寫入點與棄追判準仍在 load-gate，故不是 ADR-0020 否決的形 3。
  *
  * R14(候選 F1):頁面進場包 pageEntry() 自 session-gate 搬進 HydrationGate——plain 閘門
- * (mobile-admin 的 opsGate)與 session 閘門的頁面自此同一條接法
+ * (mobile-admin ops 集合的水合單位)與 session 閘門的頁面自此同一條接法
  * `createLoadGate({ ...gate.pageEntry() })`。
  *
  * R14(候選 F2):**hydrate 合併**——hydrate() 與頁面 load-gate 的 load 共用同一支在飛 GET(子頁
@@ -73,7 +72,7 @@ import type { LoadSource } from './load-gate'; // type-only:零 runtime 邊(執�
  * 直到世代穩定為止。
  *
  * 判準只認「進場之後才發生的 mutation」，**絕不可**改讀旗標／世代的當下值：像
- * mobile-admin 的「await write() → await refreshOps()」是正常序列，mutation 發生
+ * mobile-admin ops 寫入動詞的「await 寫入 → await 單位 refresh()」是正常序列，mutation 發生
  * 在進場之前，那份快照必須照常套用、且只能發一次 fetch。
  *
  * `opts.iterate` 是棄追判準（即 refreshRun 收到的 isCurrent；store 層的 refresh() 傳恆真＝抓到
@@ -181,7 +180,7 @@ export interface HydrationGateOptions<T> {
  * 資料來源(LoadSource)——guarded/load/refresh 都是閘門自己的閉包,頁面 load-gate 拿不到旗標、
  * 世代帳或尾流帳,只把自己的棄追判準 isCurrent 交進來。去泛型:資料型別封在閘門內部。
  * R14(候選 F1)自 session-gate.ts 搬來住在 HydrationGate:mobile-admin 的 ops 頁接的是 plain
- * 閘門(opsGate),進場包若只住 session 閘門,它們只能拿 hydrate/refresh 當 load-gate 的
+ * 閘門(ops 集合的水合單位),進場包若只住 session 閘門,它們只能拿 hydrate/refresh 當 load-gate 的
  * fetch/refresh——store 閘門自己 apply,load-gate 的「已卸載/被新一輪取代」守衛管不到寫入。
  */
 export interface PageEntry {

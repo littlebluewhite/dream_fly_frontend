@@ -301,8 +301,8 @@ re-delegates to the real getters built for their desktop counterpart (`mobile` �
 `mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping only where the mobile shape
 diverges, with their own small residual mock spots (same ADR 0006 inventory) inlined the same direct way.
 
-`mobile-admin/api.ts` keeps exactly four combinators — `getMore`/`getCoachHome`/`getAdminHome`/
-`getOpsCollections` — the ones that fan out to more than one source or reshape a response;
+`mobile-admin/api.ts` keeps exactly three combinators — `getMore`/`getCoachHome`/`getAdminHome` —
+the ones that fan out to more than one source or reshape a response;
 mobile-admin production code imports everything else from the owning module (`$lib/admin/api`,
 `$lib/admin/data`, `$lib/admin/components/coach-save`, `$lib/admin/settings-form`, `$lib/coach/api`,
 `$lib/coach/load-error-copy`, `$lib/coach/data`) directly, aliasing at the import site on a name clash
@@ -431,36 +431,44 @@ wait, the ledger decides whose landing counts — and `write()`/`invalidate()`/`
 only tails), hangs when the winner's page unmounts, and drops a good older snapshot when the winner
 rejects.
 
-Mobile-admin's ops collections are store-owned: the fetch/apply/guard lifecycle lives in
-`stores.ts`'s `opsGate`, because a mutator can flip the guard true (a mutation *is* the session's source
-of truth) and none of them is "the page". The pages spread the gate's own entry pack —
-`createLoadGate({ ...opsPageEntry })` — so the store write goes through the source's `load` closure
-and a response landing after unmount or after a newer run is dropped; the hydrated guard is rechecked
-right before the write, so a mutation racing an in-flight fetch always wins. The four ops collections
-(`members`/`classes`/`orders`/`coaches`) boot honestly (`docs/adr/0025` F-3): a private `EMPTY_OPS`
-constant (four empty arrays, `pages` all `{ total: 0, perPage: 0 }`) is both the stores' boot value and
-what `opsGate`'s `reset: () => applyOps(EMPTY_OPS)` restores on identity reset — the admin home page's
-pending-payment banner and `CoachesScreen`'s subtitle read `0`/nothing before the gate is ready. The
-member/course/coach writes don't go through `write()` at all: the store's per-entity, add/edit-split
-write verbs (`docs/adr/0022`) — `addMember`/`saveMember`, `addCourse`/`saveCourse` (taking a
-`ValidCourse` from `course-request.ts`'s `checkCourseDraft` and building the body with
-`buildCreateCourseBody`/`buildUpdateCourseBody`) and `addCoach`/`saveCoach` (wrapping `coach-save.ts`,
-returning its outcome untouched) — call the real `/users`/`/courses`/`/coaches` API followed by an
-unconditional `refreshOps()` refetch. Each verb throws on a failed write (coach verbs return the failing
-outcome) and otherwise awaits the refetch before resolving, so a caller's success toast lands together
-with the updated list; a failed refetch after a successful write is only `console.error`ed. There's
-deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `docs/adr/0012`).
-"Unconditional" describes the refetch *call*, nothing guards it; what it *applies* is generation-stable,
-see `docs/adr/0020`. Mobile-admin orders are read-only: 「標記已付款」(`markOrderPaid`) was removed in W-6
-fix 1 because the backend rejects pending→paid since BE-3, so no ops mutator goes through `opsGate.write()`
-any more (desktop's `LEGAL_NEXT` offers pending → cancelled only). The same gate also
-publishes `opsPages` (backend `total`/`perPage` for the page-1-only members/classes/orders lists), which
-the three pages show as header totals plus a `searchCapHint()` line once `total > perPage`.
+Mobile-admin's ops collections are store-owned and split into three hydration units, each a plain
+`createHydrationGate` in `stores.ts`: **members** (`getMembers(1)`), **courses·coaches** (`getClasses(1)`,
+filling `classes` and `coaches` in one go — a course row's coach name comes from that same coach list) and
+**orders** (`getOrders(1)`). The gates live in the store rather than the pages because the collections are
+shared across pages: `CoachesScreen` and the classes page read the same `coaches`, the admin home banner
+and the orders page read the same `orders`, and a write verb fired on one page must refresh what another
+page shows. Each page spreads its own unit's entry pack — `createLoadGate({ ...membersPageEntry })`,
+`classesPageEntry` (also `CoachesScreen`), `ordersPageEntry` — so the store write goes through the
+source's `load` closure and a response landing after unmount or after a newer run is dropped; the admin
+home page only calls `hydrateOrders()` for its pending-payment banner. Units don't drag each other down:
+a failing `/orders` leaves the members and classes pages working. The four collections are exported as
+`Readable` and boot honestly (`docs/adr/0025` F-3): a private `EMPTY_OPS` (empty arrays, every `opsPages`
+cell `{ total: 0, perPage: 0 }`) is both the boot value and what each unit's `reset` restores — each unit
+writes and resets only its own `opsPages` cell — so the home banner and `CoachesScreen`'s subtitle read
+`0`/nothing before their unit is ready. The member/course/coach writes don't go through `write()` at all:
+the store's per-entity, add/edit-split write verbs (`docs/adr/0022`) — `addMember`/`saveMember`,
+`addCourse`/`saveCourse` (taking a `ValidCourse` from `course-request.ts`'s `checkCourseDraft` and building
+the body with `buildCreateCourseBody`/`buildUpdateCourseBody`) and `addCoach`/`saveCoach` (wrapping
+`coach-save.ts`, returning its outcome untouched) — call the real `/users`/`/courses`/`/coaches` API
+followed by `refetchAfterWrite(...units)`, which refreshes only the affected units concurrently
+(`Promise.allSettled`). Because the backend's order and coach lists JOIN the user's name live, a rename
+fans out: `addMember`/`saveMember` (same name) → members; `saveMember`/`saveCoach` (renamed) → all three;
+`addCourse`/`saveCourse`/`saveCoach` (same name) → courses·coaches; `addCoach` (created) → members +
+courses·coaches. Each verb throws on a failed write (coach verbs return the failing outcome) and otherwise
+awaits the refetch before resolving, so a caller's success toast lands together with the updated lists; a
+unit whose refetch fails after a successful write is only `console.error`ed and the others still apply.
+There's deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `docs/adr/0012`).
+Nothing guards the refetch *call*; what it *applies* is generation-stable, see `docs/adr/0020`.
+Mobile-admin orders are read-only: 「標記已付款」(`markOrderPaid`) was removed in W-6 fix 1 because the
+backend rejects pending→paid since BE-3, so no ops mutator goes through a unit's `write()` (desktop's
+`LEGAL_NEXT` offers pending → cancelled only). The units also publish `opsPages` (backend
+`total`/`perPage` for the page-1-only lists), which the three pages show as header totals plus a
+`searchCapHint()` line once `total > perPage`.
 
 That store-owned guard + post-await re-check protocol is a shared factory, `src/lib/hydration-gate.ts`'s
 `createHydrationGate` (public surface: `hydrated: Readable<boolean>`, `hydrate`/`refresh`/`invalidate`/
 `write()`/`pageEntry()`/`reset()` — the mutation-generation and settle readers never leave
-the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s ops gate builds on it directly;
+the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s three ops units build on it directly;
 every identity-scoped store builds on it through `src/lib/session-gate.ts` (`docs/adr/0017`, see the
 dedicated section below) — member's waitlist, leave-requests and notifications, the coach conversation
 list, the self account and coach identity. `hydrateWaitlist`/`hydrateLeaveRequests`/`hydrateNotifications`
@@ -534,17 +542,17 @@ place, independent of any single page's own load-gate?
   `$lib/member/notifications` directly — there is one gate and one `mapNotification` over the same
   server-side read state, so a read on one surface shows on the other in the same session
   (`docs/adr/0022`).
-- **mobile-admin ops — store-owned, multiple mutators**: `opsGate` lives in `stores.ts`, not the page; the
-  pages build their load-gate from the gate's entry pack (`opsPageEntry`), the same wiring the notifications
-  pages use. The ops gate is a plain `createHydrationGate` because ops is organisation-wide data. A mutator
-  can flip the guard, and it is not "the page", so the fetch/apply/guard lifecycle has to live where the
-  mutators do: the full `createHydrationGate` factory, store-owned. The store-level `refreshOps()` gets the
-  generation-stable refetch for free — the store-owned gate holds the mutation generation itself;
-  "`await write()` → `await refreshOps()`" is a single fetch whose snapshot applies (`docs/adr/0020`'s
-  conservation pin), and the pages' retry reaches the same ledger only indirectly, through
-  `source.refresh(isCurrent)`. The mutator enrols no settle tail in the fifth decision point, and doesn't
-  need to: it is a non-optimistic `write()`, so the store is touched (`commit`) and the generation bumped
-  only after `send` has settled.
+- **mobile-admin ops — store-owned, shared across pages**: the three ops units (members, courses·coaches,
+  orders) live in `stores.ts`, not the pages; each page builds its load-gate from its unit's entry pack
+  (`membersPageEntry`/`classesPageEntry`/`ordersPageEntry`), the same wiring the notifications pages use.
+  Each unit is a plain `createHydrationGate` because ops is organisation-wide data. The gates are
+  store-owned because the collections are shared across pages — `CoachesScreen` and the classes page read
+  one `coaches`, the home banner and the orders page read one `orders`, and the write verbs refresh units
+  that other pages are showing — so no single page can own the lifecycle. A unit's `refresh()` gets the
+  generation-stable refetch for free — the gate holds the mutation generation itself; "`await` write →
+  `await` unit `refresh()`" is a single fetch per refreshed unit whose snapshot applies (`docs/adr/0020`'s
+  conservation pin, now counted per unit), and the pages' retry reaches the same ledger only indirectly,
+  through `source.refresh(isCurrent)`.
 - **coach conversation list — one session-gate-owned module** (`src/lib/coach/conversations.ts`, R20,
   `docs/adr/0029`): the signed-in coach's `GET /conversations/me` summaries live in one module on a
   `createSessionGate`, so a second coach logging in never sees the first one's list. It exports
@@ -561,7 +569,7 @@ place, independent of any single page's own load-gate?
   list, thread and TabBar (coach home does not read it). The coach layout and the mobile-admin layout warm it; layout warm,
   page load and the dashboard's `hydrateConversations()` merge into one in-flight GET, so a first visit is one
   request. The overlay screens on this store render their own three states: `CoachesScreen`
-  uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...opsPageEntry })`, ready synchronously when
+  uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...classesPageEntry })`, ready synchronously when
   the guard hits), so its coach cards never render stale rows during the hydrate window
   (`docs/adr/0016`).
 
@@ -575,7 +583,7 @@ pair (`docs/adr/0023`, `docs/adr/0016` addendum, `docs/adr/0024`, `docs/adr/0025
 the store gate would write the shared store without knowing the page exists, losing protections that
 only the load-gate wiring gives — stop re-fetching once the page unmounts, never write a superseded run's
 snapshot, and the re-entry re-checks (the load-gate's own "F1/F5"). All the store-owned callers (the
-four `hydrateOps` pages/screens and the desktop and mobile-admin messages pages, through
+four ops pages/screens (`membersPageEntry`/`classesPageEntry`/`ordersPageEntry`) and the desktop and mobile-admin messages pages, through
 `conversationsPageEntry`) spread `pageEntry()` like the notifications pages do. `source.load`'s in-flight GET is shared with `hydrate()`, `source.refresh` is a separate, uncoalesced
 call, and the re-entry bookkeeping stays in load-gate.
 
@@ -641,7 +649,7 @@ settle-tail ledger and reconcile chain, and wake any waiters — the hydration g
 Each factory call opens its own `authStore` subscription (eight module-level subscriptions total — six
 `createSessionGate`s plus two `createSessionRefresher`s) rather than sharing a registry. Session-gate is
 deliberately *not* folded into `hydration-gate.ts` itself: not every hydration gate is identity-scoped
-(mobile-admin's organisation-wide ops gate isn't), and `load-gate.ts` — used by ~55 route pages and
+(mobile-admin's organisation-wide ops units aren't), and `load-gate.ts` — used by ~55 route pages and
 overlay screens across every surface but `staff` — must not take on auth awareness either;
 that would be a wrong-direction dependency on the repo's widest shared seam.
 

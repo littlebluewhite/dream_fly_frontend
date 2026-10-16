@@ -41,7 +41,7 @@ export type { Student } from '$lib/coach/data';
 
 // R15(候選 F-3，誠實開機)：CLASSES/MEMBERS/ORDERS 三個 .map 衍生 builder 已退役——
 // members/classes/orders store 改為誠實開機(`[]`)，值改由真 GET /courses、/users、
-// /orders 水合(見 mobile-admin/stores.ts opsGate)。下方 Tone 查表(MEMBER_ACCOUNT_STATUS 等)
+// /orders 水合(見 mobile-admin/stores.ts 的 ops 集合)。下方 Tone 查表(MEMBER_ACCOUNT_STATUS 等)
 // 與已退役的班級/學員/訂單種子陣列無關，不受影響。
 import { MEMBER_ACCOUNT_STATUS as MEMBER_ACCOUNT_STATUS_BASE, type MemberAccountStatus } from '$lib/domain/members';
 import { VENUE_STATUS as VENUE_STATUS_BASE } from '$lib/domain/venues';

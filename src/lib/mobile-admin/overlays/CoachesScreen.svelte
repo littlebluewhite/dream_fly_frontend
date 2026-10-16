@@ -6,13 +6,13 @@
    *
    * Task F5：新增/編輯改接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
    * routes/admin/coaches/+page.svelte 的兩步流程（先建 user 帳號、再綁 coach）與
-   * 錯誤訊息設計。寫入成功後整包重抓 members/classes/coaches/orders 四個 store
-   * （同 routes/mobile-admin/admin/members/+page.svelte 慣例）。
+   * 錯誤訊息設計。寫入成功後重抓受影響的 ops 集合單位（刷新表見 $lib/mobile-admin/stores
+   * 的寫入動詞）。
    *
    * C3：兩步序列本身（API 呼叫順序、outcome 判別聯集）已收進
    * $lib/admin/components/coach-save.ts 的 saveNewCoach/saveCoachEdit——同桌面
    * admin/coaches/+page.svelte 復用的同一套無狀態純函式（K4）。R12 起再由 store 的
-   * addCoach/saveCoach 動詞包起來(成功 outcome → 動詞內 await refreshOps())，本頁
+   * addCoach/saveCoach 動詞包起來(成功 outcome → 動詞內 await 受影響單位的重抓)，本頁
    * 只剩「呼叫動詞 → 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
    *
    * R17：表單送出時驗證、handler 回 Promise<boolean>（true＝已存才關 sheet，false＝sheet 留著）。
@@ -28,7 +28,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Tag from '$lib/components/ui/Tag.svelte';
   import { ErrorState, LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, coaches as coachesStore, toasts, opsPageEntry, addCoach, saveCoach } from '$lib/mobile-admin/stores';
+  import { overlay, coaches as coachesStore, toasts, classesPageEntry, addCoach, saveCoach } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { Coach } from '$lib/domain/coaches';
   import type { CoachFormValues } from '$lib/admin/data';
@@ -37,15 +37,11 @@
   export let onBack: () => void;
   export let onNew: (() => void) | undefined = undefined;
 
-  // R11(C3,LoadGate 三態第五次複製,先例 VenuesScreen):R10 加的 onMount 自保呼叫
-  // (hydrateOps().catch(()=>{}))只解決「未曾水合」的個案本身——fetch 失敗時仍永久
-  // 停留在 domain seed、沒有 loading 骨架、也沒有重試入口,是 ADR 0016 明文記載的
-  // 風險窗。改建 createLoadGate 三態(loading/error/ready)。R14(F1)起佈線改 spread
-  // ops 閘門的頁面進場包 opsPageEntry(同 routes/mobile-admin/admin/members/+page.svelte)
-  // ——閘門的 apply 寫 $coachesStore,卸載後才落地的回應不寫。ops 閘門已水合
-  // 時 load-gate 的 guard 命中,同步 ready、不重打 getOpsCollections。ScreenHeader(含
+  // createLoadGate 三態(loading/error/ready),佈線 spread ops 集合課程·教練單位的頁面進場包
+  // classesPageEntry(與課程頁共用同一份 $coaches)——閘門的 apply 寫 $coachesStore,卸載後才落地的
+  // 回應不寫。該單位已水合時 load-gate 的 guard 命中,同步 ready、不重打 GET /courses、/coaches。ScreenHeader(含
   // 「新增教練」按鈕)留在閘外,三態只包卡片列表區(同 VenuesScreen 裁決)。
-  const gate = createLoadGate({ ...opsPageEntry });
+  const gate = createLoadGate({ ...classesPageEntry });
 
   // /users 端點(createMember/updateMember)的錯誤訊息已是後端給的 繁中 使用者可讀
   // 文字 → apiErrorMessage 直接透傳，同桌面 coaches 頁慣例。

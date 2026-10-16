@@ -6,29 +6,23 @@
  * live collections, notifs and toasts are shared stores here. Factories are
  * exported for isolated test instances; the app uses the singletons.
  *
- * Task 20：members/classes/coaches/orders 現由 $lib/mobile-admin/api
- * 的 getOpsCollections() 供給真資料(該檔組合桌面 admin/coach
- * seams 並做薄映射)——這裡的 store 本身不知道資料來源，只負責水合守衛/樂觀更新等跨路由狀態
- * 管理，見各函式附註。notifs(通知中心鈴鐺)仍為 mock，無對應後端來源。 */
+ * members/classes/coaches/orders 是 ops 集合:三個水合單位直接向桌面 $lib/admin/api 的
+ * getMembers/getClasses/getOrders 取第 1 頁(見下方「ops 集合」段)。notifs(通知中心鈴鐺)
+ * 仍為 mock，無對應後端來源。 */
 
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import { createToasts } from '$lib/stores/toasts';
 import { createHydrationGate } from '$lib/hydration-gate';
 import { createOverlay } from '$lib/components/mobile/overlay';
 import type { MobileAdminPushRegistry, MobileAdminSheetRegistry } from './overlay-registry';
 import { createReadState, unreadCount } from '$lib/stores/read-state';
-// R15(候選 F-3，誠實開機)：MEMBERS/CLASSES/ORDERS/COACHES 同步種子已退役——
-// members/classes/orders/coaches 四個 store 誠實開機為 `[]`(見下方 EMPTY_OPS),值
-// 改由真 getOpsCollections() 水合。type Coach 仍直取 $lib/domain/coaches(型別本身
-// 留在原處，只有 COACHES 值搬到 $lib/testing/seed-fixtures 供測試用)。
 import { ADMIN_NOTIFS, COACH_NOTIFS, type AdminNotif } from './data';
 import type { ClassRow, MemberAccount as MemberRow, Order as OrderRow, CoachFormValues } from '$lib/admin/data';
 import type { Coach } from '$lib/domain/coaches';
-import { getOpsCollections, type OpsCollections, type OpsPages, type PageInfo } from './api';
-// R15 Task 3b(候選 轉手退役):createMember/updateMember/createCourse/updateCourse/
-// createCoach/updateCoach 原經 mobile-admin/api.ts 零映射
-// re-export 轉手,已退役——直接向擁有者模組 $lib/admin/api 取用。
 import {
+	getMembers,
+	getClasses,
+	getOrders,
 	createMember,
 	updateMember,
 	createCourse,
@@ -63,127 +57,155 @@ export const adminUnread = unreadCount;
 export const adminNotifs = createReadState<AdminNotif>(ADMIN_NOTIFS);
 export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
 
-/** 開機值 = reset 值(R15 候選 F-3，誠實開機):四個集合皆為 `[]`,分頁 meta 全為
- *  0/0——沒水合過就不假裝有資料。結構上與 opsGate 的 reset 同源(見下方),兩者
- *  都是 applyOps(EMPTY_OPS)。本檔私有——無外部消費者,不對外匯出(ADR-0010 死值不留死出口)。 */
-const EMPTY_OPS: OpsCollections = {
-	members: [],
-	classes: [],
-	coaches: [],
-	orders: [],
-	pages: {
-		members: { total: 0, perPage: 0 },
-		classes: { total: 0, perPage: 0 },
-		orders: { total: 0, perPage: 0 }
-	}
-};
+/* ---------- ops 集合(Ops Collections):三個水合單位 ----------
+ * 會員(getMembers(1))、課程·教練(getClasses(1),一次填 classes 與 coaches)、訂單
+ * (getOrders(1))各自一顆水合閘門:一支端點壞掉只有自己那一頁顯示錯誤,寫入後只刷新受影響的
+ * 單位(見下方寫入動詞的刷新表)。行動版不能換頁,三個單位都只抓第 1 頁(後端預設 per_page=20),
+ * 分頁 meta 進 opsPages,頁面據此顯示真實總數與 searchCapHint()。閘門由 store 擁有而不是各頁
+ * 自建,是因為集合跨頁共用:教練畫面與課程頁讀同一份 coaches,首頁 banner 與訂單頁讀同一份
+ * orders,寫入動詞在別頁觸發也要刷新同一份。
+ *
+ * 誠實開機(ADR-0025 F-3):開機值 = 重置值 = EMPTY_OPS(集合為 `[]`,分頁 meta 0/0)——沒水合過
+ * 就不假裝有資料。每個單位只寫、只重置自己那一格 opsPages。fetch 包一層箭頭函式,只有實際水合時
+ * 才讀 $lib/admin/api 的 getter binding。四個集合對外只匯出 Readable,只有閘門的 apply/reset 能寫。 */
+export interface PageInfo {
+	total: number;
+	perPage: number;
+}
+export interface OpsPages {
+	members: PageInfo;
+	classes: PageInfo;
+	orders: PageInfo;
+}
+const EMPTY_PAGE: PageInfo = { total: 0, perPage: 0 };
+/** 本檔私有——無外部消費者(ADR-0010 死值不留死出口)。 */
+const EMPTY_OPS: OpsPages = { members: EMPTY_PAGE, classes: EMPTY_PAGE, orders: EMPTY_PAGE };
 
-/* ---------- Live collections (新增 / 編輯 表單寫回) ---------- */
-export const members = writable<MemberRow[]>(EMPTY_OPS.members);
-export const classes = writable<ClassRow[]>(EMPTY_OPS.classes);
-// 寫入不局部樂觀更新這些 store:寫入成功後一律 refreshOps() 整包重抓(見下方寫入動詞)。
-export const coaches = writable<Coach[]>(EMPTY_OPS.coaches);
-
+const _members = writable<MemberRow[]>([]);
+const _classes = writable<ClassRow[]>([]);
+const _coaches = writable<Coach[]>([]);
+const _orders = writable<OrderRow[]>([]);
+const _opsPages = writable<OpsPages>(EMPTY_OPS);
+export const members: Readable<MemberRow[]> = { subscribe: _members.subscribe };
+export const classes: Readable<ClassRow[]> = { subscribe: _classes.subscribe };
+export const coaches: Readable<Coach[]> = { subscribe: _coaches.subscribe };
 /** Live orders (read-only on mobile since W-6 fix 1). The orders screen KPIs (本頁已收
  *  revenue, 待付款 count) and the admin home 待付款 banner all derive from this
  *  store — keep it the single source of truth for order status. */
-export const orders = writable<OrderRow[]>(EMPTY_OPS.orders);
+export const orders: Readable<OrderRow[]> = { subscribe: _orders.subscribe };
+export const opsPages: Readable<OpsPages> = { subscribe: _opsPages.subscribe };
 
-/** members/classes/orders 的分頁 meta(只抓第 1 頁,見 api.ts getOpsCollections)。頁面
- *  header 顯示 total,total > perPage 時搜尋區顯示 searchCapHint()。誠實開機(R15 候選
- *  F-3):開機值全為 0/0(不出提示),水合後由 opsGate.apply 覆寫。 */
-const _opsPages = writable<OpsPages>(EMPTY_OPS.pages);
-export const opsPages = { subscribe: _opsPages.subscribe };
+const setPage = (unit: keyof OpsPages, p: PageInfo) => _opsPages.update((all) => ({ ...all, [unit]: p }));
 
-/** apply/reset 共用的套用函式(R15 候選 F-3):把 OpsCollections 整包寫回四個 store +
- *  分頁 meta,結構上保證開機值與 reset 值同源(皆呼叫 applyOps(EMPTY_OPS))。 */
-function applyOps(d: OpsCollections): void {
-	members.set(d.members);
-	classes.set(d.classes);
-	coaches.set(d.coaches);
-	orders.set(d.orders);
-	_opsPages.set(d.pages);
-}
+const membersGate = createHydrationGate({
+	fetch: () => getMembers(1),
+	apply: (d) => {
+		_members.set(d.members);
+		setPage('members', { total: d.total, perPage: d.perPage });
+	},
+	reset: () => {
+		_members.set([]);
+		setPage('members', EMPTY_OPS.members);
+	}
+});
+const classesGate = createHydrationGate({
+	fetch: () => getClasses(1),
+	apply: (d) => {
+		_classes.set(d.classes);
+		_coaches.set(d.coaches);
+		setPage('classes', { total: d.total, perPage: d.perPage });
+	},
+	reset: () => {
+		_classes.set([]);
+		_coaches.set([]);
+		setPage('classes', EMPTY_OPS.classes);
+	}
+});
+const ordersGate = createHydrationGate({
+	fetch: () => getOrders(1),
+	apply: (d) => {
+		_orders.set(d.orders);
+		setPage('orders', { total: d.total, perPage: d.perPage });
+	},
+	reset: () => {
+		_orders.set([]);
+		setPage('orders', EMPTY_OPS.orders);
+	}
+});
+
+/** 頁面進場包(R14 F1):members/classes/orders 三頁各用自己單位的 `createLoadGate({ ...xPageEntry })`,
+ *  CoachesScreen 用 classesPageEntry——寫入由閘門依頁面 load-gate 交來的 isCurrent 把關,卸載後
+ *  或被新一輪取代的重整不再寫共享 store。 */
+export const membersPageEntry = membersGate.pageEntry();
+export const classesPageEntry = classesGate.pageEntry();
+export const ordersPageEntry = ordersGate.pageEntry();
+/** 首頁待付款 banner 只需要訂單單位(best-effort,失敗由呼叫端吞掉)。 */
+export const hydrateOrders = ordersGate.hydrate;
+/** 測試出口:三個單位還原開機態(內容回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
+export const resetOpsForTests = (): void => { membersGate.reset(); classesGate.reset(); ordersGate.reset(); };
 
 /** 行動版不能換頁,搜尋只涵蓋已抓回的第 1 頁——超過一頁時誠實提示(不照抄桌面「切換頁面」文案)。 */
 export function searchCapHint(p: PageInfo): string | null {
 	return p.total > p.perPage ? `僅搜尋前 ${p.perPage} 筆，完整清單請至桌面後台` : null;
 }
 
-/** 集合水合守衛(members/classes/coaches/orders 一次到位)。誠實開機(R15 候選
- *  F-3):開機值 = reset 值 = EMPTY_OPS(四個 store 皆為 `[]`,分頁 meta 全為 0/0)——
- *  沒水合過就不假裝有資料,不再走「同步 seed、水合只是覆寫一次」的舊慣例。hydrateOps()
- *  由 classes/members/orders 任一消費頁在 onMount 觸發(W-6 修正 1 起 ops 沒有走
- *  opsGate.write() 的 mutator;唯一的 markOrderPaid 已隨後端拒絕待付款→已付款移除)。
- *  refreshOps() 保持一律真抓,供「重新整理」/ErrorState 重試與寫入動詞的寫後重抓共用(使用者明確要求最新資料,不受 guard
- *  短路保護);架構深化 R10 起落地改走世代穩定重抓——只丟棄「refresh **進場之後**」才
- *  發生的 mutation,故「await 寫入 → await refreshOps()」這種寫後重抓的正常
- *  序列零變化(fetch 恰一次、快照照常套用),只有真的在飛期間才發生的 mutation 會讓舊
- *  快照作廢、原地補抓。guard 短路 + post-await re-check(mutation 勝出)的機制本身由
- *  `createHydrationGate` 提供,見 `$lib/hydration-gate` 的模組註解。fetch 包一層箭頭
- *  函式(不直接傳函式參照)——維持原本「只有實際呼叫 hydrateOps()/refreshOps() 時才讀取
- *  getOpsCollections 這個 binding」的惰性時機,而非在本模組載入當下就讀取;純 import
- *  stores.ts 而不曾呼叫 hydrateOps()(或寫入動詞)的頁面測試,其 api mock 因此不必連帶
- *  提供 getOpsCollections。 */
-const opsGate = createHydrationGate({
-	fetch: () => getOpsCollections(),
-	apply: applyOps,
-	reset: () => applyOps(EMPTY_OPS)
-});
-/** 測試出口:閘門還原開機態(內容回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
-export const resetOpsForTests = opsGate.reset;
-export const hydrateOps = opsGate.hydrate;
-export const refreshOps = opsGate.refresh;
-/** 頁面進場包(R14 F1):classes/members/orders 三頁與 CoachesScreen 一律
- *  `createLoadGate({ ...opsPageEntry })`——寫入由閘門的資料來源依頁面 load-gate 交來的 isCurrent
- *  把關,卸載後或被新一輪取代的重整不再寫共享 store。hydrateOps/refreshOps 仍留給首頁與
- *  refetchAfterWrite。 */
-export const opsPageEntry = opsGate.pageEntry();
-
 /* ---------- 寫入動詞(R12:ops store 擁有自己的寫入) ----------
  * 逐 entity、新增/編輯分兩支(不做跨 entity 的通用 CRUD——ADR-0018 C6;不用 isNew 旗標
  * ——ADR-0012)。寫入失敗 → 丟出(coach 系列回 coach-save 的 outcome 原樣),頁面照舊用
- * 自己的錯誤文案表(ADR-0011)。寫入成功 → 動詞內 await 寫後重抓,呼叫端拿到 resolve 時
- * 列表已是新的;重抓失敗只 console.error、不丟出(寫入本身已成功,不該回報成失敗)。 */
-async function refetchAfterWrite(): Promise<void> {
-	try {
-		await refreshOps();
-	} catch (e) {
-		console.error('[mobile-admin] 寫入成功但重抓 ops 集合失敗', e);
+ * 自己的錯誤文案表(ADR-0011)。寫入成功 → 動詞內 await 受影響單位的寫後重抓,呼叫端拿到
+ * resolve 時列表已是新的。後端的訂單列表與教練列表都即時 JOIN 使用者名字(課程列的教練名
+ * 又取自教練列表),所以改名會波及三個單位:
+ *
+ *   addMember / saveMember(名字沒變)        → 會員
+ *   saveMember(改名) / saveCoach(改名)       → 會員、課程·教練、訂單
+ *   addCourse / saveCourse / saveCoach(名字沒變) → 課程·教練
+ *   addCoach(created)                        → 會員、課程·教練(新教練也是一個 user)
+ *
+ * 受影響單位同時重抓(Promise.allSettled);某個單位重抓失敗只 console.error、不丟出(寫入本身
+ * 已成功,不該回報成失敗,ADR-0022 §1),其餘單位照常套用。 */
+type OpsUnit = typeof membersGate;
+const ALL_UNITS: OpsUnit[] = [membersGate, classesGate, ordersGate];
+
+async function refetchAfterWrite(...units: OpsUnit[]): Promise<void> {
+	const results = await Promise.allSettled(units.map((u) => u.refresh()));
+	for (const r of results) {
+		if (r.status === 'rejected') console.error('[mobile-admin] 寫入成功但重抓 ops 集合失敗', r.reason);
 	}
 }
 
 export async function addMember(body: CreateMemberBody): Promise<void> {
 	await createMember(body);
-	await refetchAfterWrite();
+	await refetchAfterWrite(membersGate);
 }
 export async function saveMember(id: string, body: UpdateMemberBody): Promise<void> {
+	const renamed = body.name !== undefined && body.name !== get(_members).find((m) => m.id === id)?.name;
 	await updateMember(id, body);
-	await refetchAfterWrite();
+	await refetchAfterWrite(...(renamed ? ALL_UNITS : [membersGate]));
 }
 
 /** 課程 body 由桌面 course-request.ts 組(R13 Task 4):ClassForm 已驗證成 ValidCourse
  *  (coach_id 在表單端對照 $coaches 解出),這裡只挑 POST/PATCH 對應的 builder。 */
 export async function addCourse(course: ValidCourse): Promise<void> {
 	await createCourse(buildCreateCourseBody(course));
-	await refetchAfterWrite();
+	await refetchAfterWrite(classesGate);
 }
 export async function saveCourse(id: string, course: ValidCourse): Promise<void> {
 	await updateCourse(id, buildUpdateCourseBody(course));
-	await refetchAfterWrite();
+	await refetchAfterWrite(classesGate);
 }
 
 /** 教練兩步寫入(coach-save.ts):失敗不丟出,outcome 原樣回傳給頁面翻譯 toast。新增的
  *  pendingUserId 是上次綁定失敗留下的 user id(sheet 工作階段內由 CoachesScreen 持有),
- *  非 null 時只重打 createCoach,避免重建 user 撞 email 409。 */
+ *  非 null 時只重打 createCoach,避免重建 user 撞 email 409。改名判準同 saveCoachEdit
+ *  (trim 後與現值不同才 PATCH /users)。 */
 export async function addCoach(v: CoachFormValues, pendingUserId: string | null): Promise<SaveNewCoachOutcome> {
 	const outcome = await saveNewCoach(v, pendingUserId, { createMember, createCoach });
-	if (outcome.kind === 'created') await refetchAfterWrite();
+	if (outcome.kind === 'created') await refetchAfterWrite(membersGate, classesGate);
 	return outcome;
 }
 export async function saveCoach(v: CoachFormValues, target: Coach): Promise<SaveCoachEditOutcome> {
 	const outcome = await saveCoachEdit(v, { id: target.id, userId: target.userId, name: target.name }, { updateMember, updateCoach });
-	if (outcome.kind === 'saved') await refetchAfterWrite();
+	if (outcome.kind === 'saved') await refetchAfterWrite(...(v.name.trim() !== target.name ? ALL_UNITS : [classesGate]));
 	return outcome;
 }
 
