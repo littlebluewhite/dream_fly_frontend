@@ -2,8 +2,8 @@
  *
  * session 閘門(waitlist/leave/notifications/messages)在身分變更時自行重置,測試不再有
  * 專屬的 reset…ForTests 出口:用真的登入 → 登出把身分走一圈,閘門就經由 production 的
- * 同一條路徑回到開機態。authStore 是真的(api 被 vi.mock)或家族 A 的 mock 皆可——兩者的
- * login/logout 都會讓 sessionIdentity 變一次再變回 null。
+ * 同一條路徑回到開機態。authStore 一律是真的(import-scan 契約擋住 vi.mock 登入狀態),呼叫端
+ * 把 $lib/api/client 的 api 換成 vi.fn,這裡暫時換上登入／登出的 fakeRouter。
  *
  * 在 beforeEach 最前面呼叫(它會清掉 api mock 的呼叫紀錄,並還原呼叫前的實作)。 */
 import { vi } from 'vitest';

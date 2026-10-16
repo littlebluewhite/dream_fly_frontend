@@ -6,6 +6,7 @@ import { checkoutOpen } from '$lib/member/stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { authStore } from '$lib/stores/authStore';
 import { checkoutTarget } from '$lib/checkout-gate';
 
@@ -20,14 +21,8 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-// authStore is API-backed (real network calls); this file only cares about
-// the logged-in/out UI state, so mock it with a tiny local store — auth
-// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
-vi.mock('$lib/stores/authStore', async () => {
-  const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-  const { FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
-});
+// authStore is real: tests log in through loginRoutes() over the api() fake —
+// auth mechanics themselves are covered in src/lib/stores/authStore.test.ts.
 
 // R14(候選 F3)暖機清單:layout 宣告通知、交給身分範圍暖——只替換 api(),數 GET /notifications。
 // 守門、暖機准入、頁面壽命的機制在 $lib/components/SessionScope.test.ts 測一次;這裡只留本 layout 的宣告。
@@ -40,17 +35,16 @@ import Layout from './+layout.svelte';
 import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
-  localStorage.clear();
-  authStore.logout();
-  checkoutOpen.set(false);
   await resetSessionStores();
-  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
+  localStorage.clear();
+  checkoutOpen.set(false);
+  vi.mocked(api).mockImplementation(fakeRouter({ ...loginRoutes(), 'GET /notifications': [] }));
 });
 afterEach(() => vi.clearAllMocks());
 
 describe('member +layout — checkout gate receiver', () => {
-  it('a logged-in member with ?checkout=1 opens the checkout dialog and strips the query', () => {
-    authStore.login('member@test.com', 'password123');
+  it('a logged-in member with ?checkout=1 opens the checkout dialog and strips the query', async () => {
+    await authStore.login('member@test.com', 'password123');
     mockUrl = new URL('http://localhost/member?checkout=1');
     render(Layout);
     expect(get(checkoutOpen)).toBe(true);
@@ -71,8 +65,8 @@ describe('member +layout — checkout gate receiver', () => {
     expect(replaceState).not.toHaveBeenCalled();
   });
 
-  it('a logged-in /member landing (no checkout query) does not redirect, open checkout, or rewrite the URL', () => {
-    authStore.login('member@test.com', 'password123');
+  it('a logged-in /member landing (no checkout query) does not redirect, open checkout, or rewrite the URL', async () => {
+    await authStore.login('member@test.com', 'password123');
     mockUrl = new URL('http://localhost/member');
     render(Layout);
     expect(get(checkoutOpen)).toBe(false);
@@ -97,7 +91,7 @@ describe('member +layout — 暖機清單(R14 F3)', () => {
   const settle = () => new Promise((r) => setTimeout(r, 0));
 
   it('登入後 GET /notifications 恰好一次;重新 render 不再打(閘門守衛擋重訪)', async () => {
-    authStore.login('member@test.com', 'password123');
+    await authStore.login('member@test.com', 'password123');
     mockUrl = new URL('http://localhost/member');
     const first = render(Layout);
     await settle();

@@ -6,18 +6,22 @@ import { authStore } from '$lib/stores/authStore';
 import { cart } from '$lib/cart';
 import { courseToCartItem } from '$lib/cart-item';
 import type { CatalogCourse } from '$lib/public/adapters';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 // Header reads $page.url.pathname (Navigation active state). Stub a static page.
 vi.mock('$app/stores', () => ({
   page: readable({ url: new URL('http://localhost/') })
 }));
 
-// authStore is API-backed (real network calls); this file only cares about
-// the logged-in/out UI state, so mock it with a tiny local store — auth
-// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
-vi.mock('$lib/stores/authStore', async () => {
-  const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA();
+// authStore is real: only api() is swapped for the HTTP fake, and tests log in
+// through loginRoutes() — auth mechanics themselves are covered in
+// src/lib/stores/authStore.test.ts.
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
 });
 
 // Two distinct in-stock catalog courses (uuid ids, spots > 0).
@@ -30,9 +34,10 @@ const courseB: CatalogCourse = {
   price: 100, hot: false, coach: '', desc: '', spots: 9
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
-  authStore.logout();
+  await resetSessionStores();
+  vi.mocked(api).mockImplementation(fakeRouter(loginRoutes()));
   cart.clear();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -46,8 +51,8 @@ describe('marketing Header — auth-aware controls', () => {
     expect(screen.queryByLabelText('通知')).toBeNull();
   });
 
-  it('logged in: swaps 登入 → 會員中心 (→ /member) and reveals the bell', () => {
-    authStore.login('member@test.com', 'password123');
+  it('logged in: swaps 登入 → 會員中心 (→ /member) and reveals the bell', async () => {
+    await authStore.login('member@test.com', 'password123');
     render(Header);
     const entry = screen.getByLabelText('會員中心');
     expect(entry.getAttribute('href')).toBe('/member');

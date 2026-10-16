@@ -174,15 +174,19 @@ from the same batch.
 comment/string/template-aware import-specifier extraction (`importSpecifiers`), and the reach predicate
 (`makeReachPredicate`) — whose self-proving fixtures live in `import-scan.test.ts` (foundation-contracts
 uses its `walk`); `fake-router.ts` (`fakeRouter(overrides, defaults?)`, a fetch-path lookup stub with
-fn-eval support); `auth-mock.ts` (`makeAuthMockA`/`makeAuthMockB`, canonical
-`vi.mock('$lib/stores/authStore')` factories, both passing through the real `sessionIdentity`);
-`session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
+fn-eval support); `auth-fixtures.ts` (the 登入狀態 fixtures, including `loginRoutes(rolesFor?)` — the
+`POST /auth/login` (`user.id` = the email) and `POST /auth/logout` routes a test merges into its own
+`fakeRouter` table before `await authStore.login(email, pw)`, so every test that needs someone logged in
+goes through the real 登入狀態 core; coach tests use `coach-session.ts`'s `loginAs()`, and an
+`import-scan.test.ts` contract pins zero `vi.mock`/`vi.doMock` of `$lib/stores/authStore` or
+`$lib/stores/login-state`); `session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
 gate resets through its production path; there are no per-store `reset…ForTests` exports except
 `resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
 `orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
 with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
 `page-lifetime.ts` (`describePageLifetime(name, Component, props?)` — the "page lifetime = login
-identity" scenarios, run once against the session scope; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
+identity" scenarios, run once against the session scope over the real 登入狀態 core, its probe route table
+merged with `loginRoutes()`; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
 one A→B scenario each of the four identity-dependent layout tests runs to prove its slot goes through the
 scope, `docs/adr/0028` §2); and fixtures
 such as `coach-routes.ts`, `member-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under

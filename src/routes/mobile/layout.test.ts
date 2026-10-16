@@ -15,12 +15,6 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-  const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-  const { FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
-});
-
 // R14(候選 F3)暖機清單:layout 宣告通知、交給身分範圍暖——只替換 api(),數 GET /notifications。
 // 守門、暖機准入、頁面壽命、關 overlay 的機制在 $lib/components/SessionScope.test.ts 測一次;這裡只留本 layout 的宣告。
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -30,6 +24,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import { overlay } from '$lib/mobile/stores';
@@ -37,10 +32,9 @@ import Layout from './+layout.svelte';
 import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 
 beforeEach(async () => {
-  mockUrl = new URL('http://localhost/mobile');
-  authStore.logout();
   await resetSessionStores();
-  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /notifications': [] }));
+  mockUrl = new URL('http://localhost/mobile');
+  vi.mocked(api).mockImplementation(fakeRouter({ ...loginRoutes(), 'GET /notifications': [] }));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -50,8 +44,8 @@ describe('mobile +layout — real auth guard (Task 19, replaces df_mobile_sessio
     expect(goto).toHaveBeenCalledWith('/mobile/login');
   });
 
-  it('a logged-in visitor at /mobile is not redirected', () => {
-    authStore.login('member@test.com', 'password123');
+  it('a logged-in visitor at /mobile is not redirected', async () => {
+    await authStore.login('member@test.com', 'password123');
     render(Layout);
     expect(goto).not.toHaveBeenCalled();
   });
@@ -62,7 +56,7 @@ describe('mobile +layout — 暖機清單(R14 F3)', () => {
   const settle = () => new Promise((r) => setTimeout(r, 0));
 
   it('登入後 GET /notifications 恰好一次;重新 render 不再打(閘門守衛擋重訪)', async () => {
-    authStore.login('member@test.com', 'password123');
+    await authStore.login('member@test.com', 'password123');
     const first = render(Layout);
     await settle();
     expect(notifGets()).toBe(1);

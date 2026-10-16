@@ -9,6 +9,8 @@ import { authStore } from '$lib/stores/authStore';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { coachResponse, courseResponse } from '$lib/testing/wire-fixtures';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 // 只假造 HTTP 層：真的 listCourses / listCoaches + mapper 會跑
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -27,13 +29,8 @@ vi.mock('$lib/member/stores', async (importOriginal) => {
 	return { ...actual, joinWaitlist: vi.fn() };
 });
 
-// authStore is API-backed (real network calls); this file only cares about the
-// logged-in/out UI state (same fake as CartDropdown.test.ts — auth mechanics
-// themselves are covered in src/lib/stores/authStore.test.ts).
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA();
-});
+// authStore is real: tests log in through loginRoutes(), merged into the same
+// api() fake (auth mechanics themselves are covered in src/lib/stores/authStore.test.ts).
 
 const COURSE = courseResponse({
 	id: 'course-uuid-1',
@@ -74,6 +71,7 @@ const FULL_COURSE = courseResponse({ ...COURSE, id: 'course-uuid-full', max_stud
 const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<never>) =>
 	vi.mocked(api).mockImplementation(
 		fakeRouter({
+			...loginRoutes(),
 			'GET /courses?per_page=100':
 				courses instanceof Error || courses instanceof Promise
 					? courses
@@ -82,14 +80,13 @@ const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<ne
 		})
 	);
 
-beforeEach(() => {
-	vi.mocked(api).mockReset();
+beforeEach(async () => {
+	await resetSessionStores();
 	route([COURSE]);
 	vi.mocked(joinWaitlist).mockReset();
 	vi.mocked(goto).mockClear();
 	localStorage.clear();
 	cart.clear();
-	authStore.logout();
 });
 
 describe('課程介紹 (marketing) — 接真 API', () => {
@@ -150,7 +147,7 @@ describe('課程介紹 (marketing) — 接真 API', () => {
  * /member/login、不嘗試呼叫 API。 */
 describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 	it('已登入時點擊加入購物車 → 呼叫真實 joinWaitlist()，成功後才顯示已加入候補 toast', async () => {
-		authStore.login('member@test.com', 'password123');
+		await authStore.login('member@test.com', 'password123');
 		route([FULL_COURSE]);
 		vi.mocked(joinWaitlist).mockResolvedValue({
 			id: 'wl-1',
@@ -170,7 +167,7 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 	});
 
 	it('已登入但後端回 409（已候補）→ 顯示已候補的友善提示，不是通用錯誤訊息', async () => {
-		authStore.login('member@test.com', 'password123');
+		await authStore.login('member@test.com', 'password123');
 		route([FULL_COURSE]);
 		vi.mocked(joinWaitlist).mockRejectedValue(new ApiError(409, 'already on waitlist'));
 

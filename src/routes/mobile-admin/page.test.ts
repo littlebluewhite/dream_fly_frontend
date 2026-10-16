@@ -10,17 +10,24 @@ import { goto } from '$app/navigation';
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockB } = await import('$lib/testing/auth-mock');
-	return makeAuthMockB({ withIsLoggedIn: true });
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 
+import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
-import type { TestAuthStore } from '$lib/testing/auth-mock';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import Page from './+page.svelte';
 
-beforeEach(() => {
-	(authStore as TestAuthStore).__set({ loggedIn: false, member: null, roles: [] });
+// 角色取自 email 的帳號名:admin@… → ['admin']、coach@… → ['coach']、member@… → ['member']。
+const rolesFor = (email: string) => [email.split('@')[0]];
+
+beforeEach(async () => {
+	await resetSessionStores();
+	vi.mocked(api).mockImplementation(fakeRouter(loginRoutes(rolesFor)));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -30,20 +37,20 @@ describe('/mobile-admin root — real-auth forward redirect', () => {
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/login');
 	});
 
-	it('admin role → /mobile-admin/admin', () => {
-		(authStore as TestAuthStore).__set({ loggedIn: true, member: null, roles: ['admin'] });
+	it('admin role → /mobile-admin/admin', async () => {
+		await authStore.login('admin@dreamfly.test', 'pw');
 		render(Page);
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/admin');
 	});
 
-	it('coach-only role → /mobile-admin/coach', () => {
-		(authStore as TestAuthStore).__set({ loggedIn: true, member: null, roles: ['coach'] });
+	it('coach-only role → /mobile-admin/coach', async () => {
+		await authStore.login('coach@dreamfly.test', 'pw');
 		render(Page);
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/coach');
 	});
 
-	it('no staff portal (plain member) → blocked login', () => {
-		(authStore as TestAuthStore).__set({ loggedIn: true, member: null, roles: ['member'] });
+	it('no staff portal (plain member) → blocked login', async () => {
+		await authStore.login('member@dreamfly.test', 'pw');
 		render(Page);
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/login?blocked=1');
 	});
