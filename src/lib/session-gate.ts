@@ -35,8 +35,8 @@
  *
  * R17(候選 寫入動詞):和解鏈(原 queueReconcile)與 mutate 的協定本體搬進 HydrationGate 的
  * write(),軸由本檔的 session 世代換成閘門的 resetEpoch——身分變更即 reset(),resetEpoch 跟著
- * 推進,所以「跨身分作廢」語意不變。本檔只剩身分核心、epochFetch 與 queueWrite;mutate 已於
- * FE-8 退役(寫入一律走繼承自水合閘門的 write())。
+ * 推進,所以「跨身分作廢」語意不變。本檔只剩身分核心、epochFetch 與 queueWrite;寫入一律走繼承自
+ * 水合閘門的 write(),queueWrite 只在前面加排隊、寫前水合與身分核對,失敗復原共用水合閘門的 recoverWrite。
  *
  * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
  * session 世代收進閘門——合併住 HydrationGate(hydrate 與頁面 load-gate 的 load 共用在飛 GET),
@@ -57,7 +57,15 @@
  * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
  */
 import { authStore, sessionIdentity } from '$lib/stores/authStore';
-import { createDepartureLedger, createHydrationGate, type HydrationGate } from '$lib/hydration-gate';
+import { get } from 'svelte/store';
+import {
+	createDepartureLedger,
+	createHydrationGate,
+	recoverWrite,
+	type HydrationGate,
+	type Write,
+	type WriteOutcome
+} from '$lib/hydration-gate';
 
 /**
  * 私有 identity core:每次 factory call 建一個 authStore 訂閱,把「身分是否變更」
@@ -107,14 +115,27 @@ export interface SessionGateOptions<T> {
  * 多 queueWrite;reset 覆寫為「閘門 reset + 重置寫入鏈」。pageEntry() 繼承自閘門
  * (R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠餵給水合閘門的那一支,
  * 不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })` 不再有機會繞過核對。
- * queueWrite(R14 F2,語意逐字取自 profile.ts 原 enqueue):排進本閘門的寫入鏈,前一筆
- * settle(成敗皆可)才輪到;輪到時 session 已換就回 `skipped`、task 不執行。task 拿到
- * `stale()` 供失敗處理判斷(換帳後不得回滾/重抓到新身分身上)。換帳號即重置這條鏈——
- * 舊身分卡住的寫入不得堵住新身分。
+ * queueWrite:排進本閘門寫入鏈的單一寫入,前一筆 settle(成敗皆可)才輪到。
+ *   1. 入列當下(同步)記 session 世代與是否已水合,套用 `optimistic`(畫面立即反映);
+ *   2. 輪到時 session 已換 → `stale`(settled 為「未送出」的 rejected),send 不執行;
+ *   3. 寫前 `await hydrate()`;失敗時已換帳號回 stale,否則走 recoverWrite(onFailure, undo,
+ *      refresh, stale)——不送出、不推世代;
+ *   4. 水合後再比一次身分;入列時未水合 → 再套一次 `optimistic`(水合的 apply 蓋掉了它,故必須冪等);
+ *   5. `send()` 回 null → `written(null)`;否則交給 write(),optimistic 只回入列時的 undo。
+ * 換帳號即重置這條鏈——舊身分卡住的寫入不得堵住新身分。
  */
 export interface SessionGate extends HydrationGate {
-	queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R>;
+	queueWrite<R>(w: QueuedWrite<R>): Promise<WriteOutcome<R | null>>;
 }
+
+/** queueWrite 收的寫入:與 Write<R> 相同,只差 send 可以回 null(= 不用送)。 */
+type QueuedWrite<R> = Omit<Write<R>, 'send'> & { send: () => Promise<R> | null };
+
+/** 沒送出就因換帳號作廢:stale,settled 是「未送出」的 rejected。 */
+const NOT_SENT: WriteOutcome<never> = {
+	kind: 'stale',
+	settled: { status: 'rejected', reason: new Error('session 已變更,未送出') }
+};
 
 /**
  * 建立完整 session gate。epochFetch 抽名,讓閘門的 pageEntry() 交給頁面 load-gate 的資料來源
@@ -147,15 +168,38 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 	}
 	const core = createSessionCore(reset);
 
-	function queueWrite<R>(task: (stale: () => boolean) => Promise<R>, skipped: R): Promise<R> {
+	function queueWrite<R>(w: QueuedWrite<R>): Promise<WriteOutcome<R | null>> {
 		const mine = core.epoch();
 		const stale = () => mine !== core.epoch();
-		const run = writeChain.then(() => (stale() ? skipped : task(stale)));
+		const wasHydrated = get(gate.hydrated);
+		const undo = w.optimistic?.(); // 入列當下同步套用(畫面立即反映)
+		const run = writeChain.then(() => runQueued(w, stale, wasHydrated, undo));
 		writeChain = run.then(
 			() => {},
 			() => {}
 		);
 		return run;
+	}
+
+	async function runQueued<R>(
+		w: QueuedWrite<R>,
+		stale: () => boolean,
+		wasHydrated: boolean,
+		undo: (() => void) | void
+	): Promise<WriteOutcome<R | null>> {
+		if (stale()) return NOT_SENT;
+		try {
+			await gate.hydrate();
+		} catch (error) {
+			if (stale()) return NOT_SENT; // 換帳號:新身分的 store 不碰、不重抓
+			const recovery = await recoverWrite(w.onFailure, undo, gate.refresh, stale);
+			return recovery === 'stale' ? NOT_SENT : { kind: 'failed', error, recovery };
+		}
+		if (stale()) return NOT_SENT;
+		if (!wasHydrated) w.optimistic?.(); // 水合的 apply 已用後端值蓋掉入列時的樂觀寫入,補回
+		const p = w.send();
+		if (p === null) return { kind: 'written', result: null };
+		return gate.write({ ...w, optimistic: w.optimistic && (() => undo), send: () => p });
 	}
 
 	return { ...gate, reset, queueWrite };

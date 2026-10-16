@@ -344,3 +344,54 @@ describe('saveSelfAccount', () => {
 		expect(patchBodies()).toEqual([{ birth_date: '2013-05-18' }]);
 	});
 });
+
+describe('排隊與寫前水合中途換帳號', () => {
+	const USER_B = { ...USER_A, id: 'u-b', email: 'b@dreamfly.test', name: '李小華' };
+
+	/** A 已水合,一筆 PATCH 掛在飛:之後的寫入排在它後面。 */
+	async function hangFirstPatch() {
+		route({ 'GET /users/me': me() });
+		await hydrateSelfAccount();
+		const hung = deferred<unknown>();
+		route({ 'PATCH /users/me': () => hung.promise });
+		void setPref('promo', true);
+		await new Promise((r) => setTimeout(r, 0));
+		vi.mocked(api).mockClear();
+		return hung;
+	}
+
+	it("排隊中途換帳號:setPref 回 { kind: 'rolledBack' },不送 PATCH", async () => {
+		const hung = await hangFirstPatch();
+		const queued = setPref('dark', true);
+		await loginAs(USER_B);
+		hung.resolve(me());
+
+		expect(await queued).toEqual({ kind: 'rolledBack' });
+		expect(patchBodies()).toEqual([]);
+	});
+
+	it("排隊中途換帳號:saveSelfAccount 回 failed,不送 PATCH", async () => {
+		const hung = await hangFirstPatch();
+		const queued = saveSelfAccount({ name: '王大明' });
+		await loginAs(USER_B);
+		hung.resolve(me());
+
+		expect((await queued).kind).toBe('failed');
+		expect(patchBodies()).toEqual([]);
+	});
+
+	it("寫前水合時換帳號:setPref 回 { kind: 'rolledBack' },不發 resync GET、不送 PATCH", async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const getMe = deferred<unknown>();
+		route({ 'GET /users/me': () => getMe.promise });
+
+		const outcome = setPref('dark', true); // 寫前水合的 GET 在飛
+		await new Promise((r) => setTimeout(r, 0));
+		await loginAs(USER_B);
+		getMe.resolve(me());
+
+		expect(await outcome).toEqual({ kind: 'rolledBack' });
+		expect(getCount()).toBe(1); // 只有寫前水合那一支
+		expect(patchBodies()).toEqual([]);
+	});
+});

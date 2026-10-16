@@ -600,10 +600,14 @@ that awareness. It has **two** factories, both sitting between `authStore` and t
   server-side effect already happened), re-checks completeness on write-back (a prior reconcile may
   have flipped the flag back to `false`), bumps the generation, then conditionally queues a serialized,
   retryable reconciliation refetch (the reconcile chain lives in the base gate too). The session gate
-  adds only `queueWrite(task, skipped)`, one serialized write chain per gate: a queued
-  write whose identity changed before its turn is skipped, the task gets a `stale()` probe for its failure
-  handling, and an identity change resets the chain — the self account's `setPref`/`saveSelfAccount` run
-  on it. Its **`pageEntry()`** (inherited from the hydration gate) is the pack a page spreads into its own
+  adds only `queueWrite(w)`, one serialized write chain per gate. `w` is a `write()` input whose `send`
+  may return `null` (nothing to send → `written(null)`). At enqueue it records the identity and whether the
+  gate was hydrated and applies `optimistic`; at its turn a changed identity yields `stale`, then it
+  hydrates first — a failed hydrate runs the base gate's exported `recoverWrite` (the same recovery step
+  `write()` uses; nothing sent, no generation bump) — re-checks identity, re-applies `optimistic` if the
+  gate was not hydrated at enqueue (so it must be idempotent), and hands off to `write()`. An identity
+  change resets the chain. The self account's `setPref`/`saveSelfAccount` run on it with no recovery
+  branch of their own. Its **`pageEntry()`** (inherited from the hydration gate) is the pack a page spreads into its own
   load-gate: `{ source: LoadSource }`, where `source.load`/`source.refresh` are the *epoch-checking* fetch
   and refresh, and the mutation-generation ledger they compare against is the gate's own — the page's
   refresh and the store gate read **one** ledger, without exposing it as a separate reader. That closes
