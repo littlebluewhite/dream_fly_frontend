@@ -11,7 +11,7 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
-/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getClasses/
  * createCourse/updateCourse(stores.ts 直取 $lib/admin/api)走真實
  * fetch adapter。FIXTURE_CLASS 改為 wire 形狀(CourseResponse)，經真實 mapCourse() 映射，
  * 而非手造已映射的 ClassRow。 */

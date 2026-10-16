@@ -1,7 +1,7 @@
 /* Dream Fly — mobile-admin ops 頁共用 wire fixture(R15 Task 3a·候選 轉手退役)。
  *
- * getOpsCollections()(members/classes/coaches/orders 一次水合)背後打的四個端點
- * GET /users?page=1、/courses?page=1、/coaches、/orders?page=1 的最小可用 wire
+ * ops 集合三個水合單位背後打的四個端點——會員 GET /users?page=1、課程·教練
+ * GET /courses?page=1 + /coaches、訂單 GET /orders?page=1——的最小可用 wire
  * fixture，形狀取自 admin/api.test.ts :221(orders)/:366(courses)/:407(coaches)/
  * :786(users)。供各 mobile-admin 測試檔當 fakeRouter 的 defaults 使用，測試只需
  * 覆寫自己關心的路徑。 */
@@ -38,7 +38,7 @@ export const ORDERS_FIXTURE: AdminOrderSummary[] = [
 	})
 ];
 
-/** fakeRouter 的 defaults 表——getOpsCollections() 平行拉取的四個端點都有交代，
+/** fakeRouter 的 defaults 表——三個水合單位的四個端點都有交代，
  *  沒交代到的路徑(例如某測試自己要覆寫 coaches 清單)由該測試的 overrides 蓋過。 */
 export const OPS_ROUTES: Record<string, unknown> = {
 	'GET /users?page=1': { users: USERS_FIXTURE, total: USERS_FIXTURE.length, page: 1, per_page: 100 },

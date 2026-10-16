@@ -179,7 +179,7 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 序帳只管誰的落地算數;`write()`/`invalidate()`/`reset()` 不碰這本帳。**`reset()`**(選配 `opts.reset`):依序丟棄在飛 GET、換尾流帳本(`resetEpoch += 1`)、清尾流計數與和解鏈、還原內容、
 旗標翻 false、喚醒全部尾流等待者;重置前出發的
 load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/教練對話列表)不再匯出測試專用的重置,測試用真的登入 → 登出
-(`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests = opsGate.reset` 與 `resetAnnouncementsForTests = announcementsGate.reset`,
+(`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests`(三個 ops 水合單位一起 reset)與 `resetAnnouncementsForTests = announcementsGate.reset`,
 production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯出 `*Hydrated`(`hydrated` 只留在閘門介面當唯讀探針)。
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
 自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「`await write()` →
@@ -190,7 +190,7 @@ _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋
 **頁面進場包 (Page Entry)**:
 水合閘門交給頁面載入閘門的進場物——`gate.pageEntry()` 回傳 `{ source: LoadSource }`,頁面寫
 `createLoadGate({ ...gate.pageEntry() })` 即可(見 `docs/adr/0025` F-1)。plain 閘門(如
-mobile-admin 的 `opsGate`)與 session 閘門都交出同一形(住 `HydrationGate`)。`source.guarded()`
+mobile-admin ops 集合的三個水合單位,各交出 `membersPageEntry`/`classesPageEntry`/`ordersPageEntry`)與 session 閘門都交出同一形(住 `HydrationGate`)。`source.guarded()`
 是 guard 短路,`source.load(isCurrent)`/`source.refresh(isCurrent)` 內部各自委派
 `loadRun`/`refreshRun`——`load` 與閘門的 `hydrate()` 共用在飛 GET,`refresh` 是不合併的另一支;
 session 閘門餵進來的是 epoch 核對過的 fetch,所以兩支都自帶核對,頁面結構上拿不到 raw getter。
@@ -203,6 +203,26 @@ session 閘門餵進來的是 epoch 核對過的 fetch,所以兩支都自帶核�
 「水合閘門」詞條)。
 _Avoid_: 通知頁一類頁面以 raw fetch(未經 epoch 核對的 API getter)直入 load-gate;頁面直接讀閘門的
 世代/尾流帳
+
+**ops 集合 (Ops Collections)**:
+mobile-admin 跨頁共用的四個集合 `members`/`classes`/`coaches`/`orders`(住 `mobile-admin/stores.ts`,對外只匯出
+`Readable`),拆成三個水合單位,各是一顆 plain 水合閘門:**會員**(`getMembers(1)`)、**課程·教練**(`getClasses(1)`,
+一次填 classes 與 coaches——課程列的教練名來自同一份教練列表)、**訂單**(`getOrders(1)`)。三個單位**只抓第 1 頁**
+(行動版不能換頁,分頁 meta 進 `opsPages`,超過一頁時 `searchCapHint()` 提示搜尋範圍)。**開機值等於重置值**
+`EMPTY_OPS`(集合 `[]`、分頁 meta 0/0,`docs/adr/0025` F-3),每個單位只寫、只重置自己那一格 `opsPages`。單位之間互不
+牽連:一支端點壞掉只有那一頁顯示錯誤。頁面經各自的 `*PageEntry` 進場(教練畫面用 `classesPageEntry`),首頁的
+待付款 banner 只呼叫 `hydrateOrders()`。寫入動詞成功後只刷新受影響的單位,同時發出(`Promise.allSettled`)、某單位
+失敗只記 log 不丟出(`docs/adr/0022` §1);後端的訂單列表與教練列表都即時 JOIN 使用者名字,所以改名波及三個單位:
+
+| 動詞 | 刷新的單位 |
+|---|---|
+| `addMember`、`saveMember`(名字沒變) | 會員 |
+| `saveMember`(改名)、`saveCoach`(改名) | 會員、課程·教練、訂單 |
+| `addCourse`、`saveCourse`、`saveCoach`(名字沒變) | 課程·教練 |
+| `addCoach`(created) | 會員、課程·教練 |
+
+_Avoid_: 一個單位整包抓四個集合(一支壞掉全頁陪葬、寫一筆重抓全部);頁面自建 ops 閘門(集合跨頁共用);改名
+只刷新自己那個單位(其他集合上的名字會停在舊值)
 
 **session 閘門 (Session Gate)**:
 domain store 對「會員身分變更」(登入/登出、或不經整頁重載直接換帳號)的感知與重置協定;單一

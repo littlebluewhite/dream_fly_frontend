@@ -2,7 +2,7 @@
   /* 管理員 · 學員管理。admin.jsx MembersScreen (116) 的行動版接線改版。
    * 清單由 $members store 提供;tap → sheet('member'),新增 → sheet('memberForm',{m:null})。
    *
-   * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $members store,三態閘門
+   * 資料經 membersPageEntry(ops 集合會員單位的頁面進場包,R14 F1)非同步水合 $members store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
    * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。寫入由閘門依 load-gate
    * 交來的 isCurrent 把關,卸載後才落地的回應不寫共享 store。
@@ -12,7 +12,7 @@
    * 真後端的 is_active 二元旗標(啟用中/已停用)；搜尋拿掉「課程」關鍵字(真資料無
    * 課程欄位)，改為姓名/電話/編號。新增/編輯改接真 POST /users、PATCH /users/{id}
    * （R12 起經 store 的 addMember/saveMember 動詞，內部復用桌面 createMember/
-   * updateMember 並在寫入成功後 await refreshOps() 整包重抓），toast 在動詞 resolve
+   * updateMember 並在寫入成功後 await 受影響單位的重抓），toast 在動詞 resolve
    * 後才出現——和更新後的列表同時。header 顯示後端 total(只抓第 1 頁)，超過一頁時
    * 搜尋區提示搜尋範圍。 */
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
@@ -24,7 +24,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, membersPageEntry, openAdminNotif, addMember, saveMember, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { members } from '$lib/mobile-admin/stores';
   import { createLoadGate } from '$lib/load-gate';
   import type { MemberAccount as MemberRow } from '$lib/admin/data';
@@ -32,7 +32,7 @@
   import { apiErrorMessage } from '$lib/api/error-text';
   import { countByAccountStatus, filterMemberAccounts, type MemberAccountStatusFilter } from '$lib/admin/components/member-account-filter';
 
-  const gate = createLoadGate({ ...opsPageEntry });
+  const gate = createLoadGate({ ...membersPageEntry });
 
   let tab: MemberAccountStatusFilter = 'all';
   let q = '';

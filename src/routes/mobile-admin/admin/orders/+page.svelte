@@ -2,7 +2,7 @@
   /* 管理員 · 訂單與金流。admin.jsx OrdersScreen (287)。
    * 清單由 $orders store 提供;tap → sheet('order',{o})。
    *
-   * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $orders store,三態閘門
+   * 資料經 ordersPageEntry(ops 集合訂單單位的頁面進場包,R14 F1)非同步水合 $orders store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫本地 mutation
    * (W-6 修正 1 起本頁唯讀,markOrderPaid 已移除),ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。
    *
@@ -21,7 +21,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, orders, opsPageEntry, openAdminNotif, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, orders, ordersPageEntry, openAdminNotif, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { fmtNT } from '$lib/format';
   import { orderStatusBadge } from '$lib/api/wire';
   import { createLoadGate } from '$lib/load-gate';
@@ -30,7 +30,7 @@
 
   type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'error' | 'info' | 'neutral';
 
-  const gate = createLoadGate({ ...opsPageEntry });
+  const gate = createLoadGate({ ...ordersPageEntry });
 
   let tab: OrderStatusFilter = 'all';
   let q = '';

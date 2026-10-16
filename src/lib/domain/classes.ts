@@ -2,7 +2,7 @@
  *
  * R15(候選 F-3，誠實開機)：本檔原本的課程種子陣列已退役——唯一消費者 mobile-admin/data.ts
  * 的班級 builder 隨誠實開機一併移除(值改由真 GET /courses 水合，見
- * mobile-admin/stores.ts opsGate)。ClassBase 介面保留——仍被 admin/data.ts 的
+ * mobile-admin/stores.ts 的 ops 集合)。ClassBase 介面保留——仍被 admin/data.ts 的
  * ClassRow 繼承。 */
 
 import type { Level } from './course-level';

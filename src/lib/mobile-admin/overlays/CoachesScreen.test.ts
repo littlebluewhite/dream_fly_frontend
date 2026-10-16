@@ -3,7 +3,8 @@ import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import CoachesScreen from './CoachesScreen.svelte';
 import type { CoachFormValues } from '$lib/admin/data';
-import { overlay, coaches, toasts, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
+import { overlay, coaches, toasts, classesPageEntry, resetOpsForTests } from '$lib/mobile-admin/stores';
+import { createLoadGate } from '$lib/load-gate';
 import type { Coach } from '$lib/domain/coaches';
 import type { CoachResponse } from '$lib/api/generated';
 import { api, ApiError } from '$lib/api/client';
@@ -16,22 +17,21 @@ import { initialOf } from '$lib/api/wire';
  * coach-save.ts 的 saveNewCoach/saveCoachEdit(取代舊有的 inline 兩步序列重抄)。
  *
  * 驗證策略同桌面 routes/admin/coaches/page.test.ts：只 mock 底層
- * createMember/createCoach/updateMember/updateCoach(+ refreshOps 內部依賴的
- * getOpsCollections)，saveNewCoach/saveCoachEdit 本體吃真實實作跑過一次序列——
- * 這樣才是驗證本頁「呼叫 seam → 依 outcome.kind 翻譯 toast → refreshOps」的真實
+ * createMember/createCoach/updateMember/updateCoach(+ 寫後重抓打的 ops 集合端點)，
+ * saveNewCoach/saveCoachEdit 本體吃真實實作跑過一次序列——
+ * 這樣才是驗證本頁「呼叫 seam → 依 outcome.kind 翻譯 toast → 寫後重抓」的真實
  * 接線，而不是把 seam 也一起 mock 掉、只驗證呼叫參數。overlay 是全域 store，直接
  * 呼叫 sheet 帶入的 onSave（頁面自己的閉包），不重新渲染 CoachForm.svelte（同
  * mobile-admin/admin/members/page.test.ts 慣例）。
  *
- * R10：本頁 onMount 加了 hydrateOps() 自保呼叫(水合缺口修補，見 CoachesScreen.svelte
- * 檔頭新增註解)。既有 8 it 驗證的是「使用者互動」觸發的 refreshOps，跟 onMount 的
- * hydrateOps 是兩條不同呼叫路徑，但兩者共用同一組 ops 端點與 ops 水合 guard——beforeEach
- * 先真水合一次(ops 已水合)，讓 onMount 的 hydrateOps() 因 guard 短路直接 return，不會偷打
- * getOpsCollections，才不會弄假紅既有的呼叫次數斷言。「開啟即水合」測試則反過來，先
- * resetOpsForTests()(ops 未水合時)才 render，驗證 guard 開啟時 onMount 真的會呼叫。
+ * 本頁經 classesPageEntry(ops 集合課程·教練單位)進場水合。寫入互動驗證的是動詞觸發的寫後
+ * 重抓，跟進場水合是兩條不同呼叫路徑，但共用同一個單位的端點與 guard——beforeEach 先照頁面
+ * 的接法預熱 classesPageEntry(單位已水合)，讓本頁進場因 guard 短路、不偷打 GET /coaches，
+ * 才不會弄假紅呼叫次數斷言。「開啟即水合」測試則反過來，先 resetOpsForTests()(未水合)
+ * 才 render，驗證進場真的會抓。
  *
  * R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓
- * createMember/createCoach/updateMember/updateCoach/getOpsCollections(stores.ts
+ * createMember/createCoach/updateMember/updateCoach/getClasses(stores.ts
  * 直取 $lib/admin/api)一路走真實 fetch adapter。
  * 教練清單的「預期輸出」改用 expectedFromWire()鏡射 admin/api.ts 私有 mapCoach()
  * 的 color/initial 推導(色票依陣列位置 i%MEMBER_COLORS.length 決定，不能沿用
@@ -82,24 +82,22 @@ const apiUserAccount = (over: Partial<{ id: string; name: string }> = {}) => ({
 	...over
 });
 
-/** getOpsCollections() 平行拉取的其餘三路端點沿用 OPS_ROUTES 預設值(內容與本檔
- *  斷言無關)，只覆寫 GET /coaches。 */
+/** ops 集合的其餘端點沿用 OPS_ROUTES 預設值(內容與本檔斷言無關)，只覆寫 GET /coaches。 */
 const opsRoutes = (wireCoaches: CoachResponse[]) => ({ ...OPS_ROUTES, 'GET /coaches': wireCoaches });
 
 beforeEach(async () => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter(opsRoutes(WIRE_COACHES_BASE)));
-	coaches.set(SEED_COACHES);
 	overlay.closeAll();
-	// R10：先水合(旗標唯讀,R15 起經 fixture 真水合),讓本頁新加的 onMount hydrateOps()
-	// 因 guard 短路直接 return，不干擾既有的呼叫次數斷言。
+	// 預熱課程·教練單位($coaches = SEED_COACHES),讓本頁進場因 guard 短路，不干擾呼叫次數斷言。
 	resetOpsForTests();
-	await hydrateOps();
+	const warm = createLoadGate({ ...classesPageEntry });
+	await warm.load();
+	warm.destroy();
 	vi.mocked(api).mockClear();
 });
 
 afterEach(() => {
-	coaches.set(SEED_COACHES);
 	overlay.closeAll();
 });
 
@@ -129,7 +127,7 @@ function callCount(method: string, path: string): number {
 }
 
 describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMember → createCoach)', () => {
-	it('兩步皆成功：createCoach 帶正確 user_id 綁定，顯示成功 toast，且 refreshOps 被喚(coaches store 反映最新資料)', async () => {
+	it('兩步皆成功：createCoach 帶正確 user_id 綁定，顯示成功 toast，且 寫後重抓被喚(coaches store 反映最新資料)', async () => {
 		const newWire: CoachResponse = { id: 'c-new', user_id: 'u-new', name: '新教練', title: '兼任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 10, slug: null, photo_url: null, created_at: '' };
 		const refreshedWire = [...WIRE_COACHES_BASE, newWire];
 		vi.mocked(api).mockImplementation(
@@ -149,12 +147,12 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 		expect(api).toHaveBeenCalledWith('/coaches', { method: 'POST', body: JSON.stringify({ user_id: 'u-new', title: V.title, specialties: V.tags, is_active: V.isActive }) });
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'success', title: '已新增教練' });
 		expect(get(toasts).at(-1)?.body).toBe('「新教練」已建立為教練。');
-		// refreshOps 被喚：getOpsCollections 重新打過一次(GET /coaches 屬其中一路)，coaches store 反映最新資料。
+		// 寫後重抓被喚：課程·教練單位重新打過一次(GET /coaches 屬其中一路)，coaches store 反映最新資料。
 		expect(callCount('GET', '/coaches')).toBe(1);
 		expect(get(coaches)).toEqual(expectedFromWire(refreshedWire));
 	});
 
-	it('userCreateFailed：createMember 失敗 → 新增失敗 toast 透傳後端訊息，不呼叫 createCoach，不觸發 refreshOps', async () => {
+	it('userCreateFailed：createMember 失敗 → 新增失敗 toast 透傳後端訊息，不呼叫 createCoach，不觸發寫後重抓', async () => {
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'POST /users': new ApiError(409, 'Email 已被使用'), ...opsRoutes(WIRE_COACHES_BASE) })
 		);
@@ -241,7 +239,7 @@ describe('CoachesScreen — 新增教練(saveNewCoach 兩步序列：createMembe
 });
 
 describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
-	it('姓名未變：只呼叫 updateCoach(不呼叫 updateMember)，成功後顯示 toast 且 refreshOps 被喚', async () => {
+	it('姓名未變：只呼叫 updateCoach(不呼叫 updateMember)，成功後顯示 toast 且 寫後重抓被喚', async () => {
 		const target = SEED_COACHES[0];
 		const refreshedWire = WIRE_COACHES_BASE.map((c) => (c.id === target.id ? { ...c, title: '改職稱' } : c));
 		vi.mocked(api).mockImplementation(
@@ -291,7 +289,7 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 		expect(get(toasts).at(-1)).toMatchObject({ tone: 'success', title: '已儲存' });
 	});
 
-	it('coachUpdateFailed：updateCoach 失敗(422)→ 儲存失敗 toast 查表文案，不觸發 refreshOps', async () => {
+	it('coachUpdateFailed：updateCoach 失敗(422)→ 儲存失敗 toast 查表文案，不觸發寫後重抓', async () => {
 		const target = SEED_COACHES[2];
 		vi.mocked(api).mockImplementation(
 			fakeRouter({ 'PATCH /coaches/c3': new ApiError(422, 'invalid coach payload'), ...opsRoutes(WIRE_COACHES_BASE) })
@@ -327,8 +325,8 @@ describe('CoachesScreen — 編輯教練(saveCoachEdit)', () => {
 	});
 });
 
-describe('CoachesScreen — 進場水合(R10 修補：admin 首頁→更多頁→本 overlay 動線上此前無人呼叫 hydrateOps，$coachesStore 只見 domain seed)', () => {
-	it('ops 未水合時開啟即觸發 onMount 的 hydrateOps()：getOpsCollections 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
+describe('CoachesScreen — 進場水合(admin 首頁→更多頁→本 overlay 動線上沒有別頁先水合)', () => {
+	it('課程·教練單位未水合時開啟即水合：GET /coaches 被呼叫一次，水合後的教練資料反映到畫面上', async () => {
 		resetOpsForTests();
 		const hydratedWire: CoachResponse = { id: 'c-hydrated', user_id: 'u-hydrated', name: '水合教練', title: '主任教練', bio: null, experience: null, specialties: ['地板動作'], certifications: [], is_active: true, display_order: 1, slug: null, photo_url: null, created_at: '' };
 		vi.mocked(api).mockImplementation(fakeRouter(opsRoutes([hydratedWire])));
@@ -353,7 +351,7 @@ function createDeferred<T>() {
 	return { promise, resolve };
 }
 
-describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 getOpsCollections)', () => {
+describe('CoachesScreen — 載入(createLoadGate 三態,source=classesPageEntry)', () => {
 	it('loading：ops 未水合時顯示骨架、無編輯鉛筆按鈕；resolve 後列表現身、骨架消失', async () => {
 		resetOpsForTests();
 		const d = createDeferred<CoachResponse[]>();
@@ -373,9 +371,9 @@ describe('CoachesScreen — 載入(createLoadGate 三態,fetch=hydrateOps 經 ge
 		expect(container.querySelectorAll('button[aria-label="編輯教練"]').length).toBe(SEED_COACHES.length);
 	});
 
-	it('error:getOpsCollections 失敗 → ErrorState「載入失敗」、無編輯鉛筆;點「重新載入」→ refreshOps 重打,成功後列表恢復', async () => {
+	it('error:課程·教練單位載入失敗 → ErrorState「載入失敗」、無編輯鉛筆;點「重新載入」→ 重打,成功後列表恢復', async () => {
 		resetOpsForTests();
-		// 第一打(hydrateOps)失敗;重試的第二打落回正常的 WIRE_COACHES_BASE。
+		// 第一打(進場水合)失敗;重試的第二打落回正常的 WIRE_COACHES_BASE。
 		let call = 0;
 		vi.mocked(api).mockImplementation(
 			fakeRouter({

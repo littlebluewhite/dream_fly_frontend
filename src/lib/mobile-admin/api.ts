@@ -1,32 +1,20 @@
-/* Dream Fly — 行動管理端 API 接縫。Task 20：從整包 reply() mock 改為 desktop
- * admin/coach seams 的薄層——直接 import `$lib/admin/api.ts`/`$lib/coach/api.ts`，
- * 形狀相同的欄位零映射直接沿用（多數集合型別在 data.ts 已刻意對齊桌面真實型別，
- * 例如 ClassRow/MemberRow/OrderRow/Coach，見該檔各型別附註），只在行動版 UI 真的
- * 需要不同形狀處做薄映射（例如今日課表的 tone/label）。
- * 凡是桌面 seam 本身仍是 mock（無後端來源）的欄位，這裡原樣沿用同一份 mock/預設值
- * ——不發明桌面沒有的假來源，也不重新實作桌面已經做過的映射邏輯。逐函式來源見
- * task-20-report.md 的盤點表。
+/* Dream Fly — 行動管理端 API 接縫：組合桌面 admin/coach seams(`$lib/admin/api`、
+ * `$lib/coach/api`)的薄層。形狀相同的欄位零映射直接沿用，只在行動版 UI 真的需要不同
+ * 形狀處做薄映射；桌面 seam 本身仍是 mock(無後端來源)的欄位原樣沿用同一份 mock/預設值。
  *
- * R15 Task 3b(候選 轉手退役)：本檔原本還轉出約 40 支對桌面 admin/coach seam 的零
- * 映射 re-export（新增/編輯/報表/設定/課堂點名/我的學員/個人設定/訊息中心…），
- * 對外只是換一個 import 路徑、沒有加任何型別事實或映射邏輯——依 ADR-0019 C4 的
- * facade 退役判準全數刪除，生產消費端改直接 import 擁有者模組（$lib/admin/api、
- * $lib/admin/data、$lib/admin/components/coach-save、$lib/admin/settings-form、
- * $lib/coach/api、$lib/coach/load-error-copy、$lib/coach/data）。本檔只留真正做
- * 「組合(平行拉取多支端點)＋薄映射」的 4 支：getMore/getCoachHome/getAdminHome/
- * getOpsCollections。 */
+ * 本檔只留真正做「組合(平行拉取多支端點)＋薄映射」的 3 支：getMore/getCoachHome/
+ * getAdminHome。零映射的轉手一律不留(ADR-0019 C4)，消費端直接 import 擁有者模組；
+ * ops 集合(members/classes/coaches/orders)由 $lib/mobile-admin/stores 的三個水合單位
+ * 直接向 $lib/admin/api 取第 1 頁。 */
 import {
 	getVenues as adminGetVenues,
 	getTickets as adminGetTickets,
 	getCoaches as adminGetCoaches,
-	getClasses as adminGetClasses,
-	getMembers as adminGetMembers,
-	getOrders as adminGetOrders,
 	getReports as adminGetReports,
 	getTodaySessions as adminGetTodaySessions,
 	getRecentActivity as adminGetRecentActivity
 } from '$lib/admin/api';
-import type { TodayClass, ClassRow, MemberAccount as MemberRow, Order as OrderRow } from '$lib/admin/data';
+import type { TodayClass } from '$lib/admin/data';
 import { getDashboard as coachGetDashboard } from '$lib/coach/api';
 import type { Coach as CoachProfile, TodayClass as CoachTodayClass } from '$lib/coach/data';
 // C4 批3(facade 純轉手退役):Coach/Venue/Ticket/ActivityRow 四型別改直取對應
@@ -119,49 +107,5 @@ export const getAdminHome = async (): Promise<MAdminHomeData> => {
 		activity: recentActivity.activity,
 		enrolledValue: String(reports.members.active),
 		revenueMonthValue: fmtNT(reports.revenue.thisMonth)
-	};
-};
-
-/** 集合水合(members/classes/coaches/orders 一次到位)。四者皆復用桌面 admin seam
- *  的真資料，平行拉取——members/classes/orders 皆為分頁端點(Task 17)，這裡固定抓
- *  第一頁(後端預設 per_page=20)。coaches 直接取 getClasses() 回應裡的 coaches(同一支
- *  listCoaches() + mapCoach() 映射，與 getCoaches() 形狀相同)，不再另打一次 GET /coaches。
- *  // P2: 行動版目前沒有 PaginationBar 可切頁，資料超過一頁時清單如實只顯示第一頁
- *  （不假裝資料齊全），也不在本次任務新蓋一套行動版分頁 UI——桌面對應頁面皆已有
- *  PaginationBar，行動版尚未跟進，記錄為後續 polish(見 task-20-report.md)。R12 起
- *  分頁 meta(total/perPage)一併帶出(pages)，頁面據此顯示真實總數與「僅搜尋前 N 筆」
- *  提示。四個型別與桌面對應型別逐欄位相同(見 data.ts 各型別附註)，故零映射、直接沿用。 */
-export interface PageInfo {
-	total: number;
-	perPage: number;
-}
-export interface OpsPages {
-	members: PageInfo;
-	classes: PageInfo;
-	orders: PageInfo;
-}
-export interface OpsCollections {
-	members: MemberRow[];
-	classes: ClassRow[];
-	coaches: Coach[];
-	orders: OrderRow[];
-	pages: OpsPages;
-}
-export const getOpsCollections = async (): Promise<OpsCollections> => {
-	const [membersRes, classesRes, ordersRes] = await Promise.all([
-		adminGetMembers(1),
-		adminGetClasses(1),
-		adminGetOrders(1)
-	]);
-	return {
-		members: membersRes.members,
-		classes: classesRes.classes,
-		coaches: classesRes.coaches,
-		orders: ordersRes.orders,
-		pages: {
-			members: { total: membersRes.total, perPage: membersRes.perPage },
-			classes: { total: classesRes.total, perPage: classesRes.perPage },
-			orders: { total: ordersRes.total, perPage: ordersRes.perPage }
-		}
 	};
 };

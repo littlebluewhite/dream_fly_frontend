@@ -5,14 +5,14 @@
    *
    * 資料改由 getAdminHome()(mock-API 接縫)非同步載入,三態閘門(loading/error/
    * ready)。$orders 是跨頁共享 store(待付款橫幅,與本頁 payload 無關)——onMount
-   * 補呼叫 hydrateOps() 真的水合;$orders 開機即為 `[]`(誠實開機,docs/adr/0025),
+   * 補呼叫 hydrateOrders() 只水合 ops 集合的訂單單位;$orders 開機即為 `[]`(誠實開機,docs/adr/0025),
    * 水合前 pending 天然是 0。
    *
    * Task 20：Hero KPI 改讀真 GET /reports/admin(admin/api.ts getReports())——同
    * 桌面 admin/+page.svelte 的裁決 9：原 4 張 KPI 卡中「本週課堂」「出席偏低」在
    * /reports/admin 沒有對應資料源，已隨桌面版一併移除，不留假數字；硬編 hero 日期
    * (dateLabel)同理移除。「新增學員」快速操作改開真表單並接 store 的 addMember()(同
-   * admin/members 頁的寫入邏輯，寫入成功即整包重抓 ops 集合)，不再是本地假寫入。 */
+   * admin/members 頁的寫入邏輯，寫入成功即重抓會員單位)，不再是本地假寫入。 */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import HeroHeader from '$lib/mobile-admin/components/HeroHeader.svelte';
@@ -21,7 +21,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, adminUnreadCount, toasts, orders, hydrateOps, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
+  import { overlay, adminUnreadCount, toasts, orders, hydrateOrders, openAdminNotif, addMember } from '$lib/mobile-admin/stores';
   import { adminPath } from '$lib/mobile-admin/nav';
   import { createLoadGate } from '$lib/load-gate';
   import { getAdminHome, type MAdminHomeData } from '$lib/mobile-admin/api';
@@ -37,7 +37,7 @@
   onMount(() => {
     // best-effort：待付款橫幅只是提示,失敗就先不顯示,不擋首頁其餘內容(同
     // member/courses 的候補水合慣例)。橫幅不會假出現,靠的是 $orders 開機即為 `[]`(見檔頭註解)。
-    void hydrateOps().catch(() => {});
+    void hydrateOrders().catch(() => {});
   });
 
   $: today = data?.today ?? [];
