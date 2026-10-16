@@ -7,6 +7,7 @@ import { points } from '$lib/member/points';
 import { api, ApiError } from '$lib/api/client';
 import type { Course } from '$lib/mobile/data';
 import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 /* CartSheet 結帳接真（複審後）：confirmPayment 現在打真實 POST /orders（復用
  * desktop member 的 syncCartToServer + api()，見 $lib/mobile/stores.ts 的
@@ -50,9 +51,9 @@ const SAMPLE_ORDER = orderResponse({
   items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: COURSE.id, quantity: 1, unit_price_cents: 480000 }]
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   cart.clear();
-  points.set(0);
+  await resetSessionStores();
   vi.mocked(api).mockReset();
 });
 

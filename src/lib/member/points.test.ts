@@ -7,6 +7,7 @@ import { api } from '$lib/api/client';
 import type { PointsMeResponse } from '$lib/api/generated';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { points, pointsLedger, pointsEarnedThisMonth, refreshPoints } from './stores';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -14,10 +15,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   return { ...actual, api: vi.fn() };
 });
 
-beforeEach(() => {
-  points.set(0);
-  pointsLedger.set([]);
-  pointsEarnedThisMonth.set(0);
+beforeEach(async () => {
+  await resetSessionStores();
   vi.mocked(api).mockReset();
 });
 

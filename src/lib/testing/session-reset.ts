@@ -1,6 +1,6 @@
 /* Dream Fly — session 閘門單例的測試重置(FE-9)。
  *
- * session 閘門(waitlist/leave/notifications/messages)在身分變更時自行重置,測試不再有
+ * session 閘門(waitlist/leave/notifications/messages、點數／訂閱的 refresher)在身分變更時自行重置,測試不再有
  * 專屬的 reset…ForTests 出口:用真的登入 → 登出把身分走一圈,閘門就經由 production 的
  * 同一條路徑回到開機態。authStore 一律是真的(import-scan 契約擋住 vi.mock 登入狀態),呼叫端
  * 把 $lib/api/client 的 api 換成 vi.fn,這裡暫時換上登入／登出的 fakeRouter。

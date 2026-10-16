@@ -247,8 +247,10 @@ restored 與訪客開機一律**零觸發**,只有身分真的變了才重置(re
 onFailure 並對應結果,不自己讀旗標、不手寫 resync/回滾。換帳號即重置這條鏈(見 `docs/adr/0024`)。`reset()` 呼叫水合閘門通用的
 `gate.reset()`(連和解鏈一起清),再重置 `writeChain`(見 `docs/adr/0025`「閘門重置」、`docs/adr/0027` §5);
 「誰換人、何時換人」這個 session 專屬判斷只住本檔。
+閘門管的 store **內容唯讀**:擁有者模組持有私有 `writable`、只匯出 `Readable`(點數三顆、訂閱已是這個形狀),只有閘門的 apply/commit
+(與 reset)能寫;測試不 `.set()`,而是 route 水合用的 GET 再呼叫 `hydrateX()`/`refreshX()` 取得狀態。
 _Avoid_: 手抄 epoch/訂閱重置/和解鏈/寫入鏈/身分 key 公式(單一來源之外的複本)、`queueWrite` 消費端自寫的寫前水合或復原分支、`*Hydrated` 旗標跨登入存活、
-開機時為了「對齊開機值」而觸發 reset
+開機時為了「對齊開機值」而觸發 reset、從擁有者模組外寫 store 內容
 
 **教練對話列表 (Coach Conversation List)**:
 登入教練本人的對話摘要(`GET /conversations/me`)的唯一 owner,`src/lib/coach/conversations.ts`,建在

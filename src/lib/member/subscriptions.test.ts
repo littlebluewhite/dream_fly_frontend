@@ -4,14 +4,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { subscriptions, refreshSubscriptions } from './stores';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
 
-beforeEach(() => {
-  subscriptions.set([]);
+beforeEach(async () => {
+  await resetSessionStores();
   vi.mocked(api).mockReset();
 });
 

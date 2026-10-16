@@ -1,9 +1,9 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { isoDate } from '$lib/api/wire';
 import { createSessionRefresher } from '$lib/session-gate';
 import { ntd } from '$lib/public/adapters';
-import { SUBS_SEED, type Subscription } from './data';
+import type { Subscription } from './data';
 import type { SubscriptionResponse } from '$lib/api/generated';
 
 /* ---- Subscriptions / entitlements ----
@@ -13,8 +13,12 @@ import type { SubscriptionResponse } from '$lib/api/generated';
  * 這支，見 mobile/account/+page.svelte）and after placeOrder()). A client-cached
  * snapshot could out-live the real
  * entitlement (e.g. an admin-side change) with no event to invalidate it, so
- * the store simply starts empty/seeded and is hydrated on demand instead. */
-export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ...s })));
+ * the store simply starts empty and is hydrated on demand instead.
+ * 內容唯讀：私有 writable，只匯出 Readable，唯一寫入者是下方 refreshSubscriptions 這顆
+ * session 閘門的 apply／reset。開機值與 reset 值是同一個私有空常數。 */
+const NONE: Subscription[] = [];
+const owned = writable<Subscription[]>(NONE);
+export const subscriptions: Readable<Subscription[]> = { subscribe: owned.subscribe };
 
 /** 訂閱清單 — 從 GET /subscriptions/me 重新 hydrate 本地 subscriptions store。
  *  只留 status active 的項目：expired/cancelled 不算「已持有」，不該擋掉會員
@@ -33,10 +37,10 @@ export const subscriptions = writable<Subscription[]>(SUBS_SEED.map((s) => ({ ..
 export const refreshSubscriptions = createSessionRefresher<SubscriptionResponse[]>({
   fetch: () => api<SubscriptionResponse[]>('/subscriptions/me'),
   apply: (list) =>
-    subscriptions.set(
+    owned.set(
       list
         .filter((s) => s.status === 'active')
         .map((s) => ({ id: s.product_id, name: s.product_name, since: isoDate(s.started_at), price: ntd(s.price_cents) }))
     ),
-  reset: () => subscriptions.set([]) // boot 態 = 空(SUBS_SEED = [])
+  reset: () => owned.set(NONE) // boot 態(開機值 = reset 值 = NONE)
 });

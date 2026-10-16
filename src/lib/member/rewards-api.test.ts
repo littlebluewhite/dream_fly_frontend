@@ -9,24 +9,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
-import { points, pointsLedger, redeemReward, redeemRewardErrorMessage } from './stores';
+import { points, pointsLedger, refreshPoints, redeemReward, redeemRewardErrorMessage } from './stores';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { pointsMe } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import type { PointsMeResponse } from '$lib/api/generated';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetSessionStores();
   vi.mocked(api).mockReset();
-  points.set(0);
-  pointsLedger.set([]);
 });
+
+/** 先經 GET /points/me 水合出既有餘額／明細，再清掉 api 的呼叫紀錄與實作。 */
+async function hydratePoints(me: PointsMeResponse): Promise<void> {
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /points/me': me }));
+  await refreshPoints();
+  vi.mocked(api).mockReset();
+}
 
 describe('redeemReward — POST /rewards/{id}/redeem', () => {
   it('無 body 呼叫 POST /rewards/{id}/redeem，成功後呼叫 refreshPoints() 整包 hydrate points/pointsLedger（非本地扣減）', async () => {
-    points.set(500); // 先前餘額——驗證最終值來自 refreshPoints 的回應，不是 500-100 本地算出來的
+    await hydratePoints(pointsMe({ balance: 500 })); // 先前餘額——驗證最終值來自 refreshPoints 的回應，不是 500-100 本地算出來的
     vi.mocked(api).mockImplementation(
       fakeRouter({
         'POST /rewards/rw-1/redeem': { redemption_id: 'redemption-1', points_spent: 100, balance_after: 900 },
@@ -64,8 +72,9 @@ describe('redeemReward — POST /rewards/{id}/redeem', () => {
   });
 
   it('409「點數不足」原樣拋出，且不觸發 refreshPoints（store 維持原狀）', async () => {
-    points.set(50);
-    pointsLedger.set([{ id: 'old', date: '2026/07/01', desc: '舊紀錄', type: 'earn', delta: 50 }]);
+    await hydratePoints(
+      pointsMe({ balance: 50, ledger: [{ id: 'old', delta: 50, balance_after: 50, reason: 'checkout_earn', order_id: null, created_at: '2026-07-01T00:00:00Z' }] })
+    );
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /rewards/rw-1/redeem': new ApiError(409, '點數不足') }));
 
     await expect(redeemReward('rw-1')).rejects.toThrow('點數不足');

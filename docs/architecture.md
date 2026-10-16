@@ -76,8 +76,8 @@ coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/
   array lives in `weekday.ts`, `docs/adr/0013`) plus type-only exports
   (`EnrolledCourse`/`ScheduleBlock`/`Order`, `LedgerEntry`/`LedgerType`) that back type annotations in
   `mobile/api.ts`, `member/points.ts` and the facades' own local interfaces. `ANNOUNCE` stays forked in
-  each facade because one announcement's background colour differs between the two. The notification and
-  points-ledger seed values (`NOTIFS_SEED`/`POINTS_LEDGER`) exist only as test fixtures in
+  each facade because one announcement's background colour differs between the two. The notification
+  seed value (`NOTIFS_SEED`) exists only as a test fixture in
   `src/lib/testing/seed-fixtures.ts` (`docs/adr/0010`, `docs/adr/0013`, `docs/adr/0024`).
 - **Per-entity display lookups** — each entity file single-sources a status/type → tone-and-label
   lookup: `VENUE_STATUS` (`venues.ts`), `TICKET_TYPE` (`tickets.ts`), `MEMBER_ACCOUNT_STATUS`

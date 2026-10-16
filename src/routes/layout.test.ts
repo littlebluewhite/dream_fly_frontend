@@ -42,7 +42,6 @@ beforeEach(async () => {
   // 根 layout 掛載時 authStore.hydrate() 經 global fetch 換 refresh token;回 503(後端暫時不可用)時登入狀態不變。
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
   resetAnnouncementsForTests();
-  subscriptions.set([]);
   vi.mocked(api).mockImplementation(
     fakeRouter({
       ...loginRoutes(),
