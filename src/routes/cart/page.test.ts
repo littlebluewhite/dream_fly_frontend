@@ -7,6 +7,9 @@ import { authStore } from '$lib/stores/authStore';
 import { api } from '$lib/api/client';
 import { subscriptions } from '$lib/member/subscriptions';
 import { checkoutTarget } from '$lib/checkout-gate';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -18,13 +21,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 import { goto } from '$app/navigation';
 
-// authStore is API-backed (real network calls); this file only cares about
-// the logged-in/out UI state, so mock it with a tiny local store — auth
-// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
-});
+// authStore is real: tests log in through loginRoutes() over the same api() fake —
+// auth mechanics themselves are covered in src/lib/stores/authStore.test.ts.
 
 const COURSE: CatalogCourse = {
 	id: 'course-uuid-1',
@@ -47,12 +45,12 @@ const PASS: Ticket = {
 	features: ['a']
 };
 
-beforeEach(() => {
-	vi.mocked(api).mockReset();
+beforeEach(async () => {
+	await resetSessionStores();
+	vi.mocked(api).mockImplementation(fakeRouter(loginRoutes()));
 	subscriptions.set([]);
 	localStorage.clear();
 	cart.clear();
-	authStore.logout();
 	vi.mocked(goto).mockClear();
 });
 afterEach(() => {
@@ -95,7 +93,7 @@ describe('購物車頁 — 結帳 gate', () => {
 	});
 
 	it('logged-in 結帳 routes to member checkout', async () => {
-		authStore.login('member@test.com', 'password123');
+		await authStore.login('member@test.com', 'password123');
 		cart.addItem(courseToCartItem(COURSE));
 		const { getByRole } = render(Page);
 		await fireEvent.click(getByRole('button', { name: '前往結帳' }));

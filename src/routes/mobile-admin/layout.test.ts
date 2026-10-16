@@ -21,15 +21,6 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-	const { FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA({
-		roleFor: (email) => (email.includes('coach') ? ['coach'] : ['admin']),
-		memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email })
-	});
-});
-
 // R14(候選 F3)暖機清單:教練分區的訊息交給身分範圍暖——只替換 api(),數 GET /conversations/me。
 // 守門、暖機准入、頁面壽命、關 overlay 的機制在 $lib/components/SessionScope.test.ts 測一次;這裡只留本 layout 的宣告。
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -39,17 +30,20 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import { overlay } from '$lib/mobile-admin/stores';
 import Layout from './+layout.svelte';
 import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 
+// 帳號名含 coach 的只有教練角色,其餘都是 admin。
+const routes = () => ({ ...loginRoutes((email) => (email.includes('coach') ? ['coach'] : ['admin'])), 'GET /conversations/me': [] });
+
 beforeEach(async () => {
-	mockUrl = new URL('http://localhost/mobile-admin/admin');
-	authStore.logout();
 	await resetSessionStores();
-	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
+	mockUrl = new URL('http://localhost/mobile-admin/admin');
+	vi.mocked(api).mockImplementation(fakeRouter(routes()));
 });
 afterEach(() => vi.clearAllMocks());
 
@@ -59,28 +53,28 @@ describe('mobile-admin +layout — real auth + role guard (Task 20, replaces df_
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/login');
 	});
 
-	it('an admin visitor at /mobile-admin/admin is not redirected', () => {
-		authStore.login('admin@test.com', 'password123');
+	it('an admin visitor at /mobile-admin/admin is not redirected', async () => {
+		await authStore.login('admin@test.com', 'password123');
 		render(Layout);
 		expect(goto).not.toHaveBeenCalled();
 	});
 
-	it('an admin visitor may also enter /mobile-admin/coach (admin can view both)', () => {
+	it('an admin visitor may also enter /mobile-admin/coach (admin can view both)', async () => {
 		mockUrl = new URL('http://localhost/mobile-admin/coach');
-		authStore.login('admin@test.com', 'password123');
+		await authStore.login('admin@test.com', 'password123');
 		render(Layout);
 		expect(goto).not.toHaveBeenCalled();
 	});
 
-	it('a coach-only visitor at /mobile-admin/admin is bounced to login?blocked=1 (stays inside mobile-admin)', () => {
-		authStore.login('coach@test.com', 'password123');
+	it('a coach-only visitor at /mobile-admin/admin is bounced to login?blocked=1 (stays inside mobile-admin)', async () => {
+		await authStore.login('coach@test.com', 'password123');
 		render(Layout);
 		expect(goto).toHaveBeenCalledWith('/mobile-admin/login?blocked=1');
 	});
 
-	it('a coach-only visitor at /mobile-admin/coach is not redirected', () => {
+	it('a coach-only visitor at /mobile-admin/coach is not redirected', async () => {
 		mockUrl = new URL('http://localhost/mobile-admin/coach');
-		authStore.login('coach@test.com', 'password123');
+		await authStore.login('coach@test.com', 'password123');
 		render(Layout);
 		expect(goto).not.toHaveBeenCalled();
 	});
@@ -92,7 +86,7 @@ describe('mobile-admin +layout — 暖機清單(R14 F3)', () => {
 
 	it('coach 角色(/mobile-admin/coach)打 GET /conversations/me 恰好一次;重新 render 不再打', async () => {
 		mockUrl = new URL('http://localhost/mobile-admin/coach');
-		authStore.login('coach@test.com', 'password123');
+		await authStore.login('coach@test.com', 'password123');
 		const first = render(Layout);
 		await settle();
 		expect(convGets()).toBe(1);
@@ -107,14 +101,14 @@ describe('mobile-admin +layout — 暖機清單(R14 F3)', () => {
 	// 訊息角標,所以一樣暖。
 	it('admin 帳號進教練分區(/mobile-admin/coach)也暖訊息:GET /conversations/me 恰好一次', async () => {
 		mockUrl = new URL('http://localhost/mobile-admin/coach');
-		authStore.login('admin@test.com', 'password123');
+		await authStore.login('admin@test.com', 'password123');
 		render(Layout);
 		await settle();
 		expect(convGets()).toBe(1);
 	});
 
 	it('admin 角色(/mobile-admin/admin)零次', async () => {
-		authStore.login('admin@test.com', 'password123');
+		await authStore.login('admin@test.com', 'password123');
 		render(Layout);
 		await settle();
 		expect(convGets()).toBe(0);
@@ -132,4 +126,4 @@ describe('mobile-admin +layout — 換人時關掉 overlay', () => {
 	});
 });
 
-describeKeyedSlot('mobile-admin +layout', Layout, { 'GET /conversations/me': [] });
+describeKeyedSlot('mobile-admin +layout', Layout, routes());

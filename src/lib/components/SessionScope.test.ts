@@ -19,19 +19,18 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
-});
-
-// describePageLifetime 的探針頁面經 api() 讀資料。
+// authStore 是真的:經 loginRoutes() 登入(member.id 就是 email);describePageLifetime 的探針頁面也經 api() 讀資料。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
 
 import { page } from '$app/stores';
+import { api } from '$lib/api/client';
 import { authStore, type AuthState } from '$lib/stores/authStore';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import { describePageLifetime } from '$lib/testing/page-lifetime';
 import SessionScope from './SessionScope.svelte';
 
@@ -48,9 +47,10 @@ function navigate(path: string) {
 	});
 }
 
-beforeEach(() => {
+beforeEach(async () => {
 	mockUrl = new URL('http://localhost/s/home');
-	authStore.logout();
+	await resetSessionStores();
+	vi.mocked(api).mockImplementation(fakeRouter(loginRoutes()));
 });
 afterEach(() => vi.clearAllMocks());
 

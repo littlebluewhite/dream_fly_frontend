@@ -4,7 +4,10 @@ import { readable, get } from 'svelte/store';
 import { afterNavigate } from '$app/navigation';
 import { search } from '$lib/admin/stores';
 import { authStore } from '$lib/stores/authStore';
-import { FIXTURE_MEMBER, type TestAuthStore } from '$lib/testing/auth-mock';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 /* Pin-first regression（Task 1，R13 小 bug 包）：admin +layout 沒有像 coach +layout
  * 那樣在 afterNavigate 清空 Topbar 的 search store — 從某頁帶著搜尋字串切到另一頁，
@@ -15,15 +18,17 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockB } = await import('$lib/testing/auth-mock');
-	return makeAuthMockB();
+vi.mock('$lib/api/client', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/api/client')>();
+	return { ...actual, api: vi.fn() };
 });
 
 import Layout from './+layout.svelte';
 
-beforeEach(() => {
-	(authStore as TestAuthStore).__set({ loggedIn: true, member: FIXTURE_MEMBER, roles: ['admin'] });
+beforeEach(async () => {
+	await resetSessionStores();
+	vi.mocked(api).mockImplementation(fakeRouter(loginRoutes(() => ['admin'])));
+	await authStore.login('admin@dreamfly.test', 'pw');
 	search.set('');
 });
 afterEach(() => vi.clearAllMocks());

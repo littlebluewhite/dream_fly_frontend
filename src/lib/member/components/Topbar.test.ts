@@ -5,27 +5,32 @@ import Topbar from './Topbar.svelte';
 import { cart, checkoutOpen } from '$lib/member/stores';
 import { authStore } from '$lib/stores/authStore';
 import { checkoutTarget } from '$lib/checkout-gate';
+import { api } from '$lib/api/client';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 // Topbar calls goto() — for the bell nav and the guest checkout bounce. Mock nav.
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import { goto } from '$app/navigation';
 
-// authStore is API-backed (real network calls); this file only cares about
-// the logged-in/out UI state, so mock it with a tiny local store — auth
-// mechanics themselves are covered in src/lib/stores/authStore.test.ts.
-vi.mock('$lib/stores/authStore', async () => {
-  const { makeAuthMockA } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA();
+// authStore is real: only api() is swapped for the HTTP fake, and tests log in
+// through loginRoutes() — auth mechanics themselves are covered in
+// src/lib/stores/authStore.test.ts.
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
 });
 
 // Task 17: cart.add() now takes the public-seam CatalogCourse (uuid id).
 const courseA = { id: 'course-a', name: '幼兒體操 啟蒙班', level: '啟蒙', cat: '幼兒體操', age: '3–5 歲', days: '週六 10:00', price: 2800, hot: false, coach: '黃詩涵', desc: '', spots: 9 };
 const courseB = { id: 'course-b', name: '兒童基礎 B 班', level: '基礎', cat: '兒童基礎', age: '7–9 歲', days: '週一 17:30', price: 3200, hot: true, coach: '陳冠宇', desc: '', spots: 9 };
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
   cart.clear();
-  authStore.logout();
+  await resetSessionStores();
+  vi.mocked(api).mockImplementation(fakeRouter(loginRoutes()));
   checkoutOpen.set(false);
 });
 afterEach(() => vi.clearAllMocks());
@@ -52,7 +57,7 @@ describe('member Topbar — cart badge is the qty sum', () => {
 
 describe('member Topbar — cart button gates checkout on login', () => {
   it('a logged-in member opens the checkout dialog directly', async () => {
-    authStore.login('member@test.com', 'password123');
+    await authStore.login('member@test.com', 'password123');
     render(Topbar);
     await fireEvent.click(screen.getByLabelText('購物車'));
     expect(get(checkoutOpen)).toBe(true);

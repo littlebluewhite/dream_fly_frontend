@@ -2,20 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readable } from 'svelte/store';
 
 /* coach +layout 的宣告:教練角色守門與暖機清單(教練對話列表),slot 交給身分範圍。守門、暖機准入、頁面壽命的
- * 機制在 $lib/components/SessionScope.test.ts 測一次。教練 layout 的 guard 讀 $authStore.roles,所以登入的身分帶 coach 角色。 */
+ * 機制在 $lib/components/SessionScope.test.ts 測一次。教練 layout 的 guard 讀 $authStore.roles,所以經 loginRoutes() 登入的身分帶 coach 角色。 */
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/coach') })
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
-
-vi.mock('$lib/stores/authStore', async () => {
-	const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-	return makeAuthMockA({
-		roleFor: (email) => (email.startsWith('member') ? ['member'] : ['coach']),
-		memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email })
-	});
-});
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -26,9 +18,13 @@ import { render } from '@testing-library/svelte';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { describeKeyedSlot } from '$lib/testing/page-lifetime';
 import Layout from './+layout.svelte';
+
+// member… 開頭的帳號只有 member 角色,其餘都是教練。
+const routes = () => ({ ...loginRoutes((email) => (email.startsWith('member') ? ['member'] : ['coach'])), 'GET /conversations/me': [] });
 
 afterEach(() => vi.clearAllMocks());
 
@@ -39,9 +35,8 @@ describe('coach +layout — 暖機清單(R20)', () => {
 	const settle = () => new Promise((r) => setTimeout(r, 0));
 
 	beforeEach(async () => {
-		authStore.logout();
 		await resetSessionStores();
-		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /conversations/me': [] }));
+		vi.mocked(api).mockImplementation(fakeRouter(routes()));
 	});
 
 	it('教練登入打 GET /conversations/me 恰好一次;重新 render 不再打', async () => {
@@ -64,4 +59,4 @@ describe('coach +layout — 暖機清單(R20)', () => {
 	});
 });
 
-describeKeyedSlot('coach +layout', Layout, { 'GET /conversations/me': [] });
+describeKeyedSlot('coach +layout', Layout, routes());

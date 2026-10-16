@@ -12,11 +12,7 @@ vi.mock('$app/stores', () => ({
 }));
 vi.mock('$app/environment', () => ({ browser: true }));
 
-vi.mock('$lib/stores/authStore', async () => {
-  const { makeAuthMockA, FIXTURE_MEMBER } = await import('$lib/testing/auth-mock');
-  return makeAuthMockA({ memberFor: (email) => ({ ...FIXTURE_MEMBER, id: email }) });
-});
-
+// authStore 是真的:經 loginRoutes() 登入(member.id 就是 email)。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
@@ -24,6 +20,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { authStore } from '$lib/stores/authStore';
 import { subscriptions } from '$lib/member/subscriptions';
@@ -40,20 +37,25 @@ const owned = {
 };
 
 beforeEach(async () => {
-  mockUrl = new URL('http://localhost/');
-  authStore.logout();
   await resetSessionStores();
+  mockUrl = new URL('http://localhost/');
+  // 根 layout 掛載時 authStore.hydrate() 經 global fetch 換 refresh token;回 503(後端暫時不可用)時登入狀態不變。
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
   resetAnnouncementsForTests();
   subscriptions.set([]);
   vi.mocked(api).mockImplementation(
     fakeRouter({
+      ...loginRoutes(),
       'GET /subscriptions/me': () => (get(authStore).member?.id === 'b@test.com' ? [owned] : []),
       'GET /notifications': [],
       'GET /posts?per_page=100': { posts: [], total: 0, page: 1, per_page: 100 }
     })
   );
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('根 +layout — 訂閱暖機(R18 W3)', () => {
   it('已登入 → 1 次 GET /subscriptions/me', async () => {

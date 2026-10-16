@@ -247,4 +247,48 @@ describe('匯入掃描器（Import Scan）', () => {
 			expect(offenders, `改走 HTTP seam，不要 mock ${name} seam 模組：${offenders.join(', ')}`).toEqual([]);
 		}
 	});
+
+	it('登入狀態測試契約：零 vi.mock／vi.doMock authStore 與登入狀態核心(R22)', () => {
+		// 需要「有人登入」的測試一律經真的登入狀態核心：把 loginRoutes()(或教練的 loginAs)併進
+		// fakeRouter 的 route 表，再 await authStore.login(email)。假的 authStore 會重做一份身分推導，
+		// 讓身分範圍、暖機、頁面壽命只在假的登入狀態上被驗。vi.importActual 讀真模組不算 mock。
+		const reaches = [
+			makeReachPredicate('$lib/stores/authStore', r('src/lib/stores/authStore')),
+			makeReachPredicate('$lib/stores/login-state', r('src/lib/stores/login-state'))
+		];
+		const mocksLoginState = (file: string, src: string): boolean =>
+			mockedSpecifiers(src).some((spec) => reaches.some((reach) => reach(file, spec)));
+
+		const inComponents = r('src/lib/components/Fake.test.ts');
+		const inStores = r('src/lib/stores/Fake.test.ts');
+		const POSITIVE: [string, string][] = [
+			[inComponents, "vi.mock('$lib/stores/authStore');"],
+			[inComponents, "vi.mock('$lib/stores/authStore', async () => ({ authStore: fakeStore, isLoggedIn: fakeLoggedIn }));"],
+			[inComponents, "vi.mock('$lib/stores/authStore', async (importOriginal) => ({ ...(await importOriginal()), logout: vi.fn() }));"],
+			[inComponents, "vi.doMock('$lib/stores/authStore', () => ({}));"],
+			[inComponents, "vi.mock(import('$lib/stores/authStore'));"],
+			[inComponents, "vi.mock('../stores/authStore.ts');"],
+			[inComponents, "vi.mock('$lib/stores/login-state');"],
+			[inStores, "vi.mock('./login-state', () => ({}));"],
+			[inStores, "vi.doMock('./authStore');"]
+		];
+		const NEGATIVE: [string, string][] = [
+			[inComponents, "const real = await vi.importActual('$lib/stores/authStore');"],
+			[inComponents, "vi.mock('$lib/api/client', async (importOriginal) => ({ ...(await importOriginal()), api: vi.fn() }));"],
+			[inComponents, "import { authStore } from '$lib/stores/authStore';"],
+			[inComponents, "// vi.mock('$lib/stores/authStore');"],
+			[inComponents, "vi.mock('$lib/stores/toasts');"],
+			[inComponents, "vi.mock('./authStore');"]
+		];
+		for (const [f, src] of POSITIVE) expect(mocksLoginState(f, src), `應命中：${src}`).toBe(true);
+		for (const [f, src] of NEGATIVE) expect(mocksLoginState(f, src), `不應命中：${src}`).toBe(false);
+
+		const testFiles = walk(r('src')).filter((f) => f.endsWith('.test.ts'));
+		expect(testFiles.length).toBeGreaterThan(100); // 同上：鬆釘防 walk 死亡的 vacuous pass
+		const offenders = testFiles
+			.filter((f) => f !== r('src/lib/testing/import-scan.test.ts')) // 本檔自證字面值不算
+			.filter((f) => mocksLoginState(f, readFileSync(f, 'utf8')))
+			.map((f) => f.replace(ROOT + '/', ''));
+		expect(offenders, `經真的登入狀態核心登入(loginRoutes／loginAs)，不要 mock 登入狀態：${offenders.join(', ')}`).toEqual([]);
+	});
 });
