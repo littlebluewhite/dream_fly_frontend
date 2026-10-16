@@ -503,3 +503,9 @@ export/import/宣告。這與本倉既有慣例一致——`NOTIFS_SEED`(37 處�
 (`mapTodayClassToRow`/`mapAdminTodayRow`)退役(`925cc38`),admin 分支直接用 `$lib/admin/data` 的 `TodayClass`,
 coach 分支直接用 `$lib/coach/data` 的 `TodayClass`(import 端 alias `CoachTodayClass`,不另留 re-export)。admin 與
 coach 的 `TodayClass` 仍是兩個型別(`docs/adr/0022`/`0023`)。見 `docs/adr/0028` §5。
+
+## 增補(2026-10-16,架構深化 R22)
+
+F-3(:190-192)的 `EMPTY_OPS: OpsCollections`、`applyOps(d)` 與 `opsGate` 的 `reset: () => applyOps(EMPTY_OPS)` 已不存在:
+三個水合單位各自 apply/reset,只寫、只重置自己那格 `opsPages`,開機值仍等於重置值。:119-122 的 `opsGate` 與 :165 的
+`getOpsCollections` 同樣退役;`resetOpsForTests` 一次重置三個單位。見 `docs/adr/0031` §3。

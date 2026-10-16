@@ -382,3 +382,8 @@ C4 批3 保留的記名邊界 seam 由 `LEVEL_TINT`/`Student` 縮成只剩 `type
 沒有的 `Student.level`,`LEVEL_TINT` 失去對象而退役(`docs/adr/0014` R16 增補、`docs/adr/0026` §3)。
 判準句的保留側第三款(ADR 記名的邊界 seam)與鑑別法都不變,本篇提到 `LEVEL_TINT`/`Student` 之處自此
 只讀作 `Student`。
+
+## 增補(2026-10-16,架構深化 R22)
+
+§2(:84)的先例「`PaymentMethod from '$lib/checkout-order'`」改讀作 `PaymentMethod from './checkout-controller'`:
+`checkout-order.ts` 已刪,barrel 照留、只改來源。見 `docs/adr/0031` §4。

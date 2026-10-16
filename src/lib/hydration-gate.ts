@@ -2,7 +2,7 @@
  * 共享 store 水合閘門 factory。
  *
  * 收斂「共享 store 的水合協定」：guard 短路 + post-await re-check（mutation 勝出）
- * + mutator 翻旗。最初是 src/lib/mobile-admin/stores.ts 中 hydrateOps 與訊息水合
+ * + mutator 翻旗。最初是 src/lib/mobile-admin/stores.ts 中 ops 集合與訊息水合
  * 兩段逐字重複協定的深模組化——該檔的 ops 集合（三個水合單位）仍直接用本 factory；訊息那段自 R13（docs/adr/0023）改建在
  * session-gate.ts 的 createSessionGate 上（換帳號即重置），R20 起已是教練對話列表
  * （coach/conversations.ts，同樣建在 createSessionGate 上，桌面與 mobile-admin 共用），

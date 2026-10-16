@@ -445,3 +445,16 @@ once-per-identity/A→B/logout-reset/queued-write-skip(22 → 18)、兩個通知
 `authStore`(`onSessionExpired` 收訊號、`storage` listener、session 世代、`sessionIdentity()`)的部分都改住核心,`onSessionExpired`
 退役,`authStore` 是門面、匯出面不變。§1 列的 `client.test.ts` refresh 測試搬到 `login-state.test.ts`,`expired` spy 改斷言
 `LOGGED_OUT`。見 `docs/adr/0030` §4。
+
+## 增補(2026-10-16,架構深化 R22)
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **:53、:336 的 `auth-mock`**:`auth-mock.ts` 已刪,測試經真的登入狀態核心登入。見 `docs/adr/0031` §1。
+- **§3(:87-88)**:`checkout-order.ts` 已刪;`syncCartToServer`、`applyCouponCode` 是 `member/checkout-sync.ts` 的私有函式,
+  `PaymentMethod` 住 `member/checkout-controller.ts`。見 `docs/adr/0031` §4。
+- **§5**:「不動:ops 的 create/save(寫後無條件重抓)、`saveSelfAccount` 本體」不再成立——ops 寫入只刷新受影響單位(`0031` §3);
+  `saveSelfAccount` 與 `setPref` 都走新的 `queueWrite`,`setPref` 寫前水合失敗的 resync → 回滾改由共用的 `recoverWrite` 做(`0031` §5)。
+  :133 的 plain 閘門 `opsGate` 現為三個 ops 水合單位。
+- **§6(:167)的 `resetOpsForTests = opsGate.reset`**:現在一次重置三個 ops 水合單位,仍是唯一的 `*ForTests`。
+- **§9(:254-255)**:`opsGate` 已拆成三個單位;寫入動詞由「寫後無條件重抓」改成只刷新受影響的單位(`0031` §3)。
