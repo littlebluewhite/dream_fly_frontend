@@ -446,8 +446,8 @@ page shows. Each page spreads its own unit's entry pack — `createLoadGate({ ..
 source's `load` closure and a response landing after unmount or after a newer run is dropped; the admin
 home page only calls `hydrateOrders()` for its pending-payment banner. Units don't drag each other down:
 a failing `/orders` leaves the members and classes pages working. The four collections are exported as
-`Readable` and boot honestly (`docs/adr/0025` F-3): a private `EMPTY_OPS` (empty arrays, every `opsPages`
-cell `{ total: 0, perPage: 0 }`) is both the boot value and what each unit's `reset` restores — each unit
+`Readable` and boot honestly (`docs/adr/0025` F-3): empty arrays plus a private `EMPTY_OPS` (page meta only:
+every `opsPages` cell `{ total: 0, perPage: 0 }`) are both the boot value and what each unit's `reset` restores — each unit
 writes and resets only its own `opsPages` cell — so the home banner and `CoachesScreen`'s subtitle read
 `0`/nothing before their unit is ready. The member/course/coach writes don't go through `write()` at all:
 the store's per-entity, add/edit-split write verbs (`docs/adr/0022`) — `addMember`/`saveMember`,

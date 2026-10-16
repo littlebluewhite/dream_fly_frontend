@@ -65,7 +65,7 @@ export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
  * 自建,是因為集合跨頁共用:教練畫面與課程頁讀同一份 coaches,首頁 banner 與訂單頁讀同一份
  * orders,寫入動詞在別頁觸發也要刷新同一份。
  *
- * 誠實開機(ADR-0025 F-3):開機值 = 重置值 = EMPTY_OPS(集合為 `[]`,分頁 meta 0/0)——沒水合過
+ * 誠實開機(ADR-0025 F-3):開機值 = 重置值:集合為 `[]`、分頁 meta 為 EMPTY_OPS(三格皆 0/0)——沒水合過
  * 就不假裝有資料。每個單位只寫、只重置自己那一格 opsPages。fetch 包一層箭頭函式,只有實際水合時
  * 才讀 $lib/admin/api 的 getter binding。四個集合對外只匯出 Readable,只有閘門的 apply/reset 能寫。 */
 export interface PageInfo {
@@ -141,7 +141,7 @@ export const classesPageEntry = classesGate.pageEntry();
 export const ordersPageEntry = ordersGate.pageEntry();
 /** 首頁待付款 banner 只需要訂單單位(best-effort,失敗由呼叫端吞掉)。 */
 export const hydrateOrders = ordersGate.hydrate;
-/** 測試出口:三個單位還原開機態(內容回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
+/** 測試出口:三個單位還原開機態(集合回到 `[]`、分頁 meta 回到 EMPTY_OPS + 旗標 + 在飛 GET + 尾流帳)。production 不得引用。 */
 export const resetOpsForTests = (): void => { membersGate.reset(); classesGate.reset(); ordersGate.reset(); };
 
 /** 行動版不能換頁,搜尋只涵蓋已抓回的第 1 頁——超過一頁時誠實提示(不照抄桌面「切換頁面」文案)。 */
@@ -178,7 +178,7 @@ export async function addMember(body: CreateMemberBody): Promise<void> {
 	await refetchAfterWrite(membersGate);
 }
 export async function saveMember(id: string, body: UpdateMemberBody): Promise<void> {
-	const renamed = body.name !== undefined && body.name !== get(_members).find((m) => m.id === id)?.name;
+	const renamed = body.name !== undefined && body.name.trim() !== get(_members).find((m) => m.id === id)?.name;
 	await updateMember(id, body);
 	await refetchAfterWrite(...(renamed ? ALL_UNITS : [membersGate]));
 }

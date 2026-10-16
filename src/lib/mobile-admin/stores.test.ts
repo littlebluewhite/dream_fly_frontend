@@ -319,6 +319,12 @@ describe('ops 寫入動詞', () => {
 			expect(names(get(members))).toEqual(['重抓回來的學員']);
 			resetOpsForTests();
 		});
+		it('名字只差前後空白 → 不算改名,只重抓會員(判準同 saveCoach:trim 後比)', async () => {
+			await resetHydrated(ok);
+			await saveMember('u1', { name: ' 王小明 ' });
+			expect(fetchCounts()).toEqual(ONLY_MEMBERS);
+			resetOpsForTests();
+		});
 		it('改名 → 會員、課程·教練、訂單三個單位都重抓(訂單/教練列表的名字由後端即時 JOIN)', async () => {
 			await resetHydrated(ok);
 			await saveMember('u1', { name: '王大明' });

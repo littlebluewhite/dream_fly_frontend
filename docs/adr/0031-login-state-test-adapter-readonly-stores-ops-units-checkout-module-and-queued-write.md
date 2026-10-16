@@ -39,7 +39,9 @@ R22 沿 `docs/adr/0027`–`0030`「一輪多案、單篇記錄」的體例,不�
   `$lib/stores/login-state`(`vi.importActual` 不算),附 POSITIVE/NEGATIVE fixture。
 
 **和計畫的差異**:計畫裡 A 家族的三步(同拍斷言的 `login()` 前補 `await`、`roleFor` → `rolesFor`、斷言 mock `login` 被呼叫
-改查 `POST /auth/login` body)沒有對象——A 家族沒有任何檔斷言 mock 的 `login` 或用 `roleFor`,所以是空條件。
+改查 `POST /auth/login` body)只有前兩步有對象:多個檔在沒 `await` 的 `login()` 後同拍斷言,`routes/coach/layout.test.ts` 與
+`routes/mobile-admin/layout.test.ts` 用 `roleFor`(改成傳給 `loginRoutes` 的 `rolesFor`)。第三步是空條件——A 家族沒有任何檔
+斷言 mock 的 `login` 被呼叫。
 
 ### 2. 共享 store 內容唯讀(`7ffc3d4`、`5e5dd7b`)
 
@@ -158,8 +160,8 @@ queueWrite<R>(w: QueuedWrite<R>): Promise<WriteOutcome<R | null>>
   `checkout-math.ts` 是 `docs/adr/0003` 決定的兩 surface 共用純數學,不併進 checkout module。
 - **把 401 重送規則收進登入狀態核心**:401 只替發出當下的畫面身分重送(`docs/adr/0028` §1)屬於 `api()` 的請求生命週期,
   核心只決定身分與 token;本輪沒有因這條規則而生的摩擦。
-- **清理沒改到的檔頭**:只改本輪改到的檔;沒改到的檔頭(例如仍提到已退役 `POINTS_LEDGER` 的 `member/data.ts`、
-  `mobile/data.ts`、`domain/member-app.ts` 退役清單)不動。
+- **清理沒改到的檔頭**:只改本輪改到的檔頭;其餘檔頭(例如仍提到已退役 `POINTS_LEDGER` 的 `member/data.ts`——本輪只刪了
+  它的 `SUBS_SEED`,檔頭沒動——以及 `mobile/data.ts`、`domain/member-app.ts` 退役清單)不動。
 
 ## 可見的行為變更(逐條)
 
