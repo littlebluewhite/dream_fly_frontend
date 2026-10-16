@@ -181,10 +181,11 @@ false)或水合/重置流程(翻 true);型別層擋直寫(見 `docs/adr/0024` D-
 load/refresh 落地時因 `resetEpoch` 比對不符而不寫、不翻旗。session 閘門(waitlist/leave/notifications/教練對話列表)不再匯出測試專用的重置,測試用真的登入 → 登出
 (`$lib/testing/session-reset`)讓身分走一圈;只剩身分無關的 `resetOpsForTests`(三個 ops 水合單位一起 reset)與 `resetAnnouncementsForTests = announcementsGate.reset`,
 production 不得 import(`import-scan.test.ts` 契約守)。各 store 不再匯出 `*Hydrated`(`hydrated` 只留在閘門介面當唯讀探針)。
+閘門管的**內容也唯讀**:候補、請假、通知(與教練對話列表)的 store 模組只匯出 `Readable`(私有 `writable`,`unreadCount` 照常 derived),只有閘門的 apply(水合/重置)與 `write()` 的 commit/optimistic 能寫。測試要有內容就 route 水合用的 GET,呼叫 `hydrateX()`/`refreshX()` 拿閘門真的會產生的狀態(有內容且已水合),不 mock 這些模組與 `$lib/member/stores` barrel(`import-scan.test.ts` 的登入狀態測試契約守)。
 _Avoid_: 手抄 *Hydrated 旗標協定;production 直寫 `hydrated`(型別已擋,執行期丟 `TypeError`);呼叫端
 自己包一層在飛合併;refresh 族以旗標/世代的**當下值**當丟棄判準(正常的「`await write()` →
 `await refresh()`」序列會因此無窮重抓);把等待判準接上世代(同一條正常序列會永久掛住)或把丟棄判準接上
-尾流(0020 關掉的窗當場復發);消費端手寫出發序號(`refreshSeq` 一類)替共享 store 排後發優先;讓被超車
+尾流(0020 關掉的窗當場復發);測試 `.set()` 閘門管的 store 內容(繞過 apply/commit,得到閘門不會產生的「有內容、未水合」狀態);消費端手寫出發序號(`refreshSeq` 一類)替共享 store 排後發優先;讓被超車
 的落地等贏家(第二條等待軸)
 
 **頁面進場包 (Page Entry)**:

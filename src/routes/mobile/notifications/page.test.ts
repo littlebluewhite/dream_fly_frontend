@@ -3,16 +3,12 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import { api } from '$lib/api/client';
-import { notifications, hydrateNotifications } from '$lib/member/notifications';
+import { notifications, hydrateNotifications, markRead } from '$lib/member/notifications';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { toasts } from '$lib/mobile/stores';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
-// notifications store 現在是 member 的 Notification(tone: Tone 窄型別)——sentinel fixture
-// 寫入 store 需要窄型別,不能用 domain 的寬鬆型別(tone: string)註記(合一後單向可指派:
-// member → domain,反過來不行,見 task-5-report.md)。
-import type { Notification as NotifItem } from '$lib/member/data';
 import type { NotificationResponse } from '$lib/api/generated';
 import Page from './+page.svelte';
 
@@ -56,17 +52,12 @@ beforeEach(async () => {
 	// toasts 是自動過期的 singleton — 前一個測試的 toast 會殘留到下一個測試,
 	// 清掉才能對「某 toast 不得出現」做可靠斷言(同 member 前例)。
 	get(toasts).forEach((t) => toasts.dismiss(t.id));
-	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始。
+	// 重設 load-once 守衛,讓每個測試都從「尚未水合」開始(內容回開機態 [])。
 	await resetSessionStores();
-	// 重新灌夾具(store 開機為 `[]`,本檔測試需要有未讀的 feed,比照 member 前例),避免前一
-	// 測試的 set()/markAllRead 滲漏到下一個測試。
-	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 afterEach(async () => {
-	// 確保共享 store 在每個測試後都還原為 seed。
 	await resetSessionStores();
-	notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 describe('mobile/notifications 頁', () => {
@@ -130,11 +121,12 @@ describe('mobile/notifications 頁', () => {
 		// Mount: load() fires on mount; promise A is pending (phase=loading).
 		const { unmount } = render(Page);
 
-		// Simulate post-remount state: user already marked items read in the store.
-		const sentinel: NotifItem[] = [
-			{ id: 'sentinel', cat: 'system', icon: 'bell', tone: 'info', title: '哨兵', body: '已讀哨兵', time: '剛才', read: true }
-		];
-		notifications.set(sentinel);
+		// Simulate post-remount state: user marks an item read while A is in flight —— 未水合的寫入
+		// 排和解重抓,和解抓回的哨兵就是 store 的新真相。
+		feed = async () => [apiNotif('sentinel', true, '哨兵', '已讀哨兵')];
+		await markRead('sentinel');
+		await vi.waitFor(() => expect(get(notifications).map((n) => n.id)).toEqual(['sentinel']));
+		const sentinel = get(notifications);
 
 		// Unmount the component (simulates navigating away).
 		unmount();

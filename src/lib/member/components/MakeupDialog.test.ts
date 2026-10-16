@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import MakeupDialog from './MakeupDialog.svelte';
-import { toasts, leaveRequests, type LeaveRequest } from '$lib/member/stores';
+import { toasts, leaveRequests, hydrateLeaveRequests, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { leaveRequest } from '$lib/testing/wire-fixtures';
 
 /* 預約補課 dialog（Task 11；integration-contract.md §3.20 + §3.18）—— 現在是針對
  * 「一張已核准且尚未補課的請假申請」開啟的動作（不再是課程層級的一般動作），
@@ -47,9 +49,13 @@ const UPDATED = {
   decided_at: '2026-06-26T00:00:00Z', created_at: '2026-06-25T00:00:00Z'
 };
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
-  leaveRequests.set([]);
+  await resetSessionStores();
+  // 請假清單經閘門水合(內容唯讀):store 裡有這張已核准的假單,已水合的寫入不另排和解重抓。
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [leaveRequest({ ...LEAVE_REQUEST })] }));
+  await hydrateLeaveRequests();
+  vi.mocked(api).mockClear();
 });
 
 describe('MakeupDialog — 開啟時載入同課程未來場次（GET /courses/{id}/sessions）', () => {
@@ -90,7 +96,6 @@ describe('MakeupDialog — 確認預約（POST /leave-requests/{id}/makeup）', 
     vi.mocked(api).mockImplementation(
       fakeRouter({ 'GET /courses/course-1/sessions': SESSIONS, 'POST /leave-requests/lr-2/makeup': UPDATED })
     );
-    leaveRequests.set([LEAVE_REQUEST]);
     const notifySpy = vi.spyOn(toasts, 'notify');
     render(MakeupDialog, { open: true, leaveRequest: LEAVE_REQUEST });
     await screen.findByText('2026-07-20 (一) 18:00–19:00');

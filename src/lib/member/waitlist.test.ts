@@ -6,6 +6,9 @@ import { get } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { waitlist, hydrateWaitlist, joinWaitlist, cancelWaitlist, joinWaitlistErrorMessage } from './stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { waitlistResponse } from '$lib/testing/wire-fixtures';
+import type { WaitlistResponse } from '$lib/api/generated';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -14,9 +17,15 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 beforeEach(async () => {
   vi.mocked(api).mockReset();
-  waitlist.set([]);
   await resetSessionStores(); // 模組單例閘門:登入→登出走一圈,不重置會跨 it 洩漏
 });
+
+/** 經閘門水合取得候補內容(store 唯讀),再清掉呼叫紀錄。 */
+async function hydrateWith(list: WaitlistResponse[]): Promise<void> {
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /waitlist/me': list }));
+  await hydrateWaitlist();
+  vi.mocked(api).mockClear();
+}
 
 describe('hydrateWaitlist', () => {
   it('GET /waitlist/me → 只留 status=waiting，映射成 WaitlistEntry（id/course_id/course_name）', async () => {
@@ -45,7 +54,7 @@ describe('hydrateWaitlist', () => {
 
 describe('joinWaitlist', () => {
   it('POST /waitlist 帶 course_id；成功後把回應塞進 store 最前面（新到舊，同 GET /waitlist/me 的排序）', async () => {
-    waitlist.set([{ id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程' }]);
+    await hydrateWith([waitlistResponse({ id: 'wl-old', course_id: 'course-uuid-1', course_name: '舊候補課程' })]);
     vi.mocked(api).mockResolvedValue({
       id: 'wl-new', course_id: 'course-uuid-9', course_name: '課程A', status: 'waiting', created_at: '2026-07-04T00:00:00Z'
     });
@@ -73,9 +82,9 @@ describe('joinWaitlist', () => {
 
 describe('cancelWaitlist', () => {
   it('DELETE /waitlist/{id}；成功後從 store 移除該筆（204 No Content，同 syncCartToServer 的 DELETE /cart 慣例）', async () => {
-    waitlist.set([
-      { id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' },
-      { id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' }
+    await hydrateWith([
+      waitlistResponse({ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }),
+      waitlistResponse({ id: 'wl-2', course_id: 'course-uuid-8', course_name: '課程B' })
     ]);
     vi.mocked(api).mockResolvedValue(undefined);
 
@@ -86,7 +95,7 @@ describe('cancelWaitlist', () => {
   });
 
   it('失敗時原樣拋出，store 不變', async () => {
-    waitlist.set([{ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' }]);
+    await hydrateWith([waitlistResponse({ id: 'wl-1', course_id: 'course-uuid-9', course_name: '課程A' })]);
     vi.mocked(api).mockRejectedValue(new ApiError(404, 'waitlist entry not found'));
 
     await expect(cancelWaitlist('wl-1')).rejects.toBeInstanceOf(ApiError);

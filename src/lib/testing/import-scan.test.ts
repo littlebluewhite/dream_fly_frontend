@@ -252,13 +252,18 @@ describe('匯入掃描器（Import Scan）', () => {
 		// 需要「有人登入」的測試一律經真的登入狀態核心：把 loginRoutes()(或教練的 loginAs)併進
 		// fakeRouter 的 route 表，再 await authStore.login(email)。假的 authStore 會重做一份身分推導，
 		// 讓身分範圍、暖機、頁面壽命只在假的登入狀態上被驗。vi.importActual 讀真模組不算 mock。
-		// 點數、訂閱與本人帳號資料同理：內容唯讀，測試 route 水合用的 GET 再呼叫 hydrate／refresh，
-		// 不 mock 掉水合入口。$lib/mobile/stores 不納入(試上畫面只 mock toasts)。
+		// 候補、請假、通知、點數、訂閱(與轉手它們的 member stores barrel)和本人帳號資料同理：內容唯讀，
+		// 測試 route 水合用的 GET 再呼叫 hydrate／refresh，拿閘門真的會產生的狀態，不 mock 水合入口或動詞。
+		// $lib/mobile/stores 不納入(試上畫面只 mock toasts)。
 		const reaches = [
 			makeReachPredicate('$lib/stores/authStore', r('src/lib/stores/authStore')),
 			makeReachPredicate('$lib/stores/login-state', r('src/lib/stores/login-state')),
+			makeReachPredicate('$lib/member/waitlist', r('src/lib/member/waitlist')),
+			makeReachPredicate('$lib/member/leave', r('src/lib/member/leave')),
+			makeReachPredicate('$lib/member/notifications', r('src/lib/member/notifications')),
 			makeReachPredicate('$lib/member/points', r('src/lib/member/points')),
 			makeReachPredicate('$lib/member/subscriptions', r('src/lib/member/subscriptions')),
+			makeReachPredicate('$lib/member/stores', r('src/lib/member/stores')),
 			makeReachPredicate('$lib/self-account', r('src/lib/self-account'))
 		];
 		const mocksLoginState = (file: string, src: string): boolean =>
@@ -276,6 +281,10 @@ describe('匯入掃描器（Import Scan）', () => {
 			[inComponents, "vi.mock('$lib/stores/login-state');"],
 			[inStores, "vi.mock('./login-state', () => ({}));"],
 			[inStores, "vi.doMock('./authStore');"],
+			[inComponents, "vi.mock('$lib/member/stores', async (importOriginal) => ({ ...(await importOriginal()), joinWaitlist: vi.fn() }));"],
+			[inComponents, "vi.mock('$lib/member/waitlist');"],
+			[inComponents, "vi.mock('$lib/member/leave', () => ({}));"],
+			[inComponents, "vi.mock('../member/notifications.ts');"],
 			[inComponents, "vi.mock('$lib/member/points', async (importOriginal) => ({ ...(await importOriginal()), refreshPoints: vi.fn() }));"],
 			[inComponents, "vi.mock('$lib/member/subscriptions');"],
 			[inComponents, "vi.mock('$lib/self-account', async (importOriginal) => ({ ...(await importOriginal()), hydrateSelfAccount: vi.fn() }));"]
@@ -287,6 +296,7 @@ describe('匯入掃描器（Import Scan）', () => {
 			[inComponents, "// vi.mock('$lib/stores/authStore');"],
 			[inComponents, "vi.mock('$lib/stores/toasts');"],
 			[inComponents, "vi.mock('./authStore');"],
+			[inComponents, "vi.mock('$lib/member/ui');"],
 			[inComponents, "vi.mock('$lib/mobile/stores', async (importOriginal) => ({ ...(await importOriginal()) }));"]
 		];
 		for (const [f, src] of POSITIVE) expect(mocksLoginState(f, src), `應命中：${src}`).toBe(true);

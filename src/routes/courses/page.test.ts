@@ -3,7 +3,7 @@ import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/s
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
 import type { CourseListResponse } from '$lib/api/generated';
-import { cart, joinWaitlist } from '$lib/member/stores';
+import { cart } from '$lib/member/stores';
 import { toasts } from '$lib/stores/marketingToasts';
 import { authStore } from '$lib/stores/authStore';
 import { api, ApiError } from '$lib/api/client';
@@ -11,6 +11,8 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { coachResponse, courseResponse } from '$lib/testing/wire-fixtures';
 import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
+import { apiBody, apiCalls } from '$lib/testing/admin-routes';
+import { waitlistResponse } from '$lib/testing/wire-fixtures';
 
 // 只假造 HTTP 層：真的 listCourses / listCoaches + mapper 會跑
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -21,13 +23,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import { goto } from '$app/navigation';
 
-// FE#14: joinWaitlist hits the real network (api()); mock only that export,
-// keep cart/joinWaitlistErrorMessage/toasts real (same partial-mock idiom as
-// admin/api.test.ts's fakeRouter-backed suites).
-vi.mock('$lib/member/stores', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/stores')>();
-	return { ...actual, joinWaitlist: vi.fn() };
-});
+// FE#14: joinWaitlist is real and hits POST /waitlist through the same api() fake;
+// each 候補 test routes its own response.
 
 // authStore is real: tests log in through loginRoutes(), merged into the same
 // api() fake (auth mechanics themselves are covered in src/lib/stores/authStore.test.ts).
@@ -68,10 +65,13 @@ const COACH = coachResponse({
 const FULL_COURSE = courseResponse({ ...COURSE, id: 'course-uuid-full', max_students: 8, enrolled_count: 8 });
 
 // 課程列表為分頁外層；courses 可給 Error / 永不 resolve 的 promise 以模擬錯誤與載入態
-const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<never>) =>
+const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<never>, extra: Record<string, unknown> = {}) =>
 	vi.mocked(api).mockImplementation(
 		fakeRouter({
 			...loginRoutes(),
+			// 未水合時加入候補會排和解重抓(GET /waitlist/me)
+			'GET /waitlist/me': [],
+			...extra,
 			'GET /courses?per_page=100':
 				courses instanceof Error || courses instanceof Promise
 					? courses
@@ -83,7 +83,6 @@ const route = (courses: ReturnType<typeof courseResponse>[] | Error | Promise<ne
 beforeEach(async () => {
 	await resetSessionStores();
 	route([COURSE]);
-	vi.mocked(joinWaitlist).mockReset();
 	vi.mocked(goto).mockClear();
 	localStorage.clear();
 	cart.clear();
@@ -146,13 +145,10 @@ describe('課程介紹 (marketing) — 接真 API', () => {
  * 真實 joinWaitlist()（409 已候補繁中提示；成功才顯示已候補），未登入則導向
  * /member/login、不嘗試呼叫 API。 */
 describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
-	it('已登入時點擊加入購物車 → 呼叫真實 joinWaitlist()，成功後才顯示已加入候補 toast', async () => {
+	it('已登入時點擊加入購物車 → 呼叫真實 joinWaitlist()(POST /waitlist)，成功後才顯示已加入候補 toast', async () => {
 		await authStore.login('member@test.com', 'password123');
-		route([FULL_COURSE]);
-		vi.mocked(joinWaitlist).mockResolvedValue({
-			id: 'wl-1',
-			course_id: FULL_COURSE.id,
-			course_name: FULL_COURSE.name
+		route([FULL_COURSE], {
+			'POST /waitlist': waitlistResponse({ id: 'wl-1', course_id: FULL_COURSE.id, course_name: FULL_COURSE.name })
 		});
 
 		const { container } = render(Page);
@@ -160,7 +156,7 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 		const before = get(toasts).length;
 		await fireEvent.click(btn);
 
-		await vi.waitFor(() => expect(joinWaitlist).toHaveBeenCalledWith(FULL_COURSE.id));
+		await vi.waitFor(() => expect(apiBody('POST /waitlist')).toEqual({ course_id: FULL_COURSE.id }));
 		expect(get(cart)).toHaveLength(0); // 額滿課程不進付費購物車
 		await vi.waitFor(() => expect(get(toasts).length).toBe(before + 1));
 		expect(get(toasts).at(-1)?.title).toBe('已加入候補');
@@ -168,14 +164,13 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 
 	it('已登入但後端回 409（已候補）→ 顯示已候補的友善提示，不是通用錯誤訊息', async () => {
 		await authStore.login('member@test.com', 'password123');
-		route([FULL_COURSE]);
-		vi.mocked(joinWaitlist).mockRejectedValue(new ApiError(409, 'already on waitlist'));
+		route([FULL_COURSE], { 'POST /waitlist': new ApiError(409, 'already on waitlist') });
 
 		const { container } = render(Page);
 		const btn = await findByRole(container, 'button', { name: '加入購物車' });
 		await fireEvent.click(btn);
 
-		await vi.waitFor(() => expect(joinWaitlist).toHaveBeenCalledWith(FULL_COURSE.id));
+		await vi.waitFor(() => expect(apiBody('POST /waitlist')).toEqual({ course_id: FULL_COURSE.id }));
 		await vi.waitFor(() => expect(get(toasts).at(-1)?.body).toBe('你已經在候補名單中了'));
 	});
 
@@ -186,7 +181,7 @@ describe('候補 (FE#14) — 公開 /courses 頁的額滿課程', () => {
 		const btn = await findByRole(container, 'button', { name: '加入購物車' });
 		await fireEvent.click(btn);
 
-		expect(joinWaitlist).not.toHaveBeenCalled();
+		expect(apiCalls('POST /waitlist')).toHaveLength(0);
 		expect(get(toasts).at(-1)?.title).toBe('請先登入會員');
 		// 裁決 10：不自動導回——單純導向登入頁，不帶 ?redirect= 回跳參數。
 		expect(goto).toHaveBeenCalledWith('/member/login');

@@ -19,6 +19,7 @@ import type {
 	MemberReportResponse,
 	MyEnrolmentResponse,
 	MyScheduleEntryResponse,
+	NotificationResponse,
 	OrderResponse,
 	OrderSummary,
 	PointsMeResponse,
@@ -29,7 +30,8 @@ import type {
 	SubscriptionResponse,
 	TodaySessionResponse,
 	UserResponse,
-	VenueResponse
+	VenueResponse,
+	WaitlistResponse
 } from '$lib/api/generated';
 
 export const orderSummary = (over: Partial<OrderSummary> = {}): OrderSummary => ({
@@ -88,6 +90,26 @@ export const leaveRequest = (over: Partial<LeaveRequestResponse> = {}): LeaveReq
 	makeup_session_date: null,
 	makeup_start_time: null,
 	decided_at: null,
+	created_at: '2026-06-10T00:00:00Z',
+	...over
+});
+
+export const waitlistResponse = (over: Partial<WaitlistResponse> = {}): WaitlistResponse => ({
+	id: 'wl-1',
+	course_id: 'course-1',
+	course_name: '體操基礎班',
+	status: 'waiting',
+	created_at: '2026-06-10T00:00:00Z',
+	...over
+});
+
+export const notificationResponse = (over: Partial<NotificationResponse> = {}): NotificationResponse => ({
+	id: 'n-1',
+	type: 'system',
+	title: '系統通知',
+	message: '歡迎加入 Dream Fly',
+	is_read: false,
+	metadata: null,
 	created_at: '2026-06-10T00:00:00Z',
 	...over
 });

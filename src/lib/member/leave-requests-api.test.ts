@@ -45,9 +45,15 @@ const API_LR_APPROVED = {
 
 beforeEach(async () => {
   vi.mocked(api).mockReset();
-  leaveRequests.set([]);
   await resetSessionStores(); // 模組單例閘門:登入→登出走一圈,不重置會跨 it 洩漏
 });
+
+/** 經閘門水合取得請假清單(store 唯讀),再清掉呼叫紀錄。 */
+async function hydrateWith(list: unknown[]): Promise<void> {
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': list }));
+  await hydrateLeaveRequests();
+  vi.mocked(api).mockClear();
+}
 
 /* 閘門協定(guard 短路、在飛作廢、和解重抓、換身分重置)的釘子住 hydration-gate.test.ts /
  * session-gate.test.ts;本檔只留接線:HTTP 路徑與 body、成功後 store 內容、錯誤文案。 */
@@ -121,7 +127,7 @@ describe('createLeaveRequest — POST /leave-requests', () => {
   });
 
   it('prepends onto any existing entries (新到舊)', async () => {
-    leaveRequests.set([{ ...API_LR_APPROVED, reason: null } as never]);
+    await hydrateWith([API_LR_APPROVED]);
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /leave-requests': API_LR_PENDING }));
 
     await createLeaveRequest('sess-1', '生病');
@@ -140,7 +146,7 @@ describe('createLeaveRequest — POST /leave-requests', () => {
 
 describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
   it('calls DELETE and marks the matching entry cancelled in place (not removed — history stays visible)', async () => {
-    leaveRequests.set([API_LR_PENDING as never, API_LR_APPROVED as never]);
+    await hydrateWith([API_LR_PENDING, API_LR_APPROVED]);
     vi.mocked(api).mockImplementation(fakeRouter({ 'DELETE /leave-requests/lr-1': undefined }));
 
     await cancelLeaveRequest('lr-1');
@@ -151,9 +157,8 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
     expect(list.find((r) => r.id === 'lr-2')?.status).toBe('approved'); // untouched
   });
 
-  // 接線釘:cancelLeaveRequest 繞過 gate.write() 的話,未水合時 store 只剩本地那筆,不會和解成完整清單。
+  // 接線釘:cancelLeaveRequest 繞過 gate.write() 的話,未水合時 store 只剩本地寫入,不會和解成完整清單。
   it('未水合就取消 → 和解成完整的 server 清單', async () => {
-    leaveRequests.set([API_LR_PENDING as never]);
     vi.mocked(api).mockImplementation(fakeRouter({
       'DELETE /leave-requests/lr-1': undefined,
       'GET /leave-requests/me': [{ ...API_LR_PENDING, status: 'cancelled' }, API_LR_APPROVED]
@@ -169,7 +174,7 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
   });
 
   it('leaves the store untouched when the DELETE call fails', async () => {
-    leaveRequests.set([API_LR_PENDING as never]);
+    await hydrateWith([API_LR_PENDING]);
     vi.mocked(api).mockImplementation(
       fakeRouter({ 'DELETE /leave-requests/lr-1': new ApiError(409, '僅待審核假單可取消') })
     );
@@ -183,7 +188,7 @@ describe('cancelLeaveRequest — DELETE /leave-requests/{id}', () => {
 describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
   it('sends { session_id } and replaces the matching store entry with the updated response', async () => {
     const updated = { ...API_LR_APPROVED, makeup_session_id: 'sess-9', makeup_session_date: '2026-07-20', makeup_start_time: '18:00:00' };
-    leaveRequests.set([API_LR_APPROVED as never]);
+    await hydrateWith([API_LR_APPROVED]);
     vi.mocked(api).mockImplementation(fakeRouter({ 'POST /leave-requests/lr-2/makeup': updated }));
 
     const result = await bookMakeup('lr-2', 'sess-9');
@@ -197,7 +202,7 @@ describe('bookMakeup — POST /leave-requests/{id}/makeup', () => {
   });
 
   it('propagates 409 (該場次名額已滿) unhandled', async () => {
-    leaveRequests.set([API_LR_APPROVED as never]);
+    await hydrateWith([API_LR_APPROVED]);
     vi.mocked(api).mockImplementation(
       fakeRouter({ 'POST /leave-requests/lr-2/makeup': new ApiError(409, '該場次名額已滿') })
     );
