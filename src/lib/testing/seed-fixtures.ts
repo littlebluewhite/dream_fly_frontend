@@ -1,14 +1,12 @@
 /* 種子測試夾具（R14 候選 F3、R15 候選 F-3）— 誠實開機後退役的 store 種子，值逐字搬自原處：
  *   - NOTIFS_SEED     ← $lib/domain/member-app(經 member/data.ts facade 收窄為嚴格 Tone)
- *   - POINTS_LEDGER   ← $lib/domain/member-app
  *   - COACHES         ← $lib/domain/coaches(R15 候選 F-3：mobile-admin 的 coaches store
  *                       誠實開機為 `[]`，COACHES 不再有 production 讀者)
- * production 的 notifications / pointsLedger / mobile-admin coaches 開機值與
+ * production 的 notifications / mobile-admin coaches 開機值與
  * reset 值都是 `[]`(ADR 0010 死種子退役慣例:沒有 production 讀者的值不留在 src/lib 本體)。
- * 這裡只供測試用 `store.set(fixture)` 灌一份「有未讀、有明細」的狀態，或供測試檔直接
+ * 這裡只供測試用 `store.set(fixture)` 灌一份「有未讀」的狀態，或供測試檔直接
  * 引用當固定 fixture。 */
 import type { Notification } from '$lib/member/data';
-import type { LedgerEntry } from '$lib/domain/member-app';
 import type { Coach } from '$lib/domain/coaches';
 
 /* 通知:n1–n3 未讀、n4–n6 已讀。 */
@@ -21,15 +19,6 @@ export const NOTIFS_SEED: Notification[] = [
 	{ id: 'n6', cat: 'system', icon: 'calendar-off', tone: 'warning', title: '端午連假停課公告', body: '6/14–6/16 全館停課，相關課程將安排補課，請留意通知。', time: '5 天前', read: true }
 ];
 
-/* 點數明細。 */
-export const POINTS_LEDGER: LedgerEntry[] = [
-	{ id: 'pl1', date: '2026/06/05', desc: '完課獎勵 · 競技啦啦隊 進階班', type: 'earn', delta: 120 },
-	{ id: 'pl2', date: '2026/05/20', desc: '折抵報名費 · 競技體操 選手班', type: 'redeem', delta: -300 },
-	{ id: 'pl3', date: '2026/05/01', desc: '生日禮金點數', type: 'earn', delta: 200 },
-	{ id: 'pl4', date: '2026/04/12', desc: '推薦好友報名獎勵', type: 'earn', delta: 150 },
-	{ id: 'pl5', date: '2026/03/01', desc: '完課獎勵 · 兒童翻滾 技巧班', type: 'earn', delta: 120 },
-	{ id: 'pl6', date: '2026/02/15', desc: '會員點數調整', type: 'adjust', delta: -50 }
-];
 
 /* 教練名單，逐字搬自 $lib/domain/coaches 原 COACHES(R15 候選 F-3)。 */
 export const COACHES: Coach[] = [

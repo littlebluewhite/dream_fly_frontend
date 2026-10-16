@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent, findByRole, findAllByRole } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import Page from './+page.svelte';
-import { cart, subscriptions } from '$lib/member/stores';
+import { cart, refreshSubscriptions } from '$lib/member/stores';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { productResponse } from '$lib/testing/wire-fixtures';
-import type { ProductListResponse } from '$lib/api/generated';
+import { productResponse, subscriptionResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import type { ProductListResponse, SubscriptionResponse } from '$lib/api/generated';
 
 // The /tickets marketing page sells PASSES (方案/購票). cart v3: the page now
 // fetches products via the public seam (mock ticketTypes' string-price/number-id
@@ -31,21 +32,25 @@ const PRODUCT = productResponse({
 	updated_at: '2026-01-01T00:00:00Z'
 });
 
+/** GET /subscriptions/me 回的已持有清單；測試改它，再 refreshSubscriptions() 水合。 */
+let held: SubscriptionResponse[] = [];
 const route = (products: ReturnType<typeof productResponse>[]) =>
 	vi.mocked(api).mockImplementation(
 		fakeRouter({
-			'GET /products?per_page=100': { products, total: products.length, page: 1, per_page: 100 } satisfies ProductListResponse
+			'GET /products?per_page=100': { products, total: products.length, page: 1, per_page: 100 } satisfies ProductListResponse,
+			'GET /subscriptions/me': () => held
 		})
 	);
 const routeRaw = (value: unknown) =>
-	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /products?per_page=100': value }));
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /products?per_page=100': value, 'GET /subscriptions/me': () => held }));
 
-beforeEach(() => {
+beforeEach(async () => {
+	await resetSessionStores();
 	vi.mocked(api).mockReset();
+	held = [];
 	route([PRODUCT]);
 	localStorage.clear();
 	cart.clear();
-	subscriptions.set([]);
 });
 
 describe('購票資訊 — 接真 API', () => {
@@ -147,7 +152,9 @@ describe('購票資訊 — 加入購物車 routes a pass into the member cart', 
 
 	it('a pass the member already subscribes to shows 已訂閱 and cannot be re-added (blocks the paid no-op)', async () => {
 		// Member already holds this product as a persisted entitlement.
-		subscriptions.set([{ id: 'product-uuid-1', name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
+		held = [subscriptionResponse({ product_id: 'product-uuid-1', product_name: '單堂體驗課', price_cents: 50000 })];
+		await refreshSubscriptions();
+		vi.mocked(api).mockClear();
 
 		const { findByText } = render(Page);
 

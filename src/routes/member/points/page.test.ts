@@ -9,6 +9,7 @@ import { fakeRouter } from '$lib/testing/fake-router';
 import { apiCalls } from '$lib/testing/admin-routes';
 import { MEMBER_ROUTES } from '$lib/testing/member-routes';
 import { pointsMe, rewardResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 // Task 14：兌換動作(redeemReward)/hydrate(refreshPoints)在 $lib/member/stores 用
 // 真實實作，只替換 $lib/api/client 的 api()（同 LeaveDialog.test.ts 慣例）——這樣
@@ -19,7 +20,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
   return { ...actual, api: vi.fn() };
 });
 
-// 三個品項各代表一種按鈕狀態(搭配 beforeEach 的 points.set(1000))：
+// 三個品項各代表一種按鈕狀態(搭配 route() 預設 GET /points/me 的餘額 1000)：
 // AFFORDABLE(100 點,不限量) → 可兌換；SOLDOUT(50 點但 stock 0) → 即使付得起也
 // 售罄優先；EXPENSIVE(5000 點) → 點數不足。
 const REWARD_AFFORDABLE = rewardResponse({ id: 'rw-1', name: '報名費折抵 NT$100', description: '下次報名課程可折抵 NT$100。', points_cost: 100, stock: null });
@@ -34,10 +35,9 @@ const route = (over: Record<string, unknown> = {}) =>
     fakeRouter(over, { ...MEMBER_ROUTES, 'GET /rewards': REWARDS, 'GET /points/me': pointsMe({ balance: 1000 }) })
   );
 
-beforeEach(() => {
+beforeEach(async () => {
+  await resetSessionStores();
   vi.mocked(api).mockReset();
-  points.set(0);
-  pointsLedger.set([]);
 });
 
 describe('member/points 頁', () => {

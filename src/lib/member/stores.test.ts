@@ -1,22 +1,24 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { subscriptions, points, pointsLedger } from './stores';
-import { POINTS_LEDGER } from '$lib/testing/seed-fixtures';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { api } from '$lib/api/client';
+import { refreshSubscriptions } from './stores';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { subscriptionResponse } from '$lib/testing/wire-fixtures';
 
-// R13 Task 3:mock 會員 ME 退役;points 的起始值改用本地常數。
-const SEED_POINTS = 1250;
+vi.mock('$lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('$lib/api/client')>();
+  return { ...actual, api: vi.fn() };
+});
 
-// The singleton subscriptions persist to localStorage; reset it (and storage)
-// between tests.
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
-  subscriptions.set([]);
-  points.set(SEED_POINTS);
-  pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
+  await resetSessionStores();
 });
 
 describe('subscriptions (truth is the server now — Task 17 removed client persistence)', () => {
-  it('does NOT write entitlements to localStorage; the server (refreshSubscriptions) is the only source of truth', () => {
-    subscriptions.set([{ id: 'product-uuid-1', name: '單堂體驗課', since: '2026/06/17', price: 500 }]);
+  it('does NOT write entitlements to localStorage; the server (refreshSubscriptions) is the only source of truth', async () => {
+    vi.mocked(api).mockImplementation(fakeRouter({ 'GET /subscriptions/me': [subscriptionResponse({ product_id: 'product-uuid-1' })] }));
+    await refreshSubscriptions();
     expect(localStorage.getItem('dreamfly_subscriptions')).toBeNull();
   });
 });

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints } from './api';
 import { api } from '$lib/api/client';
-import { points, pointsLedger, subscriptions, notifications, waitlist, leaveRequests } from './stores';
+import { points, pointsLedger, notifications, waitlist, leaveRequests } from './stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
@@ -23,9 +23,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 beforeEach(async () => {
   vi.mocked(api).mockReset();
-  points.set(0);
-  pointsLedger.set([]);
-  subscriptions.set([]);
   notifications.set([]);
   waitlist.set([]);
   leaveRequests.set([]);

@@ -104,7 +104,6 @@ export interface Subscription {
   since: string;
   price: number;
 }
-export const SUBS_SEED: Subscription[] = [];
 
 /* Upcoming classes (member's booked sessions) — status is Tone-typed here;
  * domain stores the loose shape, so assert back to this file's stricter type. */
