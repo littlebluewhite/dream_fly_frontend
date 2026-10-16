@@ -384,3 +384,12 @@ sheet)與 toast 文案仍留呼叫端,本篇候選 04 的這句話不變。
 ## 增補(2026-10-03,W-6 修正 1)
 
 mobile-admin「標記已付款」(`markOrderPaid`)已移除、`OrderSheet` 改唯讀:後端 BE-3 起拒絕待付款→已付款(400),桌面 `LEGAL_NEXT` 的 pending 只剩 cancelled(詳見 `0027`)。
+
+## 增補(2026-10-16,架構深化 R22)
+
+§1 以下各句以本節為準,見 `docs/adr/0031` §3。
+
+- **:28 的「動詞內 `await` 私有的 `refetchAfterWrite()`」**:仍是動詞內 `await`,但只刷新受影響的水合單位(會員/課程·教練/
+  訂單,改名才三個都刷);各單位同時發出,某單位失敗照舊只 `console.error`、不丟出。
+- **:38、:42、:233 的 `getOpsCollections()`**:已退役。三個單位各自呼叫 `getMembers(1)`/`getClasses(1)`/`getOrders(1)`,各寫自己
+  那格 `opsPages`;課程·教練單位照樣用 `getClasses()` 回的 `coaches`,不另打 `GET /coaches`。

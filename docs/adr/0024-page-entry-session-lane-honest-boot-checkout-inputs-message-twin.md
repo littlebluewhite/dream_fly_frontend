@@ -377,3 +377,9 @@ clone」的條款,以免 restored 開機的重置抹掉角標的 seed teaser。�
 §4「各 surface 的 layout 以身分為 key 反應式呼叫」(:150-157)改由身分範圍 `SessionScope` 做:layout 把暖機清單寫成
 module-level 常數交給它,key 是 `guard(…) === null && warmIn(url) ? $sessionKey : null`(mobile-admin 的教練分區條件改成
 `warmIn`)。清單內容與每個身分只打一次 GET 都不變。見 `docs/adr/0030` §3。
+
+## 增補(2026-10-16,架構深化 R22)
+
+§3(:123-125)的 `queueWrite<R>(task: (stale) => Promise<R>, skipped: R)` 已換成 `queueWrite<R>(w: QueuedWrite<R>)`:`w` 與
+`Write<R>` 同形、`send` 可回 `null`。排隊語意不變(前一筆 settle 才輪到、換身分重置鏈);輪到時身分已換回 `stale`,另外先
+`hydrate()`、失敗走 `recoverWrite`,再交給 `write()`。呼叫端不再手寫寫前水合與復原。見 `docs/adr/0031` §5。

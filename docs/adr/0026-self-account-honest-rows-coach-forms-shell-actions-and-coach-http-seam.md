@@ -300,3 +300,10 @@ Task 9 只修過時註解(mobile-admin 約 20 個「經 `$lib/mobile-admin/api` 
 - **R17 增補「§6 的住所改變」(:260-262)**:`sessionIdentity()` 自本日起宣告在登入狀態核心 `src/lib/stores/login-state.ts`
   (身分的 owner 改為核心),`stores/authStore.ts` 以原名轉出、函式不變;呼叫端仍從 authStore import,四支 `sessionIdentity`
   測試仍在 `authStore.test.ts`。「不做 derived store」的決定與理由不變。見 `docs/adr/0030` §4。
+
+## 增補(2026-10-16,架構深化 R22)
+
+- **§1(:29-30)的 `makeAuthMockB` 補 `logout`**:`auth-mock.ts` 已刪。兩個 Sidebar 的登出測試改經真的登入狀態核心登入,斷言
+  `loggedIn === false` 加上恰好一次 `POST /auth/logout`。見 `docs/adr/0031` §1。
+- **§6「不做 derived store」的理由**:「15 個 mock authStore 的測試檔都得跟著改」這項成本已不存在(沒有測試 mock authStore);
+  主要理由「所有 session 閘門的重置時機往後延一拍」不變,決定不變。見 `docs/adr/0031`「明確不做」。

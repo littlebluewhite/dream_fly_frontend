@@ -344,3 +344,12 @@ member/mobile/coach/mobile-admin 四個 layout 以 `{#key $lastSessionKey}` 包�
 - **R17 增補(:305、:309-310)**:refresh 失敗清 token 時的登出、`storage` listener 與 `sessionIdentity()` 的宣告,現在都在登入
   狀態核心 `stores/login-state.ts`;`onSessionExpired` 已退役,`authStore` 以原名轉出 `sessionIdentity`。
 - **R18 增補(:334)**:四個 layout 的 `{#key $lastSessionKey}` 改由身分範圍 `SessionScope` 包住 slot,語意不變。
+
+## 增補(2026-10-16,架構深化 R22)
+
+本篇原文不改寫,以下各點以本節為準。
+
+- **:269 的 `queueWrite(task, skipped)`**:現在收與 `Write<R>` 同形的寫入(`send` 可回 `null`),先水合再交給 `write()`,
+  失敗復原共用 `recoverWrite`;輪到時身分已換回 `stale`。見 `docs/adr/0031` §5。
+- **R17 增補(:307)「測試替身 `$lib/testing/auth-mock` 兩個家族轉手真實作」**:`auth-mock.ts` 已刪,測試經真的登入狀態核心
+  登入(`loginRoutes()`/`loginAs`),import-scan 契約擋住 `vi.mock` 登入狀態。見 `docs/adr/0031` §1。

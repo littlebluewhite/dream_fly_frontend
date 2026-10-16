@@ -101,3 +101,10 @@ refresh 的位置跟著搬:mobile 的 `CartSheet.svelte` 原本在 `freshCheckou
 
 `member/checkout.ts` 的 `validateCoupon` 併入 `applyCouponCode`(它是唯一呼叫端;404 → 同一句
 「優惠碼無效或已過期」的分類契約改由 `applyCouponCode` 的案例釘住)。
+
+## 增補(2026-10-16,架構深化 R22)
+
+FE-5 增補(:98-103)的「`checkout-order.ts` 只留 wire 型別與 `syncCartToServer`」已不成立:`src/lib/checkout-order.ts` 已刪。
+`syncCartToServer` 與 `applyCouponCode` 是 `member/checkout-sync.ts` 的私有函式,`PaymentMethod` 住 `member/checkout-controller.ts`;
+優惠碼分類契約改經 `createCheckout` 的 `applyCode()` 釘住。本篇「共用的是 wire 編排,不是結算」與 `checkout-math.ts` 不變。
+見 `docs/adr/0031` §4。
