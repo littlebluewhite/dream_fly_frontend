@@ -455,8 +455,8 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		const recovery = await recoverWrite(w.onFailure, undo, () => refreshRun(ALWAYS), () => owner !== resetEpoch);
 		if (recovery === 'stale') return { kind: 'stale', settled };
 		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標;
-		// resynced 已整包重抓,不必再補)。
-		if (recovery !== 'resynced' && w.optimistic && !wasHydrated) queueReconcile();
+		// resynced 已整包重抓,不必再補;await recoverWrite 期間擁有者換人 → 不在新擁有者身上排)。
+		if (recovery !== 'resynced' && w.optimistic && !wasHydrated && owner === resetEpoch) queueReconcile();
 		return { kind: 'failed', error, recovery };
 	}
 

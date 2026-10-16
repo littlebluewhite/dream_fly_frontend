@@ -1064,6 +1064,24 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 		expect(get(store)).toEqual([]);
 	});
 
+	it('未水合的樂觀寫入失敗、復原步驟之後 reset → 不在新擁有者身上排和解(不發 GET、不翻旗)', async () => {
+		const fetch = vi.fn(async () => ['new-owner']);
+		const { store, gate } = makeGate(fetch);
+		const d = createDeferred<void>();
+
+		const p = gate.write({ optimistic: () => {}, send: () => d.promise, onFailure: 'keep' });
+		d.reject(new Error('offline'));
+		await Promise.resolve();
+		await Promise.resolve(); // 失敗已落地、復原步驟已跑,write() 尚未從 recoverWrite 的 await 醒來
+		gate.reset();
+
+		expect((await p).kind).toBe('failed');
+		await settleRetry();
+		expect(fetch).not.toHaveBeenCalled();
+		expect(get(store)).toEqual([]); // 新擁有者的開機值
+		expect(get(gate.hydrated)).toBe(false);
+	});
+
 	it('樂觀:optimistic 與 send 同步發生,翻旗也同步(await 之前)', async () => {
 		const { store, gate } = makeGate(async () => ['server']);
 		const d = createDeferred<void>();
