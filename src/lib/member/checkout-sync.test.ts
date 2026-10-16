@@ -7,7 +7,7 @@
  * refreshOnOpen（best-effort，失敗吞掉）。*/
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createCart } from '$lib/cart';
 import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
@@ -15,6 +15,7 @@ import { createCheckout, chargeableCart } from './checkout-sync';
 import { subscriptions, refreshSubscriptions } from './subscriptions';
 import { points, refreshPoints } from './points';
 import { fakeRouter } from '$lib/testing/fake-router';
+import type { CartItem } from '$lib/cart-item';
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -103,6 +104,88 @@ describe('createCheckout — 送單呼叫序列（sync → orders → hydrate �
 		expect((itemPosts[0][1] as RequestInit).body).toBe(
 			JSON.stringify({ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 })
 		);
+	});
+});
+
+/** 手做的 cart：繞過 createCart 的 qty 鎖 1，模擬 localStorage 帶回的舊購物車行。 */
+const handCart = (items: CartItem[]) => ({ ...writable(items), clear: vi.fn() });
+const cartItemBodies = () =>
+	vi
+		.mocked(api)
+		.mock.calls.filter(([p, i]) => p === '/cart/items' && (i as RequestInit)?.method === 'POST')
+		.map(([, i]) => JSON.parse((i as RequestInit).body as string));
+
+describe('createCheckout — 同步到 server 購物車的 quantity 規則', () => {
+	it('課程 qty 3 送出時是 1；方案 qty 2 送出時是 2', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'POST /orders': SAMPLE_ORDER }, CART_DEFAULTS));
+		const cart = handCart([
+			{ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, qty: 3, icon: 'sparkles' },
+			{ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, qty: 2, icon: 'ticket' }
+		]);
+
+		const checkout = createCheckout({ cart, refreshAfterOrder: [], refreshOnOpen: [] });
+		await checkout.confirmPay();
+
+		expect(cartItemBodies()).toEqual([
+			{ item_type: 'course', item_id: 'course-uuid-9', quantity: 1 },
+			{ item_type: 'product', item_id: 'pass-uuid-9', quantity: 2 }
+		]);
+		expect(cart.clear).toHaveBeenCalledTimes(1);
+	});
+
+	it('空車 → nothingChargeable，0 個請求', async () => {
+		const cart = handCart([]);
+
+		const checkout = createCheckout({ cart, refreshAfterOrder: [], refreshOnOpen: [] });
+
+		expect(await checkout.confirmPay()).toEqual({ kind: 'nothingChargeable' });
+		expect(api).not.toHaveBeenCalled();
+		expect(cart.clear).not.toHaveBeenCalled();
+	});
+});
+
+describe('createCheckout — applyCode（套用優惠碼）', () => {
+	const INVALID = '優惠碼無效或已過期';
+	const make = () => createCheckout({ cart: handCart([]), refreshAfterOrder: [], refreshOnOpen: [] });
+
+	it('空白輸入 → 不送請求、不顯示錯誤', async () => {
+		const checkout = make();
+		for (const code of ['', '   ']) {
+			checkout.form.update((f) => ({ ...f, code }));
+			await checkout.applyCode();
+		}
+		expect(api).not.toHaveBeenCalled();
+		expect(get(checkout).coupon).toBeNull();
+		expect(get(checkout).codeErr).toBe('');
+	});
+
+	it('命中 → trim 後打 GET /coupons/{code}/validate（不轉大寫），discount_cents 經 ntd 換成 NT$', async () => {
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /coupons/dreamfly100/validate': { code: 'DREAMFLY100', discount_cents: 10000 } })
+		);
+		const checkout = make();
+		checkout.form.update((f) => ({ ...f, code: '  dreamfly100  ' }));
+		await checkout.applyCode();
+
+		expect(api).toHaveBeenCalledWith('/coupons/dreamfly100/validate');
+		expect(get(checkout).coupon).toEqual({ code: 'DREAMFLY100', off: 100 });
+		expect(get(checkout).codeErr).toBe('');
+	});
+
+	it('404 與網路錯誤一視同仁 → 同一句共用文案，不套用', async () => {
+		const checkout = make();
+		checkout.form.update((f) => ({ ...f, code: 'NOPE' }));
+
+		vi.mocked(api).mockRejectedValueOnce(new ApiError(404, 'coupon not found'));
+		await checkout.applyCode();
+		expect(get(checkout).coupon).toBeNull();
+		expect(get(checkout).codeErr).toBe(INVALID);
+
+		checkout.clearCodeErr();
+		vi.mocked(api).mockRejectedValueOnce(new TypeError('fetch failed'));
+		await checkout.applyCode();
+		expect(get(checkout).coupon).toBeNull();
+		expect(get(checkout).codeErr).toBe(INVALID);
 	});
 });
 

@@ -71,8 +71,8 @@ export const orderStatusBadge = (s: string): [Tone, string] => lookupOr<[Tone, s
  *  三個 surface 不再各自記憶「哪個欄位餵哪條路徑」。四處 wire 型別（admin
  *  AdminOrderSummary、member OrderSummary、checkout 與 PATCH 回應 OrderResponse，皆為
  *  後端產生型別）皆必填 `order_number: string`、無 fallback。註：mobile-admin
- *  的 mock ORDERS 用自參照（orderId = 顯示 id）不走此協定；checkout-order.ts 的
- *  `orderNumber` 為具名欄位、無混用風險，亦不經此。 */
+ *  的 mock ORDERS 用自參照（orderId = 顯示 id）不走此協定；結帳成交快照
+ *  （member/checkout-controller 的 `PaidSummary.orderNumber`）為具名欄位、無混用風險，亦不經此。 */
 export const orderIdentity = (o: { id: string; order_number: string }): { display: string; uuid: string } =>
   ({ display: o.order_number, uuid: o.id });
 

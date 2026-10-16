@@ -27,7 +27,7 @@ function courseFixture(overrides: Partial<Course> = {}): Course {
 
 // C4/Task 9(架構深化 R15·F-5)：placeOrder 已退役，checkout 單例委派
 // $lib/member/checkout-sync 的 createCheckout（單測見 checkout-sync.test.ts）——
-// 本檔不再需要 mock $lib/checkout-order。通知段(唯一會打 $lib/api/client 的一段)
+// 本檔不 mock 結帳。通知段(唯一會打 $lib/api/client 的一段)
 // 自 R12 起是 member 通知 module 的轉出(測試在 $lib/member/notifications.test.ts)，
 // 本檔不需要 api mock。
 
