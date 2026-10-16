@@ -1,9 +1,8 @@
 /* Dream Fly — unified cart item type + adapters, shared across surfaces.
  *
- * Moved out of the member surface facade (`member/data.ts`) so a neutral
- * lib-root module carries it — mirrors the existing checkout-math /
- * checkout-gate / checkout-order convention. Pure relocation: content below
- * is unchanged from its original spot in member/data.ts. */
+ * A neutral lib-root module (alongside checkout-math / checkout-gate) so
+ * member, mobile and public routes import it without going through a
+ * surface facade. */
 
 /* ---- Unified cart item (auth-at-checkout) — cart v3 ----
  * One cart holds two product sources — courses and passes — both keyed by the
@@ -38,8 +37,8 @@ export type CartItemInput = Omit<CartItem, 'qty'>;
  * 產地是 chargeableLines()（member/checkout）——過濾清單與請款清單從建構上同源，
  * 呼叫端繞不過去。
  *
- * 型別刻意住 lib-root（此檔）而非 member facade:消費者 checkout-math /
- * checkout-order 都在 lib-root，不得反向 import member;brand 放這裡才不會開一條
+ * 型別刻意住 lib-root（此檔）而非 member facade:消費者 checkout-math 在
+ * lib-root，不得反向 import member;brand 放這裡才不會開一條
  * domain → member 的反向依賴邊（鏡射 CartItem/IconName 的既有落腳慣例）。
  * CHARGEABLE 是 nominal 標記（unique symbol，編譯後零 runtime 表徵），只讓型別
  * 系統分辨「已過濾」與「未過濾」的購物車行，不改變執行期形狀。 */

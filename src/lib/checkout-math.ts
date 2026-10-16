@@ -2,10 +2,9 @@
  *
  * CartSheet / CheckoutDialog 的 subtotal / couponOff / ptRedeem / total / earned 計算邏輯，
  * 抽成可單測的純函式。點數折抵夾擠、最終金額、回饋點數——都是本地預覽用的算法，
- * 實際送單金額一律由後端 API 回應為準。優惠碼折抵改由 member/checkout.ts 的
- * applyCouponCode()（內含真實 GET /coupons/{code}/validate）查詢，這裡不再保留本地
- * 查表版的 lookupCoupon()（CartSheet 是它最後一個呼叫端，已隨 Task 19 收尾改真
- * API，見該檔案）。 */
+ * 實際送單金額一律由後端 API 回應為準。優惠碼折抵由 createCheckout 的 applyCode
+ * （member/checkout-sync，內含真實 GET /coupons/{code}/validate）查詢，這裡只收
+ * 已套用的 coupon。 */
 
 // type-only import:brand 型別編譯後零 runtime 邊（verbatimModuleSyntax 下必須
 // `import type`），checkout-math 對 lib-root cart-item 只取型別、不開值依賴。
