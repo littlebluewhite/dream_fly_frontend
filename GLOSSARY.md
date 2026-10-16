@@ -210,7 +210,7 @@ mobile-admin 跨頁共用的四個集合 `members`/`classes`/`coaches`/`orders`(
 `Readable`),拆成三個水合單位,各是一顆 plain 水合閘門:**會員**(`getMembers(1)`)、**課程·教練**(`getClasses(1)`,
 一次填 classes 與 coaches——課程列的教練名來自同一份教練列表)、**訂單**(`getOrders(1)`)。三個單位**只抓第 1 頁**
 (行動版不能換頁,分頁 meta 進 `opsPages`,超過一頁時 `searchCapHint()` 提示搜尋範圍)。**開機值等於重置值**
-`EMPTY_OPS`(集合 `[]`、分頁 meta 0/0,`docs/adr/0025` F-3),每個單位只寫、只重置自己那一格 `opsPages`。單位之間互不
+(集合 `[]`、分頁 meta `EMPTY_OPS` 三格皆 0/0,`docs/adr/0025` F-3),每個單位只寫、只重置自己那一格 `opsPages`。單位之間互不
 牽連:一支端點壞掉只有那一頁顯示錯誤。頁面經各自的 `*PageEntry` 進場(教練畫面用 `classesPageEntry`),首頁的
 待付款 banner 只呼叫 `hydrateOrders()`。寫入動詞成功後只刷新受影響的單位,同時發出(`Promise.allSettled`)、某單位
 失敗只記 log 不丟出(`docs/adr/0022` §1);後端的訂單列表與教練列表都即時 JOIN 使用者名字,所以改名波及三個單位:
