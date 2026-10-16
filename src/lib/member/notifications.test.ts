@@ -13,6 +13,7 @@ import { mapNotification } from './data';
 import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
+import { notificationResponse } from '$lib/testing/wire-fixtures';
 
 /** GET /notifications 的後端形狀（NotificationResponse），只填 mapNotification 會讀到的欄位。
  *  id 預設 'n1'(既有呼叫端沿用);settle 測試(移植自 mobile)需要區分多筆,顯式傳入。 */
@@ -30,15 +31,21 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 beforeEach(async () => {
   vi.mocked(api).mockReset();
+  await resetSessionStores(); // 登入→登出走一圈讓閘門回開機態(內容還原 [])
   vi.mocked(api).mockResolvedValue(undefined);
-  // 夾具: n1–n3 未讀、n4–n6 已讀（見 $lib/testing/seed-fixtures 的 NOTIFS_SEED）。
-  await resetSessionStores(); // 登入→登出走一圈讓閘門回開機態(內容還原 []),再鋪夾具
-  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
+
+/** 經閘門水合鋪夾具(內容唯讀):預設 n1–n3 未讀、n4–n6 已讀(見 $lib/testing/seed-fixtures 的
+ *  NOTIFS_SEED);水合後清掉呼叫紀錄,PATCH 一律回 undefined。 */
+async function hydrateSeed(read = (n: (typeof NOTIFS_SEED)[number]) => n.read): Promise<void> {
+  vi.mocked(api).mockResolvedValueOnce(NOTIFS_SEED.map((n) => notificationResponse({ id: n.id, is_read: read(n) })));
+  await hydrateNotifications();
+  vi.mocked(api).mockClear();
+}
 
 // R14(候選 F3)誠實開機:開機值 = reset 值 = `[]`——角標在暖機前是 0(UI 在 0 時本來就
 // 隱藏),不再顯示種子裡的假 3 則。重新載入模組才照得到「開機」那一刻的值(本檔其他 it
-// 都會先 set 夾具)。
+// 都會先水合夾具)。
 describe('誠實開機(R14 F3)', () => {
   it('模組開機時 notifications 為 [],unreadCount 為 0', async () => {
     vi.resetModules();
@@ -101,6 +108,7 @@ describe('hydrateNotifications — GET /notifications', () => {
 
 describe('markRead', () => {
   it('樂觀更新 store 後送 PATCH /notifications/{id}/read', async () => {
+    await hydrateSeed();
     await markRead('n1');
 
     expect(get(notifications).find((n) => n.id === 'n1')?.read).toBe(true);
@@ -108,6 +116,7 @@ describe('markRead', () => {
   });
 
   it('PATCH 失敗只記錄錯誤，樂觀更新的已讀狀態不還原', async () => {
+    await hydrateSeed();
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(api).mockRejectedValue(new Error('network error'));
 
@@ -146,8 +155,7 @@ describe('markRead 的閘門接線', () => {
 
 describe('markAllRead', () => {
   it("無未讀 → 回 'ok' 且不送任何請求", async () => {
-    notifications.set(NOTIFS_SEED.map((n) => ({ ...n, read: true })));
-    vi.mocked(api).mockClear();
+    await hydrateSeed(() => true);
 
     expect(await markAllRead()).toBe('ok');
 
@@ -155,6 +163,7 @@ describe('markAllRead', () => {
   });
 
   it('對每個未讀通知各發一次 PATCH(已讀的不重發)，全部成功回 \'ok\'', async () => {
+    await hydrateSeed();
     const result = await markAllRead();
 
     expect(result).toBe('ok');
@@ -168,6 +177,7 @@ describe('markAllRead', () => {
   });
 
   it('任一 PATCH 失敗回 \'partial\'，本地已讀狀態不還原', async () => {
+    await hydrateSeed();
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(api).mockImplementation(async (path: string) => {
       if (path === '/notifications/n2/read') throw new Error('network error');

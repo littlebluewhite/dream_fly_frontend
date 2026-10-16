@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import LeaveDialog from './LeaveDialog.svelte';
-import { toasts, leaveRequests } from '$lib/member/stores';
+import { toasts, leaveRequests, hydrateLeaveRequests } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import type { EnrolledCourse } from '$lib/domain/member-app';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
 
 /* 請假申請 dialog（Task 11；integration-contract.md §3.20 + §3.18）—— 開啟時打
  * GET /courses/{course_id}/sessions 列出未來場次；選場次 + 選填事由 → 送出打
@@ -38,9 +39,13 @@ const SESSIONS = [
   { id: 'sess-2', course_id: 'course-1', session_date: '2026-07-12', start_time: '19:00:00', end_time: '20:30:00' }
 ];
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
-  leaveRequests.set([]);
+  await resetSessionStores();
+  // 請假清單經閘門水合(內容唯讀):已水合的寫入不另排和解重抓。
+  vi.mocked(api).mockImplementation(fakeRouter({ 'GET /leave-requests/me': [] }));
+  await hydrateLeaveRequests();
+  vi.mocked(api).mockClear();
 });
 
 describe('LeaveDialog — 開啟時載入場次（GET /courses/{id}/sessions）', () => {

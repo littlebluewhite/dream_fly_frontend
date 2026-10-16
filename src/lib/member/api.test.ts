@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { getDashboard, getReports, getSchedule, getMine, getEnrolmentAttendance, getAccount, getCourses, getPoints } from './api';
 import { api } from '$lib/api/client';
-import { points, pointsLedger, subscriptions, notifications, waitlist, leaveRequests } from './stores';
+import { points, pointsLedger, subscriptions } from './stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { UPCOMING, ANNOUNCE } from './data';
 import { STATS, SKILLS } from '$lib/domain/member-app';
@@ -26,9 +26,6 @@ beforeEach(async () => {
   points.set(0);
   pointsLedger.set([]);
   subscriptions.set([]);
-  notifications.set([]);
-  waitlist.set([]);
-  leaveRequests.set([]);
   await resetSessionStores(); // 模組單例閘門:登入→登出走一圈,不重置會跨 it 洩漏、讓旁路 hydrate 短路
 });
 

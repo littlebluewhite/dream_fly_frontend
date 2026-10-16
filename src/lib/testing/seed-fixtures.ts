@@ -5,7 +5,7 @@
  *                       誠實開機為 `[]`，COACHES 不再有 production 讀者)
  * production 的 notifications / pointsLedger / mobile-admin coaches 開機值與
  * reset 值都是 `[]`(ADR 0010 死種子退役慣例:沒有 production 讀者的值不留在 src/lib 本體)。
- * 這裡只供測試用 `store.set(fixture)` 灌一份「有未讀、有明細」的狀態，或供測試檔直接
+ * 這裡只供測試灌一份「有未讀、有明細」的狀態(通知轉成 GET /notifications 回應經閘門水合)，或供測試檔直接
  * 引用當固定 fixture。 */
 import type { Notification } from '$lib/member/data';
 import type { LedgerEntry } from '$lib/domain/member-app';

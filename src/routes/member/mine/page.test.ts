@@ -1,29 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { waitlist, leaveRequests, toasts, hydrateWaitlist, hydrateLeaveRequests, type LeaveRequest } from '$lib/member/stores';
+import { toasts, type LeaveRequest } from '$lib/member/stores';
 import { api, ApiError } from '$lib/api/client';
 import Page from './+page.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { MEMBER_ROUTES } from '$lib/testing/member-routes';
-import { attendanceEntry, myEnrolment } from '$lib/testing/wire-fixtures';
+import { attendanceEntry, leaveRequest, myEnrolment, waitlistResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { apiCalls } from '$lib/testing/admin-routes';
 import type { AttendanceStatus } from '$lib/api/generated';
 
-// 只替換 api()，ApiError 用回真實類別。真的 getMine / getEnrolmentAttendance + mapper 會跑——
-// 候補/請假清單的映射與 hydrate 失敗不擋主資料等水合語意由 member/api.test.ts、
-// $lib/store-warm.test.ts 把關，這裡的路由只交代報名/出席明細，加上動作端點：取消的
-// DELETE（/waitlist/{id}、/leave-requests/{id}）與 dialog 的場次查詢（GET /courses/{id}/sessions）。
+// 只替換 api()，ApiError 用回真實類別。真的 getMine / getEnrolmentAttendance + mapper 會跑，
+// 候補/請假清單也走頁面自己的暖機(真的 hydrateWaitlist／hydrateLeaveRequests 打 GET /waitlist/me、
+// GET /leave-requests/me)——hydrate 失敗不擋主資料等水合語意由 $lib/store-warm.test.ts 把關。
+// 路由交代報名/出席明細、候補/請假清單，加上動作端點：取消的 DELETE（/waitlist/{id}、
+// /leave-requests/{id}）與 dialog 的場次查詢（GET /courses/{id}/sessions）。
 vi.mock('$lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('$lib/api/client')>();
   return { ...actual, api: vi.fn() };
-});
-
-// R15(候選 F2)：候補/請假的暖機搬到本頁的 gate.fetch 自己宣告(與 getMine() 並行)——
-// hydrateWaitlist/hydrateLeaveRequests 在此整支 mock 掉，候補/請假清單一律改 store
-// 直接 seed，這個檔案只驗頁面渲染與取消動作佈線，不重複測 hydrate 本身的語意。
-vi.mock('$lib/member/stores', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('$lib/member/stores')>();
-  return { ...actual, hydrateWaitlist: vi.fn(), hydrateLeaveRequests: vi.fn() };
 });
 
 // 原 EnrolledCourse 畫面形狀 fixture 改為 wire 輸入(2 筆,沿用真實種子 k1/k6 的欄位值;
@@ -34,23 +29,22 @@ const ENROLMENTS = [
   myEnrolment({ id: 'k6', course_name: '競技體操 選手班', course_level: 'elite', schedule_text: '週四 17:00–19:00', attended: 22, total: 25 })
 ];
 
-/** 預設:兩筆報名、空出勤明細——不關心出席明細內容的既有測試(候補/請假相關)不用逐一配置。 */
+/** 預設:兩筆報名、空出勤明細、空候補/請假清單——不關心的測試不用逐一配置。 */
 const route = (over: Record<string, unknown> = {}) =>
   vi.mocked(api).mockImplementation(
     fakeRouter(over, {
       ...MEMBER_ROUTES,
       'GET /enrolments/me': ENROLMENTS,
       'GET /enrolments/k1/attendance': [],
-      'GET /enrolments/k6/attendance': []
+      'GET /enrolments/k6/attendance': [],
+      'GET /waitlist/me': [],
+      'GET /leave-requests/me': []
     })
   );
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.mocked(api).mockReset();
-  vi.mocked(hydrateWaitlist).mockReset().mockResolvedValue(undefined);
-  vi.mocked(hydrateLeaveRequests).mockReset().mockResolvedValue(undefined);
-  waitlist.set([]);
-  leaveRequests.set([]);
+  await resetSessionStores(); // 候補/請假閘門回開機態,每個測試由頁面暖機重新水合
 });
 
 describe('member/mine 頁', () => {
@@ -118,8 +112,8 @@ describe('member/mine 頁', () => {
     render(Page);
 
     await vi.waitFor(() => {
-      expect(hydrateWaitlist).toHaveBeenCalled();
-      expect(hydrateLeaveRequests).toHaveBeenCalled();
+      expect(apiCalls('GET /waitlist/me')).toHaveLength(1);
+      expect(apiCalls('GET /leave-requests/me')).toHaveLength(1);
     });
 
     resolveMine([]);
@@ -199,9 +193,9 @@ describe('member/mine 頁 — 出席明細(Task F7：GET /enrolments/{id}/attend
 });
 
 describe('member/mine 頁 — 候補中課程（Task 3：waitlist store 清單 + DELETE 取消）', () => {
-  // 卡 6：GET /waitlist/me 的水合（含 waiting 過濾）收進 getMine() 接縫，由
-  // member/api.test.ts 把關——這裡改 store 直接 seed，只驗清單渲染與取消動作佈線。
-  const WL_ENTRY = { id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X' };
+  // GET /waitlist/me 的映射(含 waiting 過濾)由 member/waitlist.test.ts 把關——這裡 route
+  // 候補清單讓頁面暖機水合，只驗清單渲染與取消動作佈線。
+  const WL_ENTRY = waitlistResponse({ id: 'wl-1', course_id: 'course-x', course_name: '候補課程 X' });
 
   it('沒有候補中的課程時顯示空狀態', async () => {
     route();
@@ -213,8 +207,7 @@ describe('member/mine 頁 — 候補中課程（Task 3：waitlist store 清單 +
   });
 
   it('點擊「取消候補」→ DELETE /waitlist/{id} 成功後從清單移除', async () => {
-    waitlist.set([WL_ENTRY]);
-    route({ 'DELETE /waitlist/wl-1': undefined });
+    route({ 'GET /waitlist/me': [WL_ENTRY], 'DELETE /waitlist/wl-1': undefined });
 
     render(Page);
     const btn = await screen.findByRole('button', { name: '取消候補' });
@@ -226,8 +219,7 @@ describe('member/mine 頁 — 候補中課程（Task 3：waitlist store 清單 +
   });
 
   it('取消候補失敗 → 顯示錯誤 toast，清單不變', async () => {
-    waitlist.set([WL_ENTRY]);
-    route({ 'DELETE /waitlist/wl-1': new ApiError(404, 'waitlist entry not found') });
+    route({ 'GET /waitlist/me': [WL_ENTRY], 'DELETE /waitlist/wl-1': new ApiError(404, 'waitlist entry not found') });
 
     render(Page);
     const btn = await screen.findByRole('button', { name: '取消候補' });
@@ -260,8 +252,8 @@ describe('member/mine 頁 — 請假入口（Task 11：每門課「請假」按�
 });
 
 describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清單 + 取消/預約補課）', () => {
-  // 卡 6：GET /leave-requests/me 的水合（含 hydrate 失敗不擋主資料）收進 getMine()
-  // 接縫，由 member/api.test.ts 把關——fixture 改 UI 形 LeaveRequest 直接 seed store。
+  // GET /leave-requests/me 的映射由 member/leave-requests-api.test.ts 把關——fixture 是 UI 形
+  // LeaveRequest，經 leaveRequest() 組成 wire 形 route 給頁面暖機水合。
   const LR_PENDING: LeaveRequest = {
     id: 'lr-1', course_id: 'c1', course_name: '請假課程 A', session_id: 's1',
     session_date: '2026-07-10', start_time: '19:00:00', reason: '生病',
@@ -284,8 +276,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('pending → 顯示待審核 badge 與「取消」按鈕', async () => {
-    route();
-    leaveRequests.set([LR_PENDING]);
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_PENDING)] });
     render(Page);
     await screen.findByText('請假課程 A');
     expect(screen.getByText('待審核')).toBeInTheDocument();
@@ -294,8 +285,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('approved 且未補課 → 顯示已核准 badge 與「預約補課」按鈕（不顯示取消）', async () => {
-    route();
-    leaveRequests.set([LR_APPROVED_UNBOOKED]);
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_APPROVED_UNBOOKED)] });
     render(Page);
     await screen.findByText('請假課程 B');
     expect(screen.getByText('已核准')).toBeInTheDocument();
@@ -304,8 +294,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('approved 且已補課 → 顯示補課場次資訊，不顯示「預約補課」按鈕', async () => {
-    route();
-    leaveRequests.set([LR_APPROVED_BOOKED]);
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_APPROVED_BOOKED)] });
     render(Page);
     await screen.findByText('請假課程 C');
     expect(screen.getByText('已核准')).toBeInTheDocument();
@@ -314,8 +303,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('rejected → 顯示已婉拒 badge，不顯示任何動作按鈕', async () => {
-    route();
-    leaveRequests.set([LR_REJECTED]);
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_REJECTED)] });
     render(Page);
     await screen.findByText('請假課程 D');
     expect(screen.getByText('已婉拒')).toBeInTheDocument();
@@ -324,8 +312,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('cancelled → 顯示已取消 badge，不顯示任何動作按鈕', async () => {
-    route();
-    leaveRequests.set([LR_CANCELLED]);
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_CANCELLED)] });
     render(Page);
     await screen.findByText('請假課程 E');
     expect(screen.getByText('已取消')).toBeInTheDocument();
@@ -334,8 +321,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('點擊「取消」→ DELETE /leave-requests/{id} 成功後狀態原地變為已取消（清單不移除該筆）', async () => {
-    leaveRequests.set([LR_PENDING]);
-    route({ 'DELETE /leave-requests/lr-1': undefined });
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_PENDING)], 'DELETE /leave-requests/lr-1': undefined });
     render(Page);
     const btn = await screen.findByRole('button', { name: '取消' });
     await fireEvent.click(btn);
@@ -346,8 +332,7 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('取消失敗 → 顯示錯誤 toast，狀態不變', async () => {
-    leaveRequests.set([LR_PENDING]);
-    route({ 'DELETE /leave-requests/lr-1': new ApiError(409, '僅待審核假單可取消') });
+    route({ 'GET /leave-requests/me': [leaveRequest(LR_PENDING)], 'DELETE /leave-requests/lr-1': new ApiError(409, '僅待審核假單可取消') });
     render(Page);
     const btn = await screen.findByRole('button', { name: '取消' });
     await fireEvent.click(btn);
@@ -363,9 +348,11 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   // 卡 6：busy 旗標佈線的可證偽測試——取消 in-flight（DELETE 未 resolve）期間按鈕
   // 必須停用；resolve 後走完既有成功路徑（狀態原地變已取消）。
   it('取消進行中（DELETE 尚未完成）時「取消」按鈕停用', async () => {
-    leaveRequests.set([LR_PENDING]);
     let resolveDelete!: () => void;
-    route({ 'DELETE /leave-requests/lr-1': () => new Promise<void>((res) => { resolveDelete = res; }) });
+    route({
+      'GET /leave-requests/me': [leaveRequest(LR_PENDING)],
+      'DELETE /leave-requests/lr-1': () => new Promise<void>((res) => { resolveDelete = res; })
+    });
     render(Page);
     const btn = await screen.findByRole('button', { name: '取消' });
     expect(btn).not.toBeDisabled();
@@ -378,8 +365,8 @@ describe('member/mine 頁 — 我的請假（Task 11：leaveRequests store 清�
   });
 
   it('點擊「預約補課」開啟補課 dialog，並用該假單的 course_id（而非目前選取課程）查詢場次', async () => {
-    leaveRequests.set([LR_APPROVED_UNBOOKED]);
     route({
+        'GET /leave-requests/me': [leaveRequest(LR_APPROVED_UNBOOKED)],
         'GET /courses/c1/sessions': [
           { id: 'sess-9', course_id: 'c1', session_date: '2026-07-20', start_time: '18:00:00', end_time: '19:00:00' }
         ]

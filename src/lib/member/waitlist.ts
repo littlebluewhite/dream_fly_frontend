@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
 import { resultOf } from '$lib/hydration-gate';
@@ -18,7 +18,9 @@ export interface WaitlistEntry {
   course_name: string;
 }
 
-export const waitlist = writable<WaitlistEntry[]>([]);
+const list = writable<WaitlistEntry[]>([]);
+/** 唯讀投影:寫入一律經下方閘門的 apply(水合)與 write() 的 commit。 */
+export const waitlist: Readable<WaitlistEntry[]> = { subscribe: list.subscribe };
 
 function toWaitlistEntry(w: WaitlistResponse): WaitlistEntry {
   return { id: w.id, course_id: w.course_id, course_name: w.course_name };
@@ -39,8 +41,8 @@ const gate = createSessionGate<WaitlistEntry[]>({
     const list = await api<WaitlistResponse[]>('/waitlist/me');
     return list.filter((w) => w.status === 'waiting').map(toWaitlistEntry);
   },
-  apply: (list) => waitlist.set(list),
-  reset: () => waitlist.set([]) // boot 態(開機值 = reset 值 = [])
+  apply: (l) => list.set(l),
+  reset: () => list.set([]) // boot 態(開機值 = reset 值 = [])
 });
 export const hydrateWaitlist = gate.hydrate;
 
@@ -60,7 +62,7 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
       });
       return toWaitlistEntry(res);
     },
-    commit: (entry) => waitlist.update((list) => [entry, ...list])
+    commit: (entry) => list.update((l) => [entry, ...l])
   });
   return resultOf(o);
 }
@@ -71,7 +73,7 @@ export async function joinWaitlist(courseId: string): Promise<WaitlistEntry> {
 export async function cancelWaitlist(id: string): Promise<void> {
   const o = await gate.write({
     send: () => api(`/waitlist/${id}`, { method: 'DELETE' }),
-    commit: () => waitlist.update((list) => list.filter((w) => w.id !== id))
+    commit: () => list.update((l) => l.filter((w) => w.id !== id))
   });
   resultOf(o); // 失敗原樣拋出
 }

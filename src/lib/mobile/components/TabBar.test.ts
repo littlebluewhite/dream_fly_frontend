@@ -1,29 +1,47 @@
-import { describe, it, expect, vi, afterEach, onTestFinished } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, onTestFinished } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { readable, get } from 'svelte/store';
 import MobileTabBar from './TabBar.svelte';
 import { TABS, mobilePath } from '$lib/mobile/nav';
-import { markAllRead, notifications, unreadCount } from '$lib/member/notifications';
+import { api } from '$lib/api/client';
+import { hydrateNotifications, markAllRead, unreadCount } from '$lib/member/notifications';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
+import { fakeRouter } from '$lib/testing/fake-router';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { notificationResponse } from '$lib/testing/wire-fixtures';
 
 vi.mock('$app/stores', () => ({
 	page: readable({ url: new URL('http://localhost/mobile') })
 }));
-// W1:markAllRead()(見下方 :78)現在會送 PATCH 落庫(見 $lib/member/notifications.ts)
-// ——這裡純粹隔離掉真正的 fetch,不驗證落庫本身,斷言零變更。
+// 通知內容經閘門水合(GET /notifications);markAllRead() 會送 PATCH 落庫——這裡只隔離掉
+// 真正的 fetch,不驗證落庫本身。
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return { ...actual, api: vi.fn() };
 });
 
+beforeEach(async () => {
+	await resetSessionStores(); // 通知閘門回開機態(內容 []、未水合)
+});
+
 afterEach(() => {
 	vi.restoreAllMocks();
-	// 不在這裡還原 notifications——每個 it 自己 set 需要的狀態。
 });
+
+/** 經閘門水合夾具 NOTIFS_SEED(3 則未讀),PATCH 一律成功,再清掉呼叫紀錄。 */
+async function hydrateSeed(): Promise<void> {
+	const routes: Record<string, unknown> = {
+		'GET /notifications': NOTIFS_SEED.map((n) => notificationResponse({ id: n.id, is_read: n.read }))
+	};
+	for (const n of NOTIFS_SEED) routes[`PATCH /notifications/${n.id}/read`] = undefined;
+	vi.mocked(api).mockImplementation(fakeRouter(routes));
+	await hydrateNotifications();
+	vi.mocked(api).mockClear();
+}
 
 describe('mobile TabBar adapter — smoke tests', () => {
 	// R14(候選 F3)誠實開機:通知 store 開機為 `[]` → 未讀 0 → 沒有角標(不再顯示種子的假 3 則)。
-	// 重新載入模組才照得到開機那一刻(本檔其他 it 會 set 通知),不依賴執行順序。
+	// 重新載入模組才照得到開機那一刻(本檔其他 it 會水合通知),不依賴執行順序。
 	it('開機沒有角標(通知 store 開機為空)', async () => {
 		vi.resetModules();
 		const fresh = await import('$lib/member/notifications');
@@ -65,9 +83,9 @@ describe('mobile TabBar adapter — smoke tests', () => {
 		}
 	});
 
-	it('notifications badge shows the unread count when unread > 0', () => {
-		// 夾具 NOTIFS_SEED 有 3 則未讀(開機是空的,先灌進 store)。
-		notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
+	it('notifications badge shows the unread count when unread > 0', async () => {
+		// 夾具 NOTIFS_SEED 有 3 則未讀(開機是空的,先水合)。
+		await hydrateSeed();
 		const currentUnread = get(unreadCount);
 		expect(currentUnread).toBeGreaterThan(0); // precondition: fixture has unread items
 
@@ -89,9 +107,10 @@ describe('mobile TabBar adapter — smoke tests', () => {
 		}
 	});
 
-	it('notifications badge is absent when unread = 0 (adapter wires badges correctly)', () => {
+	it('notifications badge is absent when unread = 0 (adapter wires badges correctly)', async () => {
 		// Mark all notifications read so the derived `unreadCount` store emits 0.
-		markAllRead();
+		await hydrateSeed();
+		await markAllRead();
 		expect(get(unreadCount)).toBe(0); // verify precondition
 
 		render(MobileTabBar);

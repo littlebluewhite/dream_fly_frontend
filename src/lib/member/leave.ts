@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { createSessionGate } from '$lib/session-gate';
@@ -34,7 +34,9 @@ function toLeaveRequest(r: LeaveRequestResponse): LeaveRequest {
   };
 }
 
-export const leaveRequests = writable<LeaveRequest[]>([]);
+const list = writable<LeaveRequest[]>([]);
+/** 唯讀投影:寫入一律經下方閘門的 apply(水合)與 write() 的 commit。 */
+export const leaveRequests: Readable<LeaveRequest[]> = { subscribe: list.subscribe };
 
 /** GET /leave-requests/me — 純陣列、不分頁、新到舊，原樣沿用後端排序。C1（架構深化
  *  R7）改用共用的 createSessionGate 收斂整套 session 水合協定:guard 短路 + post-await
@@ -47,8 +49,8 @@ const gate = createSessionGate<LeaveRequest[]>({
     const list = await api<LeaveRequestResponse[]>('/leave-requests/me');
     return list.map(toLeaveRequest);
   },
-  apply: (list) => leaveRequests.set(list),
-  reset: () => leaveRequests.set([]) // boot 態 = 空
+  apply: (l) => list.set(l),
+  reset: () => list.set([]) // boot 態 = 空
 });
 export const hydrateLeaveRequests = gate.hydrate;
 /** 保名 = gate.refresh：無視守衛、一律真抓——MyCourseDetail 開課程詳情要「刷新
@@ -76,7 +78,7 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
       const res = await api<LeaveRequestResponse>('/leave-requests', { method: 'POST', body: JSON.stringify(body) });
       return toLeaveRequest(res);
     },
-    commit: (entry) => leaveRequests.update((list) => [entry, ...list])
+    commit: (entry) => list.update((l) => [entry, ...l])
   });
   return resultOf(o);
 }
@@ -89,7 +91,7 @@ export async function createLeaveRequest(sessionId: string, reason?: string): Pr
 export async function cancelLeaveRequest(id: string): Promise<void> {
   const o = await gate.write({
     send: () => api(`/leave-requests/${id}`, { method: 'DELETE' }),
-    commit: () => leaveRequests.update((list) => list.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)))
+    commit: () => list.update((l) => l.map((r) => (r.id === id ? { ...r, status: 'cancelled' as const } : r)))
   });
   resultOf(o); // 失敗原樣拋出
 }
@@ -107,7 +109,7 @@ export async function bookMakeup(id: string, sessionId: string): Promise<LeaveRe
       });
       return toLeaveRequest(res);
     },
-    commit: (entry) => leaveRequests.update((list) => list.map((r) => (r.id === id ? entry : r)))
+    commit: (entry) => list.update((l) => l.map((r) => (r.id === id ? entry : r)))
   });
   return resultOf(o);
 }

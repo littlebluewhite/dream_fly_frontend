@@ -5,10 +5,10 @@ import { tick } from 'svelte';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { notifications, hydrateNotifications, toasts } from '$lib/member/stores';
+import { notifications, hydrateNotifications, markRead, toasts } from '$lib/member/stores';
 import { resetSessionStores } from '$lib/testing/session-reset';
 import { NOTIFS_SEED } from '$lib/testing/seed-fixtures';
-import type { Notification } from '$lib/member/data';
+import { notificationResponse } from '$lib/testing/wire-fixtures';
 import type { NotificationResponse, NotificationType } from '$lib/api/generated';
 import Page from './+page.svelte';
 
@@ -36,14 +36,13 @@ const FEED_UNSET = () => Promise.reject(new Error('測試未指定 GET /notifica
 /** 本頁只有兩種 api 呼叫:GET /notifications(路徑相等)與 /notifications/{id}/read。 */
 const feedCalls = () => vi.mocked(api).mock.calls.filter(([path]) => path === '/notifications').length;
 
-/** 「已水合」前置(旗標唯讀,R15):fetch 替身回 fixture 真水合、清掉呼叫紀錄,再鋪回 seed
- *  (n1–n3 未讀、n4–n6 已讀)——各測試的斷言都以 seed 為準。 */
+/** 「已水合」前置(內容唯讀):fetch 替身回 seed 的 wire 形(n1–n3 未讀、n4–n6 已讀)真水合,
+ *  再清掉呼叫紀錄——各測試的斷言都以 seed 為準。 */
 async function hydrateWithSeed() {
-  feed = async () => WIRE.map((n) => ({ ...n }));
+  feed = async () => NOTIFS_SEED.map((n) => notificationResponse({ id: n.id, title: n.title, message: n.body, is_read: n.read }));
   await hydrateNotifications();
   vi.mocked(api).mockClear();
   feed = FEED_UNSET;
-  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 }
 
 beforeEach(async () => {
@@ -53,17 +52,12 @@ beforeEach(async () => {
   // toasts 是 4000ms 自動過期的 singleton — 前一個測試的 toast 會殘留到下一個
   // 測試,清掉才能對「某 toast 不得出現」做可靠斷言。
   get(toasts).forEach((t) => toasts.dismiss(t.id));
-  // Reset the load-once guard so each test starts un-hydrated. A store (not a
-  // module boolean) so test order can't leak a prior successful hydrate.
+  // Reset the load-once guard so each test starts un-hydrated(內容回開機態 [])。
   await resetSessionStores();
-  // Re-seed the feed so a prior test's set() doesn't bleed through.
-  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 afterEach(async () => {
-  // Ensure shared store is always restored to seed after each test.
   await resetSessionStores();
-  notifications.set(NOTIFS_SEED.map((n) => ({ ...n })));
 });
 
 describe('member/notifications 頁', () => {
@@ -193,11 +187,12 @@ describe('member/notifications 頁', () => {
     // Mount: load() fires on mount; promise A is pending (phase=loading).
     const { unmount } = render(Page);
 
-    // Simulate post-remount state: user already marked items read in the store.
-    const sentinel: Notification[] = [
-      { id: 'sentinel', cat: 'system', icon: 'bell', tone: 'info', title: '哨兵', body: '已讀哨兵', time: '剛才', read: true }
-    ];
-    notifications.set(sentinel);
+    // Simulate post-remount state: user marks an item read while A is in flight —— 未水合的寫入
+    // 排和解重抓,和解抓回的哨兵就是 store 的新真相。
+    feed = async () => [notificationResponse({ id: 'sentinel', title: '哨兵', message: '已讀哨兵', is_read: true })];
+    await markRead('sentinel');
+    await waitFor(() => expect(get(notifications).map((n) => n.id)).toEqual(['sentinel']));
+    const sentinel = get(notifications);
 
     // Unmount the component (simulates navigating away).
     unmount();

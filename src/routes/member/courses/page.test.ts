@@ -71,13 +71,12 @@ const COURSES_DEFAULTS: Record<string, unknown> = {
 beforeEach(async () => {
 	vi.mocked(api).mockReset();
 	vi.mocked(api).mockImplementation(fakeRouter({}, COURSES_DEFAULTS));
-	waitlist.set([]);
-	await resetSessionStores();
+	await resetSessionStores(); // 候補閘門回開機態(內容 []、未水合)
 });
 
 afterEach(async () => {
 	cart.clear();
-	waitlist.set([]); // singleton waitlist isn't cleared by cart.clear(); reset it so entries don't leak across tests
+	await resetSessionStores(); // singleton waitlist isn't cleared by cart.clear(); reset it so entries don't leak across tests
 });
 
 describe('課程介紹 — addToCart branches on the store AddResult (waitlist guard)', () => {

@@ -8,8 +8,10 @@ import type { NotificationResponse } from '$lib/api/generated';
 /* ---- Notifications ----
  * 誠實開機(R14 候選 F3):開機值 = reset 值 = `[]`。角標不另加旗標——空清單 → 未讀數 0
  * → 既有 UI 在 0 時本來就隱藏;暖機後才顯示真數。 */
-export const notifications = writable<Notification[]>([]);
-export const unreadCount: Readable<number> = derived(notifications, ($n) =>
+const list = writable<Notification[]>([]);
+/** 唯讀投影:寫入一律經下方閘門的 apply(水合)與 write() 的 optimistic。 */
+export const notifications: Readable<Notification[]> = { subscribe: list.subscribe };
+export const unreadCount: Readable<number> = derived(list, ($n) =>
   $n.filter((n) => !n.read).length
 );
 
@@ -40,8 +42,8 @@ const gate = createSessionGate<Notification[]>({
     const list = await api<NotificationResponse[]>('/notifications');
     return list.map(mapNotification);
   },
-  apply: (list) => notifications.set(list),
-  reset: () => notifications.set([]) // boot 態(開機值 = reset 值 = [])
+  apply: (l) => list.set(l),
+  reset: () => list.set([]) // boot 態(開機值 = reset 值 = [])
 });
 export const hydrateNotifications = gate.hydrate;
 /** 通知頁的 load-gate 進場包(閘門的資料來源,抓取帶 epoch 核對),頁面 spread 使用。 */
@@ -55,7 +57,7 @@ export const notificationsPageEntry = gate.pageEntry();
  *  閘門的同一個同步段裡,未水合時另排和解重抓。 */
 export async function markRead(id: string): Promise<void> {
   const o = await gate.write({
-    optimistic: () => notifications.update((list) => list.map((n) => (n.id === id ? { ...n, read: true } : n))),
+    optimistic: () => list.update((l) => l.map((n) => (n.id === id ? { ...n, read: true } : n))),
     send: () => api(`/notifications/${id}/read`, { method: 'PATCH' }),
     onFailure: 'keep'
   });
@@ -68,12 +70,12 @@ export async function markRead(id: string): Promise<void> {
  *  成功的那些後端已落地，失敗的重新整理後會恢復未讀)。呼叫端(頁面)依回傳值決定
  *  toast 文案，本模組不碰 toast。 */
 export async function markAllRead(): Promise<'ok' | 'partial'> {
-  const unreadIds = get(notifications).filter((n) => !n.read).map((n) => n.id);
+  const unreadIds = get(list).filter((n) => !n.read).map((n) => n.id);
   // 空集零帳(R11 終審修波):沒有未讀就真的無事可做——不樂觀更新、不 write、不
   // allSettled。行為等價,但同拍呼叫的 refresh 族不必為一筆空尾流多等三個 microtask。
   if (unreadIds.length === 0) return 'ok';
   const o = await gate.write({
-    optimistic: () => notifications.update((list) => list.map((n) => ({ ...n, read: true }))),
+    optimistic: () => list.update((l) => l.map((n) => ({ ...n, read: true }))),
     send: () => Promise.allSettled(unreadIds.map((id) => api(`/notifications/${id}/read`, { method: 'PATCH' }))),
     onFailure: 'keep'
   });
