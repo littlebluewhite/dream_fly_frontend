@@ -3,10 +3,9 @@ import { render, screen } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { orderSummary } from '$lib/testing/wire-fixtures';
+import { orderSummary, pointsMe, userResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import type { OrderListResponse } from '$lib/api/generated';
-import { hydrateSelfAccount } from '$lib/self-account';
-import { refreshPoints } from '$lib/member/points';
 
 // Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手 getAccount() 已退役，
 // 本頁直取桌面 seam。W4c：只假造 HTTP(api())，真 getAccount + mapper 跑起來。
@@ -15,17 +14,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return { ...actual, api: vi.fn() };
 });
 
-// Task 8(架構深化 R15·F-2)：getAccount() 只回訂單資料，個人資料水合/點數暖機改由
-// 本頁自己宣告；這裡整支 mock 掉，只驗頁面的訂單渲染與三態，不重複測水合/暖機本身
-// 的語意（見 member/account/page.test.ts 的暖機描述、$lib/store-warm.test.ts）。
-vi.mock('$lib/self-account', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/self-account')>();
-	return { ...actual, hydrateSelfAccount: vi.fn() };
-});
-vi.mock('$lib/member/points', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/member/points')>();
-	return { ...actual, refreshPoints: vi.fn() };
-});
+// Task 8(架構深化 R15·F-2)：getAccount() 只回訂單資料，個人資料水合(GET /users/me)與
+// 點數暖機(GET /points/me)由本頁自己宣告、與主 GET 並行。兩者都走真模組，這裡只 route
+// 它們的 GET(水合本身的語意見 self-account.test.ts、$lib/store-warm.test.ts)。
 
 // Task 1(C2 死種子退役):訂單改為檔內 inline wire fixture;「相異 fixture」的 it()
 // 用自己的覆寫，這個預設值只供 beforeEach 使用，內容本身不受斷言檢查。
@@ -37,13 +28,15 @@ const ordersRes = (orders = ORDERS, total = orders.length) =>
 	({ orders, total, page: 1, per_page: 100 }) satisfies OrderListResponse;
 
 const route = (over: Record<string, unknown> = {}) =>
-	vi.mocked(api).mockImplementation(fakeRouter(over, { 'GET /orders/me?per_page=100': ordersRes() }));
+	vi.mocked(api).mockImplementation(
+		fakeRouter(over, { 'GET /orders/me?per_page=100': ordersRes(), 'GET /users/me': userResponse(), 'GET /points/me': pointsMe() })
+	);
+const getPaths = () => vi.mocked(api).mock.calls.map(([p, init]) => `${init?.method ?? 'GET'} ${p}`);
 
-beforeEach(() => {
+beforeEach(async () => {
+	await resetSessionStores(); // 本人帳號資料是 session 閘門:每個 it 重新水合
 	vi.mocked(api).mockReset();
 	route();
-	vi.mocked(hydrateSelfAccount).mockReset().mockResolvedValue(undefined);
-	vi.mocked(refreshPoints).mockReset().mockResolvedValue(undefined);
 });
 
 describe('帳戶頁 — 三態', () => {
@@ -85,16 +78,17 @@ describe('帳戶頁 — 暖機(R15 候選 F2：只暖點數，不暖訂閱)', ()
 		render(Page);
 
 		await vi.waitFor(() => {
-			expect(hydrateSelfAccount).toHaveBeenCalled();
-			expect(refreshPoints).toHaveBeenCalled();
+			expect(getPaths()).toContain('GET /users/me');
+			expect(getPaths()).toContain('GET /points/me');
 		});
+		expect(getPaths()).not.toContain('GET /subscriptions/me');
 
 		resolveAccount(ordersRes());
 		expect(await screen.findByText(`${ORDERS.length} 筆報名紀錄`)).toBeInTheDocument();
 	});
 
 	it('點數暖機失敗時仍成功顯示帳戶頁(暖機 best-effort，不擋主資料)', async () => {
-		vi.mocked(refreshPoints).mockRejectedValue(new Error('network down'));
+		route({ 'GET /points/me': new Error('network down') });
 
 		render(Page);
 
@@ -103,7 +97,7 @@ describe('帳戶頁 — 暖機(R15 候選 F2：只暖點數，不暖訂閱)', ()
 	});
 
 	it('個人資料水合失敗 → 整頁錯誤態(hydrateSelfAccount 是主資料之一,fail-hard)', async () => {
-		vi.mocked(hydrateSelfAccount).mockRejectedValue(new Error('network down'));
+		route({ 'GET /users/me': new Error('network down') });
 
 		render(Page);
 

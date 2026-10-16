@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
-import { points, pointsLedger } from '$lib/member/points';
+import { points } from '$lib/member/points';
 import { toasts } from '$lib/mobile/stores';
 import { api, ApiError } from '$lib/api/client';
 import PointsScreen from './PointsScreen.svelte';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { pointsMe, rewardResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
 import type { RewardListResponse } from '$lib/api/generated';
 
 /* Task 19：PointsScreen 改真後端 —— 兌換品項復用桌面 getPoints()(Task 14 rewards
@@ -32,10 +33,9 @@ const REWARDS = { rewards: [REWARD_AFFORDABLE, REWARD_SOLDOUT, REWARD_EXPENSIVE]
 const route = (over: Record<string, unknown> = {}) =>
 	vi.mocked(api).mockImplementation(fakeRouter(over, { 'GET /rewards': REWARDS, 'GET /points/me': pointsMe({ balance: 1000 }) }));
 
-beforeEach(() => {
+beforeEach(async () => {
+	await resetSessionStores();
 	vi.mocked(api).mockReset();
-	points.set(0);
-	pointsLedger.set([]);
 });
 
 describe('PointsScreen — 三態 + 接縫 wiring', () => {

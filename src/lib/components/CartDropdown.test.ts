@@ -5,11 +5,13 @@ import { cart } from '$lib/cart';
 import { courseToCartItem, passToCartItem } from '$lib/cart-item';
 import { authStore } from '$lib/stores/authStore';
 import { api } from '$lib/api/client';
-import { subscriptions } from '$lib/member/subscriptions';
+import { refreshSubscriptions } from '$lib/member/subscriptions';
 import { checkoutTarget } from '$lib/checkout-gate';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { loginRoutes } from '$lib/testing/auth-fixtures';
 import { resetSessionStores } from '$lib/testing/session-reset';
+import { subscriptionResponse } from '$lib/testing/wire-fixtures';
+import type { SubscriptionResponse } from '$lib/api/generated';
 import type { CatalogCourse, Ticket } from '$lib/public/adapters';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -45,10 +47,13 @@ const PASS: Ticket = {
 	features: ['a']
 };
 
+/** GET /subscriptions/me 回的已持有清單；各測試改它，再 refreshSubscriptions() 水合。 */
+let held: SubscriptionResponse[] = [];
+
 beforeEach(async () => {
 	await resetSessionStores();
-	vi.mocked(api).mockImplementation(fakeRouter(loginRoutes()));
-	subscriptions.set([]);
+	held = [];
+	vi.mocked(api).mockImplementation(fakeRouter({ ...loginRoutes(), 'GET /subscriptions/me': () => held }));
 	localStorage.clear();
 	cart.clear();
 	vi.mocked(goto).mockClear();
@@ -109,8 +114,9 @@ describe('CartDropdown — 結帳 gate', () => {
 });
 
 describe('CartDropdown — 已持有方案不計入總額', () => {
-	it('訂閱已持有該方案 → 該行標「已持有，不計費」、總計只算可計費行', () => {
-		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 1800 }]);
+	it('訂閱已持有該方案 → 該行標「已持有，不計費」、總計只算可計費行', async () => {
+		held = [subscriptionResponse({ product_id: PASS.id, product_name: PASS.name, price_cents: 180000 })];
+		await refreshSubscriptions();
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));
 		const { getByText, container } = render(CartDropdown, { isOpen: true, onClose: () => {} });
@@ -119,13 +125,14 @@ describe('CartDropdown — 已持有方案不計入總額', () => {
 		expect(container.querySelector('.total-price')?.textContent).toBe('NT$ 3,200');
 	});
 
-	it('訂閱在畫面開著時才到 → 已持有方案隨即不計入總額', () => {
+	it('訂閱在畫面開著時才到 → 已持有方案隨即不計入總額', async () => {
 		cart.addItem(courseToCartItem(COURSE));
 		cart.addItem(passToCartItem(PASS));
 		const { getByText, container } = render(CartDropdown, { isOpen: true, onClose: () => {} });
 		expect(container.querySelector('.total-price')?.textContent).toBe('NT$ 5,000');
 
-		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 1800 }]);
+		held = [subscriptionResponse({ product_id: PASS.id, product_name: PASS.name, price_cents: 180000 })];
+		await refreshSubscriptions();
 
 		return waitFor(() => {
 			expect(getByText('已持有，不計費')).toBeInTheDocument();

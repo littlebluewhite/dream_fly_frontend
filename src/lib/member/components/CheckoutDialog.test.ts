@@ -3,15 +3,16 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import CheckoutDialog from './CheckoutDialog.svelte';
-import { cart, subscriptions, points, pointsLedger, checkoutOpen, toasts } from '$lib/member/stores';
-import { POINTS_LEDGER } from '$lib/testing/seed-fixtures';
+import { cart, subscriptions, points, refreshPoints, refreshSubscriptions, checkoutOpen, toasts } from '$lib/member/stores';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import { fakeRouter } from '$lib/testing/fake-router';
 
 // R13 Task 3:mock 會員 ME 退役;本地 points 的 mock 殘值改用本地常數。
 const SEED_POINTS = 1250;
 import { passToCartItem } from '$lib/cart-item';
 import { fmtNT } from '$lib/format';
 import { api, ApiError } from '$lib/api/client';
-import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
+import { orderResponse, pointsMe, subscriptionResponse } from '$lib/testing/wire-fixtures';
 import type { OrderResponse } from '$lib/api/generated';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -43,12 +44,12 @@ const COURSE = {
 	days: '週二 / 週四 19:00'
 };
 
-beforeEach(() => {
+beforeEach(async () => {
 	localStorage.clear();
 	cart.clear();
-	subscriptions.set([]);
-	points.set(SEED_POINTS);
-	pointsLedger.set(POINTS_LEDGER.map((e) => ({ ...e })));
+	await resetSessionStores();
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /points/me': pointsMe({ balance: SEED_POINTS }) }));
+	await refreshPoints();
 	checkoutOpen.set(false);
 	vi.mocked(api).mockReset();
 });
@@ -310,7 +311,11 @@ describe('CheckoutDialog — 開啟時水合點數餘額（GET /points/me）', (
 
 describe('CheckoutDialog — 全數已持有（chargeable 為空）不可送單', () => {
 	it('確認付款 disabled、顯示提示，點了也不發 POST /orders', async () => {
-		subscriptions.set([{ id: PASS.id, name: PASS.name, since: '2026-06-01', price: 4500 }]);
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'GET /subscriptions/me': [subscriptionResponse({ product_id: PASS.id, product_name: PASS.name, price_cents: 450000 })] })
+		);
+		await refreshSubscriptions();
+		vi.mocked(api).mockReset();
 		cart.addItem(PASS);
 		vi.mocked(api).mockImplementation(async (path: string) => {
 			if (path === '/subscriptions/me') {

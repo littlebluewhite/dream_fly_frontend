@@ -26,6 +26,7 @@ import type {
 	ReportCardResponse,
 	RewardResponse,
 	SettingsResponse,
+	SubscriptionResponse,
 	TodaySessionResponse,
 	UserResponse,
 	VenueResponse
@@ -366,5 +367,19 @@ export const rewardResponse = (over: Partial<RewardResponse> = {}): RewardRespon
 	display_order: 0,
 	created_at: '',
 	updated_at: '',
+	...over
+});
+
+/** active 的訂閱(GET /subscriptions/me 的一列)；refreshSubscriptions 只留 active，id 映射成 product_id。 */
+export const subscriptionResponse = (over: Partial<SubscriptionResponse> = {}): SubscriptionResponse => ({
+	id: 'sub-1',
+	product_id: 'product-1',
+	product_name: '單次體驗券',
+	status: 'active',
+	started_at: '2026-06-01T00:00:00Z',
+	expires_at: null,
+	total_sessions: null,
+	remaining_sessions: null,
+	price_cents: 50000,
 	...over
 });

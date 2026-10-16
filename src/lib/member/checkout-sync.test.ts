@@ -10,9 +10,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get, writable } from 'svelte/store';
 import { api, ApiError } from '$lib/api/client';
 import { createCart } from '$lib/cart';
-import { orderResponse, pointsMe } from '$lib/testing/wire-fixtures';
+import { orderResponse, pointsMe, subscriptionResponse } from '$lib/testing/wire-fixtures';
+import { resetSessionStores } from '$lib/testing/session-reset';
+import type { SubscriptionResponse } from '$lib/api/generated';
 import { createCheckout, chargeableCart } from './checkout-sync';
-import { subscriptions, refreshSubscriptions } from './subscriptions';
+import { refreshSubscriptions } from './subscriptions';
 import { points, refreshPoints } from './points';
 import { fakeRouter } from '$lib/testing/fake-router';
 import type { CartItem } from '$lib/cart-item';
@@ -37,11 +39,18 @@ const SAMPLE_ORDER = orderResponse({
  *  checkout-api.test.ts 既有慣例）。 */
 const CART_DEFAULTS: Record<string, unknown> = { 'DELETE /cart': undefined, 'POST /cart/items': undefined };
 
-beforeEach(() => {
-	subscriptions.set([]);
-	points.set(0);
+beforeEach(async () => {
+	await resetSessionStores();
 	vi.mocked(api).mockReset();
 });
+
+/** 經 GET /subscriptions/me 水合出會員已持有的訂閱，再清掉 api 的呼叫紀錄與實作。 */
+async function holdSubscriptions(list: SubscriptionResponse[]): Promise<void> {
+	vi.mocked(api).mockImplementation(fakeRouter({ 'GET /subscriptions/me': list }));
+	await refreshSubscriptions();
+	vi.mocked(api).mockReset();
+}
+const PASS_HELD = subscriptionResponse({ product_id: 'pass-uuid-9', product_name: '方案', price_cents: 300000 });
 
 describe('createCheckout — 送單呼叫序列（sync → orders → hydrate → clear）', () => {
 	it('完整序列：DELETE /cart → POST /cart/items ×N（課程 qty 夾 1）→ POST /orders 帶 Idempotency-Key → GET subscriptions/points → 本地購物車清空', async () => {
@@ -88,7 +97,7 @@ describe('createCheckout — 送單呼叫序列（sync → orders → hydrate �
 	});
 
 	it('已持有的 pass 不同步到 server — lines 只送 chargeableLines（同意金額 ≡ 請款金額）', async () => {
-		subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+		await holdSubscriptions([PASS_HELD]);
 		const cart = createCart();
 		cart.addItem({ id: 'pass-uuid-9', type: 'pass', name: '方案', price: 3000, icon: 'ticket' });
 		cart.addItem({ id: 'course-uuid-9', type: 'course', name: '課程', price: 4800, icon: 'sparkles' });
@@ -347,8 +356,8 @@ describe('chargeableCart — 可計費購物車只推導一次', () => {
 		expect(get(total)).toBe(7800);
 	});
 
-	it('已持有的方案不算進 lines、billable、total', () => {
-		subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+	it('已持有的方案不算進 lines、billable、total', async () => {
+		await holdSubscriptions([PASS_HELD]);
 		const cart = createCart();
 		cart.addItem(COURSE);
 		cart.addItem(PASS);
@@ -358,19 +367,19 @@ describe('chargeableCart — 可計費購物車只推導一次', () => {
 		expect(get(total)).toBe(4800);
 	});
 
-	it('subscriptions 一變，結果跟著變', () => {
+	it('subscriptions 一變，結果跟著變', async () => {
 		const cart = createCart();
 		cart.addItem(COURSE);
 		cart.addItem(PASS);
 		const { lines, billable, total } = chargeableCart(cart);
 		expect(get(total)).toBe(7800);
 
-		subscriptions.set([{ id: 'pass-uuid-9', name: '方案', since: '2026-06-01', price: 3000 }]);
+		await holdSubscriptions([PASS_HELD]);
 		expect(get(lines)).toHaveLength(1);
 		expect(get(billable).size).toBe(1);
 		expect(get(total)).toBe(4800);
 
-		subscriptions.set([]);
+		await holdSubscriptions([]);
 		expect(get(total)).toBe(7800);
 	});
 });

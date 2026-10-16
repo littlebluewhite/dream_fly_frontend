@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { apiErrorMessage } from '$lib/api/error-text';
 import { isoDate } from '$lib/api/wire';
@@ -7,17 +7,22 @@ import type { PointReason, PointsMeResponse, RedeemResponse } from '$lib/api/gen
 import type { LedgerEntry, LedgerType } from '$lib/domain/member-app';
 
 /* ---- Points ----
- * 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由
+ * 三顆 store 的內容唯讀：私有 writable，只匯出 Readable，唯一寫入者是下方 refreshPoints 這顆
+ * session 閘門的 apply／reset。 */
+/* 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由
  * refreshPoints 水合：getAccount / getPoints 進頁時，以及
  * CheckoutDialog 每次開啟時都會觸發。 */
-export const points = writable<number>(0);
+const balance = writable<number>(0);
+export const points: Readable<number> = { subscribe: balance.subscribe };
 // Ledger lives in a store too, so a redemption (which lowers `points`) stays in
 // sync with the visible history across route navigation. 誠實開機(R14 候選 F3):開機值 =
 // reset 值 = `[]`,由 refreshPoints 水合成真明細。
-export const pointsLedger = writable<LedgerEntry[]>([]);
+const ledger = writable<LedgerEntry[]>([]);
+export const pointsLedger: Readable<LedgerEntry[]> = { subscribe: ledger.subscribe };
 /** 本月累積：後端 `earned_this_month`（工作室月份、只計 checkout_earn，與明細分頁無關）。
  *  開機值 = reset 值 = 0，隨 refreshPoints 水合、隨身分變更歸零。 */
-export const pointsEarnedThisMonth = writable<number>(0);
+const earnedThisMonth = writable<number>(0);
+export const pointsEarnedThisMonth: Readable<number> = { subscribe: earnedThisMonth.subscribe };
 
 /** reason → 中文 desc + 本地 LedgerType 對照，後端 PointReason 六值全數列出：
  *  checkout_earn/checkout_redeem（結帳賺/折抵）、redeem（兌換獎勵扣點，契約 §3.23，
@@ -58,9 +63,9 @@ function describeLedgerReason(reason: PointReason): { type: LedgerType; desc: st
 export const refreshPoints = createSessionRefresher<PointsMeResponse>({
   fetch: () => api<PointsMeResponse>('/points/me'),
   apply: (data) => {
-    points.set(data.balance);
-    pointsEarnedThisMonth.set(data.earned_this_month);
-    pointsLedger.set(
+    balance.set(data.balance);
+    earnedThisMonth.set(data.earned_this_month);
+    ledger.set(
       data.ledger.map((l) => {
         const { type, desc } = describeLedgerReason(l.reason);
         return { id: l.id, date: isoDate(l.created_at).replace(/-/g, '/'), desc, type, delta: l.delta };
@@ -68,9 +73,9 @@ export const refreshPoints = createSessionRefresher<PointsMeResponse>({
     );
   },
   reset: () => {
-    points.set(0);
-    pointsLedger.set([]); // boot 態(開機值 = reset 值 = [])
-    pointsEarnedThisMonth.set(0);
+    balance.set(0);
+    ledger.set([]); // boot 態(開機值 = reset 值 = [])
+    earnedThisMonth.set(0);
   }
 });
 
