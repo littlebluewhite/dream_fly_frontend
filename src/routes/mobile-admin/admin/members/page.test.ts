@@ -9,7 +9,7 @@ import { api } from '$lib/api/client';
 import { fakeRouter } from '$lib/testing/fake-router';
 import { OPS_ROUTES } from '$lib/testing/ops-routes';
 
-/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getOpsCollections/
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getMembers/
  * createMember/updateMember(stores.ts 直取 $lib/admin/api)走真實
  * fetch adapter。FIXTURE_MEMBERS 改為 wire 形狀(ApiUserAccount)，經真實
  * mapMemberAccount() 映射，而非手造已映射的 MemberRow。 */
@@ -22,7 +22,7 @@ const mkWireUser = (over: Partial<ApiUserAccount>): ApiUserAccount => ({
 	id: 'X', name: 'X', phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: 0,
 	...over
 });
-// 與 seed 相異的 fixture(人名、狀態組成皆改過),證明頁面讀 hydrateOps() 水合後
+// 與 seed 相異的 fixture(人名、狀態組成皆改過),證明頁面讀 membersPageEntry 水合後
 // 的 $members store。
 const WIRE_MEMBERS: ApiUserAccount[] = [
 	mkWireUser({ id: 'zz1', name: '測試學員甲', is_active: true }),

@@ -2,7 +2,7 @@
   /* 管理員 · 課程管理。admin.jsx ClassesScreen (202)。
    * 清單由 $classes store 提供;tap → sheet('class'),新增 → sheet('classForm',{k:null})。
    *
-   * 資料經 opsPageEntry(ops 閘門的頁面進場包,R14 F1)非同步水合 $classes store,三態閘門
+   * 資料經 classesPageEntry(ops 集合課程·教練單位的頁面進場包,R14 F1)非同步水合 $classes store,三態閘門
    * (loading/error/ready);hydrated 守衛防止第二次進頁的 fetch 覆寫 overlay 新增
    * /編輯,ErrorState 重試走 load-gate 的 refresh(不受守衛短路)。unmount 後解析的
    * in-flight fetch 由 createLoadGate($lib/load-gate)內建的 generation/destroy
@@ -12,7 +12,7 @@
    * createCourse/updateCourse/mapCourse，由 stores.ts 的 addCourse/saveCourse 直取 $lib/admin/api）；openEdit
    * 統一收斂「班級卡編輯鈕」與「班級詳情 sheet 的編輯鈕」兩個入口，兩者都需要真正
    * 呼叫後端，不能其中一條路徑漏接。R12 起寫入經 store 的 addCourse/saveCourse
-   * 動詞(寫入成功後 await refreshOps() 整包重抓)，toast 在動詞 resolve 後才出現。
+   * 動詞(寫入成功後 await 課程·教練單位重抓)，toast 在動詞 resolve 後才出現。
    * R13 Task 4：ClassForm 交出驗證過的 ValidCourse(course-request.ts)，新增/編輯
    * 各接一支函式(create/update)，編輯的 id 由 openEdit 的閉包帶入。
    * header 顯示後端 total(只抓第 1 頁)，超過一頁時搜尋區
@@ -27,7 +27,7 @@
   import Badge from '$lib/components/ui/Badge.svelte';
   import Icon from '$lib/components/ui/Icon.svelte';
   import { LoadGate, Skeleton, SkelCard } from '$lib/components/ui';
-  import { overlay, classes, coaches, adminUnreadCount, toasts, opsPageEntry, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
+  import { overlay, classes, coaches, adminUnreadCount, toasts, classesPageEntry, openAdminNotif, addCourse, saveCourse, opsPages, searchCapHint } from '$lib/mobile-admin/stores';
   import { classStatusTone } from '$lib/domain/classes';
   import { createLoadGate } from '$lib/load-gate';
   import { CATS, type ClassRow } from '$lib/admin/data';
@@ -38,7 +38,7 @@
   import { classFill } from '$lib/domain/class-detail';
 
 
-  const gate = createLoadGate({ ...opsPageEntry });
+  const gate = createLoadGate({ ...classesPageEntry });
 
   let cat = '全部';
   let q = '';

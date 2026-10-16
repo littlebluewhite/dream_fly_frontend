@@ -10,8 +10,8 @@ import { type OrderStatus } from '$lib/api/wire';
 import type { AdminOrderSummary } from '$lib/api/generated';
 import { adminOrderSummary } from '$lib/testing/wire-fixtures';
 
-/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api(),讓 getOpsCollections
- * (組合器,3b 留任)走真實 fetch adapter,頁面讀 hydrateOps() 水合後的 $orders store,
+/* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api(),讓 getOrders
+ * 走真實 fetch adapter,頁面讀 ordersPageEntry 水合後的 $orders store,
  * 不再手造已映射的 OrderRow fixture。 */
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -21,7 +21,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 const mkWireOrder = (over: Partial<AdminOrderSummary>): AdminOrderSummary =>
 	adminOrderSummary({ id: 'uuid-x', order_number: 'DF-X', user_name: 'X', user_email: 'x@test.com', created_at: '2026-01-01T00:00:00Z', ...over });
 
-// 與 seed 相異的 fixture(訂單編號/金額皆改過),證明頁面讀 hydrateOps() 水合後
+// 與 seed 相異的 fixture(訂單編號/金額皆改過),證明頁面讀 ordersPageEntry 水合後
 // 的 $orders store。
 const WIRE_ORDERS: AdminOrderSummary[] = [
 	mkWireOrder({ id: 'uuid-test01', order_number: 'DF-TEST01', user_name: '測試學員甲', total_cents: 1234500, status: 'paid' }),

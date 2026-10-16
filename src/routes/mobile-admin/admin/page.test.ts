@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import AdminHomePage from './+page.svelte';
-import { overlay, toasts, members, hydrateOps, resetOpsForTests } from '$lib/mobile-admin/stores';
+import { overlay, toasts, members, membersPageEntry, resetOpsForTests } from '$lib/mobile-admin/stores';
+import { createLoadGate } from '$lib/load-gate';
 import type { MemberAccount as MemberRow } from '$lib/admin/data';
 import type { CreateMemberBody } from '$lib/admin/api';
 import { api } from '$lib/api/client';
@@ -11,7 +12,7 @@ import { OPS_ROUTES } from '$lib/testing/ops-routes';
 import type { TodaySessionResponse } from '$lib/api/wire';
 
 /* R15 Task 3a(候選 轉手退役)：改 mock $lib/api/client 的 api()，讓 getAdminHome/
- * createMember/getOpsCollections(getAdminHome 為組合器，3b 留任)走真實 fetch
+ * createMember 與 ops 集合的 getter(getAdminHome 為組合器，3b 留任)走真實 fetch
  * adapter。今日課表的 tone/label 現一律由真實 SESSION_STATUS 查表(依 state)推導,
  * 不再是呼叫端可任意指定的獨立欄位——「label 與 state 脫鉤」這兩則舊回歸測試在
  * wire 層已無法構造出矛盾輸入(SESSION_STATUS 是唯一來源),故改測「只有 state 才
@@ -72,18 +73,16 @@ const MEMBERS_FIXTURE: MemberRow[] = [
 	{ id: 'm2', name: '陳小華', initial: '陳', phone: '0922222222', joined: '2024/02', status: 'inactive', points: 0 }
 ];
 
-/** getOpsCollections 回傳(新增學員走 store 的 addMember,寫入成功後會重抓 ops 集合)。
- *  只需要 GET /users?page=1 隨 memberRows 變化，其餘三路沿用 OPS_ROUTES 預設值。 */
+/** 首頁只水合 ops 集合的訂單單位(待付款 banner),ops 端點只交代 GET /orders?page=1。 */
+const ORDERS_ROUTE = { 'GET /orders?page=1': OPS_ROUTES['GET /orders?page=1'] };
+/** 新增學員走 store 的 addMember,寫入成功後會重抓會員單位——GET /users?page=1 隨 memberRows 變化。 */
 const opsWith = (memberRows: MemberRow[]) => ({
-	...OPS_ROUTES,
 	'GET /users?page=1': { users: memberRows.map((m) => ({ id: m.id, name: m.name, phone: null, created_at: '2026-01-01T00:00:00Z', is_active: true, points_balance: m.points })), total: memberRows.length, page: 1, per_page: 20 }
 });
 
 beforeEach(() => {
 	vi.mocked(api).mockReset();
-	vi.mocked(api).mockImplementation(
-		fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) })
-	);
+	vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE }));
 	resetOpsForTests();
 	overlay.closeAll();
 });
@@ -117,15 +116,9 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	/* $orders 開機即為 `[]`(誠實開機,docs/adr/0025)——水合前 pending 天然是 0，
 	 * 水合落地後才反映 fixture 裡的 pending 數。 */
 	it('水合前待付款為 0(橫幅不出現)，水合後等於 fixture 裡的 pending 數', async () => {
-		// 四路 ops 端點故意 pending 不 resolve，模擬 hydrateOps() 還在飛行中。
+		// 訂單端點故意 pending 不 resolve，模擬 hydrateOrders() 還在飛行中。
 		vi.mocked(api).mockImplementation(
-			fakeRouter({
-				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
-				'GET /users?page=1': () => new Promise(() => {}),
-				'GET /courses?page=1': () => new Promise(() => {}),
-				'GET /coaches': () => new Promise(() => {}),
-				'GET /orders?page=1': () => new Promise(() => {})
-			})
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), 'GET /orders?page=1': () => new Promise(() => {}) })
 		);
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試動態一'); // 等 getAdminHome 的 ready(與 ops 水合是獨立的兩支請求)
@@ -135,7 +128,16 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	it('水合落地後，待付款橫幅依 $orders 的 pending 數顯示', async () => {
 		const { findByText } = render(AdminHomePage);
 		await findByText('測試動態一');
-		expect(await findByText('筆訂單', { exact: false })).toBeInTheDocument(); // onMount 的 hydrateOps() 落地後才出現
+		expect(await findByText('筆訂單', { exact: false })).toBeInTheDocument(); // onMount 的 hydrateOrders() 落地後才出現
+	});
+
+	it('首頁的 ops 集合請求只有 GET /orders?page=1(不抓會員、課程·教練)', async () => {
+		const { findByText } = render(AdminHomePage);
+		await findByText('筆訂單', { exact: false });
+		expect(callCount('GET', '/orders?page=1')).toBe(1);
+		expect(callCount('GET', '/users?page=1')).toBe(0);
+		expect(callCount('GET', '/courses?page=1')).toBe(0);
+		expect(callCount('GET', '/coaches')).toBe(0);
 	});
 
 	it('render 今日課表與進行中課堂橫幅(皆讀 payload 的 today)', async () => {
@@ -155,13 +157,13 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	 * 直接驗證：橫幅只認 state(由後端 status 對應)，不是任何呼叫端可
 	 * 另外指定的欄位——回歸精神不變，構造方式改走 wire。 */
 	it('status=ongoing(state=live)的課堂 → 進行中課堂橫幅出現', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE }));
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('● 進行中課堂')).toBeInTheDocument();
 	});
 
 	it('status=upcoming(state=wait)的課堂 → 進行中課堂橫幅不出現', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([WAIT_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('測試備課班');
 		expect(queryByText('● 進行中課堂')).toBeNull();
@@ -175,14 +177,14 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 
 	it('載入失敗顯示 ErrorState', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE), 'GET /reports/admin': new Error('boom') })
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE, 'GET /reports/admin': new Error('boom') })
 		);
 		const { findByText } = render(AdminHomePage);
 		expect(await findByText('載入失敗')).toBeInTheDocument();
 	});
 
 	it('today/activity 空集合不當機,且沒有進行中課堂橫幅', async () => {
-		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([], []), ...opsWith(MEMBERS_FIXTURE) }));
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([], []), ...ORDERS_ROUTE }));
 		const { findByText, queryByText } = render(AdminHomePage);
 		await findByText('營運總覽');
 		expect(queryByText('進行中課堂')).toBeNull();
@@ -191,7 +193,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	/* Task 20 — 快速操作「新增學員」改開真表單並接 createMember，不再是本地假寫入。 */
 	it('快速操作「新增學員」開出的 sheet 帶入真正呼叫 createMember 的 onCreate', async () => {
 		vi.mocked(api).mockImplementation(
-			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...opsWith(MEMBERS_FIXTURE), 'POST /users': wireMember({}) })
+			fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE, ...opsWith(MEMBERS_FIXTURE), 'POST /users': wireMember({}) })
 		);
 		const { findByText } = render(AdminHomePage);
 		await findByText('新增學員');
@@ -208,15 +210,20 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 	});
 
 	/* R12 Task 3 回歸:快速新增學員原本只打 createMember、不重抓——$members 維持舊清單,
-	 * 使用者轉到學員管理頁看不到剛建的學員(hydrateOps 已水合則被 guard 短路)。改走
-	 * store 的 addMember() 後,寫入成功即 await refreshOps()。 */
-	it('快速新增學員後重抓 ops 集合($members 含新學員),並顯示成功 toast', async () => {
+	 * 使用者轉到學員管理頁看不到剛建的學員(會員單位已水合則被 guard 短路)。改走
+	 * store 的 addMember() 後,寫入成功即 await 會員單位重抓。 */
+	it('快速新增學員後重抓會員單位($members 含新學員),並顯示成功 toast', async () => {
 		const created = { ...MEMBERS_FIXTURE[0], id: 'zz-quick', name: '快速新增的學員' };
-		await hydrateOps(); // 已水合(fetch 替身回舊清單):舊碼下 hydrateOps 會被 guard 短路,列表永遠看不到新學員
+		vi.mocked(api).mockImplementation(fakeRouter({ ...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS), ...ORDERS_ROUTE, ...opsWith(MEMBERS_FIXTURE) }));
+		// 會員單位已水合(fetch 替身回舊清單):只靠 guard 的話,列表永遠看不到新學員
+		const warm = createLoadGate({ ...membersPageEntry });
+		await warm.load();
+		warm.destroy();
 		const usersCallsBefore = callCount('GET', '/users?page=1');
 		vi.mocked(api).mockImplementation(
 			fakeRouter({
 				...homeRoutes([LIVE_SESSION, WAIT_SESSION], ACTIVITY_ITEMS),
+				...ORDERS_ROUTE,
 				...opsWith([...MEMBERS_FIXTURE, created]),
 				'POST /users': wireMember({ name: '快速新增的學員' })
 			})
@@ -227,7 +234,7 @@ describe('mobile-admin/admin 頁(總覽首頁)', () => {
 
 		await sheetProps.onCreate({ email: 'q@test.com', name: '快速新增的學員', password: 'password123' });
 
-		expect(callCount('GET', '/users?page=1')).toBeGreaterThan(usersCallsBefore); // 寫入成功後真的 refreshOps()
+		expect(callCount('GET', '/users?page=1')).toBeGreaterThan(usersCallsBefore); // 寫入成功後真的重抓會員單位
 		expect(get(members).some((m) => m.id === 'zz-quick')).toBe(true);
 		expect(get(toasts).some((t) => t.title === '已新增學員')).toBe(true);
 	});
