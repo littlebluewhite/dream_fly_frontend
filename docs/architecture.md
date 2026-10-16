@@ -49,7 +49,7 @@ a sibling `nav.test.ts`. `admin`'s sidebar labels and its `TITLES` labels disagr
 group (`GET /reports/admin` types/mappers/`getReports`) lives in `admin/reports-api.ts`, with
 `admin/api.ts` re-exporting it name-by-name so consumers keep importing `$lib/admin/api`; the file's other
 groups (Settings, Courses) are not preemptively split (`docs/adr/0018`). Cross-surface shared code lives
-in: lib-root single-file pure modules (`checkout-math.ts`/`checkout-gate.ts`/`checkout-order.ts`/
+in: lib-root single-file pure modules (`checkout-math.ts`/`checkout-gate.ts`/
 `load-gate.ts`/`hydration-gate.ts`; `cart-item.ts` — the `CartItem` types + `courseToCartItem`/
 `passToCartItem` adapters, imported by member/mobile/public routes without going through a surface
 facade; `format.ts` — `fmtNT` + `fmtRatio`, with `admin`'s `fmtPct` and `member`'s `fmtRate` as one-line
@@ -258,7 +258,8 @@ Where the pieces live (the *rules* for changing them are in the `coding-standard
   and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
 - **Course vs Pass**: checkout syncs the cart and `POST /orders`s it through the checkout
   controller that `member/checkout-sync.ts`'s `createCheckout` builds for each surface (its private `placeOrder`
-  calls `checkout-order.ts`'s `syncCartToServer` then `POST /orders`; see `docs/adr/0003`'s FE-5 addendum; see also the
+  calls the module-private `syncCartToServer` then `POST /orders`; `PaymentMethod` lives beside the controller in
+  `member/checkout-controller.ts`; see `docs/adr/0003`'s FE-5 addendum; see also the
   controller section below). The lines it submits are `chargeableLines(cart, subscriptions)`
   (`member/checkout.ts`) — the branded `ChargeableLine[]` filter that skips passes the member already
   holds (the `/cart` page, `CartDropdown` and `createCheckout` all take it from `member/checkout-sync.ts`'s
@@ -719,7 +720,7 @@ rejected.
   `coupon`/`codeErr`/`preview` (`checkoutMath(lines, coupon, points, usePoints)`)/`hasChargeable`, and
   `checkout.form` (`code`/`usePoints`/`paymentMethod`) is what the components `bind:` to, so a
   mid-payment reopen shows the order being sent rather than a reset form. The deps are
-  `{ placeOrder, applyCouponCode, lines, points }` — two effects plus two read-only sources, which
+  `{ placeOrder, applyCouponCode, lines, points }` (both effects private to `member/checkout-sync.ts`) — two effects plus two read-only sources, which
   `docs/adr/0012` clarifies are data, not behaviour flags; `deps.placeOrder` is
   `(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>`, and `confirmPay()` (no
   arguments) reads `lines` once and passes it down. The idempotency-key lifecycle (fresh key per checkout
@@ -793,7 +794,7 @@ this class by `docs/adr/0014`. Its members:
 - `member/checkout-controller.ts` — mobile's `CartSheet` is the factory's second caller (details in the
   controller bullet above); the two surfaces differ in *wiring* (who supplies the cart and refresh lists,
   who drives the lifecycle), not in the machine, which supersedes `docs/adr/0016`'s original "非 twin"
-  note. The twins' coupon-apply step is single-sourced as `member/checkout.ts`'s `applyCouponCode` (trim
+  note. The twins' coupon-apply step is single-sourced as `member/checkout-sync.ts`'s private `applyCouponCode` (trim
   guard + the real `GET /coupons/{code}/validate` + one shared 404/network copy), injected into the
   controller as a dep, so the components don't call it; there is no separate `validateCoupon` any more
   (`docs/adr/0027` §3).
