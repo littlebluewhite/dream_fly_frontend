@@ -65,9 +65,8 @@ surface 共用程式碼集中在 `lib/components/`、`lib/domain/`、`lib/stores
 （多數欄位現由真實 API 覆寫，僅少數 P2 殘餘仍讀這份種子）。六個 app surface 的 `api.ts` 現在都以呼叫
 `dream_fly_backend` 的真實 API 為主：`mobile`、`mobile-admin`（Round 3 起）是薄層，復用 desktop
 member/admin/coach 既有的真實 API 函式，只在各自小範圍的 P2 殘餘（見 `docs/adr/0006`）才落回 mock。每個
-surface 的 `api.ts` 是唯一的接縫層，呼叫端（頁面）不需要知道背後是真 API 還是 mock。完整架構、domain 詞彙
-與決策紀錄分見
-[`docs/architecture.md`](docs/architecture.md)、[`GLOSSARY.md`](GLOSSARY.md)、[`docs/adr/`](docs/adr/)。
+surface 的 `api.ts` 是唯一的接縫層，呼叫端（頁面）不需要知道背後是真 API 還是 mock。哪種問題該查哪份文件，
+見 [`AGENTS.md`](AGENTS.md) 的「Domain docs」分工。
 
 ## 驗證關卡
 

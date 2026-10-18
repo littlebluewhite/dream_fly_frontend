@@ -56,7 +56,7 @@ describe('cart waitlist guard (public-seam course path — cart.add)', () => {
   // Task 3 (round 2): the cart no longer tracks waitlist membership itself —
   // it only guards a full course out of the paid cart. Joining the real
   // waitlist (and its dedup) is now the server's job via joinWaitlist() in
-  // stores.ts's network layer (see checkout-api.test.ts).
+  // member/waitlist.ts (see member/waitlist.test.ts).
   const full = { ...COURSE, spots: 0 };
 
   it('records a full course (spots 0) as waitlisted instead of adding it to the paid cart', () => {

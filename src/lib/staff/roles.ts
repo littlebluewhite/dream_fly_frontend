@@ -4,7 +4,8 @@ export const STAFF_ROLE_KEY = 'df_staff_last_role';
 
 export const ROLE_HOME: Record<StaffRole, string> = { admin: '/admin', coach: '/coach' };
 
-/** Persist the staff's chosen role so /staff/login can remember it. Navigation is done by the caller. */
+/** Write the role the staff just switched to under `STAFF_ROLE_KEY`. Nothing reads it back:
+ *  /staff/login routes by `staffPortals(roles)`. Navigation is done by the caller. */
 export function rememberStaffRole(role: StaffRole): void {
   try {
     localStorage.setItem(STAFF_ROLE_KEY, role);

@@ -4,20 +4,11 @@
    * → 切換到管理後台（goto /mobile-admin）→ 登出（authStore.logout() + goto /mobile/login）。
    * Legacy Svelte（無 runes）。繁體中文文案。
    *
-   * 訂單筆數改由 getAccount()(真後端接縫,見 $lib/member/api.ts)非同步取得:
-   * onMount 進三態閘門(loading/error/ready)。Task 19:登出改真 authStore.logout()
-   * (清 token,不再是示範性的 df_mobile_session)；會員點數改讀真 $lib/member/points
-   * 的 points(本頁自己呼叫 refreshPoints() 側效水合,見下方 gate.fetch) — 不再是
-   * mobile 本地、永遠停在 mock 種子值的 points store
-   * (那顆本地 store 仍保留給 CartSheet 的既有假結帳流程使用,兩者現在是分開的,
-   * 見 task-19-report.md 的顧慮)。hero 的名字讀 authStore(改名經 syncUser 同步)、
-   * 加入年月讀會員資料 module 的 $selfAccount(本頁自己等它水合,R13 Task 3);
-   * 後端沒有的會員編號拿掉。Task 7(架構深化 R15·F-4)：mobile/api.ts 原本的純轉手
-   * getAccount()/MobileAccountData 已退役,本頁直取桌面 seam;selfAccount/points
-   * 也改直取擁有者模組,不再經 $lib/mobile/stores 轉手。Task 8(架構深化 R15·F-2)：
-   * getAccount() 只回訂單資料——個人資料水合與點數暖機改由本頁自己宣告，與主 GET
-   * 並行發出；行動版帳戶頁只暖點數，不暖訂閱(不打 GET /subscriptions/me，本頁不
-   * 顯示訂閱資訊)。 */
+   * onMount 進三態閘門(loading/error/ready)，三件事並行發出：訂單筆數讀桌面 seam 的
+   * getAccount()($lib/member/api.ts，只回訂單資料)、個人資料水合、點數暖機(下方
+   * gate.fetch)。只暖點數，不暖訂閱(不打 GET /subscriptions/me，本頁不顯示訂閱資訊)。
+   * 點數讀擁有者模組 $lib/member/points 的 points；hero 的名字讀 authStore(改名經
+   * syncUser 同步)、加入年月讀會員資料 module 的 $selfAccount；後端沒有的會員編號拿掉。 */
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';

@@ -47,8 +47,7 @@ const OPEN = COURSES.find((c) => spotsOf(c) > 0)!; // course-1 幼兒體操 啟�
 // below to be unambiguous; assert that here so the fixture can't drift silently.
 const fullCount = COURSES.filter((c) => spotsOf(c) === 0).length;
 
-/** Waitlist defaults for the shared fakeRouter (same convention as
- *  checkout-api.test.ts's fakeRouter): defaults GET /waitlist/me to an empty
+/** Waitlist defaults for the shared fakeRouter: defaults GET /waitlist/me to an empty
  *  candidate list and POST /waitlist to a successful join echoing back the
  *  requested course_id, so tests that don't care about the waitlist API's
  *  exact shape still get a working join flow without configuring it. */

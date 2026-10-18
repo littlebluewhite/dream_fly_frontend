@@ -23,7 +23,7 @@ describe('subscriptions (truth is the server now — Task 17 removed client pers
   });
 });
 
-// applyOrder（本地結算寫入）已隨 Task 16 移除 — 真訂單改由 stores.ts 的
-// syncCartToServer / placeOrder / refreshSubscriptions / refreshPoints 接手
-// （見 checkout-api.test.ts），points/pointsLedger/subscriptions/cart 的寫入
+// applyOrder（本地結算寫入）已隨 Task 16 移除 — 真訂單改由 checkout-sync.ts 的
+// createCheckout（送單）與 refreshSubscriptions / refreshPoints 接手（見
+// checkout-sync.test.ts、subscriptions.test.ts、points.test.ts），points/pointsLedger/subscriptions/cart 的寫入
 // 改成 API 回應驅動的 hydrate，而非本地 CheckoutResult 的加總。
