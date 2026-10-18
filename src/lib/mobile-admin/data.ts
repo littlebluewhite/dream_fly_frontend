@@ -24,7 +24,7 @@ export type Tone = [string, string];
 // $lib/admin/api getVenues/getTickets 的 payload)；本批複核 Venue/Ticket 型別轉出本身也是
 // 零附加型別事實的純轉手，一併退役，消費端(含 api.ts)改直取 $lib/domain/venues、
 // $lib/domain/tickets。domain/venues.ts、domain/tickets.ts 的 VENUES/TICKETS seed
-// 本身不動(admin 頁測試的 canonical fixture)。
+// 本身後來也已刪除(兩個 EditDialog 測試改用檔內 fixture)。
 // Task P4-F3：報表分析(ReportsScreen.svelte)改接真 GET /reports/admin(復用桌面
 // `$lib/admin/api` 的 getReports(),ReportsScreen 直接 import,非經本檔)——domain/reports.ts 的
 // 13 個 mock 圖表陣列/型別(CATEGORY_SPLIT/TOP_COURSES/…/COACH_PERF，含 `Split` 別名)
