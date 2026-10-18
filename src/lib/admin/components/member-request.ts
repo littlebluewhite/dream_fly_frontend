@@ -1,7 +1,8 @@
 /* Dream Fly — 管理後台 · 學員寫入 module（R13 Task 4 / C2）。
  * 桌面 MemberCreateDialog / MemberEditDialog 與 mobile-admin MemberForm 三個表單共用：
  * 表單欄位 → checkNewMember()/checkMemberEdit() → valid 時直接是 POST/PATCH /users 的
- * body。新增與編輯是兩支函式、兩套型別（ADR-0022：不用 isNew）。
+ * body。新增與編輯是兩支函式、兩套型別（ADR-0022：不用 isNew）；私有 helper 不跨 entity
+ * 共用（ADR-0018 C6）。
  *
  * 上限對齊後端 CreateUserRequest/UpdateUserRequest：姓名 2–100、電話 8–20（選填）、
  * 密碼 8–128（validator 以字元數計）。email 只檢查必填——格式交給後端 422。空白電話

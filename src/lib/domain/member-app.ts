@@ -6,8 +6,8 @@
  * 公告的 bg 色兩側不同(member 'var(--df-accent-bg)' vs mobile '#FFF8DB')，因此整個
  * ANNOUNCE 留在原地(member/data.ts、mobile/data.ts 各自的字面陣列)，不搬進這裡。
  *
- * 型別策略:形狀完全相同(同名或僅名稱不同)的 interface 直接上移，兩側 facade
- * pass-through(名稱不同時用 `export type { X as Y }` 別名)。形狀有出入的
+ * 型別策略:形狀完全相同(同名或僅名稱不同)的 interface 直接上移，兩側消費端直取
+ * (名稱不同時用 import-site alias;facade 不轉手,ADR 0019 §4)。形狀有出入的
  * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED(R14 F3 退役)的 tone 相關欄位 member 端是嚴格
  * `Tone` 型別、mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的
  * 一側保留自己原本的 interface 宣告、只從這裡匯入值並自行斷言回自己的型別。

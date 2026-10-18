@@ -3,6 +3,8 @@
  * lib-root 而非 components/ 下:components 對 lib-root 的值 import 是既有向下
  * 方向,domain/data 層之後只需要對本檔做 type-only import(`IconName`),編譯
  * 後零 runtime 邊,不會開一條 domain → components 的反向邊。
+ * Icon.svelte 的 `name` 與資料層每個 `icon` 欄位都標 `IconName`(不寫 `string`),未註冊的
+ * 名稱因此在 `npm run check` 就是全倉編譯錯誤,不另設執行期的完整性掃描(ADR 0012 §3)。
  *
  * Data-driven icons reference a kebab-case string name (navigationConfig
  * categories, homepage course/why cards, etc.) and resolve through this map,

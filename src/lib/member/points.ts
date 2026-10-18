@@ -10,7 +10,7 @@ import type { LedgerEntry, LedgerType } from '$lib/domain/member-app';
  * 三顆 store 的內容唯讀：私有 writable，只匯出 Readable，唯一寫入者是下方 refreshPoints 這顆
  * session 閘門的 apply／reset。 */
 /* 種子 0（fail-safe：折抵預覽寧可少報、絕不拿虛構餘額多報）——真實餘額由
- * refreshPoints 水合：getAccount / getPoints 進頁時，以及
+ * refreshPoints 水合：帳戶頁暖機 / getPoints 進頁時，以及
  * CheckoutDialog 每次開啟時都會觸發。 */
 const balance = writable<number>(0);
 export const points: Readable<number> = { subscribe: balance.subscribe };

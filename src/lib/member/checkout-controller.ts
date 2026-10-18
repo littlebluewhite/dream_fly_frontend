@@ -20,8 +20,9 @@
  * deps：兩支效應（placeOrder、applyCouponCode）＋兩個唯讀來源（lines = 可計費項目、
  * points = 可用點數；前例是 attendance-controller 的 `now`）——注入的是資料來源，不是
  * 行為旗標（ADR 0012 判準②）。codeErr 的文字由注入的 applyCouponCode 給，本檔零 toast／
- * 錯誤文案 import（判準④）。開啟即水合的 refreshSubscriptions/refreshPoints 屬 open-reset
- * 時刻的元件佈線，不入 deps。
+ * 錯誤文案 import（判準④）。開啟即水合的 refresh 清單不入 deps：那是 surface 交給
+ * createCheckout 的 refreshOnOpen。surface 不直接呼叫本工廠，一律經 `$lib/member/checkout-sync`
+ * 的 createCheckout 組裝（兩支效應是它的私有函式）。
  *
  * 雙 surface 共用（C2/R11：mobile CartSheet 原本手焊一台同構的機器，已退役改吃本檔，
  * 經 $lib/mobile/stores 的 seam 取用）。C3/R13 起兩個消費者的生命週期同層，機器本身

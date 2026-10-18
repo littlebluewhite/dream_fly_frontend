@@ -8,7 +8,8 @@
    * /coaches；編輯＝姓名有變才 PATCH /users/{user_id}，教練欄位一律 PATCH
    * /coaches/{id}。契約 §3.2/§3.4 兩組端點接受的欄位完全不同，故本表單依 isNew
    * 顯示不同欄位組合，同 MemberForm 的分工慣例——保留單一元件、內部切換（不拆兩個
-   * 檔案）。新增 → onCreate(values)、編輯 → onUpdate(values)，皆回 Promise<boolean>
+   * 檔案）。新增 → onCreate(values) 回 'saved'｜'kept'｜'bind-failed'（只有 'saved' 關閉；
+   * 'bind-failed' 留著並鎖 email/姓名/密碼，見 locked）；編輯 → onUpdate(values) 回 Promise<boolean>
    * （true＝已存才關閉，false＝sheet 留著重試）；沒有對應 handler 時單純不送出，不再有本地
    * saveCoach() 假寫入 fallback（同 MemberForm/ClassForm 的決定：沒有後端呼叫者
    * 就不假裝成功）——兩步 API 呼叫、失敗訊息、成功後刷新皆由呼叫端

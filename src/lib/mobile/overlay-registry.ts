@@ -2,7 +2,9 @@
  * push/sheet 的合法 id 由本檔鍵推出;各 id 可傳的 props 由元件自身 props 推出
  * (見 `createOverlay<PushReg, SheetReg>`)。stores.ts 只可用敘述層級
  * `import type { … } from './overlay-registry'`——值 import 會在執行期把全部 overlay
- * 元件拉進 stores 的載入鏈(元件反過來 import stores,形成循環)。 */
+ * 元件拉進 stores 的載入鏈(元件反過來 import stores,形成循環)。
+ * 新的次級畫面(push screen / bottom sheet)＝ overlays/ 新增元件 + 在這裡登記,不新增路由
+ * (路由只給底部 tab 與登入頁)。 */
 import type { OverlayRegistry } from '$lib/components/mobile/overlay';
 
 import MyCourseDetail from './overlays/MyCourseDetail.svelte';

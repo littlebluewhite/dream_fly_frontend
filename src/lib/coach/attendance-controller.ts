@@ -8,6 +8,9 @@
  * toast 文案）。時鐘（now，預設 nowHHMM）與 saveAttendance 皆為注入依賴，無 svelte 元件
  * 相依、建構零副作用（SSR 安全）。
  *
+ * 兩個呼叫端：桌面 coach/attendance 與 mobile-admin 教練點名頁（ADR-0014 §2 雙生），同一套
+ * 桌面語意、零行為旗標；兩頁各自直取 $lib/coach/api 當 deps，不另設映射層，toast 文案各留頁面。
+ *
  * 備註（notes）僅存本機：後端 PUT /sessions/{id}/attendance 無備註欄位，故 applyNote 只寫
  * notes、不動 state/dirtyCount（不算「待同步」變更）；儲存成功照舊保留 notes，重新整理即消失。
  *

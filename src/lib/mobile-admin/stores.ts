@@ -63,7 +63,8 @@ export const coachNotifs = createReadState<AdminNotif>(COACH_NOTIFS);
  * 單位(見下方寫入動詞的刷新表)。行動版不能換頁,三個單位都只抓第 1 頁(後端預設 per_page=20),
  * 分頁 meta 進 opsPages,頁面據此顯示真實總數與 searchCapHint()。閘門由 store 擁有而不是各頁
  * 自建,是因為集合跨頁共用:教練畫面與課程頁讀同一份 coaches,首頁 banner 與訂單頁讀同一份
- * orders,寫入動詞在別頁觸發也要刷新同一份。
+ * orders,寫入動詞在別頁觸發也要刷新同一份。ops 是全機構資料、與登入身分無關,所以是 plain 水合閘門,
+ * 不是 session 閘門。
  *
  * 誠實開機(ADR-0025 F-3):開機值 = 重置值:集合為 `[]`、分頁 meta 為 EMPTY_OPS(三格皆 0/0)——沒水合過
  * 就不假裝有資料。每個單位只寫、只重置自己那一格 opsPages。fetch 包一層箭頭函式,只有實際水合時
@@ -151,7 +152,8 @@ export function searchCapHint(p: PageInfo): string | null {
 
 /* ---------- 寫入動詞(R12:ops store 擁有自己的寫入) ----------
  * 逐 entity、新增/編輯分兩支(不做跨 entity 的通用 CRUD——ADR-0018 C6;不用 isNew 旗標
- * ——ADR-0012)。寫入失敗 → 丟出(coach 系列回 coach-save 的 outcome 原樣),頁面照舊用
+ * ——ADR-0012)。寫入動詞不經閘門的 write()(不寫本地 store、不推世代):以伺服器為準,成功後直接重抓。
+ * 寫入失敗 → 丟出(coach 系列回 coach-save 的 outcome 原樣),頁面照舊用
  * 自己的錯誤文案表(ADR-0011)。寫入成功 → 動詞內 await 受影響單位的寫後重抓,呼叫端拿到
  * resolve 時列表已是新的。後端的訂單列表與教練列表都即時 JOIN 使用者名字(課程列的教練名
  * 又取自教練列表),所以改名會波及三個單位:

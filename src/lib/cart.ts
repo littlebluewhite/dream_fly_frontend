@@ -1,3 +1,12 @@
+/* Dream Fly — 購物車 (the one cart): guest → login → checkout.
+ *
+ * `cart` below is the single app-wide, persisted instance; keep it the only
+ * `createCart(true)` call — a second persisting instance would double-write the
+ * same `dreamfly_cart_v3` key. Other carts (tests, mobile's own in
+ * mobile/stores.ts) are non-persisting instances of this factory: a shared
+ * factory, not a shared store. The persisted cart is read at module init, so a
+ * hard reload of an SSR page with a non-empty cart can flicker on hydration — a
+ * known, deferred follow-up (ADR-0001), not a regression. */
 import { writable, derived, get, type Readable } from 'svelte/store';
 import type { CatalogCourse } from '$lib/public/adapters';
 import { courseToCartItem, type CartItem, type CartItemInput } from '$lib/cart-item';

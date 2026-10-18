@@ -1,14 +1,16 @@
 # Architecture
 
-How Dream Fly's frontend is wired. Read this before touching routing, layouts, surfaces, `src/lib` stores, or the cart/checkout/auth flow. The *rules* for changing this code live in the `coding-standards` skill; this file is the *facts* — what exists and where it lives.
+A map of Dream Fly's frontend: which surfaces exist, where things live in `src/lib`, and which module's header
+to read. Rules (invariants, protocol steps, when to use what) live in the owner module's header doc. Terms live
+in `GLOSSARY.md`, decisions and their reasons in `docs/adr/`, and coding conventions in the `coding-standards`
+skill.
 
 ## Seven surfaces, separated at the root layout
 
-`src/routes/+layout.svelte` is the hinge. It inspects `$page.url.pathname` and only wraps the **public /
-marketing** site in the shared `Header`/`Footer`. The six "app" surfaces start with a path prefix and
-bring their own chrome via a nested `+layout.svelte` (or a layout-resetting `+page@.svelte`, e.g. the
-member login). `global.css` loads at the root for everyone, so design tokens / `.btn` / `.card` apply
-everywhere regardless of surface.
+`src/routes/+layout.svelte` decides by path prefix (`isAppSurface`). Only the public/marketing site gets the
+shared `Header`/`Footer`. The six app surfaces bring their own chrome through a nested `+layout.svelte` or a
+layout-resetting `+page@.svelte` (the login pages). `global.css` loads at the root for every surface. A new app
+surface must add its prefix there; see that file's header.
 
 | Surface | Routes | Chrome |
 | --- | --- | --- |
@@ -20,847 +22,197 @@ everywhere regardless of surface.
 | Mobile (member) | `/mobile/*` | nested layout + overlay host |
 | Mobile-admin (staff) | `/mobile-admin/*` (`admin` + `coach`) | nested layout + overlay host |
 
-Four of the nested layouts — member, mobile, coach and mobile-admin — depend on who is logged in. Each hands
-its slot to the **session scope** (身分範圍, `src/lib/components/SessionScope.svelte`) and declares only its
-own inputs as module-level constants: a guard `(url, auth) → redirect target | null`, a warm set, and, where
-it has one, the overlay to close (mobile-admin also passes `warmIn` = "in the coach section"). The scope does
-the guard's `goto`, warms only the identity the guard admits (keyed on `$sessionKey`), wraps the slot in
-`{#key $lastSessionKey}` (page lifetime, below) and closes the overlay on an account switch. What is
-specific to a surface stays in its layout: member's checkout receiver, each `afterNavigate`, and the
-chrome outside the key (CheckoutDialog, TabBar…). The root and admin layouts don't use it (`docs/adr/0028` §2).
-
-(Adding a new surface has a wiring rule — see the `coding-standards` skill → `references/frontend.md`.)
+Four nested layouts depend on who is logged in: member, mobile, coach and mobile-admin. Each hands its slot to
+the **session scope** (身分範圍, `src/lib/components/SessionScope.svelte`) and declares only its own inputs as
+module-level constants: a guard, a warm set, and the overlay to close where it has one. The scope runs the
+guard, warms the identity the guard admits, and ties the page's lifetime to the login identity; the root and
+admin layouts don't use it (`docs/adr/0028` §2). Rules: the component's header.
 
 ## `src/lib` is organized by surface, not by file type
 
-Each surface owns a folder under `src/lib/` (`admin/`, `coach/`, `member/`, `mobile/`, `mobile-admin/`,
-`staff/`) typically containing: `data.ts` (the surface facade — see the domain section below),
-`stores.ts` (Svelte stores), `nav.ts`, `format.ts`, `api.ts` (API seam — see below), and a `components/`
-(or `overlays/`) subfolder. `member/stores.ts` is the one exception to the single-file pattern: it's a
-pure barrel re-exporting 7 concern modules that live alongside it (`waitlist.ts`, `leave.ts`,
-`points.ts`, `subscriptions.ts`, `checkout-sync.ts`, `notifications.ts`, `ui.ts`) plus a pass-through of
-lib-root's `cart.ts` (`docs/adr/0019`), so the four call sites that pull `cart` alongside other member
-symbols in one import clause keep a single import — new store/function additions go in the owning
-module, never in the barrel file itself. `nav.ts` is each chrome-bearing surface's navigation model
-(`admin`/`coach`/`mobile`/`mobile-admin`) — the nav/tab item list and the `isActive` predicate, plus, on
-`admin` and `coach`, the layout's longest-prefix `resolve()` title/subtitle map — as pure functions with
-a sibling `nav.test.ts`. `admin`'s sidebar labels and its `TITLES` labels disagree in a few spots
-(會員管理 vs 學員管理) — a pre-existing divergence kept verbatim, not unified. `admin/api.ts`'s Reports
-group (`GET /reports/admin` types/mappers/`getReports`) lives in `admin/reports-api.ts`, with
-`admin/api.ts` re-exporting it name-by-name so consumers keep importing `$lib/admin/api`; the file's other
-groups (Settings, Courses) are not preemptively split (`docs/adr/0018`). Cross-surface shared code lives
-in: lib-root single-file pure modules (`checkout-math.ts`/`checkout-gate.ts`/
-`load-gate.ts`/`hydration-gate.ts`; `cart-item.ts` — the `CartItem` types + `courseToCartItem`/
-`passToCartItem` adapters, imported by member/mobile/public routes without going through a surface
-facade; `format.ts` — `fmtNT` + `fmtRatio`, with `admin`'s `fmtPct` and `member`'s `fmtRate` as one-line
-surface bindings over `fmtRatio` carrying each surface's null-label; and `cart.ts`, the `createCart`
-factory plus the app-wide persisted singleton and `cartCount` — lib-root because the cart is a global
-concept, not a member-surface one, see `docs/adr/0019`), `lib/components/` (marketing/shared UI, plus the
-`ui/` and `mobile/` shelves below), `lib/data/` (marketing seed + nav config), `lib/domain/` (single-source
-seed feeding several facades — see below), `lib/stores/` (`authStore` is cross-cutting; the toast deep
-store `toasts.ts` / `marketingToasts.ts` is cross-cutting too, via three adapters in
-`lib/components/toast/` per ADR 0005 — `notificationsStore` is public/marketing-only; `read-state.ts`'s
-`createReadState` factory is the shared per-item read/unread store shape behind mobile-admin's and
-coach's notification bells), `lib/styles/` (`global.css` + design tokens), `lib/types/`, `lib/utils/`.
+Each surface owns a folder under `src/lib/`: `admin/`, `coach/`, `member/`, `mobile/`, `mobile-admin/`,
+`staff/`, plus `public/` for the marketing site. A surface folder typically holds `data.ts` (the surface
+facade, below), `stores.ts`, `nav.ts` (the nav model, unit-tested), `format.ts`, `api.ts` (the API seam) and a
+`components/` or `overlays/` folder. `staff/` holds only `roles.ts`. `member/stores.ts` is a barrel over
+member's concern modules (`waitlist.ts`, `leave.ts`, `points.ts`, `subscriptions.ts`, `checkout-sync.ts`,
+`notifications.ts`, `ui.ts`); its header says where new code goes. Admin's Reports API lives in
+`admin/reports-api.ts`, re-exported by `admin/api.ts`.
 
-## `src/lib/domain/` — single source for the ops-pair and member-app facades
+Cross-surface code:
 
-`src/lib/domain/` holds seed and display knowledge shared across surfaces:
+- lib-root single-file modules: `cart.ts`, `cart-item.ts`, `checkout-math.ts`, `checkout-gate.ts`,
+  `format.ts`, `load-gate.ts`, `hydration-gate.ts`, `session-gate.ts`, `store-warm.ts`, `login-submit.ts`,
+  `self-account.ts`, `icon-registry.ts`.
+- `lib/api/` (transport, tokens, wire knowledge, error copy, generated wire types), `lib/stores/`
+  (`authStore`, `login-state`, `toasts` + `marketingToasts`, `read-state`, the marketing-only
+  `notificationsStore`), `lib/components/` (marketing/shared UI and the shelves below), `lib/domain/`,
+  `lib/data/` (marketing seed and nav config), `lib/styles/` (`global.css` and design tokens), `lib/types/`,
+  `lib/utils/`, `lib/testing/`.
 
-- **Ops entities** for the admin↔mobile-admin ops-pair: `venues.ts`, `tickets.ts`, `coaches.ts`,
-  `activity.ts`, plus the entity type files `classes.ts` / `members.ts` / `orders.ts` (`ClassBase`/
-  `OrderBase` interfaces — there are no base seed arrays; mobile-admin's ops collections boot empty, see
-  the API seam section).
-- **`member-app.ts`** — the member↔mobile desktop/mobile twin seed: 7 constants (`STATS`, `SKILLS`,
-  `UPCOMING`, `TIME_ROWS`, `CONTACT_THREAD`, `COACH_REPLIES`, `NOTIF_CATS`; the Monday-first `WEEK` label
-  array lives in `weekday.ts`, `docs/adr/0013`) plus type-only exports
-  (`EnrolledCourse`/`ScheduleBlock`/`Order`, `LedgerEntry`/`LedgerType`) that back type annotations in
-  `mobile/api.ts`, `member/points.ts` and the facades' own local interfaces. `ANNOUNCE` stays forked in
-  each facade because one announcement's background colour differs between the two. The notification
-  seed value (`NOTIFS_SEED`) exists only as a test fixture in
-  `src/lib/testing/seed-fixtures.ts` (`docs/adr/0010`, `docs/adr/0013`, `docs/adr/0024`).
-- **Per-entity display lookups** — each entity file single-sources a status/type → tone-and-label
-  lookup: `VENUE_STATUS` (`venues.ts`), `TICKET_TYPE` (`tickets.ts`), `MEMBER_ACCOUNT_STATUS`
-  (`members.ts`), `STATUS_TONE` (`classes.ts`), `LEVEL_TONE` (`course-level.ts`) and `SESSION_STATUS`
-  (`sessions.ts`, alongside the `TodayStatus` union) (`docs/adr/0013`,
-  `docs/adr/0018`). Every table also has a total accessor that never returns `undefined`: all of them go
-  through `lookupOr` (`api/wire.ts`, own keys only), and the level/class-status ones are
-  `courseLevelLabel`/`courseLevelTone` (`course-level.ts`) and `classStatusTone` (`classes.ts`) — consumers
-  call those instead of indexing the table (`docs/adr/0013`, R20 addendum). `SESSION_STATUS` is the one today's-session-status table for `coach` and `admin`
-  (`mobile-admin`'s today lists reuse admin's and coach's `TodayClass` rows as-is, `docs/adr/0028` §5); its
-  canonical `live` label is `上課中`.
-- **`session-format.ts`** — pure per-session display derivation, imported directly by its six
-  member/mobile consumers with no facade hop (`docs/adr/0014`).
-- **`class-detail.ts`** — `classDetailRows`, the 6-row `[icon, label, value]` course detail list behind
-  `admin`'s `ClassDialog` and `mobile-admin`'s `ClassSheet`, plus `classFill(enrolled, cap)`, the
-  full/percentage derivation (`cap <= 0` gives `pct: 0`, never `Infinity`/`NaN`). It maps to no backend
-  enum and yields no `Tone`, so it isn't a per-entity lookup (`docs/adr/0013`, `docs/adr/0026`).
-- **`order-detail.ts`** — `orderDetailRows(o)`, `class-detail.ts`'s sibling for orders: the 9-row (10 with
-  a refund reason) detail list behind `admin`'s `OrderDialog` and `mobile-admin`'s `OrderSheet`, typed
-  structurally over `OrderDetailSource` (`docs/adr/0023`, `docs/adr/0026`).
-- **`leave-requests.ts`** — its public surface is a single function, `leaveRow(source): LeaveRow`
-  (`{ tone, label, when, makeupWhen, action }`), which absorbs both the display lookup (the module-private
-  `STATUS_BADGE`) and the one 請假 action rule — `pending` → cancel, `approved` without a makeup → book
-  補課, `approved` with one → already booked, else nothing — behind a private `leaveAction(lr)`.
-  `makeupWhen` is `null` (not an empty string) when the makeup session's date/time is missing. member/mine
-  and mobile's `MyCourseDetail` both destructure `leaveRow()`'s result. It lives in an entity file rather
-  than `member-app.ts`, whose header restricts it to constants and lookups, and mobile imports it directly
-  as a pure function (`docs/adr/0022`, `docs/adr/0025`).
-- **`sessions.ts`'s `toTodaySession(s)`** — projects the generated wire `TodaySessionResponse`
-  (re-exported from `wire.ts`) onto a `TodaySession` with `'—'` for a missing coach/venue and the
-  backend-derived `status` mapped to a `TodayStatus` (`upcoming`→`wait`, `ongoing`→`live`, `done`→`done`). `admin`'s `mapTodaySession` and `coach`'s `mapTodayClass`/`mapAttendanceClass` build on it
-  instead of re-deriving `hhmm`/venue defaults/status themselves (`docs/adr/0023`).
-- **`course-category.ts`** — `COURSE_CATEGORIES` (key/chip/trial label/icon/age) plus
-  `courseCategoryIcon(cat)` (unknown → `graduation-cap`), the single source for `mobile`'s home, courses
-  page, `TrialScreen` and `mobile/api.ts`; it yields no `Tone` and leaves `admin/data.ts`'s `CATS` alone
-  (`docs/adr/0026`).
+### `src/lib/domain/`: shared seed and display knowledge
 
-Four facades consume `lib/domain/` — each of `admin`'s, `mobile-admin`'s, `member`'s, and `mobile`'s
-`data.ts` — and **none of them re-exports a pass-through** (`docs/adr/0019`): an export line that carries
-no local type fact (no narrowing annotation, no `as` assertion, no local interface) and does no value
-transformation over a same-name-same-type symbol from `$lib/domain` or `$lib/api/wire` doesn't belong in
-a facade; consumers import the canonical source directly, with import-site aliases where a facade name
-differs (`Activity as ActivityRow`). What the four `data.ts` files hold is what makes them facades: local
-interfaces and local mock arrays, real mappers (`admin`'s `mapMemberAccount`), the `docs/adr/0013`
-Form 2/3 narrowing re-asserts that genuinely re-assert a stricter local type over the same reference
-(`member`'s one `as`-assertion narrowing `UPCOMING`,
-`mobile-admin`'s two status tables, `MEMBER_ACCOUNT_STATUS` and `VENUE_STATUS`), and one ADR-named boundary seam: `mobile-admin/data.ts` re-exports
-the `Student` type from `$lib/coach/data` — its canonical home — for mobile-admin's coach-side consumers
-(`docs/adr/0014`, `docs/adr/0019`, `docs/adr/0026`). `coach` has no persona mapping into this shared
-ops-pair/member-app seed, so it stays outside the four-facade group, but it does consume `lib/domain/`
-directly: `coach/data.ts` imports `SESSION_STATUS` and `coach/api.ts` imports `toTodaySession` from
-`domain/sessions.ts`. The guards on the domain values are `domain/member-app.test.ts`,
-`status-lookups.test.ts` and `course-level.test.ts` — literal snapshots and row/key-count canaries, plus
-`toBe` same-reference pins for exactly the narrowing re-asserts listed above. There is no facade-level
-type-export regression test (`docs/adr/0009`, `docs/adr/0019`).
+Rules live in each file's header; the display-lookup rules (tables, `lookupOr`) are in `src/lib/api/wire.ts`'s.
 
-## Shared component shelves: `lib/components/ui` and `lib/components/mobile`
+- `venues.ts`, `tickets.ts`, `members.ts`, `classes.ts`, `coaches.ts`, `orders.ts`, `activity.ts`: ops-pair
+  (admin and mobile-admin) entity types and their status/type lookups.
+- `course-level.ts` (levels, labels, tones), `sessions.ts` (`SESSION_STATUS`, `toTodaySession`),
+  `attendance.ts` (attendance-status badge), `weekday.ts`, `session-format.ts`, `course-category.ts`.
+- `member-app.ts`: constants and types shared by the member and mobile twins.
+- `leave-requests.ts` (`leaveRow()`), `class-detail.ts`, `order-detail.ts`: row view-models shared by twins.
 
-`lib/components/ui/` is the cross-surface primitive shelf (`Button`, `Card`, `Input`, `Dialog`, … barrelled
-through `index.ts`) plus four async three-state components — `Skeleton`, `SkelCard`, `ErrorState`,
-`EmptyState` — consumed by API-seam pages across every surface for their loading/error states; the
-shimmer animation `Skeleton` uses (`df-shimmer`) is a `@keyframes` in `global.css`, not a per-component
-style block. `lib/components/mobile/` is the parallel shelf for the two mobile surfaces — `Sheet`,
-`TabBar`, `ScreenHeader`, plus smaller pieces (`HeaderIcon`, `NoteBox`, `SectionTitle`, …) — consumed
-directly by both `mobile` and `mobile-admin`'s pages/overlays; each surface wraps the shared `TabBar` in
-its own thin local component to attach its own tab items. The same shelf holds `overlay.ts` — the
-`createOverlay` factory (push/pop screen stack + one bottom sheet), shared by `mobile` and
-`mobile-admin`; each surface builds its own singleton in its `stores.ts` by importing the factory
-directly (`stores.ts` does not re-export `createOverlay`/`OverlayEntry`/`OverlayState`). Push and sheet
-are non-intersecting id namespaces, so the factory takes two type parameters, and those parameters are
-each surface's registry rather than bare id unions (`docs/adr/0022`): the `PUSH`/`SHEETS` id → component
-maps live in `src/lib/mobile/overlay-registry.ts` and `src/lib/mobile-admin/overlay-registry.ts`
-(`satisfies OverlayRegistry`), and `overlay = createOverlay<MobilePushRegistry, MobileSheetRegistry>()`
-derives the legal ids from the registry keys and each id's props from the registered component's props
-minus the host-injected `onBack`/`onClose`. A `push()`/`sheet()` call with an unknown id, a wrong or
-missing required prop, or a host-injected prop is a compile error, pinned by `@ts-expect-error` lines in
-`components/mobile/overlay.test.ts`. `stores.ts` pulls the registry in with a statement-level
-`import type` only, so the overlay components never enter the stores' runtime import chain.
+The `data.ts` facades of `admin`, `mobile-admin`, `member` and `mobile` hold local interfaces, mock data,
+mappers and narrowing re-asserts, never a pass-through re-export (`docs/adr/0019`; the test is in each
+`data.ts` header). `coach` imports `lib/domain` directly.
 
-`src/lib/icon-registry.ts` (K6) is the single source of every icon name used anywhere in the codebase. It
-sits at lib-root rather than under `lib/components/`, deliberately: `lib/components/` (including
-`Icon.svelte`) already imports lib-root values downward, and this way `lib/domain`/each surface's
-`data.ts` only need a type-only import of `IconName` — erased at transpile time, so no
-`domain → components` runtime edge opens. `Icon.svelte`'s `name` prop and every data-layer `icon` field
-are typed `IconName = keyof typeof ICONS`, so an unregistered icon name is a `npm run check` failure
-everywhere it's used, not just where `<Icon>` renders it. Together with the overlay registries above, this
-means `src/lib/mobile/foundation-contracts.test.ts` needs no icon-registry-completeness or
-overlay-map-completeness source scans — `check` catches a strict superset. The file's contracts are
-route inventory (a deleted route only 404s at navigation time) and CSS safety (two regression regexes
-`check` can't reach). See `docs/adr/0012` for the full K6 rationale, including a type-assertion lesson
-from the same batch.
+## Shared component shelves
 
-`src/lib/testing/` holds first-class test-support modules: `import-scan.ts` — `walk`, the
-comment/string/template-aware import-specifier extraction (`importSpecifiers`), and the reach predicate
-(`makeReachPredicate`) — whose self-proving fixtures live in `import-scan.test.ts` (foundation-contracts
-uses its `walk`); `fake-router.ts` (`fakeRouter(overrides, defaults?)`, a fetch-path lookup stub with
-fn-eval support); `auth-fixtures.ts` (the 登入狀態 fixtures, including `loginRoutes(rolesFor?)` — the
-`POST /auth/login` (`user.id` = the email) and `POST /auth/logout` routes a test merges into its own
-`fakeRouter` table before `await authStore.login(email, pw)`, so every test that needs someone logged in
-goes through the real 登入狀態 core; coach tests use `coach-session.ts`'s `loginAs()`, and an
-`import-scan.test.ts` contract pins zero `vi.mock`/`vi.doMock` of `$lib/stores/authStore` or
-`$lib/stores/login-state`); `session-reset.ts` (`resetSessionStores()` — a real `authStore.login` then `logout`, so every session
-gate resets through its production path; there are no per-store `reset…ForTests` exports except
-`resetOpsForTests` and `resetAnnouncementsForTests`, both on identity-free gates); `wire-fixtures.ts` (builders such as
-`orderSummary(over?)`/`adminLeaveRequest(over?)`/`pointsMe(over?)` that return a full generated wire type
-with defaults and take `Partial<T>` overrides, so a new backend field is one default to add);
-`page-lifetime.ts` (`describePageLifetime(name, Component, props?)` — the "page lifetime = login
-identity" scenarios, run once against the session scope over the real 登入狀態 core, its probe route table
-merged with `loginRoutes()`; `describeKeyedSlot(name, Layout, baseRoutes?)` — the
-one A→B scenario each of the four identity-dependent layout tests runs to prove its slot goes through the
-scope, `docs/adr/0028` §2); and fixtures
-such as `coach-routes.ts`, `member-routes.ts` and `seed-fixtures.ts`. A dogfood contract inside `import-scan.test.ts` pins that no production file under
-`src/lib`/`src/routes` imports `$lib/testing`; its production-file scan excludes `src/lib/testing/`
-itself (it's the module being scanned *for*, not a production consumer).
+- `lib/components/ui/`: cross-surface primitives barrelled through `index.ts`, including `Icon` and the async
+  three-state components (`Skeleton`, `SkelCard`, `ErrorState`, `EmptyState`, `LoadGate`).
+- `lib/components/mobile/`: the shelf both mobile surfaces use (`Sheet`, `TabBar`, `ScreenHeader`, …) and
+  `overlay.ts`, the `createOverlay` factory. Each mobile surface's `overlay-registry.ts` maps ids to components
+  and types `push()`/`sheet()` (`docs/adr/0022`).
+- `lib/components/toast/`: the desktop, mobile and public adapters over `lib/stores/toasts.ts`
+  (`docs/adr/0005`).
+- `src/lib/icon-registry.ts`: every icon name. `IconName` makes an unregistered name a `npm run check` error
+  (`docs/adr/0012`). `src/lib/mobile/foundation-contracts.test.ts` covers what `check` can't reach: the route
+  inventory and CSS safety.
 
-## Auth / cart / checkout — the domain core (read `docs/adr/0001` first)
+`src/lib/testing/` is test-only support (production never imports it); each module's header has its rules:
+`import-scan.ts` (the scanner behind the seam contracts in `import-scan.test.ts`), `fake-router.ts` (the HTTP
+seam behind `$lib/api/client`) with the `*-routes.ts` tables, `auth-fixtures.ts` and `coach-session.ts` (log in
+through the real 登入狀態 core), `session-reset.ts`, `wire-fixtures.ts`, `page-lifetime.ts`,
+`owner-switch-sweep.ts`, `seed-fixtures.ts`.
 
-Where the pieces live (the *rules* for changing them are in the `coding-standards` skill):
+## Auth / cart / checkout: the domain core
 
-- **auth-at-checkout**: guests browse and fill the cart freely; login is required **only** at 結帳
-  (checkout). Login state (登入狀態) lives in one core, `lib/stores/login-state.ts`; `lib/stores/authStore.ts`
-  is its public face (`$authStore`, `login`/`register`/`loginWithGoogle`/`logout`/`hydrate`/`syncUser`), which
-  calls the real `/auth/*` API through `api()` and hands the results to the core (`startSession`/`endSession`/
-  `hydrateSession(fetchMe)`/`watchOtherTabs(fetchMe)`, with `fetchMe = () => api('/users/me')`). Access token
-  in memory only, refresh token in `localStorage` under `dreamfly_refresh` (`lib/api/tokens.ts`, the core's
-  private storage adapter — an `import-scan.test.ts` contract pins it to the core), rotated
-  single-flight on 401 (see `docs/adr/0006`). The `dreamfly_auth` `localStorage` key is only a
-  first-paint cache of the member profile (so the UI doesn't flash "logged out" before `hydrate()`
-  resolves) — the actual truth is whether the refresh token is still valid against the server. Login state
-  follows that truth across tabs and on expiry (`docs/adr/0006` R17 addendum, `docs/adr/0027` §1): the
-  refresh single-flight clears tokens only on an explicit backend rejection (400/401/403 — never a 408,
-  429 or 5xx) and only if the stored
-  refresh token is still the one it sent (compare-and-clear; a successful rotation is stored under the
-  same condition, otherwise dropped so a newer login wins), and at that single clear point the core goes
-  `LOGGED_OUT`; the core also listens for `storage` events (`watchOtherTabs`) and decides from the *current* storage only (no refresh token → log out; cached
-  identity is a different logged-in member → drop this tab's access token and re-hydrate, logging out
-  if the tab still isn't the member storage held when the event fired — now only reachable when the refresh
-  was unavailable; plain
-  rotation → do nothing, otherwise tabs would trigger each other's refresh forever). A stored rotation also
-  reads the `user` the `/auth/refresh` response carries; if that user isn't
-  the tab's current identity (another tab switched accounts and this tab's `storage` event hasn't landed),
-  the core switches to them in the same tick (`beginSession(); applyUser(user)`), so the token and the
-  on-screen identity never diverge. `api()` records the on-screen identity when it sends (the core's
-  `currentIdentity()`) and on a 401 asks the core's `refreshFor(issuedBy)`, which refreshes only for that
-  identity and says yes only if it is unchanged both before and after the refresh; `api()` then re-checks
-  `currentIdentity()` synchronously right before the resend (a login can land in the microtask gap after
-  `refreshFor` settles). Otherwise `api()` throws
-  `ApiError(401)` rather than resend the old screen's request on the new identity's token (`docs/adr/0028` §1).
-  The core imports neither `client.ts` nor `authStore.ts`, so no callback hook runs between them and there
-  is no import cycle. Page lifetime
-  follows identity too: the session scope that the member/mobile/coach/mobile-admin layouts hand their slot
-  to wraps it in `{#key $lastSessionKey}` — `lastLoggedIn(sessionKey)`, which never re-emits `null` once
-  someone has logged in — so switching accounts remounts the page (and closes the overlays mobile/mobile-admin
-  pass it) while logging out doesn't (the guard navigates away first); gates never key on it (`docs/adr/0028` §2).
-  `authStore.syncUser(user)` lets a module that has just read or `PATCH`ed `/users/me` for the logged-in
-  user push the fresh name into `member` (and so into that cache) without a re-login; it's a no-op for any
-  other user id and leaves the identity key alone, so no session gate resets.
-- **Self account** (本人帳號資料; 會員資料 is its member-side view): the logged-in user's own
-  name/phone/birthday (plus read-only email, join month and last login) and four notification preferences
-  live in one module, `src/lib/self-account.ts` (`docs/adr/0023`, `docs/adr/0026`), imported directly by
-  `member`, `mobile` and `coach`; coach's private coach gate caches only the `CoachResponse` row and reads the
-  person from `$selfAccount`, so a rename shows up on every surface at once. It sits on a
-  `createSessionGate` (one `GET /users/me` per identity, reset on account switch) and serializes every
-  `PATCH /users/me` through one write chain that hydrates first. It owns the `prefs` store: `setPref` is
-  optimistic per key, with a whole-object resync when a save fails and a single-key rollback when the
-  resync fails too (`saved`/`resynced`/`rolledBack`); `saveSelfAccount` sends only changed fields (no
-  request at all when nothing changed). Fields the backend has no column for (member number, parent
-  contact, avatar colour) have no input.
-- **One persistent cart** spanning guest → login → checkout: the factory and the singleton both live at
-  lib-root in `src/lib/cart.ts` (`docs/adr/0019`) — the single app-wide `cart = createCart(true)`
-  (persisted to `dreamfly_cart_v3` — string uuid item ids deduped by `(type, id)`; no migration runs
-  against the old `dreamfly_cart_v2` key, see `docs/adr/0006`) plus the `cartCount` badge derived.
-  `lib/member/stores.ts` re-exports `createCart`/`cart`/`cartCount` as a pass-through of `$lib/cart` (see
-  above); the public chrome (`components/Header.svelte`, `components/CartDropdown.svelte`,
-  `routes/cart/+page.svelte`) imports `$lib/cart` directly. There must be exactly one `createCart(true)`
-  call — a second persisting singleton would double-write `localStorage`. The `createCart(persist=false)`
-  factory exists so tests get an isolated, non-persisting cart — and so does `mobile`, which builds its
-  own non-persisting instance behind a deliberately narrow seam in `mobile/stores.ts` exposing exactly
-  four members (`subscribe`/`add`/`remove`/`clear`), with the mobile-only `icon` override expressed as its
-  own `addItem` input rather than as a factory option: **a shared factory is not a shared store instance**.
-- **Routing contract is single-sourced** in `lib/checkout-gate.ts`: `checkoutTarget()`, `wantsCheckout()`,
-  and `safeRedirect()` (open-redirect guard — only same-origin root-relative `?redirect=` targets allowed).
-- **Course vs Pass**: checkout syncs the cart and `POST /orders`s it through the checkout
-  controller that `member/checkout-sync.ts`'s `createCheckout` builds for each surface (its private `placeOrder`
-  calls the module-private `syncCartToServer` then `POST /orders`; `PaymentMethod` lives beside the controller in
-  `member/checkout-controller.ts`; see `docs/adr/0003`'s FE-5 addendum; see also the
-  controller section below). The lines it submits are `chargeableLines(cart, subscriptions)`
-  (`member/checkout.ts`) — the branded `ChargeableLine[]` filter that skips passes the member already
-  holds (the `/cart` page, `CartDropdown` and `createCheckout` all take it from `member/checkout-sync.ts`'s
-  `chargeableCart(cart)` → `{ lines, billable, total }`, and the two previews mark held lines 「已持有，不計費」;
-  the root layout warms subscriptions for the marketing shell, keyed on `$sessionKey`, `docs/adr/0028` §3), a no-op for mobile's course-only carts; mobile's cart is typed as the shared `CartItem`
-  (`$lib/cart-item`). The backend creates both artifacts atomically in one transaction. A
-  `type: 'course'` line becomes a real 報名 (enrolment row); the member's weekly schedule is real too,
-  hydrated from `GET /schedule/me` (`member/api.ts`'s `getSchedule()`, derived from the member's active
-  enrolments, see `docs/adr/0006`); a `type: 'pass'` line becomes a real 訂閱 (entitlement), re-hydrated
-  from `GET /subscriptions/me` after checkout — subscriptions are not persisted in `localStorage`. Per
-  ADR 0001 the two remain independent products.
-- **Waitlist guard:** a full course (`spots: 0`) is blocked from the paid cart and routed to 候補
-  (waitlist) — see the `AddResult = 'added' | 'bumped' | 'waitlisted'` add path in `lib/cart.ts`
-  (re-exported through member stores). Mobile's cart returns the same `AddResult`; on `'waitlisted'` its
-  three call sites (`routes/mobile/+page.svelte`, `routes/mobile/courses/+page.svelte`,
-  `CourseDetailSheet`) `await joinWaitlist()` from `$lib/member/waitlist` against the real `/waitlist`
-  endpoint, so a mobile 候補 is the same server row the desktop member/mine card shows.
-- **Staff role switch:** `lib/staff/roles.ts` maps admin↔coach and remembers the last role in
-  `df_staff_last_role` — a local UI convenience, independent of the real role check at staff login.
-- **Google OAuth callback is one shared component:** `lib/components/GoogleCallbackCard.svelte` takes
-  `successPath`/`loginPath` props; `member`'s and `mobile`'s `/login/google` routes are both ten-line
-  shells over it. `staff`/`mobile-admin` have no Google option (`docs/adr/0006`).
+Guests browse and fill the cart freely; login is required only at 結帳 (`docs/adr/0001`). Where each piece
+lives (the rules are in each module's header):
 
-Known, deferred caveat (ADR 0001): persisted stores read `localStorage` at module-init, which can cause a
-hydration flicker on a hard reload of a logged-in SSR page. Intentional follow-up, not a regression.
+- **登入狀態 (login state)**: the core `lib/stores/login-state.ts` owns the token pair, refresh, session
+  generation, hydrate and cross-tab sync. `lib/stores/authStore.ts` is its public face (`$authStore`,
+  `login`/`logout`/`hydrate`…, `sessionKey`/`lastSessionKey`). `lib/api/tokens.ts` is the core's private
+  storage adapter. `lib/api/client.ts`'s `api()` is the transport: it asks the core for credentials and owns the
+  401 resend. `lib/api/base-url.ts` builds URLs for both (`docs/adr/0006`, `docs/adr/0028` §1).
+- **本人帳號資料 (self account)**: `lib/self-account.ts`, the logged-in user's own `/users/me` profile and
+  notification preferences, one store shared by member, mobile and coach.
+- **The one cart**: `lib/cart.ts` (`createCart`, the persisted app-wide `cart`, `cartCount`); the item type is
+  in `lib/cart-item.ts`. Mobile takes its own non-persisting instance in `lib/mobile/stores.ts`.
+- **Checkout routing contract**: `lib/checkout-gate.ts` (`checkoutTarget`, `wantsCheckout`, `safeRedirect`);
+  the receiving side is `routes/member/+layout.svelte`.
+- **結帳 (checkout)**: below. 報名 and 訂閱 stay independent products (`docs/adr/0001`).
+- **Staff portals**: `lib/staff/roles.ts` (`staffPortals`, `staffGuardTarget`, `ROLE_HOME`).
+- **Google OAuth callback**: `lib/components/GoogleCallbackCard.svelte`, shared by member's and mobile's
+  `/login/google` routes. Staff and mobile-admin have no Google login.
+
+**Checkout core.** `lib/member/checkout-controller.ts` is the 結帳 payment machine (lifecycle, form, coupon,
+preview, the idempotency key). Surfaces never build it directly: `lib/member/checkout-sync.ts`'s
+`createCheckout` assembles it, and `lib/member/checkout.ts`'s `chargeableLines` is the one filter the order and
+the cart previews share. Consumers: member's `CheckoutDialog` and the `checkout` singleton in
+`lib/mobile/stores.ts` that `CartSheet` drives. Rules: the three module headers (`docs/adr/0016`).
 
 ## API 接縫 (seam): every app surface but `staff` has an `api.ts`
 
-Every app surface except `staff` — `public`, `admin`, `coach`, `member`, `mobile`, `mobile-admin` — has
-`src/lib/<surface>/api.ts`: async getters over the real `dream_fly_backend` API (seam design:
-`docs/superpowers/specs/2026-06-21-mock-api-seam-design.md`). `public`, `admin`, `coach`, and `member`'s
-getters mostly call `api<T>()` (`lib/api/client.ts`) — a plain transport that builds the URL with
-`lib/api/base-url.ts`'s `apiUrl()` and asks the 登入狀態 core (`lib/stores/login-state.ts`) for the Bearer
-token, the on-screen identity and the 401 refresh, so a test that mocks `$lib/api/client` still drives the
-real login state; the handful of P2-commented gaps that have no
-backend equivalent (or are purely cosmetic) return the mock/hardcoded value directly inside the same
-`async` getter — full inventory in `docs/adr/0006`. `mobile` and `mobile-admin` both hold an `api.ts` that
-re-delegates to the real getters built for their desktop counterpart (`mobile` → `$lib/member/api.ts`;
-`mobile-admin` → `$lib/admin` + `$lib/coach`), adding light field-mapping only where the mobile shape
-diverges, with their own small residual mock spots (same ADR 0006 inventory) inlined the same direct way.
+`public`, `admin`, `coach`, `member`, `mobile` and `mobile-admin` each have `src/lib/<surface>/api.ts`: async
+getters over the real backend, built on `api<T>()` in `lib/api/client.ts`. `mobile/api.ts` is a thin layer over
+`member/api.ts`; `mobile-admin/api.ts` keeps only its combinators over `admin/api` and `coach/api`. Backend wire
+knowledge shared across surfaces is in `lib/api/wire.ts` (`docs/adr/0007`); response types are in
+`lib/api/generated/`, mirrored from the backend. Error copy: `lib/api/error-text.ts`, plus
+`lib/coach/load-error-copy.ts` for coach load errors. Pages load through `lib/load-gate.ts` and render the three
+states with `lib/components/ui/LoadGate.svelte`. The P2 gaps with no backend endpoint are inventoried in
+`docs/adr/0006`. Rules: the headers of those modules and of each `api.ts`.
 
-`mobile-admin/api.ts` keeps exactly three combinators — `getMore`/`getCoachHome`/`getAdminHome` —
-the ones that fan out to more than one source or reshape a response;
-mobile-admin production code imports everything else from the owning module (`$lib/admin/api`,
-`$lib/admin/data`, `$lib/admin/components/coach-save`, `$lib/admin/settings-form`, `$lib/coach/api`,
-`$lib/coach/load-error-copy`, `$lib/coach/data`) directly, aliasing at the import site on a name clash
-(`docs/adr/0019` C4's judgement extended from `data.ts` facades to this combinator layer,
-`docs/adr/0025`). `mobile/stores.ts` has exactly six exports — `overlay`, `MobilePushId`/`MobileSheetId`,
-`cart`, `checkout`, `toasts` — and mobile production code imports `$lib/member/<concern>` modules
-directly rather than through the `member/stores` barrel. There is no import-direction contract on
-mobile → member imports (`docs/adr/0014` §1, `docs/adr/0025`).
+The public seam is `lib/public/api.ts` (public endpoints, `auth: false`) plus `adapters.ts`, the only place that
+converts cents/enum/id shapes into marketing types. `ScheduleCalendar`'s pure logic is in
+`lib/public/calendar-grid.ts` and `calendar-selection.ts`. The `admin` and `coach` `Sidebar.svelte`/
+`Topbar.svelte` shells stay outside the seam: no I/O, only synchronous store reads (`docs/adr/0013`).
 
-Backend wire shapes shared across ≥2 surfaces — order-status badges (`orderStatusBadge`, with a fallback
-for unknown statuses), the admin/coach `TodaySessionResponse` (generated, re-exported),
-the `OrderStatus`/`LeaveStatus` unions (generated, re-exported; leave and order DTOs are imported straight from
-`$lib/api/generated`), display atoms like `ageRange`/`initialOf` — live in the
-single source `src/lib/api/wire.ts` rather than each `api.ts` redeclaring its own copy
-(`docs/adr/0007`). Response shapes themselves have one source:
-`src/lib/api/generated/`, a byte-exact mirror of the backend's ts-rs `bindings/` kept in sync by
-`scripts/wire.mjs` (`npm run wire:sync`; `npm run check` runs `wire:check` first). Hand-written code
-only `import type`s from it, directly or via `wire.ts` (no single-entry rule); request bodies and UI view
-types stay hand-written, and the only `Api*` types left are `Pick<…>` projections (`ApiUser`, `ApiMe`,
-`ApiUserAccount`) and the settings-shape assertions (`ApiStudioProfile` etc.) (`docs/adr/0007`
-addendum, `docs/adr/0027` §7). Wire also owns two pieces of order knowledge as zero-import pure helpers:
-`orderIdentity`, the dual-identity protocol picking the display `order_number` vs the real uuid for
-`PATCH /orders/{id}/status` (used by admin's `mapAdminOrder` and member's `mapOrder`), and `taxFromGross`,
-the 5% tax-inclusive display derivation `round(amount - amount/1.05)` whose unit follows the caller (used
-by admin's `mapAdminOrder`). mobile-admin takes its order row type from `$lib/admin/data`
-(`Order as OrderRow`, aliased at the import site) and its badge from wire's `orderStatusBadge`.
+## Shared stores: hydration gate, session gate, warm sets
 
-Error-toast plumbing is single-sourced the same way: `src/lib/api/error-text.ts`'s `apiErrorMessage`
-(pass-through) and `apiErrorText` (status-table, never leaks the backend message) — table-form call sites
-keep their own 1-4-line entity text table, pass-through ones delegate outright (`docs/adr/0011`). The
-coach pages' *load*-error copy — the gate `onError` title/body pairs — is single-sourced in
-`src/lib/coach/load-error-copy.ts`, imported directly by eight coach pages (five desktop, three
-mobile-admin). It recognises `CoachNotFoundError` with `instanceof`, so a whole-module mock of
-`$lib/coach/api` would break it: the eight `routes/coach/**/page.test.ts` files test through the HTTP
-seam — `vi.mock('$lib/api/client')` + `fakeRouter` with `src/lib/testing/coach-routes.ts`'s
-`COACH_ROUTES` — and an `import-scan.test.ts` contract pins zero whole-module `vi.mock('$lib/coach/api')`
-(`docs/adr/0014` addenda, `docs/adr/0026`). The ten `routes/admin/**/page.test.ts` files do the same with
-`src/lib/testing/admin-routes.ts`'s `ADMIN_ROUTES` (`{ ...OPS_ROUTES, … }`, plus the `apiCalls`/`apiBody`
-inspection helpers), and a sibling contract pins zero mocks of `$lib/admin/api` or `$lib/mobile-admin/api` in any
-form — whole-module, `importOriginal` partial, `vi.doMock`, or a relative path resolving to either (`mobile-admin/stores.test.ts`
-uses the same HTTP seam; `docs/adr/0026` W-8 addendum, `docs/adr/0027` §10). `public`, `member` and `mobile`
-page and api tests do the same (`src/lib/testing/member-routes.ts`'s `MEMBER_ROUTES` holds only the defaults
-tests rely on, `GET /enrolments/me` and `GET /reports/me`; public has no routes table, each getter hitting one
-endpoint), and the contract's seams include `$lib/member/api`/`$lib/mobile/api` and `$lib/public/api`
-(`docs/adr/0028` §4). Per-entity *action* error tables stay at call sites —
-`docs/adr/0014` draws that boundary. mobile-admin's coach attendance page's `ATTENDANCE_ERROR_TEXT` is
-one: it maps 403/404/422 to the same wording desktop's inline attendance-error table uses, so a save
-failure shows the specific reason (`docs/adr/0011` addendum).
+A store with more than one hydration trigger owns a `createHydrationGate` from `src/lib/hydration-gate.ts`. The
+gate holds the hydration protocol, the one write verb `write()`, `reset()` and `pageEntry()`. Identity-free
+gates are mobile-admin's three ops units in `mobile-admin/stores.ts` (members, courses·coaches, orders) and the
+marketing announcements in `stores/notificationsStore.ts`. Identity-scoped gates go through `session-gate.ts`:
+`member/waitlist`, `member/leave`, `member/notifications` (one module for member and mobile), `self-account`,
+the coach identity in `coach/api`, and `coach/conversations` (desktop coach and mobile-admin). Protocol:
+`hydration-gate.ts`'s header. Readers, mutators and refetch fan-out: the owning store's header
+(`docs/adr/0016`, `docs/adr/0025`).
 
-Pages build a `createLoadGate`/`createPagedLoadGate` gate from the single source `src/lib/load-gate.ts`
-(`docs/adr/0008`) — a gate constructed during component init (top level of the script, synchronously)
-starts its first load on mount by itself, so pages don't write `onMount(() => gate.load())` (built outside
-a component, or later in an event handler / after an `await`, it neither auto-loads nor auto-destroys) —
-and read `$gate` for `'loading' | 'error' | 'ready'`, rendering
-`Skeleton`/`SkelCard` while loading and `ErrorState` on failure. That branching is usually collapsed into
-a presentation wrapper, `src/lib/components/ui/LoadGate.svelte` (`slot="loading"` / `slot="error"` with
-`let:retry`, default slot for ready; retry always calls `gate.refresh()`, never `load()`), consumed at 55
-call sites: one per route page across 45 route pages, plus 10 mobile/mobile-admin overlay screens (among
-them `VenuesScreen`/`TicketsScreen`/`CoachesScreen`, and mobile's `MyCourseDetail` with its own in-card
-attendance gate, which overrides `slot="error"` with a bare `ErrorState` because it already sits inside
-a `Card`). The member 我的課程 page's in-card attendance-history load is not a second gate — it lives in
-`member/mine-controller.ts` (`docs/adr/0008`). `ScheduleCalendar` keeps its bespoke inline template
-outside the wrapper.
+`src/lib/session-gate.ts` (`docs/adr/0017`) is the one module that makes stores identity-aware. It keys on
+`sessionIdentity()` from `stores/authStore`, resets a store when the identity changes, and drops responses that
+left before the switch. `createSessionGate` is a hydration gate plus that reset, an epoch-checked fetch and a
+serialized `queueWrite()` chain. `createSessionRefresher` always refetches (points, subscriptions). Rules: the
+module header.
 
-Data that already lives in a store (member/mobile's notification centre; mobile-admin's ops collections;
-the coach conversation list) hydrates once behind the gate's hydrated guard (`notifications` — shared by
-member and mobile — the ops collections, `conversations` — shared by the desktop coach and mobile-admin;
-stores no longer export `*Hydrated`), with `gate.refresh()` always re-fetching for `ErrorState`'s
-retry regardless of the guard — but the guard's mechanism and ownership differ by surface. The wiring is
-the same for all of them (`docs/adr/0025` F-1): `load-gate.ts` exposes a `LoadSource` port
-(`guarded()`/`load(isCurrent)`/`refresh(isCurrent)`), `LoadGateOptions<T>` is a discriminated union of
-`{ fetch, onData?, onError? }` (plain pages) or `{ source, onError? }` (pages reading a shared store), and
-a hydration gate's `pageEntry()` returns `{ source }` — a page writes
-`createLoadGate({ ...gate.pageEntry() })`. load-gate owns only phase, its own run-generation, the
-mount-time first load, unmount, and `onError`; every fetch/apply/flag decision (guard short-circuit,
-post-await mutation-wins re-check, the flag-flip, the fourth to sixth decision points below) lives
-inside `hydration-gate.ts`'s internal `loadRun`/`refreshRun`, reached only through the source's
-`load`/`refresh` closures. `isCurrent` is the
-one thing load-gate hands the source: "unmounted or superseded by a newer run" — the source can only
-read it, never touch phase or generation itself. `fetchGenStable` is a module-private function inside
-`hydration-gate.ts`, called only by its own `refreshRun` (`docs/adr/0016`, `docs/adr/0025`). The
-mutation-wins re-check compares `entered !== mutationGen || get(flag)` (both the entry-time generation
-*and* the flag), so "load in flight → `write()` → `invalidate()` → response lands" doesn't apply the
-stale snapshot.
-
-The refresh family is covered by a *fourth* decision point (`docs/adr/0020`): `fetchGenStable` —
-capture the gate's monotonic mutation generation on entry, re-read it when the response lands, and if a
-local mutation happened inside that window discard the snapshot and refetch in place until it is stable.
-It is deliberately never applied to `load()`/`source.load()` (hydrate's contract is
-mutation-wins-discard, with the reconcile chain owing the refetch; refresh's is explicit freshness, so a
-discard *must* be followed by one) — this asymmetry lives entirely inside `refreshRun`; no generation
-reader is exposed for a page to reach for, on purpose. A *fifth* decision point (`docs/adr/0021`) is the
-**mutation settle signal**, an axis orthogonal to the generation one. Optimistic mutators are
-mark-before-await (write the store *first*, `await` the PATCH after), so "the PATCH is
-in flight" is invisible to a generation check: a GET leaving inside that window reaches the server
-before the write does, gets the old truth back, finds the generation stable, and applies it. So an
-optimistic `write({ optimistic, send, … })` books `send()`'s promise as the mutation's network tail with
-`tail.then(done, done)` (a rejection settles too — structurally, rather than trusting call sites to
-`catch`; the tail *is* `send()`, so the old "caller must pass a pure network tail" obligation is now a
-type-level shape, `commit`/recovery run outside it), an internal
-`pendingSettle()` reports whether any tail is outstanding, and `fetchGenStable` waits on it in a
-re-asking loop *before* capturing the generation and firing. **Wait by tails, discard by generations,
-never swap the two** — the honest boundaries (a hung tail makes refresh wait with it; a continuous
-mutation stream starves refresh until the user stops) are in the ADR. When idle, `pendingSettle()`
-returns `undefined` **synchronously** — a hard contract, since one extra microtask would push the
-generation capture past a caller's "refresh then synchronously optimistic `write()`"; in port terms,
-`source.refresh(isCurrent)` dispatches its fetch synchronously whenever there is no pending tail
-(`docs/adr/0021` addendum). The enrolled call sites are `member/notifications.ts`'s
-`markRead`/`markAllRead` (optimistic `write({ optimistic, send, onFailure: 'keep' })`) and the self
-account's `setPref` (optimistic PATCH, `onFailure: 'resync'`), which book their tails through `write()`;
-`markRead`/`markAllRead` are mobile's mutators too; the pages keep only the toast. The gate's own `generation`/`destroyed` bookkeeping (no page-local
-flag needed) discards a response that resolves after the page unmounts.
-
-A *sixth* decision point (R21) is the **departure ledger**, last departure wins
-(`createDepartureLedger`, exported from `hydration-gate.ts` so the session refresher can share it). Every
-GET that may apply takes a number synchronously when it leaves: the coalesced hydrate GET (joiners share
-its number) and the whole refresh family — store `refresh()`, the page's `source.refresh`, each
-generation-stable refetch round, the reconcile and the `resync` refetch. On landing, a snapshot that a
-later departure has already overtaken returns silently: no wait, no refetch, no throw. So an earlier GET
-landing late never overwrites a newer snapshot, whichever caller started either one, and no consumer keeps
-its own sequence number. An earlier departure that lands first still applies and is then overwritten; a
-later one that rejects leaves the earlier one to apply; an overtaken reconcile doesn't `invalidate()`, and
-an overtaken resync still reports `resynced`. The three axes stay independent — generations discard, tails
-wait, the ledger decides whose landing counts — and `write()`/`invalidate()`/`reset()` never touch it.
-"The superseded one waits for the winner" was rejected: it adds a second wait axis (`docs/adr/0021` allows
-only tails), hangs when the winner's page unmounts, and drops a good older snapshot when the winner
-rejects.
-
-Mobile-admin's ops collections are store-owned and split into three hydration units, each a plain
-`createHydrationGate` in `stores.ts`: **members** (`getMembers(1)`), **courses·coaches** (`getClasses(1)`,
-filling `classes` and `coaches` in one go — a course row's coach name comes from that same coach list) and
-**orders** (`getOrders(1)`). The gates live in the store rather than the pages because the collections are
-shared across pages: `CoachesScreen` and the classes page read the same `coaches`, the admin home banner
-and the orders page read the same `orders`, and a write verb fired on one page must refresh what another
-page shows. Each page spreads its own unit's entry pack — `createLoadGate({ ...membersPageEntry })`,
-`classesPageEntry` (also `CoachesScreen`), `ordersPageEntry` — so the store write goes through the
-source's `load` closure and a response landing after unmount or after a newer run is dropped; the admin
-home page only calls `hydrateOrders()` for its pending-payment banner. Units don't drag each other down:
-a failing `/orders` leaves the members and classes pages working. The four collections are exported as
-`Readable` and boot honestly (`docs/adr/0025` F-3): empty arrays plus a private `EMPTY_OPS` (page meta only:
-every `opsPages` cell `{ total: 0, perPage: 0 }`) are both the boot value and what each unit's `reset` restores — each unit
-writes and resets only its own `opsPages` cell — so the home banner and `CoachesScreen`'s subtitle read
-`0`/nothing before their unit is ready. The member/course/coach writes don't go through `write()` at all:
-the store's per-entity, add/edit-split write verbs (`docs/adr/0022`) — `addMember`/`saveMember`,
-`addCourse`/`saveCourse` (taking a `ValidCourse` from `course-request.ts`'s `checkCourseDraft` and building
-the body with `buildCreateCourseBody`/`buildUpdateCourseBody`) and `addCoach`/`saveCoach` (wrapping
-`coach-save.ts`, returning its outcome untouched) — call the real `/users`/`/courses`/`/coaches` API
-followed by `refetchAfterWrite(...units)`, which refreshes only the affected units concurrently
-(`Promise.allSettled`). Because the backend's order and coach lists JOIN the user's name live, a rename
-fans out: `addMember`/`saveMember` (same name) → members; `saveMember`/`saveCoach` (renamed) → all three;
-`addCourse`/`saveCourse`/`saveCoach` (same name) → courses·coaches; `addCoach` (created) → members +
-courses·coaches. Each verb throws on a failed write (coach verbs return the failing outcome) and otherwise
-awaits the refetch before resolving, so a caller's success toast lands together with the updated lists; a
-unit whose refetch fails after a successful write is only `console.error`ed and the others still apply.
-There's deliberately no generic CRUD helper and no `isNew` flag (`docs/adr/0018` C6, `docs/adr/0012`).
-Nothing guards the refetch *call*; what it *applies* is generation-stable, see `docs/adr/0020`.
-Mobile-admin orders are read-only: 「標記已付款」(`markOrderPaid`) was removed in W-6 fix 1 because the
-backend rejects pending→paid since BE-3, so no ops mutator goes through a unit's `write()` (desktop's
-`LEGAL_NEXT` offers pending → cancelled only). The units also publish `opsPages` (backend
-`total`/`perPage` for the page-1-only lists), which the three pages show as header totals plus a
-`searchCapHint()` line once `total > perPage`.
-
-That store-owned guard + post-await re-check protocol is a shared factory, `src/lib/hydration-gate.ts`'s
-`createHydrationGate` (public surface: `hydrated: Readable<boolean>`, `hydrate`/`refresh`/`invalidate`/
-`write()`/`pageEntry()`/`reset()` — the mutation-generation and settle readers never leave
-the gate, not even through `pageEntry()`). `mobile-admin/stores.ts`'s three ops units build on it directly;
-every identity-scoped store builds on it through `src/lib/session-gate.ts` (`docs/adr/0017`, see the
-dedicated section below) — member's waitlist, leave-requests and notifications, the coach conversation
-list, the self account and coach identity. `hydrateWaitlist`/`hydrateLeaveRequests`/`hydrateNotifications`
-*are* `gate.hydrate`, and their
-mutators run through one `gate.write()`. There is no `refreshWaitlist` (YAGNI); `refreshLeaveRequests`
-is `gate.refresh`, used by `MyCourseDetail`'s open-refresh — accepting once-per-session freshness, with
-in-flight cross-login responses discarded and the explicit-refresh window closed by the
-generation-stable refetch loop, so a cancel landing inside that window discards the stale snapshot and
-refetches instead of reverting the row to pending (`docs/adr/0016`, `docs/adr/0020` — which records
-extending mutation-wins into refresh as an explicit rejection).
-
-Separately, each surface's layout declares a **warm set** (a module-level `WarmSet` constant) — the shared
-stores its shell reads before any page does — and hands it to the session scope, which calls
-`src/lib/store-warm.ts`'s `warmStores(caller, tasks)` keyed on the identity its guard admits
-(`docs/adr/0024`): member and mobile warm notifications (Topbar/Sidebar/TabBar badges), the desktop coach
-layout and mobile-admin (coach section only, keyed on the route section, not the account's roles) warm
-the coach conversation list (the desktop Sidebar's 訊息中心 badge and the mobile TabBar badge both read
-`unreadConversationCount`, `docs/adr/0029`), and the root
-layout warms subscriptions for the marketing shell only (the `/cart` page's and `CartDropdown`'s held-pass
-lines, `docs/adr/0028` §3) plus, on a separate line that ignores `$sessionKey`, the marketing announcements
-(`hydrateAnnouncements` behind a plain hydration gate; the Header bell's `unreadAnnouncements`; the store no
-longer fetches at import, and a failed fetch leaves the gate un-hydrated so the next warm retries). Individual
-*pages* declare their own warm set the same way, run in `Promise.all` alongside their own main fetch
-(`docs/adr/0025` F-2): `member/mine` (`getMine()` + 候補 waitlist/請假), `member/account` (`getAccount()` +
-points/subscriptions), and `mobile/account` (`getAccount()` + points) each call `warmStores(caller, tasks)`
-with a caller label that also prefixes the console warm-up log (`'member/mine'`/`'member/account'`/
-`'mobile/account'`). `warmStores` is `Promise.allSettled`, best-effort (a failed hydrate only
-`console.error`s, never throws) — deliberately unlike `getPoints()`'s own fail-hard points refresh, which
-is page-critical rather than incidental. One GET per identity: the gate's guard stops revisits, the
-in-flight coalescing merges the warm call with a page's own load on the same screen, and an identity
-change resets the gate. Getters don't warm stores as a side effect (`docs/adr/0012` K7): `getDashboard()`
-reads neither points nor notifications, `getMine()` fetches `activeEnrolments()` only, and `getAccount()`
-fetches `GET /orders/me` only — `mobile/account` doesn't request `GET /subscriptions/me` at all.
-`getPoints()` is called directly by whichever page reads `$points`. The account pages' own fetch awaits
-the self account's `hydrateSelfAccount()` in parallel with `getAccount()` and the warm set — fail-hard,
-not in the best-effort helper, because the page renders from `$selfAccount`.
-
-Layout shells stay outside the seam — a deliberate boundary, not an oversight: `admin`'s `Sidebar.svelte`
-/ `Topbar.svelte` have no `data.ts` or `api.ts` import at all (nav config from `admin/nav.ts`), while
-`coach`'s Topbar imports `NOTIFS` from `data.ts` for its unread-bell dropdown — synchronously, never
-through `api.ts` or the load gate (coach's workflow notifications have no backend feed, a standing P2).
-The identity slot is a separate axis: both shells read it off `$authStore.member` — avatar initial,
-display name, and profile popover on `admin`'s and `coach`'s `Sidebar.svelte`; on `coach`'s
-`Topbar.svelte` just the avatar-initial disc (its only popover is the notification bell, not an identity
-surface) — a synchronous store read, not an `api.ts`/load-gate seam (`docs/adr/0013`). `staff` is
-excluded because it's pre-auth login/role-switch UI with no `data.ts` to seam. `public`'s seam is
-`src/lib/public/api.ts` + `adapters.ts` — the one place that converts the backend's `*_cents`/enum/id
-shapes into the marketing types, including cents→NT$ conversion via the shared `ntd()` helper (single
-*definition* here, not its only caller, see `docs/adr/0006`) — over the real `/courses`, `/coaches`,
-`/venues`, `/schedule`, `/posts`, `/contact` endpoints. `src/lib/public/calendar-grid.ts` is the same
-shape applied to `ScheduleCalendar`'s date-grid math — Sunday-leading grid/date pure functions, with the
-component a thin adapter over them; deliberately incompatible with, and never merged into, coach's own
-Monday-leading `schedule-dates.ts`. Its sibling `calendar-selection.ts` does the same for the component's
-*selection* transitions — month paging and date/time-slot picking as pure
-`CalendarSelection → CalendarSelection` functions, with `gate.refresh()` staying a component-side effect
-at the `loadMonth` call site; the bespoke inline three-state template is ADR 0008's standing exemption.
+`src/lib/store-warm.ts`'s `warmStores(caller, tasks)` runs a warm set best-effort. App layouts hand a
+module-level warm set to the session scope for the stores their shell reads (badges). The root layout warms
+subscriptions and announcements for the marketing shell, and a few pages warm extras beside their main fetch.
+Getters never warm stores (`docs/adr/0024`). Rules: `store-warm.ts`'s header.
 
 ## Load gate vs. hydration gate: which one owns a shared store's fetch?
 
-Two shapes exist for a page whose data already lives in a cross-route store (`docs/adr/0008`). Picking
-between them only depends on one question — can the store's hydration be triggered from more than one
-place, independent of any single page's own load-gate?
+Ask one question: can this data's hydration be triggered from more than one place, independent of any one
+page's load gate (another page, a warm set, another getter or mutator)?
 
-- **member notifications — several entry points, one shared flag**: the member notifications *page*
-  and mobile's notifications page each drive their own load-gate, and the member and mobile layouts' warm
-  sets also hydrate the same store (`warmStores`, see above) — independent triggers that must agree on one
-  guard. The store (`member/notifications.ts`) therefore owns a full `createHydrationGate` instance
-  (wrapped by `createSessionGate`, see the next section), and both pages'
-  `createLoadGate({ ...notificationsPageEntry })` read that *same* `gate.hydrated` (`Readable<boolean>`,
-  not writable outside the gate) rather than declaring their own. Mobile's page imports
-  `$lib/member/notifications` directly — there is one gate and one `mapNotification` over the same
-  server-side read state, so a read on one surface shows on the other in the same session
-  (`docs/adr/0022`).
-- **mobile-admin ops — store-owned, shared across pages**: the three ops units (members, courses·coaches,
-  orders) live in `stores.ts`, not the pages; each page builds its load-gate from its unit's entry pack
-  (`membersPageEntry`/`classesPageEntry`/`ordersPageEntry`), the same wiring the notifications pages use.
-  Each unit is a plain `createHydrationGate` because ops is organisation-wide data. The gates are
-  store-owned because the collections are shared across pages — `CoachesScreen` and the classes page read
-  one `coaches`, the home banner and the orders page read one `orders`, and the write verbs refresh units
-  that other pages are showing — so no single page can own the lifecycle. A unit's `refresh()` gets the
-  generation-stable refetch for free — the gate holds the mutation generation itself; "`await` write →
-  `await` unit `refresh()`" is a single fetch per refreshed unit whose snapshot applies (`docs/adr/0020`'s
-  conservation pin, now counted per unit), and the pages' retry reaches the same ledger only indirectly,
-  through `source.refresh(isCurrent)`.
-- **coach conversation list — one session-gate-owned module** (`src/lib/coach/conversations.ts`, R20,
-  `docs/adr/0029`): the signed-in coach's `GET /conversations/me` summaries live in one module on a
-  `createSessionGate`, so a second coach logging in never sees the first one's list. It exports
-  `conversations` (read-only), `unreadConversationCount` (conversations with a badge, not a sum of unread
-  messages), `hydrateConversations`, `conversationsPageEntry`, `refreshConversationsIfHydrated`, and three
-  non-optimistic mutators that take the controller's promise: `markConversationRead(id, badgeCleared)`,
-  `recordSent(id, ctrl.send(text))`, `recordCreated(ctrl.confirmCompose())`. The caller hands the promise
-  over before awaiting, so `write()` captures the identity at call time and a switch before it lands makes
-  the write `stale` (`docs/adr/0021`, `docs/adr/0027` §5); only a successful outcome commits (`badgeCleared`
-  true, `messageSent`, `conversationCreated` — an id already in the list is left as is), and the controller
-  never learns of the list. Readers: the desktop messages page (`createLoadGate({ ...conversationsPageEntry
-  })` plus a background `refreshConversationsIfHydrated()` on re-entry), the desktop dashboard (top three,
-  derived; `getDashboard()` no longer fetches conversations), the desktop Sidebar badge, and mobile-admin's
-  list, thread and TabBar (coach home does not read it). The coach layout and the mobile-admin layout warm it; layout warm,
-  page load and the dashboard's `hydrateConversations()` merge into one in-flight GET, so a first visit is one
-  request. The overlay screens on this store render their own three states: `CoachesScreen`
-  uses a real load-gate + `<LoadGate>` (`createLoadGate({ ...classesPageEntry })`, ready synchronously when
-  the guard hits), so its coach cards never render stale rows during the hydrate window
-  (`docs/adr/0016`).
+- No: the page owns it with `createLoadGate({ fetch, onData })` (`src/lib/load-gate.ts`).
+- Yes, and the data is identity-free: a store-owned `createHydrationGate`. Example: mobile-admin ops, where
+  several pages read one `coaches`/`orders` and a write on one page refreshes another page's list.
+- Yes, and the data belongs to the login identity: `createSessionGate`. Examples: member notifications (the
+  member and mobile pages plus both layouts' warm sets share one flag) and the coach conversation list (two
+  surfaces' pages, warm sets and the dashboard).
+- Identity-scoped, and every call must really fetch: `createSessionRefresher` (points, subscriptions).
 
-Rule of thumb: reach for a store-owned `createHydrationGate` (or `createSessionGate`, for identity-scoped
-data) when a store's hydration can be triggered from more than one place (another getter, another
-mutator, another page); a page with no shared store uses the plain `createLoadGate({ fetch, onData })`
-form.
+A page on a shared store writes `createLoadGate({ ...gate.pageEntry() })`, never the store's `hydrate`/`refresh`
+as its `fetch`: the entry pack keeps the page's unmount and superseded-run checks in front of every write to the
+shared store (`docs/adr/0008`, `docs/adr/0025`). Rules: the headers of `hydration-gate.ts` and `load-gate.ts`.
 
-Why `pageEntry()` hands pages a `{ source: LoadSource }` rather than the store-owned `{ fetch, refresh }`
-pair (`docs/adr/0023`, `docs/adr/0016` addendum, `docs/adr/0024`, `docs/adr/0025`): with the raw pair,
-the store gate would write the shared store without knowing the page exists, losing protections that
-only the load-gate wiring gives — stop re-fetching once the page unmounts, never write a superseded run's
-snapshot, and the re-entry re-checks (the load-gate's own "F1/F5"). All the store-owned callers (the
-four ops pages/screens (`membersPageEntry`/`classesPageEntry`/`ordersPageEntry`) and the desktop and mobile-admin messages pages, through
-`conversationsPageEntry`) spread `pageEntry()` like the notifications pages do. `source.load`'s in-flight GET is shared with `hydrate()`, `source.refresh` is a separate, uncoalesced
-call, and the re-entry bookkeeping stays in load-gate.
+## Admin write rules: one module per entity
 
-## Session gate: session-identity-aware resets on top of the hydration gate
+Each admin entity's "form values → validation → request body" step is one pure module in
+`src/lib/admin/components/` (`docs/adr/0023`):
 
-`createHydrationGate`/`createLoadGate`'s guard/mutation-wins protocol (above) knows nothing about
-*who* is logged in — it only tracks whether a store has been hydrated at all. An SPA logout has no full
-page reload, so without identity awareness the next account's first hydrate would be
-guard-short-circuited into reading the previous account's data, and an in-flight refetch spanning the
-switch would land unconditionally. `src/lib/session-gate.ts` (`docs/adr/0017`) is the single source for
-that awareness. It has **two** factories, both sitting between `authStore` and the domain stores:
+- `course-request.ts`: course draft, `checkCourseDraft`, create/update bodies.
+- `member-request.ts`: `checkNewMember`/`checkMemberEdit`.
+- `coach-save.ts`: `checkNewCoach`/`checkCoachEdit` and the two-step account-then-coach save.
+- `order-status.ts`: legal status transitions, the revenue rule, `changeOrderStatus`.
 
-- **`createSessionGate<T>({ fetch, apply, reset })`** — waitlist / leave / notifications (one gate shared
-  by member and mobile), the self account (`self-account.ts`, shared by member, mobile and coach), the
-  coach identity (private to `coach/api.ts`: just `CoachResponse | null`, resolved once per session from
-  `hydrateSelfAccount()` + `GET /coaches`, the flag flipped back on `CoachNotFoundError` so a retry
-  re-resolves) and the coach conversation list (`coach/conversations.ts`, `docs/adr/0023` C6, `docs/adr/0029`;
-  shared by the desktop coach and mobile-admin). The coach ones are staff-side consumers — staff logins write the same `authStore`. It builds a `HydrationGate`
-  (`createHydrationGate({ fetch, apply, reset })`, whose `reset()` is layered with the write-chain reset
-  below, `docs/adr/0025`). The one mutator skeleton is the *base* gate's `write()` (`docs/adr/0027` §5):
-  it records the owner (reset epoch) and whether the gate was hydrated before `await`, discards a
-  write that landed after a reset as `stale` (the outcome still carries how `send` ended — the
-  server-side effect already happened), re-checks completeness on write-back (a prior reconcile may
-  have flipped the flag back to `false`), bumps the generation, then conditionally queues a serialized,
-  retryable reconciliation refetch (the reconcile chain lives in the base gate too). The session gate
-  adds only `queueWrite(w)`, one serialized write chain per gate. `w` is a `write()` input whose `send`
-  may return `null` (nothing to send → `written(null)`). At enqueue it records the identity and whether the
-  gate was hydrated and applies `optimistic`; at its turn a changed identity yields `stale`, then it
-  hydrates first — a failed hydrate runs the base gate's exported `recoverWrite` (the same recovery step
-  `write()` uses; nothing sent, no generation bump) — re-checks identity, re-applies `optimistic` if the
-  gate was not hydrated at enqueue (so it must be idempotent), and hands off to `write()`. An identity
-  change resets the chain. The self account's `setPref`/`saveSelfAccount` run on it with no recovery
-  branch of their own. Its **`pageEntry()`** (inherited from the hydration gate) is the pack a page spreads into its own
-  load-gate: `{ source: LoadSource }`, where `source.load`/`source.refresh` are the *epoch-checking* fetch
-  and refresh, and the mutation-generation ledger they compare against is the gate's own — the page's
-  refresh and the store gate read **one** ledger, without exposing it as a separate reader. That closes
-  the reconcile window: the gate's `queueReconcile` needs no second queued reconcile, because a reconcile refetch
-  whose snapshot predates a later mutation is discarded and refetched by `gate.refresh`'s own generation
-  check (`docs/adr/0020`). A failed reconcile flips the flag back through `gate.invalidate()`; `hydrate()`
-  shares one in-flight GET among concurrent callers, so no consumer module carries its own `inflight`
-  wrapper.
-- **`createSessionRefresher<T>({ fetch, apply, reset })`** — points / subscriptions. Unconditional-refetch
-  semantics (no guard), plus identity-change reset and *silent* in-flight cross-login discard (`return`,
-  not `throw` — throwing would inject a new "switched accounts" failure mode into `redeemReward`'s and
-  the checkout's existing rejection chains). Since R21 it is also last-departure-wins on the hydration
-  gate's departure ledger (`createDepartureLedger`, the sixth decision point above): each call takes a
-  number before its fetch, and after the epoch check a landing that a later departure has overtaken is
-  dropped just as silently. So the GET that opening the checkout started can no longer land after the
-  post-payment refresh and turn an owned plan back into a billable line. The ledger isn't reset on an
-  identity change: numbers only climb, and a landing that left before the switch is dropped by the
-  epoch check before it reaches the ledger.
+The desktop dialogs and mobile-admin's `MemberForm`/`ClassForm`/`CoachForm` validate with the same modules;
+mobile-admin's orders page uses only `order-status.ts`'s revenue rule. Where copy lives, the add/edit split and
+the "no cross-entity CRUD helper" rule (`docs/adr/0018` C6) are in each module's header.
 
-Both factories share one private identity core, keyed by `sessionIdentity(auth)` — a pure
-function re-exported from `stores/authStore.ts` (owned by the 登入狀態 core `stores/login-state.ts`; `null` when logged out, else `member.id`, degrading to `''`) that the session
-scope's warm key (`$sessionKey`) calls too instead of hand-copying the formula (`docs/adr/0026`). The core fixes its identity *baseline* at construction: the subscription's
-immediate callback only records who is logged in, so a restored (or guest) boot fires no reset at all —
-reset value equals boot value, so nothing on screen differs — and declaration order at call sites is not
-a contract. On a real identity change `createSessionGate` calls its underlying `gate.reset()`
-(`opts.reset()`, flag false, drop the in-flight coalesced GET, bump the reset epoch, clear the
-settle-tail ledger and reconcile chain, and wake any waiters — the hydration gate's own general-purpose
-`reset()`, `docs/adr/0025`) and resets its write chain.
+## Page controllers and twin modules
 
-Each factory call opens its own `authStore` subscription (eight module-level subscriptions total — six
-`createSessionGate`s plus two `createSessionRefresher`s) rather than sharing a registry. Session-gate is
-deliberately *not* folded into `hydration-gate.ts` itself: not every hydration gate is identity-scoped
-(mobile-admin's organisation-wide ops units aren't), and `load-gate.ts` — used by ~55 route pages and
-overlay screens across every surface but `staff` — must not take on auth awareness either;
-that would be a wrong-direction dependency on the repo's widest shared seam.
+When a page's state orchestration is worth testing on its own, it moves to a `.ts` module: effects injected as
+deps, one snapshot store (or IO callbacks), `kind`-tagged outcomes, toast copy left on the page.
+`docs/adr/0012` sets the criteria; `docs/adr/0014` §2 lets desktop and mobile twins share one module. Guards
+and boundaries are in each module's header. Under `src/lib/`:
 
-Epoch knowledge lives only in `session-gate.ts`; `load-gate.ts` knows nothing about it, and the entry
-pack's only dependency on it is a type-only `import type { LoadSource }` (`docs/adr/0025`). Because both
-notifications pages spread `notificationsPageEntry` rather than calling a raw API getter, they can't
-escape the epoch check. There is no separate code path for a stale response: it makes `epochFetch` throw,
-which lands in the load-gate's existing error state, and the user's retry re-enters the *same*
-`epochFetch` under the new epoch. See `docs/adr/0019` for the full walkthrough and `docs/adr/0017` for why
-the guard-short-circuit and navigate-away cases are safe.
-
-## Admin write rules: one module per entity (course, member, coach, order status)
-
-The "form values → validation → request body" step for each admin entity lives in one pure module shared
-by the desktop dialog and the mobile-admin form (`docs/adr/0023`):
-
-- **`src/lib/admin/components/course-request.ts`** — `courseDraftOf(row)` → `CourseDraft` (writable
-  fields only, numeric fields as text buffers), `checkCourseDraft(draft, coaches)` →
-  `valid{course: ValidCourse} | invalid{errors}`, then `buildCreateCourseBody`/`buildUpdateCourseBody`.
-  Both builders put every field in the body and send `null` for a cleared one — an edit always sends
-  both age bounds, because the backend merges a missing bound with the stored one. `coach_id` is never
-  `null` (`GET /coaches` lists active coaches only, so `null` would silently unbind).
-- **`src/lib/admin/components/member-request.ts`** — `checkNewMember`/`checkMemberEdit` → `valid{body} |
-  invalid{errors}`.
-- **`src/lib/admin/components/coach-save.ts`** — `checkNewCoach`/`checkCoachEdit` beside
-  `saveNewCoach`/`saveCoachEdit`.
-- **`src/lib/admin/components/order-status.ts`** — the legal-transition table (`legalNextStatuses`,
-  `applyStatusChange`), the revenue rule (`isRevenueStatus`/`revenueTotal`, the backend's `is_revenue`:
-  paid/processing/completed) and `changeOrderStatus(id, next, deps)`, which maps a 400 to
-  `illegalTransition` and a 409 (points clawback shortfall) to `pointsShortfall`.
-
-The rules follow the backend DTOs: fields the backend has go in, fields it derives (a course's
-enrolment status) are read-only, fields it lacks (venue/term/session count) have no input. Validation
-copy is exported from each module; toast and API-error copy stays on the page (`docs/adr/0012` ④,
-`docs/adr/0011`). Each entity keeps its own types and private helpers, add and edit are separate
-functions, and there's no cross-entity CRUD helper (`docs/adr/0018` C6, `docs/adr/0022`).
-
-## Single-page controllers, orchestrators, and twin modules (coach, admin, member)
-
-Some pages have a same-page-only state-orchestration layer thick enough to be worth extracting into a
-sibling `.ts` (per the Testing convention below) but not general enough to become a shared
-`lib/<surface>/` module consumed by more than one caller — see `docs/adr/0012` for the four-part test
-(K1/K3/K4), and its contrast with the cross-page "list-page controller factory" that `docs/adr/0011`
-rejected.
-
-- **`src/lib/coach/attendance-controller.ts`**'s `createAttendanceController` (K1) sits in front of
-  `coach/attendance/+page.svelte` (and mobile-admin's coach attendance page — see the twin class below):
-  a single `AttendanceViewState` snapshot store instead of mirrored page variables, with
-  `saveAttendance` and an optional `now` (defaulting to the exported `nowHHMM`) injected as deps (no
-  Svelte component/lifecycle imports — `svelte/store` only — and construction is side-effect-free,
-  SSR-safe). It owns the draft transitions as non-exported internals tested through the controller's
-  interface. `save()` layers an incrementing save-token guard on top of the state-based stale guard — not
-  a replacement for it — closing an ABA hole where an in-flight save's late response could land on a
-  class switched away from mid-save. Attendance notes are local-only (`docs/adr/0022` D1): the backend's
-  `PUT /sessions/{id}/attendance` has no notes field, so `applyNote` only writes `notes` and doesn't mark
-  the draft dirty, and both note editors say 「僅存本機，重新整理後會消失」.
-- **`src/lib/coach/conversations-filter.ts`** (K3) is a framework-free port of
-  `coach/messages/+page.svelte`'s tab × search filtering, selection-fallback, and compose-insert logic
-  (`filterConversations`/`pickSelection`) over the list that `src/lib/coach/conversations.ts` owns,
-  consumed only by that page; the compose-insert rule (exists-or-prepend) moved into that module's
-  `recordCreated` (`docs/adr/0029`).
-- **`src/lib/admin/components/coach-save.ts`**'s `saveNewCoach`/`saveCoachEdit` (K4) is a stateless async
-  orchestrator for `admin/coaches/+page.svelte`'s two-step account-then-coach create sequence and its
-  `pendingUserId` retry sentinel — sentinel *semantics* live in the module, sentinel *storage* stays on
-  the page. Both functions return a `kind`-tagged outcome so the page — not the module — picks the error
-  mapper (`docs/adr/0011`) and toast text. It also owns the coach form rules — `checkNewCoach`/
-  `checkCoachEdit` (see "Admin write rules" above).
-- **`src/lib/coach/clock-controller.ts`**'s `createClockController`: the coach home page's
-  clock-in/out orchestration as a two-field snapshot store (`clockedIn`/`clocking`) with
-  `clockIn`/`clockOut`/`isClockedIn` injected as deps. `ApiError` 409/404 reclassification
-  (already-clocked-in / not-clocked-in) and the hydrate-vs-mutation ABA guard (`clockTouched`, mutation
-  wins) live inside, returning `kind`-tagged outcomes so all six toast strings stay on the page
-  (`docs/adr/0014` records the adjudication, over `docs/adr/0013`'s earlier note).
-- **`src/lib/member/checkout-controller.ts`**'s `createCheckoutController`: the 結帳 payment lifecycle
-  *and* its inputs as one snapshot store. The snapshot is `step`/`paying`/`paid` plus
-  `coupon`/`codeErr`/`preview` (`checkoutMath(lines, coupon, points, usePoints)`)/`hasChargeable`, and
-  `checkout.form` (`code`/`usePoints`/`paymentMethod`) is what the components `bind:` to, so a
-  mid-payment reopen shows the order being sent rather than a reset form. The deps are
-  `{ placeOrder, applyCouponCode, lines, points }` (both effects private to `member/checkout-sync.ts`) — two effects plus two read-only sources, which
-  `docs/adr/0012` clarifies are data, not behaviour flags; `deps.placeOrder` is
-  `(lines: ChargeableLine[], order: PlaceOrderInput) => Promise<PaidSummary>`, and `confirmPay()` (no
-  arguments) reads `lines` once and passes it down. The idempotency-key lifecycle (fresh key per checkout
-  open, same key across a failed retry — the double-charge safety machine), `setOpen` edge detection
-  (`freshCheckout | resumedInFlight | noop`) and the paying guard live inside, returning `kind`-tagged
-  outcomes (`orderPlaced`/`orderFailed`/`alreadyPaying`/`nothingChargeable`, original throwable passed
-  through). `freshCheckout` resets form and coupon, `resumedInFlight` keeps them; `applyCode()` drops a
-  response that lands after a `freshCheckout`; `removeCoupon()` backs desktop's 「移除」 link. Surfaces
-  don't assemble the controller themselves: `member/checkout-sync.ts`'s
-  `createCheckout({ cart, refreshAfterOrder, refreshOnOpen })` builds it, deriving `lines` from the given
-  `cart` and running its private `placeOrder`, and its `setOpen` fires `refreshOnOpen` on the `freshCheckout`
-  edge. Its two consumers, with no branch inside the machine, are member's `CheckoutDialog`
-  (`[refreshSubscriptions, refreshPoints]` for both lists) and mobile's module-level singleton `checkout`
-  in `mobile/stores.ts`, beside `cart` and with the same lifetime (`[refreshPoints]` only — its cart never
-  carries pass lines). `CartSheet` calls `setOpen(true)` on mount and `setOpen(false)` on destroy and
-  refuses to close while `paying`; a reopen after navigation lands on `resumedInFlight` — same key, still
-  locked. The constructor-time-key guarantee is pinned by `checkout-controller.test.ts`. Toast copy and
-  `CartSheet`'s `close()` guard stay on the components (`docs/adr/0016` supersedes `docs/adr/0008`'s
-  "keep the double-charge guard in the dialog" note; see also `docs/adr/0014`, `docs/adr/0023`,
-  `docs/adr/0024`, `docs/adr/0025`).
-- **`src/lib/coach/messages-controller.ts`**'s `createMessagesController`: `coach/messages/+page.svelte`'s
-  conversation-thread orchestration as a single `MessagesViewState` snapshot store, with
-  `getThread`/`markRead`/`sendMessage`/`getStudents`/`createConversation` injected as deps.
-  `selectThread` returns two independent promises rather than a single outcome — `threadReady` layers an
-  incrementing-token stale-guard (the same shape as `attendance-controller`'s save-token guard) over the
-  `getThread` fetch, while `badgeCleared` (`markRead`) is deliberately unguarded and never blocks on
-  `threadReady`, so a stuck read-receipt call can't delay the thread-loaded/failed toast; `send`'s
-  stale-response guard instead re-checks a captured `conversationId` snapshot; `confirmCompose`'s
-  `creating` guard mirrors `checkout-controller`'s `alreadyPaying`. `composeOpen` lives in the
-  controller's snapshot, so the page closes the compose dialog through `closeCompose()` — assigning the
-  destructured mirror directly would be overwritten back to `true` by the controller's next `publish()`.
-  Toast text and the tab×search filtering (`conversations-filter.ts`, K3) stay on the page; the conversation
-  list and its mutators moved to `src/lib/coach/conversations.ts`, which the page hands the controller's
-  promises to (`docs/adr/0029`, overturning `docs/adr/0018` §1's keep-on-page note); `docs/adr/0018` records
-  the criterion walkthrough. mobile-admin's `MessageThread`
-  is a second caller (see the twin paragraph).
-- **`src/lib/member/mine-controller.ts`**'s `createMineController`, in `messages-controller`'s shape:
-  member/mine's *inner* coordination — course selection × the in-card attendance-history load × the
-  waitlist-cancel busy guard — as one `MineViewState` snapshot (`active`/`attState`/`attendance`/
-  `cancellingId`) with `getEnrolmentAttendance`/`cancelWaitlist` as its only deps. "Latest request wins"
-  comes from the controller's own incrementing `seq`/`token` guard (`attendance-controller`'s shape
-  again), and "write `active` before fetching" is structural rather than a comment —
-  `fetchAttendance(id)` takes the id as a parameter and never reads the `active` closure. Toast copy and
-  the outer `getMine` gate stay on the page (`docs/adr/0012`, `docs/adr/0008`).
-- **`src/lib/public/contact-form.ts`**'s `createContactForm`, `public`'s form machine:
-  `ContactForm.svelte`'s four sequential validation guards, submit and 3-second reset choreography, with
-  `send` and `schedule: (fn, ms) => cancel` (a timer effect, the same injection habit as
-  `attendance-controller`'s `now`) as deps and 洽詢-domain outcome kinds
-  (`inquirySent`/`validationFailed`/`failed`/`alreadySubmitting`). It draws a boundary the ADR states
-  outright: *validation* copy lives in the machine as exported consts (single string source for the
-  module's own mapping and the component's inline error box — `login-submit.ts`'s `EMPTY_FIELDS_ERROR` is
-  the precedent), while *toast* copy stays at the call site as criterion ④ requires. A leftover reset
-  timer from an earlier successful submit can't cut the next success message short (`docs/adr/0012`).
-
-The same deps-injected, outcome-tagged shape also has a sanctioned *twin* variant — modules whose callers
-are desktop↔mobile twins with byte-identical orchestration rather than a single page. Gate wiring, error
-mappers, and toast copy stay at each call site — `docs/adr/0012`'s criterion ① is relaxed for exactly
-this class by `docs/adr/0014`. Its members:
-
-- `member/leave-form.ts` (the 請假/補課 form machines behind `LeaveDialog`/`MakeupDialog` and mobile's
-  `LeaveSheet`/`MakeupSheet`) and `member/cancel-leave.ts` (the shared cancel-leave busy guard behind
-  member/mine and mobile's `MyCourseDetail`).
-- `admin/settings-form.ts`'s `createSettingsForm` — the admin desktop settings page and mobile-admin's
-  `AdminSettingsScreen` share one factory for their byte-identical 10-field draft-flattening/assembly
-  orchestration, deliberately *not* split into a leave-form-style shared core plus two wrapper factories
-  since there's only one outcome domain to serve (`docs/adr/0018`).
-- `coach/attendance-controller.ts` — the mobile-admin coach attendance page is its second caller, with
-  desktop semantics: an unsaved draft survives a class switch, switching mid-save is blocked with a toast,
-  and a late save response is dropped as `stale`. The page imports `getAttendance`/`saveAttendance`
-  from `$lib/coach/api` directly, with no mapping layer (`docs/adr/0014`).
-- `member/checkout-controller.ts` — mobile's `CartSheet` is the factory's second caller (details in the
-  controller bullet above); the two surfaces differ in *wiring* (who supplies the cart and refresh lists,
-  who drives the lifecycle), not in the machine, which supersedes `docs/adr/0016`'s original "非 twin"
-  note. The twins' coupon-apply step is single-sourced as `member/checkout-sync.ts`'s private `applyCouponCode` (trim
-  guard + the real `GET /coupons/{code}/validate` + one shared 404/network copy), injected into the
-  controller as a dep, so the components don't call it; there is no separate `validateCoupon` any more
-  (`docs/adr/0027` §3).
-- `coach/messages-controller.ts` — mobile-admin's `MessageThread` builds it with the same five deps,
-  imported directly from `$lib/coach/api` (`docs/adr/0024` F5). The one wiring difference is the list
-  writes: `MessageThread` hands `badgeCleared` to `markConversationRead(id, badgeCleared)` and `ctrl.send(text)`
-  to `recordSent(id, …)` in `$lib/coach/conversations`, the same module the desktop page uses, so the unread
-  badge clears after the backend acknowledged the read and the list preview and time follow a sent reply
-  (`docs/adr/0029`).
-- `coach/student-forms.ts` — `createCertificateForm`/`createReportCardForm` (one file, two factories, no
-  mode flag) hold the required-field guard, double-submit guard, trimming, optional-field omission and
-  local-date default shared by desktop's `CertificateDialog`/`ReportCardDialog` and mobile-admin's
-  `StudentActionSheet`; toast copy and the `lastOpen` reset timing stay in the components
-  (`docs/adr/0026`).
-- `coach/data.ts`'s `ATT_CHOICES` — the one attendance-status list (`present`/`leave`/`absent`; there is
-  no 遲到, the backend only has those three) shared by desktop's `AttSegment` and stat chips and
-  mobile-admin's attendance page; `tally()` is a zero-initialised `Record<AttDefault, number>`
-  (`docs/adr/0026` R17 addendum).
-- mobile-admin's `MemberForm`/`ClassForm`/`CoachForm` take `onCreate`/`onUpdate` (promise-returning, close
-  only on success) instead of `onSave(body, isNew)`, validate on submit with the same `checkX` modules as
-  desktop and show errors on the field; `CoachForm`'s `onCreate` also reports `'bind-failed'`, which
-  keeps the sheet open and locks email/name/password for the retry (`docs/adr/0023` R17 addendum,
-  `docs/adr/0027` §4).
-
-`src/lib/login-submit.ts`'s `submitLogin(io: LoginSubmitIO)` pushes the pattern further still — an
-IO-callback orchestrator, not a deps-injected snapshot store, shared by *four* surfaces' login pages
-(`member`/`mobile`/`mobile-admin`/`staff`) rather than a desktop↔mobile pair. It owns the `submit()`
-skeleton (re-entrancy guard → optional empty-fields check → clear error, lock → login → resolve a
-role-based redirect target → navigate → catch → unlock); each page keeps its own `let busy`/`let error`
-locals and markup, wiring them through the `LoginSubmitIO` callbacks. The same file holds three siblings
-covering member's other three auth pages (`docs/adr/0019`) — `submitRegister`, `submitPasswordReset` and
-`submitForgot`, each with its own narrow IO interface (`RegisterSubmitIO`/`PasswordResetSubmitIO`/
-`ForgotSubmitIO`) — deliberately *not* refactored into a shared private core or a generic
-`submitAuthAction`: the four functions' success side effects and catch policies genuinely differ
-(register always has a redirect target, password-reset neither navigates nor logs in, forgot swallows
-the error silently), and the timing contracts they encode differ in the same breath — `navigate`/
-`onSuccess` fire *before* the `finally` unlock while forgot's `onSettled` fires *after* it. Forgot's
-anti-enumeration guarantee is structural rather than documentary: `ForgotSubmitIO` simply has no
-`setError`, so no call site can leak whether the address existed.
+- `coach/attendance-controller.ts`: coach attendance, mobile-admin coach attendance
+- `coach/messages-controller.ts`: coach messages, mobile-admin `MessageThread`
+- `coach/conversations-filter.ts`: coach messages
+- `coach/clock-controller.ts`: coach home
+- `coach/student-forms.ts`: `CertificateDialog`/`ReportCardDialog`, mobile-admin `StudentActionSheet`
+- `coach/data.ts`'s `ATT_CHOICES`: the one attendance-status list for both attendance pages
+- `member/checkout-controller.ts`: member `CheckoutDialog`, mobile `CartSheet` (see Checkout core)
+- `member/mine-controller.ts`: member/mine
+- `member/leave-form.ts`: `LeaveDialog`/`MakeupDialog`, mobile `LeaveSheet`/`MakeupSheet`
+- `member/cancel-leave.ts`: member/mine, mobile `MyCourseDetail`
+- `admin/settings-form.ts`: admin settings, mobile-admin `AdminSettingsScreen`
+- `admin/components/coach-save.ts`: admin coaches, mobile-admin `CoachesScreen` (through `stores.ts`)
+- `public/contact-form.ts`: `ContactForm.svelte`
+- `login-submit.ts`: the member, mobile, mobile-admin and staff login pages, plus member's register, reset and
+  forgot pages (IO callbacks, not a store)
 
 ## Testing
 
-Vitest + `@testing-library/svelte` (jsdom, setup in `src/vitest-setup.ts`), with co-located `*.test.ts`.
-The *convention* — extract pure logic into a sibling `.ts` so it's testable without rendering — is a
-coding standard; see the `coding-standards` skill → `references/frontend.md`. Not every `.ts` has a
-same-named `.test.ts`, though: `member/waitlist.ts`, `leave.ts`, `points.ts`, and `subscriptions.ts` have
-no sibling test file of their own — their mutator/adapter pins live in the topic-named
-`checkout-api.test.ts` and `leave-requests-api.test.ts` instead, while the shared session-identity
-protocol itself (guard, epoch, reconcile chain) is tested exactly once, generically, in lib-root's
-`session-gate.test.ts` (`docs/adr/0017`). "Co-located" above means co-located with the API surface a test
-exercises, not a strict 1:1 file-name mirror.
+Vitest + `@testing-library/svelte` in jsdom (setup in `src/vitest-setup.ts`), with co-located `*.test.ts`
+(routes use `page.test.ts` / `layout.test.ts`). The convention — extract pure logic into a sibling `.ts` so it's
+testable without rendering — is a coding standard; see the `coding-standards` skill → `references/frontend.md`.
+Page and api tests go through the HTTP seam (`lib/testing/fake-router.ts`) and never mock an `api.ts`. Not every
+module has a same-named test: `member/leave.ts` is covered by `member/leave-requests-api.test.ts`, and the gate
+protocols are tested generically in `hydration-gate.test.ts` and `session-gate.test.ts`.
 
 ## Mobile surfaces use an overlay host, not nested routes
 
-`/mobile` and `/mobile-admin` render most secondary views as sheets/screens via `OverlayHost.svelte` +
-an `overlays/` folder, rather than as additional SvelteKit routes. New mobile views usually mean a new
-overlay component + a store entry, not a new route.
+`/mobile` and `/mobile-admin` render secondary views as push screens and sheets through `OverlayHost.svelte` and
+an `overlays/` folder, not as extra SvelteKit routes. A new mobile view is usually a new overlay component plus
+an entry in the surface's `overlay-registry.ts`.

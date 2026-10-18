@@ -4,6 +4,8 @@
  * 品牌色、日期/時間顯示切片、收款時間、年齡範圍）、訂單雙身分協定與 5% 內含稅顯示反推，以及產生型別
  * （$lib/api/generated）的 type-only 轉出。後端回應形狀由 Rust DTO 產生，這裡不手寫信封或成對 DTO
  * （ADR 0007 與其增補）。UI 目標型別一律不收（結算 per-surface，ADR 0003 精神）。
+ * 產生型別一律 `import type`（本檔也不 runtime import ./generated）；消費端直取 $lib/api/generated 或經本檔轉出
+ * 皆可，不設單一入口。generated/ 只有 response：request body 與 UI 目標型別照舊手寫（ADR 0027 §7）。
  *
  * 明確不收（防未來誤收）：
  * - `ntd`/`toCents`/`orderItemsSummary` —— 留在 public/adapters.ts（ADR 0006
@@ -19,8 +21,7 @@
  * - 表住 $lib/domain 各 entity 檔與 domain/member-app（member/mobile 雙生的查表與成對常數）；訂單狀態表住本檔。
  * - 取用形只有兩種：facade 真的攜帶自己的型別事實（以較嚴格或不同形狀的 `Tone` 對同一參照純註記收窄，零 `as`）
  *   時，消費端經該 facade 取用（mobile-admin、member、mobile 屬此）；facade 只是同源且結構恆等的轉手時不設這一層，
- *   消費端直取 $lib/domain 各 entity 檔或本檔。不為零型別事實的轉手開 re-export（假接縫）。mobile/stores 的
- *   store/動作轉手管的是 import 方向，不在此列（ADR 0024）。
+ *   消費端直取 $lib/domain 各 entity 檔或本檔。不為零型別事實的轉手開 re-export（假接縫）。
  * - 以後端 enum 為鍵的表，另提供一支「任何字串都能查」的函式（orderStatusBadge、ticketTypeBadge、attStateBadge），
  *   未知值後備（中性 tone + 原字串）收在表所在的檔；消費端不自己補 `?? …`、不用 `as` 強轉鍵型別。課程等級與
  *   招生狀態同形：消費端呼叫 courseLevelLabel/courseLevelTone/classStatusTone，不索引 LEVEL_TONE/STATUS_TONE。
@@ -67,8 +68,7 @@ export const orderStatusBadge = (s: string): [Tone, string] => lookupOr<[Tone, s
  *  的顯示 `id` 欄），`id` 才是打 `PATCH /orders/{id}/status` 要用的真 uuid。單點此協定，
  *  三個 surface 不再各自記憶「哪個欄位餵哪條路徑」。四處 wire 型別（admin
  *  AdminOrderSummary、member OrderSummary、checkout 與 PATCH 回應 OrderResponse，皆為
- *  後端產生型別）皆必填 `order_number: string`、無 fallback。註：mobile-admin
- *  的 mock ORDERS 用自參照（orderId = 顯示 id）不走此協定；結帳成交快照
+ *  後端產生型別）皆必填 `order_number: string`、無 fallback。註：結帳成交快照
  *  （member/checkout-controller 的 `PaidSummary.orderNumber`）為具名欄位、無混用風險，亦不經此。 */
 export const orderIdentity = (o: { id: string; order_number: string }): { display: string; uuid: string } =>
   ({ display: o.order_number, uuid: o.id });

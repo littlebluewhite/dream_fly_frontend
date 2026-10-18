@@ -13,7 +13,12 @@ export type Tone = [string, string];
  * base arrays + helpers its own `.map` projections (below) build on, so
  * there is exactly one copy of every value. Mobile's own flat types, casts,
  * tuple `Tone`, status maps and mobile-only data stay local; its public API
- * is unchanged. */
+ * is unchanged.
+ * Rule for any new export (`docs/adr/0019` §4): an export of a `$lib/domain` /
+ * `$lib/api/wire` symbol that adds no local type fact (narrowing annotation,
+ * `as` assertion, local interface) and no value transformation — renamed or
+ * not — is a pass-through and doesn't belong here; consumers import the
+ * canonical source, aliasing at the import site (`Activity as ActivityRow`). */
 
 // 對 `$lib/domain` 的純轉手 re-export 已全數退役(C4 批3);本節其下唯一還在轉手的
 // 是來源為 coach surface 的邊界 seam(Student,見卡 3 段落與 ADR 0014 §1)。

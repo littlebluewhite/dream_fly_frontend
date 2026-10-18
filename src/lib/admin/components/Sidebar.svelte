@@ -2,7 +2,10 @@
   /* 管理後台 left rail: dark brand header, single nav group (9 real route
    * links with active state), and an admin profile menu in the footer
    * (avatar + name + role, popover with a 切換至其他身分 → 教練工作台 role
-   * switch, then 個人設定 / 帳號管理 / 登出). */
+   * switch, then 個人設定 / 帳號管理 / 登出).
+   * Like every layout shell it stays outside the api.ts / load-gate seam: no I/O here — nav
+   * comes from admin/nav.ts and the profile name/initial are a synchronous `$authStore.member`
+   * read (ADR 0013). */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';

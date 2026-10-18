@@ -13,10 +13,12 @@
  * 寫入鏈。pageEntry() 的資料來源抓的是本檔的 epochFetch,頁面拿不到未經 epoch 核對的 getter。測試要重置
  * session 閘門,經真的登入 → 登出($lib/testing/session-reset),本檔不開測試出口。
  *
- * 座落位置:authStore 與 domain store 之間。刻意不把身分維度打進 hydration-gate——後者被全 surface 的
- * load-gate 消費(含 staff 面,其身分源不是 member authStore),打進去等於把錯向依賴灌進 repo 最寬的 seam,
- * 也破壞它零模組級副作用、零 store import 的檔頭憲章(ADR-0016)。本檔依賴 authStore,但守零 import-time
- * 副作用:authStore.subscribe() 發生在 factory 被呼叫時(各 store 模組頂層),不是本模組 import 時,SSR 安全。
+ * 座落位置:authStore 與 domain store 之間。刻意不把身分維度打進 hydration-gate 或 load-gate——不是每顆
+ * 水合閘門都有身分範圍(ops 集合、行銷公告與身分無關),load-gate 又是 repo 最寬的 seam,打進去等於灌進錯向
+ * 依賴,也破壞 hydration-gate 零模組級副作用、零 store import 的檔頭憲章(ADR-0016)。員工端的消費者(教練
+ * 身分、教練對話列表)用的是同一個 authStore:員工與 mobile-admin 登入頁也寫入它。本檔依賴 authStore,
+ * 但守零 import-time 副作用:authStore.subscribe() 發生在 factory 被呼叫時(各 store 模組頂層),不是本模組
+ * import 時,SSR 安全。
  *
  * 每次 factory call 一個獨立、模組級永生的 authStore 訂閱,沒有共享 registry:registry 會違反零副作用、
  * 需要新的 registry-reset 測試接縫,而 epoch 只與自身比較、沒有跨模組消費者(ADR-0017、ADR-0024)。
@@ -174,7 +176,7 @@ export function createSessionGate<T>(opts: SessionGateOptions<T>): SessionGate {
 /**
  * 門 (b) session refresher —— points / subscriptions。
  *
- * 保留「無條件重抓」語意(getDashboard/getAccount/getPoints/checkout-sync afterOrder/
+ * 保留「無條件重抓」語意(帳戶頁暖機/getPoints/checkout-sync afterOrder/
  * CheckoutDialog/CartSheet 開啟時都依賴每次真抓,不得硬套 guard),只加三件事:
  * identity 變更清空(reset)+ 在飛換帳「靜默丟棄」+ 後發優先(見下)。丟棄必須靜默(return,不 throw)——
  * redeemReward await refreshPoints、placeOrder 的 afterOrder 會傳播 rejection,若在飛

@@ -10,12 +10,13 @@
  * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 7 個
  * 關切模組的 public exports（型別一律用 `export type`）。新增 store／函式請寫進
  * 歸屬模組，不要寫進這裡：
- *  - $lib/cart          購物車 store + 持久化（lib-root 共用模組，本 barrel 只轉手）
+ *  - $lib/cart          購物車 store + 持久化（lib-root 共用模組，本 barrel 只轉手；刻意保留：
+ *                       同一 import 子句混拿 cart 與會員符號的呼叫端維持一行，ADR 0019 §2）
  *  - waitlist.ts        候補清單
  *  - leave.ts           請假 + 補課 + 課程場次
  *  - points.ts          點數 + 明細 + 兌換
  *  - subscriptions.ts   訂閱 / entitlement
- *  - checkout-sync.ts   購物車同步 + 送出訂單
+ *  - checkout-sync.ts   購物車同步 + 送出訂單（PaymentMethod 型別取自 checkout-controller.ts）
  *  - notifications.ts   通知中心
  *  - ui.ts              跨路由 UI 狀態（checkoutOpen/search/toasts） */
 
