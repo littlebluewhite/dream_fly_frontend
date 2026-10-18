@@ -3,7 +3,15 @@
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
 This is a **single-context** repo: one `GLOSSARY.md` (the domain glossary) and one `docs/adr/` at the repo
-root. Before exploring an area, read `GLOSSARY.md` and the ADRs that touch it.
+root. Each kind of question has one place to look (ADR 0032):
+
+- **Terms → `GLOSSARY.md`**: a short definition and an _Avoid_ line per entry, plus the owner module's name.
+- **Rules → the owner module's header doc**: invariants, protocol steps, when to use what.
+- **Why → `docs/adr/`**: decisions and their reasons.
+- **Where → `docs/architecture.md`**: the map of surfaces, `src/lib`, and which module to read.
+
+Before exploring an area, take its terms from `GLOSSARY.md`, its rules from the owner module's header, and
+read the ADRs that touch it.
 
 ## Use the glossary's vocabulary
 

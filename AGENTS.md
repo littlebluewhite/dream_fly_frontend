@@ -60,19 +60,22 @@ that touches routing or SSR. A change is done when the gate is green.
 
 ## Architecture
 
-Mapped in **`docs/architecture.md`** — read it before touching routing, layouts, surfaces, `src/lib`
-stores, or the cart/checkout/auth flow. In one breath: seven UI **surfaces** split at the root layout
+Mapped in **`docs/architecture.md`** — look there for where a surface, store or flow lives and which
+module's header holds its rules. In one breath: seven UI **surfaces** split at the root layout
 (public/marketing vs six app surfaces), `src/lib` organised per surface, and an auth/cart/checkout core
 backed by `dream_fly_backend` (Bearer tokens + a thin `localStorage` cache) where 報名 (course enrolment)
 and 訂閱 (pass subscription) are independent (ADR 0001).
 
-## Domain docs (read before working in an area)
+## Domain docs: each kind of question has one place (ADR 0032)
 
-- **`GLOSSARY.md`** — the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
-  frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Use these exact terms in code,
-  tests, and issue titles; each entry's *Avoid* line marks the wrong synonyms.
-- **`docs/adr/`** — architecture decisions. Read any ADR that touches your area; if your change
+- **Terms → `GLOSSARY.md`**, the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
+  frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Each entry is a short definition,
+  an *Avoid* line marking the wrong synonyms, and its owner module's name. Use these exact terms in code,
+  tests, and issue titles.
+- **Rules → the owner module's header doc**: invariants, protocol steps, when to use what.
+- **Why → `docs/adr/`**: decisions and their reasons. Read any ADR that touches your area; if your change
   contradicts one, surface the conflict explicitly.
+- **Where → `docs/architecture.md`**: the map above.
 - **`docs/design/`** — the original JSX design prototypes (reference only; not shipped code).
 - **`docs/agents/`** — `issue-tracker.md` (issues/PRDs are GitHub issues via the `gh` CLI),
   `triage-labels.md` (triage label names), `domain.md` (how skills consume the domain docs).
