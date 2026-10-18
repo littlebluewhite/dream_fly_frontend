@@ -106,3 +106,49 @@ describe('hydrateAnnouncements — 經水合閘門抓 GET /posts 並過濾 categ
 		expect(postGets()).toBe(1);
 	});
 });
+
+describe('notificationsStore — 已讀旗標（markAsRead／markAllAsRead）', () => {
+	const ROUTE = 'GET /posts?per_page=100';
+	const page = (posts: PostResponse[]): PostListResponse => ({ posts, total: posts.length, page: 1, per_page: 100 });
+	const postGets = () => vi.mocked(api).mock.calls.filter(([p]) => p === '/posts?per_page=100').length;
+	const readById = () => Object.fromEntries(get(notificationsStore).map((n) => [n.id, n.read]));
+
+	beforeEach(async () => {
+		resetAnnouncementsForTests();
+		vi.mocked(api).mockReset();
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ [ROUTE]: page([makePost({ id: 'a1' }), makePost({ id: 'a2' })]) })
+		);
+	});
+
+	it('markAsRead 只標那一則，未讀數跟著少一', async () => {
+		await hydrateAnnouncements();
+		notificationsStore.markAsRead('a1');
+		expect(readById()).toEqual({ a1: true, a2: false });
+		expect(get(unreadAnnouncements)).toBe(1);
+	});
+
+	it('markAllAsRead 全標已讀，未讀數歸零', async () => {
+		await hydrateAnnouncements();
+		notificationsStore.markAllAsRead();
+		expect(readById()).toEqual({ a1: true, a2: true });
+		expect(get(unreadAnnouncements)).toBe(0);
+	});
+
+	it('水合前 markAllAsRead 不擋水合：照常抓 GET，抓回的公告維持未讀', async () => {
+		notificationsStore.markAllAsRead();
+		await hydrateAnnouncements();
+		expect(postGets()).toBe(1);
+		expect(readById()).toEqual({ a1: false, a2: false });
+	});
+
+	it('reset 連已讀旗標一起還原開機態：重新水合後同一則又是未讀', async () => {
+		await hydrateAnnouncements();
+		notificationsStore.markAsRead('a1');
+		resetAnnouncementsForTests();
+		expect(get(notificationsStore)).toEqual([]);
+		await hydrateAnnouncements();
+		expect(readById()).toEqual({ a1: false, a2: false });
+		expect(get(unreadAnnouncements)).toBe(2);
+	});
+});

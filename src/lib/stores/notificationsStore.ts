@@ -2,7 +2,7 @@
  * 來源為 GET /posts（見 lib/public/api.ts），過濾 category==='announcement'
  * 並轉為 Notification 形狀；經水合閘門由根 layout 暖機（見下方 announcementsGate）。 */
 
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { Notification } from '$lib/types';
 import { listPosts } from '$lib/public/api';
 import { createHydrationGate } from '$lib/hydration-gate';
@@ -23,6 +23,9 @@ export function toAnnouncement(p: PostResponse): Notification {
 /** 公告清單本體。寫入只經水合閘門（apply／reset），不對外暴露 set。 */
 const announcements = writable<Notification[]>([]);
 
+/** 已讀的公告 id。本地狀態、不進閘門內容；寫入只經 markAsRead／markAllAsRead 與閘門 reset。 */
+const readIds = writable<ReadonlySet<string>>(new Set());
+
 /** 公告水合閘門（R20）：import 時不再打 GET /posts，由根 layout 的暖機清單呼叫
  *  hydrateAnnouncements。抓取失敗要 throw（不吞成空清單），閘門才會維持「未水合」，
  *  下次暖機可以重試；已水合則短路、不重抓。公開端點與身分無關，故不用 session 閘門。 */
@@ -32,35 +35,31 @@ const announcementsGate = createHydrationGate({
     return posts.filter((p) => p.category === 'announcement').map(toAnnouncement);
   },
   apply: (list) => announcements.set(list),
-  reset: () => announcements.set([])
+  reset: () => {
+    announcements.set([]);
+    readIds.set(new Set());
+  }
 });
 export const hydrateAnnouncements = announcementsGate.hydrate;
-/** 測試出口：閘門還原開機態（內容回 [] + 旗標 + 在飛 GET）。production 不得引用。 */
+/** 測試出口：閘門還原開機態（內容回 []、已讀清空 + 旗標 + 在飛 GET）。production 不得引用。 */
 export const resetAnnouncementsForTests = announcementsGate.reset;
 
-// Create the notifications store
+/** 公告清單疊上已讀旗標。只匯出 subscribe 與兩個已讀動詞，閘門內容不被寫。 */
 function createNotificationsStore() {
-  const { subscribe, update } = announcements;
+  const { subscribe } = derived([announcements, readIds], ([$announcements, $readIds]) =>
+    $announcements.map((n) => ($readIds.has(n.id) ? { ...n, read: true } : n))
+  );
 
   return {
     subscribe,
 
     markAsRead: (notificationId: string) => {
-      update((notifications) =>
-        notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-      );
+      readIds.update((ids) => new Set(ids).add(notificationId));
     },
 
     markAllAsRead: () => {
-      update((notifications) => notifications.map((n) => ({ ...n, read: true })));
-    },
-
-    clearNotification: (notificationId: string) => {
-      update((notifications) => notifications.filter((n) => n.id !== notificationId));
-    },
-
-    addNotification: (notification: Notification) => {
-      update((notifications) => [notification, ...notifications]);
+      const all = get(announcements).map((n) => n.id);
+      readIds.update((ids) => new Set([...ids, ...all]));
     }
   };
 }
