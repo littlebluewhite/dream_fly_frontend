@@ -16,6 +16,7 @@ import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
+import { microtasks, sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
 import { createLoadGate, type LoadPhase } from './load-gate';
 import { createSessionGate, createSessionRefresher } from './session-gate';
 
@@ -29,10 +30,12 @@ type Item = { id: string };
 /** 手動控時序的 deferred promise——測 in-flight race 不用 fake timers。 */
 function createDeferred<T>() {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((res) => {
+	let reject!: (reason?: unknown) => void;
+	const promise = new Promise<T>((res, rej) => {
 		resolve = res;
+		reject = rej;
 	});
-	return { promise, resolve };
+	return { promise, resolve, reject };
 }
 
 /** macrotask 跳一拍,讓在飛的 refresh / 和解重抓的 fetch → apply 鏈完整收束後再斷言。 */
@@ -445,6 +448,63 @@ describe('createSessionGate — queueWrite 寫入鏈', () => {
 		await expect(p).resolves.toMatchObject({ kind: 'stale', settled: { status: 'rejected' } });
 		expect(gets).toBe(1);
 		expect(undo).not.toHaveBeenCalled();
+	});
+
+	describe('擁有者換人掃描:寫前水合失敗後第 k 拍真登入換帳號 → 舊寫入不替新身分重抓、改 store、翻旗', () => {
+		const rows: { name: string; onFailure: 'rollback' | 'resync'; refetchFails: boolean }[] = [
+			{ name: 'rollback', onFailure: 'rollback', refetchFails: false },
+			{ name: 'resync', onFailure: 'resync', refetchFails: false },
+			{ name: 'resync、重抓也失敗(退回 undo)', onFailure: 'resync', refetchFails: true }
+		];
+
+		it.each(rows)('$name', async (row) => {
+			await sweepOwnerSwitch(async (k) => {
+				let logins = 0;
+				vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
+				const hydrateGet = createDeferred<Item[]>();
+				let gets = 0;
+				let getsAtSwitch = 0;
+				let writeSettled = false;
+				let settledAtSwitch = false;
+				const store = writable<Item[]>([]);
+				const gate = createSessionGate<Item[]>({
+					fetch: () => {
+						gets++;
+						if (gets === 1) return hydrateGet.promise;
+						return row.refetchFails ? Promise.reject(new Error('offline')) : Promise.resolve([{ id: 'server' }]);
+					},
+					apply: (d) => store.set(d),
+					reset: () => {
+						// 每次身分變更都會呼叫;最後一次是換到 B 那一拍
+						getsAtSwitch = gets;
+						settledAtSwitch = writeSettled;
+						store.set([]);
+					}
+				});
+				await authStore.login('a@dreamfly.test', 'pw');
+				const p = gate.queueWrite({
+					optimistic: () => {
+						store.set([{ id: 'local' }]);
+						return () => store.set([{ id: 'undone' }]);
+					},
+					send: () => Promise.resolve('ok'),
+					onFailure: row.onFailure
+				});
+				void p.then(() => (writeSettled = true));
+				await settleReconcile(); // 寫前水合的 GET 已出發、掛著
+				hydrateGet.reject(new Error('offline'));
+
+				await microtasks(k);
+				await authStore.login('b@dreamfly.test', 'pw');
+				await p;
+				await settleReconcile();
+
+				expect(gets - getsAtSwitch, `k=${k}:舊寫入替新身分發了 GET`).toBe(0);
+				expect(get(store), `k=${k}:store 應是新身分的開機值`).toEqual([]);
+				expect(get(gate.hydrated), `k=${k}:旗標被舊寫入翻起`).toBe(false);
+				return settledAtSwitch;
+			});
+		});
 	});
 
 	it('A 的寫入卡住不影響 B:換帳號即重置寫入鏈', async () => {

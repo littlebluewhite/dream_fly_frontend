@@ -1,64 +1,59 @@
 /**
- * 共享 store 水合閘門 factory。
+ * 共享 store 水合閘門 factory:水合協定、寫入動詞與重置的單一住所。mobile-admin ops 集合的三個水合
+ * 單位直接用它;session-gate.ts 的 createSessionGate 建在它上面(waitlist/leave/notifications、本人
+ * 帳號資料、教練身分、教練對話列表)。
  *
- * 收斂「共享 store 的水合協定」：guard 短路 + post-await re-check（mutation 勝出）
- * + mutator 翻旗。最初是 src/lib/mobile-admin/stores.ts 中 ops 集合與訊息水合
- * 兩段逐字重複協定的深模組化——該檔的 ops 集合（三個水合單位）仍直接用本 factory；訊息那段自 R13（docs/adr/0023）改建在
- * session-gate.ts 的 createSessionGate 上（換帳號即重置），R20 起已是教練對話列表
- * （coach/conversations.ts，同樣建在 createSessionGate 上，桌面與 mobile-admin 共用），
- * 仍間接用本 factory。
+ * 核心語意:hydrate() 開頭若已水合就短路、不打 API;fetch 進行中若發生 mutation(write(),或併發的
+ * 另一方先套用並翻旗),await 結束後的 re-check 讓 mutation 勝出、放棄套用剛抓回的資料——「水合前的
+ * 本地寫入」不被姍姍來遲的首次水合覆蓋。refresh() 略過 guard、一律真抓,供使用者明確要求的「重新
+ * 整理」與失敗重試共用;抓回的快照走**世代穩定重抓**(fetchGenStable,第四決策點)——進場捕捉
+ * mutation 世代、落地比對,期間發生的本地 mutation 讓那份快照作廢並原地重抓,直到抓回一份「不早於
+ * 最後一次本地 mutation 出發點」的快照才套用。**第五決策點:mutation settle 訊號**——refresh 族每次
+ * 出發 fetch 之前,先等未 settle 的樂觀 mutation 尾流(樂觀 write() 記帳的 PATCH promise)全數落地,
+ * 關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代又已穩定」的 server-race 窗(ADR 0020 誠實
+ * 界線)。等待軸與丟棄軸正交。
  *
- * 核心語意：hydrate() 開頭若已水合就短路、不打 API；fetch 進行中若發生 mutation
- * （write()，或併發的另一方先套用並翻旗），await 結束後的 re-check 會
- * 讓 mutation 勝出、放棄套用剛抓回的資料——避免「水合前的本地寫入」被姍姍來遲的
- * 首次水合覆蓋（mobile-admin 的 C1 regression 即此類 bug）。refresh() 略過 guard、
- * 一律真抓，供使用者明確要求的「重新整理」與失敗重試共用；抓回的快照則走**世代穩定
- * 重抓**（fetchGenStable，R10 新增的第四決策點）——進場捕捉 mutation 世代、落地比對，
- * 期間發生的本地 mutation 會讓那份快照作廢並原地重抓，直到抓回一份「不早於最後一次
- * 本地 mutation 出發點」的快照才套用。R11 再補上**第五決策點：mutation settle 訊號**
- * ——refresh 族每次出發 fetch 之前，先等未 settle 的樂觀 mutation 尾流（樂觀 write() 記帳
- * 的 PATCH promise）全數落地，關掉「GET 搶在 PATCH 前面出發、server 回舊真值而世代
- * 又已穩定」的 server-race 窗（ADR 0020 誠實界線）。等待軸與丟棄軸正交。
+ * hydrate 路徑刻意**不**套這個迴圈:hydrate 的契約是 mutation-wins 直接丟棄(本地即真相,補抓的責任
+ * 在後續的和解鏈);refresh 的契約是顯式新鮮度,丟棄之後**必須**補抓,否則使用者按了「重新整理」卻
+ * 什麼都沒發生。此不對稱是協定本體,不是遺漏。
  *
- * hydrate 路徑刻意**不**套這個迴圈：hydrate 的契約是 mutation-wins 直接丟棄（本地即
- * 真相，補抓的責任在後續的和解鏈）；refresh 的契約是顯式新鮮度，丟棄之後**必須**補抓，
- * 否則使用者按了「重新整理」卻什麼都沒發生。此不對稱是協定本體，不是遺漏。
+ * 協定的三個決策點(guarded/mutationWins/commit,ADR-0016)與「套用」本身都在閘門內。頁面一律寫
+ * `createLoadGate({ ...gate.pageEntry() })`(plain 閘門與 session 閘門同一條接法):pageEntry() 交出
+ * 資料來源(LoadSource),load-gate 把棄追判準 isCurrent 交進來,閘門的 loadRun/refreshRun 在 apply
+ * 與 commit 之間尊重頁面的 run 身分(重入防護)。phase、run 世代的寫入點與棄追判準留在 load-gate,
+ * 所以這不是 ADR-0020 否決的形 3。
  *
- * C1（架構深化 R5）：協定的三個決策點（guarded／mutationWins／commit）單一住所。R15（候選
- * F-1）起連「套用」本身也收回閘門：頁面 load-gate 不再拿旗標與 into 自己組協定，而是由
- * pageEntry() 交出資料來源（LoadSource）——load-gate 把棄追判準 isCurrent 交進來，閘門的
- * loadRun／refreshRun 在 apply 與 commit 之間尊重頁面的 run 身分（重入防護(F1)／(F5)），
- * 對外的 hydrate()／refresh() 即 isCurrent 恆真的同一支。當年擋住整體委派的就是「閘門
- * 看不到頁面的 run 身分」，isCurrent 由呼叫方交進來之後這個理由不再成立（取代 ADR-0016
- * 決定一）。phase、run 世代的寫入點與棄追判準仍在 load-gate，故不是 ADR-0020 否決的形 3。
+ * **hydrate 合併**:hydrate() 與頁面 load-gate 的 load 共用同一支在飛 GET(子頁 onMount 先於 layout,
+ * 暖機與頁面載入必然同時水合)。只共用「同一次 GET」,沒有世代迴圈,也不是形 3;refresh 族(refresh()、頁面
+ * load-gate 的 refresh 族)一律真抓、不併入。invalidate() 是外部 production 把旗標翻回 false 的唯一
+ * 寫法(reset() 也翻,但它是整顆閘門的重置)。
  *
- * R14(候選 F1):頁面進場包 pageEntry() 自 session-gate 搬進 HydrationGate——plain 閘門
- * (mobile-admin ops 集合的水合單位)與 session 閘門的頁面自此同一條接法
- * `createLoadGate({ ...gate.pageEntry() })`。
- *
- * R14(候選 F2):**hydrate 合併**——hydrate() 與頁面 load-gate 的 load 共用同一支在飛 GET(子頁
- * onMount 先於 layout,暖機與頁面載入必然同時水合)。只共用「同一次 GET」,沒有世代迴圈,
- * 不是 ADR-0020 否決的形 3;refresh 族(refresh()、頁面 load-gate 的 refresh 族)一律真抓、不併入。
- * 同時新增 invalidate():外部 production 把旗標翻回 false 的唯一寫法(reset() 也翻,但它是整顆閘門的重置)。
- *
- * R15(候選 閘門重置):閘門自帶 reset()——內容還原開機值(opts.reset)+ 翻旗 false + 丟在飛合併
- * GET + 換尾流帳本。session-gate 的 identity 重置與各模組的測試出口 reset…ForTests 共用這一支
- * (取代 R14 只給 session-gate 的內部「擁有者換人」出口);hydrated 自此唯讀(收掉
- * ADR-0024 D-F2a),測試不再直寫旗標。
+ * reset():內容還原開機值(opts.reset)+ 翻旗 false + 丟在飛合併 GET + 換尾流帳本。session-gate 的
+ * identity 重置與各模組的測試出口 reset…ForTests 共用這一支;hydrated 唯讀,測試不直寫旗標。
  *
  * 寫入動詞 write()(docs/adr/0027 §5):「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 → 未水合時
  * 和解」整條在閘門內,和解鏈以 resetEpoch 為軸(reset() 一併清)。樂觀路徑同一同步段先寫 store 再記
  * 尾流,非樂觀路徑 await send 之後才寫;丟棄軸(fetchGenStable)與等待軸(尾流帳)各自獨立。write()
  * 是唯一的寫入動詞(推世代、翻旗、尾流入帳都只經由它)。
  *
- * R21:**第六決策點:出發序帳**(createDepartureLedger)——後出發者贏。hydrate 的合併 GET
- * 與 refresh 族(store refresh()、頁面 source.refresh、世代重抓輪、和解、resync)出發時同步取號,落地時已有
- * 更晚出發的落地就靜默返回。先出發的快照較晚落地不再蓋回,不分是哪個 caller 出發的——消費端不必手寫序號。
+ * **第六決策點:出發序帳**(createDepartureLedger)——後出發者贏。hydrate 的合併 GET 與 refresh 族
+ * (store refresh()、頁面 source.refresh、世代重抓輪、和解、resync)出發時同步取號,落地時已有更晚
+ * 出發的落地就靜默返回。先出發的快照較晚落地不會蓋回,不分是哪個 caller 出發的——消費端不必手寫序號。
  * 三軸互相獨立:世代軸管丟棄、尾流軸管等待、出發序帳只管「誰的落地算數」。
  *
- * Legacy store-factory 風格（仿 load-gate.ts／stores/toasts.ts）：closure、無
- * `this`、無模組層副作用（SSR 安全，模組可被伺服端 import），不使用 runes。
- * fetch rejection 一律原樣拋出、不在此攔截——呼叫端的 load-gate 接手轉 error 態。
+ * **擁有者判定同一拍**(水合閘門、session 閘門、登入狀態核心與 api() 共用的規則,只寫在這裡):
+ *  - 「還是同一個擁有者/身分嗎」的判定只在算出它的那一拍有效:`await` 恢復時至少隔了一個 microtask,
+ *    換登可能落在其中。
+ *  - 被它保護的動作要嘛同一拍做完(同步比、同步動手);要嘛延後的動作帶著出發時的擁有者,在真正動手
+ *    的那一拍自己比——本檔的和解重抓收 write() 出發時的 owner,排隊當下比一次、起跑時再比一次。
+ *  - 呼叫端不可以拿 callee 前一拍給的判定動手:recoverWrite 沒回 'stale'、refreshFor 回 true,都只
+ *    代表它 settle 那一拍。
+ *  - 會給出擁有者判定的 async 步驟,測試要做擁有者換人掃描(`$lib/testing/owner-switch-sweep`):落地
+ *    之後的每一拍各換一次擁有者。
+ *
+ * Legacy store-factory 風格(仿 load-gate.ts/stores/toasts.ts):closure、無 `this`、無模組層副作用
+ * (SSR 安全,模組可被伺服端 import),不使用 runes。fetch rejection 一律原樣拋出、不在此攔截——呼叫
+ * 端的 load-gate 接手轉 error 態。
  */
 import { writable, get, type Readable } from 'svelte/store';
 import type { LoadSource } from './load-gate'; // type-only:零 runtime 邊(執行期只剩單向依賴)
@@ -260,7 +255,8 @@ export interface HydrationGate {
 	 *   - send 同步拋出等同回傳 rejected promise(走失敗路徑,不讓 write 本身 reject);
 	 *   - send 落地時 owner 已變 → stale,不碰 store;成功 → commit;失敗 → 依 onFailure 復原
 	 *     (rollback/resync 退回 undo 時沒有 undo 可呼叫 → recovery 'kept';resync 期間 owner 變了 → stale);
-	 *   - 寫入翻了旗而 store 可能不完整(寫入前未水合,或非樂觀寫回時旗標已被翻回 false)→ 排和解重抓。 */
+	 *   - 寫入翻了旗而 store 可能不完整(寫入前未水合,或非樂觀寫回時旗標已被翻回 false)→ 排和解重抓
+	 *     (帶著進場時的 owner:已換人就不排、不跑)。 */
 	write<R>(w: Write<R>): Promise<WriteOutcome<R>>;
 	/** 頁面進場包。source 的三支是閘門自己的閉包(不是複本):
 	 *   - guarded:讀閘門自己的 hydrated **同一實例**;
@@ -405,13 +401,14 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		}
 	}
 
-	/** 和解重抓:序列化 + 失敗可重試 + 幽靈取消(語意逐字取自 R7 session-gate 的 queueReconcile)。
+	/** 和解重抓:序列化 + 失敗可重試 + 幽靈取消。`owner` 是這次寫入出發時的擁有者(延後的動作自己比)。
+	 *  - 排隊:擁有者已換人就不排。
 	 *  - 序列化:多支未水合寫入各自排隊、先進先出——後出發的和解快照必然較新且最後套用。
 	 *  - 可重試:和解失敗把旗標翻回 false(僅限同一擁有者),下一次 hydrate 重新真抓。
-	 *  - 幽靈取消:排隊時的擁有者在起跑前已換人(reset),直接跳過。
+	 *  - 幽靈取消:起跑前擁有者已換人(reset),直接跳過。
 	 *  和解快照 vs 後續寫入的殘窗由 refreshRun 的世代穩定重抓閉合(ADR-0020),這裡不多排。 */
-	function queueReconcile(): void {
-		const owner = resetEpoch;
+	function queueReconcile(owner: number): void {
+		if (owner !== resetEpoch) return;
 		reconcileChain = reconcileChain.then(() => {
 			if (owner !== resetEpoch) return;
 			return refreshRun(ALWAYS).catch(() => {
@@ -447,7 +444,7 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 			const stillIncomplete = !guarded();
 			w.commit?.(settled.value);
 			if (!w.optimistic) bump(); // 非樂觀:寫回之後才宣告(樂觀路徑進場時已宣告)
-			if (!wasHydrated || stillIncomplete) queueReconcile();
+			if (!wasHydrated || stillIncomplete) queueReconcile(owner);
 			return { kind: 'written', result: settled.value };
 		}
 
@@ -455,8 +452,8 @@ export function createHydrationGate<T>(opts: HydrationGateOptions<T>): Hydration
 		const recovery = await recoverWrite(w.onFailure, undo, () => refreshRun(ALWAYS), () => owner !== resetEpoch);
 		if (recovery === 'stale') return { kind: 'stale', settled };
 		// 樂觀路徑進場時已翻旗:寫入前未水合 → store 只有本地寫入,排和解補齊(非樂觀失敗沒動旗標;
-		// resynced 已整包重抓,不必再補;await recoverWrite 期間擁有者換人 → 不在新擁有者身上排)。
-		if (recovery !== 'resynced' && w.optimistic && !wasHydrated && owner === resetEpoch) queueReconcile();
+		// resynced 已整包重抓,不必再補)。擁有者是否已換人由和解自己比。
+		if (recovery !== 'resynced' && w.optimistic && !wasHydrated) queueReconcile(owner);
 		return { kind: 'failed', error, recovery };
 	}
 

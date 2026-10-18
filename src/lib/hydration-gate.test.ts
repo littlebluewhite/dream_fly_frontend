@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 import { createHydrationGate, createDepartureLedger, resultOf, type HydrationGate } from './hydration-gate';
 import { createLoadGate, type LoadPhase } from './load-gate';
+import { microtasks, sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
 
 /** 手動控時序的 deferred promise——測 in-flight 競態不用 fake timers（抄
  *  load-gate.test.ts 開頭寫法）。 */
@@ -1064,22 +1065,65 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 		expect(get(store)).toEqual([]);
 	});
 
-	it('未水合的樂觀寫入失敗、復原步驟之後 reset → 不在新擁有者身上排和解(不發 GET、不翻旗)', async () => {
-		const fetch = vi.fn(async () => ['new-owner']);
-		const { store, gate } = makeGate(fetch);
-		const d = createDeferred<void>();
+	describe('擁有者換人掃描:寫入前未水合,send 落地後第 k 拍 reset → 舊寫入不替新擁有者發 GET、改 store、翻旗', () => {
+		type Row = { name: string; optimistic: boolean; sendFails: boolean; onFailure?: 'keep' | 'rollback' | 'resync'; refetchFails?: boolean };
+		const rows: Row[] = [
+			{ name: '樂觀失敗 keep', optimistic: true, sendFails: true, onFailure: 'keep' },
+			{ name: '樂觀失敗 rollback', optimistic: true, sendFails: true, onFailure: 'rollback' },
+			{ name: '樂觀失敗 resync', optimistic: true, sendFails: true, onFailure: 'resync' },
+			{ name: '樂觀失敗 resync、重抓也失敗(退回 undo)', optimistic: true, sendFails: true, onFailure: 'resync', refetchFails: true },
+			{ name: '樂觀成功', optimistic: true, sendFails: false },
+			{ name: '非樂觀成功', optimistic: false, sendFails: false }
+		];
 
-		const p = gate.write({ optimistic: () => {}, send: () => d.promise, onFailure: 'keep' });
-		d.reject(new Error('offline'));
-		await Promise.resolve();
-		await Promise.resolve(); // 失敗已落地、復原步驟已跑,write() 尚未從 recoverWrite 的 await 醒來
-		gate.reset();
+		it.each(rows)('$name', async (row) => {
+			await sweepOwnerSwitch(async (k) => {
+				let switched = false;
+				let fetchesAfterSwitch = 0;
+				let refetchFails = row.refetchFails ?? false;
+				const store = writable<string[]>([]);
+				const gate = createHydrationGate({
+					fetch: async () => {
+						if (switched) fetchesAfterSwitch++;
+						if (refetchFails) {
+							refetchFails = false;
+							throw new Error('offline');
+						}
+						return ['server'];
+					},
+					apply: (list: string[]) => store.set(list),
+					reset: () => store.set([])
+				});
+				const d = createDeferred<string>();
+				const p = gate.write({
+					optimistic: row.optimistic
+						? () => {
+								store.set(['local']);
+								return () => store.set(['undone']);
+							}
+						: undefined,
+					send: () => d.promise,
+					commit: (r) => store.update((l) => [...l, r]),
+					onFailure: row.onFailure
+				});
+				let writeSettled = false;
+				void p.then(() => (writeSettled = true));
+				if (row.sendFails) d.reject(new Error('offline'));
+				else d.resolve('saved');
 
-		expect((await p).kind).toBe('failed');
-		await settleRetry();
-		expect(fetch).not.toHaveBeenCalled();
-		expect(get(store)).toEqual([]); // 新擁有者的開機值
-		expect(get(gate.hydrated)).toBe(false);
+				await microtasks(k);
+				const settledAtSwitch = writeSettled;
+				gate.reset();
+				switched = true;
+				await p;
+				await settleRetry();
+
+				expect(fetchesAfterSwitch, `k=${k}:舊寫入替新擁有者發了 GET`).toBe(0);
+				expect(get(store), `k=${k}:store 應是新擁有者的開機值`).toEqual([]);
+				expect(get(gate.hydrated), `k=${k}:旗標被舊寫入翻起`).toBe(false);
+				return settledAtSwitch;
+			});
+		});
 	});
 
 	it('樂觀:optimistic 與 send 同步發生,翻旗也同步(await 之前)', async () => {
