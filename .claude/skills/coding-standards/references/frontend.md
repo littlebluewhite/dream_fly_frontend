@@ -15,7 +15,7 @@ SvelteKit 2 + Svelte 5 + TypeScript (strict). Talks to the Rust backend through 
 
 ## State & persistence
 
-- Server-backed shared stores go through the 水合閘門 / session 閘門 and pages enter them via 頁面進場包 — the single sources are defined in `GLOSSARY.md` under those terms; build on them.
+- Server-backed shared stores go through the 水合閘門 / session 閘門 and pages enter them via 頁面進場包 — each single source is defined in its owner module's header (`hydration-gate.ts`, `session-gate.ts`) and `GLOSSARY.md` names it; build on them.
 - One cart implementation: `createCart` in `lib/cart.ts`. The persisted app-wide `cart` is re-exported from `lib/member/stores.ts`; `mobile` takes its own non-persisted instance from the same factory. Extend that factory for any cart change.
 - `localStorage` persistence (`authStore`, the app-wide `cart`) follows the SSR-guard → load → subscribe-write-back pattern. In tests, use the non-persisting factory (e.g. `createCart(persist=false)`) so tests never share `localStorage`.
 

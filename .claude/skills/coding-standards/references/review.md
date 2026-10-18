@@ -11,6 +11,7 @@ Apply when reviewing a diff or PR. Each item is a pass/fail gate; cite `file:lin
 - [ ] Shared stores built on the existing gates and the single `createCart`; `localStorage` stores follow the SSR-guard pattern.
 - [ ] A new top-level surface is wired into the root layout's `isAppSurface` check.
 - [ ] Domain terms match the `GLOSSARY.md` glossary (no *Avoid* synonyms).
+- [ ] **GLOSSARY diffs touch only definitions and `_Avoid_` lines**: a rule change (invariant, protocol step, when to use what) shows up in the owner module's header doc instead (ADR 0032).
 - [ ] **Last-started wins is the gate's job, not hand-written**: a shared store refetches through its 水合閘門 (or a session 閘門 built on it), whose departure ledger (`createDepartureLedger`) already stops an earlier fetch that lands late from overwriting a newer snapshot. A store or page must not keep its own sequence number or pass a custom `isCurrent` for this; a shared store that fetches outside the gates uses the ledger, and a test interleaves two fetches to prove it.
 
 ## Domain safety
