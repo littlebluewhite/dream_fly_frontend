@@ -5,7 +5,10 @@ import { vi } from 'vitest';
  *  undefined 蓋掉斷言。覆寫值可以是函式（呼叫時傳入該次呼叫的 RequestInit；舊式
  *  零參數 thunk 一樣相容）——F2 race 釘的兩段式 GET、讀 body 決定回應的 preset
  *  （如 POST /waitlist）都靠這個表達。
- *  升格自 member/checkout-api.test.ts:58-62 的「極小 fake router」。 */
+ *  升格自 member/checkout-api.test.ts:58-62 的「極小 fake router」。
+ *  這就是測試的 HTTP seam：頁面與 api 測試把 $lib/api/client 的 api 換成 fakeRouter(overrides, COACH_ROUTES／
+ *  ADMIN_ROUTES／MEMBER_ROUTES…)，讓各 surface 的真 getter 走真 mapper；不以任何形式 mock coach／admin／
+ *  mobile-admin／member／mobile／public 的 api.ts(import-scan.test 契約)。 */
 export function fakeRouter(overrides: Record<string, unknown>, defaults: Record<string, unknown> = {}) {
 	return vi.fn(async (path: string, init: RequestInit = {}) => {
 		const method = (init.method ?? 'GET').toString().toUpperCase();

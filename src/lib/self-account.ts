@@ -3,7 +3,7 @@
  * 任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
  * 上次登入時間——連同通知偏好的唯一住處:GET/PATCH /users/me 的讀寫、欄位映射、表單規則、寫入序列化
  * 都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)、mobile(SettingsScreen / EditProfileSheet /
- * 首頁·帳戶 hero / TrialScreen / CartSheet)與教練端(coach/api 的教練閘門與 saveSettings)都 import
+ * 帳戶頁 hero / TrialScreen)與教練端(coach/api 的教練閘門與 saveSettings)都 import
  * 同一顆單例,所以同一位登入者在任何一端改名,各端讀到的都是新名字。教練檔案(GET /coaches)是另一份
  * 資料,不屬於本人帳號資料——教練閘門只另快取它。
  *

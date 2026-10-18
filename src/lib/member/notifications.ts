@@ -6,6 +6,8 @@ import { mapNotification, type Notification } from './data';
 import type { NotificationResponse } from '$lib/api/generated';
 
 /* ---- Notifications ----
+ * member 與 mobile 共用這一個通知模組(ADR-0022):同一顆 session 閘門、同一份 mapNotification 讀同一份
+ * 後端已讀狀態,同一 session 內一邊已讀、另一邊也看得到;mobile 直接 import 本模組,不另開副本。
  * 誠實開機(R14 候選 F3):開機值 = reset 值 = `[]`。角標不另加旗標——空清單 → 未讀數 0
  * → 既有 UI 在 0 時本來就隱藏;暖機後才顯示真數。 */
 const list = writable<Notification[]>([]);

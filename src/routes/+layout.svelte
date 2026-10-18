@@ -19,10 +19,12 @@
     authStore.hydrate();
   });
 
-  /* App surfaces (member centre, admin back-office, coach work-portal, and the
-   * staff login) bring their own chrome via a nested layout (or a bare page),
-   * so the marketing header/footer must not wrap them. global.css still loads
-   * here, so tokens/.btn/.card apply everywhere. */
+  /* App surfaces (member centre, admin back-office, coach work-portal, the
+   * staff login, mobile and mobile-admin) bring their own chrome via a nested
+   * layout (or a bare page), so the marketing header/footer must not wrap them.
+   * A new app surface must add its path prefix here, or it inherits the
+   * marketing chrome. global.css still loads here, so tokens/.btn/.card apply
+   * everywhere. */
   $: isAppSurface =
     $page.url.pathname.startsWith('/member') ||
     $page.url.pathname.startsWith('/admin') ||

@@ -2,7 +2,9 @@
  *
  * walk（列檔）、importSpecifiers（抽 import specifier）、mockedSpecifiers（抽 vi.mock／vi.doMock 的目標）與
  * makeReachPredicate（某 specifier 是否 reach 某 alias／目標目錄；alias 與 targetDir 是資料組態、非行為旗標）。
- * 接縫契約測試掃 import 一律用本模組，不在測試檔內另寫 regex 掃描。 */
+ * 接縫契約測試掃 import 一律用本模組，不在測試檔內另寫 regex 掃描。
+ * $lib/testing 整個目錄只供測試：production 原始碼（src/lib、src/routes 的非測試檔）不得 import 它
+ * （import-scan.test 的 dogfood 契約）。 */
 
 // 掃描器要求——涵蓋靜態 from / side-effect import / 動態 import()
 // （含 /* @vite-ignore */ 註解形與簡單模板字串）與相對路徑逃逸；不誤中註解、

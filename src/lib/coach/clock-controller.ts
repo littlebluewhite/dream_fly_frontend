@@ -6,7 +6,7 @@
  *
  * hydrate 的 mutation-wins 守衛：手動打卡後（clockTouched，留內部不進視圖），開機
  * 查詢的過期結果一律丟棄（回 stale）——同 mobile-admin hydrate guard 的「mutation
- * 永遠贏過 in-flight fetch」原則（docs/architecture.md）。isClockedIn 為最佳努力
+ * 永遠贏過 in-flight fetch」原則（$lib/hydration-gate.ts）。isClockedIn 為最佳努力
  * （失敗一律回 false，見 coach/clock.ts），hydrate 不另設 catch。
  *
  * 刻意不加 busy 早退守衛——今日防雙擊只靠頁面 disabled={clocking}，加了是行為變更。

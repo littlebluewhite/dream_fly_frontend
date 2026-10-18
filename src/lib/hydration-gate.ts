@@ -3,6 +3,11 @@
  * 單位直接用它;session-gate.ts 的 createSessionGate 建在它上面(waitlist/leave/notifications、本人
  * 帳號資料、教練身分、教練對話列表)。
  *
+ * 何時用:store 的水合能從不只一處觸發(多個頁面、暖機清單、另一個 getter 或 mutator)時,由 store
+ * 擁有一顆閘門,各頁 spread 它的 pageEntry() 共讀同一個旗標;只有單一頁面讀的資料不進 store,頁面用
+ * plain `createLoadGate({ fetch, onData })`。資料屬於登入身分就用 createSessionGate,與身分無關(ops
+ * 集合、行銷公告)才直接用本 factory。
+ *
  * 核心語意:hydrate() 開頭若已水合就短路、不打 API;fetch 進行中若發生 mutation(write(),或併發的
  * 另一方先套用並翻旗),await 結束後的 re-check 讓 mutation 勝出、放棄套用剛抓回的資料——「水合前的
  * 本地寫入」不被姍姍來遲的首次水合覆蓋。refresh() 略過 guard、一律真抓,供使用者明確要求的「重新

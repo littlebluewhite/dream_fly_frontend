@@ -16,7 +16,10 @@
  * mock，見 P2 註解)。
  * Task 10(架構深化 R15·請假列 view-model)：LEAVE_STATUS 這份收窄 facade 退役，
  * tone/label 查表併入動作規則、when/makeupWhen 格式化，單源收斂進
- * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。 */
+ * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。
+ * 新增匯出前先過判準（ADR 0019 §4）：對 `$lib/domain`／`$lib/api/wire` 符號的匯出行若不攜帶
+ * 本檔型別事實（收窄註記／`as` 斷言／本地 interface）、也不做值變形（改過名也算），就是純轉手，
+ * 不放這裡——消費端直取 canonical 源，名稱不同時用 import-site alias。 */
 
 // C4 批1(facade 純轉手退役):ME/type Member、AttRecord、EnrolledCourse as
 // MyCourse、CONTACT_THREAD、ChatMessage as ThreadMsg、NOTIFS_SEED、Notification

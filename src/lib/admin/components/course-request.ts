@@ -5,7 +5,8 @@
  *
  * 欄位規則（D2）：後端有的欄位才有 draft 鍵；招生狀態由後端依人數推導（唯讀，不進
  * draft）；場地/期別/堂數後端沒有，不進 draft。驗證文案住本檔（exported const，
- * ADR-0012 ④），toast 與 API 錯誤文案留頁面（ADR-0011）。
+ * ADR-0012 ④），toast 與 API 錯誤文案留頁面（ADR-0011）。型別與私有 helper（courseFields
+ * 等）只在本 entity 內共用，不抽跨 entity 的 CRUD helper（ADR-0018 C6）。
  *
  * 驗證上限對齊後端 CreateCourseRequest/UpdateCourseRequest 與 AgeRange：名稱 1–100、
  * max_students 1–10000、price_cents 0–100,000,000（＝NT$0–1,000,000）、duration 1–1440、

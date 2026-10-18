@@ -15,7 +15,11 @@
    *
    * The prototype's single Shell injected `action` into the Topbar by view; as
    * separate routes can't reach into the parent layout, the Topbar detects the
-   * schedule route itself (same $page used for the title map). */
+   * schedule route itself (same $page used for the title map).
+   *
+   * Like every layout shell it stays outside the api.ts / load-gate seam: the bell reads
+   * `NOTIFS` from coach/data synchronously (coach workflow notifications have no backend
+   * feed, P2) and the avatar disc is a synchronous `$authStore.member` read (ADR 0013). */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';

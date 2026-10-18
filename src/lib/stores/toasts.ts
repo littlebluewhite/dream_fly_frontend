@@ -1,7 +1,9 @@
 /* Dream Fly — canonical toast store (cross-surface).
  *
- * Factory-based so tests get an isolated instance; the app uses the
- * `toasts` singleton exported at the bottom.
+ * Factory-based: each surface builds its own instance with `createToasts(duration)`
+ * (marketing pages share `marketingToasts.ts`) and renders it through one of the
+ * three thin adapters in `lib/components/toast/` (ADR 0005); tests build isolated
+ * instances the same way.
  *
  * Behaviours:
  *   - CAP = 4: if a new (non-dedup) push would exceed 4, the oldest is evicted.

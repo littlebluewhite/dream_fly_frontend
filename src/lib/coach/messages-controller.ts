@@ -14,6 +14,9 @@
  * confirmCompose() 的 promise 交還呼叫端，由呼叫端在 await 之前交給列表 module 的 mutator
  * （markConversationRead／recordSent／recordCreated）。
  *
+ * 兩個呼叫端：桌面 coach/messages 頁與 mobile-admin MessageThread（ADR-0014 §2 雙生、
+ * ADR-0024 F5），同五個 deps 直取 $lib/coach/api，不為行動版加行為旗標。
+ *
  * selectThread 的 stale-guard 仿 attendance-controller 的 save-token guard：遞增序號
  * token，getThread 的 resolve/reject 皆驗 token===seq，不符即丟棄過期回應（不寫
  * thread）——避免快速切換對話時，較舊對話延遲回來的回應覆蓋目前選取對話的訊息。

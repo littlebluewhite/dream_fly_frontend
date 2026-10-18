@@ -3,7 +3,8 @@
  * 形狀處做薄映射；桌面 seam 本身仍是 mock(無後端來源)的欄位原樣沿用同一份 mock/預設值。
  *
  * 本檔只留真正做「組合(平行拉取多支端點)＋薄映射」的 3 支：getMore/getCoachHome/
- * getAdminHome。零映射的轉手一律不留(ADR-0019 C4)，消費端直接 import 擁有者模組；
+ * getAdminHome。零映射的轉手一律不留(ADR-0019 C4)，消費端直接 import 擁有者模組
+ * (名稱衝突時在 import 處 alias，不回本檔開轉手)；
  * ops 集合(members/classes/coaches/orders)由 $lib/mobile-admin/stores 的三個水合單位
  * 直接向 $lib/admin/api 取第 1 頁。 */
 import {

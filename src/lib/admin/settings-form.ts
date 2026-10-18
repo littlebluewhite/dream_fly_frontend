@@ -10,6 +10,8 @@
  * 10 個 Writable（markup 以 `bind:value={$draft.name}` 對物件欄位直接雙向綁定），
  * 唯一守衛（in-flight）也值得有自己的 outcome kind（'alreadySaving'）而非靜默回
  * null——三態 kind 讓呼叫端不必用 `if (!outcome) return` 猜測「回 null 代表什麼」。
+ * 單一工廠、守衛內聯在 save()，刻意不拆 leave-form 那種共用 core——leave-form 拆 core 是
+ * 為了服務請假/補課兩個 outcome 領域，本模組只有一個（ADR-0018 §2）。
  *
  * maxClassSizeToLabel/labelToMaxClassSize（Select 顯示字串 ↔ 後端數字換算）與
  * SettingsWriteBody 組裝（三組 key 皆選填、全送不追蹤 dirty，見 admin/api.ts

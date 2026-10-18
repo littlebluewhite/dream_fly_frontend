@@ -7,8 +7,10 @@
    *   - slot="error":錯誤畫面;未提供時 fallback 為慣用的 Card + ErrorState,
    *     覆寫時以 `let:retry` 取得重試函式
    *   - default slot:ready 內容
-   * retry 一律呼叫 gate.refresh()、絕不呼叫 load()——`hydrate` 選項的 guard 短路只擋 load(),
-   * refresh() 一律真抓(ADR 0008),retry 走 refresh 才不會被守衛短路。 */
+   * retry 一律呼叫 gate.refresh()、絕不呼叫 load()——資料來源的 guarded() 短路只擋 load(),
+   * refresh() 一律真抓(ADR 0008),retry 走 refresh 才不會被守衛短路。
+   * 已經坐在 Card 裡的呼叫點把 slot="error" 覆寫成裸 ErrorState,免得 Card 套 Card。
+   * ScheduleCalendar 刻意不經本元件:它載入時月份導覽列留在畫面上、只把格線換成骨架,三態模板自己寫(ADR 0008)。 */
   import type { LoadGate, PagedLoadGate } from '$lib/load-gate';
   import Card from './Card.svelte';
   import ErrorState from './ErrorState.svelte';
