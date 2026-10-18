@@ -279,20 +279,27 @@ describe('saveSelfAccount', () => {
 		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 	});
+	const ACCOUNT_A = {
+		id: 'u-a', name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '0912345678', birth: '2013-05-18', since: '2024/03',
+		lastLogin: ''
+	};
 
 	it('只送改過的欄位;成功後 selfAccount 與 Topbar 讀的 authStore 名字同步更新', async () => {
 		route({ 'PATCH /users/me': me({ name: '王大明', birth_date: '2013-05-18', preferences: { legacy_key: 'x' } }) });
 
 		const outcome = await saveSelfAccount({ name: ' 王大明 ', phone: '0912345678', birth: '2013-05-18' });
 
-		expect(outcome).toEqual({ kind: 'saved' });
+		expect(outcome).toEqual({ kind: 'saved', account: { ...ACCOUNT_A, name: '王大明' } });
 		expect(patchBodies()).toEqual([{ name: '王大明' }]);
 		expect(get(selfAccount)?.name).toBe('王大明');
 		expect(get(authStore).member?.name).toBe('王大明');
 	});
 
-	it('沒有改動就不發請求', async () => {
-		expect(await saveSelfAccount({ name: '王小明', phone: '0912345678', birth: '2013-05-18', prefs: { promo: false } })).toEqual({ kind: 'saved' });
+	it('沒有改動就不發請求;saved 帶送出那一拍的現值', async () => {
+		expect(await saveSelfAccount({ name: '王小明', phone: '0912345678', birth: '2013-05-18', prefs: { promo: false } })).toEqual({
+			kind: 'saved',
+			account: ACCOUNT_A
+		});
 		expect(patchBodies()).toEqual([]);
 	});
 
@@ -340,12 +347,12 @@ describe('saveSelfAccount', () => {
 
 		const outcome = await saveSelfAccount({ name: 'J', phone: USER_A.phone, birth: '2013-05-18' });
 
-		expect(outcome).toEqual({ kind: 'saved' });
+		expect(outcome.kind).toBe('saved');
 		expect(patchBodies()).toEqual([{ birth_date: '2013-05-18' }]);
 	});
 });
 
-describe('排隊與寫前水合中途換帳號', () => {
+describe('排隊、寫前水合與 PATCH 飛行中換帳號', () => {
 	const USER_B = { ...USER_A, id: 'u-b', email: 'b@dreamfly.test', name: '李小華' };
 
 	/** A 已水合,一筆 PATCH 掛在飛:之後的寫入排在它後面。 */
@@ -378,6 +385,30 @@ describe('排隊與寫前水合中途換帳號', () => {
 
 		expect((await queued).kind).toBe('failed');
 		expect(patchBodies()).toEqual([]);
+	});
+
+	it("PATCH 飛行中換帳號:saveSelfAccount 回 saved 並帶回舊帳號(PATCH 回應);新帳號的 store 不碰", async () => {
+		route({ 'GET /users/me': me() });
+		await hydrateSelfAccount();
+		const hung = deferred<unknown>();
+		route({ 'PATCH /users/me': () => hung.promise });
+		const saving = saveSelfAccount({ name: '王大明' });
+		await new Promise((r) => setTimeout(r, 0));
+		expect(patchBodies()).toEqual([{ name: '王大明' }]); // 已送出
+
+		await loginAs(USER_B);
+		hung.resolve(me({ name: '王大明' }));
+
+		expect(await saving).toEqual({
+			kind: 'saved',
+			account: {
+				id: 'u-a', name: '王大明', initial: '王', email: 'a@dreamfly.test', phone: '0912345678', birth: '', since: '2024/03',
+				lastLogin: ''
+			}
+		});
+		expect(get(selfAccount)).toBeNull(); // B 的本人帳號資料仍是開機值
+		expect(get(prefs)).toEqual(DEFAULT_PREFS);
+		expect(get(authStore).member?.name).toBe('李小華');
 	});
 
 	it("寫前水合時換帳號:setPref 回 { kind: 'rolledBack' },不發 resync GET、不送 PATCH", async () => {
