@@ -1,6 +1,6 @@
-/* Dream Fly — public/marketing surface API 接縫（首次接上真實後端；其餘 surface 見
- * docs/architecture.md 的 mock API 接縫）。這裡只放呼叫 Task 11 client 的 fetch 函式；
- * 後端 wire 形狀一律是產生型別（$lib/api/generated，W-7）；cents/enum/id 轉換到既有前端形狀
+/* Dream Fly — public/marketing surface API 接縫（其餘 surface 見 docs/architecture.md 的
+ * 「API 接縫」）。這裡只放呼叫 $lib/api/client 的 fetch 函式；
+ * 後端 wire 形狀一律是產生型別（$lib/api/generated）；cents/enum/id 轉換到既有前端形狀
  * (CatalogCourse/Coach/Ticket) 一律在 adapters.ts 做，呼叫端不自行轉換。
  *
  * 全部為公開端點（integration-contract.md §3.3–§3.6、§3.16–§3.17）—— 一律

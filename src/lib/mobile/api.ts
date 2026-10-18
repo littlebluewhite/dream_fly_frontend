@@ -1,11 +1,11 @@
 /* 會員 app(手機)API 接縫。
  *
- * Task 19：從整包 reply() mock 改為 desktop member seams 的薄層——直接 import
+ * desktop member seams 的薄層——直接 import
  * `$lib/member/api.ts`(有的直接 re-export/passthrough，形狀完全相同時不重新
  * 宣告一次型別;有的做薄映射，僅在行動版形狀真的不同處，例如 catalog 課程卡
  * 需要一個真後端沒有的 icon 欄位)。凡是桌面 seam 本身仍是 mock(無後端來源)
  * 的欄位，這裡原樣沿用同一份 mock/預設值——不發明桌面沒有的假來源，也不重新
- * 實作桌面已經做過的映射邏輯。逐函式來源見 task-19-report.md 的盤點表。 */
+ * 實作桌面已經做過的映射邏輯。 */
 import type { CatalogCourse } from '$lib/public/adapters';
 import { sendContactInquiry } from '$lib/public/api';
 import type { InquiryResponse } from '$lib/api/generated';

@@ -62,7 +62,7 @@ async function payThrough(getByText: (t: string) => HTMLElement) {
 
 /** confirmPay 打的真實序列（DELETE /cart → POST /cart/items ×N → POST /orders
  *  → GET /subscriptions/me → GET /points/me）一次配好回應。DELETE/POST cart
- *  端點回 undefined（204/成功 upsert），呼叫序列本身已由 checkout-api.test.ts
+ *  端點回 undefined（204/成功 upsert），呼叫序列本身已由 member/checkout-sync.test.ts
  *  釘住，這裡只需要讓 confirmPay 的成功路徑跑得完整。
  *
  *  有狀態：subsAfter/pointsAfter 是「下單後」的世界 —— dialog 開啟時的水合

@@ -31,8 +31,8 @@ const FULL = courseResponse({
 });
 const coursesRes = (courses = [OPEN, FULL]) => ({ courses, total: courses.length, page: 1, per_page: 100 });
 
-/** Waitlist defaults for the shared fakeRouter（同 checkout-api.test.ts /
- *  routes/member/courses/page.test.ts 慣例）：預設 POST /waitlist 回一個成功
+/** Waitlist defaults for the shared fakeRouter（同 routes/member/courses/page.test.ts
+ *  慣例）：預設 POST /waitlist 回一個成功
  *  join，讓不關心候補 API 細節的既有測試不用逐一配置 mock 也能跑完整個 join
  *  流程。 */
 const WAITLIST_DEFAULTS: Record<string, unknown> = {

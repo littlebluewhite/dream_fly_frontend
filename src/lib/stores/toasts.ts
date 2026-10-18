@@ -94,5 +94,5 @@ export function createToasts(duration = 4000) {
 	return { subscribe, notify, dismiss };
 }
 
-/** App-wide singleton — surfaces import this directly. */
+/** Default-duration instance. Nothing imports it: every surface builds its own with `createToasts` (see header). */
 export const toasts = createToasts();

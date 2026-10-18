@@ -1,4 +1,4 @@
-/* Dream Fly — member/waitlist.ts 接線單測(原 checkout-api.test.ts 的候補段):
+/* Dream Fly — member/waitlist.ts 接線單測:
  * HTTP 路徑與 body、成功後 store 內容、錯誤文案。閘門協定(guard 短路、換身分重置、
  * 在飛作廢、和解重抓)的釘子住 hydration-gate.test.ts / session-gate.test.ts。 */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

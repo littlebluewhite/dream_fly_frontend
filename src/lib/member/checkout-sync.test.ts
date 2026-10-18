@@ -1,8 +1,7 @@
-/* Dream Fly — member 結帳工廠（createCheckout，Task 9(架構深化 R15·F-5)）單測。
+/* Dream Fly — member 結帳工廠（createCheckout）單測。
  *
- * 覆蓋兩件事：①送單呼叫序列（原本 checkout-api.test.ts 的 placeOrder 兩個 describe
- * 已搬進本檔並改走 createCheckout；只替換 $lib/api/client 的 api()，ApiError 用回
- * 真實類別）；②surface adapter 這層自己的組裝——lines 衍生自注入的 cart + member
+ * 覆蓋兩件事：①送單呼叫序列（走 createCheckout；只替換 $lib/api/client 的 api()，
+ * ApiError 用回真實類別）；②surface adapter 這層自己的組裝——lines 衍生自注入的 cart + member
  * 訂閱（chargeableLines 過濾已持有的 pass）、setOpen 在 freshCheckout 時觸發注入的
  * refreshOnOpen（best-effort，失敗吞掉）。*/
 
@@ -35,8 +34,7 @@ const SAMPLE_ORDER = orderResponse({
 	items: [{ id: 'oi-1', item_type: 'course', product_id: null, course_id: 'course-uuid-9', quantity: 1, unit_price_cents: 480000 }]
 });
 
-/** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined（同
- *  checkout-api.test.ts 既有慣例）。 */
+/** cart 呼叫預設：未覆寫時 DELETE /cart 與 POST /cart/items 回 undefined。 */
 const CART_DEFAULTS: Record<string, unknown> = { 'DELETE /cart': undefined, 'POST /cart/items': undefined };
 
 beforeEach(async () => {

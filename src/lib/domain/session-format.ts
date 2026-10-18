@@ -1,9 +1,7 @@
-/* Dream Fly — 請假/補課場次選單格式化（純函式，Task 11）。
+/* Dream Fly — 請假/補課場次選單格式化（純函式）。
  *
- * 卡 3：自 $lib/member/session-format 搬遷 $lib/domain——純顯示派生、member/mobile
- * 雙生共同消費（LeaveDialog/MakeupDialog/mine 頁 + LeaveSheet/MakeupSheet/
- * MyCourseDetail 六處），依 course-level 先例落 domain，消費端直接 import、
- * 無需 facade（同 ADR 0009 對純函式的直取精神）。
+ * 純顯示派生、member/mobile 雙生共同消費，依 course-level 先例落 domain，消費端直接
+ * import、無需 facade（同 ADR 0009 對純函式的直取精神）。
  *
  * GET /courses/{id}/sessions（integration-contract.md §3.18）回傳的 session_date
  * 為 naive date（無時區資訊，裁決 2）—— 用 `new Date(y, m-1, d)` 之類的 local

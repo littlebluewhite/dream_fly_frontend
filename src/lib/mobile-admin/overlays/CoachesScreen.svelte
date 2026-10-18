@@ -4,18 +4,19 @@
    * 新增 → onNew()（未提供時 overlay.sheet('coachForm',{c:null,onCreate})）；
    * 編輯鉛筆 → overlay.sheet('coachForm',{c,onUpdate})。
    *
-   * Task F5：新增/編輯改接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
+   * 新增/編輯接真 POST/PATCH /coaches + POST/PATCH /users——同桌面
    * routes/admin/coaches/+page.svelte 的兩步流程（先建 user 帳號、再綁 coach）與
    * 錯誤訊息設計。寫入成功後重抓受影響的 ops 集合單位（刷新表見 $lib/mobile-admin/stores
    * 的寫入動詞）。
    *
-   * C3：兩步序列本身（API 呼叫順序、outcome 判別聯集）已收進
-   * $lib/admin/components/coach-save.ts 的 saveNewCoach/saveCoachEdit——同桌面
-   * admin/coaches/+page.svelte 復用的同一套無狀態純函式（K4）。R12 起再由 store 的
-   * addCoach/saveCoach 動詞包起來(成功 outcome → 動詞內 await 受影響單位的重抓)，本頁
-   * 只剩「呼叫動詞 → 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
+   * 兩步序列本身（API 呼叫順序、outcome 判別聯集）在
+   * $lib/admin/components/coach-save.ts 的 saveNewCoach/saveCoachEdit——與桌面
+   * admin/coaches/+page.svelte 復用同一套無狀態純函式。store 的 addCoach/saveCoach 動詞
+   * 再把它包起來(成功 outcome → 動詞內 await 受影響單位的重抓)，本頁只剩「呼叫動詞 →
+   * 依 outcome.kind 翻譯 toast」，toast 在重抓完成後才出現。
    *
-   * R17：表單送出時驗證、handler 回 Promise<boolean>（true＝已存才關 sheet，false＝sheet 留著）。
+   * 表單送出時驗證；新增 handler 回 'saved'｜'kept'｜'bind-failed'、編輯 handler 回 boolean，
+   * sheet 依回傳值關或留（契約見 CoachForm 檔頭）。
    * 新增的第二步（教練綁定）失敗時，outcome.coachBindFailed 攜帶的 pendingUserId 連同第一次的
    * email/name 存在本頁的 pending（每次開新增 sheet 重置）；handler 回 'bind-failed'，CoachForm
    * 鎖住 email/姓名/密碼，同一個 sheet 內重試只補打 createCoach、沿用同一個 user id，不重建帳號
