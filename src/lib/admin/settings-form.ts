@@ -1,6 +1,5 @@
-/* Dream Fly — admin 系統設定草稿表單機（卡 C2，自桌面 admin/settings/+page.svelte 與
- * mobile-admin AdminSettingsScreen.svelte 兩份逐字重複的 10 個 let + onData 攤平段 +
- * save() 組裝抽出；0014 §2 雙生核可類：deps 相同、零行為旗標、逐字重複，三條件已核）。
+/* Dream Fly — admin 系統設定草稿表單機。桌面 admin/settings/+page.svelte 與 mobile-admin
+ * AdminSettingsScreen.svelte 共用（ADR-0014 §2 雙生：deps 相同、零行為旗標）。
  * 仿 member/leave-form.ts 的骨架：deps 注入（putSettings；getSettings 不進——資料由
  * 各頁 gate 的 onData 呼叫 applyData(d) 餵入）。
  *
@@ -15,20 +14,16 @@
  *
  * maxClassSizeToLabel/labelToMaxClassSize（Select 顯示字串 ↔ 後端數字換算）與
  * SettingsWriteBody 組裝（三組 key 皆選填、全送不追蹤 dirty，見 admin/api.ts
- * SettingsWriteBody 附註）收進本模組——是兩畫面除渲染外唯一的逐字重複。403 文案
- * 映射（桌面 settingsErrorMessage / 行動 SETTINGS_ERROR_TEXT 表）、成功 toast、
- * gate.silentRefresh() 呼叫時機不收進來，逐字留在各畫面（同 leave-form 錯誤透傳、
- * 不做翻譯的慣例：failed outcome 攜帶原始拋出物）。
+ * SettingsWriteBody 附註）在本模組。403 文案映射（桌面 settingsErrorMessage / 行動
+ * SETTINGS_ERROR_TEXT 表）、成功 toast、gate.silentRefresh() 呼叫時機不收進來，留在
+ * 各畫面（同 leave-form 錯誤透傳、不做翻譯的慣例：failed outcome 攜帶原始拋出物）。
  *
- * P2 回歸修復（codex 全輪審查）：重構前兩畫面的 saving 鎖一路保持到
- * `await gate.silentRefresh()` 完成才復位；初版把解鎖放在 save() 的 finally，PUT
- * 一 resolve 就解鎖，此時呼叫端的 silentRefresh() 還在飛——「儲存變更」按鈕提早
- * 恢復可點，若使用者這時再按一次，第二次 save() 不會被 in-flight 守衛擋下，可能
- * 兩個 PUT 交錯、第一次的 silentRefresh 覆寫第二次剛送出的 draft。修法：saved
- * outcome 額外攜帶 release() —— 呼叫端必須在自己的 post-save 同步（如
- * gate.silentRefresh()）完成後親自呼叫它，saving 才真正復位；在此之前鎖持續
- * 擋下後續 save()。failed 路徑不受影響（呼叫端不會在失敗後 silentRefresh，原本
- * 就立即解鎖）。 */
+ * saving 鎖保持到呼叫端的 post-save 同步完成：saved outcome 攜帶 release()，呼叫端
+ * 必須在自己的 post-save 同步（如 `await gate.silentRefresh()`）完成後親自呼叫它，
+ * saving 才復位；在此之前鎖持續擋下後續 save()。若 PUT 一 resolve 就解鎖，
+ * silentRefresh() 還在飛時「儲存變更」已可再按，第二次 save() 不會被 in-flight 守衛
+ * 擋下，兩個 PUT 交錯、第一次的 silentRefresh 會覆寫第二次剛送出的 draft。failed 路徑
+ * 立即解鎖（呼叫端不會在失敗後 silentRefresh）。 */
 import { get, writable, type Readable, type Writable } from 'svelte/store';
 import type { SettingsData, SettingsWriteBody } from './api';
 

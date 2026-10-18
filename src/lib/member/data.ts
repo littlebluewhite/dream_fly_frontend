@@ -10,10 +10,7 @@ import type { Tone } from '$lib/api/wire';
 /* ---- single-source domain seed ----
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生 —— 值相等的 seed 常數集中在
  * `$lib/domain/member-app`。ANNOUNCE 因兩側有一則公告的 bg 色不同，留在本檔案原地
- * (見下方),未搬進 domain。
- * 新增匯出前先過判準（ADR 0019 §4）：對 `$lib/domain`／`$lib/api/wire` 符號的匯出行若不攜帶
- * 本檔型別事實（收窄註記／`as` 斷言／本地 interface）、也不做值變形（改過名也算），就是純轉手，
- * 不放這裡——消費端直取 canonical 源，名稱不同時用 import-site alias。 */
+ * (見下方),未搬進 domain。新增匯出前先過 ADR 0019 §4 的純轉手判準。 */
 // C4 批2(facade 純轉手退役):ME/type Member、STATS/type Stat、SKILLS/type Skill、
 // EnrolledCourse、AttRecord、CONTACT_THREAD/type ChatMessage、POINTS_LEDGER/type
 // LedgerEntry、WEEK、TIME_ROWS、COACH_REPLIES、NOTIF_CATS(下方「Notification

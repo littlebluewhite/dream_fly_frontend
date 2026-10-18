@@ -5,8 +5,8 @@
    * logout). Active state via nav.ts isActive() so 儀表板 isn't stuck
    * active on deeper routes. 訊息中心's badge = 未讀對話數 (unreadConversationCount from the
    * 教練對話列表, hidden at 0); the list is warmed by the coach +layout.
-   * Like every layout shell it stays outside the api.ts / load-gate seam: no I/O here — the
-   * profile card is a synchronous `$authStore.member` read (ADR 0013). */
+   * No I/O: the profile card is a synchronous `$authStore.member` read (shells and the
+   * api.ts seam: ADR 0013 §2). */
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/ui/Icon.svelte';

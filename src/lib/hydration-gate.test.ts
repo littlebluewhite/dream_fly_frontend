@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 import { createHydrationGate, createDepartureLedger, resultOf, type HydrationGate } from './hydration-gate';
 import { createLoadGate, type LoadPhase } from './load-gate';
-import { microtasks, sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
+import { sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
 
 /** 手動控時序的 deferred promise——測 in-flight 競態不用 fake timers（抄
  *  load-gate.test.ts 開頭寫法）。 */
@@ -1077,25 +1077,20 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 		];
 
 		it.each(rows)('$name', async (row) => {
-			await sweepOwnerSwitch(async (k) => {
-				let switched = false;
-				let fetchesAfterSwitch = 0;
+			await sweepOwnerSwitch({ fetchesSinceSwitch: 0, store: [], hydrated: false }, async () => {
+				let fetches = 0;
+				let fetchesAtSwitch = 0;
 				let refetchFails = row.refetchFails ?? false;
-				const store = writable<string[]>([]);
-				const gate = createHydrationGate({
-					fetch: async () => {
-						if (switched) fetchesAfterSwitch++;
-						if (refetchFails) {
-							refetchFails = false;
-							throw new Error('offline');
-						}
-						return ['server'];
-					},
-					apply: (list: string[]) => store.set(list),
-					reset: () => store.set([])
+				const { store, gate } = makeGate(async () => {
+					fetches++;
+					if (refetchFails) {
+						refetchFails = false;
+						throw new Error('offline');
+					}
+					return ['server'];
 				});
 				const d = createDeferred<string>();
-				const p = gate.write({
+				void gate.write({
 					optimistic: row.optimistic
 						? () => {
 								store.set(['local']);
@@ -1106,22 +1101,14 @@ describe('write()(R17:寫入動詞;markMutated/mutate 自 FE-8 退役,write 是�
 					commit: (r) => store.update((l) => [...l, r]),
 					onFailure: row.onFailure
 				});
-				let writeSettled = false;
-				void p.then(() => (writeSettled = true));
-				if (row.sendFails) d.reject(new Error('offline'));
-				else d.resolve('saved');
-
-				await microtasks(k);
-				const settledAtSwitch = writeSettled;
-				gate.reset();
-				switched = true;
-				await p;
-				await settleRetry();
-
-				expect(fetchesAfterSwitch, `k=${k}:舊寫入替新擁有者發了 GET`).toBe(0);
-				expect(get(store), `k=${k}:store 應是新擁有者的開機值`).toEqual([]);
-				expect(get(gate.hydrated), `k=${k}:旗標被舊寫入翻起`).toBe(false);
-				return settledAtSwitch;
+				return {
+					land: () => (row.sendFails ? d.reject(new Error('offline')) : d.resolve('saved')),
+					switchOwner: () => {
+						gate.reset();
+						fetchesAtSwitch = fetches;
+					},
+					observe: () => ({ fetchesSinceSwitch: fetches - fetchesAtSwitch, store: get(store), hydrated: get(gate.hydrated) })
+				};
 			});
 		});
 	});

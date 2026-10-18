@@ -69,9 +69,9 @@ and 訂閱 (pass subscription) are independent (ADR 0001).
 ## Domain docs: each kind of question has one place (ADR 0032)
 
 - **Terms → `GLOSSARY.md`**, the domain glossary (報名 / 方案 / 訂閱 / 購物車 / 結帳 / 洽詢 / 候補, and the
-  frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Each entry is a short definition,
-  an *Avoid* line marking the wrong synonyms, and its owner module's name. Use these exact terms in code,
-  tests, and issue titles.
+  frontend's own terms: 本人帳號資料, 水合閘門, session 閘門, 暖機清單…). Each entry is a short definition
+  and an *Avoid* line marking the wrong synonyms; technical entries also name their owner module. Use these
+  exact terms in code, tests, and issue titles.
 - **Rules → the owner module's header doc**: invariants, protocol steps, when to use what.
 - **Why → `docs/adr/`**: decisions and their reasons. Read any ADR that touches your area; if your change
   contradicts one, surface the conflict explicitly.

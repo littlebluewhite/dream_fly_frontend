@@ -1,8 +1,9 @@
 /* Dream Fly — GLOSSARY 文件掃描。
  *
- * GLOSSARY 是詞彙表：每條只有一兩句「它是什麼」、`_Avoid_`、owner module 的名字；規則住在 owner
- * module 的檔頭。本檔逐條掃 GLOSSARY.md，擋住實作細節長回來：原始碼檔案路徑或副檔名、行號、commit
- * hash、輪次編號(R-n)、定義段落超過 200 字元、超過 2 個 code span、缺 `_Avoid_`。ADR 編號可以引用。
+ * GLOSSARY 是詞彙表：每條只有一兩句「它是什麼」與 `_Avoid_`，技術用語再點名 owner module；規則住在
+ * owner module 的檔頭。本檔逐條掃 GLOSSARY.md，擋住實作細節長回來：原始碼檔案路徑或副檔名、行號、commit
+ * hash、輪次編號(R-n)、定義段落超過 200 字元、超過 2 個 code span、缺 `_Avoid_`、`_Avoid_` 之後還有文字、
+ * `**` 開頭卻不是 `**詞**:` 的行。ADR 編號可以引用。
  * owner module 以 `$lib` 之下、不帶副檔名的名字點名(例如 `hydration-gate`、`coach/api`)。
  * 沒有豁免清單：寫不下就拆詞，或把內容搬回檔頭。
  *
@@ -16,29 +17,35 @@ import { resolve } from 'node:path';
 const MAX_DEFINITION_CHARS = 200;
 const MAX_CODE_SPANS = 2;
 
-type Entry = { term: string; definition: string; text: string; hasAvoid: boolean };
+type Entry = { term: string; wellFormed: boolean; definition: string; text: string; hasAvoid: boolean; afterAvoid: boolean };
 
-/** 條目從 `**詞**:` 那行開始，到下一條或下一個標題為止；定義段落是詞那行之後、`_Avoid_` 之前的文字。 */
+/** 條目從 `**` 開頭那行開始，到下一條或下一個標題為止；定義段落是詞那行之後、`_Avoid_` 之前的文字。
+ *  `**` 開頭卻不是 `**詞**:`(例如全形冒號)也自成一條、標成格式錯，它的文字不會併進上一條。 */
 function parseEntries(markdown: string): Entry[] {
 	const entries: Entry[] = [];
-	let current: { term: string; lines: string[] } | null = null;
+	let current: { term: string; wellFormed: boolean; lines: string[] } | null = null;
 	const close = () => {
 		if (current === null) return;
 		const avoidAt = current.lines.findIndex((line) => line.startsWith('_Avoid_'));
 		const definitionLines = avoidAt === -1 ? current.lines : current.lines.slice(0, avoidAt);
 		entries.push({
 			term: current.term,
+			wellFormed: current.wellFormed,
 			definition: definitionLines.map((line) => line.trim()).join(''),
 			text: [`**${current.term}**:`, ...current.lines].join('\n'),
-			hasAvoid: avoidAt !== -1
+			hasAvoid: avoidAt !== -1,
+			afterAvoid: avoidAt !== -1 && avoidAt < current.lines.length - 1
 		});
 		current = null;
 	};
 	for (const line of markdown.replace(/\r\n?/g, '\n').split('\n')) {
-		const head = /^\*\*(.+?)\*\*:\s*(.*)$/.exec(line);
-		if (head !== null) {
+		if (line.startsWith('**')) {
 			close();
-			current = { term: head[1], lines: head[2] === '' ? [] : [head[2]] };
+			const head = /^\*\*(.+?)\*\*(:?)\s*(.*)$/.exec(line);
+			current =
+				head === null
+					? { term: line, wellFormed: false, lines: [] }
+					: { term: head[1], wellFormed: head[2] === ':', lines: head[3] === '' ? [] : [head[3]] };
 		} else if (line.startsWith('#')) {
 			close();
 		} else if (current !== null && line.trim() !== '') {
@@ -50,6 +57,7 @@ function parseEntries(markdown: string): Entry[] {
 }
 
 const RULES: { rule: string; test: (e: Entry) => boolean }[] = [
+	{ rule: '詞那行不是 **詞**:', test: (e) => !e.wellFormed },
 	{ rule: '原始碼檔案路徑', test: (e) => /(?:^|[^\w$./-])(?:src|\$lib|docs|scripts|static|\.\.?)\/[\w$.-]/m.test(e.text) },
 	{ rule: '副檔名', test: (e) => /\.(?:ts|tsx|js|mjs|cjs|svelte|rs|json|md|css|html|sh)\b/.test(e.text) },
 	{ rule: '行號', test: (e) => /:\d+\b|#L\d+|\bL\d+\b|第\s*\d+\s*行|\b[Ll]ines?\s+\d+/.test(e.text) },
@@ -57,7 +65,8 @@ const RULES: { rule: string; test: (e: Entry) => boolean }[] = [
 	{ rule: '輪次編號', test: (e) => /\bR-?\d+/.test(e.text) },
 	{ rule: `定義超過 ${MAX_DEFINITION_CHARS} 字元`, test: (e) => [...e.definition].length > MAX_DEFINITION_CHARS },
 	{ rule: `超過 ${MAX_CODE_SPANS} 個 code span`, test: (e) => (e.text.match(/`[^`\n]+`/g) ?? []).length > MAX_CODE_SPANS },
-	{ rule: '缺 _Avoid_', test: (e) => !e.hasAvoid }
+	{ rule: '缺 _Avoid_', test: (e) => !e.hasAvoid },
+	{ rule: '_Avoid_ 之後還有文字', test: (e) => e.afterAvoid }
 ];
 
 const problemsOf = (entries: Entry[]): string[] =>
@@ -76,6 +85,7 @@ describe('GLOSSARY 文件掃描', () => {
 			'**甲 (Alpha)**:',
 			'甲是乙的一種，單一 owner 是 `coach/api`(見 ADR-0024、ADR 0031 §5)。',
 			'_Avoid_: 丙, `丁`',
+			'',
 			'**長 (Long)**:',
 			'字'.repeat(MAX_DEFINITION_CHARS),
 			'_Avoid_: 短'
@@ -103,16 +113,26 @@ describe('GLOSSARY 文件掃描', () => {
 			// 定義寫在詞那一行也照樣算字數
 			`**行內**: ${'字'.repeat(MAX_DEFINITION_CHARS + 1)}`,
 			'_Avoid_: 別的詞',
+			// _Avoid_ 之後的文字不算進定義，所以一行都不准有
+			'**後綴**:',
+			'短定義。',
+			'_Avoid_: 別的詞',
+			'塞在 _Avoid_ 之後的一段。',
+			// 不是 `**詞**:` 的 `**` 開頭行(全形冒號)自成一條、標格式錯，不會併進上一條而躲過檢查
+			'**全形**：短定義。',
+			'_Avoid_: 別的詞',
 			// 標題結束上一條：缺 _Avoid_ 的條目恰好 200 字元，下一行的標題不算進它的定義
 			'**沒有避免**:',
 			'字'.repeat(MAX_DEFINITION_CHARS),
 			'### 下一節'
 		].join('\n');
 		const failing = parseEntries(failingMarkdown);
-		expect(failing).toHaveLength(FAILING.length + 2);
+		expect(failing).toHaveLength(FAILING.length + 4);
 		expect(problemsOf(failing)).toEqual([
 			...FAILING.map(([term, , , rule]) => `${term}：${rule}`),
 			`行內：定義超過 ${MAX_DEFINITION_CHARS} 字元`,
+			'後綴：_Avoid_ 之後還有文字',
+			'全形：詞那行不是 **詞**:',
 			'沒有避免：缺 _Avoid_'
 		]);
 	});

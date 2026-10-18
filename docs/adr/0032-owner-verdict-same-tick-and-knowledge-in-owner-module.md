@@ -45,7 +45,7 @@ architecture.md,常常還要補 ADR 增補。文件已經在漂移(architecture.
 
 | 問題 | 去哪裡 | 放什麼 |
 |---|---|---|
-| 這個詞是什麼 | `GLOSSARY.md` | 每條一兩句定義、`_Avoid_`、owner module 的名字 |
+| 這個詞是什麼 | `GLOSSARY.md` | 每條一兩句定義與 `_Avoid_`;技術用語再點名 owner module |
 | 規則是什麼 | owner module 的檔頭 | 不變量、protocol 步驟、選用條件、interface 說明 |
 | 為什麼這樣決定 | `docs/adr/` | 決定與理由 |
 | 東西在哪裡 | `docs/architecture.md` | 有哪些 surface、`src/lib` 怎麼分、要讀哪個 module |

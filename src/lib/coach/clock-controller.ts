@@ -1,4 +1,4 @@
-/* Dream Fly — coach 儀表板打卡編排層（自 coach/+page.svelte 的打卡編排抽出）。
+/* Dream Fly — coach 儀表板打卡編排層。
  * 進頁面時以 isClockedIn()（最新一筆 clock-record）做開機狀態查詢（hydrate），之後為
  * 本地樂觀狀態；clockIn 409（已在上班中）/clockOut 404（尚未上班）時，用回應校正回
  * 正確的本地狀態，不只是回報錯誤——ApiError 409/404 的分類在此層，toast 文案逐字

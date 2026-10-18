@@ -28,9 +28,8 @@
  *
  * Truth lives on the server: the refresh token's validity. `dreamfly_auth` is only a member-profile
  * CACHE for first paint — it lets a reload show the last-known session instantly instead of flashing
- * "logged out" while hydrateSession() confirms it. It is read at module init, so a hard reload of a
- * logged-in SSR page can flicker on hydration — a known, deferred follow-up (ADR-0001), not a
- * regression. */
+ * "logged out" while hydrateSession() confirms it. It is read at module init (SSR hydration flicker:
+ * ADR-0001). */
 
 import { writable, get, type Readable } from 'svelte/store';
 import { getAccess, setTokens, getRefresh, clearTokens, forgetAccess, REFRESH_KEY } from '$lib/api/tokens';

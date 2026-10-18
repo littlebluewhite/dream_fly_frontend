@@ -29,12 +29,8 @@ import { TICKET_TYPE, type TicketType } from '$lib/domain/tickets';
  * retired every pass-through export from this file, so consumers import each
  * canonical source directly. What stays here is admin's own content — local
  * interfaces, local constants and the one real mapper (`mapMemberAccount`) —
- * over the base types/helpers imported below.
- * Rule for any new export (`docs/adr/0019` §4): an export of a `$lib/domain` /
- * `$lib/api/wire` symbol that adds no local type fact (narrowing annotation,
- * `as` assertion, local interface) and no value transformation — renamed or
- * not — is a pass-through and doesn't belong here; consumers import the
- * canonical source, aliasing at the import site where a name differs. */
+ * over the base types/helpers imported below. A new export must pass the
+ * pass-through test in `docs/adr/0019` §4. */
 
 // C4 批4(pass-through 退役):Coach/Venue/Ticket/Activity 四個型別轉出退役(消費端改直取
 // $lib/domain/coaches、$lib/domain/venues、$lib/domain/tickets、

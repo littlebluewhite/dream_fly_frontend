@@ -16,7 +16,7 @@ import { get, writable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { authStore } from '$lib/stores/authStore';
 import { fakeRouter } from '$lib/testing/fake-router';
-import { microtasks, sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
+import { sweepOwnerSwitch } from '$lib/testing/owner-switch-sweep';
 import { createLoadGate, type LoadPhase } from './load-gate';
 import { createSessionGate, createSessionRefresher } from './session-gate';
 
@@ -458,14 +458,12 @@ describe('createSessionGate — queueWrite 寫入鏈', () => {
 		];
 
 		it.each(rows)('$name', async (row) => {
-			await sweepOwnerSwitch(async (k) => {
+			await sweepOwnerSwitch({ getsSinceSwitch: 0, store: [], hydrated: false }, async () => {
 				let logins = 0;
 				vi.mocked(api).mockImplementation(fakeRouter({ 'POST /auth/login': () => (++logins === 1 ? AUTH_RES : AUTH_RES_B) }));
 				const hydrateGet = createDeferred<Item[]>();
 				let gets = 0;
 				let getsAtSwitch = 0;
-				let writeSettled = false;
-				let settledAtSwitch = false;
 				const store = writable<Item[]>([]);
 				const gate = createSessionGate<Item[]>({
 					fetch: () => {
@@ -477,12 +475,11 @@ describe('createSessionGate — queueWrite 寫入鏈', () => {
 					reset: () => {
 						// 每次身分變更都會呼叫;最後一次是換到 B 那一拍
 						getsAtSwitch = gets;
-						settledAtSwitch = writeSettled;
 						store.set([]);
 					}
 				});
 				await authStore.login('a@dreamfly.test', 'pw');
-				const p = gate.queueWrite({
+				void gate.queueWrite({
 					optimistic: () => {
 						store.set([{ id: 'local' }]);
 						return () => store.set([{ id: 'undone' }]);
@@ -490,19 +487,12 @@ describe('createSessionGate — queueWrite 寫入鏈', () => {
 					send: () => Promise.resolve('ok'),
 					onFailure: row.onFailure
 				});
-				void p.then(() => (writeSettled = true));
 				await settleReconcile(); // 寫前水合的 GET 已出發、掛著
-				hydrateGet.reject(new Error('offline'));
-
-				await microtasks(k);
-				await authStore.login('b@dreamfly.test', 'pw');
-				await p;
-				await settleReconcile();
-
-				expect(gets - getsAtSwitch, `k=${k}:舊寫入替新身分發了 GET`).toBe(0);
-				expect(get(store), `k=${k}:store 應是新身分的開機值`).toEqual([]);
-				expect(get(gate.hydrated), `k=${k}:旗標被舊寫入翻起`).toBe(false);
-				return settledAtSwitch;
+				return {
+					land: () => hydrateGet.reject(new Error('offline')),
+					switchOwner: () => authStore.login('b@dreamfly.test', 'pw'),
+					observe: () => ({ getsSinceSwitch: gets - getsAtSwitch, store: get(store), hydrated: get(gate.hydrated) })
+				};
 			});
 		});
 	});

@@ -1,5 +1,5 @@
-/* Dream Fly — 管理後台 · 教練建立/編輯兩階段 async 編排器（K4，自 coaches/+page.svelte
- * 的 saveNew/saveEdit 抽出）。無狀態純函式：呼叫端傳入目前表單值、（新增用）哨兵
+/* Dream Fly — 管理後台 · 教練建立/編輯兩階段 async 編排器。無狀態純函式：呼叫端傳入
+ * 目前表單值、（新增用）哨兵
  * pendingUserId 或（編輯用）目前教練資料，以及一組注入的 API 函式；回傳 outcome 判別
  * 聯集，讓頁面依 kind 翻譯成對應的 toast 文案與哨兵狀態更新——本模組不呼叫 toast、不
  * 持有任何狀態（哨兵的儲存/生命週期留頁面，見 +page.svelte 檔頭註解）。
@@ -17,11 +17,11 @@
  * 兩支 mapper（apiErrorMessage/coachErrorMessage）留頁面（ADR 0011）——本模組的
  * error 欄位一律是原始拋出物，不做文案轉換。
  *
- * R13 Task 4(C2)：表單驗證也收進本模組——checkNewCoach()/checkCoachEdit() 把桌面
- * CoachEditDialog 與 mobile CoachForm 的草稿轉成 CoachFormValues(含標籤拆分)，驗證
- * 文案是本檔 exported const(ADR-0012 ④)。上限對齊後端：姓名 2–100、密碼 8–128
- * (POST/PATCH /users)，職稱 1–100(coaches.title)。新增/編輯各一支函式，私有 helper
- * (charLen/splitTags/checkNameTitle)不跨 entity 共用(ADR-0018 C6、ADR-0022)。 */
+ * 表單驗證也在本模組：checkNewCoach()/checkCoachEdit() 把桌面 CoachEditDialog 與
+ * mobile CoachForm 的草稿轉成 CoachFormValues(含標籤拆分)，驗證文案是本檔 exported
+ * const(ADR-0012 ④)。上限對齊後端：姓名 2–100、密碼 8–128(POST/PATCH /users)，
+ * 職稱 1–100(coaches.title)。新增/編輯各一支函式(ADR-0022)；跨 entity 的 CRUD helper
+ * 見 ADR-0018 C6。 */
 import type { CoachFormValues } from '$lib/admin/data';
 
 /** 新增教練表單草稿(文字欄位原樣，標籤是「以、分隔」的文字緩衝)。 */
