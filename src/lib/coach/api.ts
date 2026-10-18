@@ -1,15 +1,13 @@
-/* 教練工作台 API 接縫。Task 19：getDashboard/getToday/getSchedule/getSettings 換真後端
- * 資料 + saveSettings 新增；Task 10：getAttendance/getStudents 換真後端資料；
- * Task 12：getConversations/getThread/sendMessage/markRead 換真後端資料（訊息中心，
- * §3.21）。回傳「形狀」盡量維持不變，頁面不用重寫樣板。
+/* 教練工作台 API 接縫：把後端回應映射成教練頁面用的形狀。
  *
  * 教練身分：本人帳號資料($lib/self-account，GET /users/me) + GET /coaches →
  * find(user_id === account.id) 是本檔案的核心（登入的使用者本人就是教練，教練姓名只能從
- * users.name 來，見 integration-contract.md §3.4 附註）。R13 Task 7(C6)起由私有 session
- * 閘門快取：每個登入身分只解析一次，換帳號/登出即重置。R16 Task 1b 起這顆閘門只快取
- * CoachResponse | null，本人資料一律讀 $selfAccount(與會員端同一份快取)。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
+ * users.name 來，見 integration-contract.md §3.4 附註）。私有 session 閘門快取解析結果：
+ * 每個登入身分只解析一次，換帳號/登出即重置。這顆閘門只快取 CoachResponse | null；本人資料
+ * 由 $lib/self-account 持有(與會員端同一份快取)：讀取走 $selfAccount，存檔(saveSettings)
+ * 用 saveSelfAccount 帶回的帳號。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
  * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面經 coachLoadErrorCopy
- * (instanceof 判別，R16 Task 8)改顯示「此帳號未綁定教練檔案」。 */
+ * (instanceof 判別)改顯示「此帳號未綁定教練檔案」。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
@@ -501,16 +499,17 @@ export const getSettings = async (): Promise<CoachSettingsData> => {
 
 /** ProfileTab 可編輯的欄位裡，只有 name/phone 有對應的後端 PATCH 欄位（avatar_url 目前
  *  沒有 UI 入口，未使用）；email/birth/bio 後端不支援經此寫入，頁面唯讀顯示或不提供
- *  輸入(R16 Task 2a)。R16 Task 1b:先解析教練(快取命中不打 API),再交給
- *  saveSelfAccount——它與目前值比對、只送改過的欄位(電話 null 的教練只改姓名時不再送
- *  phone: '' 撞後端 8–20 碼驗證的 422),表單規則不合法就不發請求;PATCH 回應寫回
- *  $selfAccount 並 authStore.syncUser(Topbar 等處的姓名跟著變),不重抓。簽章不變:失敗
- *  (含驗證錯誤、換帳號後被跳過)照樣 throw。 */
+ *  輸入。先解析教練(快取命中不打 API),再交給 saveSelfAccount——它與目前值比對、只送
+ *  改過的欄位(電話 null 的教練只改姓名時不送 phone: '' 撞後端 8–20 碼驗證的 422),表單
+ *  規則不合法就不發請求;PATCH 回應寫回 $selfAccount 並 authStore.syncUser(Topbar 等處的
+ *  姓名跟著變),不重抓。回傳的 Coach 用存檔結果帶回的帳號組,不在 await 之後讀
+ *  $selfAccount:PATCH 飛行中換帳號時伺服器已經接受,照樣 resolve 舊帳號的 Coach(畫面隨
+ *  身分範圍重掛)。失敗(含驗證錯誤、排隊中換帳號而沒送出)照樣 throw。 */
 export const saveSettings = async (edit: { name?: string; phone?: string }): Promise<CoachSettingsData> => {
 	const { coach } = await requireCoach();
 	const outcome = await saveSelfAccount(edit);
 	if (outcome.kind === 'failed') throw outcome.error;
-	return { coach: mapCoach(get(selfAccount)!, coach) };
+	return { coach: mapCoach(outcome.account, coach) };
 };
 
 /* ═════════════════════════ 發證書（POST /certificates，見 integration-contract.md §3.22） ═════════════════════════ */
