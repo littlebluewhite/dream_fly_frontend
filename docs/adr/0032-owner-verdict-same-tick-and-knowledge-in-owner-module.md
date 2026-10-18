@@ -72,7 +72,6 @@ architecture.md,常常還要補 ADR 增補。文件已經在漂移(architecture.
 - **改寫舊 ADR 的原文或增補**:舊 ADR 維持原樣,包括 `docs/adr/0031` §5 的停止條件。
 - **替 architecture.md 加掃描測試**:它是地圖,本來就會寫路徑。
 - **清理沒改到的檔頭**:只在改到的檔順手改成只寫現況。
-- **測試夾具的四種登入形狀、`coach-session` 沒人用的 `authRoutes`、`notificationsStore` 沒人用的
-  `clearNotification`/`addNotification`**。
+- **測試夾具的四種登入形狀、`coach-session` 沒人用的 `authRoutes`**。
 - **後端變更與 wire 型別變更**:後端另開 issue,不改 DTO 形狀。
 - **改使用者層級的 skill**:domain-modeling 的規則已經跟 §2 一致。
