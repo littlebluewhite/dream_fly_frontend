@@ -3,6 +3,12 @@
  * Thin fetch wrapper: prefixes the base URL, attaches the Bearer access token,
  * maps non-2xx {"error": msg} bodies to ApiError, and — on a 401 — asks the
  * 登入狀態 core to refresh the token pair once and retries the original request.
+ *
+ * 401 重送規則 (ADR-0031): a 401 is resent only for the identity that issued the request. If the
+ * identity changed before or after the refresh (a re-login, or the refresh came back with someone
+ * else's tokens), api() throws the 401 instead: an old screen's write is never resent with the new
+ * identity's credentials.
+ *
  * Credentials, identity and the refresh itself (single-flight, cross-tab lock,
  * compare-and-set/clear) all belong to the core (stores/login-state.ts); this
  * module only asks it, never stores tokens or calls back into authStore. */
@@ -58,10 +64,9 @@ export async function api<T>(path: string, init: RequestInit & { auth?: boolean 
   const { auth, ...requestInit } = init;
   const useAuth = auth !== false;
 
-  // 只替發出請求的那個畫面身分重送:發出時記下身分,遇 401 交給核心的 refreshFor(issuedBy)——refresh 前後
-  // 身分都沒變才重送,否則(換登、或 refresh 換出別人的憑證)丟 401,不得用新身分的憑證替舊畫面的寫入重送。
-  // refreshFor 的 promise settle 到這裡恢復之間還有 microtask 空檔(換登可能落在其中),所以重送前要在
-  // 同一拍再比一次身分,比完立刻同步掛上 Bearer 送出。
+  // 401 重送規則見檔頭:發出時記下身分,遇 401 交給核心的 refreshFor(issuedBy)。refreshFor 的 promise
+  // settle 到這裡恢復之間還有 microtask 空檔(換登可能落在其中),所以重送前要在同一拍再比一次身分,比完
+  // 立刻同步掛上 Bearer 送出。
   const issuedBy = currentIdentity();
   const response = await sendRequest(path, requestInit, useAuth);
 

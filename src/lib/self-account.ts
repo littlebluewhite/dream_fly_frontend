@@ -202,12 +202,13 @@ export async function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcom
  *  outcome.account,不在 await 之後讀 $selfAccount(那時它可能已是新帳號的開機值 null)。 */
 export async function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveOutcome> {
 	let prefsChanged = false;
-	let sentFrom: ApiMe | null = null; // 送出那一拍的現值
+	let meAtSend: ApiMe | null = null; // 送出那一拍的現值
 	try {
 		const saved = resultOf(
 			await gate.queueWrite({
 				send: () => {
-					const cur = (sentFrom = get(me)!); // queueWrite 已水合且核對過身分 → 必有值
+					const cur = get(me)!; // queueWrite 已水合且核對過身分 → 必有值
+					meAtSend = cur;
 					const invalid = selfAccountEditError(edit, toSelfAccount(cur));
 					if (invalid) return Promise.reject(new Error(invalid));
 
@@ -229,7 +230,7 @@ export async function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccoun
 				}
 			})
 		);
-		return { kind: 'saved', account: toSelfAccount(saved ?? sentFrom!) }; // null = 沒有要送的
+		return { kind: 'saved', account: toSelfAccount(saved ?? meAtSend!) }; // null = 沒有要送的
 	} catch (error) {
 		return { kind: 'failed', error };
 	}

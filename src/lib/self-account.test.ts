@@ -38,6 +38,12 @@ function me(over: Record<string, unknown> = {}, user: Record<string, unknown> = 
 	return { ...user, birth_date: null, preferences: null, ...over };
 }
 
+/** `me()` 映射出的本人帳號資料。 */
+const ACCOUNT_A = {
+	id: 'u-a', name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '0912345678', birth: '', since: '2024/03',
+	lastLogin: ''
+};
+
 type Routes = Record<string, unknown>;
 let routes: Routes;
 function route(extra: Routes) {
@@ -279,17 +285,14 @@ describe('saveSelfAccount', () => {
 		await hydrateSelfAccount();
 		vi.mocked(api).mockClear();
 	});
-	const ACCOUNT_A = {
-		id: 'u-a', name: '王小明', initial: '王', email: 'a@dreamfly.test', phone: '0912345678', birth: '2013-05-18', since: '2024/03',
-		lastLogin: ''
-	};
+	const HYDRATED_A = { ...ACCOUNT_A, birth: '2013-05-18' }; // beforeEach 水合的那份
 
 	it('只送改過的欄位;成功後 selfAccount 與 Topbar 讀的 authStore 名字同步更新', async () => {
 		route({ 'PATCH /users/me': me({ name: '王大明', birth_date: '2013-05-18', preferences: { legacy_key: 'x' } }) });
 
 		const outcome = await saveSelfAccount({ name: ' 王大明 ', phone: '0912345678', birth: '2013-05-18' });
 
-		expect(outcome).toEqual({ kind: 'saved', account: { ...ACCOUNT_A, name: '王大明' } });
+		expect(outcome).toEqual({ kind: 'saved', account: { ...HYDRATED_A, name: '王大明' } });
 		expect(patchBodies()).toEqual([{ name: '王大明' }]);
 		expect(get(selfAccount)?.name).toBe('王大明');
 		expect(get(authStore).member?.name).toBe('王大明');
@@ -298,7 +301,7 @@ describe('saveSelfAccount', () => {
 	it('沒有改動就不發請求;saved 帶送出那一拍的現值', async () => {
 		expect(await saveSelfAccount({ name: '王小明', phone: '0912345678', birth: '2013-05-18', prefs: { promo: false } })).toEqual({
 			kind: 'saved',
-			account: ACCOUNT_A
+			account: HYDRATED_A
 		});
 		expect(patchBodies()).toEqual([]);
 	});
@@ -399,13 +402,7 @@ describe('排隊、寫前水合與 PATCH 飛行中換帳號', () => {
 		await loginAs(USER_B);
 		hung.resolve(me({ name: '王大明' }));
 
-		expect(await saving).toEqual({
-			kind: 'saved',
-			account: {
-				id: 'u-a', name: '王大明', initial: '王', email: 'a@dreamfly.test', phone: '0912345678', birth: '', since: '2024/03',
-				lastLogin: ''
-			}
-		});
+		expect(await saving).toEqual({ kind: 'saved', account: { ...ACCOUNT_A, name: '王大明' } });
 		expect(get(selfAccount)).toBeNull(); // B 的本人帳號資料仍是開機值
 		expect(get(prefs)).toEqual(DEFAULT_PREFS);
 		expect(get(authStore).member?.name).toBe('李小華');

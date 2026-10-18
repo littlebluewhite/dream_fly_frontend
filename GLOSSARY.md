@@ -15,11 +15,11 @@ _Avoid_: 使用者(指訪客時), 家長
 _Avoid_: 使用者
 
 **登入狀態 (Login State)**:
-這個分頁此刻是不是登入、登入的是誰。真相是共用的 refresh token,本機快取只供首屏;token 與畫面身分永遠同一拍換。單一 owner 是登入狀態核心 `stores/login-state`。
+這個分頁此刻是不是登入、登入的是誰。單一 owner 是登入狀態核心 `stores/login-state`。
 _Avoid_: 登入態(混用時統一用「登入狀態」), 看首屏快取判斷是否登入, 畫面身分與 token 分頭換
 
 **401 重送規則 (401 Retry Rule)**:
-請求遇 401 時,只替發出它的那個畫面身分 refresh 後重送;refresh 前後身分變了就不重送、照樣回 401,舊畫面的寫入不會以新身分的憑證送出。規則住在 `api/client`(ADR-0031)。
+api client 遇 401 時要不要 refresh 後重送原請求的規則。規則住在 `api/client`(ADR-0031)。
 _Avoid_: 遇 401 一律重送, 以新身分的憑證替舊畫面重送
 
 **本人帳號資料 (Self Account)**:
@@ -110,7 +110,7 @@ _Avoid_: 手抄 phase 機制, 拿共享 store 的水合或重抓函式當頁面�
 _Avoid_: 手抄水合旗標協定, 呼叫端自己包在飛合併或出發序號, 測試直寫閘門管的 store 內容
 
 **擁有者判定 (Owner Verdict)**:
-「還是同一個擁有者、同一個身分嗎」的判定;水合閘門、session 閘門、登入狀態核心與 api client 都靠它決定動不動手。規則「判定只在算出它的那一拍有效」只寫在 `hydration-gate` 的檔頭。
+「還是同一個擁有者、同一個身分嗎」的判定;水合閘門、session 閘門、登入狀態核心與 api client 都靠它決定動不動手。規則住在 `hydration-gate` 的檔頭。
 _Avoid_: 拿 callee 前一拍給的判定動手
 
 **頁面進場包 (Page Entry)**:

@@ -1,5 +1,5 @@
 /* src/lib/domain/member-app.ts — 會員 app(member 桌面 / mobile 手機雙生)共用 seed 單一來源。
- * 值逐位元組沿用 member 側;僅收值相等的常數 —— 自 ADR 0013 起含顯示查表/成對常數;Tone 等 facade 專屬型別仍留各 facade。
+ * 值逐位元組沿用 member 側;僅收值相等的常數,含顯示查表/成對常數(ADR 0013);Tone 等 facade 專屬型別留各 facade。
  *
  * member 與 mobile 是同一個「會員 app」的桌面/手機雙生，data.ts 近乎重複(同 persona
  * 王承恩 GY2024001)。這裡只收兩側 JSON.stringify 深度相等的常數 —— ANNOUNCE 有一筆
@@ -8,25 +8,14 @@
  *
  * 型別策略:形狀完全相同(同名或僅名稱不同)的 interface 直接上移，兩側消費端直取
  * (名稱不同時用 import-site alias;facade 不轉手,ADR 0019 §4)。形狀有出入的
- * (SCHEDULE / ORDERS / UPCOMING / NOTIFS_SEED(R14 F3 退役)的 tone 相關欄位 member 端是嚴格
- * `Tone` 型別、mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的
- * 一側保留自己原本的 interface 宣告、只從這裡匯入值並自行斷言回自己的型別。
+ * (UpcomingClass / ScheduleBlock / Order 的 tone 相關欄位 member 端是嚴格 `Tone` 型別、
+ * mobile 端是寬鬆 `string`)，這裡存寬鬆的結構型別，形狀有出入的一側保留自己的
+ * interface 宣告、只從這裡匯入值並自行斷言回自己的型別。
  * `Tone` 型別本身不進這裡;查表/成對常數以寬鬆結構型別在此宣告,窄側 facade 以自身型別對同一參照純註記收窄(UPCOMING 為現存實例)。
  *
- * Task 10(架構深化 R15·請假列 view-model):`LEAVE_STATUS` 查表退役——它其實只服務
- * 「我的請假」單一列的顯示,不是獨立於動作規則(`leaveAction`)之外的查表,兩者與
- * when/makeupWhen 格式化合併單源收斂進 `domain/leave-requests.ts` 的 `leaveRow()`,
- * member/mobile 兩側 facade 的收窄轉出一併退役。
- *
- * Task 1(C2 死種子退役):CATALOG/MAKEUP_SLOTS/REWARDS/REPORTS/CERTS 五組(值+
- * interface)、以及 MY_COURSES/SCHEDULE/ORDERS 三組的值,經確認無 runtime 消費者
- * (member/mobile 兩側頁面皆已改走真後端 API)後整批退役;MY_COURSES/SCHEDULE/
- * ORDERS 的 interface(EnrolledCourse/ScheduleBlock/Order)因仍供 api.ts 型別標註
- * 使用而保留。既有測試改為檔內 inline fixture,不再從這裡 import 死值。
- *
- * R14 候選 F3(誠實開機):通知/點數明細 store 開機值改為 `[]`,NOTIFS_SEED(連同只為它存在的
- * Notification interface)與 POINTS_LEDGER 的值退役,逐字搬進測試專用的 $lib/testing/seed-fixtures。
- * LedgerEntry/LedgerType 仍供 member/points.ts 型別標註使用而保留。 */
+ * 「我的請假」一列的顯示(tone/label、動作、when/makeupWhen)在 `domain/leave-requests.ts` 的
+ * `leaveRow()`,不在這裡。EnrolledCourse/ScheduleBlock/Order 與 LedgerEntry/LedgerType 只有型別、
+ * 沒有值(供 api.ts 與 member/points.ts 型別標註);測試用的種子值在 $lib/testing/seed-fixtures。 */
 
 import type { IconName } from '$lib/icon-registry';
 import type { WeekColumn } from './weekday';

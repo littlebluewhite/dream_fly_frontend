@@ -1,12 +1,12 @@
-/* Dream Fly — 結帳付款狀態機（自 member/components/CheckoutDialog.svelte 抽出）。
+/* Dream Fly — 結帳付款狀態機。
  * 收的是「付款生命週期」——有跨事件不變量的四個變數：step（open-reset 歸 0、成功轉 2）、
  * idempotencyKey（重試沿用、fresh 換發——防重複扣款安全機的核心）、paid（成交快照，
- * 購物車清空後成功步仍要顯示）、paying（in-flight 守衛本身）。Task 5(R14·F4) 起結算輸入
+ * 購物車清空後成功步仍要顯示）、paying（in-flight 守衛本身）。結算輸入
  * （form = code/usePoints/paymentMethod，coupon/codeErr）與預覽（preview/hasChargeable）
  * 也住這裡、跟著機器活：freshCheckout 一併重置，resumedInFlight 全部保留（付款飛行中重開
  * 看到的輸入與預覽，就是正在送出的那一單）。confirmPay 不收引數，讀自己那份。
  *
- * open-reset 邊沿語意（與原元件 wasOpen 佈線逐字等價）：setOpen 內建閉→開邊沿偵測，
+ * open-reset 邊沿語意：setOpen 內建閉→開邊沿偵測，
  * prevOpen **每次呼叫都更新——含付款飛行中**；飛行中的閉→開邊沿不重置（resumedInFlight），
  * 延續同一個 in-flight 結帳流程（paying 鎖住、key 不變）——否則重開換發新 key，使用者
  * 再按一次付款就會開出第二張真訂單，同一筆意圖被收兩次錢（integration-contract.md §1.7）。
@@ -24,18 +24,16 @@
  * createCheckout 的 refreshOnOpen。surface 不直接呼叫本工廠，一律經 `$lib/member/checkout-sync`
  * 的 createCheckout 組裝（兩支效應是它的私有函式）。
  *
- * 雙 surface 共用（C2/R11：mobile CartSheet 原本手焊一台同構的機器，已退役改吃本檔，
- * 經 $lib/mobile/stores 的 seam 取用）。C3/R13 起兩個消費者的生命週期同層，機器本身
- * 仍不分岔：桌面 CheckoutDialog 整個結帳期間都不卸載；行動版改為 $lib/mobile/stores.ts
- * 的模組級單例（`export const checkout`，與 `cart` 同生命週期，比 CartSheet 這顆 mount
- * 級元件活得久，OverlayHost `{#if}` 每次開闔都拿同一顆）。兩側都用 setOpen 的閉→開邊沿
+ * 雙 surface 共用：桌面 CheckoutDialog 與 mobile CartSheet(經 $lib/mobile/stores 的 seam
+ * 取用)。兩個消費者的生命週期同層，機器本身不分岔：桌面 CheckoutDialog 整個結帳期間都不
+ * 卸載；行動版是 $lib/mobile/stores.ts 的模組級單例（`export const checkout`，與 `cart`
+ * 同生命週期，比 CartSheet 這顆 mount 級元件活得久，OverlayHost `{#if}` 每次開闔都拿同一
+ * 顆）。兩側都用 setOpen 的閉→開邊沿
  * 換發 key／偵測飛行中 resumed——CartSheet 隨掛載/卸載呼叫 setOpen(true/false)，若 sheet
  * 在付款飛行中被關閉（如導航觸發的 closeAll）又重開，走 resumedInFlight，同一把 key
  * 續用、paying 繼續鎖住，不會開出第二張真訂單。
  *
- * 無 svelte 元件相依、建構零 dep 呼叫（SSR 安全）。本抽取取代 ADR 0008 §「有意識保留：
- * CheckoutDialog 的防重複扣款不抽成純模組」的當時裁決（Round 5；render 測試原封全綠 =
- * 搬動零 churn 的證明）。 */
+ * 無 svelte 元件相依、建構零 dep 呼叫（SSR 安全）。 */
 import { derived, get, writable, type Readable, type Writable } from 'svelte/store';
 import type { ChargeableLine } from '$lib/cart-item';
 import { checkoutMath } from '$lib/checkout-math';

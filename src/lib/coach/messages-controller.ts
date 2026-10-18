@@ -1,13 +1,12 @@
-/* Dream Fly — coach/messages 訊息串編排層（Round 8 C1，自 +page.svelte 的訊息串編排
- * 抽出）。仿 attendance-controller 的「單一快照 store + 效應注入」分層、clock-controller
- * 的 outcome 形。
+/* Dream Fly — coach/messages 訊息串編排層。仿 attendance-controller 的「單一快照 store +
+ * 效應注入」分層、clock-controller 的 outcome 形。
  *
  * 收斂範圍：對話串載入（selectThread，內部化 getThread + markRead 雙 best-effort fetch
  * 與 stale-guard）、傳送（send，回應同步 thread 的過期回應防護）、撰寫新對話三部曲
  * （openCompose/pickRecipient/confirmCompose，creating 守衛靜默，同 checkout-controller
  * 的 alreadyPaying 先例）。
  *
- * 不收：對話列表（唯一 owner 是 $lib/coach/conversations，R20 候選 02）、tab×搜尋過濾與選取
+ * 不收：對話列表（唯一 owner 是 $lib/coach/conversations）、tab×搜尋過濾與選取
  * 回退（conversations-filter.ts 純函式，留頁面呼叫）、toast 文案（頁面據 outcome 翻譯）。
  * badge 清零、傳送後的預覽/時間更新、新對話插入列表都作用在對話列表（非本 controller
  * 狀態）——故本 controller 完全不知道列表：只把 selectThread() 的 badgeCleared、send()、
@@ -20,17 +19,15 @@
  * selectThread 的 stale-guard 仿 attendance-controller 的 save-token guard：遞增序號
  * token，getThread 的 resolve/reject 皆驗 token===seq，不符即丟棄過期回應（不寫
  * thread）——避免快速切換對話時，較舊對話延遲回來的回應覆蓋目前選取對話的訊息。
- * markRead 的 badge 副作用不受此 guard 限制（逐字複刻頁面現行行為：badgeCleared 只看
- * markRead 本身成功與否，與目前是否還停留在該對話無關）。
+ * markRead 的 badge 副作用不受此 guard 限制（badgeCleared 只看 markRead 本身成功與否，
+ * 與目前是否還停留在該對話無關）。
  *
  * selectThread 回傳 threadReady/badgeCleared 兩條「各自獨立、互不等待」的 promise
- * （而非單一 outcome）——曾誤用 Promise.all 合併成一顆 outcome，導致 markRead 卡住/
- * 永不落定時連帶拖住 threadReady，使失敗 toast 或已載入狀態遲遲無法呈現、或 getThread
- * 卡住時連帶拖住徽章清零（codex 全輪審查 P2 回歸；本檔 messages-controller.test.ts 的
- * 「threadReady 與 badgeCleared 互不阻塞」一組測試即為此問題的可證偽回歸測試）。逐字
- * 複刻重構前頁面 getThread/markRead 兩條 promise chain 各自完成、互不阻塞的行為。
+ * （而非單一 outcome）：合併成一顆會讓 markRead 卡住/永不落定時連帶拖住 threadReady，
+ * 使失敗 toast 或已載入狀態遲遲無法呈現，getThread 卡住時也連帶拖住徽章清零。
+ * messages-controller.test.ts 的「threadReady 與 badgeCleared 互不阻塞」一組測試守這件事。
  *
- * send 的過期回應防護沿用頁面現行 `sel === conversationId` 快照比對（非 token 機制，
+ * send 的過期回應防護是 `sel === conversationId` 快照比對（非 token 機制，
  * 與 selectThread 分開）：送出當下捕捉 conversationId，await 期間使用者可能已切到
  * 另一個對話，套用回應（附加到 thread）前重新檢查，避免遲來的回應附加到「現在正在看」
  * 的另一個對話串。

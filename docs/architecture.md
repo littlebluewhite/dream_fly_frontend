@@ -61,8 +61,8 @@ Rules live in each file's header; the display-lookup rules (tables, `lookupOr`) 
 - `leave-requests.ts` (`leaveRow()`), `class-detail.ts`, `order-detail.ts`: row view-models shared by twins.
 
 The `data.ts` facades of `admin`, `mobile-admin`, `member` and `mobile` hold local interfaces, mock data,
-mappers and narrowing re-asserts, never a pass-through re-export (`docs/adr/0019`; the test is in each
-`data.ts` header). `coach` imports `lib/domain` directly.
+mappers and narrowing re-asserts, never a pass-through re-export (the test: `docs/adr/0019` §4). `coach`
+imports `lib/domain` directly.
 
 ## Shared component shelves
 
@@ -124,7 +124,7 @@ states with `lib/components/ui/LoadGate.svelte`. The P2 gaps with no backend end
 The public seam is `lib/public/api.ts` (public endpoints, `auth: false`) plus `adapters.ts`, the only place that
 converts cents/enum/id shapes into marketing types. `ScheduleCalendar`'s pure logic is in
 `lib/public/calendar-grid.ts` and `calendar-selection.ts`. The `admin` and `coach` `Sidebar.svelte`/
-`Topbar.svelte` shells stay outside the seam: no I/O, only synchronous store reads (`docs/adr/0013`).
+`Topbar.svelte` shells are outside the seam (`docs/adr/0013` §2).
 
 ## Shared stores: hydration gate, session gate, warm sets
 
@@ -146,7 +146,7 @@ module header.
 `src/lib/store-warm.ts`'s `warmStores(caller, tasks)` runs a warm set best-effort. App layouts hand a
 module-level warm set to the session scope for the stores their shell reads (badges). The root layout warms
 subscriptions and announcements for the marketing shell, and a few pages warm extras beside their main fetch.
-Getters never warm stores (`docs/adr/0024`). Rules: `store-warm.ts`'s header.
+Rules: `store-warm.ts`'s header.
 
 ## Load gate vs. hydration gate: which one owns a shared store's fetch?
 
@@ -161,9 +161,8 @@ page's load gate (another page, a warm set, another getter or mutator)?
   surfaces' pages, warm sets and the dashboard).
 - Identity-scoped, and every call must really fetch: `createSessionRefresher` (points, subscriptions).
 
-A page on a shared store writes `createLoadGate({ ...gate.pageEntry() })`, never the store's `hydrate`/`refresh`
-as its `fetch`: the entry pack keeps the page's unmount and superseded-run checks in front of every write to the
-shared store (`docs/adr/0008`, `docs/adr/0025`). Rules: the headers of `hydration-gate.ts` and `load-gate.ts`.
+How a page on a shared store enters its load gate (頁面進場包, the page entry): the headers of
+`hydration-gate.ts` and `load-gate.ts` (`docs/adr/0025`).
 
 ## Admin write rules: one module per entity
 
@@ -176,8 +175,8 @@ Each admin entity's "form values → validation → request body" step is one pu
 - `order-status.ts`: legal status transitions, the revenue rule, `changeOrderStatus`.
 
 The desktop dialogs and mobile-admin's `MemberForm`/`ClassForm`/`CoachForm` validate with the same modules;
-mobile-admin's orders page uses only `order-status.ts`'s revenue rule. Where copy lives, the add/edit split and
-the "no cross-entity CRUD helper" rule (`docs/adr/0018` C6) are in each module's header.
+mobile-admin's orders page uses only `order-status.ts`'s revenue rule. Where copy lives and the add/edit split
+are in each module's header; cross-entity CRUD helpers: `docs/adr/0018` C6.
 
 ## Page controllers and twin modules
 

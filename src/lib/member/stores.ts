@@ -2,9 +2,8 @@
  *
  * The prototype kept cart / points / notifications / toasts in the top-level
  * React component. Because we render the member centre as real SvelteKit routes,
- * that shared state lives in module stores instead. Since Tasks 16-17 the
- * checkout / subscriptions / points / notifications state is backed by the real
- * API (hydrated via each module's refresh* functions); only the cart itself stays
+ * that shared state lives in module stores instead. The checkout / subscriptions /
+ * points / notifications state is backed by the real API (hydrated via each module's refresh* functions); only the cart itself stays
  * a local store, synced to the server at checkout time (placeOrder).
  *
  * 這支檔案本身是「關切模組的 barrel」——不放任何實作，只逐名再匯出下列 7 個

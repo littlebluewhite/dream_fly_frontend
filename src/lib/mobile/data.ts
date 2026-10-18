@@ -1,25 +1,10 @@
 /* Dream Fly — 行動版會員 App · mock data + helpers (ported from mobile/data.jsx).
  *
- * Task 19：`getHome()`/`getCourses()`/`getMine()`/`getAccount()`/`getNotifications()`
- * 改接真後端(復用 `$lib/member/api.ts` 的既有 seam；其中 `getNotifications()`
- * 已於 R12 隨通知 module 合一退役，通知改經 member 通知閘門取得)。Task 7(架構
- * 深化 R15·F-4)：`getAccount()` 連同其餘 4 支純轉手已從 `$lib/mobile/api.ts`
- * 退役，`getHome()`/`getCourses()`/`getMine()` 仍留在那裡；消費端一律直取
- * `$lib/member/*`，不再經 `$lib/mobile/stores` 轉出。
- * Task 1(C2 死種子退役)：本檔案原本混合兩種常數——(a) 仍是畫面唯一資料源的 mock、
- * (b) 已無 production 消費者、僅供既有測試當 fixture 用的舊 mock(如 CATALOG)。
- * 經逐一確認 runtime 消費者後，(b) 類整批退役(STATS/SKILLS/SCHEDULE/ORDERS/
- * MAKEUP_SLOTS/REWARDS/REPORTS/UPCOMING/MY_COURSES/POINTS_LEDGER/CERTS 的轉出行、
- * CATALOG 本地值)，對應測試改為檔內 inline fixture(見各測試檔)。C4 批1(facade
- * 純轉手退役)接續移除本檔對 domain/member-app 的純轉手值/型別轉出，消費端改直取
- * 單源。現存常數皆為 (a) 畫面仍在讀的本地 mock(ANNOUNCE — 對應桌面版同樣是
- * mock，見 P2 註解)。
- * Task 10(架構深化 R15·請假列 view-model)：LEAVE_STATUS 這份收窄 facade 退役，
- * tone/label 查表併入動作規則、when/makeupWhen 格式化，單源收斂進
- * `domain/leave-requests.ts` 的 `leaveRow()`，消費端(MyCourseDetail.svelte)改直取。
- * 新增匯出前先過判準（ADR 0019 §4）：對 `$lib/domain`／`$lib/api/wire` 符號的匯出行若不攜帶
- * 本檔型別事實（收窄註記／`as` 斷言／本地 interface）、也不做值變形（改過名也算），就是純轉手，
- * 不放這裡——消費端直取 canonical 源，名稱不同時用 import-site alias。 */
+ * 真資料不經本檔：`getHome()`/`getCourses()`/`getMine()` 在 `$lib/mobile/api.ts`(復用
+ * `$lib/member/api.ts` 的 seam)，通知與其餘資料消費端直取 `$lib/member/*`；請假列的
+ * tone/label 在 `domain/leave-requests.ts` 的 `leaveRow()`，共用 seed 在 `$lib/domain/member-app`。
+ * 本檔只留本地型別(`Course`)、畫面仍在讀的本地 mock(ANNOUNCE——桌面版同樣是 mock，
+ * 見 P2 註解)與通知色票。新增匯出前先過 ADR 0019 §4 的純轉手判準。 */
 
 // C4 批1(facade 純轉手退役):ME/type Member、AttRecord、EnrolledCourse as
 // MyCourse、CONTACT_THREAD、ChatMessage as ThreadMsg、NOTIFS_SEED、Notification

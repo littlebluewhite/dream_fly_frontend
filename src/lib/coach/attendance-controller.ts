@@ -1,8 +1,6 @@
-/* Dream Fly — coach/attendance 出席點名編排層（Round 3 K1，自 +page.svelte 的無測
- * 編排 script 抽出；草稿轉移函式自 R12 起由舊 attendance-draft.ts 收進本檔成非匯出內部
- * 函式）。把頁面原本手焊的鏡射變數 ×5、snapshot/undo 副作用、byClass 切班暫存、save
- * 生命週期收斂成一個可脫離 Svelte 直接測試的 controller。頁面退化為「單一快照 store 解構
- * + UI 翻譯 + toast 文案」的薄 adapter。
+/* Dream Fly — coach/attendance 出席點名編排層。草稿轉移（非匯出內部函式）、snapshot/undo
+ * 副作用、byClass 切班暫存、save 生命週期都在這個可脫離 Svelte 直接測試的 controller；
+ * 頁面是「單一快照 store 解構 + UI 翻譯 + toast 文案」的薄 adapter。
  *
  * 分層：controller（草稿怎麼轉移 + 何時轉移、效應注入，本檔）→ +page.svelte（渲染與
  * toast 文案）。時鐘（now，預設 nowHHMM）與 saveAttendance 皆為注入依賴，無 svelte 元件
@@ -14,13 +12,12 @@
  * 備註（notes）僅存本機：後端 PUT /sessions/{id}/attendance 無備註欄位，故 applyNote 只寫
  * notes、不動 state/dirtyCount（不算「待同步」變更）；儲存成功照舊保留 notes，重新整理即消失。
  *
- * save() 的 state guard（await 後 state!=='saving' 即丟棄回應）逐字複刻自頁面現行語意；
- * 其上再疊一層 save-token guard（K1 c3）：每次 save() ++seq 並捕捉 token，resolve 與 catch
- * 皆驗 token===seq，不符即丟棄過期回應——修掉 state guard 單獨存在時的 latent ABA 洞（儲存
- * 中先編輯把 state 打回 dirty、放行切班、再啟第二次 save 後，舊回應見 state==='saving' 穿透
- * guard 以 live curClassId 把舊班 roster 寫進新班；catch 更全無 guard 會把新班打成 failed）。
- * token guard 疊加、不取代 state guard——單一 in-flight 的行為逐點不變（page.test 16 it 續
- * 綠）。 */
+ * save() 有兩層 guard：state guard（await 後 state!=='saving' 即丟棄回應），其上再疊
+ * save-token guard：每次 save() ++seq 並捕捉 token，resolve 與 catch 皆驗 token===seq，
+ * 不符即丟棄過期回應。只有 state guard 擋不住 ABA：儲存中先編輯把 state 打回 dirty、放行
+ * 切班、再啟第二次 save 後，舊回應見 state==='saving' 會穿透 guard，以 live curClassId 把
+ * 舊班 roster 寫進新班；catch 沒有 guard 則會把新班打成 failed。token guard 疊加、不取代
+ * state guard。 */
 import { writable, type Readable } from 'svelte/store';
 import type { AttRow, AttDefault, AttClassFull } from '$lib/coach/data';
 
