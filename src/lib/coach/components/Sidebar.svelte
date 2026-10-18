@@ -16,7 +16,7 @@
   import { initialOf } from '$lib/api/wire';
   import { toasts } from '$lib/coach/stores';
   import { unreadConversationCount } from '$lib/coach/conversations';
-  import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
+  import { ROLE_HOME } from '$lib/staff/roles';
   import type { IconName } from '$lib/icon-registry';
 
   let menu = false;
@@ -45,7 +45,6 @@
 
   function switchRole() {
     menu = false;
-    rememberStaffRole('admin');
     goto(ROLE_HOME.admin);
   }
 </script>

@@ -93,6 +93,3 @@ export function createToasts(duration = 4000) {
 
 	return { subscribe, notify, dismiss };
 }
-
-/** Default-duration instance. Nothing imports it: every surface builds its own with `createToasts` (see header). */
-export const toasts = createToasts();

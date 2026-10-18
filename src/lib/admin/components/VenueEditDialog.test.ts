@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import VenueEditDialog from './VenueEditDialog.svelte';
-import { VENUES, type Venue } from '$lib/domain/venues';
+import type { Venue } from '$lib/domain/venues';
 
 /* VenueEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog / CoachEditDialog). Holds a local copy of the venue; 儲存 fires
@@ -14,7 +14,7 @@ import { VENUES, type Venue } from '$lib/domain/venues';
  * Task F4 review 修正：欄位標籤由「場地類型」改為「場地簡介」+ helper 提示，對齊
  * buildVenueBody() 把這個值送進後端 description、公開場地頁把 description 渲染成
  * 場館介紹的實際去向(內部欄位名 f.type 未變)。 */
-const base: Venue = VENUES[0]; // A 訓練館
+const base: Venue = { id: 'A', slug: 'a', name: 'A 訓練館', type: '競技主訓練場', equip: ['彈翻床', '平衡木', '單槓', '海綿池'], status: 'available' };
 
 describe('VenueEditDialog', () => {
 	it('renders open with the venue name field and the 儲存場地 primary', () => {
@@ -113,8 +113,8 @@ describe('VenueEditDialog', () => {
 	 * ——working copy 與 equipText buffer（join('、')）都要跟著新實體；②關閉重開丟棄
 	 * 髒草稿——同 ClassEditDialog，初始 working copy 是 clone，編輯不可污染原實體。 */
 	it('resets fields when the venue prop changes to a different venue (no stale data)', async () => {
-		const other: Venue = { ...VENUES[0], id: 'X', slug: 'x', name: 'X 測試館', equip: ['彈翻床', '海綿池'] };
-		const { getByLabelText, rerender } = render(VenueEditDialog, { open: true, venue: { ...VENUES[0] } });
+		const other: Venue = { ...base, id: 'X', slug: 'x', name: 'X 測試館', equip: ['彈翻床', '海綿池'] };
+		const { getByLabelText, rerender } = render(VenueEditDialog, { open: true, venue: { ...base } });
 
 		await fireEvent.input(getByLabelText('場地名稱'), { target: { value: '髒草稿' } });
 		await fireEvent.input(getByLabelText('器材配置（以、分隔）'), { target: { value: '空手道墊' } });
@@ -126,7 +126,7 @@ describe('VenueEditDialog', () => {
 	});
 
 	it('discards a dirty draft on close/re-open and never pollutes the original venue passed in (initial working copy is a clone)', async () => {
-		const original: Venue = { ...VENUES[0] };
+		const original: Venue = { ...base };
 		const { getByLabelText, rerender } = render(VenueEditDialog, { open: true, venue: original });
 
 		await fireEvent.input(getByLabelText('場地名稱'), { target: { value: '髒草稿名稱' } });

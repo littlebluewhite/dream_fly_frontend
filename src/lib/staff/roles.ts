@@ -1,18 +1,6 @@
 export type StaffRole = 'admin' | 'coach';
 
-export const STAFF_ROLE_KEY = 'df_staff_last_role';
-
 export const ROLE_HOME: Record<StaffRole, string> = { admin: '/admin', coach: '/coach' };
-
-/** Write the role the staff just switched to under `STAFF_ROLE_KEY`. Nothing reads it back:
- *  /staff/login routes by `staffPortals(roles)`. Navigation is done by the caller. */
-export function rememberStaffRole(role: StaffRole): void {
-  try {
-    localStorage.setItem(STAFF_ROLE_KEY, role);
-  } catch (_) {
-    // SSR (no localStorage) or quota — persistence is best-effort, never fatal to the switch.
-  }
-}
 
 /** Which staff portals `roles` (from GET /users/me) may enter. An admin can
  *  also enter the coach portal (switches view via the sidebar's 切換至其他身分

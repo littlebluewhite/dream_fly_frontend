@@ -11,7 +11,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import { NAV, isActive } from '$lib/admin/nav';
   import { toasts } from '$lib/admin/stores';
-  import { rememberStaffRole, ROLE_HOME } from '$lib/staff/roles';
+  import { ROLE_HOME } from '$lib/staff/roles';
   import { authStore } from '$lib/stores/authStore';
 
   const PROFILE = {
@@ -39,7 +39,6 @@
 
   function switchRole() {
     menuOpen = false;
-    rememberStaffRole('coach');
     goto(ROLE_HOME.coach);
   }
 </script>

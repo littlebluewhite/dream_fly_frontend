@@ -8,7 +8,7 @@
  *    純轉手退役整檔退場。LEAVE_STATUS 原在本檔一併雙釘,Task 10(架構深化 R15·
  *    請假列 view-model)隨這份查表退役一併移除——tone/label 斷言改在
  *    domain/leave-requests.test.ts 經 `leaveRow()` 涵蓋。)
- * 2. 獨立字面不變量:比照 src/lib/domain/data.test.ts 的慣例(獨立不變量,不拿
+ * 2. 獨立字面不變量(不拿
  *    下游 facade 對照),對 seed 關鍵欄位做字面快照(persona 王承恩 GY2024001、
  *    課名、教練名、金額……)—— 誤改 domain 值時這裡變紅。
  * 3. row-count canary:防搬移 / 截斷時整列消失。

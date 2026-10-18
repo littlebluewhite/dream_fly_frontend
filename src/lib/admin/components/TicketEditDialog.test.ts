@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import TicketEditDialog from './TicketEditDialog.svelte';
-import { TICKETS, TICKET_TYPE, type Ticket } from '$lib/domain/tickets';
+import { TICKET_TYPE, type Ticket } from '$lib/domain/tickets';
 
 /* TicketEditDialog — edit form in the shared EditModal (clone of
  * ClassEditDialog). Holds a local copy of the ticket; 儲存 fires onSave(updated)
  * + a success toast. We assert the fields render, the onSave wiring carries the
  * edit, numeric fields coerce back to numbers, and the quota clamp protects the
  * ProgressBar from a NaN% fill. */
-const base: Ticket = TICKETS[0]; // 月票 · 自由練習
+const base: Ticket = { id: 'T-MONTH', name: '月票 · 自由練習', type: 'membership', price: 2800, sold: 128, quota: 200, color: 'var(--df-primary)', icon: 'calendar-days', desc: '當月不限堂數自由練習' };
 
 describe('TicketEditDialog', () => {
 	it('renders open with the ticket name field and the 儲存票券 primary', () => {
@@ -134,7 +134,7 @@ describe('TicketEditDialog', () => {
 	 * which is null (不限) for every non-merchandise ticket. String(null) rendered the literal
 	 * "null" in the 配額 field, and 儲存 ran parseInt("null")||1 → silently flipped 不限 to 1. */
 	it('renders a null quota (不限) as an empty 配額 field, not the literal "null"', () => {
-		const nullQuota: Ticket = { ...TICKETS[0], quota: null };
+		const nullQuota: Ticket = { ...base, quota: null };
 		const { getByLabelText } = render(TicketEditDialog, { open: true, ticket: nullQuota });
 		const quotaInput = getByLabelText('配額') as HTMLInputElement;
 		expect(quotaInput.value).toBe('');
@@ -143,7 +143,7 @@ describe('TicketEditDialog', () => {
 
 	it('keeps a 不限 (null) quota null on save when the field is left untouched — no null→1 corruption', async () => {
 		const onSave = vi.fn();
-		const nullQuota: Ticket = { ...TICKETS[0], quota: null };
+		const nullQuota: Ticket = { ...base, quota: null };
 		const { getByText } = render(TicketEditDialog, { open: true, ticket: nullQuota, onSave });
 		await fireEvent.click(getByText('儲存票券'));
 		expect(onSave.mock.calls[0][0].quota).toBeNull();
@@ -166,8 +166,8 @@ describe('TicketEditDialog', () => {
 	 * ——working copy 與 priceText/quotaText 兩個文字 buffer 都要跟著新實體；②關閉重開
 	 * 丟棄髒草稿——同 ClassEditDialog，初始 working copy 是 clone，編輯不可污染原實體。 */
 	it('resets fields when the ticket prop changes to a different ticket (no stale data)', async () => {
-		const other: Ticket = { ...TICKETS[0], id: 'T-OTHER', name: '季票 · 測試', price: 9900, quota: 42 };
-		const { getByLabelText, rerender } = render(TicketEditDialog, { open: true, ticket: { ...TICKETS[0] } });
+		const other: Ticket = { ...base, id: 'T-OTHER', name: '季票 · 測試', price: 9900, quota: 42 };
+		const { getByLabelText, rerender } = render(TicketEditDialog, { open: true, ticket: { ...base } });
 
 		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '髒草稿' } });
 		await fireEvent.input(getByLabelText('票價 (NT$)'), { target: { value: '1' } });
@@ -180,7 +180,7 @@ describe('TicketEditDialog', () => {
 	});
 
 	it('discards a dirty draft on close/re-open and never pollutes the original ticket passed in (initial working copy is a clone)', async () => {
-		const original: Ticket = { ...TICKETS[0] };
+		const original: Ticket = { ...base };
 		const { getByLabelText, rerender } = render(TicketEditDialog, { open: true, ticket: original });
 
 		await fireEvent.input(getByLabelText('票券名稱'), { target: { value: '髒草稿名稱' } });
