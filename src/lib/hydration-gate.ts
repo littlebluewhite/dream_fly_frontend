@@ -29,7 +29,13 @@
  * 寫法(reset() 也翻,但它是整顆閘門的重置)。
  *
  * reset():內容還原開機值(opts.reset)+ 翻旗 false + 丟在飛合併 GET + 換尾流帳本。session-gate 的
- * identity 重置與各模組的測試出口 reset…ForTests 共用這一支;hydrated 唯讀,測試不直寫旗標。
+ * identity 重置與身分無關閘門(ops 集合、行銷公告)的測試出口 reset…ForTests 共用這一支;session 閘門
+ * 沒有測試出口,測試經真的登入 → 登出重置。production 不得引用 reset…ForTests(import-scan 契約守)。
+ *
+ * **閘門管的內容唯讀**:建在本閘門、session 閘門或 session refresher 上的 store,擁有者模組持有私有
+ * writable、只匯出 Readable;只有閘門的 apply/reset 與 write() 的 optimistic/commit 能寫。hydrated 也是
+ * 唯讀探針,store 不另匯出 *Hydrated 旗標。測試要有內容就 route 水合用的 GET,呼叫 hydrate/refresh 拿閘門
+ * 真的會產生的狀態(有內容且已水合),不 `.set()`、不 mock 這些模組(import-scan 契約守)。
  *
  * 寫入動詞 write()(docs/adr/0027 §5):「寫 store → 宣告水合真相 → 記尾流 → 失敗復原 → 未水合時
  * 和解」整條在閘門內,和解鏈以 resetEpoch 為軸(reset() 一併清)。樂觀路徑同一同步段先寫 store 再記
@@ -171,12 +177,13 @@ export interface HydrationGateOptions<T> {
 }
 
 /**
- * 頁面進場包:頁面寫 `createLoadGate({ ...gate.pageEntry() })` 即可。R15(候選 F-1)起只交出一個
- * 資料來源(LoadSource)——guarded/load/refresh 都是閘門自己的閉包,頁面 load-gate 拿不到旗標、
- * 世代帳或尾流帳,只把自己的棄追判準 isCurrent 交進來。去泛型:資料型別封在閘門內部。
- * R14(候選 F1)自 session-gate.ts 搬來住在 HydrationGate:mobile-admin 的 ops 頁接的是 plain
- * 閘門(ops 集合的水合單位),進場包若只住 session 閘門,它們只能拿 hydrate/refresh 當 load-gate 的
- * fetch/refresh——store 閘門自己 apply,load-gate 的「已卸載/被新一輪取代」守衛管不到寫入。
+ * 頁面進場包:頁面寫 `createLoadGate({ ...gate.pageEntry() })` 即可。只交出一個資料來源(LoadSource)——
+ * guarded/load/refresh 都是閘門自己的閉包,頁面 load-gate 拿不到旗標、世代帳或尾流帳,只把自己的棄追判準
+ * isCurrent 交進來。去泛型:資料型別封在閘門內部。住在 HydrationGate 而不是 session 閘門:mobile-admin 的
+ * ops 頁接的是 plain 閘門(ops 集合的水合單位),拿 hydrate/refresh 當 load-gate 的 fetch/refresh 的話,
+ * store 閘門自己 apply,load-gate 的「已卸載/被新一輪取代」守衛管不到寫入。
+ * session 閘門餵進來的 fetch 帶 epoch 核對:跨登出/換帳號的在飛回應讓 fetch 拋出、落進 load-gate 的 error 態,
+ * 使用者重試時走的是同一支核對過的 fetch(ADR-0019)。
  */
 export interface PageEntry {
 	source: LoadSource;

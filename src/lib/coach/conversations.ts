@@ -1,10 +1,13 @@
-/* Dream Fly — 教練對話列表(R20 候選 02):登入教練本人的對話摘要(GET /conversations/me)
- * 唯一的 owner——列表本身、未讀對話數,以及作用在列表上的三種變更(已讀/送出/新對話)都住這裡。
+/* Dream Fly — 教練對話列表:登入教練本人的對話摘要(GET /conversations/me)唯一的 owner——列表本身、
+ * 未讀對話數,以及作用在列表上的三種變更(已讀/送出/新對話)都住這裡,頁面與其他 store 不手寫這些更新。
  *
  * 建在 createSessionGate 上(同 member/notifications、member/leave):列表是教練本人的資料,
  * 換帳號/登出即重置回開機態、旗標翻回 false,在飛的舊回應由 epoch 核對作廢(ADR 0023 C6——
  * 第二位教練不得看到前一位的列表)。誠實開機:開機值 = reset 值 = `[]`。映射沿用 coach/api.ts 的
  * getConversations()(內含 mapConversation),本檔不另寫一份。
+ *
+ * 讀者:桌面訊息中心與工作台、桌面側欄角標、mobile-admin 訊息頁/對話串/TabBar。mobile-admin 的教練首頁
+ * 不讀列表(ADR-0029);getDashboard 這類 getter 也不順手抓對話。
  *
  * 新鮮度:
  *   - 第一次進頁只抓 1 次——hydrateConversations(暖機)與頁面 load-gate 的 load(進場包)共用同一

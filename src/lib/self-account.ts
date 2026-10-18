@@ -1,25 +1,22 @@
-/* Dream Fly — 本人帳號資料 module(R13 Task 3·候選 C1 起為會員資料 module;R16 Task 1a 改名搬到
- * lib 根目錄 $lib/self-account)。
+/* Dream Fly — 本人帳號資料 module。
  *
- * 會員本人的「個人資料 + 通知偏好」唯一住處:GET/PATCH /users/me 的讀寫、欄位映射、
- * 表單規則、寫入序列化都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)與 mobile
- * (SettingsScreen / EditProfileSheet / 首頁·帳戶 hero / TrialScreen / CartSheet)直接
- * import $lib/self-account 取同一顆單例。R16 Task 1b 起教練端(coach/api.ts 的教練 gate 與
- * saveSettings)也經這裡讀寫本人資料,教練 gate 只另快取 CoachResponse——改名後 $selfAccount 與
- * 教練頁同一份快取(關掉 ADR-0023 記的「快取各自為政」)。取代了三份各自為政的來源:
- * member/api.ts 的 mapProfile/saveBirthDate、mobile/stores.ts 的本地 profile/prefs
- * store,以及 mobile/pref-sync.ts 的偏好同步機(其 outcome 與序列鏈語意原樣移入)。
+ * 任何已登入者(會員、教練或其他 staff)自己的帳號資料——姓名、電話、生日、email(只讀)、加入年月與
+ * 上次登入時間——連同通知偏好的唯一住處:GET/PATCH /users/me 的讀寫、欄位映射、表單規則、寫入序列化
+ * 都在這裡。桌面 member(帳戶頁 / ProfileEditDialog)、mobile(SettingsScreen / EditProfileSheet /
+ * 首頁·帳戶 hero / TrialScreen / CartSheet)與教練端(coach/api 的教練閘門與 saveSettings)都 import
+ * 同一顆單例,所以同一位登入者在任何一端改名,各端讀到的都是新名字。教練檔案(GET /coaches)是另一份
+ * 資料,不屬於本人帳號資料——教練閘門只另快取它。
  *
  * 結構保證:
- *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(修掉 prefs 與
- *    profile 跨登入殘留)。併發的 hydrateSelfAccount() 共用同一支在飛 GET(閘門的 hydrate 合併)。
+ *  - createSessionGate:每個 identity 水合一次,換帳號 / 登出即重置(prefs 與 profile
+ *    不跨登入殘留)。併發的 hydrateSelfAccount() 共用同一支在飛 GET(閘門的 hydrate 合併)。
  *  - 所有 PATCH 走閘門的寫入鏈 gate.queueWrite:寫前水合、換帳號作廢、失敗復原都在閘門裡,
  *    這裡只交 optimistic/send/commit/onFailure;send 回 null 表示沒有要送的(全部欄位未改動)。
  *  - 後端對 preferences 是整包覆寫,送出時 = 後端原始物件 + 本地 4 鍵,前端不認識的
  *    鍵也保得住。
  *  - PATCH/GET 成功都經 authStore.syncUser 同步名字(identity 不變,不觸發任何 gate)。
  *
- * 誠實界線:後端沒有會員編號、家長聯絡人、頭像顏色——這些輸入一律拿掉(D2)。 */
+ * 誠實界線:後端沒有會員編號、家長聯絡人、頭像顏色——這些輸入一律拿掉(ADR-0023 D2)。 */
 import { writable, derived, get, type Readable } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { initialOf, isoDateTime } from '$lib/api/wire';
