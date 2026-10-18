@@ -3,14 +3,14 @@
    * 營收 hero + 票券卡片：icon 方塊 + 名稱/TICKET_TYPE Badge + 說明 + 售價 +
    * 已售/配額 MiniBar + 銷售明細/編輯。
    *
-   * C4：讀取側接真——票券清單改由 getTickets()(桌面 admin seam GET /products 的薄委派)
-   * 非同步載入，createLoadGate 三態(模板同 ReportsScreen/AdminSettingsScreen)；`tickets`
-   * 是 hero 總額與卡片渲染的來源(totalRevenue/totalSold 改為 payload reactive 推導)。
+   * 讀取側接真：票券清單由 getTickets()(桌面 admin seam GET /products 的薄委派)非同步載入，
+   * createLoadGate 三態(模板同 ReportsScreen/AdminSettingsScreen)；`tickets` 是 hero 總額
+   * (totalRevenue/totalSold 由 payload reactive 推導)與卡片渲染的來源。
    * GET /products 固定抓第 1 頁(呼叫端不帶 page，吃後端預設 per_page=20，與「更多」樞紐
    * getMore() 同一口徑)——行動版無 PaginationBar，超過一頁如實只顯示第一頁(P2，同
-   * ops 集合只抓第 1 頁的裁決，見 GLOSSARY「ops 集合」)。寫入側維持 demo——「新增方案」「編輯」仍只發 toast，
-   * 未接 POST/PATCH /products(desktop admin 端已接，見 admin/api.ts；mobile-admin
-   * 這裡是 P2，見 AGENTS.md 的存量盤點)。 */
+   * ops 集合只抓第 1 頁的裁決，見 $lib/mobile-admin/stores 的 ops 集合段)。寫入側維持 demo——
+   * 「新增方案」「編輯」只發 toast，未接 POST/PATCH /products(desktop admin 端已接，見 admin/api.ts；
+   * mobile-admin 這裡是 P2，見 AGENTS.md 的存量盤點)。 */
   import PushScreen from '$lib/components/mobile/PushScreen.svelte';
   import ScreenHeader from '$lib/components/mobile/ScreenHeader.svelte';
   import HeaderIcon from '$lib/components/mobile/HeaderIcon.svelte';

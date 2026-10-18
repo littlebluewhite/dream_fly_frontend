@@ -3,15 +3,20 @@
 export type WarmSet = ReadonlyArray<readonly [label: string, hydrate: () => Promise<void>]>;
 
 /**
- * 共享 store 暖機 helper(R14 候選 F3:自 member/api.ts 的私有 hydrateSessionStores 升格,
- * 改名 warmStores;語意與 log 格式逐字不變)。
+ * 共享 store 暖機 helper。
  *
- * 兩類呼叫端:
- *   - 各 surface 的 layout 宣告自己的暖機清單(member/mobile:通知;coach 與 mobile-admin 教練分區:
- *     訊息),交給身分範圍(SessionScope)以身分為 key 呼叫——每個身分只打一次 GET:閘門守衛擋重訪、在飛合併
- *     (R14 F2)擋掉同頁的重複、換身分時閘門自己重置。
+ * 三類呼叫端:
+ *   - 各 surface 的 layout 把自己的暖機清單宣告成 module-level 常數(member/mobile:通知;coach 與
+ *     mobile-admin 教練分區:教練對話列表),交給身分範圍(SessionScope)以身分為 key 呼叫、只替守門放行
+ *     的身分暖——每個身分只打一次 GET:閘門守衛擋重訪、在飛合併擋掉同頁的重複、換身分時閘門自己重置。
  *   - 頁面自己的 gate.fetch(member/mine、member/account、mobile/account)與主 GET 並行
- *     暖機,清單由頁面決定(getMine/getAccount 本身已不再順手水合 store)。
+ *     暖機,清單由頁面決定。
+ *   - 根 layout 在行銷外殼(非 app surface)暖兩行:以身分為 key 暖訂閱,供購物車頁與 CartDropdown 的
+ *     「已持有,不計費」(ADR-0028 §3);行銷公告是公開端點、與身分無關,不看 $sessionKey(Header 鈴鐺角標
+ *     吃它,失敗時閘門維持未水合、下次可重試)。
+ *
+ * getter 不順手水合 store:要暖什麼由清單寫明,呼叫端看得到這一層。暖機前 store 是誠實的開機值(空清單,
+ * 角標不顯示),不是種子(ADR-0024)。
  *
  * best-effort 語意:tasks 彼此獨立,用 Promise.allSettled 平行執行,單項失敗只
  * console.error 記錄、不 throw——不讓一個非核心 store 的暫時性失敗擋住整頁;失敗時

@@ -1,10 +1,10 @@
 /**
- * 三態載入閘門(loading/error/ready)的唯一機制來源。
+ * 三態載入閘門(loading/error/ready)的唯一機制來源:phase、run 世代、掛載首載、卸載與 onError 都在這裡,
+ * 頁面不手抄 `let phase; load(); onMount(load); retry` 樣板。
  *
- * 原本 49 個檔案(44 個 route 頁 + ScheduleCalendar + 4 個 mobile overlay)各自手抄
- * `let phase; load(); onMount(load); retry` 樣板,四軸變異(卸載守衛有無、
- * load/refresh 拆分、*Hydrated 守衛、retry 接法)導致同一類 bug 逐頁修逐頁測。
- * 本模組把這套機制收斂成單一 factory,呼叫端已遷移到它之上。
+ * 資料怎麼抓、抓回來寫不寫、何時翻旗全歸資料來源(LoadSource,見下)。plain 頁面給 `{ fetch, onData? }`;
+ * 接共享 store 的頁面一律給 `{ ...gate.pageEntry() }`,不拿 store 的 hydrate/refresh 當 fetch——那樣是
+ * store 閘門自己寫 store,卸載與被新一輪取代的棄追護不到;共享 store 的後發優先由水合閘門的出發序帳負責。
  *
  * Legacy store factory 風格(仿 stores/toasts.ts 的 createToasts):closure、
  * 無 `this`,回傳物件的 `subscribe` 直接轉發 svelte/store 的 writable,頁面以

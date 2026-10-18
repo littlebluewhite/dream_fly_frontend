@@ -7,7 +7,10 @@
  * 由 $lib/self-account 持有(與會員端同一份快取)：讀取走 $selfAccount，存檔(saveSettings)
  * 用 saveSelfAccount 帶回的帳號。找不到對應教練檔案時，getDashboard/getToday/getSchedule/
  * getSettings/getAttendance 一律拋出 CoachNotFoundError，頁面經 coachLoadErrorCopy
- * (instanceof 判別)改顯示「此帳號未綁定教練檔案」。 */
+ * (instanceof 判別)改顯示「此帳號未綁定教練檔案」。
+ *
+ * 訊息中心：對話兩端固定一為 coach、一為 member（§3.21 角色規則），而會員帳號就是學員本人、不分家長／
+ * 學員，所以對話不帶種類欄位。 */
 import { get } from 'svelte/store';
 import { api } from '$lib/api/client';
 import { createSessionGate } from '$lib/session-gate';
@@ -314,10 +317,8 @@ export const getSchedule = async (): Promise<CoachScheduleData> => {
 /** ISO8601 → "YYYY-MM-DD HH:MM"，同 mapCoach 的 lastLogin 轉換慣例。 */
 const toDisplayTime = (iso: string): string => isoDateTime(iso);
 
-/** ConversationSummaryResponse → 既有 Conversation 形狀。對話兩端固定一為 coach、一為
- *  member（§3.21 角色規則），且 GLOSSARY.md 明定「會員」帳號即學員本人、不分家長/學員
- *  （Avoid: 家長），故不帶對話種類欄位(R16 Task 2a 起拿掉 kind)；color 無代表色欄位，同其餘 mapXxx 慣例
- *  固定預設值(P2)。time 由 last_message_at 轉換
+/** ConversationSummaryResponse → 既有 Conversation 形狀。不帶對話種類欄位（見檔頭「訊息中心」）；
+ *  color 無代表色欄位，同其餘 mapXxx 慣例固定預設值(P2)。time 由 last_message_at 轉換
  *  （尚無訊息的 null 給空字串）；preview 由 last_message_body 轉換，null 時比照既有
  *  「撰寫新對話」的建立文案 '尚無訊息'；badge 直接用 unread_count(brief 明定)。清單
  *  順序完全依後端排序(last_message_at DESC NULLS LAST, created_at DESC)，前端不重排。 */

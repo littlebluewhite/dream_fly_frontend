@@ -1,26 +1,21 @@
 /* 匯入掃描器（Import Scan）— 靜態原始碼匯入掃描的 test-support 模組。
  *
- * Provenance：自 src/lib/mobile/foundation-contracts.test.ts 的 seam describe 內原地升格
- * （walk / stripCommentsPreserveStrings / importSpecifiers / isMemberReach 與 39 個自證
- * fixture）；isMemberReach 泛化為 makeReachPredicate（alias 與 targetDir 為資料組態、非
- * 行為旗標）。原碼經六輪 codex 硬化，指標 6430629…4f5417a：R1 補四種 import 形＋源路徑
- * 白名單、R2 對抗審、R3a 字串感知剝註解、R3b 引號字串單行封頂、R3b′ CRLF 正規化、R4 行
- * 終結對齊 ECMA＋specifier 煮熟值＋interpolation 掃描、R4b 模板堆疊機、R4c quasi 跨度掛起
- * 制、R4d 混合生命週期補殺。一檔拆三檔（不用 git mv、同 commit 增刪對開、搬移行逐字位元
- * 不動），git blame -w -C 可考古。39 個自證 fixture 現居同目錄 import-scan.test.ts。 */
+ * walk（列檔）、importSpecifiers（抽 import specifier）、mockedSpecifiers（抽 vi.mock／vi.doMock 的目標）與
+ * makeReachPredicate（某 specifier 是否 reach 某 alias／目標目錄；alias 與 targetDir 是資料組態、非行為旗標）。
+ * 接縫契約測試掃 import 一律用本模組，不在測試檔內另寫 regex 掃描。 */
 
-// codex R1+R2+R3：掃描器要求——涵蓋靜態 from / side-effect import / 動態 import()
+// 掃描器要求——涵蓋靜態 from / side-effect import / 動態 import()
 // （含 /* @vite-ignore */ 註解形與簡單模板字串）與相對路徑逃逸；不誤中註解、
 // 一般字串（含字串內的 //、/* 記號與 import(...) 字樣，兩向皆不得誤判）、
 // $lib/membership、本地 ./member* 路徑。做法：字串感知剝註解並記錄字串跨度，
 // 再抽 import 位置的 specifier（match 起點落在字串跨度內者丟棄），$lib 形以
 // 路徑段精確比對、相對形解析回絕對路徑後檢查是否落在目標目錄之下。掃描器本身由
-// import-scan.test.ts 的 39 個自證 fixture 把關（退化成空集合時自證 it 先紅，
+// import-scan.test.ts 的自證 fixture 把關（退化成空集合時自證 it 先紅，
 // 消費端契約 it 不會靜默假綠）。
-// codex R3：剝註解必須字串感知——正規式版把字串裡的 // 或 /* 當註解起點，會把
+// 剝註解必須字串感知——正規式版把字串裡的 // 或 /* 當註解起點，會把
 // 同行／其後的真違規 import 一併吞掉（靜默假陰性）。模板的 quasi 文字視為不透明
 // 跨度（specifier 本身的引號屬於 import 語法，match 起點在跨度外，不受影響）；
-// ${...} interpolation 是可執行程式碼，照常掃描（codex R4）。
+// ${...} interpolation 是可執行程式碼，照常掃描。
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

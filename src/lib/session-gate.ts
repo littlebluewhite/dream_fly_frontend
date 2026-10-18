@@ -1,60 +1,25 @@
 /**
- * session-gate — authStore 身分變更感知的 domain-store 水合閘門家族(架構深化 R7 C1)。
+ * session 閘門:對登入身分變更(登入、登出、不經整頁重載直接換帳號)有感的 domain-store 閘門家族,
+ * 建在水合閘門上。「誰換人、何時換人」這個 session 專屬判斷只住本檔;水合、寫入、重置與頁面進場包的
+ * 協定繼承自 $lib/hydration-gate。兩門工廠:
+ *   - createSessionGate      水合閘門 + 身分重置 + epoch 核對 fetch + 寫入鏈 queueWrite();頁面進場包
+ *                            pageEntry()、寫入動詞 write() 與和解鏈繼承自閘門。供候補、請假、通知、
+ *                            本人帳號資料($lib/self-account)、教練身分(coach/api 私有)與教練對話列表
+ *                            (coach/conversations)。
+ *   - createSessionRefresher 無條件重抓(不套 guard)+ 身分清空 + 在飛換帳靜默丟棄 + 後發優先。供點數、訂閱。
  *
- * 收斂六個 member/mobile domain store 對「session 身分變更」的非同構處理:waitlist/
- * leave 手抄了完整的 epoch/身分重置/序列化和解鏈骨架(位元組級雙生);notifications
- * 的 hydrated 旗標跨帳號存活(真缺陷:SPA 登出無整頁重載,B 帳號被 guarded() 短路、
- * 直接讀到 A 的資料);points/subscriptions 全無守衛。本模組把前二「吸收」成單源、
- * 把後四「抬升」到同一套守衛之下,提供兩門工廠:
- *   - createSessionGate     完整 session gate(gate + 身分重置 + epoch 核對 fetch + 寫入鏈;
- *                           頁面進場包 pageEntry()、寫入動詞 write() 與和解鏈繼承自閘門)——
- *                           waitlist / leave / notifications;R13(docs/adr/0023)
- *                           再加本人帳號資料(self-account)、教練身分(coach/api 私有)
- *                           與教練對話列表(coach/conversations,R20 取代 mobile-admin 訊息 messagesGate),共六個
- *   - createSessionRefresher session refresher(保留無條件重抓語意,只加身分清空 +
- *                           在飛寫回 epoch 作廢 + R21 後發優先;不套 guard)—— points / subscriptions
+ * 身分的 key 一律是 authStore 轉出的 sessionIdentity(),本檔與身分範圍的暖機 key 都呼叫它,不各自手抄。
+ * 換身分即 reset():水合閘門的 gate.reset()(內容還原、翻旗 false、丟在飛 GET、清尾流帳與和解鏈)再重置
+ * 寫入鏈。pageEntry() 的資料來源抓的是本檔的 epochFetch,頁面拿不到未經 epoch 核對的 getter。測試要重置
+ * session 閘門,經真的登入 → 登出($lib/testing/session-reset),本檔不開測試出口。
  *
- * C3(架構深化 R9)新增 pageEntry(),關閉 ADR 0017 明載的 known-latent 殘窗(通知
- * **頁**的 load-gate 直接拿 raw getter 當 fetch,繞過 epoch 核對)。門 (c)
- * `onSessionReset` 已退役(其唯一消費者曾是 mobile 專屬的通知模組;架構深化 R12 起
- * mobile 併入 member notifications 這顆共用 gate;R15(候選 F-4)mobile 消費端改直接
- * `import from '$lib/member/notifications'`,不再經 `$lib/mobile/stores` 轉出——三門
- * 收斂為兩門的結論不變,只是 mobile 拿到這顆 gate 的路徑換了)。
+ * 座落位置:authStore 與 domain store 之間。刻意不把身分維度打進 hydration-gate——後者被全 surface 的
+ * load-gate 消費(含 staff 面,其身分源不是 member authStore),打進去等於把錯向依賴灌進 repo 最寬的 seam,
+ * 也破壞它零模組級副作用、零 store import 的檔頭憲章(ADR-0016)。本檔依賴 authStore,但守零 import-time
+ * 副作用:authStore.subscribe() 發生在 factory 被呼叫時(各 store 模組頂層),不是本模組 import 時,SSR 安全。
  *
- * 架構深化 R10／R11 替 pageEntry() 交出的水合協定加上世代穩定重抓與 mutation settle 訊號,
- * 讓頁面 load-gate 的 refresh 族與 store 閘門讀**同一本**世代帳與**同一本**尾流帳(見
- * $lib/hydration-gate 內部的 fetchGenStable)。R14(候選 F1)把 pageEntry() 整個搬進
- * HydrationGate:本檔已把 epochFetch 當 fetch 餵給水合閘門,所以繼承下來的進場包自帶 epoch
- * 核對,本檔不再自己組。R15(候選 F-1)再把 pageEntry() 的形狀收成 `{ source: LoadSource }`
- * ——世代帳與尾流帳的讀取器連經 pageEntry() 交出這條路都收掉,只住 hydration-gate.ts 內部,
- * 頁面的 load-gate 只看得到 `source.load(isCurrent)`/`source.refresh(isCurrent)` 這兩支黑箱;
- * 本檔對此無感,`gate.pageEntry()` 原樣轉手。identity onChange 呼叫本閘門的
- * `reset()`(R15 起即水合閘門自帶的通用 reset() 再加重置兩條鏈;取代 R14 以前專供本檔用的內部
- * 工廠 `createOwnedHydrationGate`/`ownerChanged()`,兩者已退役——閘門的 reset() 翻旗 false +
- * 清尾流帳,後者即 R11 終審修波的跨身分清帳,理由見 createSessionGate 註解)。
- *
- * R17(候選 寫入動詞):和解鏈(原 queueReconcile)與 mutate 的協定本體搬進 HydrationGate 的
- * write(),軸由本檔的 session 世代換成閘門的 resetEpoch——身分變更即 reset(),resetEpoch 跟著
- * 推進,所以「跨身分作廢」語意不變。本檔只剩身分核心、epochFetch 與 queueWrite;寫入一律走繼承自
- * 水合閘門的 write(),queueWrite 只在前面加排隊、寫前水合與身分核對,失敗復原共用水合閘門的 recoverWrite。
- *
- * R14(候選 F2)重開 ADR-0023 的「等第三處再說」:profile/coach 手抄的在飛合併、寫入鏈與
- * session 世代收進閘門——合併住 HydrationGate(hydrate 與頁面 load-gate 的 load 共用在飛 GET),
- * 寫入鏈住本檔(queueWrite)。身分基準改在建構當下決定:restored 開機零觸發,建構順序契約
- * 與消費端「let 必須宣告在前」的註解一併退役。
- *
- * 座落位置:authStore 與 domain store 之間。刻意**不**深化 hydration-gate——後者被
- * ~49 頁全 surface 的 load-gate 消費(含 staff 面,其 identity 源非 member authStore),
- * 若把 member auth 維度打進那顆 core,等於把錯向依賴灌進 repo 最寬的 seam;且
- * hydration-gate 的檔頭憲章(零模組級副作用、零 store import、SSR-safe 葉)是 ADR 0016
- * 剛批的。session-gate 則明確依賴 authStore,但仍守零 import-time 副作用:authStore
- * .subscribe() 發生在 factory **被呼叫**時(call site 在各 store 模組頂層 = 現行
- * waitlist/leave 同位置),不是本模組 import 時——SSR 姿勢與現況一致。
- *
- * 每次 factory call 一個獨立的 authStore 訂閱(R13 起共八個模組級永生訂閱——六個
- * createSessionGate + 兩個 createSessionRefresher,與現狀同類),
- * 無共享 registry:registry 會違反零副作用憲章、需要新的 registry-reset 測試接縫,
- * 且 epoch 只與自身比較、無跨模組消費者(見 ADR-0017、ADR-0024 的「不做 registry 測試縫」)。
+ * 每次 factory call 一個獨立、模組級永生的 authStore 訂閱,沒有共享 registry:registry 會違反零副作用、
+ * 需要新的 registry-reset 測試接縫,而 epoch 只與自身比較、沒有跨模組消費者(ADR-0017、ADR-0024)。
  */
 import { authStore, sessionIdentity } from '$lib/stores/authStore';
 import { get } from 'svelte/store';
@@ -112,10 +77,11 @@ export interface SessionGateOptions<T> {
 
 /**
  * 門 (a) 對外面:HydrationGate(hydrated/hydrate/refresh/invalidate/reset/write/pageEntry)
- * 多 queueWrite;reset 覆寫為「閘門 reset + 重置寫入鏈」。pageEntry() 繼承自閘門
- * (R14 F1):資料來源抓的是**帶 epoch 核對**的 epochFetch(本工廠餵給水合閘門的那一支,
- * 不是呼叫端的 raw getter),頁面寫 `createLoadGate({ ...gate.pageEntry() })` 不再有機會繞過核對。
- * queueWrite:排進本閘門寫入鏈的單一寫入,前一筆 settle(成敗皆可)才輪到。
+ * 多 queueWrite;reset 覆寫為「閘門 reset + 重置寫入鏈」。pageEntry() 繼承自閘門:資料來源抓的是
+ * **帶 epoch 核對**的 epochFetch(本工廠餵給水合閘門的那一支,不是呼叫端的 raw getter),頁面寫
+ * `createLoadGate({ ...gate.pageEntry() })` 沒有機會繞過核對。
+ * queueWrite:排進本閘門寫入鏈的單一寫入,前一筆 settle(成敗皆可)才輪到。消費端只交
+ * optimistic/send/commit/onFailure 並對應結果,不自己讀旗標、不手寫寫前水合、resync 或回滾。
  *   1. 入列當下(同步)記 session 世代與是否已水合,套用 `optimistic`(畫面立即反映);
  *   2. 輪到時 session 已換 → `stale`(settled 為「未送出」的 rejected),send 不執行;
  *   3. 寫前 `await hydrate()`;失敗時已換帳號回 stale,否則走 recoverWrite(onFailure, undo,

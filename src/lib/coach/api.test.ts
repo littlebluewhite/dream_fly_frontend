@@ -523,9 +523,8 @@ describe('saveAttendance — PUT /sessions/{id}/attendance（§3.19）', () => {
 	});
 });
 
-/* Task 12：訊息中心（GET /conversations/me + GET .../messages + POST .../messages +
- * PATCH .../read，§3.21）。角色規則保證對話一端 coach、一端 member——GLOSSARY.md 明定
- * 「會員」帳號即學員本人、不分家長/學員(Avoid: 家長)，故不帶對話種類欄位(R16 Task 2a)。 */
+/* 訊息中心（GET /conversations/me + GET .../messages + POST .../messages + PATCH .../read，§3.21）。
+ * 對話一端 coach、一端 member，所以不帶對話種類欄位(規則見 coach/api 檔頭「訊息中心」)。 */
 const ME2 = {
 	id: 'u9', email: 'chen@dreamfly.com.tw', name: '陳雅婷',
 	phone: null, last_login: null, created_at: '2020-01-01T00:00:00Z'

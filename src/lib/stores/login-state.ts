@@ -14,6 +14,18 @@
  * It imports neither of them (authStore hands the `/users/me` read in as a `fetchMe` port), so there
  * is no import cycle.
  *
+ * Four events change the login state, and each one is only a `set` of this store — guards, session
+ * gate resets and checkout redirects all follow that one identity-change edge:
+ * - a login or logout in this tab;
+ * - the backend explicitly rejecting the refresh token, after which the core really clears it
+ *   (a network error, 408/429 or 5xx clears nothing and logs nobody out);
+ * - another tab changing storage (`watchOtherTabs`);
+ * - a refresh that comes back with someone else's tokens (another tab already switched user and this
+ *   tab has not seen the `storage` event yet): the identity switches in the same tick and stays on the
+ *   new user even if the `/users/me` read that follows fails.
+ * Access tokens live only in each tab's memory. On a cross-tab change a tab drops its own copy
+ * (`forgetAccess()`) and never touches the shared refresh token (ADR-0006).
+ *
  * Truth lives on the server: the refresh token's validity. `dreamfly_auth` is only a member-profile
  * CACHE for first paint — it lets a reload show the last-known session instantly instead of flashing
  * "logged out" while hydrateSession() confirms it. */

@@ -1,11 +1,13 @@
 /* src/lib/domain/weekday.ts — 星期換算單一模組（純函式）。
  *
- * 兩套星期索引並存，混用就會差一天（aaabc12 曾錯了 3 個月）：
+ * 兩套星期索引並存，混用就會差一天：
  *   - 後端 day_of_week：0=Sunday … 6=Saturday（PostgreSQL EXTRACT(DOW)），與 JS
  *     Date.getDay() 同一順序。DAY_KEYS / WEEKDAY_ZH 以它為 index。
  *   - 週課表欄位 WeekColumn：0=Monday … 6=Sunday（週一起頭的 UI 版面），ScheduleBlock.day
  *     與 WEEK[] 用它。
- * 兩者之間的換算只經 toWeekColumn。 */
+ * 兩者之間的換算只經 toWeekColumn；ScheduleBlock.day 的型別就是 WeekColumn，沒換算的數字塞不進去。
+ * 各檔不自帶星期陣列。唯一有文件的例外是 admin/report-math 的 WEEKDAY_LABEL：報表純函式層除 lookupOr
+ * 外零外部依賴（ADR 0009、ADR 0028 增補）。 */
 
 /** 週課表欄位：0=週一 … 6=週日。 */
 export type WeekColumn = 0 | 1 | 2 | 3 | 4 | 5 | 6;

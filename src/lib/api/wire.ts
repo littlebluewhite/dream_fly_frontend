@@ -1,36 +1,33 @@
 /* Dream Fly — 後端 wire 知識單一來源。
  *
- * 背景（2026-07 建檔時）：後端 wire 知識（訂單狀態 union＋標籤表、清單信封形狀、
- * 成對 DTO、品牌色/縮寫/日期切片等）當時人手同步散落多個 surface：domain/orders.ts
- * 自註「kept in sync with admin/data.ts」、ORDER_STATUS 標籤表逐字複製 2 份、清單信封
- * interface 手寫 11 份、成績單/證書 DTO 在 member 與 coach 成對重抄。本檔建立單一
- * 來源，8 個檔案改為 import 這裡。
- *
- * 2026-10（W-5～W-7）：後端回應形狀改由 Rust DTO 產生（$lib/api/generated），手寫的
- * 信封 ApiPage 與成對 DTO 已刪；本檔只留共用顯示知識與產生型別的 type-only 轉出
- * （見 ADR 0007 增補）。
- *
- * 2026-07 依同判準增收：訂單雙身分協定與 5% 內含稅顯示反推（orderIdentity /
- * taxFromGross，見下方訂單知識區）。「凍結」指當年批次的任務邊界、非永久禁令——
- * 此二支同為 ≥2 surface（admin/member/mobile-admin）逐字共用的後端 wire 知識，
- * 符合 ADR 0007 收斂判準；既有匯出一字不動，只增不改。
- *
- * 2026-07 另依同判準增收：isoDate/hhmm 兩個顯示原子（isoDateTime 旁），收斂
- * admin/member/coach/mobile 四 surface 共 10 消費檔 20 處（21 刀）裸
- * `.slice(0, 10)`/`.slice(0, 5)` 日期/時間顯示切片——輸出字串逐字節相同，行為恆等。
- *
- * 收錄原則：≥2 個 surface 共用的後端 wire 知識才收；UI 目標型別一律不收（結算
- * per-surface，ADR 0003 精神）。
+ * 收 ≥2 個 surface 共用的後端 wire 知識：共用顯示知識（Tone、訂單狀態查表、總查表原語 lookupOr、姓名縮寫、
+ * 品牌色、日期/時間顯示切片、收款時間、年齡範圍）、訂單雙身分協定與 5% 內含稅顯示反推，以及產生型別
+ * （$lib/api/generated）的 type-only 轉出。後端回應形狀由 Rust DTO 產生，這裡不手寫信封或成對 DTO
+ * （ADR 0007 與其增補）。UI 目標型別一律不收（結算 per-surface，ADR 0003 精神）。
  *
  * 明確不收（防未來誤收）：
  * - `ntd`/`toCents`/`orderItemsSummary` —— 留在 public/adapters.ts（ADR 0006
  *   既定的 cents 邊界）
  * - `COURSE_LEVEL_LABEL` —— 已在 domain/course-level.ts 單一來源
- * - 窄化的 `ApiUser`/`ApiMe`/`ApiUserAccount` —— W-7 起皆為產生型別的 `Pick<…>` 投影，
+ * - 窄化的 `ApiUser`/`ApiMe`/`ApiUserAccount` —— 皆為產生型別的 `Pick<…>` 投影，
  *   留在各自消費端（「結構型別無漂移風險」不成立，見 ADR 0007 增補）
- * - mobile 雙 surface 的 tuple 型 `Tone` 與 3 值子集 —— 與後端接線狀態無關，本次整合刻意不
+ * - mobile 雙 surface 的 tuple 型 `Tone` 與 3 值子集 —— 與後端接線狀態無關，刻意不
  *   預先收斂（見 ADR 0007）
  * - 各 surface 的 UI 目標型別與 member-only 查表
+ *
+ * **顯示查表**（狀態/類型 → tone/label；ADR 0013 與其增補、ADR 0019）：
+ * - 表住 $lib/domain 各 entity 檔與 domain/member-app（member/mobile 雙生的查表與成對常數）；訂單狀態表住本檔。
+ * - 取用形只有兩種：facade 真的攜帶自己的型別事實（以較嚴格或不同形狀的 `Tone` 對同一參照純註記收窄，零 `as`）
+ *   時，消費端經該 facade 取用（mobile-admin、member、mobile 屬此）；facade 只是同源且結構恆等的轉手時不設這一層，
+ *   消費端直取 $lib/domain 各 entity 檔或本檔。不為零型別事實的轉手開 re-export（假接縫）。mobile/stores 的
+ *   store/動作轉手管的是 import 方向，不在此列（ADR 0024）。
+ * - 以後端 enum 為鍵的表，另提供一支「任何字串都能查」的函式（orderStatusBadge、ticketTypeBadge、attStateBadge），
+ *   未知值後備（中性 tone + 原字串）收在表所在的檔；消費端不自己補 `?? …`、不用 `as` 強轉鍵型別。課程等級與
+ *   招生狀態同形：消費端呼叫 courseLevelLabel/courseLevelTone/classStatusTone，不索引 LEVEL_TONE/STATUS_TONE。
+ * - 總查表（任何字串都不取到 undefined，也不取到 Object.prototype 上的繼承成員）只有 lookupOr 一種寫法：查表
+ *   函式與一次性的後備查詢都用它，不另寫 `Object.hasOwn(…) ? … : …` 或 `表[鍵] ?? 後備`。
+ * - 報表面板的呈現素材（序列色盤、`{label,color}` 桶表、像素值域）不是域語彙，不算顯示查表：單源住
+ *   admin/report-math，兩個 surface 直取。
  *
  * 本檔是最底層的知識檔：只放純型別＋純函式＋常數，不 import 任何 $lib 模組。 */
 
