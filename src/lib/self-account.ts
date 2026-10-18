@@ -71,7 +71,8 @@ export interface SelfAccountEdit {
 }
 
 export type PrefSetOutcome = { kind: 'saved' } | { kind: 'resynced' } | { kind: 'rolledBack' };
-export type SelfAccountSaveOutcome = { kind: 'saved' } | { kind: 'failed'; error: unknown };
+/** saved 的 account 是這次存的本人帳號資料(見 saveSelfAccount),不一定是 $selfAccount 的現值。 */
+export type SelfAccountSaveOutcome = { kind: 'saved'; account: SelfAccount } | { kind: 'failed'; error: unknown };
 
 const PREFS_DEFAULT: Prefs = { classReminder: true, coachMsg: true, promo: false, dark: false };
 const PREF_WIRE: Record<keyof Prefs, string> = {
@@ -197,14 +198,19 @@ export async function setPref(k: keyof Prefs, v: boolean): Promise<PrefSetOutcom
 }
 
 /** 存個人資料(姓名/電話/生日/偏好)。不做樂觀更新;只送與目前值不同的欄位,全部相同
- *  就不發請求;birth 為 '' 送 null(後端 double-option:顯式清空)。偏好有改時送整包。 */
+ *  就不發請求;birth 為 '' 送 null(後端 double-option:顯式清空)。偏好有改時送整包。
+ *
+ *  saved 帶回這次存的是誰:PATCH 回應;沒有要送的就是送出那一拍的現值。PATCH 飛行中換帳號時
+ *  伺服器已經接受,照樣回 saved、帶舊帳號的資料,共享 store 不碰。要用存檔結果的呼叫端讀
+ *  outcome.account,不在 await 之後讀 $selfAccount(那時它可能已是新帳號的開機值 null)。 */
 export async function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccountSaveOutcome> {
 	let prefsChanged = false;
+	let sentFrom: ApiMe | null = null; // 送出那一拍的現值
 	try {
-		resultOf(
+		const saved = resultOf(
 			await gate.queueWrite({
 				send: () => {
-					const cur = get(me)!; // queueWrite 已水合且核對過身分 → 必有值
+					const cur = (sentFrom = get(me)!); // queueWrite 已水合且核對過身分 → 必有值
 					const invalid = selfAccountEditError(edit, toSelfAccount(cur));
 					if (invalid) return Promise.reject(new Error(invalid));
 
@@ -226,7 +232,7 @@ export async function saveSelfAccount(edit: SelfAccountEdit): Promise<SelfAccoun
 				}
 			})
 		);
-		return { kind: 'saved' };
+		return { kind: 'saved', account: toSelfAccount(saved ?? sentFrom!) }; // null = 沒有要送的
 	} catch (error) {
 		return { kind: 'failed', error };
 	}

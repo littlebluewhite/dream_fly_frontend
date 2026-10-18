@@ -379,6 +379,23 @@ describe('saveSettings — PATCH /users/me,以回應直接寫回 $selfAccount(�
 		expect(callCount('/coaches')).toBe(0);
 		expect(callCount('/users/me')).toBe(0);
 	});
+
+	it('PATCH 飛行中換帳號:不拋錯,回傳用舊帳號(PATCH 回應)組出來的 Coach(伺服器已經接受)', async () => {
+		vi.mocked(api).mockImplementation(fakeRouter({ 'GET /users/me': ME, 'GET /coaches': [MY_COACH] }));
+		await getSettings();
+		let landPatch!: (u: unknown) => void;
+		vi.mocked(api).mockImplementation(
+			fakeRouter({ 'PATCH /users/me': () => new Promise((resolve) => (landPatch = resolve)) })
+		);
+		const saving = saveSettings({ name: '林雅婷改' });
+		await new Promise((r) => setTimeout(r, 0));
+		expect(callCount('/users/me', 'PATCH')).toBe(1); // 已送出
+
+		await loginAs({ ...ME, id: 'u2', email: 'chen@dreamfly.com.tw', name: '陳小華' });
+		landPatch(asLoginUser({ ...ME, name: '林雅婷改' }));
+
+		await expect(saving).resolves.toEqual({ coach: { ...MAPPED_COACH, name: '林雅婷改', full: '林雅婷改 教練' } });
+	});
 });
 
 describe('getAttendance — GET /sessions/today + GET /sessions/{id}/roster（§3.19）', () => {
