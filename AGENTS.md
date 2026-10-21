@@ -1,9 +1,7 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`) — read it before writing, changing, or reviewing code. This file is **orientation**
-> (what the project is, how to run it); the skill holds the **rules**.
+> **Coding standards live in the `coding-standards` skill** (`.claude/skills/coding-standards/`) — read it
+> before writing, changing, or reviewing code.
 
 ## What this is
 
@@ -12,13 +10,13 @@ SvelteKit 2 + Svelte 5 (runes-era) + TypeScript (strict), Vite, Vitest + Testing
 the sibling repo **`dream_fly_backend`** (Rust/Axum + PostgreSQL + Redis), serving a REST API under
 `/api/v1`. Every surface calls it for real.
 
-Mock data lives only in a handful of **P2-commented** spots where no backend endpoint exists, session
+Mock data lives only in a handful of **P2** spots where no backend endpoint exists, session
 management is out of scope, or the gap is purely cosmetic — treat them as known gaps, not bugs: the
 mobile-admin identity chip, its page-1-only list fetches, its read-only venue screen and demo ticket-edit
 toast (the admin desktop equivalents are wired), the admin settings page's local-only login-device list,
 and the shell badges that have no backend feed (coach Topbar's `NOTIFS` bell, admin Topbar's
 「目前有 3 則新通知」 toast, mobile-admin's `ADMIN_NOTIFS`/`COACH_NOTIFS`). Fields the backend has no column for are left out, never faked
-(`docs/adr/0023`, `docs/adr/0026`); `docs/adr/0006` holds the full inventory.
+(`docs/adr/0023`, `docs/adr/0026`); `docs/adr/0006` holds the history.
 
 Google OAuth login exists for `member` and `mobile` only: the backend's Google flow grants just the
 `member` role, so `staff` and `mobile-admin` have no Google option.
@@ -76,6 +74,9 @@ and 訂閱 (pass subscription) are independent (ADR 0001).
 - **Why → `docs/adr/`**: decisions and their reasons. Read any ADR that touches your area; if your change
   contradicts one, surface the conflict explicitly.
 - **Where → `docs/architecture.md`**: the map above.
+
+## Other docs
+
 - **`docs/design/`** — the original JSX design prototypes (reference only; not shipped code).
 - **`docs/agents/`** — `issue-tracker.md` (issues/PRDs are GitHub issues via the `gh` CLI),
   `triage-labels.md` (triage label names), `domain.md` (how skills consume the domain docs).

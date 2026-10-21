@@ -14,5 +14,3 @@ Read the matching file *before* you act:
 | Writing or changing any code | `references/frontend.md` |
 | Reviewing a diff or PR | `references/review.md` |
 | Asked about a standard / convention | the file above that matches the topic |
-
-Done means the **verification gate** in AGENTS.md → Commands is green.
